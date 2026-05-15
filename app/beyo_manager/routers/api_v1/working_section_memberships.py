@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.database import get_db
@@ -19,9 +19,12 @@ async def list_working_section_members_route(
     working_section_id: str,
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
 ):
     ctx = ServiceContext(
         incoming_data={"working_section_id": working_section_id},
+        query_params={"limit": limit, "offset": offset},
         identity=claims,
         session=session,
     )

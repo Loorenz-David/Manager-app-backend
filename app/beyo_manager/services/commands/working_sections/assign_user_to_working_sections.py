@@ -51,40 +51,54 @@ async def assign_user_to_working_sections(ctx: ServiceContext) -> dict:
                 raise NotFound("User not found in workspace.")
             raise ValidationError("Only workers can be assigned to working sections.")
 
-        for section_id in request.working_section_ids:
-            section = await ctx.session.scalar(
-                select(WorkingSection).where(
-                    WorkingSection.workspace_id == ctx.workspace_id,
-                    WorkingSection.client_id == section_id,
-                    WorkingSection.is_deleted.is_(False),
+        section_ids_found = set(
+            (
+                await ctx.session.execute(
+                    select(WorkingSection.client_id).where(
+                        WorkingSection.workspace_id == ctx.workspace_id,
+                        WorkingSection.client_id.in_(request.working_section_ids),
+                        WorkingSection.is_deleted.is_(False),
+                    )
                 )
             )
-            if section is None:
+            .scalars()
+            .all()
+        )
+        for section_id in request.working_section_ids:
+            if section_id not in section_ids_found:
                 raise NotFound(f"Working section '{section_id}' not found.")
 
-            existing = await ctx.session.scalar(
-                select(WorkingSectionMembership.client_id).where(
-                    WorkingSectionMembership.workspace_id == ctx.workspace_id,
-                    WorkingSectionMembership.working_section_id == section_id,
-                    WorkingSectionMembership.user_id == request.user_id,
-                    WorkingSectionMembership.removed_at.is_(None),
+        existing_ids = set(
+            (
+                await ctx.session.execute(
+                    select(WorkingSectionMembership.working_section_id).where(
+                        WorkingSectionMembership.workspace_id == ctx.workspace_id,
+                        WorkingSectionMembership.working_section_id.in_(request.working_section_ids),
+                        WorkingSectionMembership.user_id == request.user_id,
+                        WorkingSectionMembership.removed_at.is_(None),
+                    )
                 )
             )
-            if existing is not None:
+            .scalars()
+            .all()
+        )
+        for section_id in request.working_section_ids:
+            if section_id in existing_ids:
                 raise ConflictError(
                     f"User is already assigned to working section '{section_id}'."
                 )
 
         for section_id in request.working_section_ids:
-            membership = WorkingSectionMembership(
-                workspace_id=ctx.workspace_id,
-                working_section_id=section_id,
-                user_id=request.user_id,
-                assigned_at=datetime.now(timezone.utc),
-                assigned_by_id=ctx.user_id,
+            ctx.session.add(
+                WorkingSectionMembership(
+                    workspace_id=ctx.workspace_id,
+                    working_section_id=section_id,
+                    user_id=request.user_id,
+                    assigned_at=datetime.now(timezone.utc),
+                    assigned_by_id=ctx.user_id,
+                )
             )
-            ctx.session.add(membership)
-            await ctx.session.flush()
+        await ctx.session.flush()
 
     await dispatch(
         [

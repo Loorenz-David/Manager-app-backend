@@ -55,7 +55,6 @@ async def create_working_section_route(
 		return build_err(outcome.error)
 	return build_ok(outcome.data)
 
-
 @router.get("")
 async def list_working_sections_route(
 	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),

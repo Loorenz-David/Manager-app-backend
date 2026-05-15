@@ -21,6 +21,24 @@
 - Out of scope:
 - Assumptions:
 
+## File manifest
+
+List every file touched by this plan. Implementing agents use this table to know what
+to open (EDIT) versus what to create from scratch (CREATE). Never search for CREATE files
+— they do not exist yet.
+
+### Existing files to edit
+
+| Path (relative to `backend/app/`) | Change summary |
+|---|---|
+| `beyo_manager/<path/to/file.py>` | `<one-line description of what changes>` |
+
+### New files to create
+
+| Path (relative to `backend/app/`) |
+|---|
+| `beyo_manager/<path/to/file.py>` |
+
 ## Clarifications required
 
 - [ ] `<question>` — why this blocks safe implementation

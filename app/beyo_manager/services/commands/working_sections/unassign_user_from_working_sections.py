@@ -23,22 +23,22 @@ async def unassign_user_from_working_sections(ctx: ServiceContext) -> dict:
         raise ValidationError("Duplicate IDs in working_section_ids are not allowed.")
 
     async with ctx.session.begin():
-        memberships: list[WorkingSectionMembership] = []
-        for section_id in request.working_section_ids:
-            result = await ctx.session.execute(
-                select(WorkingSectionMembership).where(
-                    WorkingSectionMembership.workspace_id == ctx.workspace_id,
-                    WorkingSectionMembership.working_section_id == section_id,
-                    WorkingSectionMembership.user_id == request.user_id,
-                    WorkingSectionMembership.removed_at.is_(None),
-                )
+        result = await ctx.session.execute(
+            select(WorkingSectionMembership).where(
+                WorkingSectionMembership.workspace_id == ctx.workspace_id,
+                WorkingSectionMembership.working_section_id.in_(request.working_section_ids),
+                WorkingSectionMembership.user_id == request.user_id,
+                WorkingSectionMembership.removed_at.is_(None),
             )
-            membership = result.scalar_one_or_none()
-            if membership is None:
+        )
+        memberships: list[WorkingSectionMembership] = list(result.scalars().all())
+
+        found_ids = {m.working_section_id for m in memberships}
+        for section_id in request.working_section_ids:
+            if section_id not in found_ids:
                 raise NotFound(
                     f"No active membership found for user in section '{section_id}'."
                 )
-            memberships.append(membership)
 
         now = datetime.now(timezone.utc)
         for membership in memberships:
