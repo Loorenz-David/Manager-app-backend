@@ -66,8 +66,9 @@ The commands are also designed to be reused by other services (e.g. user registr
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| `PLAN_working_section_membership_20260515` | `backend/docs/architecture/under_construction/implementation/PLAN_working_section_membership_20260515.md` | `under_construction` | Commands, query, serializer, routers, registration |
+| `PLAN_working_section_membership_20260515` | `backend/docs/architecture/archives/implementation/PLAN_working_section_membership_20260515.md` | `completed` | Commands, query, serializer, routers, registration |
 
 ## Progress notes
 
 - `2026-05-15`: Intention written. Blocking decisions resolved: user-centric batch routes (`/users/{id}/working-sections`), WORKER-only assignment, `UserEvent` confirmed via `domain_event.py` inspection, `ServiceContext` standard signature for reuse. GET members stays section-centric.
+- `2026-05-15`: Implementation completed and validated with live API flow (assign -> list members -> unassign -> list members). Summary and archive record created, implementation plan moved to archives.

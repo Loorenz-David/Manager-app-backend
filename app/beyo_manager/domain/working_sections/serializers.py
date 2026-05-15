@@ -25,3 +25,12 @@ def serialize_working_section_full(
             {"client_id": it_id, "name": it_name} for it_id, it_name in issue_types
         ],
     }
+
+
+def serialize_working_section_member(row) -> dict:
+    return {
+        "membership_id": row.membership_id,
+        "user_id": row.user_id,
+        "username": row.username,
+        "assigned_at": row.assigned_at.isoformat(),
+    }

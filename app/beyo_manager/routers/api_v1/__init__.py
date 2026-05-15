@@ -10,6 +10,8 @@ from beyo_manager.routers.api_v1 import (
     images,
     notifications,
     reset,
+    user_working_sections,
+    working_section_memberships,
     working_sections,
 )
 
@@ -28,6 +30,16 @@ def register_v1_routers(app: FastAPI) -> None:
         working_sections.router,
         prefix="/api/v1/working-sections",
         tags=["working-sections"],
+    )
+    app.include_router(
+        user_working_sections.router,
+        prefix="/api/v1/users",
+        tags=["user-working-sections"],
+    )
+    app.include_router(
+        working_section_memberships.router,
+        prefix="/api/v1/working-sections",
+        tags=["working-section-memberships"],
     )
     # Add domain routers here as you build them:
     # app.include_router(users.router, prefix="/api/v1/users", tags=["users"])

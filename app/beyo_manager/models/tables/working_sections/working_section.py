@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.models.base.base import Base
@@ -34,4 +34,12 @@ class WorkingSection(IdentityMixin, Base):
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
 
-    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_working_sections_workspace_name"),)
+    __table_args__ = (
+        Index(
+            "uix_working_sections_name_active",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+    )

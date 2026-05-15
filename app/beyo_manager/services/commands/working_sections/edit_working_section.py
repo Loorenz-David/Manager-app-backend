@@ -1,8 +1,6 @@
-from collections import deque
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
@@ -14,6 +12,7 @@ from beyo_manager.models.tables.working_sections.working_section_item_category i
 from beyo_manager.models.tables.working_sections.working_section_supported_issue_type import (
     WorkingSectionSupportedIssueType,
 )
+from beyo_manager.services.commands.working_sections._check_dependency_cycle import check_for_dependency_cycle
 from beyo_manager.services.commands.working_sections.requests.edit_working_section_request import (
     WorkingSectionEditRequest,
     parse_edit_working_section_request,
@@ -21,34 +20,6 @@ from beyo_manager.services.commands.working_sections.requests.edit_working_secti
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-
-
-async def _check_for_dependency_cycle(
-    session: AsyncSession,
-    workspace_id: str,
-    section_id: str,
-    new_prerequisite_ids: list[str],
-) -> None:
-    visited: set[str] = set()
-    queue: deque[str] = deque(new_prerequisite_ids)
-
-    while queue:
-        current_id = queue.popleft()
-        if current_id == section_id:
-            raise ConflictError("Adding these dependencies would create a circular dependency.")
-        if current_id in visited:
-            continue
-        visited.add(current_id)
-
-        result = await session.execute(
-            select(WorkingSectionDependency.prerequisite_section_id).where(
-                WorkingSectionDependency.workspace_id == workspace_id,
-                WorkingSectionDependency.dependent_section_id == current_id,
-            )
-        )
-        for prerequisite_id in result.scalars().all():
-            if prerequisite_id not in visited:
-                queue.append(prerequisite_id)
 
 
 async def edit_working_section(ctx: ServiceContext) -> dict:
@@ -106,7 +77,7 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
                     if dep_id not in dep_ids_found:
                         raise NotFound(f"Working section dependency '{dep_id}' was not found.")
 
-                await _check_for_dependency_cycle(
+                await check_for_dependency_cycle(
                     ctx.session,
                     ctx.workspace_id,
                     request.client_id,

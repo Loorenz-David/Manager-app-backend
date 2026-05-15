@@ -13,7 +13,7 @@ from beyo_manager.models.tables.working_sections.working_section_supported_issue
 from beyo_manager.services.context import ServiceContext
 
 _MAX_LIMIT = 200
-_DEFAULT_LIMIT = 200
+_DEFAULT_LIMIT = 50
 
 
 async def list_working_sections(ctx: ServiceContext) -> dict:
@@ -28,12 +28,17 @@ async def list_working_sections(ctx: ServiceContext) -> dict:
         )
         .order_by(WorkingSection.created_at.asc())
         .offset(offset)
-        .limit(limit)
+        .limit(limit + 1)
     )
-    sections = result.scalars().all()
+    rows = result.scalars().all()
+    has_more = len(rows) > limit
+    sections = rows[:limit]
 
     if not sections:
-        return {"working_sections": []}
+        return {
+            "working_sections": [],
+            "working_sections_pagination": {"has_more": False, "limit": limit, "offset": offset},
+        }
 
     section_ids = [section.client_id for section in sections]
 
@@ -109,5 +114,6 @@ async def list_working_sections(ctx: ServiceContext) -> dict:
                 issues_by_section[section.client_id],
             )
             for section in sections
-        ]
+        ],
+        "working_sections_pagination": {"has_more": has_more, "limit": limit, "offset": offset},
     }

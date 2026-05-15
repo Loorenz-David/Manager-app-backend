@@ -60,7 +60,7 @@ async def create_working_section_route(
 async def list_working_sections_route(
 	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
 	session: AsyncSession = Depends(get_db),
-	limit: int = Query(200, le=200),
+	limit: int = Query(50, le=200),
 	offset: int = Query(0, ge=0),
 ):
 	ctx = ServiceContext(
