@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -16,6 +17,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from beyo_manager.domain.items.enums import ItemIssueStateEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class ItemIssue(IdentityMixin, Base):
@@ -41,7 +46,7 @@ class ItemIssue(IdentityMixin, Base):
         index=True,
     )
     base_time_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    time_multiplier: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
+    time_multiplier: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
     issue_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     severity_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_id: Mapped[str | None] = mapped_column(

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -20,6 +21,10 @@ from beyo_manager.domain.items.enums import (
 )
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class ItemUpholsteryRequirement(IdentityMixin, Base):
@@ -33,7 +38,7 @@ class ItemUpholsteryRequirement(IdentityMixin, Base):
         String(64), ForeignKey("item_upholsteries.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
     upholstery_inventory_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    amount_meters: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    amount_meters: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     value_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[ItemCurrencyEnum | None] = mapped_column(
         SAEnum(ItemCurrencyEnum, name="item_currency_enum", create_type=False), nullable=True

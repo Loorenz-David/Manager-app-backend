@@ -11,6 +11,10 @@ from beyo_manager.domain.schedulers.enums import (
 )
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class DelayedScheduler(IdentityMixin, Base):

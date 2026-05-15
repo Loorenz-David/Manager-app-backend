@@ -7,6 +7,9 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from beyo_manager.domain.base.enums import EventStateEnum
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class Event:

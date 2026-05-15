@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -19,6 +20,10 @@ from beyo_manager.domain.upholstery.enums import (
 )
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class UpholsteryInventory(IdentityMixin, Base):
@@ -48,14 +53,14 @@ class UpholsteryInventory(IdentityMixin, Base):
         default=UpholsteryInventoryConditionEnum.AVAILABLE,
         index=True,
     )
-    current_stored_amount_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    current_amount_in_use_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    current_amount_in_need_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    current_amount_ordered_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    total_upholstery_used_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    total_upholstery_used_inventory_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    total_upholstery_used_surplus_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    total_upholstery_surplus_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
+    current_stored_amount_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    current_amount_in_use_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    current_amount_in_need_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    current_amount_ordered_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    total_upholstery_used_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    total_upholstery_used_inventory_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    total_upholstery_used_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    total_upholstery_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     latest_projection_history_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

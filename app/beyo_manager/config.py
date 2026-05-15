@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     sleep_mode_enabled: bool = Field(default=True, alias="SLEEP_MODE_ENABLED")
     idle_sleep_threshold_seconds: int = Field(default=600, alias="IDLE_SLEEP_THRESHOLD_SECONDS")
 
+    # Bootstrap
+    bootstrap_secret: str | None = Field(default=None, alias="BOOTSTRAP_SECRET")
+    bootstrap_admin_email: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_EMAIL")
+    bootstrap_admin_username: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_USERNAME")
+    bootstrap_admin_password: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_PASSWORD")
+    bootstrap_workspace_name: str = Field(default="My Workspace", alias="BOOTSTRAP_WORKSPACE_NAME")
+    bootstrap_workspace_timezone: str = Field(default="UTC", alias="BOOTSTRAP_WORKSPACE_TIMEZONE")
+
+    # Reset (development only)
+    reset_secret: str = Field(default="", alias="RESET_SECRET")
 
     model_config = SettingsConfigDict(
         # Load deterministic env profile selected by APP_ENV.

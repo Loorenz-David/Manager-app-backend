@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -19,6 +20,10 @@ from beyo_manager.domain.upholstery.enums import (
 )
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class UpholsteryInventoryThresholdPolicy(IdentityMixin, Base):
@@ -36,9 +41,9 @@ class UpholsteryInventoryThresholdPolicy(IdentityMixin, Base):
     upholstery_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("upholsteries.client_id", ondelete="RESTRICT"), nullable=True, index=True
     )
-    low_stock_minimum_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
-    low_stock_ratio: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
-    out_of_stock_epsilon_meters: Mapped[float | None] = mapped_column(Numeric(14, 3), nullable=True)
+    low_stock_minimum_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    low_stock_ratio: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    out_of_stock_epsilon_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     escalation_policy: Mapped[SourcingEscalationPolicyEnum | None] = mapped_column(
         SAEnum(
             SourcingEscalationPolicyEnum,

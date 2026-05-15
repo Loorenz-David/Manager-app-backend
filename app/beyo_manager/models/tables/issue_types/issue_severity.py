@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,7 +16,7 @@ class IssueSeverity(IdentityMixin, Base):
         String(64), ForeignKey("workspaces.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    time_multiplier: Mapped[float] = mapped_column(Numeric(8, 4), nullable=False)
+    time_multiplier: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

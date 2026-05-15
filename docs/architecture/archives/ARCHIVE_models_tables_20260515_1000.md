@@ -8,21 +8,22 @@
 
 ## Source references
 
-- Plan: `backend/docs/architecture/under_construction/implementation/PLAN_models_tables_20260515.md`
+- Plan: `backend/docs/architecture/archives/implementation/PLAN_models_tables_20260515.md`
 - Summary: `backend/docs/architecture/implemented_summaries/SUMMARY_models_tables_20260515.md`
 - Debug chain (optional): N/A
 
 ## Outcome classification
 
-- Result: `completed_with_followups`
-- Acceptance criteria met: `partial`
+- Result: `completed`
+- Acceptance criteria met: `yes`
 
 ## Final notes
 
 - The planned model/domain implementation scope was completed: enums, aggregate mixins, table definitions, package stubs, and model registration imports.
 - A runtime-compatible safeguard was applied by renaming the business task enum type to `business_task_type_enum` to avoid collision with existing execution `task_type_enum`.
-- Validation confirmed successful import of `beyo_manager.models.Base` in `backend/app/.venv` and successful syntax compilation via `compileall`.
-- Follow-up validation remains: execute Alembic autogenerate against the target database to review generated DDL and enum/FK ordering in migration output.
+- Enum persistence was hardened globally so SQLAlchemy now stores enum `.value` strings, and the live database was migrated to lowercase enum labels to match.
+- A follow-up migration added the missing circular foreign keys that Alembic autogenerate surfaced after the initial table build.
+- Validation confirmed successful import of `beyo_manager.models.Base` in `backend/app/.venv`, successful syntax compilation via `compileall`, successful `alembic upgrade head`, and a clean autogenerate drift check.
 
 ## Follow-up links
 

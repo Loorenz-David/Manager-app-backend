@@ -1,0 +1,113 @@
+from sqlalchemy import select
+from sqlalchemy.orm import aliased
+
+from beyo_manager.domain.working_sections.serializers import serialize_working_section_full
+from beyo_manager.models.tables.issue_types.issue_type import IssueType
+from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.models.tables.working_sections.working_section import WorkingSection
+from beyo_manager.models.tables.working_sections.working_section_dependency import WorkingSectionDependency
+from beyo_manager.models.tables.working_sections.working_section_item_category import WorkingSectionItemCategory
+from beyo_manager.models.tables.working_sections.working_section_supported_issue_type import (
+    WorkingSectionSupportedIssueType,
+)
+from beyo_manager.services.context import ServiceContext
+
+_MAX_LIMIT = 200
+_DEFAULT_LIMIT = 200
+
+
+async def list_working_sections(ctx: ServiceContext) -> dict:
+    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
+    offset = int(ctx.query_params.get("offset", 0))
+
+    result = await ctx.session.execute(
+        select(WorkingSection)
+        .where(
+            WorkingSection.workspace_id == ctx.workspace_id,
+            WorkingSection.is_deleted.is_(False),
+        )
+        .order_by(WorkingSection.created_at.asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    sections = result.scalars().all()
+
+    if not sections:
+        return {"working_sections": []}
+
+    section_ids = [section.client_id for section in sections]
+
+    prerequisite_section = aliased(WorkingSection)
+    dep_result = await ctx.session.execute(
+        select(
+            WorkingSectionDependency.dependent_section_id,
+            WorkingSectionDependency.prerequisite_section_id,
+            prerequisite_section.name.label("prerequisite_name"),
+        )
+        .select_from(WorkingSectionDependency)
+        .join(
+            prerequisite_section,
+            prerequisite_section.client_id == WorkingSectionDependency.prerequisite_section_id,
+        )
+        .where(
+            WorkingSectionDependency.workspace_id == ctx.workspace_id,
+            WorkingSectionDependency.dependent_section_id.in_(section_ids),
+            prerequisite_section.workspace_id == ctx.workspace_id,
+            prerequisite_section.is_deleted.is_(False),
+        )
+    )
+    deps_by_section: dict[str, list[tuple[str, str]]] = {section_id: [] for section_id in section_ids}
+    for row in dep_result.all():
+        deps_by_section[row.dependent_section_id].append(
+            (row.prerequisite_section_id, row.prerequisite_name)
+        )
+
+    cat_result = await ctx.session.execute(
+        select(
+            WorkingSectionItemCategory.working_section_id,
+            WorkingSectionItemCategory.item_category_id,
+            ItemCategory.name.label("category_name"),
+        )
+        .select_from(WorkingSectionItemCategory)
+        .join(ItemCategory, ItemCategory.client_id == WorkingSectionItemCategory.item_category_id)
+        .where(
+            WorkingSectionItemCategory.workspace_id == ctx.workspace_id,
+            WorkingSectionItemCategory.working_section_id.in_(section_ids),
+            ItemCategory.workspace_id == ctx.workspace_id,
+            ItemCategory.is_deleted.is_(False),
+        )
+    )
+    cats_by_section: dict[str, list[tuple[str, str]]] = {section_id: [] for section_id in section_ids}
+    for row in cat_result.all():
+        cats_by_section[row.working_section_id].append((row.item_category_id, row.category_name))
+
+    issue_type_result = await ctx.session.execute(
+        select(
+            WorkingSectionSupportedIssueType.working_section_id,
+            WorkingSectionSupportedIssueType.issue_type_id,
+            IssueType.name.label("issue_type_name"),
+        )
+        .select_from(WorkingSectionSupportedIssueType)
+        .join(IssueType, IssueType.client_id == WorkingSectionSupportedIssueType.issue_type_id)
+        .where(
+            WorkingSectionSupportedIssueType.workspace_id == ctx.workspace_id,
+            WorkingSectionSupportedIssueType.working_section_id.in_(section_ids),
+            IssueType.workspace_id == ctx.workspace_id,
+            IssueType.is_deleted.is_(False),
+        )
+    )
+    issues_by_section: dict[str, list[tuple[str, str]]] = {section_id: [] for section_id in section_ids}
+    for row in issue_type_result.all():
+        issues_by_section[row.working_section_id].append((row.issue_type_id, row.issue_type_name))
+
+    return {
+        "working_sections": [
+            serialize_working_section_full(
+                section,
+                deps_by_section[section.client_id],
+                cats_by_section[section.client_id],
+                issues_by_section[section.client_id],
+            )
+            for section in sections
+        ]
+    }

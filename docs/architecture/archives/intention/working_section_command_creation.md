@@ -35,3 +35,4 @@ getting all working sections does not require any input. we user the same serial
 the query for getting defaults to search for deleted_at = null, so deleted working sections are not returned in the get by id or get all endpoints. we can have a separate endpoint for getting deleted working sections if needed, but for now we will just exclude them from the main endpoints.
 
 
+any role can access the get endpoints, but only admin can access the create, edit, and delete endpoints. we will enforce this in the router using the current check for role names. 

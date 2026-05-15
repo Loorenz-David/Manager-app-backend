@@ -6,6 +6,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from beyo_manager.domain.static_costs.enums import StaticCostCurrencyEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class StaticCost(IdentityMixin, Base):

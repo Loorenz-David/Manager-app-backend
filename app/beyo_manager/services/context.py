@@ -17,6 +17,7 @@ class ServiceContext:
     identity: dict
     incoming_data: dict
     session: AsyncSession
+    query_params: dict = field(default_factory=dict)
 
     # ── convenience accessors (read from JWT claims) ──────────────────────
     @property

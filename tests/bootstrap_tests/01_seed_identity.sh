@@ -80,9 +80,9 @@ echo "Step 2: Seed identity records (idempotent)"
 
 run_sql "
 INSERT INTO roles (client_id, name)
-SELECT 'role_workspace_test_admin', 'ADMIN'
+SELECT 'role_workspace_test_admin', 'admin'
 WHERE NOT EXISTS (
-  SELECT 1 FROM roles WHERE client_id = 'role_workspace_test_admin' OR name = 'ADMIN'
+  SELECT 1 FROM roles WHERE client_id = 'role_workspace_test_admin' OR name = 'admin'
 );
 "
 
@@ -109,7 +109,7 @@ VALUES (
   (
     SELECT client_id
     FROM roles
-    WHERE client_id = 'role_workspace_test_admin' OR name = 'ADMIN'
+    WHERE client_id = 'role_workspace_test_admin' OR name = 'admin'
     ORDER BY CASE WHEN client_id = 'role_workspace_test_admin' THEN 0 ELSE 1 END
     LIMIT 1
   ),
@@ -238,7 +238,7 @@ echo "Identity Summary:"
 echo "  user_client_id       : usr_user_test"
 echo "  email                : user_test@test.local"
 echo "  workspace_client_id  : ws_workspace_test"
-echo "  role                 : ADMIN"
+echo "  role                 : admin"
 echo "  workspace_role       : admin"
 echo "  token saved to       : .test_token_bootstrap"
 echo ""

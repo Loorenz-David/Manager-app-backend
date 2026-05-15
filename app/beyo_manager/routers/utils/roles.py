@@ -1,3 +1,4 @@
 ADMIN  = "admin"
-MEMBER = "member"
-FIELD  = "field"
+WORKER = "worker"
+MANAGER = "manager"
+SELLER = "seller"

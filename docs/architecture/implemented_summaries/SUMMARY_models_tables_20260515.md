@@ -3,7 +3,7 @@
 ## Metadata
 
 - Summary ID: `SUMMARY_models_tables_20260515`
-- Status: `summarized`
+- Status: `archived`
 - Owner agent: `GitHub Copilot (GPT-5.3-Codex)`
 - Created at (UTC): `2026-05-15T10:00:01Z`
 - Source plan: `backend/docs/architecture/under_construction/implementation/PLAN_models_tables_20260515.md`
@@ -18,11 +18,16 @@
 - Added package `__init__.py` stubs for all new `domain/` and `models/tables/` folders.
 - Updated local identity extension notes with all new prefix reservations and conflict-avoidance decisions.
 - Applied one compatibility safeguard: task business enum type name set to `business_task_type_enum` to avoid collision with existing execution `task_type_enum`.
+- Hardened enum persistence so SQLAlchemy now stores enum `.value` strings via `models/base/sa_enum.py`; the wrapper was injected into all SAEnum-using model modules, including the shared event base mixin.
+- Added a PostgreSQL enum-label migration to rename existing labels from uppercase member names to lowercase values and corrected the affected check constraint / partial index literals.
+- Added a follow-up migration to materialize the missing circular foreign keys that Alembic autogenerate identified after the initial table build.
 
 ## Files changed
 
 - `backend/app/beyo_manager/models/__init__.py`: appended import registrations for all new table modules in the planned order.
 - `backend/app/beyo_manager/models/base/aggregate_metrics.py`: added aggregate metrics mixins used by task steps.
+- `backend/app/beyo_manager/models/base/sa_enum.py`: added helper that configures SAEnum to persist enum `.value` strings.
+- `backend/app/beyo_manager/models/base/event.py`: applied the shared SAEnum value wrapper for event-record enums.
 - `backend/app/beyo_manager/domain/users/enums.py`: added `UserShiftStateEnum`.
 - `backend/app/beyo_manager/domain/working_sections/enums.py`: added placeholder module.
 - `backend/app/beyo_manager/domain/customers/enums.py`: added customer enums.
@@ -62,6 +67,8 @@
 - `backend/app/beyo_manager/models/tables/tasks/step_state_record.py`: added step state records table.
 - `backend/app/beyo_manager/models/tables/tasks/task_step_dependency.py`: added task-step dependency table.
 - `backend/app/beyo_manager/models/tables/tasks/task_step_assignment_record.py`: added assignment history table.
+- `backend/app/migrations/versions/ddc5bf50153b_rename_enum_labels_to_lowercase.py`: renamed existing PostgreSQL enum labels to lowercase and fixed enum-dependent literals.
+- `backend/app/migrations/versions/243e62bcd858_add_missing_circular_fks.py`: added the missing circular foreign keys for customers, tasks, and task steps.
 - `backend/architecture/40_identity_local.md`: documented newly reserved prefixes and collision-avoidance decisions.
 
 ## Contract adherence
@@ -69,19 +76,19 @@
 - `backend/architecture/03_models.md`: used SQLAlchemy 2.x `Mapped`/`mapped_column`, FK indexing, UTC DateTime columns, and named constraints/indexes.
 - `backend/architecture/08_domain.md`: all enums placed under `domain/<domain>/enums.py` and imported into model files.
 - `backend/architecture/21_naming_conventions.md`: naming patterns applied for table, index, and unique/check constraints.
-- `backend/architecture/30_migrations.md`: circular FK links modeled with `use_alter=True` and explicit names where required.
+- `backend/architecture/30_migrations.md`: circular FK links modeled with `use_alter=True`, explicit names were retained, and the final DB state was corrected with a follow-up migration where Alembic had not emitted the circular constraints.
 - `backend/architecture/40_identity.md`: each new addressable model defines `CLIENT_ID_PREFIX`; local companion updated for app-specific prefix registry.
 
 ## Validation evidence
 
 - `APP_ENV=development ./.venv/bin/python -c "from beyo_manager.models import Base; print('OK_BASE_IMPORT')"` (run in `backend/app`): `OK_BASE_IMPORT`.
 - `./.venv/bin/python -m compileall -q beyo_manager && echo COMPILE_OK` (run in `backend/app`): `COMPILE_OK`.
-- `rg 'name="([a-z_]+_enum)"' beyo_manager/models/tables -n`: reviewed enum type-name reuse and identified/mitigated task enum type collision.
+- `APP_ENV=development ./.venv/bin/alembic upgrade head` (run in `backend/app`): applied both follow-up migrations successfully.
+- `APP_ENV=development ./.venv/bin/alembic revision --autogenerate -m "final_drift_check"`: no detected schema drift after the follow-up migration.
 
 ## Known gaps or deferred items
 
-- Alembic autogenerate preview (`alembic revision --autogenerate`) was not executed in this transition; recommended as immediate follow-up validation against active DB metadata.
-- No migration file was produced in this implementation cycle by design (plan non-goal).
+- None currently tracked.
 
 ## Handoff notes (if needed)
 
@@ -90,6 +97,6 @@
 
 ## Lifecycle transition
 
-- Current state: `summarized`
-- Next state: `archived`
+- Current state: `archived`
+- Next state: `N/A`
 - Archive target record: `backend/docs/architecture/archives/ARCHIVE_models_tables_20260515_1000.md`

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -16,6 +17,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class ItemUpholstery(IdentityMixin, Base):
@@ -33,7 +38,7 @@ class ItemUpholstery(IdentityMixin, Base):
     )
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     code: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    amount_meters: Mapped[float | None] = mapped_column(Numeric(12, 3), nullable=True)
+    amount_meters: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     source: Mapped[ItemUpholsterySourceEnum] = mapped_column(
         SAEnum(ItemUpholsterySourceEnum, name="item_upholstery_source_enum", create_type=True),
         nullable=False,

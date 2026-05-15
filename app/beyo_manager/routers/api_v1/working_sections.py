@@ -1,0 +1,127 @@
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from beyo_manager.models.database import get_db
+from beyo_manager.routers.http.response import build_err, build_ok
+from beyo_manager.routers.utils.jwt_dep import require_roles
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
+from beyo_manager.services.commands.working_sections.create_working_section import (
+	create_working_section,
+)
+from beyo_manager.services.commands.working_sections.delete_working_section import (
+	delete_working_section,
+)
+from beyo_manager.services.commands.working_sections.edit_working_section import (
+	edit_working_section,
+)
+from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.working_sections.get_working_section import (
+	get_working_section,
+)
+from beyo_manager.services.queries.working_sections.list_working_sections import (
+	list_working_sections,
+)
+from beyo_manager.services.run_service import run_service
+
+router = APIRouter()
+
+
+class WorkingSectionCreateBody(BaseModel):
+	name: str
+	image: str | None = None
+	working_section_dependencies: list[str] = Field(default_factory=list)
+	working_section_item_categories: list[str] = Field(default_factory=list)
+	working_section_supported_issue_types: list[str] = Field(default_factory=list)
+
+
+class WorkingSectionEditBody(BaseModel):
+	name: str | None = None
+	image: str | None = None
+	working_section_dependencies: list[str] | None = None
+	working_section_item_categories: list[str] | None = None
+	working_section_supported_issue_types: list[str] | None = None
+
+
+@router.put("")
+async def create_working_section_route(
+	body: WorkingSectionCreateBody,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+	session: AsyncSession = Depends(get_db),
+):
+	ctx = ServiceContext(incoming_data=body.model_dump(), identity=claims, session=session)
+	outcome = await run_service(create_working_section, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.get("")
+async def list_working_sections_route(
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+	session: AsyncSession = Depends(get_db),
+	limit: int = Query(200, le=200),
+	offset: int = Query(0, ge=0),
+):
+	ctx = ServiceContext(
+		incoming_data={},
+		query_params={"limit": limit, "offset": offset},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(list_working_sections, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.get("/{working_section_id}")
+async def get_working_section_route(
+	working_section_id: str,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+	session: AsyncSession = Depends(get_db),
+):
+	ctx = ServiceContext(
+		incoming_data={"client_id": working_section_id},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(get_working_section, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.patch("/{working_section_id}")
+async def edit_working_section_route(
+	working_section_id: str,
+	body: WorkingSectionEditBody,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+	session: AsyncSession = Depends(get_db),
+):
+	ctx = ServiceContext(
+		incoming_data={"client_id": working_section_id, **body.model_dump(exclude_unset=True)},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(edit_working_section, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.delete("/{working_section_id}")
+async def delete_working_section_route(
+	working_section_id: str,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+	session: AsyncSession = Depends(get_db),
+):
+	ctx = ServiceContext(
+		incoming_data={"client_id": working_section_id},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(delete_working_section, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)

@@ -43,9 +43,10 @@ summary, archive, and debugging loops.
 6. Execute implementation (current or delegated agent).
 7. Write summary in `backend/docs/architecture/implemented_summaries/`.
 8. Create archive record in `backend/docs/architecture/archives/`.
-9. Update the intention plan's "Linked implementation plans" table and progress notes.
-10. If defects appear, create nested debug plan in `backend/docs/debugging/`.
-11. Repeat review -> implement -> summary -> archive for debug iteration.
+9. Move the implementation plan file from `backend/docs/architecture/under_construction/implementation/` to `backend/docs/architecture/archives/implementation/` to keep the under_construction folder clean.
+10. Update the intention plan's "Linked implementation plans" table and progress notes.
+11. If defects appear, create nested debug plan in `backend/docs/debugging/`.
+12. Repeat review -> implement -> summary -> archive for debug iteration.
 
 ## Handoff protocol
 

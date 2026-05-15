@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,8 +18,8 @@ class UserWorkProfile(IdentityMixin, Base):
     workspace_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("workspaces.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    salary_per_hour_before_tax: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
-    salary_per_hour_after_tax: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
+    salary_per_hour_before_tax: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    salary_per_hour_after_tax: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
