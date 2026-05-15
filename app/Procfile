@@ -1,0 +1,5 @@
+web: python run.py
+worker: python worker.py
+task-router: python beyo_manager/workers/task_router_process.py
+delayed-scheduler: python beyo_manager/workers/delayed_scheduler_runner.py
+recurring-scheduler: python beyo_manager/workers/recurring_scheduler_runner.py
