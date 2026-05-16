@@ -1,0 +1,9 @@
+
+router and command for recording the user app view record, this router will be hit the most, the front end will constantly send records of the entity_type which is what the user is viewing, it will come with a started_at timestamp and or end_at, this is because the front end will keep memory in case user is offline or some request failed, the front end will provide the client_id, that will be the way a record can be mark as ended_at. the frontend can send a list of records so the operation should support batch creation. on batch creation records with only start and end will be created, only one record will be allow to have the started_at and not the ended_at, that will be the record that is currently active and will be updated with the end time when the frontend send the client_id again with the end time. the user table should also update the last_app_view_record_id to keep always the last record accessible. 
+
+im thinking to create redis system so that the db doesn't get hammer, how can we achive this reliably. 
+
+when viewing what the current user is viewing the router get the info from the redis system as that will be the live layer.
+
+so the the calls for storing the records in the db happen over lapses, but the live data is instantly accessible through the redis, perhaps the instant layer stores a max amount of records so when the users views the recent records it gets the data stored from redis and we have a separate call to  a router which allows to retreat older records, pagination is of extreme importance here as the user can have a lot of records, so we need to make sure that the pagination is efficient and doesn't cause performance issues. when that call happens the recently store records on redis gets flushed to the db and the user can access all the records with pagination.
+

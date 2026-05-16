@@ -55,3 +55,9 @@
 	- `working_sections` uses `wsec` (not `ws_sec`) to satisfy no-underscore rule.
 	- `working_section_memberships` uses `wsme` to avoid collision with existing `workspace_memberships` prefix `wsm`.
 	- `working_section_supported_issue_types` uses `wsit` to avoid ambiguity with `wsic`.
+
+- Added table prefix reservations for analytics aggregate models (PLAN_analytics_aggregate_models_20260515):
+	- `usr_stat`: `UserLifetimeStats`
+	- `udwr`: `UserDailyWorkStats`
+	- `usdwr`: `UserSectionDailyWorkStats`
+	- `wsdws`: `WorkingSectionDailyWorkStats`

@@ -109,6 +109,28 @@ curl -X GET http://localhost:8000/api/v1/working-sections \
    curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/working-sections
    ```
 
+## User Management Integration Test
+
+Run the user-management shell test from the backend root:
+
+```bash
+bash tests/users/test_user_management.sh user_test@test.local Test1234!
+```
+
+The script covers:
+
+- self-service `GET /api/v1/users/me`
+- self-service `PATCH /api/v1/users/me`
+- self-service password rotation and restore
+- admin `POST /api/v1/auth/register` using `role_name`
+- admin `GET /api/v1/users`
+- admin `GET /api/v1/users/{user_client_id}`
+- admin `PATCH /api/v1/users/{user_client_id}`
+- admin `PATCH /api/v1/users/{user_client_id}/deactivate`
+- users-list filtering by `role`, `q`, and `working_sections`
+
+The script creates a temporary working section and temporary worker user, then cleans them up at the end.
+
 ## Adding New Test Users
 
 To add new test users to the seeded set:

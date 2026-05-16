@@ -5,6 +5,18 @@ def serialize_working_section_id_only(section: WorkingSection) -> dict:
     return {"client_id": section.client_id}
 
 
+def serialize_working_section_compact(
+    client_id: str,
+    name: str,
+    image: str | None,
+) -> dict:
+    return {
+        "client_id": client_id,
+        "name": name,
+        "image": image,
+    }
+
+
 def serialize_working_section_full(
     section: WorkingSection,
     dependencies: list[tuple[str, str]],

@@ -1,9 +1,13 @@
 import bcrypt
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import Settings
+from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetimeStats
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 
 
@@ -30,9 +34,11 @@ async def seed_admin_user(
         )
         session.add(user)
         await session.flush()
-        user_client_id = user.client_id
+        admin_user = user
     else:
-        user_client_id = existing_user.client_id
+        admin_user = existing_user
+
+    user_client_id = admin_user.client_id
 
     existing_membership = await session.scalar(
         select(WorkspaceMembership).where(
@@ -48,6 +54,33 @@ async def seed_admin_user(
             is_active=True,
         )
         session.add(membership)
+        await session.flush()
+
+    existing_work_profile = await session.scalar(
+        select(UserWorkProfile).where(
+            UserWorkProfile.user_id == user_client_id,
+            UserWorkProfile.workspace_id == workspace_id,
+        )
+    )
+    if existing_work_profile is None:
+        now = datetime.now(timezone.utc)
+        session.add(
+            UserWorkProfile(
+                user_id=user_client_id,
+                workspace_id=workspace_id,
+                created_by_id=user_client_id,
+                created_at=now,
+            )
+        )
+        session.add(
+            UserLifetimeStats(
+                workspace_id=workspace_id,
+                user_id=user_client_id,
+                user_display_name_snapshot=admin_user.username,
+                created_at=now,
+                updated_at=now,
+            )
+        )
         await session.flush()
 
     return {"admin_user_id": user_client_id}

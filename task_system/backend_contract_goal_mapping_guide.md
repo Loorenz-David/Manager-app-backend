@@ -106,6 +106,7 @@ Add:
 - "cache", "query cache", "result cache" -> `07`, `12`
 - "bulk insert", "batch write" -> `22`
 - "multipart", "large file upload" -> `34`
+- "search", "text search", "string filter", "q param", "filter query", "date filter", "ilike", "partial match" -> `55`
 
 ## Output format (required before coding)
 

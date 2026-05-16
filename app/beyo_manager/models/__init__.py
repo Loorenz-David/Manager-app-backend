@@ -109,3 +109,9 @@ from beyo_manager.models.tables.tasks import task_step_dependency  # noqa: F401
 
 # --- Task step assignment records (depends on task_step) ---
 from beyo_manager.models.tables.tasks import task_step_assignment_record  # noqa: F401
+
+# --- Analytics aggregates (depends on users and working_sections) ---
+from beyo_manager.models.tables.analytics import user_lifetime_stats  # noqa: F401
+from beyo_manager.models.tables.analytics import user_daily_work_stats  # noqa: F401
+from beyo_manager.models.tables.analytics import user_section_daily_work_stats  # noqa: F401
+from beyo_manager.models.tables.analytics import working_section_daily_work_stats  # noqa: F401
