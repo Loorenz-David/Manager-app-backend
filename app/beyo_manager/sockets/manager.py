@@ -33,6 +33,9 @@ class ConnectionManager:
     def get(self, sid: str) -> ConnectionMeta | None:
         return self._connections.get(sid)
 
+    def is_user_connected(self, user_id: str) -> bool:
+        return any(meta.user_id == user_id for meta in self._connections.values())
+
     @staticmethod
     def user_room(user_id: str) -> str:
         return f"user:{user_id}"

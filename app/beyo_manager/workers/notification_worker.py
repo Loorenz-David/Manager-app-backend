@@ -1,6 +1,7 @@
 import asyncio
 
 from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.models.database import init_db
 from beyo_manager.services.infra.execution.worker_base import run_worker
 from beyo_manager.services.infra.jobs.handlers.notification import handle_notification
 from beyo_manager.services.tasks.notifications.create_notifications import handle_create_notifications
@@ -17,5 +18,10 @@ HANDLER_MAP = {
     TaskType.RECURRING_REMINDER:         handle_reminder,
 }
 
+async def main() -> None:
+    await init_db()
+    await run_worker("queue:notifications", HANDLER_MAP)
+
+
 if __name__ == "__main__":
-    asyncio.run(run_worker("queue:notifications", HANDLER_MAP))
+    asyncio.run(main())

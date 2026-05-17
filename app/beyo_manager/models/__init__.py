@@ -72,7 +72,6 @@ from beyo_manager.models.tables.items import item_upholstery_requirement  # noqa
 
 # --- Upholstery inventory (depends on upholstery) ---
 from beyo_manager.models.tables.upholstery import upholstery_inventory  # noqa: F401
-from beyo_manager.models.tables.upholstery import upholstery_inventory_threshold_policy  # noqa: F401
 
 # --- Customers (use_alter FK to customer_history_record) ---
 from beyo_manager.models.tables.customers import customer  # noqa: F401

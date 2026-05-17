@@ -38,9 +38,6 @@ from beyo_manager.services.commands.reset.phases.delete_tasks import delete_task
 from beyo_manager.services.commands.reset.phases.delete_upholstery_inventories import (
     delete_upholstery_inventories,
 )
-from beyo_manager.services.commands.reset.phases.delete_upholstery_inventory_threshold_policies import (
-    delete_upholstery_inventory_threshold_policies,
-)
 from beyo_manager.services.commands.reset.phases.delete_upholsteries import delete_upholsteries
 from beyo_manager.services.commands.reset.phases.delete_static_costs import delete_static_costs
 from beyo_manager.services.commands.reset.phases.delete_working_section_memberships import (
@@ -88,8 +85,7 @@ async def reset_app(ctx: ServiceContext) -> dict:
     
     Upholstery:
     17. upholstery_inventories
-    18. upholstery_inventory_threshold_policies
-    19. upholsteries
+    18. upholsteries
     
     Other operational data:
     20. static_costs
@@ -137,7 +133,6 @@ async def reset_app(ctx: ServiceContext) -> dict:
         
         # Upholstery data
         await delete_upholstery_inventories(ctx.session, workspace_id)
-        await delete_upholstery_inventory_threshold_policies(ctx.session, workspace_id)
         await delete_upholsteries(ctx.session, workspace_id)
         
         # Other operational data

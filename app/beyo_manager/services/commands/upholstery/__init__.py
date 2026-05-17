@@ -1,0 +1,1 @@
+"""Upholstery inventory commands package."""

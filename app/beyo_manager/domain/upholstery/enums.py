@@ -13,18 +13,3 @@ class UpholsteryInventoryConditionEnum(enum.Enum):
     OUT_OF_STOCK = "out_of_stock"
 
 
-class ThresholdPolicyScopeEnum(enum.Enum):
-    WORKSPACE_DEFAULT = "workspace_default"
-    UPHOLSTERY = "upholstery"
-
-
-class SourcingEscalationPolicyEnum(enum.Enum):
-    NONE = "none"
-    RECOMMEND_REORDER = "recommend_reorder"
-    ESCALATE_TO_PROCUREMENT = "escalate_to_procurement"
-
-
-class InventoryWarningTierEnum(enum.Enum):
-    NORMAL = "normal"
-    LOW_STOCK_WARNING = "low_stock_warning"
-    URGENT_REORDER = "urgent_reorder"

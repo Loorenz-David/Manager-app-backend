@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from beyo_manager.config import settings
 from beyo_manager.models.tables.users.user import User
@@ -14,13 +14,18 @@ async def handle_record_view_start(payload: dict, task_id: str) -> None:
     entity_client_id = payload.get("entity_client_id")
     if not user_client_id or not entity_type:
         return
+
+    started_at_raw = payload.get("started_at")
+    started_at = (
+        datetime.fromisoformat(started_at_raw) if started_at_raw else datetime.now(timezone.utc)
+    )
+
     async with task_db_session() as session:
         user = (await session.execute(select(User).where(User.client_id == user_client_id))).scalar_one_or_none()
         if user is None:
             return
 
-        now = datetime.now(timezone.utc)
-        debounce_cutoff = now - timedelta(seconds=settings.presence_debounce_seconds)
+        debounce_cutoff = started_at - timedelta(seconds=settings.presence_debounce_seconds)
         existing = (await session.execute(
             select(UserAppViewRecord).where(
                 UserAppViewRecord.user_id == user.client_id,
@@ -33,11 +38,21 @@ async def handle_record_view_start(payload: dict, task_id: str) -> None:
         if existing is not None:
             return  # within debounce window — extend the existing record silently
 
+        # Global auto-close: close all open records for this user across all entities
+        await session.execute(
+            update(UserAppViewRecord)
+            .where(
+                UserAppViewRecord.user_id == user.client_id,
+                UserAppViewRecord.ended_at.is_(None),
+            )
+            .values(ended_at=started_at)
+        )
+
         record = UserAppViewRecord(
             user_id=user.client_id,
             entity_type=entity_type,
             entity_client_id=entity_client_id,
-            started_at=now,
+            started_at=started_at,
         )
         session.add(record)
         await session.flush()

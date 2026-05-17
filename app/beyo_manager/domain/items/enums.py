@@ -39,6 +39,7 @@ class ItemUpholsteryRequirementSourceEnum(enum.Enum):
 
 
 class ItemUpholsteryRequirementStateEnum(enum.Enum):
+    MISSING_QUANTITY = "missing_quantity"
     AVAILABLE = "available"
     NEEDS_ORDERING = "needs_ordering"
     ORDERED = "ordered"

@@ -8,8 +8,11 @@ from beyo_manager.routers.api_v1 import (
     files,
     health,
     images,
+    items,
+    item_upholsteries,
     notifications,
     reset,
+    upholstery_inventories,
     users,
     user_working_sections,
     working_section_memberships,
@@ -43,4 +46,8 @@ def register_v1_routers(app: FastAPI) -> None:
         prefix="/api/v1/working-sections",
         tags=["working-section-memberships"],
     )
+    app.include_router(upholstery_inventories.router)
+    app.include_router(item_upholsteries.router)
+    app.include_router(item_upholsteries.requirements_router)
+    app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
     # Add domain routers here as you build them:

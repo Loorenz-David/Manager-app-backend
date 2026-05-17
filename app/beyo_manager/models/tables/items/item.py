@@ -45,6 +45,8 @@ class Item(IdentityMixin, Base):
     external_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     external_source: Mapped[str | None] = mapped_column(String(128), nullable=True)
     external_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    item_category_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    item_major_category_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -70,13 +72,13 @@ class Item(IdentityMixin, Base):
             "workspace_id",
             "article_number",
             unique=True,
-            postgresql_where=text("article_number IS NOT NULL"),
+            postgresql_where=text("article_number IS NOT NULL AND is_deleted = false"),
         ),
         Index(
             "uix_items_workspace_sku",
             "workspace_id",
             "sku",
             unique=True,
-            postgresql_where=text("sku IS NOT NULL"),
+            postgresql_where=text("sku IS NOT NULL AND is_deleted = false"),
         ),
     )

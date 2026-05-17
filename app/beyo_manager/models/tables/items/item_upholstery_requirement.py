@@ -38,7 +38,7 @@ class ItemUpholsteryRequirement(IdentityMixin, Base):
         String(64), ForeignKey("item_upholsteries.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
     upholstery_inventory_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    amount_meters: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    amount_meters: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     value_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[ItemCurrencyEnum | None] = mapped_column(
         SAEnum(ItemCurrencyEnum, name="item_currency_enum", create_type=False), nullable=True
@@ -91,7 +91,10 @@ class ItemUpholsteryRequirement(IdentityMixin, Base):
             "item_upholstery_id",
             "state",
         ),
-        CheckConstraint("amount_meters >= 0", name="ck_item_upholstery_requirements_amount_positive"),
+        CheckConstraint(
+            "amount_meters IS NULL OR amount_meters >= 0",
+            name="ck_item_upholstery_requirements_amount_positive",
+        ),
         CheckConstraint(
             "value_minor IS NULL OR value_minor >= 0",
             name="ck_item_upholstery_requirements_value_positive",

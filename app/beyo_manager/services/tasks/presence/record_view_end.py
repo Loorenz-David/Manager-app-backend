@@ -13,6 +13,12 @@ async def handle_record_view_end(payload: dict, task_id: str) -> None:
     entity_client_id = payload.get("entity_client_id")
     if not user_client_id or not entity_type:
         return
+
+    ended_at_raw = payload.get("ended_at")
+    ended_at = (
+        datetime.fromisoformat(ended_at_raw) if ended_at_raw else datetime.now(timezone.utc)
+    )
+
     async with task_db_session() as session:
         user = (await session.execute(select(User).where(User.client_id == user_client_id))).scalar_one_or_none()
         if user is None:
@@ -31,5 +37,5 @@ async def handle_record_view_end(payload: dict, task_id: str) -> None:
         record = result.scalar_one_or_none()
         if record is None:
             return
-        record.ended_at = datetime.now(timezone.utc)
+        record.ended_at = ended_at
         await session.commit()

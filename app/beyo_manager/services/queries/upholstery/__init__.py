@@ -1,0 +1,1 @@
+"""Upholstery inventory queries package."""

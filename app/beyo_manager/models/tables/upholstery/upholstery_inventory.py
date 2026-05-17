@@ -7,10 +7,10 @@ from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -61,6 +61,7 @@ class UpholsteryInventory(IdentityMixin, Base):
     total_upholstery_used_inventory_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     total_upholstery_used_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     total_upholstery_surplus_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    low_stock_threshold_meters: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     latest_projection_history_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -81,7 +82,13 @@ class UpholsteryInventory(IdentityMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("workspace_id", "upholstery_id", name="uq_upholstery_inventory_workspace_upholstery"),
+        Index(
+            "uix_upholstery_inventory_workspace_upholstery_active",
+            "workspace_id",
+            "upholstery_id",
+            unique=True,
+            postgresql_where="is_deleted = false",
+        ),
         CheckConstraint("minimum_to_have IS NULL OR minimum_to_have >= 0", name="ck_upholstery_inventory_min_positive"),
         CheckConstraint("maximum_to_have IS NULL OR maximum_to_have >= 0", name="ck_upholstery_inventory_max_positive"),
         CheckConstraint(
@@ -91,5 +98,9 @@ class UpholsteryInventory(IdentityMixin, Base):
         CheckConstraint(
             "projected_inventory_value_minor IS NULL OR projected_inventory_value_minor >= 0",
             name="ck_upholstery_inventory_value_positive",
+        ),
+        CheckConstraint(
+            "low_stock_threshold_meters IS NULL OR low_stock_threshold_meters > 0",
+            name="ck_upholstery_inventory_low_stock_threshold_positive",
         ),
     )

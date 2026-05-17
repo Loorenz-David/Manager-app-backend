@@ -1,10 +1,14 @@
+import logging
 import jwt
 
 from beyo_manager.config import settings
+
+logger = logging.getLogger(__name__)
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.presence.enums import EntityType
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.infra.presence import mark_left, mark_viewing
+from beyo_manager.services.infra.presence.user_online_key import delete_user_online, set_user_online
 from beyo_manager.sockets.connection_meta import ConnectionMeta
 from beyo_manager.sockets.manager import manager
 
@@ -17,21 +21,33 @@ async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
         claims = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
     except jwt.PyJWTError:
         return False
+    user_id = claims.get("user_id", "")
+    if not user_id:
+        return False
     await manager.connect(
         sid,
         ConnectionMeta(
-            user_id=claims.get("user_id", ""),
+            user_id=user_id,
             workspace_id=claims.get("workspace_id", ""),
             username=claims.get("username", ""),
         ),
     )
+    try:
+        await set_user_online(user_id)
+    except Exception:
+        logger.warning("set_user_online failed for user_id=%s — connection allowed, user appears offline", user_id)
     return True
 
 
-async def _handle_disconnect(sid: str):
+async def _handle_disconnect(sid: str, reason: str | None = None):
     meta = await manager.disconnect(sid)
     if meta:
         _cleanup_presence(meta)
+        if not manager.is_user_connected(meta.user_id):
+            try:
+                await delete_user_online(meta.user_id)
+            except Exception:
+                logger.warning("delete_user_online failed for user_id=%s", meta.user_id)
 
 
 async def _handle_view_entity(sid: str, data: dict):

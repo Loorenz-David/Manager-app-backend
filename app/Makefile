@@ -46,23 +46,26 @@ test-e2e:
 
 # Worker runtime
 worker:
-	python worker.py
+	PYTHONPATH=. python worker.py
 
 worker-dev:
-	python scripts/worker.py
+	PYTHONPATH=. APP_ENV=development python scripts/worker.py
+
+presence-worker:
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.presence_worker
 
 worker-logs:
 	docker compose logs -f worker
 
 # Scheduler runners
 delayed-scheduler:
-	python beyo_manager/workers/delayed_scheduler_runner.py
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.delayed_scheduler_runner
 
 recurring-scheduler:
-	python beyo_manager/workers/recurring_scheduler_runner.py
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.recurring_scheduler_runner
 
 task-router:
-	python beyo_manager/workers/task_router_process.py
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.task_router_process
 
 # Run before every production deploy
 pre-deploy:
@@ -96,4 +99,4 @@ inspect:
 reset-db:
 	python scripts/ops.py reset-db --dry-run True
 
-.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db
+.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker
