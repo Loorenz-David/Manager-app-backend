@@ -131,6 +131,62 @@ The script covers:
 
 The script creates a temporary working section and temporary worker user, then cleans them up at the end.
 
+## User View Records Integration Test
+
+Required processes for end-to-end verification:
+
+- backend API server
+- PostgreSQL
+- Redis
+- Python package `websocket-client` installed in `backend/app/.venv`
+- task router (`make task-router`)
+- presence worker (`make presence-worker`)
+
+Note: `make worker-dev` runs the RQ worker (`default/critical/replay/dead-letter`) and does not consume `queue:presence` tasks.
+
+Run the user view-records shell test from the backend root:
+
+```bash
+bash tests/users/test_user_view_records.sh user_test@test.local Test1234!
+```
+
+The script covers:
+
+- self-service `POST /api/v1/users/me/view-records` (START events)
+- self-service `POST /api/v1/users/me/view-records` (completed START+END events)
+- self-service `GET /api/v1/users/me/view-records/current` set/clear behavior
+- self-service `GET /api/v1/users/me/view-records` pagination shape
+- admin `GET /api/v1/users/{user_client_id}/view-records`
+- admin `GET /api/v1/users/{user_client_id}/view-records` non-member guard (`404`)
+- admin `GET /api/v1/users/live` presence shape (`current_view`, `is_online`, `role_name`)
+- validation error for invalid `entity_type` (`422`)
+- validation error for oversized `records` batch (`422`)
+
+The script uses seeded admin credentials and does not require creating temporary users.
+
+## User Online Status Integration Test
+
+Required processes for end-to-end verification:
+
+- backend API server
+- PostgreSQL
+- Redis
+
+Run the user online-status test from the backend root:
+
+```bash
+python tests/users/test_user_online_status.py user_test@test.local Test1234!
+```
+
+The script covers:
+
+- connect one socket -> `GET /api/v1/users/live` shows `is_online: true`
+- connect second socket, disconnect first -> still `is_online: true` (multi-tab guard)
+- disconnect last socket -> `is_online: false`
+
+This test validates live endpoint behavior based on socket connect/disconnect lifecycle.
+Because disconnect propagation can depend on heartbeat timeouts, the test allows up to ~75s for `is_online` to turn false after final disconnect.
+
 ## Adding New Test Users
 
 To add new test users to the seeded set:

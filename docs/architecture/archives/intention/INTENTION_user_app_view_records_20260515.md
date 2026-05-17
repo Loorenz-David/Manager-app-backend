@@ -3,7 +3,7 @@
 ## Metadata
 
 - Intention ID: `INTENTION_user_app_view_records_20260515`
-- Status: `active`
+- Status: `achieved`
 - Owner: `David`
 - Created at (UTC): `2026-05-15T00:00:00Z`
 - Last updated at (UTC): `2026-05-15T01:00:00Z`
@@ -58,7 +58,7 @@ The frontend needs a reliable HTTP channel for view record events — especially
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| `PLAN_user_app_view_records_20260515` | `backend/docs/architecture/under_construction/implementation/PLAN_user_app_view_records_20260515.md` | `under_construction` | HTTP batch POST, self-service GET (current + history), admin/manager GET (per-user history + live workspace snapshot), Redis user-view key, task handler global auto-close, local presence contract update |
+| `PLAN_user_app_view_records_20260515` | `backend/docs/architecture/archives/implementation/PLAN_user_app_view_records_20260515.md` | `completed` | HTTP batch POST, self-service GET (current + history), admin/manager GET (per-user history + live workspace snapshot), Redis user-view key, task handler global auto-close, local presence contract update |
 
 ## Progress notes
 
@@ -80,6 +80,6 @@ The frontend needs a reliable HTTP channel for view record events — especially
 
 ## Lifecycle transition
 
-- Current status: `active`
-- Next status: `achieved`
+- Current status: `achieved`
 - Transition trigger: All success criteria met and implementation plan completed and archived.
+- Achieved on: `2026-05-16` by GitHub Copilot.

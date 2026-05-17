@@ -47,7 +47,7 @@ If a contract's pattern feels ambiguous, re-read it carefully or ask for clarifi
 - `../architecture/01_architecture.md`
 - `../architecture/04_context.md`
 - `../architecture/05_errors.md`
-- `../architecture/06_commands.md`
+- `../architecture/06_commands.md` + `../architecture/06_commands_local.md` (local adds `maybe_begin` transaction utility, session call safety rules, and subordinate-command event rule — always load both)
 - `../architecture/07_queries.md` + `../architecture/07_queries_local.md` (local overrides cursor pagination with offset — always load both)
 - `../architecture/09_routers.md`
 - `../architecture/21_naming_conventions.md`
