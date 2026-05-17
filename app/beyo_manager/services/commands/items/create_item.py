@@ -29,11 +29,8 @@ async def create_item(ctx: ServiceContext) -> dict:
         iup_input = request.item_upholstery
         if iup_input.source == ItemUpholsterySourceEnum.INTERNAL and iup_input.upholstery_id is None:
             raise ValidationError("item_upholstery.upholstery_id is required when source is internal.")
-        if iup_input.source == ItemUpholsterySourceEnum.CUSTOMER:
-            if iup_input.upholstery_id is not None:
-                raise ValidationError("item_upholstery.upholstery_id must be null when source is customer.")
-            if not iup_input.name or not iup_input.code:
-                raise ValidationError("item_upholstery.name and item_upholstery.code are required when source is customer.")
+        if iup_input.source == ItemUpholsterySourceEnum.CUSTOMER and iup_input.upholstery_id is not None:
+            raise ValidationError("item_upholstery.upholstery_id must be null when source is customer.")
 
     async with maybe_begin(ctx.session):
         item_category_snapshot: str | None = None
