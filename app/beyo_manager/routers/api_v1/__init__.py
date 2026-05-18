@@ -5,6 +5,7 @@ from beyo_manager.routers.api_v1 import (
     auth,
     bootstrap,
     cases,
+    customers,
     files,
     health,
     images,
@@ -50,4 +51,5 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(item_upholsteries.router)
     app.include_router(item_upholsteries.requirements_router)
     app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
+    app.include_router(customers.router, prefix="/api/v1/customers", tags=["customers"])
     # Add domain routers here as you build them:

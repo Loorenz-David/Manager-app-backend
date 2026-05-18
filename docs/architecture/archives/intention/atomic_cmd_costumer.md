@@ -10,3 +10,17 @@ listing  costumers has the common command pattern we have stablish, list of cost
 
 getting a costumer by id returns the costumer with its linked items serialized with the item serializer.
 
+---
+
+## Linked implementation plans
+
+| Plan ID | Status | Plan path | Summary path | Archive record |
+|---|---|---|---|---|
+| `PLAN_customer_crud_20260517` | `archived` | `backend/docs/architecture/archives/implementation/PLAN_customer_crud_20260517.md` | `backend/docs/architecture/implemented_summaries/SUMMARY_customer_crud_20260517.md` | `backend/docs/architecture/archives/ARCHIVE_RECORD_PLAN_customer_crud_20260517.md` |
+
+## Progress notes
+
+- `2026-05-17`: Customer CRUD/query/router scope implemented and validated.
+- `2026-05-17`: Formal shell test suite added at `backend/tests/costumer/test_costumer.sh` and executed with all checks passing.
+- `2026-05-17`: Lifecycle completed for this implementation plan (summary + archive).
+

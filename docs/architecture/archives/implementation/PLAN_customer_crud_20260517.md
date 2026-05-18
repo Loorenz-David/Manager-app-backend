@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_customer_crud_20260517`
-- Status: `under_construction`
-- Owner agent: `Claude Sonnet 4.6`
+- Status: `archived`
+- Owner agent: `GitHub Copilot (GPT-5.3-Codex)`
 - Created at (UTC): `2026-05-17T20:00:00Z`
-- Last updated at (UTC): `2026-05-17T20:00:00Z`
+- Last updated at (UTC): `2026-05-17T21:15:00Z`
 - Related issue/ticket: —
 - Intention plan: `backend/docs/architecture/under_construction/intention/atomic_cmd_costumer.md`
 
@@ -988,6 +988,6 @@ grep -n "find-or-create\|client_id" backend/app/beyo_manager/routers/api_v1/cust
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
-- Transition owner: GitHub Copilot (implementation)
+- Current state: `archived`
+- Next state: `none`
+- Transition owner: `GitHub Copilot (GPT-5.3-Codex)`
