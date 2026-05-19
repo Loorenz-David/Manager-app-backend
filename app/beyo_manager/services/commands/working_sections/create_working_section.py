@@ -15,6 +15,7 @@ from beyo_manager.services.commands.working_sections.requests.create_working_sec
     WorkingSectionCreateRequest,
     parse_create_working_section_request,
 )
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.infra.events.build_event import build_workspace_event
@@ -24,7 +25,17 @@ async def create_working_section(ctx: ServiceContext) -> dict:
     request: WorkingSectionCreateRequest = parse_create_working_section_request(ctx.incoming_data)
     pending_events: list = []
 
+    if request.client_id is not None:
+        validate_provided_client_id(request.client_id, "wsec")
+
     async with ctx.session.begin():
+        section_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            dup = await ctx.session.get(WorkingSection, request.client_id)
+            if dup is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            section_kwargs["client_id"] = request.client_id
+
         existing = await ctx.session.scalar(
             select(WorkingSection).where(
                 WorkingSection.workspace_id == ctx.workspace_id,
@@ -105,6 +116,7 @@ async def create_working_section(ctx: ServiceContext) -> dict:
                     raise NotFound(f"Issue type '{issue_type_id}' was not found.")
 
         section = WorkingSection(
+            **section_kwargs,
             workspace_id=ctx.workspace_id,
             name=request.name,
             image=request.image,

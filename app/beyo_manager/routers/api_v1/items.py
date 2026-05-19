@@ -14,6 +14,7 @@ from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
 from beyo_manager.services.commands.items.create_item import create_item
 from beyo_manager.services.commands.items.create_item_issue import create_item_issue
 from beyo_manager.services.commands.items.delete_item import delete_item
+from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.items.items import get_item, list_items
@@ -32,6 +33,7 @@ class _ItemIssueBody(BaseModel):
 
 
 class _ItemUpholsteryBody(BaseModel):
+    client_id: str | None = None
     upholstery_id: str | None = None
     source: ItemUpholsterySourceEnum
     name: str | None = None
@@ -41,6 +43,7 @@ class _ItemUpholsteryBody(BaseModel):
 
 
 class _CreateItemBody(BaseModel):
+    client_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
     item_category_id: str | None = None
@@ -66,6 +69,26 @@ class _UpdateItemBody(BaseModel):
     sku: str | None = None
     item_category_id: str | None = None
     quantity: int | None = None
+    designer: str | None = None
+    height_in_cm: int | None = None
+    width_in_cm: int | None = None
+    depth_in_cm: int | None = None
+    item_value_minor: int | None = None
+    item_cost_minor: int | None = None
+    item_currency: ItemCurrencyEnum | None = None
+    item_position: str | None = None
+    external_id: str | None = None
+    external_url: str | None = None
+    external_source: str | None = None
+    external_order_id: str | None = None
+
+
+class _FindOrCreateItemBody(BaseModel):
+    client_id: str | None = None
+    article_number: str | None = None
+    sku: str | None = None
+    item_category_id: str | None = None
+    quantity: int = 1
     designer: str | None = None
     height_in_cm: int | None = None
     width_in_cm: int | None = None
@@ -139,6 +162,23 @@ async def route_create_item_issue(
         session=session,
     )
     outcome = await run_service(create_item_issue, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/find-or-create")
+async def route_find_or_create_item(
+    body: _FindOrCreateItemBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data=body.model_dump(exclude_unset=True),
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(find_or_create_item, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

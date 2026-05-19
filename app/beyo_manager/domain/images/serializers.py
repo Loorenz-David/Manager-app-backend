@@ -22,6 +22,16 @@ def serialize_annotation(annotation) -> dict:
     }
 
 
+def serialize_image_light(image) -> dict:
+    return {
+        "client_id": image.client_id,
+        "image_url": image.image_url,
+        "width_px": image.width_px,
+        "height_px": image.height_px,
+        "file_size_bytes": image.file_size_bytes,
+    }
+
+
 def serialize_image(image, *, include_events: bool = False, include_annotations: bool = False) -> dict:
     events = [serialize_image_event(event) for event in getattr(image, "events", [])] if include_events else []
     annotations = getattr(image, "image_annotations", []) if include_annotations else []

@@ -1,12 +1,16 @@
 """CMD-3: Mark in-use and available requirements as completed."""
 
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.items.requests import parse_mark_completed_request
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     complete_available_direct,
@@ -14,6 +18,9 @@ from beyo_manager.services.commands.upholstery._inventory_mutations import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
 async def mark_requirements_completed(ctx: ServiceContext) -> dict:
@@ -63,4 +70,33 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
             req.completed_at = now
             req.updated_by_id = ctx.user_id
 
+        target_user_ids = await _resolve_upholstery_audience(
+            session=ctx.session,
+            workspace_id=ctx.workspace_id,
+            item_upholstery_ids=[request.item_upholstery_id],
+            actor_id=ctx.user_id,
+        )
+        if target_user_ids:
+            await create_instant_task(
+                session=ctx.session,
+                task_type=TaskType.CREATE_NOTIFICATIONS,
+                payload=asdict(NotificationPayload(
+                    notification_type="upholstery_requirement_completed",
+                    user_ids=target_user_ids,
+                    title="Requirements completed",
+                    body="Upholstery requirements have been marked as completed.",
+                    entity_type="item_upholstery",
+                    entity_client_id=request.item_upholstery_id,
+                    exclude_viewing=[],
+                )),
+            )
+
+    await event_bus.dispatch([
+        WorkspaceEvent(
+            event_name="item:upholstery-requirement-state-changed",
+            client_id=request.item_upholstery_id,
+            workspace_id=ctx.workspace_id,
+            extra={"new_state": ItemUpholsteryRequirementStateEnum.COMPLETED.value},
+        ),
+    ])
     return {}

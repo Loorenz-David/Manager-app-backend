@@ -53,6 +53,7 @@ class StepStateRecord(IdentityMixin, Base):
         nullable=True,
     )
     taken_from_average: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recorded_time_marked_wrong: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     entered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     exited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

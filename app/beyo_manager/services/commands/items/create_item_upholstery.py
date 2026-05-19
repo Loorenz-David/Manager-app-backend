@@ -5,20 +5,28 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.items.enums import (
     ItemUpholsteryRequirementSourceEnum,
     ItemUpholsteryRequirementStateEnum,
     ItemUpholsterySourceEnum,
 )
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.validation import ValidationError
+from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.services.commands.history._create_history_record_in_session import (
+    _create_history_record_in_session,
+)
+from beyo_manager.services.commands.history.message_builder import build_create_message
 from beyo_manager.services.commands.items.requests import parse_create_item_upholstery_request
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.upholstery._inventory_mutations import check_and_inject_need
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
 async def _create_item_upholstery_in_session(
@@ -32,9 +40,19 @@ async def _create_item_upholstery_in_session(
     source: ItemUpholsterySourceEnum,
     time_to_fix_in_seconds: int | None,
     user_id: str | None,
+    client_id: str | None = None,
 ) -> str:
     """Create ItemUpholstery and its initial requirement inside an open transaction."""
+    iup_kwargs: dict[str, str] = {}
+    if client_id is not None:
+        validate_provided_client_id(client_id, "iup")
+        existing = await session.get(ItemUpholstery, client_id)
+        if existing is not None:
+            raise ConflictError("Provided client_id is already in use.")
+        iup_kwargs["client_id"] = client_id
+
     iup = ItemUpholstery(
+        **iup_kwargs,
         workspace_id=workspace_id,
         item_id=item_id,
         upholstery_id=upholstery_id,
@@ -126,6 +144,29 @@ async def create_item_upholstery(ctx: ServiceContext) -> dict:
             source=request.source,
             time_to_fix_in_seconds=request.time_to_fix_in_seconds,
             user_id=ctx.user_id,
+            client_id=request.client_id,
         )
 
+        username = ctx.identity.get("username")
+        await _create_history_record_in_session(
+            session=ctx.session,
+            entity_type=HistoryRecordEntityTypeEnum.ITEM_UPHOLSTERY,
+            entity_client_id=iup_client_id,
+            change_type=HistoryRecordChangeTypeEnum.CREATED,
+            description=build_create_message(username, "upholstery", "item"),
+            field_name=None,
+            from_value=None,
+            to_value=None,
+            created_by_id=ctx.user_id,
+            username_snapshot=username,
+        )
+
+    await event_bus.dispatch([
+        WorkspaceEvent(
+            event_name="item:updated",
+            client_id=request.item_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+    ])
     return {"client_id": iup_client_id}

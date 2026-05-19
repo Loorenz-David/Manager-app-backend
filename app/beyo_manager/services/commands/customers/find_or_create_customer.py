@@ -9,8 +9,10 @@ from beyo_manager.services.commands.customers.requests import (
     _normalize_phone,
     parse_find_or_create_customer_request,
 )
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.errors.validation import ConflictError
 
 
 async def find_or_create_customer(ctx: ServiceContext) -> dict:
@@ -22,6 +24,9 @@ async def find_or_create_customer(ctx: ServiceContext) -> dict:
 
     if normalized_email is None and normalized_phone is None:
         raise ValidationError("At least one of primary_email or primary_phone_number must be provided.")
+
+    if request.client_id is not None:
+        validate_provided_client_id(request.client_id, "cus")
 
     async with maybe_begin(ctx.session):
         lookup_conditions = []
@@ -44,7 +49,15 @@ async def find_or_create_customer(ctx: ServiceContext) -> dict:
         if existing is not None:
             return {"client_id": existing.client_id, "was_created": False}
 
+        customer_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            dup = await ctx.session.get(Customer, request.client_id)
+            if dup is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            customer_kwargs["client_id"] = request.client_id
+
         customer = Customer(
+            **customer_kwargs,
             workspace_id=ctx.workspace_id,
             display_name=request.display_name,
             customer_type=request.customer_type,

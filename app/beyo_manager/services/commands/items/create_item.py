@@ -2,20 +2,28 @@
 
 from sqlalchemy import select
 
+from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.items.enums import ItemStateEnum, ItemUpholsterySourceEnum
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.validation import ValidationError
+from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.services.commands.history._create_history_record_in_session import (
+    _create_history_record_in_session,
+)
+from beyo_manager.services.commands.history.message_builder import build_create_message
 from beyo_manager.services.commands.items.create_item_issue import _create_item_issue_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
 from beyo_manager.services.commands.items.requests import (
     CreateItemIssueRequest,
     parse_create_item_request,
 )
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.build_event import build_workspace_event
 
 
 async def create_item(ctx: ServiceContext) -> dict:
@@ -33,6 +41,14 @@ async def create_item(ctx: ServiceContext) -> dict:
             raise ValidationError("item_upholstery.upholstery_id must be null when source is customer.")
 
     async with maybe_begin(ctx.session):
+        item_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            validate_provided_client_id(request.client_id, "itm")
+            existing = await ctx.session.get(Item, request.client_id)
+            if existing is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            item_kwargs["client_id"] = request.client_id
+
         item_category_snapshot: str | None = None
         item_major_category_snapshot: str | None = None
         if request.item_category_id is not None:
@@ -50,6 +66,7 @@ async def create_item(ctx: ServiceContext) -> dict:
             item_major_category_snapshot = category.major_category.value
 
         item = Item(
+            **item_kwargs,
             workspace_id=ctx.workspace_id,
             article_number=request.article_number,
             sku=request.sku,
@@ -128,4 +145,21 @@ async def create_item(ctx: ServiceContext) -> dict:
                 user_id=ctx.user_id,
             )
 
+        username = ctx.identity.get("username")
+        await _create_history_record_in_session(
+            session=ctx.session,
+            entity_type=HistoryRecordEntityTypeEnum.ITEM,
+            entity_client_id=item.client_id,
+            change_type=HistoryRecordChangeTypeEnum.CREATED,
+            description=build_create_message(username, "item", "workspace"),
+            field_name=None,
+            from_value=None,
+            to_value=None,
+            created_by_id=ctx.user_id,
+            username_snapshot=username,
+        )
+
+    await event_bus.dispatch([
+        build_workspace_event(item, "item:created"),
+    ])
     return {"client_id": item.client_id}

@@ -93,17 +93,6 @@ class Task(IdentityMixin, Base):
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    latest_history_record_id: Mapped[str | None] = mapped_column(
-        String(64),
-        ForeignKey(
-            "task_history_records.client_id",
-            use_alter=True,
-            name="fk_tasks_latest_history_record_id",
-            ondelete="RESTRICT",
-        ),
-        nullable=True,
-        index=True,
-    )
     latest_event_id: Mapped[str | None] = mapped_column(
         String(64),
         ForeignKey(

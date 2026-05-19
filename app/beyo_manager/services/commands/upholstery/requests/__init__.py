@@ -11,6 +11,7 @@ from beyo_manager.errors.validation import ValidationError
 class CreateUpholsteryInventoryRequest(BaseModel):
     """Request to create a new upholstery inventory record."""
 
+    client_id: str | None = None
     upholstery_id: str
     low_stock_threshold_meters: Decimal | None = None
     minimum_to_have: int | None = None

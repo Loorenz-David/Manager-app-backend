@@ -38,14 +38,14 @@ class PermissionDenied(DomainError):
 # errors/validation.py
 from .base import DomainError
 
-class ValidationFailed(DomainError):
+class ValidationError(DomainError):
     code = "bad_request"
 
 
 # errors/conflict.py
 from .base import DomainError
 
-class Conflict(DomainError):
+class ConflictError(DomainError):
     code = "conflict"
 ```
 
@@ -59,8 +59,8 @@ Add new subclasses when a new semantic category is needed. Do not reuse `DomainE
 from .base import DomainError
 from .not_found import NotFound
 from .permissions import PermissionDenied
-from .validation import ValidationFailed
-from .conflict import Conflict
+from .validation import ValidationError
+from .conflict import ConflictError
 ```
 
 Import errors from `my_app.errors`, never from the submodule directly.
@@ -76,8 +76,8 @@ The response builder maps error types to HTTP status codes:
 STATUS_MAP: dict[type[DomainError], int] = {
     NotFound: 404,
     PermissionDenied: 403,
-    ValidationFailed: 400,
-    Conflict: 409,
+    ValidationError: 400,
+    ConflictError: 409,
     DomainError: 500,
 }
 ```
@@ -157,18 +157,18 @@ class StatusOutcome:
 Always raise a specific subclass:
 
 ```python
-from my_app.errors import NotFound, ValidationFailed, PermissionDenied
+from my_app.errors import NotFound, ValidationError, PermissionDenied
 
 # Correct
 raise NotFound(f"Order {order_id} not found.")
-raise ValidationFailed("Delivery window must start before it ends.")
+raise ValidationError("Delivery window must start before it ends.")
 raise PermissionDenied("Only admin roles can delete orders.")
 
 # Wrong — too generic
 raise DomainError("Something went wrong.")
 ```
 
-Never raise Python built-ins (`ValueError`, `KeyError`, `TypeError`) across layer boundaries. Convert them to `ValidationFailed` at the earliest point in the command where the bad input is detected.
+Never raise Python built-ins (`ValueError`, `KeyError`, `TypeError`) across layer boundaries. Convert them to `ValidationError` at the earliest point in the command where the bad input is detected.
 
 ---
 

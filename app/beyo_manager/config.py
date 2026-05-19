@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_origins(cls, v: object) -> list[str]:
         if isinstance(v, str):
-            return [o.strip() for o in v.split(",")]
+            return [o.strip() for o in v.split(",") if o.strip()]
         return v  # type: ignore[return-value]
 
     @model_validator(mode="after")

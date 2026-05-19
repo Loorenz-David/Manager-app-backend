@@ -49,17 +49,6 @@ class Customer(IdentityMixin, Base):
     updated_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
-    latest_history_record_id: Mapped[str | None] = mapped_column(
-        String(64),
-        ForeignKey(
-            "customer_history_records.client_id",
-            use_alter=True,
-            name="fk_customers_latest_history_record_id",
-            ondelete="RESTRICT",
-        ),
-        nullable=True,
-        index=True,
-    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[str | None] = mapped_column(

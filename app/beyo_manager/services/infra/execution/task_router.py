@@ -29,6 +29,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.RECURRING_PIN_TASK:         "queue:tasks",
     TaskType.RECORD_VIEW_START:          "queue:presence",
     TaskType.RECORD_VIEW_END:            "queue:presence",
+    TaskType.PROCESS_STEP_TRANSITION:    "queue:analytics",
 }
 
 FALLBACK_POLL_SECONDS    = 30   # safety net for LISTEN/NOTIFY drop — not routing latency

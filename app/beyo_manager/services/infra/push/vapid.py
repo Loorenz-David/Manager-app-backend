@@ -8,6 +8,13 @@ from beyo_manager.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _vapid_sub_claim() -> str:
+    contact = (settings.vapid_contact_email or "").strip()
+    if contact.startswith("mailto:"):
+        return contact
+    return f"mailto:{contact}"
+
+
 def send_web_push(
     endpoint: str,
     p256dh:   str,
@@ -22,5 +29,5 @@ def send_web_push(
         subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
         data=json.dumps(payload),
         vapid_private_key=settings.vapid_private_key,
-        vapid_claims={"sub": f"mailto:{settings.vapid_contact_email}"},
+        vapid_claims={"sub": _vapid_sub_claim()},
     )

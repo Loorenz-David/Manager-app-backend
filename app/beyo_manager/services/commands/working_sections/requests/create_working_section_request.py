@@ -4,6 +4,7 @@ from beyo_manager.errors.validation import ValidationError
 
 
 class WorkingSectionCreateRequest(BaseModel):
+    client_id: str | None = None
     name: str
     image: str | None = None
     working_section_dependencies: list[str] = []

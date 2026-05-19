@@ -4,11 +4,11 @@ from sqlalchemy import DateTime, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 
-class HistoryRecord:
+class HistoryRecordMixin:
     """Mixin for history/audit tables. Captures what changed, when, by whom, and why.
 
     Always combine with IdentityMixin:
-        class MyHistoryRecord(IdentityMixin, HistoryRecord, Base): ...
+        class MyHistoryRecord(IdentityMixin, HistoryRecordMixin, Base): ...
     """
 
     @declared_attr

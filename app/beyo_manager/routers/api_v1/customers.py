@@ -21,6 +21,7 @@ router = APIRouter()
 
 
 class _CreateCustomerBody(BaseModel):
+    client_id: str | None = None
     display_name: str
     customer_type: CustomerTypeEnum = CustomerTypeEnum.UNKNOWN
     primary_email: str | None = None
@@ -38,6 +39,7 @@ class _UpdateCustomerBody(BaseModel):
 
 
 class _FindOrCreateCustomerBody(BaseModel):
+    client_id: str | None = None
     display_name: str
     primary_email: str | None = None
     primary_phone_number: str | None = None

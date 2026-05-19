@@ -21,9 +21,6 @@ from beyo_manager.services.commands.reset.phases.delete_working_sections import 
 from beyo_manager.services.commands.reset.phases.delete_issue_severities import delete_issue_severities
 from beyo_manager.services.commands.reset.phases.delete_issue_types import delete_issue_types
 from beyo_manager.services.commands.reset.phases.delete_item_categories import delete_item_categories
-from beyo_manager.services.commands.reset.phases.delete_task_history_records import (
-    delete_task_history_records,
-)
 from beyo_manager.services.commands.reset.phases.delete_task_events import delete_task_events
 from beyo_manager.services.commands.reset.phases.delete_step_state_records import delete_step_state_records
 from beyo_manager.services.commands.reset.phases.delete_task_step_assignment_records import (
@@ -74,14 +71,13 @@ async def reset_app(ctx: ServiceContext) -> dict:
     8. item_categories
     
     Task system:
-    9. task_history_records
-    10. task_events
-    11. step_state_records
-    12. task_step_assignment_records
-    13. task_step_dependencies
-    14. task_steps
-    15. task_items
-    16. tasks
+    9. task_events
+    10. step_state_records
+    11. task_step_assignment_records
+    12. task_step_dependencies
+    13. task_steps
+    14. task_items
+    15. tasks
     
     Upholstery:
     17. upholstery_inventories
@@ -122,7 +118,6 @@ async def reset_app(ctx: ServiceContext) -> dict:
         await delete_item_categories(ctx.session, workspace_id)
         
         # Task system data
-        await delete_task_history_records(ctx.session, workspace_id)
         await delete_task_events(ctx.session, workspace_id)
         await delete_step_state_records(ctx.session, workspace_id)
         await delete_task_step_assignment_records(ctx.session, workspace_id)

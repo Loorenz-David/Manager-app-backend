@@ -37,6 +37,9 @@ class TaskType(enum.Enum):
     RECORD_VIEW_START = "record_view_start"
     RECORD_VIEW_END   = "record_view_end"
 
+    # Analytics — step state transition event
+    PROCESS_STEP_TRANSITION = "process_step_transition"
+
 
 class EventTaskOriginSourceEnum(enum.Enum):
     DELAYED_SCHEDULER   = "delayed_scheduler"

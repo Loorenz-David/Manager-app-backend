@@ -8,9 +8,20 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from beyo_manager.config import settings
 
 
+_KNOWN_ROLE_NAMES = {"admin", "manager", "seller", "worker"}
+
+
 class BackendPermissionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        # Public or self-service notification endpoints should remain accessible
+        # even when a worker token is present.
+        if request.url.path in {
+            "/api/v1/notifications/vapid-public-key",
+            "/api/v1/notifications/push-subscription",
+        }:
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
@@ -29,6 +40,13 @@ class BackendPermissionMiddleware(BaseHTTPMiddleware):
         if claims.get("app_scope") == "admin":
             return await call_next(request)
 
+        # Prefer role-based gating to match router-level `require_roles(...)` checks.
+        # If token includes a known role name, defer authorization to route dependencies.
+        role_name = str(claims.get("role_name", "")).lower()
+        if role_name in _KNOWN_ROLE_NAMES:
+            return await call_next(request)
+
+        # Backward-compatibility fallback for tokens that only contain granular permissions.
         allowed = set(claims.get("backend_permissions", []))
         normalized = _normalize_api_path(f"{request.method}:{request.url.path}")
         if normalized not in allowed:

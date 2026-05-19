@@ -8,6 +8,7 @@ from beyo_manager.domain.upholstery.enums import UpholsteryInventoryConditionEnu
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_inventory_request
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
 
 
@@ -15,7 +16,17 @@ async def create_upholstery_inventory(ctx: ServiceContext) -> dict:
     """Create a new upholstery inventory record for the workspace."""
     request = parse_create_upholstery_inventory_request(ctx.incoming_data)
 
+    if request.client_id is not None:
+        validate_provided_client_id(request.client_id, "uin")
+
     async with ctx.session.begin():
+        inv_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            dup = await ctx.session.get(UpholsteryInventory, request.client_id)
+            if dup is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            inv_kwargs["client_id"] = request.client_id
+
         existing = await ctx.session.execute(
             select(UpholsteryInventory).where(
                 UpholsteryInventory.workspace_id == ctx.workspace_id,
@@ -29,6 +40,7 @@ async def create_upholstery_inventory(ctx: ServiceContext) -> dict:
             )
 
         inv = UpholsteryInventory(
+            **inv_kwargs,
             workspace_id=ctx.workspace_id,
             upholstery_id=request.upholstery_id,
             inventory_condition=UpholsteryInventoryConditionEnum.AVAILABLE,

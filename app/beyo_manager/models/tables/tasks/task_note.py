@@ -32,6 +32,10 @@ class TaskNote(IdentityMixin, Base):
     created_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
+    )
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[str | None] = mapped_column(

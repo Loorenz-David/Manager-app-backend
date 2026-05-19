@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from beyo_manager.domain.cases.enums import CaseStateEnum
 from beyo_manager.models.base.base import Base
-from beyo_manager.models.base.history_record import HistoryRecord
+from beyo_manager.models.base.history_record import HistoryRecordMixin
 from beyo_manager.models.base.identity import IdentityMixin
 from beyo_manager.models.base.sa_enum import configure_sa_enum_values
 
@@ -14,7 +14,7 @@ from beyo_manager.models.base.sa_enum import configure_sa_enum_values
 SAEnum = configure_sa_enum_values(SAEnum)
 
 
-class Case(IdentityMixin, HistoryRecord, Base):
+class Case(IdentityMixin, HistoryRecordMixin, Base):
     CLIENT_ID_PREFIX = "ca"
     __tablename__ = "cases"
 

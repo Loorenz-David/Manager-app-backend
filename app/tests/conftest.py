@@ -11,7 +11,15 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from beyo_manager.config import settings
-from beyo_manager.models.database import get_db
+from beyo_manager.models.database import close_db, get_db, init_db
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def initialize_database() -> None:
+    """Ensure get_db has an initialized session factory during tests."""
+    await init_db()
+    yield
+    await close_db()
 
 
 @pytest.fixture(scope="session")

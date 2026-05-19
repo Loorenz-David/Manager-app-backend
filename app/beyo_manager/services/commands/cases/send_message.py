@@ -4,9 +4,12 @@ from beyo_manager.domain.cases.events import ConversationMessageEvent, conversat
 from beyo_manager.domain.cases.serializers import serialize_message
 from beyo_manager.domain.content.enums import ContentMentionLinkEntityTypeEnum
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_conversation import CaseConversation
 from beyo_manager.models.tables.cases.case_conversation_message import CaseConversationMessage
+from beyo_manager.services.commands.cases.requests import parse_send_message_request
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.content import process_content_mentions, validate_content
 from beyo_manager.services.infra.events import dispatch
@@ -24,20 +27,32 @@ async def _next_message_seq(ctx: ServiceContext, conversation_id: str) -> int:
 
 
 async def send_message(ctx: ServiceContext) -> dict:
-    data = ctx.incoming_data or {}
-    blocks = validate_content(data.get("content"))
+    request = parse_send_message_request(ctx.incoming_data or {})
+
+    if request.client_id is not None:
+        validate_provided_client_id(request.client_id, "ccm")
+
+    blocks = validate_content(request.content)
     content = [block.__dict__ for block in blocks]
     async with ctx.session.begin():
-        conversation = await ctx.session.get(CaseConversation, data.get("conversation_client_id"))
+        message_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            dup = await ctx.session.get(CaseConversationMessage, request.client_id)
+            if dup is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            message_kwargs["client_id"] = request.client_id
+
+        conversation = await ctx.session.get(CaseConversation, request.conversation_client_id)
         if conversation is None:
             raise NotFound("Conversation not found")
         seq = await _next_message_seq(ctx, conversation.client_id)
         message = CaseConversationMessage(
+            **message_kwargs,
             case_conversation_id=conversation.client_id,
             message_seq=seq,
             created_by_id=ctx.user_id,
             content=content,
-            plain_text=data.get("plain_text", ""),
+            plain_text=request.plain_text,
         )
         ctx.session.add(message)
         await ctx.session.flush()

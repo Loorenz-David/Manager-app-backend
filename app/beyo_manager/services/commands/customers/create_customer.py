@@ -2,8 +2,10 @@
 
 from beyo_manager.models.tables.customers.customer import Customer
 from beyo_manager.services.commands.customers.requests import parse_create_customer_request
+from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.errors.validation import ConflictError
 
 
 async def create_customer(ctx: ServiceContext) -> dict:
@@ -11,7 +13,16 @@ async def create_customer(ctx: ServiceContext) -> dict:
     request = parse_create_customer_request(ctx.incoming_data)
 
     async with maybe_begin(ctx.session):
+        customer_kwargs: dict[str, str] = {}
+        if request.client_id is not None:
+            validate_provided_client_id(request.client_id, "cus")
+            existing = await ctx.session.get(Customer, request.client_id)
+            if existing is not None:
+                raise ConflictError("Provided client_id is already in use.")
+            customer_kwargs["client_id"] = request.client_id
+
         customer = Customer(
+            **customer_kwargs,
             workspace_id=ctx.workspace_id,
             display_name=request.display_name,
             customer_type=request.customer_type,

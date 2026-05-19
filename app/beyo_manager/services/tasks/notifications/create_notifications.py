@@ -30,6 +30,7 @@ async def handle_create_notifications(payload: dict, task_id: str) -> None:
         return
 
     pending_events = []
+    created_notifications: list[Notification] = []
 
     async for session in get_db_session():
         for user_id in user_ids:
@@ -42,34 +43,35 @@ async def handle_create_notifications(payload: dict, task_id: str) -> None:
                 entity_client_id=entity_client_id,
             )
             session.add(notification)
+            created_notifications.append(notification)
 
         await session.flush()
 
-        # Collect client_ids for newly inserted notifications
-        for obj in session.new:
-            if isinstance(obj, Notification):
-                pending_events.append(
-                    build_user_event(
-                        user_id=obj.user_id,
-                        event_name="notification:new",
-                        client_id=obj.client_id,
-                    )
+        # After flush, notifications are persistent (not in session.new),
+        # so we iterate over the tracked objects to emit events + push tasks.
+        for obj in created_notifications:
+            pending_events.append(
+                build_user_event(
+                    user_id=obj.user_id,
+                    event_name="notification:new",
+                    client_id=obj.client_id,
                 )
-                # Enqueue SEND_PUSH_NOTIFICATION task within same transaction
-                from beyo_manager.domain.execution.enums import TaskType
-                from beyo_manager.services.infra.execution.task_factory import create_instant_task
-                await create_instant_task(
-                    session=session,
-                    task_type=TaskType.SEND_PUSH_NOTIFICATION,
-                    payload={
-                        "user_id":                obj.user_id,
-                        "notification_client_id": obj.client_id,
-                        "title":                  title,
-                        "body":                   body,
-                        "entity_type":            entity_type,
-                        "entity_client_id":       entity_client_id,
-                    },
-                )
+            )
+            # Enqueue SEND_PUSH_NOTIFICATION task within same transaction
+            from beyo_manager.domain.execution.enums import TaskType
+            from beyo_manager.services.infra.execution.task_factory import create_instant_task
+            await create_instant_task(
+                session=session,
+                task_type=TaskType.SEND_PUSH_NOTIFICATION,
+                payload={
+                    "user_id":                obj.user_id,
+                    "notification_client_id": obj.client_id,
+                    "title":                  title,
+                    "body":                   body,
+                    "entity_type":            entity_type,
+                    "entity_client_id":       entity_client_id,
+                },
+            )
 
         await session.commit()
 

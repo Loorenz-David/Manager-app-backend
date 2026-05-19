@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/upholstery-inventories", tags=["upholstery-in
 
 
 class _CreateBody(BaseModel):
+    client_id: str | None = None
     upholstery_id: str
     low_stock_threshold_meters: Decimal | None = None
     minimum_to_have: int | None = None

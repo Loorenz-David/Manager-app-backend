@@ -17,7 +17,6 @@ def serialize_customer(customer: Customer) -> dict:
         "primary_email_normalized": customer.primary_email_normalized,
         "primary_phone_number_normalized": customer.primary_phone_number_normalized,
         "address": customer.address,
-        "latest_history_record_id": customer.latest_history_record_id,
         "created_at": customer.created_at.isoformat(),
         "created_by_id": customer.created_by_id,
         "updated_at": customer.updated_at.isoformat() if customer.updated_at else None,

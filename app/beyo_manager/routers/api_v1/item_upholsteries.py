@@ -42,6 +42,7 @@ requirements_router = APIRouter(
 # ── Request body models ────────────────────────────────────────────────────────
 
 class _CreateBody(BaseModel):
+    client_id: str | None = None
     item_id: str
     upholstery_id: str | None = None
     name: str | None = None

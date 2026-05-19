@@ -29,6 +29,11 @@ from beyo_manager.models.tables.images import image  # noqa: F401
 from beyo_manager.models.tables.images import image_annotation  # noqa: F401
 from beyo_manager.models.tables.images import image_event  # noqa: F401
 from beyo_manager.models.tables.images import image_link  # noqa: F401
+
+# --- History records ---
+from beyo_manager.models.tables.history import history_record  # noqa: F401
+from beyo_manager.models.tables.history import history_record_link  # noqa: F401
+
 from beyo_manager.models.tables.schedulers import delayed_scheduler  # noqa: F401
 from beyo_manager.models.tables.schedulers import recurring_scheduler  # noqa: F401
 
@@ -73,20 +78,14 @@ from beyo_manager.models.tables.items import item_upholstery_requirement  # noqa
 # --- Upholstery inventory (depends on upholstery) ---
 from beyo_manager.models.tables.upholstery import upholstery_inventory  # noqa: F401
 
-# --- Customers (use_alter FK to customer_history_record) ---
+# --- Customers ---
 from beyo_manager.models.tables.customers import customer  # noqa: F401
-
-# --- Customer history records (depends on customer) ---
-from beyo_manager.models.tables.customers import customer_history_record  # noqa: F401
 
 # --- Static costs ---
 from beyo_manager.models.tables.static_costs import static_cost  # noqa: F401
 
-# --- Tasks (depends on customer; use_alter FKs to task_history_record and task_event) ---
+# --- Tasks (depends on customer; use_alter FK to task_event) ---
 from beyo_manager.models.tables.tasks import task  # noqa: F401
-
-# --- Task history records (depends on task) ---
-from beyo_manager.models.tables.tasks import task_history_record  # noqa: F401
 
 # --- Task events (depends on task) ---
 from beyo_manager.models.tables.tasks import task_event  # noqa: F401

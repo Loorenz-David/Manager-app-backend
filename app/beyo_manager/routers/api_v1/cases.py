@@ -31,6 +31,7 @@ router = APIRouter()
 
 
 class CreateCaseBody(BaseModel):
+    client_id: str | None = None
     case_type_id: str | None = None
     type_label: str | None = None
 
@@ -59,10 +60,12 @@ class AddParticipantBody(BaseModel):
 
 
 class CreateConversationBody(BaseModel):
+    client_id: str | None = None
     case_client_id: str
 
 
 class SendMessageBody(BaseModel):
+    client_id: str | None = None
     conversation_client_id: str
     content: list
     plain_text: str = ""

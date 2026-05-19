@@ -8,6 +8,7 @@ from beyo_manager.errors.validation import ValidationError
 
 class CreateItemUpholsteryRequest(BaseModel):
     """Request to create ItemUpholstery and initial requirement."""
+    client_id: str | None = None
     item_id: str
     upholstery_id: str | None = None
     name: str | None = None
@@ -128,6 +129,7 @@ class ItemIssueCreateInput(BaseModel):
 class ItemUpholsteryCreateInput(BaseModel):
     """Nested input for the upholstery to create atomically with an item."""
 
+    client_id: str | None = None
     upholstery_id: str | None = None
     source: ItemUpholsterySourceEnum
     name: str | None = None
@@ -152,6 +154,7 @@ class ItemUpholsteryCreateInput(BaseModel):
 
 
 class CreateItemRequest(BaseModel):
+    client_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
     item_category_id: str | None = None
@@ -377,6 +380,52 @@ def parse_delete_item_request(data: dict) -> DeleteItemRequest:
 
     try:
         return DeleteItemRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class FindOrCreateItemRequest(BaseModel):
+    client_id: str | None = None
+    article_number: str | None = None
+    sku: str | None = None
+    item_category_id: str | None = None
+    quantity: int = 1
+    designer: str | None = None
+    height_in_cm: int | None = None
+    width_in_cm: int | None = None
+    depth_in_cm: int | None = None
+    item_value_minor: int | None = None
+    item_cost_minor: int | None = None
+    item_currency: ItemCurrencyEnum | None = None
+    item_position: str | None = None
+    external_id: str | None = None
+    external_url: str | None = None
+    external_source: str | None = None
+    external_order_id: str | None = None
+
+    @field_validator("article_number", "sku", mode="before")
+    @classmethod
+    def strip_or_none(cls, v) -> str | None:
+        if v is None:
+            return None
+        v = str(v).strip()
+        return v if v else None
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_must_be_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("quantity must be >= 1.")
+        return v
+
+
+def parse_find_or_create_item_request(data: dict) -> FindOrCreateItemRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return FindOrCreateItemRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])

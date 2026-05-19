@@ -13,6 +13,9 @@ from beyo_manager.models.tables.working_sections.working_section_supported_issue
     WorkingSectionSupportedIssueType,
 )
 from beyo_manager.services.commands.working_sections._check_dependency_cycle import check_for_dependency_cycle
+from beyo_manager.services.commands.working_sections._sync_step_dependencies import (
+    _sync_step_dependencies_for_section_in_session,
+)
 from beyo_manager.services.commands.working_sections.requests.edit_working_section_request import (
     WorkingSectionEditRequest,
     parse_edit_working_section_request,
@@ -56,6 +59,14 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
 
         if "working_section_dependencies" in request.model_fields_set:
             dep_ids: list[str] = request.working_section_dependencies or []
+            old_dep_rows = await ctx.session.execute(
+                select(WorkingSectionDependency.prerequisite_section_id).where(
+                    WorkingSectionDependency.workspace_id == ctx.workspace_id,
+                    WorkingSectionDependency.dependent_section_id == request.client_id,
+                )
+            )
+            old_dep_ids: set[str] = set(old_dep_rows.scalars().all())
+
             if dep_ids:
                 if len(dep_ids) != len(set(dep_ids)):
                     raise ValidationError("Duplicate IDs in working_section_dependencies are not allowed.")
@@ -97,6 +108,19 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
                         dependent_section_id=request.client_id,
                         prerequisite_section_id=dep_id,
                     )
+                )
+
+            new_dep_ids_set: set[str] = set(dep_ids)
+            added_section_ids = new_dep_ids_set - old_dep_ids
+            removed_section_ids = old_dep_ids - new_dep_ids_set
+            if added_section_ids or removed_section_ids:
+                await _sync_step_dependencies_for_section_in_session(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    dependent_section_id=request.client_id,
+                    added_section_ids=added_section_ids,
+                    removed_section_ids=removed_section_ids,
+                    user_id=ctx.user_id,
                 )
 
         if "working_section_item_categories" in request.model_fields_set:

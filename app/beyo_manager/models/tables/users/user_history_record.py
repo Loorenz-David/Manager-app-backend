@@ -2,11 +2,11 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.models.base.base import Base
-from beyo_manager.models.base.history_record import HistoryRecord
+from beyo_manager.models.base.history_record import HistoryRecordMixin
 from beyo_manager.models.base.identity import IdentityMixin
 
 
-class UserHistoryRecord(IdentityMixin, HistoryRecord, Base):
+class UserHistoryRecord(IdentityMixin, HistoryRecordMixin, Base):
     CLIENT_ID_PREFIX = "uhr"
     __tablename__ = "user_history_records"
 

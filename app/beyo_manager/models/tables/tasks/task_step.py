@@ -10,7 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.models.base.aggregate_metrics import (
@@ -92,6 +92,11 @@ class TaskStep(
         ),
         nullable=True,
         index=True,
+    )
+    latest_state_record: Mapped["StepStateRecord | None"] = relationship(
+        "StepStateRecord",
+        foreign_keys=[latest_state_record_id],
+        uselist=False,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

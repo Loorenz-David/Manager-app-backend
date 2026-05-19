@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.config import settings
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
-from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
+from beyo_manager.routers.utils.jwt_dep import get_jwt_claims, require_roles
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.notifications.mark_notifications_read import mark_notifications_read
 from beyo_manager.services.commands.notifications.pin_notification import pin_notification
 from beyo_manager.services.commands.notifications.register_push_subscription import register_push_subscription
@@ -51,7 +52,7 @@ async def list_notifications_route(
     unread_only: bool = False,
     limit: int = 30,
     before_client_id: str | None = None,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(
@@ -64,7 +65,7 @@ async def list_notifications_route(
 
 @router.get("/unread-count")
 async def unread_count_route(
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(get_unread_notification_count, {}, claims, session)
@@ -73,7 +74,7 @@ async def unread_count_route(
 @router.post("/mark-read")
 async def mark_read_route(
     body: MarkReadBody,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(mark_notifications_read, body.model_dump(), claims, session)
@@ -84,7 +85,7 @@ async def mark_read_route(
 @router.post("/push-subscription")
 async def subscribe_route(
     body: PushSubscriptionBody,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(register_push_subscription, body.model_dump(), claims, session)
@@ -93,7 +94,7 @@ async def subscribe_route(
 @router.delete("/push-subscription")
 async def unsubscribe_route(
     body: PushSubscriptionBody,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(unregister_push_subscription, body.model_dump(), claims, session)
@@ -110,7 +111,7 @@ async def vapid_public_key_route():
 @router.post("/pins")
 async def pin_route(
     body: PinBody,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(pin_notification, body.model_dump(), claims, session)
@@ -119,7 +120,7 @@ async def pin_route(
 @router.delete("/pins")
 async def unpin_route(
     body: PinBody,
-    claims: dict = Depends(get_jwt_claims),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(unpin_notification, body.model_dump(), claims, session)
