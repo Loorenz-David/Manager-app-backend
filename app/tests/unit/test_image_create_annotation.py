@@ -107,3 +107,37 @@ async def test_create_annotation_batch_validation_includes_item_index():
 
     assert "items[1]" in str(exc.value)
     assert "missing required keys for text" in str(exc.value)
+
+
+@pytest.mark.unit
+async def test_create_annotation_batch_arrow_accepts_frontend_coordinates():
+    image = SimpleNamespace(client_id="img_1", deleted_at=None)
+    session = _FakeSession(image)
+    ctx = ServiceContext(
+        identity={"user_id": "usr_1"},
+        incoming_data={
+            "image_client_id": "img_1",
+            "annotation_type": "arrow",
+            "data": {
+                "items": [
+                    {
+                        "tool": "arrow",
+                        "fromX": 0.1,
+                        "fromY": 0.2,
+                        "toX": 0.8,
+                        "toY": 0.9,
+                        "color": "#ff5a36",
+                        "strokeWidth": 3,
+                    }
+                ]
+            },
+        },
+        session=session,
+    )
+
+    result = await create_annotation(ctx)
+
+    assert len(result["created_annotation_client_ids"]) == 1
+    saved = session.added[0].data
+    assert saved["from"] == {"x": 0.1, "y": 0.2}
+    assert saved["to"] == {"x": 0.8, "y": 0.9}

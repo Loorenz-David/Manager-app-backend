@@ -12,6 +12,7 @@ from beyo_manager.services.commands.images.generate_upload_url import generate_u
 from beyo_manager.services.commands.images.reorder_links import reorder_links
 from beyo_manager.services.commands.images.soft_delete_image import soft_delete_image
 from beyo_manager.services.commands.images.unlink_image import unlink_image
+from beyo_manager.services.commands.images.update_annotation import update_annotation
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.images.get_download_url import get_download_url
 from beyo_manager.services.queries.images.get_image import get_image
@@ -50,6 +51,11 @@ class ReorderLinksBody(BaseModel):
 class CreateAnnotationBody(BaseModel):
     image_client_id: str | None = None
     annotation_type: str | None = None
+    data: dict
+    accuracy: int | None = None
+
+
+class UpdateAnnotationBody(BaseModel):
     data: dict
     accuracy: int | None = None
 
@@ -107,3 +113,13 @@ async def create_annotation_route(image_client_id: str, body: CreateAnnotationBo
 @router.delete("/{image_client_id}/annotations/{annotation_client_id}")
 async def delete_annotation_route(image_client_id: str, annotation_client_id: str, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
     return await _run(delete_annotation, {"image_client_id": image_client_id, "annotation_client_id": annotation_client_id}, claims, session)
+
+
+@router.patch("/{image_client_id}/annotations/{annotation_client_id}")
+async def update_annotation_route(image_client_id: str, annotation_client_id: str, body: UpdateAnnotationBody, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
+    return await _run(
+        update_annotation,
+        {**body.model_dump(exclude_unset=True), "image_client_id": image_client_id, "annotation_client_id": annotation_client_id},
+        claims,
+        session,
+    )

@@ -1,5 +1,8 @@
 """Serialization for upholstery inventory domain objects."""
 
+from beyo_manager.domain.images.serializers import serialize_image_light
+from beyo_manager.models.tables.images.image import Image
+from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 
 
@@ -66,4 +69,23 @@ def serialize_upholstery_inventory(inv: UpholsteryInventory) -> dict:
         "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
         "updated_by_id": inv.updated_by_id,
         "is_deleted": inv.is_deleted,
+    }
+
+
+def serialize_upholstery(
+    row: Upholstery,
+    primary_image: Image | None = None,
+    inventory: UpholsteryInventory | None = None,
+) -> dict:
+    return {
+        "client_id": row.client_id,
+        "name": row.name,
+        "code": row.code,
+        "image_url": serialize_image_light(primary_image)["image_url"] if primary_image else None,
+        "current_stored_amount_meters": (
+            str(inventory.current_stored_amount_meters)
+            if inventory is not None and inventory.current_stored_amount_meters is not None
+            else None
+        ),
+        "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
     }

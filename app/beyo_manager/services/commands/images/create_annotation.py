@@ -33,6 +33,19 @@ def _validate_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload
         raise ValidationError(f"{prefix}missing required keys for {annotation_type.value}: {sorted(missing)}")
 
 
+def _normalize_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload: dict) -> dict:
+    # Frontend arrow drawings may send scalar endpoints instead of nested points.
+    # Normalize to backend canonical keys while preserving original fields.
+    if annotation_type == ImageAnnotationTypeEnum.ARROW:
+        normalized = dict(payload)
+        if "from" not in normalized and {"fromX", "fromY"}.issubset(normalized.keys()):
+            normalized["from"] = {"x": normalized["fromX"], "y": normalized["fromY"]}
+        if "to" not in normalized and {"toX", "toY"}.issubset(normalized.keys()):
+            normalized["to"] = {"x": normalized["toX"], "y": normalized["toY"]}
+        return normalized
+    return payload
+
+
 async def create_annotation(ctx: ServiceContext) -> dict:
     data = ctx.incoming_data or {}
     payload = data.get("data") or {}
@@ -55,8 +68,9 @@ async def create_annotation(ctx: ServiceContext) -> dict:
             if not isinstance(item, dict):
                 raise ValidationError(f"items[{index}] must be an object")
             item_type = _parse_annotation_type(item.get("tool"), field_name=f"items[{index}].tool")
-            _validate_payload_for_type(item_type, item, prefix=f"items[{index}] ")
-            annotations_to_create.append((item_type, item))
+            normalized_item = _normalize_payload_for_type(item_type, item)
+            _validate_payload_for_type(item_type, normalized_item, prefix=f"items[{index}] ")
+            annotations_to_create.append((item_type, normalized_item))
 
         async with ctx.session.begin():
             image = await ctx.session.get(Image, data.get("image_client_id"))
@@ -78,12 +92,13 @@ async def create_annotation(ctx: ServiceContext) -> dict:
         return {"created_annotation_client_ids": [annotation.client_id for annotation in created_annotations]}
 
     ann_type = _parse_annotation_type(data.get("annotation_type"), field_name="annotation_type")
-    _validate_payload_for_type(ann_type, payload)
+    normalized_payload = _normalize_payload_for_type(ann_type, payload)
+    _validate_payload_for_type(ann_type, normalized_payload)
 
     async with ctx.session.begin():
         image = await ctx.session.get(Image, data.get("image_client_id"))
         if image is None or image.deleted_at is not None:
             raise NotFound("Image not found")
-        annotation = ImageAnnotation(image_id=image.client_id, annotation_type=ann_type, data=payload, accuracy=accuracy, created_by_id=ctx.user_id)
+        annotation = ImageAnnotation(image_id=image.client_id, annotation_type=ann_type, data=normalized_payload, accuracy=accuracy, created_by_id=ctx.user_id)
         ctx.session.add(annotation)
     return {"client_id": annotation.client_id}

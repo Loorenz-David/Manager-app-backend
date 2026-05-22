@@ -51,6 +51,7 @@
 | GET | /api/v1/images/{image_client_id} | images | get_image_route_api_v1_images__image_client_id__get |
 | POST | /api/v1/images/{image_client_id}/annotations | images | create_annotation_route_api_v1_images__image_client_id__annotations_post |
 | DELETE | /api/v1/images/{image_client_id}/annotations/{annotation_client_id} | images | delete_annotation_route_api_v1_images__image_client_id__annotations__annotation_client_id__delete |
+| PATCH | /api/v1/images/{image_client_id}/annotations/{annotation_client_id} | images | update_annotation_route_api_v1_images__image_client_id__annotations__annotation_client_id__patch |
 | GET | /api/v1/images/{image_client_id}/download-url | images | image_download_url_route_api_v1_images__image_client_id__download_url_get |
 | GET | /api/v1/item-upholsteries | item-upholsteries | route_list_item_upholsteries_api_v1_item_upholsteries_get |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
@@ -1544,6 +1545,40 @@ None
 | ok | boolean | Yes |  |
 | data.client_id | string | Yes |  |
 | data.deleted | boolean | Yes |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
+
+### PATCH /api/v1/images/{image_client_id}/annotations/{annotation_client_id}
+- **Tag**: images
+- **OperationId**: update_annotation_route_api_v1_images__image_client_id__annotations__annotation_client_id__patch
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| image_client_id | path | Yes | string |
+| annotation_client_id | path | Yes | string |
+
+#### Request Body
+- **Content-Type**: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| data | object | Yes |  |
+| accuracy | integer | No |  |
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.client_id | string | Yes |  |
+| data.updated | boolean | Yes |  |
 | warnings[] | string | Yes |  |
 - **422**: Validation Error
   - Content-Type: application/json
