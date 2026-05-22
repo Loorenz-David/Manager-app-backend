@@ -7,6 +7,7 @@ from beyo_manager.domain.images.serializers import serialize_image_light
 from beyo_manager.domain.tasks.enums import TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item,
+    serialize_item_issue,
     serialize_note,
     serialize_requirement,
     serialize_step,
@@ -21,6 +22,7 @@ from beyo_manager.models.tables.cases.case_participant import CaseParticipant
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.tasks.task import Task
@@ -371,9 +373,18 @@ async def get_task(ctx: ServiceContext) -> dict:
         )
         item_images = img_result.scalars().all()
 
+    item_issues: list[ItemIssue] = []
     upholsteries: list[ItemUpholstery] = []
     requirements: list[ItemUpholsteryRequirement] = []
     if item is not None:
+        item_issues_result = await ctx.session.execute(
+            select(ItemIssue).where(
+                ItemIssue.workspace_id == ctx.workspace_id,
+                ItemIssue.item_id == item.client_id,
+                ItemIssue.is_deleted.is_(False),
+            )
+        )
+        item_issues = item_issues_result.scalars().all()
         upholsteries_result = await ctx.session.execute(
             select(ItemUpholstery).where(
                 ItemUpholstery.workspace_id == ctx.workspace_id,
@@ -438,6 +449,7 @@ async def get_task(ctx: ServiceContext) -> dict:
         "task": serialize_task(task),
         "item": serialize_item(item),
         "item_images": [serialize_image_light(img) for img in item_images],
+        "item_issues": [serialize_item_issue(i) for i in item_issues],
         "item_upholstery": [serialize_upholstery(u) for u in upholsteries],
         "requirements": [serialize_requirement(r) for r in requirements],
         "task_steps": [

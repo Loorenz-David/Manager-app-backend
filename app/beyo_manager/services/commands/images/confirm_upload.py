@@ -37,10 +37,15 @@ async def confirm_upload(ctx: ServiceContext) -> dict:
         if not metadata:
             raise ValidationError("file has not been uploaded yet")
 
-        try:
-            provider = ImageStorageProviderEnum(settings.storage_provider)
-        except ValueError:
-            provider = ImageStorageProviderEnum.S3
+        provider_key = (settings.storage_provider or "").strip().lower()
+        provider_map = {
+            "s3": ImageStorageProviderEnum.S3,
+            "localstack": ImageStorageProviderEnum.S3,
+            "local": ImageStorageProviderEnum.EXTERNAL,
+        }
+        provider = provider_map.get(provider_key)
+        if provider is None:
+            raise ValidationError(f"Unsupported STORAGE_PROVIDER: {settings.storage_provider!r}")
         source_ref = ImageSourceReferenceEnum.S3_IMAGE_URL if provider == ImageStorageProviderEnum.S3 else None
         image = Image(
             image_url=upload.storage_key,

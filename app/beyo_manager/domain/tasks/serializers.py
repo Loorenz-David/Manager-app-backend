@@ -1,6 +1,7 @@
 """Serialization helpers for task domain objects."""
 
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -64,6 +65,25 @@ def serialize_item(item: Item | None) -> dict | None:
         "external_order_id": item.external_order_id,
         "item_category_snapshot": item.item_category_snapshot,
         "item_major_category_snapshot": item.item_major_category_snapshot,
+    }
+
+
+def serialize_item_issue(row: ItemIssue) -> dict:
+    return {
+        "client_id": row.client_id,
+        "item_id": row.item_id,
+        "issue_type_id": row.issue_type_id,
+        "issue_severity_id": row.issue_severity_id,
+        "state": row.state.value,
+        "base_time_seconds": row.base_time_seconds,
+        "time_multiplier": float(row.time_multiplier) if row.time_multiplier is not None else None,
+        "issue_name_snapshot": row.issue_name_snapshot,
+        "severity_name_snapshot": row.severity_name_snapshot,
+        "created_by_id": row.created_by_id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
 

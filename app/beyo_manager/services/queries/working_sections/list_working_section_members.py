@@ -31,6 +31,7 @@ async def list_working_section_members(ctx: ServiceContext) -> dict:
     result = await ctx.session.execute(
         select(
             WorkingSectionMembership.client_id.label("membership_id"),
+            WorkingSectionMembership.working_section_id,
             WorkingSectionMembership.user_id,
             User.username,
             WorkingSectionMembership.assigned_at,

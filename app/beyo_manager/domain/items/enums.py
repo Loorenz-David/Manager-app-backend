@@ -3,7 +3,7 @@ import enum
 
 class ItemStateEnum(enum.Enum):
     PENDING = "pending"
-    STALL = "stall"
+    STALLED = "stalled"
     FIXING = "fixing"
     READY = "ready"
 

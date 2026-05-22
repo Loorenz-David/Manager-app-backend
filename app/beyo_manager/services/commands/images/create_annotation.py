@@ -15,17 +15,71 @@ _REQUIRED_KEYS = {
     ImageAnnotationTypeEnum.HIGHLIGHT: {"x", "y", "w", "h"},
 }
 
+_ANNOTATION_TYPE_VALUES = ", ".join(sorted(annotation_type.value for annotation_type in ImageAnnotationTypeEnum))
+
+
+def _parse_annotation_type(raw_value: str | None, *, field_name: str) -> ImageAnnotationTypeEnum:
+    if not raw_value:
+        raise ValidationError(f"{field_name} is required")
+    try:
+        return ImageAnnotationTypeEnum(raw_value)
+    except ValueError as exc:
+        raise ValidationError(f"{field_name} must be one of: {_ANNOTATION_TYPE_VALUES}") from exc
+
+
+def _validate_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload: dict, *, prefix: str = "") -> None:
+    missing = _REQUIRED_KEYS.get(annotation_type, set()) - payload.keys()
+    if missing:
+        raise ValidationError(f"{prefix}missing required keys for {annotation_type.value}: {sorted(missing)}")
+
 
 async def create_annotation(ctx: ServiceContext) -> dict:
     data = ctx.incoming_data or {}
-    ann_type = ImageAnnotationTypeEnum(data.get("annotation_type"))
     payload = data.get("data") or {}
+    if not isinstance(payload, dict):
+        raise ValidationError("data must be an object")
+
     accuracy = data.get("accuracy")
     if accuracy is not None and not 0 <= accuracy <= 100:
         raise ValidationError("accuracy must be 0-100")
-    missing = _REQUIRED_KEYS.get(ann_type, set()) - payload.keys()
-    if missing:
-        raise ValidationError(f"missing required keys for {ann_type.value}: {sorted(missing)}")
+
+    batch_items = payload.get("items")
+    if batch_items is not None:
+        if not isinstance(batch_items, list):
+            raise ValidationError("data.items must be an array when provided")
+        if not batch_items:
+            raise ValidationError("data.items must not be empty")
+
+        annotations_to_create: list[tuple[ImageAnnotationTypeEnum, dict]] = []
+        for index, item in enumerate(batch_items):
+            if not isinstance(item, dict):
+                raise ValidationError(f"items[{index}] must be an object")
+            item_type = _parse_annotation_type(item.get("tool"), field_name=f"items[{index}].tool")
+            _validate_payload_for_type(item_type, item, prefix=f"items[{index}] ")
+            annotations_to_create.append((item_type, item))
+
+        async with ctx.session.begin():
+            image = await ctx.session.get(Image, data.get("image_client_id"))
+            if image is None or image.deleted_at is not None:
+                raise NotFound("Image not found")
+
+            created_annotations: list[ImageAnnotation] = []
+            for annotation_type, annotation_payload in annotations_to_create:
+                annotation = ImageAnnotation(
+                    image_id=image.client_id,
+                    annotation_type=annotation_type,
+                    data=annotation_payload,
+                    accuracy=accuracy,
+                    created_by_id=ctx.user_id,
+                )
+                ctx.session.add(annotation)
+                created_annotations.append(annotation)
+
+        return {"created_annotation_client_ids": [annotation.client_id for annotation in created_annotations]}
+
+    ann_type = _parse_annotation_type(data.get("annotation_type"), field_name="annotation_type")
+    _validate_payload_for_type(ann_type, payload)
+
     async with ctx.session.begin():
         image = await ctx.session.get(Image, data.get("image_client_id"))
         if image is None or image.deleted_at is not None:

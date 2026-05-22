@@ -291,7 +291,7 @@ def upgrade() -> None:
     sa.Column('workspace_id', sa.String(length=64), nullable=False),
     sa.Column('article_number', sa.String(length=128), nullable=True),
     sa.Column('sku', sa.String(length=128), nullable=True),
-    sa.Column('state', sa.Enum('PENDING', 'STALL', 'FIXING', 'READY', name='item_state_enum'), nullable=False),
+    sa.Column('state', sa.Enum('PENDING', 'STALLED', 'FIXING', 'READY', name='item_state_enum'), nullable=False),
     sa.Column('item_category_id', sa.String(length=64), nullable=True),
     sa.Column('quantity', sa.Integer(), nullable=False),
     sa.Column('designer', sa.String(length=255), nullable=True),

@@ -42,6 +42,7 @@ def serialize_working_section_full(
 def serialize_working_section_member(row) -> dict:
     return {
         "membership_id": row.membership_id,
+        "working_section_id": row.working_section_id,
         "user_id": row.user_id,
         "username": row.username,
         "assigned_at": row.assigned_at.isoformat(),

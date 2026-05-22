@@ -14,8 +14,11 @@ async def list_images_for_entity(ctx: ServiceContext) -> dict:
     rows = (await ctx.session.execute(
         select(ImageLink)
         .join(Image, Image.client_id == ImageLink.image_id)
-        .options(selectinload(ImageLink.image).selectinload(Image.last_event))
+        .options(
+            selectinload(ImageLink.image).selectinload(Image.last_event),
+            selectinload(ImageLink.image).selectinload(Image.image_annotations),
+        )
         .where(ImageLink.entity_type == entity_type, ImageLink.entity_client_id == data.get("entity_client_id"), Image.deleted_at.is_(None))
         .order_by(ImageLink.display_order)
     )).scalars().all()
-    return {"images": [serialize_image_link(link) for link in rows]}
+    return {"images": [serialize_image_link(link, include_annotations=True) for link in rows]}

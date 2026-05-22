@@ -222,7 +222,7 @@ def upgrade() -> None:
     # item_state_enum
     # ------------------------------------------------------------------ #
     _rename("item_state_enum", "PENDING", "pending")
-    _rename("item_state_enum", "STALL", "stall")
+    _rename("item_state_enum", "STALLED", "stalled")
     _rename("item_state_enum", "FIXING", "fixing")
     _rename("item_state_enum", "READY", "ready")
 
@@ -681,7 +681,7 @@ def downgrade() -> None:
     _rename("item_upholstery_requirement_source_enum", "surplus", "SURPLUS")
 
     _rename("item_state_enum", "pending", "PENDING")
-    _rename("item_state_enum", "stall", "STALL")
+    _rename("item_state_enum", "stalled", "STALLED")
     _rename("item_state_enum", "fixing", "FIXING")
     _rename("item_state_enum", "ready", "READY")
 

@@ -7,6 +7,7 @@ from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
 from beyo_manager.services.commands.images.confirm_upload import confirm_upload
 from beyo_manager.services.commands.images.create_annotation import create_annotation
+from beyo_manager.services.commands.images.delete_annotation import delete_annotation
 from beyo_manager.services.commands.images.generate_upload_url import generate_upload_url
 from beyo_manager.services.commands.images.reorder_links import reorder_links
 from beyo_manager.services.commands.images.soft_delete_image import soft_delete_image
@@ -47,8 +48,8 @@ class ReorderLinksBody(BaseModel):
 
 
 class CreateAnnotationBody(BaseModel):
-    image_client_id: str
-    annotation_type: str
+    image_client_id: str | None = None
+    annotation_type: str | None = None
     data: dict
     accuracy: int | None = None
 
@@ -101,3 +102,8 @@ async def soft_delete_image_route(image_client_id: str, claims: dict = Depends(g
 @router.post("/{image_client_id}/annotations")
 async def create_annotation_route(image_client_id: str, body: CreateAnnotationBody, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
     return await _run(create_annotation, {**body.model_dump(), "image_client_id": image_client_id}, claims, session)
+
+
+@router.delete("/{image_client_id}/annotations/{annotation_client_id}")
+async def delete_annotation_route(image_client_id: str, annotation_client_id: str, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
+    return await _run(delete_annotation, {"image_client_id": image_client_id, "annotation_client_id": annotation_client_id}, claims, session)
