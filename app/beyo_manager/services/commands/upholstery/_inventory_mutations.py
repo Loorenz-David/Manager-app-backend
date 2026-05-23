@@ -247,7 +247,43 @@ async def add_stored_surplus(
 
 
 # ---------------------------------------------------------------------------
-# CMD-7 — complete_available_direct
+# CMD-7 — adjust_need
+# ---------------------------------------------------------------------------
+
+
+async def adjust_need(
+    session: AsyncSession,
+    workspace_id: str,
+    upholstery_inventory_id: str,
+    delta: Decimal,
+) -> dict:
+    """
+    Adjust current_amount_in_need_meters by a signed delta and re-evaluate condition.
+    delta > 0: need increases (requirement quantity grew).
+    delta < 0: need decreases (requirement quantity shrank).
+    Returns {sufficient, condition}.
+    """
+    inv = await _load_inventory(session, workspace_id, upholstery_inventory_id)
+    new_in_need = max(
+        Decimal("0"),
+        (inv.current_amount_in_need_meters or Decimal("0")) + delta,
+    )
+    inv.current_amount_in_need_meters = new_in_need
+    inv.inventory_condition = evaluate_inventory_condition(
+        inv.current_stored_amount_meters,
+        inv.current_amount_in_need_meters,
+        inv.low_stock_threshold_meters,
+    )
+    await session.flush()
+    net = (inv.current_stored_amount_meters or Decimal("0")) - new_in_need
+    return {
+        "sufficient": net >= Decimal("0"),
+        "condition": inv.inventory_condition,
+    }
+
+
+# ---------------------------------------------------------------------------
+# CMD-8 — complete_available_direct
 # ---------------------------------------------------------------------------
 
 

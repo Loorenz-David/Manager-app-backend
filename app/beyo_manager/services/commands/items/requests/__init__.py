@@ -90,8 +90,8 @@ class ApplySurplusRequest(BaseModel):
         return v
 
 
-class SetQuantityRequest(BaseModel):
-    """Request to set quantity on missing-quantity requirement."""
+class UpdateRequirementQuantityRequest(BaseModel):
+    """Request to set or update quantity on a mutable requirement."""
     item_upholstery_id: str
     amount_meters: Decimal
 
@@ -317,10 +317,10 @@ def parse_apply_surplus_request(data: dict) -> ApplySurplusRequest:
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
-def parse_set_quantity_request(data: dict) -> SetQuantityRequest:
+def parse_update_requirement_quantity_request(data: dict) -> UpdateRequirementQuantityRequest:
     from pydantic import ValidationError as PydanticValidationError
     try:
-        return SetQuantityRequest.model_validate(data)
+        return UpdateRequirementQuantityRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])

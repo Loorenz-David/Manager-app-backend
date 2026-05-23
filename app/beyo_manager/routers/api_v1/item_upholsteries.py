@@ -19,7 +19,7 @@ from beyo_manager.services.commands.items.mark_requirements_completed import mar
 from beyo_manager.services.commands.items.mark_requirements_in_use import mark_requirements_in_use
 from beyo_manager.services.commands.items.mark_requirements_ordered import mark_requirements_ordered
 from beyo_manager.services.commands.items.resolve_requirements_after_stock import resolve_requirements_after_stock
-from beyo_manager.services.commands.items.set_requirement_quantity import set_requirement_quantity
+from beyo_manager.services.commands.items.update_requirement_quantity import update_requirement_quantity
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     delete_item_upholstery,
     update_item_upholstery,
@@ -85,7 +85,7 @@ class _ApplySurplusBody(BaseModel):
     surplus_amount_meters: Decimal
 
 
-class _SetQuantityBody(BaseModel):
+class _UpdateQuantityBody(BaseModel):
     amount_meters: Decimal
 
 
@@ -219,10 +219,10 @@ async def route_apply_surplus(
     return build_ok(outcome.data)
 
 
-@router.post("/{client_id}/set-quantity")
-async def route_set_quantity(
+@router.post("/{client_id}/update-quantity")
+async def route_update_quantity(
     client_id: str,
-    body: _SetQuantityBody,
+    body: _UpdateQuantityBody,
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
@@ -234,7 +234,7 @@ async def route_set_quantity(
         identity=claims,
         session=session,
     )
-    outcome = await run_service(set_requirement_quantity, ctx)
+    outcome = await run_service(update_requirement_quantity, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
