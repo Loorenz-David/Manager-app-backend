@@ -39,6 +39,7 @@ from beyo_manager.services.commands.task_steps.remove_step_dependency import rem
 from beyo_manager.services.commands.task_steps.remove_task_step import remove_task_step
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
 from beyo_manager.services.queries.tasks.tasks import get_task, list_tasks
 from beyo_manager.services.run_service import run_service
 
@@ -251,6 +252,25 @@ async def route_get_task(
         session=session,
     )
     outcome = await run_service(get_task, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{task_id}/flow-records")
+async def route_get_task_flow_records(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    offset: int = Query(0, ge=0),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id},
+        query_params={"offset": offset},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(get_task_flow_records, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

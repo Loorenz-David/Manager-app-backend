@@ -57,6 +57,9 @@ presence-worker:
 analytics-worker:
 	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.analytics_worker
 
+notification-worker:
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.notification_worker
+
 worker-logs:
 	docker compose logs -f worker
 
@@ -102,4 +105,4 @@ inspect:
 reset-db:
 	python scripts/ops.py reset-db --dry-run True
 
-.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker
+.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker notification-worker

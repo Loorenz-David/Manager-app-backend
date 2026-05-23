@@ -97,11 +97,12 @@ async def create_item(ctx: ServiceContext) -> dict:
                 issue_data = CreateItemIssueRequest(
                     item_id=item.client_id,
                     issue_type_id=issue_input.issue_type_id,
-                    issue_severity_id=issue_input.issue_severity_id,
+                    # Severity is disabled for now; the endpoint only cares about the issue.
+                    issue_severity_id=None,
                     base_time_seconds=issue_input.base_time_seconds,
                     time_multiplier=issue_input.time_multiplier,
                     issue_name_snapshot=issue_input.issue_name_snapshot,
-                    severity_name_snapshot=issue_input.severity_name_snapshot,
+                    severity_name_snapshot=None,
                 )
                 await _create_item_issue_in_session(
                     session=ctx.session,

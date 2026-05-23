@@ -4,10 +4,13 @@ from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.history.history_record import HistoryRecord
+from beyo_manager.models.tables.history.history_record_link import HistoryRecordLink
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_note import TaskNote
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.users.user import User
 
 
 def serialize_task(task: Task) -> dict:
@@ -161,4 +164,47 @@ def serialize_note(note: TaskNote) -> dict:
         "updated_at": note.updated_at.isoformat() if note.updated_at else None,
         "is_deleted": note.is_deleted,
         "deleted_at": note.deleted_at.isoformat() if note.deleted_at else None,
+    }
+
+
+def _serialize_flow_record_user(user: User | None, created_by_id: str | None, username_snapshot: str | None = None) -> dict | None:
+    if created_by_id is None:
+        return None
+    if user is not None:
+        return {
+            "client_id": user.client_id,
+            "username": user.username,
+            "profile_picture": user.profile_picture,
+        }
+    return {
+        "client_id": created_by_id,
+        "username": username_snapshot,
+        "profile_picture": None,
+    }
+
+
+def serialize_history_flow_record(record: HistoryRecord, link: HistoryRecordLink, users_map: dict) -> dict:
+    user = users_map.get(record.created_by_id) if record.created_by_id else None
+    return {
+        "type": "history_record",
+        "entity_type": link.entity_type.value,
+        "entity_client_id": link.entity_client_id,
+        "description": record.description,
+        "created_at": record.created_at.isoformat(),
+        "created_by": _serialize_flow_record_user(user, record.created_by_id, record.username_snapshot),
+    }
+
+
+def serialize_step_flow_record(ssr: StepStateRecord, step: TaskStep, users_map: dict) -> dict:
+    user = users_map.get(ssr.created_by_id) if ssr.created_by_id else None
+    username = user.username if user else (ssr.created_by_id or "Unknown")
+    working_section_name = step.working_section_name_snapshot or ""
+    description = f"{username} marked {ssr.state.value} on working section {working_section_name}".rstrip()
+    return {
+        "type": "task_step",
+        "entity_type": "task_step",
+        "entity_client_id": ssr.step_id,
+        "description": description,
+        "created_at": ssr.created_at.isoformat(),
+        "created_by": _serialize_flow_record_user(user, ssr.created_by_id),
     }

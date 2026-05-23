@@ -27,12 +27,13 @@ async def _create_item_issue_in_session(
         workspace_id=workspace_id,
         item_id=item_id,
         issue_type_id=issue_data.issue_type_id,
-        issue_severity_id=issue_data.issue_severity_id,
+        # Severity is disabled for now; keep the issue flow working without the FK.
+        issue_severity_id=None,
         state=ItemIssueStateEnum.PENDING,
         base_time_seconds=issue_data.base_time_seconds,
         time_multiplier=issue_data.time_multiplier,
         issue_name_snapshot=issue_data.issue_name_snapshot,
-        severity_name_snapshot=issue_data.severity_name_snapshot,
+        severity_name_snapshot=None,
         created_by_id=user_id,
     )
     session.add(issue)

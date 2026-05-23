@@ -647,11 +647,93 @@
 }
 ```
 
+## 17) Task flow records timeline
+
+### Endpoint
+
+- `GET /api/v1/tasks/{task_id}/flow-records`
+
+### Params
+
+- Path:
+  - `task_id: string` (required)
+- Query:
+  - `offset: int` (default `0`, min `0`)
+
+### Payload
+
+- none
+
+### Success data shape
+
+```json
+{
+  "flow_records": [
+    {
+      "type": "history_record",
+      "entity_type": "task",
+      "entity_client_id": "tsk_xxx",
+      "description": "Task created",
+      "created_at": "2026-05-23T10:00:00+00:00",
+      "created_by": {
+        "client_id": "usr_xxx",
+        "username": "alice",
+        "profile_picture": "https://..."
+      }
+    },
+    {
+      "type": "task_step",
+      "entity_type": "task_step",
+      "entity_client_id": "tst_xxx",
+      "description": "alice marked in_progress on working section Upholstery",
+      "created_at": "2026-05-23T10:05:00+00:00",
+      "created_by": {
+        "client_id": "usr_xxx",
+        "username": "alice",
+        "profile_picture": "https://..."
+      }
+    }
+  ],
+  "flow_records_pagination": {
+    "has_more": false,
+    "limit": 10,
+    "offset": 0
+  }
+}
+```
+
+Notes:
+- `created_by` can be `null` when the record has no creator id.
+- Records are returned in descending `created_at` order.
+
+## 18) Delete item issue
+
+### Endpoint
+
+- `DELETE /api/v1/items/{client_id}/issues/{issue_id}`
+
+### Params
+
+- Path:
+  - `client_id: string` (item id, required)
+  - `issue_id: string` (item issue id, required)
+
+### Payload
+
+- none
+
+### Success data shape
+
+```json
+{}
+```
+
 ## Common not-found messages observed in services
 
 - Task: `Task not found.`
 - Task note: `Task note not found.`
 - Item: `Item not found.`
+- Item issue: `Item issue not found.`
 - Item category (on item update): `ItemCategory not found.`
 - ItemUpholstery: `ItemUpholstery not found.`
 - Active requirement (set quantity): `Active requirement not found.`
@@ -660,6 +742,7 @@
 
 - Tasks router: `backend/app/beyo_manager/routers/api_v1/tasks.py`
 - Tasks query service: `backend/app/beyo_manager/services/queries/tasks/tasks.py`
+- Task flow records query service: `backend/app/beyo_manager/services/queries/tasks/task_flow_records.py`
 - Task commands:
   - `backend/app/beyo_manager/services/commands/tasks/create_task_note.py`
   - `backend/app/beyo_manager/services/commands/tasks/update_task_note.py`
@@ -675,6 +758,7 @@
 - Items router/commands:
   - `backend/app/beyo_manager/routers/api_v1/items.py`
   - `backend/app/beyo_manager/services/commands/items/create_item_issue.py`
+  - `backend/app/beyo_manager/services/commands/items/delete_item_issue.py`
   - `backend/app/beyo_manager/services/commands/items/update_item.py`
 - Item upholsteries router/query/commands:
   - `backend/app/beyo_manager/routers/api_v1/item_upholsteries.py`

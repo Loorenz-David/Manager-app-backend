@@ -1,13 +1,18 @@
+# Environment files
 .env
-.env.local
-.env.testing
-.env.validation
-.env.production
+.env.*
+*.env
+app/.env
+app/.env.*
+
+# Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 *.egg-info/
+
+# Build/cache/logs
 dist/
 build/
 .pytest_cache/
@@ -15,3 +20,6 @@ build/
 .ruff_cache/
 *.log
 .DS_Store
+
+# Local secrets
+/secretes
