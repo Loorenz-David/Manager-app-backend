@@ -3,7 +3,7 @@ from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
-from beyo_manager.domain.images.serializers import serialize_image_light
+from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.domain.tasks.enums import TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item,
@@ -292,11 +292,13 @@ async def list_tasks(ctx: ServiceContext) -> dict:
                 ImageLink.entity_type == ImageLinkEntityTypeEnum.ITEM,
                 ImageLink.entity_client_id.in_(primary_item_ids),
             ))
+            .options(selectinload(Image.last_event))
             .where(Image.deleted_at.is_(None))
             .order_by(ImageLink.entity_client_id, ImageLink.display_order.asc())
         )
         for image, item_id in img_result.all():
-            item_images_map.setdefault(item_id, []).append(serialize_image_light(image))
+            image_list = item_images_map.setdefault(item_id, [])
+            image_list.append(serialize_image(image) if not image_list else serialize_image_light(image))
 
     items_payload = []
     for task_id in page_ids:

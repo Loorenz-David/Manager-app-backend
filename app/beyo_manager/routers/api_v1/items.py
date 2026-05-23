@@ -14,6 +14,7 @@ from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
 from beyo_manager.services.commands.items.create_item import create_item
 from beyo_manager.services.commands.items.create_item_issue import create_item_issue
 from beyo_manager.services.commands.items.delete_item import delete_item
+from beyo_manager.services.commands.items.delete_item_issue import delete_item_issue
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
@@ -144,6 +145,24 @@ async def route_list_items(
         session=session,
     )
     outcome = await run_service(list_items, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.delete("/{client_id}/issues/{issue_id}")
+async def route_delete_item_issue(
+    client_id: str,
+    issue_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"item_id": client_id, "client_id": issue_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(delete_item_issue, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

@@ -52,3 +52,11 @@ def serialize_user_list_item(
         },
         "working_sections": working_sections,
     }
+
+
+def serialize_user_working_section_member(user: User) -> dict:
+    return {
+        "client_id": user.client_id,
+        "username": user.username,
+        "profile_picture": user.profile_picture,
+    }

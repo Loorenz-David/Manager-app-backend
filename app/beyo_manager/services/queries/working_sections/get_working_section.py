@@ -1,13 +1,16 @@
 from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
+from beyo_manager.domain.users.serializers import serialize_user_working_section_member
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_full
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.issue_types.issue_type import IssueType
 from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.working_sections.working_section_dependency import WorkingSectionDependency
 from beyo_manager.models.tables.working_sections.working_section_item_category import WorkingSectionItemCategory
+from beyo_manager.models.tables.working_sections.working_section_membership import WorkingSectionMembership
 from beyo_manager.models.tables.working_sections.working_section_supported_issue_type import (
     WorkingSectionSupportedIssueType,
 )
@@ -54,6 +57,7 @@ async def get_working_section(ctx: ServiceContext) -> dict:
         select(
             WorkingSectionItemCategory.item_category_id,
             ItemCategory.name.label("category_name"),
+            ItemCategory.major_category.label("major_category"),
         )
         .select_from(WorkingSectionItemCategory)
         .join(ItemCategory, ItemCategory.client_id == WorkingSectionItemCategory.item_category_id)
@@ -64,7 +68,10 @@ async def get_working_section(ctx: ServiceContext) -> dict:
             ItemCategory.is_deleted.is_(False),
         )
     )
-    categories = [(row.item_category_id, row.category_name) for row in cat_result.all()]
+    categories = [
+        (row.item_category_id, row.category_name, row.major_category.value)
+        for row in cat_result.all()
+    ]
 
     issue_type_result = await ctx.session.execute(
         select(
@@ -84,11 +91,28 @@ async def get_working_section(ctx: ServiceContext) -> dict:
         (row.issue_type_id, row.issue_type_name) for row in issue_type_result.all()
     ]
 
+    member_result = await ctx.session.execute(
+        select(User)
+        .select_from(WorkingSectionMembership)
+        .join(User, User.client_id == WorkingSectionMembership.user_id)
+        .where(
+            WorkingSectionMembership.workspace_id == ctx.workspace_id,
+            WorkingSectionMembership.working_section_id == working_section_id,
+            WorkingSectionMembership.removed_at.is_(None),
+        )
+        .order_by(User.username.asc())
+    )
+    members = [
+        serialize_user_working_section_member(user)
+        for user in member_result.scalars().all()
+    ]
+
     return {
         "working_section": serialize_working_section_full(
             section,
             dependencies,
             categories,
             issue_types,
+            members,
         )
     }

@@ -22,6 +22,7 @@ def serialize_working_section_full(
     dependencies: list[tuple[str, str]],
     categories: list[tuple[str, str]],
     issue_types: list[tuple[str, str]],
+    members: list[dict],
 ) -> dict:
     return {
         "client_id": section.client_id,
@@ -31,11 +32,13 @@ def serialize_working_section_full(
             {"client_id": dep_id, "name": dep_name} for dep_id, dep_name in dependencies
         ],
         "item_categories": [
-            {"client_id": cat_id, "name": cat_name} for cat_id, cat_name in categories
+            {"client_id": cat_id, "name": cat_name, "major_category": major_category}
+            for cat_id, cat_name, major_category in categories
         ],
         "supported_issue_types": [
             {"client_id": it_id, "name": it_name} for it_id, it_name in issue_types
         ],
+        "members": members,
     }
 
 

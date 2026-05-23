@@ -231,6 +231,11 @@ class DeleteItemRequest(BaseModel):
     client_id: str
 
 
+class DeleteItemIssueRequest(BaseModel):
+    item_id: str
+    client_id: str
+
+
 # Parsing functions
 def parse_create_item_upholstery_request(data: dict) -> CreateItemUpholsteryRequest:
     from pydantic import ValidationError as PydanticValidationError
@@ -380,6 +385,17 @@ def parse_delete_item_request(data: dict) -> DeleteItemRequest:
 
     try:
         return DeleteItemRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+def parse_delete_item_issue_request(data: dict) -> DeleteItemIssueRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return DeleteItemIssueRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
