@@ -1,47 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import _SEATING_CATEGORIES, _WOOD_CATEGORIES
 from beyo_manager.models.tables.working_sections.working_section_item_category import WorkingSectionItemCategory
-
-_SEATING_CATEGORIES = [
-    "armchair",
-    "bench",
-    "chair",
-    "chairs",
-    "dining chair",
-    "sofa",
-    "stool",
-]
-
-_WOOD_CATEGORIES = [
-    "bar cabinet",
-    "bedside table",
-    "bookshelf",
-    "cabinet",
-    "chest of drawer",
-    "chest of drawers",
-    "coffee table",
-    "conference table",
-    "corner cabinet",
-    "dining table",
-    "hall table",
-    "highboard",
-    "lamp",
-    "mirror",
-    "nest of tables",
-    "plant stand",
-    "poster",
-    "round table",
-    "secretary",
-    "serving trolley",
-    "side table",
-    "sideboard",
-    "small table",
-    "shelving",
-    "sewing table",
-    "trolley",
-    "writing desk",
-]
 
 _BOTH_CATEGORY_SECTIONS: frozenset[str] = frozenset({"cleaning"})
 _WOOD_ONLY_SECTIONS: frozenset[str] = frozenset({"wood fix", "ground oil", "hardwax oil"})

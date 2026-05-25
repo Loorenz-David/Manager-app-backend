@@ -23,7 +23,6 @@ class ImageLinkEntityTypeEnum(StrEnum):
     CASE = "case"
     CASE_CONVERSATION_MESSAGE = "case_conversation_message"
     ITEM_CATEGORY = "item_category"
-    UPHOLSTERY = "upholstery"
 
 
 class ImageAnnotationTypeEnum(StrEnum):

@@ -20,6 +20,7 @@ class ItemCategory(IdentityMixin, Base):
         String(64), ForeignKey("workspaces.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     major_category: Mapped[ItemMajorCategoryEnum] = mapped_column(
         SAEnum(ItemMajorCategoryEnum, name="item_major_category_enum", create_type=True),
         nullable=False,

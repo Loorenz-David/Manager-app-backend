@@ -33,6 +33,7 @@ MarkupSafe==3.0.3
 mdurl==0.1.2
 multidict==6.7.1
 packaging==26.2
+Pillow==12.2.0
 pluggy==1.6.0
 propcache==0.5.2
 py-vapid==1.9.4

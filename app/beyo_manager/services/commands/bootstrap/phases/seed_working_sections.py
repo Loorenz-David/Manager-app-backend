@@ -20,6 +20,21 @@ _SECTIONS = [
     "hardwax oil",
 ]
 
+_SECTION_IMAGE_URLS: dict[str, str] = {
+    "assembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/assembly.webp",
+    "cleaning": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
+    "disassembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/dismantler.webp",
+    "structural repair": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/gluing_2.webp",
+    "ground oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/ground_oil.webp",
+    "hardwax oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/hardwax.webp",
+    "padding": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/padding.webp",
+    "sanding": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/sander.webp",
+    "sewing": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/sewing.webp",
+    "upholstery installation": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_installer.webp",
+    "upholstery removal": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_remover_2.webp",
+    "wood fix": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/wood_oil.webp",
+}
+
 _DEPENDENCIES: list[tuple[str, str]] = [
     ("cleaning", "disassembly"),
     ("structural repair", "disassembly"),
@@ -52,7 +67,7 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             section_ids[name] = existing.client_id
             continue
 
-        section = WorkingSection(workspace_id=workspace_id, name=name, image=None)
+        section = WorkingSection(workspace_id=workspace_id, name=name, image=_SECTION_IMAGE_URLS.get(name))
         session.add(section)
         await session.flush()
         section_ids[name] = section.client_id

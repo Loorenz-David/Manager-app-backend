@@ -1,7 +1,5 @@
 """Serialization for item upholstery domain objects."""
 
-from beyo_manager.domain.images.serializers import serialize_image_light
-from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.items.item_issue import ItemIssue
@@ -136,12 +134,12 @@ def serialize_item_detail(
     }
 
 
-def serialize_item_category(category: ItemCategory, primary_image: Image | None = None) -> dict:
+def serialize_item_category(category: ItemCategory) -> dict:
     return {
         "client_id": category.client_id,
         "name": category.name,
         "major_category": category.major_category.value,
         "created_at": category.created_at.isoformat(),
         "created_by_id": category.created_by_id,
-        "image_url": serialize_image_light(primary_image)["image_url"] if primary_image else None,
+        "image_url": category.image_url,
     }

@@ -58,6 +58,9 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
                 "Quantity can only be set on requirements in MISSING_QUANTITY, AVAILABLE, or NEEDS_ORDERING state."
             )
 
+        iup.amount_meters = request.amount_meters
+        iup.updated_by_id = ctx.user_id
+
         if active_req.state == ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY:
             inv_result = await check_and_inject_need(
                 session=ctx.session,

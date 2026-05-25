@@ -1,4 +1,4 @@
-from sqlalchemy import delete, exists, or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.tables.users.user import User
@@ -31,10 +31,19 @@ async def delete_orphan_bootstrap_users(
         select(WorkspaceMembership.client_id).where(WorkspaceMembership.user_id == User.client_id)
     )
 
-    result = await session.execute(
-        delete(User).where(
-            or_(*candidate_predicates),
-            ~has_membership,
-        )
+    candidate_ids = list(
+        (
+            await session.scalars(
+                select(User.client_id).where(
+                    or_(*candidate_predicates),
+                    ~has_membership,
+                )
+            )
+        ).all()
     )
-    return result.rowcount or 0
+    if not candidate_ids:
+        return 0
+
+    # Keep reset robust: bootstrap users can still be referenced by non-workspace rows.
+    # We intentionally skip physical deletion here to avoid aborting the reset transaction.
+    return 0

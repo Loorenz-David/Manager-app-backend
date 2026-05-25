@@ -1,7 +1,7 @@
 """Serialization for upholstery inventory domain objects."""
 
-from beyo_manager.domain.images.serializers import serialize_image_light
-from beyo_manager.models.tables.images.image import Image
+from decimal import Decimal
+
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 
@@ -74,18 +74,20 @@ def serialize_upholstery_inventory(inv: UpholsteryInventory) -> dict:
 
 def serialize_upholstery(
     row: Upholstery,
-    primary_image: Image | None = None,
     inventory: UpholsteryInventory | None = None,
 ) -> dict:
+    available_stored_amount = None
+    if inventory is not None and inventory.current_stored_amount_meters is not None:
+        net_available = (inventory.current_stored_amount_meters or Decimal("0")) - (
+            inventory.current_amount_in_need_meters or Decimal("0")
+        )
+        available_stored_amount = str(max(net_available, Decimal("0.000")))
+
     return {
         "client_id": row.client_id,
         "name": row.name,
         "code": row.code,
-        "image_url": serialize_image_light(primary_image)["image_url"] if primary_image else None,
-        "current_stored_amount_meters": (
-            str(inventory.current_stored_amount_meters)
-            if inventory is not None and inventory.current_stored_amount_meters is not None
-            else None
-        ),
+        "image_url": row.image_url,
+        "current_stored_amount_meters": available_stored_amount,
         "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
     }

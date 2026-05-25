@@ -13,6 +13,11 @@ _UPHOLSTERIES: list[dict[str, str]] = [
     {"name": "velvet ember", "code": "VEL-EMBER"},
 ]
 
+_UPHOLSTERY_IMAGE_URLS: tuple[str, str] = (
+    "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvd1NMOWVmWDZzY1pPazhlc05Sd0dDd0pvc05Ja3FpTEYySlc4MFVFZi5qcGciLCJlZGl0cyI6eyJyZXNpemUiOnsid2lkdGgiOjEwMjQsImhlaWdodCI6MTAyNCwiZml0IjoiaW5zaWRlIn19fQ==",
+    "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvUWJQclY3R3p0b1JwbFc0MTY4NTA5NTA1OC53ZWJwIiwiZWRpdHMiOnsicmVzaXplIjp7IndpZHRoIjo0MDAsImhlaWdodCI6NDAwLCJmaXQiOiJpbnNpZGUifX19",
+)
+
 
 async def seed_upholsteries(
     session: AsyncSession,
@@ -24,6 +29,7 @@ async def seed_upholsteries(
     for idx, seed in enumerate(_UPHOLSTERIES):
         name = seed["name"]
         code = seed["code"]
+        image_url = _UPHOLSTERY_IMAGE_URLS[idx % len(_UPHOLSTERY_IMAGE_URLS)]
 
         existing_upholstery = await session.scalar(
             select(Upholstery).where(
@@ -36,12 +42,16 @@ async def seed_upholsteries(
                 workspace_id=workspace_id,
                 name=name,
                 code=code,
+                image_url=image_url,
                 created_by_id=created_by_id,
             )
             session.add(upholstery)
             await session.flush()
             upholstery_row = upholstery
         else:
+            if existing_upholstery.image_url is None:
+                existing_upholstery.image_url = image_url
+                await session.flush()
             upholstery_row = existing_upholstery
 
         existing_inventory = await session.scalar(

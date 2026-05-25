@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import _SEATING_CATEGORIES, _WOOD_CATEGORIES
 from beyo_manager.models.tables.issue_types.issue_category_config import IssueCategoryConfig
 from beyo_manager.models.tables.working_sections.working_section_supported_issue_type import WorkingSectionSupportedIssueType
 
@@ -47,46 +48,6 @@ _SECTION_ISSUE_TYPE_MAP: dict[str, list[str]] = {
         "loose joints",
     ],
 }
-
-_SEATING_CATEGORIES = [
-    "armchair",
-    "bench",
-    "chair",
-    "chairs",
-    "dining chair",
-    "sofa",
-    "stool",
-]
-
-_WOOD_CATEGORIES = [
-    "bar cabinet",
-    "bedside table",
-    "bookshelf",
-    "cabinet",
-    "chest of drawer",
-    "chest of drawers",
-    "coffee table",
-    "conference table",
-    "corner cabinet",
-    "dining table",
-    "hall table",
-    "highboard",
-    "lamp",
-    "mirror",
-    "nest of tables",
-    "plant stand",
-    "poster",
-    "round table",
-    "secretary",
-    "serving trolley",
-    "side table",
-    "sideboard",
-    "small table",
-    "shelving",
-    "sewing table",
-    "trolley",
-    "writing desk",
-]
 
 _WOOD_APPLICABLE_ISSUE_TYPES: frozenset[str] = frozenset(
     {
