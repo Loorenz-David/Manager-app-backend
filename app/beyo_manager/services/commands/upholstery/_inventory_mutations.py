@@ -326,6 +326,37 @@ async def complete_available_direct(
 
 
 # ---------------------------------------------------------------------------
+# CMD-9 — rollback_in_use_to_stored
+# ---------------------------------------------------------------------------
+
+
+async def rollback_in_use_to_stored(
+    session: AsyncSession,
+    workspace_id: str,
+    upholstery_inventory_id: str,
+    quantity: Decimal,
+) -> None:
+    """
+    Reverse an IN_USE reservation back to stored without touching in_need.
+
+    Used when a currently in-use requirement is force-failed and replaced by a new
+    requirement during upholstery swap.
+    """
+    inv = await _load_inventory(session, workspace_id, upholstery_inventory_id)
+    new_in_use = (inv.current_amount_in_use_meters or Decimal("0")) - quantity
+    if new_in_use < Decimal("0"):
+        raise ValidationError(
+            "Inventory inconsistency: rollback quantity exceeds recorded in-use amount."
+        )
+
+    inv.current_amount_in_use_meters = new_in_use
+    inv.current_stored_amount_meters = (
+        inv.current_stored_amount_meters or Decimal("0")
+    ) + quantity
+    await session.flush()
+
+
+# ---------------------------------------------------------------------------
 # Private loader — shared by all mutation helpers
 # ---------------------------------------------------------------------------
 

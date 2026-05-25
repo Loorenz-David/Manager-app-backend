@@ -12,7 +12,7 @@ tests/
 
 ## bootstrap_tests/
 
-11 sequential test suites that validate the entire app stack end-to-end.
+12 sequential test suites that validate the entire app stack end-to-end.
 
 | Script | Suite | What it covers |
 |--------|-------|----------------|
@@ -27,6 +27,7 @@ tests/
 | `09_scaling_baseline.py` | 09 | DB pool, Redis eviction policy, task router LISTEN/NOTIFY |
 | `10_cases_cache.sh` | 10 | Query caching and cache invalidation latency |
 | `11_sleep_mode.py` | 11 | Sleep mode: ActivityTracker, HTTP wake-up, idle simulation |
+| `12_item_upholstery_swap.sh` | 12 | Item upholstery PATCH swap lifecycle: fail old requirement and rotate active requirement |
 
 ## Running the tests
 

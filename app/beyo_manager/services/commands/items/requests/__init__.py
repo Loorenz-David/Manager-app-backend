@@ -36,6 +36,8 @@ class CreateItemUpholsteryRequest(BaseModel):
 class UpdateItemUpholsteryRequest(BaseModel):
     """Request to update ItemUpholstery fields."""
     client_id: str
+    upholstery_id: str | None = None
+    source: ItemUpholsterySourceEnum | None = None
     name: str | None = None
     code: str | None = None
     amount_meters: Decimal | None = None

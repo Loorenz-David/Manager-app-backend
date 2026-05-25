@@ -55,6 +55,7 @@ export APP_ENV=development
 | `09_scaling_baseline.py` | 09 | DB pool, Redis policy, task router LISTEN/NOTIFY checks |
 | `10_cases_cache.sh` | 10 | Query caching + invalidation latency proof |
 | `11_sleep_mode.py` | 11 | Sleep mode: ActivityTracker API, HTTP wake-up, idle→sleep simulation |
+| `12_item_upholstery_swap.sh` | 12 | Item upholstery PATCH swap lifecycle: fail previous requirement and create new active requirement |
 
 ### Quick Run All
 

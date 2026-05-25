@@ -29,6 +29,64 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
+async def _create_initial_requirement_for_item_upholstery(
+    session: AsyncSession,
+    workspace_id: str,
+    item_upholstery: ItemUpholstery,
+    amount_meters: Decimal | None,
+    source: ItemUpholsterySourceEnum,
+    user_id: str | None,
+) -> str:
+    """Create and attach a new active requirement for an existing ItemUpholstery."""
+    if amount_meters is not None and source != ItemUpholsterySourceEnum.CUSTOMER:
+        inv_result = await check_and_inject_need(
+            session=session,
+            workspace_id=workspace_id,
+            upholstery_id=item_upholstery.upholstery_id,
+            quantity=amount_meters,
+            inject=True,
+        )
+        state = (
+            ItemUpholsteryRequirementStateEnum.AVAILABLE
+            if inv_result["sufficient"]
+            else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
+        )
+        req = ItemUpholsteryRequirement(
+            workspace_id=workspace_id,
+            item_upholstery_id=item_upholstery.client_id,
+            upholstery_inventory_id=inv_result["inventory_id"],
+            amount_meters=amount_meters,
+            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
+            state=state,
+            created_by_id=user_id,
+        )
+    elif amount_meters is None:
+        req = ItemUpholsteryRequirement(
+            workspace_id=workspace_id,
+            item_upholstery_id=item_upholstery.client_id,
+            upholstery_inventory_id=None,
+            amount_meters=None,
+            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
+            state=ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY,
+            created_by_id=user_id,
+        )
+    else:
+        req = ItemUpholsteryRequirement(
+            workspace_id=workspace_id,
+            item_upholstery_id=item_upholstery.client_id,
+            upholstery_inventory_id=None,
+            amount_meters=amount_meters,
+            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
+            state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
+            created_by_id=user_id,
+        )
+
+    session.add(req)
+    await session.flush()
+    item_upholstery.active_requirement_id = req.client_id
+    return req.client_id
+
+
 async def _create_item_upholstery_in_session(
     session: AsyncSession,
     workspace_id: str,
@@ -66,52 +124,14 @@ async def _create_item_upholstery_in_session(
     session.add(iup)
     await session.flush()
 
-    if amount_meters is not None and source != ItemUpholsterySourceEnum.CUSTOMER:
-        inv_result = await check_and_inject_need(
-            session=session,
-            workspace_id=workspace_id,
-            upholstery_id=upholstery_id,
-            quantity=amount_meters,
-            inject=True,
-        )
-        state = (
-            ItemUpholsteryRequirementStateEnum.AVAILABLE
-            if inv_result["sufficient"]
-            else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
-        )
-        req = ItemUpholsteryRequirement(
-            workspace_id=workspace_id,
-            item_upholstery_id=iup.client_id,
-            upholstery_inventory_id=inv_result["inventory_id"],
-            amount_meters=amount_meters,
-            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
-            state=state,
-            created_by_id=user_id,
-        )
-    elif amount_meters is None:
-        req = ItemUpholsteryRequirement(
-            workspace_id=workspace_id,
-            item_upholstery_id=iup.client_id,
-            upholstery_inventory_id=None,
-            amount_meters=None,
-            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
-            state=ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY,
-            created_by_id=user_id,
-        )
-    else:
-        req = ItemUpholsteryRequirement(
-            workspace_id=workspace_id,
-            item_upholstery_id=iup.client_id,
-            upholstery_inventory_id=None,
-            amount_meters=amount_meters,
-            source=ItemUpholsteryRequirementSourceEnum.INVENTORY,
-            state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
-            created_by_id=user_id,
-        )
-
-    session.add(req)
-    await session.flush()
-    iup.active_requirement_id = req.client_id
+    await _create_initial_requirement_for_item_upholstery(
+        session=session,
+        workspace_id=workspace_id,
+        item_upholstery=iup,
+        amount_meters=amount_meters,
+        source=source,
+        user_id=user_id,
+    )
     return iup.client_id
 
 

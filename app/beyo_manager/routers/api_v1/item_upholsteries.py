@@ -58,6 +58,8 @@ class _CreateBody(BaseModel):
 
 
 class _UpdateBody(BaseModel):
+    upholstery_id: str | None = None
+    source: ItemUpholsterySourceEnum | None = None
     name: str | None = None
     code: str | None = None
     amount_meters: Decimal | None = None

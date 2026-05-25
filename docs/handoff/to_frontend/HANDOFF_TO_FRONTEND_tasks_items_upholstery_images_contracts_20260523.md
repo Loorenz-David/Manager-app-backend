@@ -336,12 +336,19 @@
 
 ```json
 {
+  "upholstery_id": "upholstery_abc123",
+  "source": "INVENTORY",
   "name": "Linen A",
   "code": "LIN-A",
   "amount_meters": 2.5,
   "time_to_fix_in_seconds": 900
 }
 ```
+
+- Notes:
+  - `upholstery_id` and `source` are optional patch fields.
+  - If either changes (swap), backend marks previous active requirement as `FAILED`, rolls back its inventory impact when needed, and creates a new active requirement using the updated values.
+  - Swap is blocked when the current active requirement is already `COMPLETED`.
 
 ### Success data shape
 
