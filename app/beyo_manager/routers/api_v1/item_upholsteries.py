@@ -31,17 +31,12 @@ from beyo_manager.services.queries.items.item_upholsteries import (
     list_item_upholsteries,
     list_upholstery_requirements,
 )
-from beyo_manager.services.queries.upholstery.upholsteries import (
-    get_upholstery,
-    list_upholsteries,
-)
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter(prefix="/api/v1/item-upholsteries", tags=["item-upholsteries"])
 requirements_router = APIRouter(
     prefix="/api/v1/upholstery-requirements", tags=["upholstery-requirements"]
 )
-upholstery_router = APIRouter(prefix="/api/v1/upholsteries", tags=["upholsteries"])
 
 
 # ── Request body models ────────────────────────────────────────────────────────
@@ -327,43 +322,6 @@ async def route_complete_single_requirement(
 ):
     ctx = ServiceContext(incoming_data={"client_id": client_id}, identity=claims, session=session)
     outcome = await run_service(complete_single_requirement, ctx)
-    if not outcome.success:
-        return build_err(outcome.error)
-    return build_ok(outcome.data)
-
-
-@upholstery_router.get("")
-async def route_list_upholsteries(
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
-    session: AsyncSession = Depends(get_db),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    q: str | None = Query(None),
-):
-    ctx = ServiceContext(
-        incoming_data={},
-        query_params={"limit": limit, "offset": offset, "q": q},
-        identity=claims,
-        session=session,
-    )
-    outcome = await run_service(list_upholsteries, ctx)
-    if not outcome.success:
-        return build_err(outcome.error)
-    return build_ok(outcome.data)
-
-
-@upholstery_router.get("/{client_id}")
-async def route_get_upholstery(
-    client_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
-    session: AsyncSession = Depends(get_db),
-):
-    ctx = ServiceContext(
-        incoming_data={"client_id": client_id},
-        identity=claims,
-        session=session,
-    )
-    outcome = await run_service(get_upholstery, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

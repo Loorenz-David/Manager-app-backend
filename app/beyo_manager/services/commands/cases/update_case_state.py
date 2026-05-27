@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import selectinload
+
 from beyo_manager.domain.cases.enums import CaseStateEnum
 from beyo_manager.domain.cases.events import CaseEvent, case_state_extra
 from beyo_manager.domain.cases.serializers import serialize_case
@@ -14,7 +16,11 @@ async def update_case_state(ctx: ServiceContext) -> dict:
     data = ctx.incoming_data or {}
     new_state = CaseStateEnum(data.get("new_state"))
     async with ctx.session.begin():
-        case = await ctx.session.get(Case, data.get("case_client_id"))
+        case = await ctx.session.get(
+            Case,
+            data.get("case_client_id"),
+            options=[selectinload(Case.conversations), selectinload(Case.case_type)],
+        )
         if case is None:
             raise NotFound("Case not found")
         case.state = new_state
@@ -22,4 +28,4 @@ async def update_case_state(ctx: ServiceContext) -> dict:
         case.updated_at = datetime.now(timezone.utc)
     event = build_workspace_event(case, CaseEvent.STATE_CHANGED, workspace_id=ctx.workspace_id, extra=case_state_extra(new_state))
     await dispatch([event])
-    return {"case": serialize_case(case)}
+    return {"case": serialize_case(case, case_type=case.__dict__.get("case_type"))}

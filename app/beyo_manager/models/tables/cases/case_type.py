@@ -16,7 +16,7 @@ class CaseType(IdentityMixin, Base):
     __tablename__ = "case_types"
 
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     entity_type: Mapped[CaseLinkEntityTypeEnum] = mapped_column(
         SAEnum(CaseLinkEntityTypeEnum, name="case_link_entity_type_enum", create_type=True),

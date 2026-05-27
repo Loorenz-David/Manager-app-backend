@@ -76,6 +76,10 @@ async def _dispatch_section_side_effects(
     pass
 
 
+def _resolve_transition_credit_user_id(ctx: ServiceContext, request) -> str:
+    return request.credited_user_id or ctx.user_id
+
+
 async def transition_step_state(ctx: ServiceContext) -> dict:
     """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox."""
     request = parse_transition_step_state_request(ctx.incoming_data)
@@ -167,6 +171,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             task.updated_at = now
             task.updated_by_id = ctx.user_id
 
+        credited_user_id = _resolve_transition_credit_user_id(ctx, request)
+
         if request.new_state == TaskStepStateEnum.COMPLETED:
             # Recalculate readiness on all steps that depended on THIS step
             dependent_edges_result = await ctx.session.execute(
@@ -217,6 +223,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             closing_record_id=closing_record.client_id,
             closing_state=closing_state.value,
             new_state=request.new_state.value,
+            performed_by_user_id=ctx.user_id,
+            credited_user_id=credited_user_id,
             assigned_worker_id=step.assigned_worker_id,
             working_section_id=step.working_section_id,
             working_section_name_snapshot=step.working_section_name_snapshot,

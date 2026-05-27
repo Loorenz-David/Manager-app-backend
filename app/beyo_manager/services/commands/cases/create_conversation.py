@@ -1,4 +1,4 @@
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from beyo_manager.domain.cases.enums import CaseStateEnum
 from beyo_manager.domain.cases.events import CaseEvent
@@ -31,9 +31,21 @@ async def create_conversation(ctx: ServiceContext) -> dict:
         case = await ctx.session.get(Case, request.case_client_id)
         if case is None:
             raise NotFound("Case not found")
-        conversation = CaseConversation(**conversation_kwargs, case_id=case.client_id, created_by_id=ctx.user_id, state=CaseStateEnum.OPEN)
-        ctx.session.add(conversation)
-        await ctx.session.execute(update(Case).where(Case.client_id == case.client_id).values(conversations_count=Case.conversations_count + 1))
+
+        existing = await ctx.session.execute(
+            select(CaseConversation).where(CaseConversation.case_id == case.client_id)
+        )
+        conversation = existing.scalar_one_or_none()
+
+        if conversation is None:
+            conversation = CaseConversation(
+                **conversation_kwargs,
+                case=case,
+                created_by_id=ctx.user_id,
+                state=CaseStateEnum.OPEN,
+            )
+            ctx.session.add(conversation)
+            await ctx.session.execute(update(Case).where(Case.client_id == case.client_id).values(conversations_count=1))
     event = build_workspace_event(case, CaseEvent.CONVERSATION_CREATED, workspace_id=ctx.workspace_id)
     await dispatch([event])
     return {"conversation": serialize_conversation(conversation)}

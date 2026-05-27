@@ -37,11 +37,11 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
         # Fetch assigned worker display name snapshot for user-scoped stats.
         # If the worker record is deleted after the transition was recorded, the snapshot
         # falls back to "" — this is intentional; approximate analytics, not an error.
-        worker_display_name = ""
-        if payload.assigned_worker_id:
-            worker = await _fetch_user(session, payload.assigned_worker_id)
-            if worker:
-                worker_display_name = worker.username
+        credited_user_display_name = ""
+        if payload.credited_user_id:
+            credited_user = await _fetch_user(session, payload.credited_user_id)
+            if credited_user:
+                credited_user_display_name = credited_user.username
 
         # Exclusion rule: skip all time/count increments for inaccurate records
         if not closing_record.recorded_time_marked_wrong:
@@ -49,16 +49,16 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
             closing_state = TaskStepStateEnum(payload.closing_state)
 
             if closing_state == TaskStepStateEnum.WORKING:
-                await _apply_working_close(session, payload, interval_seconds, worker_display_name)
+                await _apply_working_close(session, payload, interval_seconds, credited_user_display_name)
             elif closing_state == TaskStepStateEnum.PAUSED:
-                await _apply_paused_close(session, payload, interval_seconds, worker_display_name)
+                await _apply_paused_close(session, payload, interval_seconds, credited_user_display_name)
             elif closing_state == TaskStepStateEnum.ENDED_SHIFT:
-                await _apply_ended_shift_close(session, payload, interval_seconds, worker_display_name)
+                await _apply_ended_shift_close(session, payload, interval_seconds, credited_user_display_name)
 
         # Issues rule: applies regardless of recorded_time_marked_wrong
         new_state = TaskStepStateEnum(payload.new_state)
         if new_state == TaskStepStateEnum.COMPLETED:
-            await _apply_issues_at_completion(session, payload, worker_display_name)
+            await _apply_issues_at_completion(session, payload, credited_user_display_name)
 
         await session.commit()
 
@@ -94,10 +94,10 @@ async def _apply_working_close(
     session: AsyncSession, payload: StepTransitionPayload, interval_seconds: int, worker_display_name: str
 ) -> None:
     """Apply increments for a closed WORKING record."""
-    cost_minor = await _compute_cost_minor(session, payload.assigned_worker_id, payload.workspace_id, interval_seconds)
+    cost_minor = await _compute_cost_minor(session, payload.credited_user_id, payload.workspace_id, interval_seconds)
     work_date = datetime.fromisoformat(payload.entered_at).date()
 
-    if payload.assigned_worker_id:
+    if payload.credited_user_id:
         await _increment_user_daily(
             session, payload, work_date, worker_display_name,
             working_seconds=interval_seconds, working_count=1, cost_minor=cost_minor
@@ -121,10 +121,10 @@ async def _apply_paused_close(
     session: AsyncSession, payload: StepTransitionPayload, interval_seconds: int, worker_display_name: str
 ) -> None:
     """Apply increments for a closed PAUSED record."""
-    cost_minor = await _compute_cost_minor(session, payload.assigned_worker_id, payload.workspace_id, interval_seconds)
+    cost_minor = await _compute_cost_minor(session, payload.credited_user_id, payload.workspace_id, interval_seconds)
     work_date = datetime.fromisoformat(payload.entered_at).date()
 
-    if payload.assigned_worker_id:
+    if payload.credited_user_id:
         await _increment_user_daily(
             session, payload, work_date, worker_display_name,
             pause_seconds=interval_seconds, pause_count=1, cost_minor=cost_minor
@@ -150,7 +150,7 @@ async def _apply_ended_shift_close(
     """Apply increments for a closed ENDED_SHIFT record (NOT costed)."""
     work_date = datetime.fromisoformat(payload.entered_at).date()
 
-    if payload.assigned_worker_id:
+    if payload.credited_user_id:
         await _increment_user_daily(
             session, payload, work_date, worker_display_name,
             ended_shift_seconds=interval_seconds, ended_shift_count=1
@@ -205,7 +205,7 @@ async def _apply_issues_at_completion(
 
     work_date = datetime.fromisoformat(payload.entered_at).date()
 
-    if payload.assigned_worker_id:
+    if payload.credited_user_id:
         await _increment_user_daily(
             session, payload, work_date, worker_display_name,
             issues_count=total_count, issues_resolved_count=resolved_count
@@ -359,7 +359,7 @@ async def _increment_user_daily(
 ) -> None:
     """Increment UserDailyWorkStats row."""
     row = await _get_or_create_user_daily(
-        session, payload.workspace_id, payload.assigned_worker_id, work_date, worker_display_name
+        session, payload.workspace_id, payload.credited_user_id, work_date, worker_display_name
     )
     row.total_working_seconds += working_seconds
     row.total_working_count += working_count
@@ -391,7 +391,7 @@ async def _increment_user_lifetime(
 ) -> None:
     """Increment UserLifetimeStats row."""
     row = await _get_or_create_user_lifetime(
-        session, payload.workspace_id, payload.assigned_worker_id, worker_display_name
+        session, payload.workspace_id, payload.credited_user_id, worker_display_name
     )
     row.total_working_seconds += working_seconds
     row.total_working_count += working_count
@@ -424,7 +424,7 @@ async def _increment_user_section_daily(
 ) -> None:
     """Increment UserSectionDailyWorkStats row."""
     row = await _get_or_create_user_section_daily(
-        session, payload.workspace_id, payload.assigned_worker_id, payload.working_section_id,
+        session, payload.workspace_id, payload.credited_user_id, payload.working_section_id,
         work_date, worker_display_name
     )
     row.total_working_seconds += working_seconds

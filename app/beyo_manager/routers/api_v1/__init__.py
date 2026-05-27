@@ -17,6 +17,7 @@ from beyo_manager.routers.api_v1 import (
     notifications,
     reset,
     tasks,
+    upholsteries,
     upholstery_inventories,
     users,
     user_working_sections,
@@ -53,9 +54,9 @@ def register_v1_routers(app: FastAPI) -> None:
         tags=["working-section-memberships"],
     )
     app.include_router(upholstery_inventories.router)
+    app.include_router(upholsteries.router)
     app.include_router(item_upholsteries.router)
     app.include_router(item_upholsteries.requirements_router)
-    app.include_router(item_upholsteries.upholstery_router)
     app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
     app.include_router(item_categories.router)
     app.include_router(issue_types.router)

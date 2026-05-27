@@ -163,6 +163,7 @@ class _AssignWorkerBody(BaseModel):
 
 class _TransitionStepBody(BaseModel):
     new_state: TaskStepStateEnum
+    credited_user_id: str | None = None
     reason: StepEventReasonEnum | None = None
     description: str | None = None
 

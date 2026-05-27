@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,19 +93,68 @@ async def create_case_route(body: CreateCaseBody, claims: dict = Depends(get_jwt
 
 
 @router.get("")
-async def list_cases_route(state: str | None = None, created_by_id: str | None = None, entity_type: str | None = None, entity_client_id: str | None = None, offset: int = 0, limit: int = 50, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
-    return await _run(list_cases, {"state": state, "created_by_id": created_by_id, "entity_type": entity_type, "entity_client_id": entity_client_id, "offset": offset, "limit": limit}, claims, session)
+async def list_cases_route(
+    state: str | None = None,
+    case_state: str | None = None,
+    q: str | None = Query(None, max_length=200),
+    created_by_id: str | None = None,
+    entity_type: str | None = None,
+    entity_client_id: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+    claims: dict = Depends(get_jwt_claims),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        list_cases,
+        {
+            "state": state,
+            "case_state": case_state,
+            "q": q,
+            "created_by_id": created_by_id,
+            "entity_type": entity_type,
+            "entity_client_id": entity_client_id,
+            "offset": offset,
+            "limit": limit,
+        },
+        claims,
+        session,
+    )
 
 
 @router.get("/unread-counts")
-async def unread_counts_route(conversation_client_ids: str | None = None, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
-    ids = conversation_client_ids.split(",") if conversation_client_ids else None
-    return await _run(get_unread_counts, {"conversation_client_ids": ids}, claims, session)
+async def unread_counts_route(
+    case_client_ids: str | None = None,
+    claims: dict = Depends(get_jwt_claims),
+    session: AsyncSession = Depends(get_db),
+):
+    case_ids = case_client_ids.split(",") if case_client_ids else None
+    return await _run(
+        get_unread_counts,
+        {"case_client_ids": case_ids},
+        claims,
+        session,
+    )
 
 
 @router.get("/{case_client_id}")
-async def get_case_route(case_client_id: str, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
-    return await _run(get_case, {"case_client_id": case_client_id}, claims, session)
+async def get_case_route(
+    case_client_id: str,
+    before_message_seq: int | None = Query(default=None, ge=1),
+    messages_limit: int = Query(default=10, ge=1, le=50),
+    claims: dict = Depends(get_jwt_claims),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        get_case,
+        {
+            "case_client_id": case_client_id,
+            "before_message_seq": before_message_seq,
+            "messages_limit": messages_limit,
+        },
+        claims,
+        session,
+    )
 
 
 @router.patch("/{case_client_id}")

@@ -17,6 +17,8 @@ class Upholstery(IdentityMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    list_order: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -44,4 +46,13 @@ class Upholstery(IdentityMixin, Base):
             unique=True,
             postgresql_where=text("code IS NOT NULL"),
         ),
+        Index(
+            "uix_upholsteries_workspace_list_order",
+            "workspace_id",
+            "list_order",
+            unique=True,
+            postgresql_where=text("list_order IS NOT NULL"),
+        ),
+        Index("ix_upholsteries_workspace_favorite", "workspace_id", "favorite"),
+        Index("ix_upholsteries_workspace_list_order", "workspace_id", "list_order"),
     )

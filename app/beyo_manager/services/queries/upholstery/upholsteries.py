@@ -1,7 +1,8 @@
 """QUERY-1: List Upholsteries | QUERY-2: Get Upholstery by ID."""
 
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 
+from beyo_manager.domain.upholstery.enums import UpholsteryInventoryConditionEnum
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
@@ -16,6 +17,8 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
+    in_stock_raw = ctx.query_params.get("in_stock")
+    favorite_raw = ctx.query_params.get("favorite")
 
     stmt = select(Upholstery).where(
         Upholstery.workspace_id == ctx.workspace_id,
@@ -31,7 +34,40 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
             )
         )
 
-    stmt = stmt.order_by(Upholstery.created_at.asc()).offset(offset).limit(limit + 1)
+    if favorite_raw is not None:
+        favorite = str(favorite_raw).strip().lower() == "true"
+        stmt = stmt.where(Upholstery.favorite.is_(favorite))
+
+    if in_stock_raw is not None:
+        in_stock = str(in_stock_raw).strip().lower() == "true"
+        conditions = (
+            [
+                UpholsteryInventoryConditionEnum.AVAILABLE,
+                UpholsteryInventoryConditionEnum.LOW_STOCK,
+            ]
+            if in_stock
+            else [UpholsteryInventoryConditionEnum.OUT_OF_STOCK]
+        )
+        stmt = stmt.where(
+            exists(
+                select(UpholsteryInventory.upholstery_id).where(
+                    UpholsteryInventory.upholstery_id == Upholstery.client_id,
+                    UpholsteryInventory.workspace_id == ctx.workspace_id,
+                    UpholsteryInventory.is_deleted.is_(False),
+                    UpholsteryInventory.inventory_condition.in_(conditions),
+                )
+            )
+        )
+
+    stmt = (
+        stmt.order_by(
+            Upholstery.list_order.asc().nulls_last(),
+            Upholstery.favorite.desc(),
+            Upholstery.created_at.asc(),
+        )
+        .offset(offset)
+        .limit(limit + 1)
+    )
 
     result = await ctx.session.execute(stmt)
     rows = result.scalars().all()

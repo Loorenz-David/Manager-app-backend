@@ -141,3 +141,164 @@ def parse_confirm_ordered_request(data: dict) -> ConfirmOrderedRequest:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class CreateUpholsteryRequest(BaseModel):
+    client_id: str | None = None
+    name: str
+    code: str | None = None
+    image_url: str | None = None
+    favorite: bool = False
+    current_stored_amount_meters: Decimal | None = None
+    low_stock_threshold_meters: Decimal | None = None
+    minimum_to_have: int | None = None
+    maximum_to_have: int | None = None
+    projected_inventory_value_minor: int | None = None
+    currency: UpholsteryCurrencyEnum | None = None
+    planning_position: str | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: str) -> str:
+        value = (v or "").strip()
+        if not value:
+            raise ValueError("name must not be blank.")
+        return value
+
+    @field_validator("low_stock_threshold_meters")
+    @classmethod
+    def create_threshold_must_be_positive(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v <= Decimal("0"):
+            raise ValueError("low_stock_threshold_meters must be greater than 0.")
+        return v
+
+    @field_validator("current_stored_amount_meters")
+    @classmethod
+    def create_current_stock_must_be_non_negative(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v < Decimal("0"):
+            raise ValueError("current_stored_amount_meters must be >= 0.")
+        return v
+
+    @field_validator("minimum_to_have", "maximum_to_have", "projected_inventory_value_minor")
+    @classmethod
+    def create_must_be_non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("Value must be >= 0.")
+        return v
+
+
+def parse_create_upholstery_request(data: dict) -> CreateUpholsteryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return CreateUpholsteryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class UpdateUpholsteryRequest(BaseModel):
+    client_id: str
+    name: str | None = None
+    code: str | None = None
+    image_url: str | None = None
+    favorite: bool | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            raise ValueError("name must not be blank.")
+        return value
+
+
+def parse_update_upholstery_request(data: dict) -> UpdateUpholsteryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return UpdateUpholsteryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class DeleteUpholsteryRequest(BaseModel):
+    client_id: str
+
+
+def parse_delete_upholstery_request(data: dict) -> DeleteUpholsteryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return DeleteUpholsteryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class MarkUpholsteryFavoriteRequest(BaseModel):
+    client_id: str
+    favorite: bool
+
+
+def parse_mark_upholstery_favorite_request(data: dict) -> MarkUpholsteryFavoriteRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return MarkUpholsteryFavoriteRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class MarkUpholsteriesFavoriteRequest(BaseModel):
+    upholstery_ids: list[str]
+    favorite: bool
+
+    @field_validator("upholstery_ids")
+    @classmethod
+    def ensure_non_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("upholstery_ids must not be empty.")
+        return v
+
+
+def parse_mark_upholsteries_favorite_request(data: dict) -> MarkUpholsteriesFavoriteRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return MarkUpholsteriesFavoriteRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class UpdateUpholsteryListOrderRequest(BaseModel):
+    client_id: str
+    list_order: int | None = None
+
+    @field_validator("list_order")
+    @classmethod
+    def validate_list_order(cls, v: int | None) -> int | None:
+        if v is not None and v < 1:
+            raise ValueError("list_order must be >= 1.")
+        return v
+
+
+def parse_update_upholstery_list_order_request(data: dict) -> UpdateUpholsteryListOrderRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return UpdateUpholsteryListOrderRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc

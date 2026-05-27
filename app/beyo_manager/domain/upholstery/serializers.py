@@ -88,6 +88,8 @@ def serialize_upholstery(
         "name": row.name,
         "code": row.code,
         "image_url": row.image_url,
+        "favorite": row.favorite,
+        "list_order": row.list_order,
         "current_stored_amount_meters": available_stored_amount,
         "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
     }

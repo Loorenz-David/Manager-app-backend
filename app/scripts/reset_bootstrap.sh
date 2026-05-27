@@ -114,18 +114,32 @@ call_endpoint() {
     status=$(echo "$response" | tail -n 1)
     body=$(echo "$response" | sed '$d')
 
-    echo "$status" "$body"
+    printf '%s\n' "$status"
+    printf '%s\n' "$body"
+}
+
+print_troubleshooting_hint_if_needed() {
+    local status="$1"
+    local body="$2"
+
+    if [[ "$status" == "405" ]] && echo "$body" | grep -qi "<html"; then
+        log "Detected HTML 405 response. This usually means BASE_URL points to frontend, not backend API."
+        log "Try --base-url https://api-manager.beyoworkaroundtheclock.com"
+    fi
 }
 
 if [[ "$SKIP_RESET" -eq 0 ]]; then
     RESET_URL="${BASE_URL}/api/v1/reset?workspace_id=${WORKSPACE_ID}"
     log "Calling reset: DELETE ${RESET_URL}"
 
-    read -r reset_status reset_body < <(call_endpoint "DELETE" "$RESET_URL" "X-Reset-Secret" "$RESET_SECRET")
+    reset_response="$(call_endpoint "DELETE" "$RESET_URL" "X-Reset-Secret" "$RESET_SECRET")"
+    reset_status="$(echo "$reset_response" | head -n 1)"
+    reset_body="$(echo "$reset_response" | tail -n +2)"
     echo "reset.status=${reset_status}"
     echo "reset.body=${reset_body}"
 
     if [[ "$reset_status" -lt 200 || "$reset_status" -ge 300 ]]; then
+        print_troubleshooting_hint_if_needed "$reset_status" "$reset_body"
         log "Reset failed"
         exit 1
     fi
@@ -135,11 +149,14 @@ if [[ "$SKIP_BOOTSTRAP" -eq 0 ]]; then
     BOOTSTRAP_URL="${BASE_URL}/api/v1/bootstrap"
     log "Calling bootstrap: POST ${BOOTSTRAP_URL}"
 
-    read -r bootstrap_status bootstrap_body < <(call_endpoint "POST" "$BOOTSTRAP_URL" "X-Bootstrap-Secret" "$BOOTSTRAP_SECRET")
+    bootstrap_response="$(call_endpoint "POST" "$BOOTSTRAP_URL" "X-Bootstrap-Secret" "$BOOTSTRAP_SECRET")"
+    bootstrap_status="$(echo "$bootstrap_response" | head -n 1)"
+    bootstrap_body="$(echo "$bootstrap_response" | tail -n +2)"
     echo "bootstrap.status=${bootstrap_status}"
     echo "bootstrap.body=${bootstrap_body}"
 
     if [[ "$bootstrap_status" -lt 200 || "$bootstrap_status" -ge 300 ]]; then
+        print_troubleshooting_hint_if_needed "$bootstrap_status" "$bootstrap_body"
         log "Bootstrap failed"
         exit 1
     fi

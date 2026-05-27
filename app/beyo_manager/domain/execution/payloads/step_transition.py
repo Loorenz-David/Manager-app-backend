@@ -16,6 +16,8 @@ class StepTransitionPayload:
     closing_record_id: str      # client_id of the StepStateRecord being closed (exited_at set)
     closing_state: str          # the state of the record being closed (old state)
     new_state: str              # the state being entered
+    performed_by_user_id: str
+    credited_user_id: str
     assigned_worker_id: str | None
     working_section_id: str
     working_section_name_snapshot: str | None  # section name at time of transition
