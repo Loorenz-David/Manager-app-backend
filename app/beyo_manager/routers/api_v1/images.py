@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.database import get_db
@@ -31,9 +31,16 @@ class GenerateImageUploadUrlBody(BaseModel):
 
 
 class ConfirmImageUploadBody(BaseModel):
-    pending_upload_client_id: str
-    entity_type: str
-    entity_client_id: str
+    model_config = ConfigDict(extra="forbid")
+
+    pending_upload_client_id: str | None = None
+    entity_type: str | None = None
+    entity_client_id: str | None = None
+    image_client_id: str | None = None
+    width_px: int | None = None
+    height_px: int | None = None
+    image_annotations: list[dict] | None = None
+    items: list[dict] | None = None
 
 
 class UnlinkImageBody(BaseModel):
@@ -71,8 +78,9 @@ async def image_upload_url_route(body: GenerateImageUploadUrlBody, claims: dict 
 
 
 @router.post("/confirm-upload")
-async def image_confirm_upload_route(body: ConfirmImageUploadBody, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
-    return await _run(confirm_upload, body.model_dump(), claims, session)
+async def image_confirm_upload_route(body: ConfirmImageUploadBody | list[ConfirmImageUploadBody], claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
+    payload = {"items": [item.model_dump(exclude_none=True) for item in body]} if isinstance(body, list) else body.model_dump(exclude_none=True)
+    return await _run(confirm_upload, payload, claims, session)
 
 
 @router.get("")
@@ -101,8 +109,13 @@ async def image_download_url_route(image_client_id: str, claims: dict = Depends(
 
 
 @router.delete("/{image_client_id}")
-async def soft_delete_image_route(image_client_id: str, claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
-    return await _run(soft_delete_image, {"image_client_id": image_client_id}, claims, session)
+async def soft_delete_image_route(
+    image_client_id: str,
+    hard_delete: bool = Query(False),
+    claims: dict = Depends(get_jwt_claims),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(soft_delete_image, {"image_client_id": image_client_id, "hard_delete": hard_delete}, claims, session)
 
 
 @router.post("/{image_client_id}/annotations")
