@@ -10,6 +10,7 @@ from beyo_manager.domain.execution.payloads.notification import NotificationPayl
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
@@ -279,4 +280,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})
         )
     await event_bus.dispatch(pending_events)
-    return {"step_id": step.client_id, "new_state": request.new_state.value}
+    return {
+        "step_id": step.client_id,
+        "new_state": request.new_state.value,
+        "last_state_record": serialize_step_state_record_light(new_record),
+    }

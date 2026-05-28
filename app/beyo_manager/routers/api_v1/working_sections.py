@@ -19,6 +19,12 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.working_sections.get_working_section import (
 	get_working_section,
 )
+from beyo_manager.services.queries.working_sections.get_worker_working_sections import (
+	get_worker_working_sections,
+)
+from beyo_manager.services.queries.working_sections.list_working_section_steps import (
+	list_working_section_steps,
+)
 from beyo_manager.services.queries.working_sections.list_working_sections import (
 	list_working_sections,
 )
@@ -75,6 +81,24 @@ async def list_working_sections_route(
 	return build_ok(outcome.data)
 
 
+@router.get("/me")
+async def get_worker_working_sections_route(
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+	session: AsyncSession = Depends(get_db),
+	today_start: str | None = Query(None),
+):
+	ctx = ServiceContext(
+		incoming_data={},
+		query_params={"today_start": today_start} if today_start else {},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(get_worker_working_sections, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
 @router.get("/{working_section_id}")
 async def get_working_section_route(
 	working_section_id: str,
@@ -87,6 +111,33 @@ async def get_working_section_route(
 		session=session,
 	)
 	outcome = await run_service(get_working_section, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.get("/{working_section_id}/steps")
+async def list_working_section_steps_route(
+	working_section_id: str,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+	session: AsyncSession = Depends(get_db),
+	q: str | None = Query(None),
+	upholstery_search: bool = Query(False),
+	limit: int = Query(50, le=200),
+	offset: int = Query(0, ge=0),
+):
+	ctx = ServiceContext(
+		incoming_data={"working_section_id": working_section_id},
+		query_params={
+			"q": q,
+			"upholstery_search": str(upholstery_search).lower(),
+			"limit": limit,
+			"offset": offset,
+		},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(list_working_section_steps, ctx)
 	if not outcome.success:
 		return build_err(outcome.error)
 	return build_ok(outcome.data)

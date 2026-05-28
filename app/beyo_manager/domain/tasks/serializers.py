@@ -208,3 +208,53 @@ def serialize_step_flow_record(ssr: StepStateRecord, step: TaskStep, users_map: 
         "created_at": ssr.created_at.isoformat(),
         "created_by": _serialize_flow_record_user(user, ssr.created_by_id),
     }
+
+
+def serialize_task_light(task: Task) -> dict:
+    return {
+        "client_id": task.client_id,
+        "task_type": task.task_type.value,
+        "priority": task.priority.value,
+        "state": task.state.value,
+        "return_source": task.return_source.value if task.return_source else None,
+        "item_location": task.item_location.value if task.item_location else None,
+        "ready_by_at": task.ready_by_at.isoformat() if task.ready_by_at else None,
+        "return_method": task.return_method.value if task.return_method else None,
+    }
+
+
+def serialize_step_state_record_light(record: StepStateRecord | None) -> dict | None:
+    if record is None:
+        return None
+    return {
+        "state": record.state.value,
+        "entered_at": record.entered_at.isoformat() if record.entered_at else None,
+        "exited_at": record.exited_at.isoformat() if record.exited_at else None,
+    }
+
+
+def serialize_item_worker_light(
+    item: Item | None,
+    upholstery_requirements: list[ItemUpholsteryRequirement] | None = None,
+) -> dict | None:
+    if item is None:
+        return None
+    return {
+        "client_id": item.client_id,
+        "article_number": item.article_number,
+        "sku": item.sku,
+        "state": item.state.value,
+        "item_category_id": item.item_category_id,
+        "quantity": item.quantity,
+        "item_position": item.item_position,
+        "upholstery_requirement": [
+            {
+                "client_id": req.client_id,
+                "item_upholstery_id": req.item_upholstery_id,
+                "state": req.state.value,
+                "source": req.source.value,
+                "amount_meters": float(req.amount_meters) if req.amount_meters is not None else None,
+            }
+            for req in (upholstery_requirements or [])
+        ],
+    }

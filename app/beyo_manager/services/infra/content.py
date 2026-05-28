@@ -46,12 +46,17 @@ def validate_content_block(block: dict) -> InputContentBlock:
         if link is None:
             raise ValidationError("LINK block missing 'link'")
 
+    marks = block.get("marks")
+    if marks is not None and not isinstance(marks, dict):
+        raise ValidationError("Content block 'marks' must be an object")
+
     return InputContentBlock(
         type=type_enum.value,
         text=text,
         mention=mention,
         label_value=label_value,
         link=link,
+        marks=marks,
     )
 
 
