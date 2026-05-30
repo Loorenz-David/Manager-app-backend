@@ -66,6 +66,30 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-dev.txt
       - run: make test
+      - name: Auth refresh smoke (sign-in -> refresh)
+        run: |
+          set -euo pipefail
+
+          APP_ENV=testing python run.py >/tmp/ci_auth_refresh_api.log 2>&1 &
+          API_PID=$!
+          cleanup() {
+            kill "$API_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ATTEMPTS=0
+          until curl -fsS "http://127.0.0.1:8000/health" >/dev/null; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ "$ATTEMPTS" -ge 45 ]; then
+              echo "API health check failed"
+              tail -n 60 /tmp/ci_auth_refresh_api.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          bash ../tests/bootstrap_tests/01_seed_identity.sh
+          bash ../tests/bootstrap_tests/02_health_auth.sh
 
   docker-validation:
     runs-on: ubuntu-latest

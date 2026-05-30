@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # JWT
     jwt_access_token_expire_minutes: int = Field(default=30, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
     jwt_refresh_token_expire_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
+    auth_refresh_cookie_secure: bool | None = Field(default=None, alias="AUTH_REFRESH_COOKIE_SECURE")
+    auth_refresh_cookie_samesite: str = Field(default="lax", alias="AUTH_REFRESH_COOKIE_SAMESITE")
+    auth_refresh_cookie_path: str = Field(default="/", alias="AUTH_REFRESH_COOKIE_PATH")
+    auth_refresh_cookie_domain: str | None = Field(default=None, alias="AUTH_REFRESH_COOKIE_DOMAIN")
+    auth_refresh_cookie_max_age_seconds: int | None = Field(default=None, alias="AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS")
 
     # VAPID (Web Push)
     vapid_private_key:   str | None = Field(default=None, alias="VAPID_PRIVATE_KEY")
@@ -100,6 +105,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_critical_settings(self):
+        self.auth_refresh_cookie_samesite = self.auth_refresh_cookie_samesite.lower().strip()
+        if self.auth_refresh_cookie_samesite not in {"lax", "strict", "none"}:
+            raise ValueError("AUTH_REFRESH_COOKIE_SAMESITE must be one of: lax, strict, none")
+
+        # Default to secure cookies outside local/test profiles.
+        if self.auth_refresh_cookie_secure is None:
+            self.auth_refresh_cookie_secure = self.environment not in {"development", "testing", "validation"}
+
+        # Browser policy: SameSite=None requires Secure.
+        if self.auth_refresh_cookie_samesite == "none" and not self.auth_refresh_cookie_secure:
+            raise ValueError("AUTH_REFRESH_COOKIE_SAMESITE=none requires AUTH_REFRESH_COOKIE_SECURE=true")
+
         required = ["secret_key", "jwt_secret_key", "database_url", "redis_url"]
         missing = [name for name in required if not getattr(self, name)]
         if missing:

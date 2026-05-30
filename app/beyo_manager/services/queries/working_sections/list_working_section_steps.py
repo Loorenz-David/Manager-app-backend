@@ -1,6 +1,7 @@
 from sqlalchemy import and_, distinct, or_, select
 from sqlalchemy.orm import selectinload
 
+from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
@@ -12,6 +13,10 @@ from beyo_manager.domain.tasks.serializers import (
 )
 from beyo_manager.domain.users.serializers import serialize_user_working_section_member
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.models.tables.cases.case import Case
+from beyo_manager.models.tables.cases.case_conversation import CaseConversation
+from beyo_manager.models.tables.cases.case_link import CaseLink
+from beyo_manager.models.tables.cases.case_participant import CaseParticipant
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
@@ -153,6 +158,58 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     step_map = {step.client_id: step for step in steps}
 
     task_ids = list({step.task_id for step in steps})
+    empty_case_summary = {
+        "total_unread": 0,
+    }
+
+    case_summary_by_task: dict[str, dict] = {}
+    if task_ids:
+        try:
+            case_summary_rows = await ctx.session.execute(
+                select(
+                    CaseLink.entity_client_id.label("task_id"),
+                    CaseConversation.last_message_seq.label("last_message_seq"),
+                    CaseParticipant.last_read_message_seq.label("last_read_message_seq"),
+                )
+                .select_from(Case)
+                .join(
+                    CaseLink,
+                    and_(
+                        CaseLink.case_id == Case.client_id,
+                        CaseLink.entity_type == CaseLinkEntityTypeEnum.TASK,
+                        CaseLink.entity_client_id.in_(task_ids),
+                    ),
+                )
+                .join(
+                    Task,
+                    and_(
+                        Task.client_id == CaseLink.entity_client_id,
+                        Task.workspace_id == ctx.workspace_id,
+                        Task.is_deleted.is_(False),
+                    ),
+                )
+                .join(CaseConversation, CaseConversation.case_id == Case.client_id)
+                .outerjoin(
+                    CaseParticipant,
+                    and_(
+                        CaseParticipant.case_id == Case.client_id,
+                        CaseParticipant.user_id == ctx.user_id,
+                    ),
+                )
+                .where(Case.state.in_([CaseStateEnum.OPEN, CaseStateEnum.RESOLVING]))
+            )
+
+            task_summary_buckets: dict[str, dict] = {}
+            for row in case_summary_rows.all():
+                bucket = task_summary_buckets.setdefault(row.task_id, empty_case_summary.copy())
+                if row.last_read_message_seq is None:
+                    continue
+                bucket["total_unread"] += max((row.last_message_seq or 0) - row.last_read_message_seq, 0)
+
+            case_summary_by_task = task_summary_buckets
+        except Exception:
+            case_summary_by_task = {}
+
     tasks_result = await ctx.session.execute(
         select(Task).where(
             Task.workspace_id == ctx.workspace_id,
@@ -186,6 +243,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
         items_map = {item.client_id: item for item in items_result.scalars().all()}
 
     requirements_map: dict[str, list[ItemUpholsteryRequirement]] = {}
+    upholstery_by_id: dict[str, ItemUpholstery] = {}
     if primary_item_ids:
         uph_result = await ctx.session.execute(
             select(ItemUpholstery).where(
@@ -195,6 +253,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             )
         )
         upholsteries = uph_result.scalars().all()
+        upholstery_by_id = {upholstery.client_id: upholstery for upholstery in upholsteries}
         upholstery_id_to_item_id = {upholstery.client_id: upholstery.item_id for upholstery in upholsteries}
 
         upholstery_ids = list(upholstery_id_to_item_id.keys())
@@ -261,6 +320,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             continue
 
         task = task_map.get(step.task_id)
+        case_summary = case_summary_by_task.get(step.task_id, empty_case_summary.copy())
         primary_item_id = task_to_primary_item_id.get(step.task_id) if task else None
         item = items_map.get(primary_item_id) if primary_item_id else None
         creator = users_map.get(step.created_by_id) if step.created_by_id else None
@@ -275,8 +335,9 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                 "updated_by": serialize_user_working_section_member(updater) if updater else None,
                 "last_state_record": serialize_step_state_record_light(step.latest_state_record),
                 "task": serialize_task_light(task) if task else None,
-                "item": serialize_item_worker_light(item, item_reqs),
+                "item": serialize_item_worker_light(item, item_reqs, upholstery_by_id),
                 "item_images": item_images_map.get(primary_item_id, []) if primary_item_id else [],
+                "cases_summary": case_summary,
             }
         )
 

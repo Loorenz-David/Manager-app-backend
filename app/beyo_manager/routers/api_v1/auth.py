@@ -1,9 +1,12 @@
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.config import settings
+from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims, require_roles
@@ -51,7 +54,16 @@ async def sign_in_route(
     data = dict(outcome.data)
     refresh_token_value = data.pop("_refresh_token")
     json_response = build_ok(data)
-    json_response.set_cookie(_REFRESH_COOKIE, refresh_token_value, httponly=True, secure=True, samesite="lax")
+    json_response.set_cookie(
+        _REFRESH_COOKIE,
+        refresh_token_value,
+        httponly=True,
+        secure=settings.auth_refresh_cookie_secure,
+        samesite=settings.auth_refresh_cookie_samesite,
+        path=settings.auth_refresh_cookie_path,
+        domain=settings.auth_refresh_cookie_domain,
+        max_age=settings.auth_refresh_cookie_max_age_seconds,
+    )
     return json_response
 
 
@@ -64,7 +76,14 @@ async def logout_route(
     ctx = ServiceContext(identity=claims, incoming_data={"refresh_token": request.cookies.get(_REFRESH_COOKIE)}, session=session)
     outcome = await run_service(logout_user, ctx)
     json_response = build_ok(outcome.data) if outcome.success else build_err(outcome.error)
-    json_response.delete_cookie(_REFRESH_COOKIE, httponly=True, samesite="lax")
+    json_response.delete_cookie(
+        _REFRESH_COOKIE,
+        httponly=True,
+        secure=settings.auth_refresh_cookie_secure,
+        samesite=settings.auth_refresh_cookie_samesite,
+        path=settings.auth_refresh_cookie_path,
+        domain=settings.auth_refresh_cookie_domain,
+    )
     return json_response
 
 
@@ -72,6 +91,16 @@ async def logout_route(
 async def refresh_route(request: Request, session: AsyncSession = Depends(get_db)):
     ctx = ServiceContext(identity={}, incoming_data={"refresh_token": request.cookies.get(_REFRESH_COOKIE)}, session=session)
     outcome = await run_service(refresh_token, ctx)
+    if not outcome.success and isinstance(outcome.error, RefreshTokenRejected):
+        return JSONResponse(
+            content={
+                "error": outcome.error.message,
+                "ok": False,
+                "code": outcome.error.code,
+                "reason": outcome.error.reason,
+            },
+            status_code=outcome.error.http_status,
+        )
     return build_ok(outcome.data) if outcome.success else build_err(outcome.error)
 
 

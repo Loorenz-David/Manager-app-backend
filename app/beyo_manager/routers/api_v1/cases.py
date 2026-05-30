@@ -20,6 +20,7 @@ from beyo_manager.services.commands.cases.update_case_state import update_case_s
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.cases.get_case import get_case
 from beyo_manager.services.queries.cases.get_conversation import get_conversation
+from beyo_manager.services.queries.cases.get_unread_count import get_unread_count
 from beyo_manager.services.queries.cases.get_unread_counts import get_unread_counts
 from beyo_manager.services.queries.cases.list_cases import list_cases
 from beyo_manager.services.queries.cases.list_linked_entities import list_linked_entities
@@ -34,6 +35,22 @@ class CreateCaseBody(BaseModel):
     client_id: str | None = None
     case_type_id: str | None = None
     type_label: str | None = None
+    entity_type: str | None = None
+    entity_client_id: str | None = None
+    participants: list[str] | None = None
+    selected_all: bool | None = None
+    skip_participants: list[str] | None = None
+    initial_message: "CreateCaseInitialMessageBody | None" = None
+
+
+class CreateCaseInitialMessageBody(BaseModel):
+    client_id: str | None = None
+    content: list
+    plain_text: str = ""
+
+
+CreateCaseBody.model_rebuild()
+CreateCaseInitialMessageBody.model_rebuild()
 
 
 class UpdateCaseBody(BaseModel):
@@ -100,6 +117,8 @@ async def list_cases_route(
     created_by_id: str | None = None,
     entity_type: str | None = None,
     entity_client_id: str | None = None,
+    participants: str | None = None,
+    includes_participants: str | None = None,
     offset: int = 0,
     limit: int = 50,
     claims: dict = Depends(get_jwt_claims),
@@ -114,6 +133,8 @@ async def list_cases_route(
             "created_by_id": created_by_id,
             "entity_type": entity_type,
             "entity_client_id": entity_client_id,
+            "participants": participants,
+            "includes_participants": includes_participants,
             "offset": offset,
             "limit": limit,
         },
@@ -132,6 +153,19 @@ async def unread_counts_route(
     return await _run(
         get_unread_counts,
         {"case_client_ids": case_ids},
+        claims,
+        session,
+    )
+
+
+@router.get("/unread-count")
+async def unread_count_route(
+    claims: dict = Depends(get_jwt_claims),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        get_unread_count,
+        {},
         claims,
         session,
     )

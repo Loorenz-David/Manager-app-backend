@@ -1,3 +1,10 @@
+"""Bootstrap endpoint.
+
+Example curl:
+curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
+    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+"""
+
 from fastapi import APIRouter, Header, HTTPException
 
 from beyo_manager.models.database import get_db_session

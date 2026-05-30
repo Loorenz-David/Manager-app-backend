@@ -3,10 +3,30 @@ from pydantic import BaseModel, ValidationError as PydanticValidationError
 from beyo_manager.errors.validation import ValidationError
 
 
+class CreateCaseInitialMessageRequest(BaseModel):
+    client_id: str | None = None
+    content: list
+    plain_text: str = ""
+
+
 class CreateCaseRequest(BaseModel):
     client_id: str | None = None
     case_type_id: str | None = None
     type_label: str | None = None
+    entity_type: str | None = None
+    entity_client_id: str | None = None
+    participants: list[str] | None = None
+    selected_all: bool | None = None
+    skip_participants: list[str] | None = None
+    initial_message: CreateCaseInitialMessageRequest | None = None
+
+
+class CreateCaseTypeRequest(BaseModel):
+    client_id: str | None = None
+    name: str
+    image_url: str | None = None
+    description: str | None = None
+    entity_type: str
 
 
 class CreateConversationRequest(BaseModel):
@@ -30,6 +50,13 @@ def _raise_validation_error(exc: PydanticValidationError) -> None:
 def parse_create_case_request(data: dict) -> CreateCaseRequest:
     try:
         return CreateCaseRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        _raise_validation_error(exc)
+
+
+def parse_create_case_type_request(data: dict) -> CreateCaseTypeRequest:
+    try:
+        return CreateCaseTypeRequest.model_validate(data)
     except PydanticValidationError as exc:
         _raise_validation_error(exc)
 

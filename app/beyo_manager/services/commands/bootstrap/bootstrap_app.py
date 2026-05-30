@@ -1,5 +1,6 @@
 from beyo_manager.config import settings
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.services.commands.bootstrap.phases.seed_case_types import seed_case_types
 from beyo_manager.services.commands.bootstrap.phases.seed_admin_user import seed_admin_user
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import seed_item_categories
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_category_configs import seed_issue_category_configs
@@ -21,6 +22,7 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
     async with ctx.session.begin():
         role_ids = await seed_roles(ctx.session)
         workspace_result = await seed_workspace(ctx.session, settings, role_ids)
+        await seed_case_types(ctx.session)
         item_category_ids = await seed_item_categories(ctx.session, workspace_result["workspace_id"])
         issue_type_ids = await seed_issue_types(ctx.session, workspace_result["workspace_id"])
         await seed_issue_severities(ctx.session, workspace_result["workspace_id"])

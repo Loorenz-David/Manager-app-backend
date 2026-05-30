@@ -225,7 +225,7 @@ HTTP 200:
             "return_method": "pickup"
           },
           "item": {
-            "client_id": "itm_...",
+            "client_id": "itm_..."
             "article_number": "ART-001",
             "sku": "SKU-001",
             "state": "pending",
@@ -257,7 +257,10 @@ HTTP 200:
               "events": [],
               "image_annotation": null
             }
-          ]
+          ],
+          "cases_summary": {
+            "total_unread": 5
+          }
         }
       ],
       "limit": 50,
@@ -277,6 +280,20 @@ item and upholstery_requirement empty-state behavior:
 
 - If item exists but has no upholstery requirements, item.upholstery_requirement returns an empty array [].
 - If the step has no resolvable primary item, item returns null and item_images returns [].
+
+cases_summary behavior:
+
+- Always present on each step item.
+- Aggregated per task, not per step.
+- `total_unread` is scoped to the authenticated user.
+- Includes unread messages from linked cases in `open` or `resolving` state.
+- If the aggregate cannot be computed, the backend returns the zero object:
+
+```json
+{
+  "total_unread": 0
+}
+```
 
 ### Endpoint B error response
 

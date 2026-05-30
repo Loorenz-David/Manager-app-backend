@@ -79,7 +79,7 @@ CASE=$(curl -s -X POST http://localhost:8000/api/v1/cases \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"case_type_id": "ct_investigation"}')
-CASE_ID=$(echo "$CASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('case',{}).get('client_id',''))" 2>/dev/null)
+CASE_ID=$(echo "$CASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('case_client_id',''))" 2>/dev/null)
 
 if [ -z "$CASE_ID" ]; then
   fail "Could not create case for audit trigger"

@@ -46,10 +46,8 @@ CASE=$(curl -s -X POST http://localhost:8000/api/v1/cases \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"case_type_id": "ct_investigation"}')
-CASE_ID=$(echo "$CASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('case',{}).get('client_id',''))" 2>/dev/null)
-STATE=$(echo "$CASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('case',{}).get('state',''))" 2>/dev/null)
-STATE=$(echo "$STATE" | tr -d '\n\r')
-[[ "$STATE" == *"open"* ]] && pass "Case created: $CASE_ID state=open" || fail "Expected state=open, got: $STATE | $CASE"
+CASE_ID=$(echo "$CASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('case_client_id',''))" 2>/dev/null)
+[ -n "$CASE_ID" ] && pass "Case created: $CASE_ID" || fail "Expected case_client_id in create response | $CASE"
 
 # ---------------------------------------------------------------------------
 # B1: Get single case

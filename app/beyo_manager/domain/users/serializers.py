@@ -60,3 +60,19 @@ def serialize_user_working_section_member(user: User) -> dict:
         "username": user.username,
         "profile_picture": user.profile_picture,
     }
+
+
+def serialize_user_compact_with_role(
+    user: User,
+    workspace_role_client_id: str,
+    workspace_role_name: str,
+) -> dict:
+    return {
+        "client_id": user.client_id,
+        "username": user.username,
+        "profile_picture": user.profile_picture,
+        "role": {
+            "client_id": workspace_role_client_id,
+            "name": workspace_role_name,
+        },
+    }

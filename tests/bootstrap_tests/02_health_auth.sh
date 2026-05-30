@@ -72,6 +72,45 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# B2: Refresh Cookie + Immediate Refresh
+# ---------------------------------------------------------------------------
+echo "B2 — Refresh cookie set and immediate refresh succeeds"
+COOKIE_JAR="$(mktemp)"
+
+SIGNIN_WITH_COOKIE=$(curl -s -w "\n_STATUS_:%{http_code}" \
+  -c "$COOKIE_JAR" \
+  -X POST "$BASE_URL/api/v1/auth/sign-in" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user_test@test.local",
+    "password": "Test1234!",
+    "app_scope": "admin"
+  }')
+
+STATUS=$(echo "$SIGNIN_WITH_COOKIE" | grep "_STATUS_:" | cut -d':' -f2)
+[ "$STATUS" = "200" ] && pass "sign-in for cookie jar HTTP 200" || fail "sign-in for cookie jar HTTP $STATUS"
+
+if grep -q "refresh_token" "$COOKIE_JAR"; then
+  pass "refresh_token cookie captured"
+else
+  fail "refresh_token cookie missing from cookie jar"
+fi
+
+REFRESH=$(curl -s -w "\n_STATUS_:%{http_code}" \
+  -b "$COOKIE_JAR" \
+  -X POST "$BASE_URL/api/v1/auth/refresh")
+
+STATUS=$(echo "$REFRESH" | grep "_STATUS_:" | cut -d':' -f2)
+BODY=$(echo "$REFRESH" | sed '/_STATUS_:/d')
+
+[ "$STATUS" = "200" ] && pass "refresh HTTP 200 immediately after sign-in" || fail "refresh HTTP $STATUS"
+REFRESH_TOKEN=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('access_token',''))" 2>/dev/null)
+[ -n "$REFRESH_TOKEN" ] && pass "refresh access_token present" || fail "refresh access_token missing"
+
+rm -f "$COOKIE_JAR"
+echo ""
+
+# ---------------------------------------------------------------------------
 # C: Protected Endpoint (uses token)
 # ---------------------------------------------------------------------------
 echo "C — GET /api/v1/notifications (protected, confirms token is valid)"

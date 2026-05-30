@@ -34,7 +34,12 @@ class Case(IdentityMixin, HistoryRecordMixin, Base):
         default=CaseStateEnum.OPEN,
         index=True,
     )
-    case_type_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("case_types.client_id", deferrable=True), nullable=True, index=True)
+    case_type_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("case_types.client_id", deferrable=True, ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     type_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     participants_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     conversations_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

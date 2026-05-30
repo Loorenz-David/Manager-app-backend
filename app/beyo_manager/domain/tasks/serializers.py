@@ -236,6 +236,7 @@ def serialize_step_state_record_light(record: StepStateRecord | None) -> dict | 
 def serialize_item_worker_light(
     item: Item | None,
     upholstery_requirements: list[ItemUpholsteryRequirement] | None = None,
+    upholsteries_by_id: dict[str, ItemUpholstery] | None = None,
 ) -> dict | None:
     if item is None:
         return None
@@ -251,6 +252,11 @@ def serialize_item_worker_light(
             {
                 "client_id": req.client_id,
                 "item_upholstery_id": req.item_upholstery_id,
+                "upholstery_id": (
+                    upholsteries_by_id[req.item_upholstery_id].upholstery_id
+                    if upholsteries_by_id and req.item_upholstery_id in upholsteries_by_id
+                    else None
+                ),
                 "state": req.state.value,
                 "source": req.source.value,
                 "amount_meters": float(req.amount_meters) if req.amount_meters is not None else None,

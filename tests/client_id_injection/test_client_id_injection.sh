@@ -291,7 +291,7 @@ def case_13():
 def case_14():
 	c = cid("ca")
 	_, body = r.req("POST", "/cases", {"client_id": c, "type_label": "ClientId Case"}, expected=200)
-	got = body.get("data", {}).get("case", {}).get("client_id")
+	got = body.get("data", {}).get("case_client_id")
 	r.assert_true(got == c, f"Expected {c}, got {got}")
 	created["case"] = c
 

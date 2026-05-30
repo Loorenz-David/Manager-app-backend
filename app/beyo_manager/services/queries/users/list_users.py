@@ -1,6 +1,6 @@
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 
-from beyo_manager.domain.users.serializers import serialize_user_list_item
+from beyo_manager.domain.users.serializers import serialize_user_list_item, serialize_user_working_section_member, serialize_user_compact_with_role
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
@@ -27,47 +27,68 @@ async def list_users(ctx: ServiceContext) -> dict:
     string_filters = ctx.query_params.get("string_filters")
     role_filter = ctx.query_params.get("role")
     sections_filter = ctx.query_params.get("working_sections")
+    compact = ctx.query_params.get("compact", "false").lower() == "true"
 
-    stmt = (
-        select(
-            User,
-            WorkspaceRole.client_id.label("role_client_id"),
-            WorkspaceRole.name.label("role_name"),
-        )
-        .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
-        .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
-        .where(
-            WorkspaceMembership.workspace_id == ctx.workspace_id,
-            WorkspaceMembership.is_active.is_(True),
-        )
-    )
-
-    stmt = apply_string_filter(stmt, q, string_filters, _ALLOWED_STRING_COLUMNS)
-
-    if role_filter:
-        role_names = [r.strip() for r in role_filter.split(",") if r.strip()]
-        stmt = stmt.where(WorkspaceRole.name.in_(role_names))
-
-    if sections_filter:
-        section_names = [s.strip() for s in sections_filter.split(",") if s.strip()]
-        stmt = stmt.where(
-            exists(
-                select(WorkingSectionMembership.client_id)
-                .join(
-                    WorkingSection,
-                    WorkingSection.client_id == WorkingSectionMembership.working_section_id,
+    def _build_base_query(include_all_columns: bool = True):
+        """Build the base query with all filters applied."""
+        if include_all_columns:
+            q_stmt = (
+                select(
+                    User,
+                    WorkspaceRole.client_id.label("role_client_id"),
+                    WorkspaceRole.name.label("role_name"),
                 )
+                .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
+                .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
                 .where(
-                    WorkingSectionMembership.user_id == User.client_id,
-                    WorkingSectionMembership.workspace_id == ctx.workspace_id,
-                    WorkingSectionMembership.removed_at.is_(None),
-                    WorkingSection.workspace_id == ctx.workspace_id,
-                    WorkingSection.is_deleted.is_(False),
-                    WorkingSection.name.in_(section_names),
+                    WorkspaceMembership.workspace_id == ctx.workspace_id,
+                    WorkspaceMembership.is_active.is_(True),
                 )
             )
-        )
+        else:
+            q_stmt = (
+                select(func.count(User.client_id.distinct()))
+                .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
+                .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
+                .where(
+                    WorkspaceMembership.workspace_id == ctx.workspace_id,
+                    WorkspaceMembership.is_active.is_(True),
+                )
+            )
 
+        q_stmt = apply_string_filter(q_stmt, q, string_filters, _ALLOWED_STRING_COLUMNS)
+
+        if role_filter:
+            role_names = [r.strip() for r in role_filter.split(",") if r.strip()]
+            q_stmt = q_stmt.where(WorkspaceRole.name.in_(role_names))
+
+        if sections_filter:
+            section_names = [s.strip() for s in sections_filter.split(",") if s.strip()]
+            q_stmt = q_stmt.where(
+                exists(
+                    select(WorkingSectionMembership.client_id)
+                    .join(
+                        WorkingSection,
+                        WorkingSection.client_id == WorkingSectionMembership.working_section_id,
+                    )
+                    .where(
+                        WorkingSectionMembership.user_id == User.client_id,
+                        WorkingSectionMembership.workspace_id == ctx.workspace_id,
+                        WorkingSectionMembership.removed_at.is_(None),
+                        WorkingSection.workspace_id == ctx.workspace_id,
+                        WorkingSection.is_deleted.is_(False),
+                        WorkingSection.name.in_(section_names),
+                    )
+                )
+            )
+
+        return q_stmt
+
+    # Get total count before pagination
+    count_stmt = _build_base_query(include_all_columns=False)
+    total = (await ctx.session.execute(count_stmt)).scalar() or 0
+
+    stmt = _build_base_query(include_all_columns=True)
     stmt = stmt.order_by(User.username.asc()).offset(offset).limit(limit + 1)
     result = await ctx.session.execute(stmt)
     rows = result.all()
@@ -77,9 +98,21 @@ async def list_users(ctx: ServiceContext) -> dict:
     if not page:
         return {
             "users": [],
-            "users_pagination": {"has_more": False, "limit": limit, "offset": offset},
+            "users_pagination": {"has_more": False, "limit": limit, "offset": offset, "total": total},
         }
 
+    # In compact mode, we don't need to fetch working sections
+    if compact:
+        users_data = [
+            serialize_user_compact_with_role(row.User, row.role_client_id, row.role_name)
+            for row in page
+        ]
+        return {
+            "users": users_data,
+            "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset, "total": total},
+        }
+
+    # Full mode: fetch working sections for each user
     user_ids = [row.User.client_id for row in page]
 
     sections_result = await ctx.session.execute(
@@ -117,5 +150,5 @@ async def list_users(ctx: ServiceContext) -> dict:
             )
             for row in page
         ],
-        "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset},
+        "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset, "total": total},
     }

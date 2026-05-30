@@ -1,4 +1,4 @@
-from sqlalchemy import and_, exists, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
@@ -10,6 +10,7 @@ from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_conversation import CaseConversation
 from beyo_manager.models.tables.cases.case_conversation_message import CaseConversationMessage
 from beyo_manager.models.tables.cases.case_link import CaseLink
+from beyo_manager.models.tables.cases.case_participant import CaseParticipant
 from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.task import Task
@@ -47,6 +48,12 @@ def _parse_case_states(case_state: str) -> list[CaseStateEnum]:
     return values
 
 
+def _parse_csv_ids(raw_value: str | None) -> list[str]:
+    if not raw_value:
+        return []
+    return [value.strip() for value in raw_value.split(",") if value.strip()]
+
+
 async def list_cases(ctx: ServiceContext) -> dict:
     data = ctx.incoming_data or {}
     stmt = select(Case).options(
@@ -69,10 +76,60 @@ async def list_cases(ctx: ServiceContext) -> dict:
     if data.get("created_by_id"):
         stmt = stmt.where(Case.created_by_id == data["created_by_id"])
 
+    entity_type = data.get("entity_type")
+    if entity_type:
+        try:
+            parsed_entity_type = CaseLinkEntityTypeEnum(entity_type)
+        except ValueError as exc:
+            allowed = ", ".join(entity.value for entity in CaseLinkEntityTypeEnum)
+            raise ValidationError(f"Invalid entity_type '{entity_type}'. Allowed values: {allowed}") from exc
+
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    CaseLink.case_id == Case.client_id,
+                    CaseLink.entity_type == parsed_entity_type,
+                )
+            )
+        )
+
+    entity_client_id = data.get("entity_client_id")
+    if entity_client_id:
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    CaseLink.case_id == Case.client_id,
+                    CaseLink.entity_client_id == entity_client_id,
+                )
+            )
+        )
+
+    participant_ids = _parse_csv_ids(data.get("participants"))
+    if participant_ids:
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    CaseParticipant.case_id == Case.client_id,
+                    CaseParticipant.user_id.in_(participant_ids),
+                )
+            )
+        )
+
+    includes_participant_ids = list(dict.fromkeys(_parse_csv_ids(data.get("includes_participants"))))
+    if includes_participant_ids:
+        matching_case_ids = (
+            select(CaseParticipant.case_id)
+            .where(CaseParticipant.user_id.in_(includes_participant_ids))
+            .group_by(CaseParticipant.case_id)
+            .having(func.count(func.distinct(CaseParticipant.user_id)) == len(includes_participant_ids))
+        )
+        stmt = stmt.where(Case.client_id.in_(matching_case_ids))
+
     q = data.get("q")
     if q:
-        stmt = (
-            stmt
+        q_match_case_ids = (
+            select(Case.client_id)
+            .select_from(Case)
             .outerjoin(CaseConversation, CaseConversation.case_id == Case.client_id)
             .outerjoin(
                 CaseConversationMessage,
@@ -113,25 +170,8 @@ async def list_cases(ctx: ServiceContext) -> dict:
                 ),
             )
         )
-        stmt = apply_string_filter(stmt, q, None, _ALLOWED_STRING_COLUMNS)
-        stmt = stmt.distinct(Case.client_id)
-
-    if data.get("entity_type") and data.get("entity_client_id"):
-        try:
-            entity_type = CaseLinkEntityTypeEnum(data["entity_type"])
-        except ValueError as exc:
-            allowed = ", ".join(entity.value for entity in CaseLinkEntityTypeEnum)
-            raise ValidationError(f"Invalid entity_type '{data['entity_type']}'. Allowed values: {allowed}") from exc
-
-        stmt = stmt.where(
-            exists(
-                select(1).where(
-                    CaseLink.case_id == Case.client_id,
-                    CaseLink.entity_type == entity_type,
-                    CaseLink.entity_client_id == data["entity_client_id"],
-                )
-            )
-        )
+        q_match_case_ids = apply_string_filter(q_match_case_ids, q, None, _ALLOWED_STRING_COLUMNS).distinct()
+        stmt = stmt.where(Case.client_id.in_(q_match_case_ids))
 
     stmt = stmt.order_by(Case.created_at.desc()).offset(int(data.get("offset", 0))).limit(int(data.get("limit", 50)))
     cases = (await ctx.session.execute(stmt)).scalars().all()

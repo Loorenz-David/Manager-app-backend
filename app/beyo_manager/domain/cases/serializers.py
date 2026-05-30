@@ -20,6 +20,16 @@ def serialize_case_type(case_type) -> dict | None:
     }
 
 
+def serialize_case_type_entry(case_type) -> dict:
+    return {
+        "client_id": case_type.client_id,
+        "name": case_type.name,
+        "image_url": case_type.image_url,
+        "description": case_type.description,
+        "entity_type": _value(case_type.entity_type),
+    }
+
+
 def serialize_case(case, *, case_type=None) -> dict:
     conversation = _first_conversation(case)
     resolved_case_type = case_type if case_type is not None else _loaded_case_type(case)

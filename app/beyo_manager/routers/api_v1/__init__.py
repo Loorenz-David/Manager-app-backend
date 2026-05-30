@@ -4,6 +4,7 @@ from beyo_manager.routers.api_v1 import (
     audit,
     auth,
     bootstrap,
+    case_types,
     cases,
     customers,
     files,
@@ -35,6 +36,7 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
     app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])
+    app.include_router(case_types.router)
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
     app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])

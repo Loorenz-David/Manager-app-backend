@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims, require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
 from beyo_manager.services.commands.users.deactivate_user import deactivate_user
 from beyo_manager.services.commands.users.record_view_events import record_view_events
 from beyo_manager.services.commands.users.update_self_password import update_self_password
@@ -173,7 +173,8 @@ async def list_users_route(
     working_sections: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    compact: bool = Query(False),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -187,6 +188,7 @@ async def list_users_route(
             "working_sections": working_sections,
             "limit": str(limit),
             "offset": str(offset),
+            "compact": str(compact),
         },
     )
     outcome = await run_service(list_users, ctx)
