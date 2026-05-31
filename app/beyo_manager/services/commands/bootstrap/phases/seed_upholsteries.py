@@ -9,14 +9,31 @@ from beyo_manager.models.tables.upholstery.upholstery_inventory import Upholster
 
 
 _UPHOLSTERIES: list[dict[str, str]] = [
-    {"name": "linen mist", "code": "LIN-MIST"},
-    {"name": "velvet ember", "code": "VEL-EMBER"},
+    {
+        "name": "linen mist",
+        "code": "LIN-MIST",
+        "image_url": "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvd1NMOWVmWDZzY1pPazhlc05Sd0dDd0pvc05Ja3FpTEYySlc4MFVFZi5qcGciLCJlZGl0cyI6eyJyZXNpemUiOnsid2lkdGgiOjEwMjQsImhlaWdodCI6MTAyNCwiZml0IjoiaW5zaWRlIn19fQ==",
+        "seeded_stored_amount_meters": "24.500",
+    },
+    {
+        "name": "velvet ember",
+        "code": "VEL-EMBER",
+        "image_url": "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvUWJQclY3R3p0b1JwbFc0MTY4NTA5NTA1OC53ZWJwIiwiZWRpdHMiOnsicmVzaXplIjp7IndpZHRoIjo0MDAsImhlaWdodCI6NDAwLCJmaXQiOiJpbnNpZGUifX19",
+        "seeded_stored_amount_meters": "0",
+    },
+    {
+        "name": "oak dune",
+        "code": "OAK-DUNE",
+        "image_url": "https://nevotex.com/Admin/Public/GetImage.ashx?width=705&height=524&crop=5&FillCanvas=True&DoNotUpscale=true&Compression=75&image=/Files/Images/produktbilder/1008371_4.jpg",
+        "seeded_stored_amount_meters": "5",
+    },
+    {
+        "name": "stone breeze",
+        "code": "STO-BREEZE",
+        "image_url": "https://nevotex.com/Admin/Public/GetImage.ashx?width=705&height=524&crop=5&FillCanvas=True&DoNotUpscale=true&Compression=75&image=/Files/Images/produktbilder/1004206_4.jpg",
+        "seeded_stored_amount_meters": "0",
+    },
 ]
-
-_UPHOLSTERY_IMAGE_URLS: tuple[str, str] = (
-    "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvd1NMOWVmWDZzY1pPazhlc05Sd0dDd0pvc05Ja3FpTEYySlc4MFVFZi5qcGciLCJlZGl0cyI6eyJyZXNpemUiOnsid2lkdGgiOjEwMjQsImhlaWdodCI6MTAyNCwiZml0IjoiaW5zaWRlIn19fQ==",
-    "https://cdn.nordisktextil.se/eyJrZXkiOiJzdG9yZV8zZjA5NzVjZi01ZjA0LTQ5NDgtYmRlMy04NTRhM2FhOGZmNDdcL2ltYWdlc1wvUWJQclY3R3p0b1JwbFc0MTY4NTA5NTA1OC53ZWJwIiwiZWRpdHMiOnsicmVzaXplIjp7IndpZHRoIjo0MDAsImhlaWdodCI6NDAwLCJmaXQiOiJpbnNpZGUifX19",
-)
 
 
 async def seed_upholsteries(
@@ -29,7 +46,7 @@ async def seed_upholsteries(
     for idx, seed in enumerate(_UPHOLSTERIES):
         name = seed["name"]
         code = seed["code"]
-        image_url = _UPHOLSTERY_IMAGE_URLS[idx % len(_UPHOLSTERY_IMAGE_URLS)]
+        image_url = seed["image_url"]
 
         existing_upholstery = await session.scalar(
             select(Upholstery).where(
@@ -62,7 +79,7 @@ async def seed_upholsteries(
             )
         )
         if existing_inventory is None:
-            seeded_stored_amount = Decimal("24.500") if idx == 0 else Decimal("0")
+            seeded_stored_amount = Decimal(seed["seeded_stored_amount_meters"])
             inventory = UpholsteryInventory(
                 workspace_id=workspace_id,
                 upholstery_id=upholstery_row.client_id,

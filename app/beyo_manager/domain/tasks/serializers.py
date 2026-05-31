@@ -1,5 +1,8 @@
 """Serialization helpers for task domain objects."""
 
+from datetime import datetime
+
+from beyo_manager.domain.users.serializers import serialize_user_working_section_member
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
@@ -223,13 +226,19 @@ def serialize_task_light(task: Task) -> dict:
     }
 
 
-def serialize_step_state_record_light(record: StepStateRecord | None) -> dict | None:
+def serialize_step_state_record_light(
+    record: StepStateRecord | None,
+    user: User | None = None,
+    first_started_at: datetime | None = None,
+) -> dict | None:
     if record is None:
         return None
     return {
         "state": record.state.value,
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,
+        "last_action_by": serialize_user_working_section_member(user) if user else None,
+        "first_started_at": first_started_at.isoformat() if first_started_at else None,
     }
 
 

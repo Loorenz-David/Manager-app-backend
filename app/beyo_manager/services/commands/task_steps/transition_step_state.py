@@ -8,7 +8,7 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.not_found import NotFound
@@ -19,6 +19,7 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.services.commands.task_steps._readiness import recalculate_readiness
+from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.requests import parse_transition_step_state_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -86,6 +87,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     request = parse_transition_step_state_request(ctx.incoming_data)
     readiness_changes: list[tuple] = []
     old_task_state = None
+    auto_paused_step: TaskStep | None = None
 
     async with maybe_begin(ctx.session):
         now = datetime.now(timezone.utc)
@@ -127,7 +129,63 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             raise NotFound("Task not found.")
         old_task_state = task.state
 
-        # 4. Close current open StepStateRecord
+        # Resolve credit user early — needed for both auto-pause enforcement and outbox event.
+        credited_user_id = _resolve_transition_credit_user_id(ctx, request)
+        # Deduplicated: covers records created by the performer AND by the credited worker,
+        # so the auto-pause fires correctly when a manager acts on behalf of a worker.
+        effective_user_ids = list({ctx.user_id, credited_user_id})
+
+        # 4. Auto-pause any other WORKING record for this user (one-active-step rule)
+        if request.new_state == TaskStepStateEnum.WORKING:
+            conflicting_record, conflicting_step = await fetch_open_user_working_record(
+                ctx.session, effective_user_ids, ctx.workspace_id, exclude_step_id=step.client_id
+            )
+            if conflicting_record is not None:
+                conflicting_closing_entered_at = conflicting_record.entered_at
+                conflicting_record.exited_at = now
+
+                auto_pause_record = StepStateRecord(
+                    workspace_id=ctx.workspace_id,
+                    step_id=conflicting_step.client_id,
+                    state=TaskStepStateEnum.PAUSED,
+                    reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY,
+                    description=None,
+                    entered_at=now,
+                    exited_at=None,
+                    created_by_id=ctx.user_id,
+                )
+                ctx.session.add(auto_pause_record)
+                await ctx.session.flush()
+
+                conflicting_step.state = TaskStepStateEnum.PAUSED
+                conflicting_step.latest_state_record_id = auto_pause_record.client_id
+                conflicting_step.updated_at = now
+                conflicting_step.updated_by_id = ctx.user_id
+
+                auto_paused_step = conflicting_step
+
+                await create_instant_task(
+                    session=ctx.session,
+                    task_type=TaskType.PROCESS_STEP_TRANSITION,
+                    payload=asdict(StepTransitionPayload(
+                        step_id=conflicting_step.client_id,
+                        task_id=conflicting_step.task_id,
+                        workspace_id=ctx.workspace_id,
+                        closing_record_id=conflicting_record.client_id,
+                        closing_state=TaskStepStateEnum.WORKING.value,
+                        new_state=TaskStepStateEnum.PAUSED.value,
+                        performed_by_user_id=ctx.user_id,
+                        credited_user_id=ctx.user_id,
+                        assigned_worker_id=conflicting_step.assigned_worker_id,
+                        working_section_id=conflicting_step.working_section_id,
+                        working_section_name_snapshot=conflicting_step.working_section_name_snapshot,
+                        entered_at=conflicting_closing_entered_at.isoformat(),
+                        exited_at=now.isoformat(),
+                        step_task_id=conflicting_step.task_id,
+                    )),
+                )
+
+        # 5. Close current open StepStateRecord
         open_record_result = await ctx.session.execute(
             select(StepStateRecord).where(
                 StepStateRecord.workspace_id == ctx.workspace_id,
@@ -142,7 +200,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         closing_state = closing_record.state  # save before flush
         closing_entered_at = closing_record.entered_at
 
-        # 5. Open new StepStateRecord
+        # 6. Open new StepStateRecord
         new_record = StepStateRecord(
             workspace_id=ctx.workspace_id,
             step_id=step.client_id,
@@ -171,8 +229,6 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             task.state = TaskStateEnum.WORKING
             task.updated_at = now
             task.updated_by_id = ctx.user_id
-
-        credited_user_id = _resolve_transition_credit_user_id(ctx, request)
 
         if request.new_state == TaskStepStateEnum.COMPLETED:
             # Recalculate readiness on all steps that depended on THIS step
@@ -267,6 +323,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     pending_events: list = [
         build_workspace_event(step, "task:step-state-changed", extra={"new_state": request.new_state.value}),
     ]
+    if auto_paused_step is not None:
+        pending_events.append(
+            build_workspace_event(auto_paused_step, "task:step-state-changed", extra={"new_state": TaskStepStateEnum.PAUSED.value})
+        )
     for dep_step, old_dep_readiness in readiness_changes:
         if dep_step.readiness_status != old_dep_readiness:
             pending_events.append(WorkspaceEvent(

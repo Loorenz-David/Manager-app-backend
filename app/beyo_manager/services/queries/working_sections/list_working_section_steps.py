@@ -1,4 +1,4 @@
-from sqlalchemy import and_, distinct, or_, select
+from sqlalchemy import and_, distinct, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
@@ -22,6 +22,7 @@ from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -39,6 +40,8 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
+    record_step_state_raw = ctx.query_params.get("record_step_state")
+    record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
 
     ws_result = await ctx.session.execute(
         select(WorkingSection).where(
@@ -58,8 +61,11 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             TaskStep.working_section_id == working_section_id,
             TaskStep.is_deleted.is_(False),
         )
-        .order_by(TaskStep.created_at.desc())
+        .order_by(Task.ready_by_at.asc().nullslast(), TaskStep.client_id.desc())
     )
+
+    if record_step_states:
+        stmt = stmt.where(TaskStep.state.in_(record_step_states))
 
     if q:
         q_like = f"%{q}%"
@@ -303,7 +309,11 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     user_ids = list({
         user_id
         for step in steps
-        for user_id in (step.created_by_id, step.updated_by_id)
+        for user_id in (
+            step.created_by_id,
+            step.updated_by_id,
+            step.latest_state_record.created_by_id if step.latest_state_record else None,
+        )
         if user_id
     })
     users_map: dict[str, User] = {}
@@ -312,6 +322,16 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             select(User).where(User.client_id.in_(user_ids))
         )
         users_map = {user.client_id: user for user in users_result.scalars().all()}
+
+    first_started_result = await ctx.session.execute(
+        select(
+            StepStateRecord.step_id,
+            func.min(StepStateRecord.entered_at).label("first_started_at"),
+        )
+        .where(StepStateRecord.step_id.in_(page_ids))
+        .group_by(StepStateRecord.step_id)
+    )
+    first_started_map = {row.step_id: row.first_started_at for row in first_started_result.all()}
 
     items_payload = []
     for step_id in page_ids:
@@ -326,6 +346,11 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
         creator = users_map.get(step.created_by_id) if step.created_by_id else None
         updater = users_map.get(step.updated_by_id) if step.updated_by_id else None
         item_reqs = requirements_map.get(primary_item_id, []) if primary_item_id else []
+        state_record_user = (
+            users_map.get(step.latest_state_record.created_by_id)
+            if step.latest_state_record and step.latest_state_record.created_by_id
+            else None
+        )
 
         items_payload.append(
             {
@@ -333,7 +358,11 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                 "updated_at": step.updated_at.isoformat() if step.updated_at else None,
                 "created_by": serialize_user_working_section_member(creator) if creator else None,
                 "updated_by": serialize_user_working_section_member(updater) if updater else None,
-                "last_state_record": serialize_step_state_record_light(step.latest_state_record),
+                "last_state_record": serialize_step_state_record_light(
+                    step.latest_state_record,
+                    user=state_record_user,
+                    first_started_at=first_started_map.get(step.client_id),
+                ),
                 "task": serialize_task_light(task) if task else None,
                 "item": serialize_item_worker_light(item, item_reqs, upholstery_by_id),
                 "item_images": item_images_map.get(primary_item_id, []) if primary_item_id else [],
