@@ -4,8 +4,12 @@ Example curl:
 curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
     -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
 
-Wipe DB data (testing/dev only):
+
+Wipe DB data:
 curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
+    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+    
+    curl -X DELETE 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap/wipe-db' \
     -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
 """
 
@@ -59,9 +63,6 @@ async def wipe_db_route(
     x_bootstrap_secret: str | None = Header(default=None, alias="X-Bootstrap-Secret"),
 ):
     _validate_bootstrap_secret(x_bootstrap_secret)
-
-    if settings.environment.lower() == "production":
-        raise HTTPException(status_code=403, detail="Wipe DB endpoint is disabled in production.")
 
     session_iter = get_db_session()
     session = await anext(session_iter)
