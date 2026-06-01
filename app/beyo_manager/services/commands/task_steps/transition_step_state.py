@@ -9,13 +9,15 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
-from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.services.commands.task_steps._readiness import recalculate_readiness
@@ -144,12 +146,37 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 conflicting_closing_entered_at = conflicting_record.entered_at
                 conflicting_record.exited_at = now
 
+                # Build description referencing the new step's item (article_number or SKU fallback)
+                auto_pause_description: str | None = None
+                primary_task_item_result = await ctx.session.execute(
+                    select(TaskItem).where(
+                        TaskItem.workspace_id == ctx.workspace_id,
+                        TaskItem.task_id == task.client_id,
+                        TaskItem.removed_at.is_(None),
+                        TaskItem.role == TaskItemRoleEnum.PRIMARY,
+                    )
+                )
+                primary_task_item = primary_task_item_result.scalar_one_or_none()
+                if primary_task_item is not None:
+                    item_result = await ctx.session.execute(
+                        select(Item).where(
+                            Item.workspace_id == ctx.workspace_id,
+                            Item.client_id == primary_task_item.item_id,
+                            Item.is_deleted.is_(False),
+                        )
+                    )
+                    new_item = item_result.scalar_one_or_none()
+                    if new_item is not None:
+                        identifier = new_item.article_number or new_item.sku
+                        if identifier:
+                            auto_pause_description = f"started working with {identifier}"
+
                 auto_pause_record = StepStateRecord(
                     workspace_id=ctx.workspace_id,
                     step_id=conflicting_step.client_id,
                     state=TaskStepStateEnum.PAUSED,
                     reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY,
-                    description=None,
+                    description=auto_pause_description,
                     entered_at=now,
                     exited_at=None,
                     created_by_id=ctx.user_id,

@@ -238,6 +238,18 @@ class DeleteItemIssueRequest(BaseModel):
     client_id: str
 
 
+class DeleteItemIssuesRequest(BaseModel):
+    item_id: str
+    issue_ids: list[str]
+
+    @field_validator("issue_ids")
+    @classmethod
+    def issue_ids_must_not_be_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("issue_ids must contain at least one id.")
+        return v
+
+
 # Parsing functions
 def parse_create_item_upholstery_request(data: dict) -> CreateItemUpholsteryRequest:
     from pydantic import ValidationError as PydanticValidationError
@@ -398,6 +410,17 @@ def parse_delete_item_issue_request(data: dict) -> DeleteItemIssueRequest:
 
     try:
         return DeleteItemIssueRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+def parse_delete_item_issues_request(data: dict) -> DeleteItemIssuesRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return DeleteItemIssuesRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])

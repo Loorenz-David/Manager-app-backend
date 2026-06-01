@@ -15,10 +15,16 @@ from beyo_manager.services.commands.items.create_item import create_item
 from beyo_manager.services.commands.items.create_item_issue import create_item_issue
 from beyo_manager.services.commands.items.delete_item import delete_item
 from beyo_manager.services.commands.items.delete_item_issue import delete_item_issue
+from beyo_manager.services.commands.items.delete_item_issues import delete_item_issues
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.queries.items.items import get_item, list_items
+from beyo_manager.services.queries.items.items import (
+    get_item,
+    list_item_issues_by_item_id,
+    list_item_upholstery_by_item_id,
+    list_items,
+)
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -113,6 +119,10 @@ class _CreateIssueBody(BaseModel):
     severity_name_snapshot: str | None = None
 
 
+class _DeleteIssuesBody(BaseModel):
+    issue_ids: list[str]
+
+
 @router.put("")
 async def route_create_item(
     body: _CreateItemBody,
@@ -154,7 +164,7 @@ async def route_list_items(
 async def route_delete_item_issue(
     client_id: str,
     issue_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -168,11 +178,29 @@ async def route_delete_item_issue(
     return build_ok(outcome.data)
 
 
+@router.delete("/{client_id}/issues")
+async def route_delete_item_issues(
+    client_id: str,
+    body: _DeleteIssuesBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"item_id": client_id, "issue_ids": body.issue_ids},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(delete_item_issues, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
 @router.post("/{client_id}/issues")
 async def route_create_item_issue(
     client_id: str,
     body: _CreateIssueBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -198,6 +226,40 @@ async def route_find_or_create_item(
         session=session,
     )
     outcome = await run_service(find_or_create_item, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{client_id}/issues")
+async def route_list_item_issues(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": client_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_item_issues_by_item_id, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{client_id}/upholstery")
+async def route_list_item_upholstery(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": client_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_item_upholstery_by_item_id, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

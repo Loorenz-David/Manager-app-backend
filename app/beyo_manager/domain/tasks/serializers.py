@@ -93,13 +93,14 @@ def serialize_item_issue(row: ItemIssue) -> dict:
     }
 
 
-def serialize_upholstery(row: ItemUpholstery) -> dict:
+def serialize_upholstery(row: ItemUpholstery, image_url: str | None = None) -> dict:
     return {
         "client_id": row.client_id,
         "item_id": row.item_id,
         "upholstery_id": row.upholstery_id,
         "name": row.name,
         "code": row.code,
+        "image_url": image_url,
         "amount_meters": float(row.amount_meters) if row.amount_meters is not None else None,
         "source": row.source.value,
         "time_to_fix_in_seconds": row.time_to_fix_in_seconds,

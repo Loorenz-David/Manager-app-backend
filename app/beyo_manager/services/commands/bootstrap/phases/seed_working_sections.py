@@ -4,21 +4,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.working_sections.working_section_dependency import WorkingSectionDependency
 
-_SECTIONS = [
-    "disassembly",
-    "cleaning",
-    "structural repair",
-    "sanding",
-    "upholstery removal",
-    "padding",
-    "upholstery installation",
-    "assembly",
-    "sewing",
-    "weaving",
-    "wood fix",
-    "ground oil",
-    "hardwax oil",
-]
+# Toggle creation per working section.
+# Set any section to False to skip creating it during bootstrap.
+_SECTION_CREATION_MAP: dict[str, bool] = {
+    "disassembly": True,
+    "cleaning": True,
+    "structural repair": True,
+    "sanding": True,
+    "upholstery removal": True,
+    "padding": True,
+    "upholstery installation": True,
+    "assembly": True,
+    "sewing": True,
+    "weaving": True,
+    "wood fix": True,
+    "ground oil": True,
+    "hardwax oil": True,
+}
 
 _SECTION_IMAGE_URLS: dict[str, str] = {
     "assembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/assembly.webp",
@@ -56,7 +58,10 @@ _DEPENDENCIES: list[tuple[str, str]] = [
 
 async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dict[str, str]:
     section_ids: dict[str, str] = {}
-    for name in _SECTIONS:
+    for name, should_create in _SECTION_CREATION_MAP.items():
+        if not should_create:
+            continue
+
         existing = await session.scalar(
             select(WorkingSection).where(
                 WorkingSection.workspace_id == workspace_id,
@@ -73,6 +78,9 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
         section_ids[name] = section.client_id
 
     for dependent_name, prerequisite_name in _DEPENDENCIES:
+        if dependent_name not in section_ids or prerequisite_name not in section_ids:
+            continue
+
         dependent_section_id = section_ids[dependent_name]
         prerequisite_section_id = section_ids[prerequisite_name]
         existing = await session.scalar(

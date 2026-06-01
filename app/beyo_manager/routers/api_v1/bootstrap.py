@@ -4,6 +4,9 @@ Example curl:
 curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
     -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
 
+    curl -X POST 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap' \
+    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+
 
 Wipe DB data:
 curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
