@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.models.base.base import Base
@@ -16,6 +16,7 @@ class WorkingSection(IdentityMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    order_list: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

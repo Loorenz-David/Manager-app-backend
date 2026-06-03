@@ -5,7 +5,7 @@ from sqlalchemy import select
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
-from beyo_manager.services.commands.task_steps._readiness import recalculate_readiness
+from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 from beyo_manager.services.commands.task_steps.requests import parse_remove_step_dependency_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext

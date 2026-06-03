@@ -3,8 +3,7 @@ from beyo_manager.errors.validation import ValidationError
 from beyo_manager.services.commands.bootstrap.phases.seed_case_types import seed_case_types
 from beyo_manager.services.commands.bootstrap.phases.seed_admin_user import seed_admin_user
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import seed_item_categories
-from beyo_manager.services.commands.bootstrap.phases.seed_issue_category_configs import seed_issue_category_configs
-from beyo_manager.services.commands.bootstrap.phases.seed_issue_severities import seed_issue_severities
+from beyo_manager.services.commands.bootstrap.phases.seed_issue_type_links import seed_issue_type_links
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_types import seed_issue_types
 from beyo_manager.services.commands.bootstrap.phases.seed_upholsteries import seed_upholsteries
 from beyo_manager.services.commands.bootstrap.phases.seed_roles import seed_roles
@@ -25,9 +24,8 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
         await seed_case_types(ctx.session)
         item_category_ids = await seed_item_categories(ctx.session, workspace_result["workspace_id"])
         issue_type_ids = await seed_issue_types(ctx.session, workspace_result["workspace_id"])
-        await seed_issue_severities(ctx.session, workspace_result["workspace_id"])
         section_ids = await seed_working_sections(ctx.session, workspace_result["workspace_id"])
-        await seed_issue_category_configs(
+        await seed_issue_type_links(
             ctx.session,
             workspace_result["workspace_id"],
             issue_type_ids,

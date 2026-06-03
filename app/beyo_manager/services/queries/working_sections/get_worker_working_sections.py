@@ -58,7 +58,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
             WorkingSection.client_id.in_(section_ids),
             WorkingSection.is_deleted.is_(False),
         )
-        .order_by(WorkingSection.name.asc())
+        .order_by(WorkingSection.order_list.asc().nulls_last(), WorkingSection.name.asc())
     )
     sections = sections_result.scalars().all()
     active_section_ids = [s.client_id for s in sections]
@@ -120,6 +120,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
                     section.client_id,
                     section.name,
                     section.image,
+                    section.order_list,
                 ),
                 "task_steps_counts": {
                     state: counts_map[section.client_id].get(state, 0)

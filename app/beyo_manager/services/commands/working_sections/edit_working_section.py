@@ -57,6 +57,9 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
         if "image" in request.model_fields_set:
             section.image = request.image
 
+        if "order_list" in request.model_fields_set:
+            section.order_list = request.order_list
+
         if "working_section_dependencies" in request.model_fields_set:
             dep_ids: list[str] = request.working_section_dependencies or []
             old_dep_rows = await ctx.session.execute(

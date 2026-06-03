@@ -12,6 +12,7 @@ class WorkingSectionEditRequest(BaseModel):
     client_id: str
     name: str | None = None
     image: str | None = None
+    order_list: int | None = None
     working_section_dependencies: list[str] | None = None
     working_section_item_categories: list[str] | None = None
     working_section_supported_issue_types: list[str] | None = None
@@ -39,13 +40,14 @@ class WorkingSectionEditRequest(BaseModel):
         updatable = {
             "name",
             "image",
+            "order_list",
             "working_section_dependencies",
             "working_section_item_categories",
             "working_section_supported_issue_types",
         }
         if not (updatable & self.model_fields_set):
             raise ValueError(
-                "At least one of name, image, working_section_dependencies, "
+                "At least one of name, image, order_list, working_section_dependencies, "
                 "working_section_item_categories, or working_section_supported_issue_types must be provided."
             )
         return self

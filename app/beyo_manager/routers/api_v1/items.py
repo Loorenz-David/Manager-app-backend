@@ -11,17 +11,16 @@ from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
+from beyo_manager.services.commands.items.batch_create_item_issues import batch_create_item_issues
+from beyo_manager.services.commands.items.batch_delete_item_issues import batch_delete_item_issues
 from beyo_manager.services.commands.items.create_item import create_item
-from beyo_manager.services.commands.items.create_item_issue import create_item_issue
 from beyo_manager.services.commands.items.delete_item import delete_item
-from beyo_manager.services.commands.items.delete_item_issue import delete_item_issue
-from beyo_manager.services.commands.items.delete_item_issues import delete_item_issues
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.items.get_item_issues import get_item_issues
 from beyo_manager.services.queries.items.items import (
     get_item,
-    list_item_issues_by_item_id,
     list_item_upholstery_by_item_id,
     list_items,
 )
@@ -31,12 +30,15 @@ router = APIRouter()
 
 
 class _ItemIssueBody(BaseModel):
+    client_id: str | None = None
     issue_type_id: str | None = None
-    issue_severity_id: str | None = None
-    base_time_seconds: int | None = None
-    time_multiplier: Decimal | None = None
-    issue_name_snapshot: str | None = None
-    severity_name_snapshot: str | None = None
+    step_id: str
+    worker_id: str
+    working_section_id: str
+    item_category_id: str
+    issue_type_snapshot: str
+    placement_of_issue_snapshot: str | None = None
+    intensity: int
 
 
 class _ItemUpholsteryBody(BaseModel):
@@ -110,17 +112,16 @@ class _FindOrCreateItemBody(BaseModel):
     external_order_id: str | None = None
 
 
-class _CreateIssueBody(BaseModel):
-    issue_type_id: str | None = None
-    issue_severity_id: str | None = None
-    base_time_seconds: int | None = None
-    time_multiplier: Decimal | None = None
-    issue_name_snapshot: str | None = None
-    severity_name_snapshot: str | None = None
+class _BatchCreateIssuesBody(BaseModel):
+    issues: list[_ItemIssueBody]
 
 
-class _DeleteIssuesBody(BaseModel):
-    issue_ids: list[str]
+class _BatchDeleteIssueInput(BaseModel):
+    item_issue_id: str
+
+
+class _BatchDeleteIssuesBody(BaseModel):
+    issues: list[_BatchDeleteIssueInput]
 
 
 @router.put("")
@@ -160,55 +161,37 @@ async def route_list_items(
     return build_ok(outcome.data)
 
 
-@router.delete("/{client_id}/issues/{issue_id}")
-async def route_delete_item_issue(
-    client_id: str,
-    issue_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
-    session: AsyncSession = Depends(get_db),
-):
-    ctx = ServiceContext(
-        incoming_data={"item_id": client_id, "client_id": issue_id},
-        identity=claims,
-        session=session,
-    )
-    outcome = await run_service(delete_item_issue, ctx)
-    if not outcome.success:
-        return build_err(outcome.error)
-    return build_ok(outcome.data)
-
-
 @router.delete("/{client_id}/issues")
 async def route_delete_item_issues(
     client_id: str,
-    body: _DeleteIssuesBody,
+    body: _BatchDeleteIssuesBody,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={"item_id": client_id, "issue_ids": body.issue_ids},
+        incoming_data={"item_id": client_id, "issues": [entry.model_dump() for entry in body.issues]},
         identity=claims,
         session=session,
     )
-    outcome = await run_service(delete_item_issues, ctx)
+    outcome = await run_service(batch_delete_item_issues, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
 
 
 @router.post("/{client_id}/issues")
-async def route_create_item_issue(
+async def route_create_item_issues(
     client_id: str,
-    body: _CreateIssueBody,
+    body: _BatchCreateIssuesBody,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={"item_id": client_id, **body.model_dump()},
+        incoming_data={"item_id": client_id, "issues": [entry.model_dump() for entry in body.issues]},
         identity=claims,
         session=session,
     )
-    outcome = await run_service(create_item_issue, ctx)
+    outcome = await run_service(batch_create_item_issues, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -236,13 +219,27 @@ async def route_list_item_issues(
     client_id: str,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
+    q: str | None = Query(None, max_length=200),
+    working_section_id: str | None = Query(None),
+    item_category_id: str | None = Query(None),
+    issue_type_id: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     ctx = ServiceContext(
-        incoming_data={"client_id": client_id},
+        incoming_data={"item_id": client_id},
+        query_params={
+            "q": q,
+            "working_section_id": working_section_id,
+            "item_category_id": item_category_id,
+            "issue_type_id": issue_type_id,
+            "limit": limit,
+            "offset": offset,
+        },
         identity=claims,
         session=session,
     )
-    outcome = await run_service(list_item_issues_by_item_id, ctx)
+    outcome = await run_service(get_item_issues, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

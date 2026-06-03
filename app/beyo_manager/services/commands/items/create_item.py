@@ -13,12 +13,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_create_message
-from beyo_manager.services.commands.items.create_item_issue import _create_item_issue_in_session
+from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
-from beyo_manager.services.commands.items.requests import (
-    CreateItemIssueRequest,
-    parse_create_item_request,
-)
+from beyo_manager.services.commands.items.requests import parse_create_item_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -93,24 +90,12 @@ async def create_item(ctx: ServiceContext) -> dict:
         await ctx.session.flush()
 
         if request.item_issues:
-            for issue_input in request.item_issues:
-                issue_data = CreateItemIssueRequest(
-                    item_id=item.client_id,
-                    issue_type_id=issue_input.issue_type_id,
-                    # Severity is disabled for now; the endpoint only cares about the issue.
-                    issue_severity_id=None,
-                    base_time_seconds=issue_input.base_time_seconds,
-                    time_multiplier=issue_input.time_multiplier,
-                    issue_name_snapshot=issue_input.issue_name_snapshot,
-                    severity_name_snapshot=None,
-                )
-                await _create_item_issue_in_session(
-                    session=ctx.session,
-                    workspace_id=ctx.workspace_id,
-                    item_id=item.client_id,
-                    issue_data=issue_data,
-                    user_id=ctx.user_id,
-                )
+            await _create_item_issues_in_session(
+                session=ctx.session,
+                workspace_id=ctx.workspace_id,
+                item_id=item.client_id,
+                issues_data=request.item_issues,
+            )
 
         if request.item_upholstery is not None:
             iup_input = request.item_upholstery

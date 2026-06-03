@@ -69,6 +69,7 @@ async def update_item_upholstery(ctx: ServiceContext) -> dict:
         if iup is None:
             raise NotFound("ItemUpholstery not found.")
 
+        before_name = iup.name
         before_values = {
             "upholstery_id": iup.upholstery_id,
             "source": iup.source,
@@ -189,12 +190,13 @@ async def update_item_upholstery(ctx: ServiceContext) -> dict:
         ]
 
         username = ctx.identity.get("username")
+        upholstery_target = f"upholstery '{before_name}'" if before_name else "upholstery"
         await _create_history_record_in_session(
             session=ctx.session,
             entity_type=HistoryRecordEntityTypeEnum.ITEM_UPHOLSTERY,
             entity_client_id=iup.client_id,
             change_type=HistoryRecordChangeTypeEnum.UPDATED,
-            description=build_update_message(username, updated_fields, "upholstery"),
+            description=build_update_message(username, updated_fields, upholstery_target),
             field_name=None,
             from_value=None,
             to_value=None,
@@ -234,12 +236,13 @@ async def delete_item_upholstery(ctx: ServiceContext) -> dict:
         iup.deleted_by_id = ctx.user_id
 
         username = ctx.identity.get("username")
+        upholstery_target = f"upholstery '{iup.name}'" if iup.name else "upholstery"
         await _create_history_record_in_session(
             session=ctx.session,
             entity_type=HistoryRecordEntityTypeEnum.ITEM_UPHOLSTERY,
             entity_client_id=iup.client_id,
             change_type=HistoryRecordChangeTypeEnum.DELETED,
-            description=build_delete_message(username, "upholstery", "item"),
+            description=build_delete_message(username, upholstery_target, "item"),
             field_name=None,
             from_value=None,
             to_value=None,

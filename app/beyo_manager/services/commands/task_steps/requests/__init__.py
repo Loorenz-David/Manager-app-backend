@@ -1,15 +1,19 @@
-from pydantic import BaseModel, ValidationError as PydanticValidationError
+from pydantic import BaseModel, ValidationError as PydanticValidationError, field_validator
 
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.errors.validation import ValidationError
 
 
-class AddTaskStepRequest(BaseModel):
+class StepInputItem(BaseModel):
     client_id: str | None = None
-    task_id: str
     working_section_id: str
     sequence_order: int | None = None
     worker_id: str | None = None
+
+
+class AddTaskStepsRequest(BaseModel):
+    task_id: str
+    steps: list[StepInputItem]
 
 
 class AssignWorkerToStepRequest(BaseModel):
@@ -18,9 +22,9 @@ class AssignWorkerToStepRequest(BaseModel):
     worker_id: str
 
 
-def parse_add_task_step_request(data: dict) -> AddTaskStepRequest:
+def parse_add_task_steps_request(data: dict) -> AddTaskStepsRequest:
     try:
-        return AddTaskStepRequest(**data)
+        return AddTaskStepsRequest(**data)
     except PydanticValidationError as e:
         raise ValidationError(str(e)) from e
 
@@ -49,6 +53,18 @@ class RemoveTaskStepRequest(BaseModel):
     step_id: str
 
 
+class RemoveTaskStepsRequest(BaseModel):
+    task_id: str
+    step_ids: list[str]
+
+    @field_validator("step_ids")
+    @classmethod
+    def validate_step_ids(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("step_ids must not be empty.")
+        return value
+
+
 def parse_add_step_dependency_request(data: dict) -> AddStepDependencyRequest:
     try:
         return AddStepDependencyRequest(**data)
@@ -66,6 +82,13 @@ def parse_remove_step_dependency_request(data: dict) -> RemoveStepDependencyRequ
 def parse_remove_task_step_request(data: dict) -> RemoveTaskStepRequest:
     try:
         return RemoveTaskStepRequest(**data)
+    except PydanticValidationError as e:
+        raise ValidationError(str(e)) from e
+
+
+def parse_remove_task_steps_request(data: dict) -> RemoveTaskStepsRequest:
+    try:
+        return RemoveTaskStepsRequest.model_validate(data)
     except PydanticValidationError as e:
         raise ValidationError(str(e)) from e
 

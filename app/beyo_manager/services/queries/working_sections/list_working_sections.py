@@ -29,7 +29,7 @@ async def list_working_sections(ctx: ServiceContext) -> dict:
             WorkingSection.workspace_id == ctx.workspace_id,
             WorkingSection.is_deleted.is_(False),
         )
-        .order_by(WorkingSection.created_at.asc())
+        .order_by(WorkingSection.order_list.asc().nulls_last(), WorkingSection.created_at.asc())
         .offset(offset)
         .limit(limit + 1)
     )

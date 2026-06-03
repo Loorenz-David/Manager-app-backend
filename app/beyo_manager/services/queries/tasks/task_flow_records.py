@@ -4,7 +4,12 @@ from sqlalchemy import and_, or_, select
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.history.enums import HistoryRecordEntityTypeEnum
-from beyo_manager.domain.tasks.serializers import serialize_history_flow_record, serialize_step_flow_record
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.tasks.serializers import (
+    serialize_history_flow_record,
+    serialize_step_flow_record,
+    serialize_step_flow_record_group,
+)
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.cases.case_link import CaseLink
 from beyo_manager.models.tables.history.history_record import HistoryRecord
@@ -18,11 +23,48 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.services.context import ServiceContext
 
-FLOW_RECORDS_LIMIT = 10
+DEFAULT_FLOW_RECORDS_LIMIT = 10
+MAX_FLOW_RECORDS_LIMIT = 200
+
+
+def _group_step_flow_rows(paged_rows: list[tuple]) -> list[tuple]:
+    grouped_rows: list[tuple] = []
+    pending_group: list[tuple] = []
+    pending_group_key: tuple | None = None
+
+    def flush_pending_group() -> None:
+        nonlocal pending_group, pending_group_key
+        if not pending_group:
+            return
+        if len(pending_group) == 1:
+            grouped_rows.extend(pending_group)
+        else:
+            grouped_rows.append((pending_group[0][0], "step_group", pending_group, None))
+        pending_group = []
+        pending_group_key = None
+
+    for row in paged_rows:
+        created_at, source_type, record_a, record_b = row
+        if source_type == "step" and record_a.state == TaskStepStateEnum.PENDING:
+            current_key = (record_a.created_at, record_a.created_by_id)
+            if pending_group and current_key == pending_group_key:
+                pending_group.append(row)
+            else:
+                flush_pending_group()
+                pending_group = [row]
+                pending_group_key = current_key
+        else:
+            flush_pending_group()
+            grouped_rows.append(row)
+
+    flush_pending_group()
+    return grouped_rows
 
 
 async def get_task_flow_records(ctx: ServiceContext) -> dict:
     task_id = ctx.incoming_data["task_id"]
+    limit = int(ctx.query_params.get("limit", DEFAULT_FLOW_RECORDS_LIMIT))
+    limit = max(1, min(limit, MAX_FLOW_RECORDS_LIMIT))
     offset = int(ctx.query_params.get("offset", 0))
 
     # 1. Verify task exists in this workspace.
@@ -165,15 +207,18 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
     raw.sort(key=lambda x: (x[0], x[2].client_id), reverse=True)
 
     # 7. Python-level offset pagination (limit + 1 trick for has_more).
-    paged = raw[offset : offset + FLOW_RECORDS_LIMIT + 1]
-    has_more = len(paged) > FLOW_RECORDS_LIMIT
-    paged = paged[:FLOW_RECORDS_LIMIT]
+    paged = raw[offset : offset + limit + 1]
+    has_more = len(paged) > limit
+    paged = paged[:limit]
+    paged = _group_step_flow_rows(paged)
 
     # 8. Serialize the page.
     flow_records = []
     for _, source_type, a, b in paged:
         if source_type == "history":
             flow_records.append(serialize_history_flow_record(a, b, users_map))
+        elif source_type == "step_group":
+            flow_records.append(serialize_step_flow_record_group(a, users_map))
         else:
             flow_records.append(serialize_step_flow_record(a, b, users_map))
 
@@ -181,7 +226,7 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
         "flow_records": flow_records,
         "flow_records_pagination": {
             "has_more": has_more,
-            "limit": FLOW_RECORDS_LIMIT,
+            "limit": limit,
             "offset": offset,
         },
     }

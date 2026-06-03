@@ -48,7 +48,6 @@ from beyo_manager.models.tables.working_sections import working_section_dependen
 
 # --- Issue type registry ---
 from beyo_manager.models.tables.issue_types import issue_type  # noqa: F401
-from beyo_manager.models.tables.issue_types import issue_severity  # noqa: F401
 
 # --- Item categories (before working section bridges and items) ---
 from beyo_manager.models.tables.items import item_category  # noqa: F401
@@ -57,16 +56,14 @@ from beyo_manager.models.tables.items import item_category  # noqa: F401
 from beyo_manager.models.tables.working_sections import working_section_item_category  # noqa: F401
 from beyo_manager.models.tables.working_sections import working_section_supported_issue_type  # noqa: F401
 
-# --- Issue category config (depends on issue_type and item_category) ---
-from beyo_manager.models.tables.issue_types import issue_category_config  # noqa: F401
-
 # --- Upholstery registry ---
 from beyo_manager.models.tables.upholstery import upholstery  # noqa: F401
 
 # --- Items (depends on item_category) ---
 from beyo_manager.models.tables.items import item  # noqa: F401
 
-# --- Item issues (depends on item, issue_type, issue_severity) ---
+# --- Item issues (depends on item, issue_type, task_steps, working_sections) ---
+from beyo_manager.models.tables.items import item_category_issue_type  # noqa: F401
 from beyo_manager.models.tables.items import item_issue  # noqa: F401
 
 # --- Item upholstery (depends on item, upholstery; use_alter FK to item_upholstery_requirement) ---

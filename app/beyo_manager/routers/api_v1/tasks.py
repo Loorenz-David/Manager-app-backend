@@ -32,11 +32,17 @@ from beyo_manager.services.commands.tasks.resolve_task import resolve_task
 from beyo_manager.services.commands.tasks.update_task import update_task
 from beyo_manager.services.commands.tasks.update_task_note import update_task_note
 from beyo_manager.services.commands.task_steps.add_step_dependency import add_step_dependency
-from beyo_manager.services.commands.task_steps.add_task_step import add_task_step
+from beyo_manager.services.commands.task_steps.add_task_steps import add_task_steps
 from beyo_manager.services.commands.task_steps.assign_worker_to_step import assign_worker_to_step
+from beyo_manager.services.commands.task_steps.cancel_pending_step_completion import (
+    cancel_pending_step_completion,
+)
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import mark_step_time_inaccurate
 from beyo_manager.services.commands.task_steps.remove_step_dependency import remove_step_dependency
-from beyo_manager.services.commands.task_steps.remove_task_step import remove_task_step
+from beyo_manager.services.commands.task_steps.remove_task_step import (
+    remove_task_step,
+    remove_task_steps,
+)
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
@@ -68,11 +74,13 @@ class _TaskItemInputBody(BaseModel):
 
 class _TaskItemIssueBody(BaseModel):
     issue_type_id: str | None = None
-    issue_severity_id: str | None = None
-    base_time_seconds: int | None = None
-    time_multiplier: float | None = None
-    issue_name_snapshot: str | None = None
-    severity_name_snapshot: str | None = None
+    step_id: str
+    worker_id: str
+    working_section_id: str
+    item_category_id: str
+    issue_type_snapshot: str
+    placement_of_issue_snapshot: str | None = None
+    intensity: int
 
 
 class _TaskItemUpholsteryBody(BaseModel):
@@ -144,13 +152,6 @@ class _UpdateNoteBody(BaseModel):
 
 
 class _TaskStepInputBody(BaseModel):
-    client_id: str | None = None
-    working_section_id: str
-    worker_id: str | None = None
-    sequence_order: int | None = None
-
-
-class _AddTaskStepBody(BaseModel):
     client_id: str | None = None
     working_section_id: str
     worker_id: str | None = None
@@ -263,11 +264,12 @@ async def route_get_task_flow_records(
     task_id: str,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
+    limit: int = Query(10, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     ctx = ServiceContext(
         incoming_data={"task_id": task_id},
-        query_params={"offset": offset},
+        query_params={"limit": limit, "offset": offset},
         identity=claims,
         session=session,
     )
@@ -457,16 +459,19 @@ async def route_delete_note(
 @router.post("/{task_id}/steps")
 async def route_add_task_step(
     task_id: str,
-    body: _AddTaskStepBody,
+    body: list[_TaskStepInputBody],
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={"task_id": task_id, **body.model_dump()},
+        incoming_data={
+            "task_id": task_id,
+            "steps": [step.model_dump() for step in body],
+        },
         identity=claims,
         session=session,
     )
-    outcome = await run_service(add_task_step, ctx)
+    outcome = await run_service(add_task_steps, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -493,6 +498,24 @@ async def route_assign_worker_to_step(
 
 class _AddDependencyBody(BaseModel):
     prerequisite_step_id: str
+
+
+@router.delete("/{task_id}/steps")
+async def route_remove_task_steps(
+    task_id: str,
+    body: list[str],
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, "step_ids": body},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(remove_task_steps, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
 
 
 @router.delete("/{task_id}/steps/{step_id}")
@@ -565,6 +588,24 @@ async def route_transition_step_state(
         session=session,
     )
     outcome = await run_service(transition_step_state, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.delete("/{task_id}/steps/{step_id}/pending-completion")
+async def route_cancel_pending_step_completion(
+    task_id: str,
+    step_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, "step_id": step_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(cancel_pending_step_completion, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

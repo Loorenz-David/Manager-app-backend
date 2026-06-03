@@ -9,11 +9,13 @@ def serialize_working_section_compact(
     client_id: str,
     name: str,
     image: str | None,
+    order_list: int | None,
 ) -> dict:
     return {
         "client_id": client_id,
         "name": name,
         "image": image,
+        "order_list": order_list,
     }
 
 
@@ -28,6 +30,7 @@ def serialize_working_section_full(
         "client_id": section.client_id,
         "name": section.name,
         "image": section.image,
+        "order_list": section.order_list,
         "dependencies": [
             {"client_id": dep_id, "name": dep_name} for dep_id, dep_name in dependencies
         ],

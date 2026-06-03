@@ -62,7 +62,6 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
     app.include_router(item_categories.router)
     app.include_router(issue_types.router)
-    app.include_router(issue_types.category_configs_router)
     app.include_router(customers.router, prefix="/api/v1/customers", tags=["customers"])
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
     # Add domain routers here as you build them:

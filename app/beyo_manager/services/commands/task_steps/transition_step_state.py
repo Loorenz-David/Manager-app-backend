@@ -1,13 +1,19 @@
 """CMD-12: Atomic step state machine driver with StepStateRecord management and outbox event."""
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
+from beyo_manager.domain.schedulers.enums import (
+    DelayedSchedulerTypeEnum,
+    SchedulerOriginSourceEnum,
+    SchedulerStateEnum,
+)
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
@@ -15,34 +21,19 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.schedulers.delayed_scheduler import DelayedScheduler
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
-from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
-from beyo_manager.services.commands.task_steps._readiness import recalculate_readiness
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.requests import parse_transition_step_state_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
-
-_TERMINAL_STEP_STATES = frozenset({
-    TaskStepStateEnum.COMPLETED,
-    TaskStepStateEnum.SKIPPED,
-    TaskStepStateEnum.FAILED,
-    TaskStepStateEnum.CANCELLED,
-})
-
-_TERMINAL_TASK_STATES = frozenset({
-    TaskStateEnum.RESOLVED,
-    TaskStateEnum.FAILED,
-    TaskStateEnum.CANCELLED,
-})
 
 _ALLOWED_TRANSITIONS: dict[TaskStepStateEnum, set[TaskStepStateEnum]] = {
     TaskStepStateEnum.PENDING:      {TaskStepStateEnum.WORKING},
@@ -87,7 +78,6 @@ def _resolve_transition_credit_user_id(ctx: ServiceContext, request) -> str:
 async def transition_step_state(ctx: ServiceContext) -> dict:
     """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox."""
     request = parse_transition_step_state_request(ctx.incoming_data)
-    readiness_changes: list[tuple] = []
     old_task_state = None
     auto_paused_step: TaskStep | None = None
 
@@ -108,7 +98,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             raise NotFound("Task step not found.")
 
         # 2. Validate transition
-        if step.state in _TERMINAL_STEP_STATES:
+        if step.state in TERMINAL_STEP_STATES:
             raise ConflictError(
                 f"Step is in terminal state {step.state.value} — no further transitions allowed."
             )
@@ -136,6 +126,47 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         # Deduplicated: covers records created by the performer AND by the credited worker,
         # so the auto-pause fires correctly when a manager acts on behalf of a worker.
         effective_user_ids = list({ctx.user_id, credited_user_id})
+
+        # COMPLETED transitions are deferred to a delayed scheduler to provide an undo window.
+        if request.new_state == TaskStepStateEnum.COMPLETED:
+            existing_scheduler_result = await ctx.session.execute(
+                select(DelayedScheduler).where(
+                    DelayedScheduler.event_client_id == step.client_id,
+                    DelayedScheduler.type == DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
+                    DelayedScheduler.state == SchedulerStateEnum.ACTIVE,
+                )
+            )
+            existing_scheduler = existing_scheduler_result.scalar_one_or_none()
+            if existing_scheduler is not None:
+                raise ConflictError("A pending completion already exists for this step.")
+
+            completion_delay_seconds = 5
+            scheduled_for = now + timedelta(seconds=completion_delay_seconds)
+
+            scheduler = DelayedScheduler(
+                type=DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
+                state=SchedulerStateEnum.ACTIVE,
+                origin_source=SchedulerOriginSourceEnum.COMMAND,
+                event_client_id=step.client_id,
+                scheduled_for=scheduled_for,
+                payload_snapshot={
+                    "step_id": step.client_id,
+                    "task_id": task.client_id,
+                    "workspace_id": ctx.workspace_id,
+                    "completion_requested_at": now.isoformat(),
+                    "performed_by_user_id": ctx.user_id,
+                    "credited_user_id": credited_user_id,
+                    "reason": request.reason.value if request.reason else None,
+                    "description": request.description,
+                },
+            )
+            ctx.session.add(scheduler)
+            await ctx.session.flush()
+
+            return {
+                "pending_completion_id": scheduler.client_id,
+                "expires_at": scheduled_for.isoformat(),
+            }
 
         # 4. Auto-pause any other WORKING record for this user (one-active-step rule)
         if request.new_state == TaskStepStateEnum.WORKING:
@@ -248,7 +279,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         step.updated_by_id = ctx.user_id
 
         # If entering a terminal state, set closed_at
-        if request.new_state in _TERMINAL_STEP_STATES:
+        if request.new_state in TERMINAL_STEP_STATES:
             step.closed_at = now
 
         # 7. Task state side effects
@@ -256,45 +287,6 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             task.state = TaskStateEnum.WORKING
             task.updated_at = now
             task.updated_by_id = ctx.user_id
-
-        if request.new_state == TaskStepStateEnum.COMPLETED:
-            # Recalculate readiness on all steps that depended on THIS step
-            dependent_edges_result = await ctx.session.execute(
-                select(TaskStepDependency).where(
-                    TaskStepDependency.workspace_id == ctx.workspace_id,
-                    TaskStepDependency.prerequisite_step_id == step.client_id,
-                    TaskStepDependency.removed_at.is_(None),
-                )
-            )
-            for edge in dependent_edges_result.scalars().all():
-                dep_step_result = await ctx.session.execute(
-                    select(TaskStep).where(
-                        TaskStep.workspace_id == ctx.workspace_id,
-                        TaskStep.client_id == edge.dependent_step_id,
-                        TaskStep.is_deleted.is_(False),
-                    )
-                )
-                dep_step = dep_step_result.scalar_one_or_none()
-                if dep_step is not None:
-                    old_dep_readiness = dep_step.readiness_status
-                    dep_step.completed_dependencies += 1
-                    recalculate_readiness(dep_step)
-                    readiness_changes.append((dep_step, old_dep_readiness))
-
-            # Check if all non-deleted steps are now terminal → task READY
-            all_steps_result = await ctx.session.execute(
-                select(TaskStep).where(
-                    TaskStep.workspace_id == ctx.workspace_id,
-                    TaskStep.task_id == task.client_id,
-                    TaskStep.is_deleted.is_(False),
-                )
-            )
-            all_steps = all_steps_result.scalars().all()
-            if all_steps and all(s.state in _TERMINAL_STEP_STATES for s in all_steps):
-                if task.state not in _TERMINAL_TASK_STATES:
-                    task.state = TaskStateEnum.READY
-                    task.updated_at = now
-                    task.updated_by_id = ctx.user_id
 
         # 8. Extension point for section-specific side effects (stub)
         await _dispatch_section_side_effects(step, request.new_state, ctx.session)
@@ -354,14 +346,6 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         pending_events.append(
             build_workspace_event(auto_paused_step, "task:step-state-changed", extra={"new_state": TaskStepStateEnum.PAUSED.value})
         )
-    for dep_step, old_dep_readiness in readiness_changes:
-        if dep_step.readiness_status != old_dep_readiness:
-            pending_events.append(WorkspaceEvent(
-                event_name="task:step-readiness-changed",
-                client_id=dep_step.client_id,
-                workspace_id=ctx.workspace_id,
-                extra={"new_readiness": dep_step.readiness_status.value},
-            ))
     if task.state != old_task_state:
         pending_events.append(
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})

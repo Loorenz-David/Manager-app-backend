@@ -37,22 +37,51 @@ _SECTION_IMAGE_URLS: dict[str, str] = {
     "wood fix": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/wood_oil.webp",
 }
 
+_SECTION_ORDER_LISTS: dict[str, int] = {
+    "disassembly": 1,
+    "cleaning": 2,
+    "structural repair": 3,
+    "sanding": 4,
+    "upholstery removal": 5,
+    "padding": 6,
+    "upholstery installation": 7,
+    "assembly": 8,
+    "sewing": 9,
+    "weaving": 7,
+    "wood fix": 1,
+    "ground oil": 2,
+    "hardwax oil": 3,
+}
+
 _DEPENDENCIES: list[tuple[str, str]] = [
     ("cleaning", "disassembly"),
     ("structural repair", "disassembly"),
+    ("structural repair", "cleaning"),
     ("sanding", "structural repair"),
+    ("sanding", "cleaning"),
+    ("sanding", "disassembly"),
     ("upholstery removal", "disassembly"),
     ("padding", "upholstery removal"),
+    ("padding", "disassembly"),
     ("upholstery installation", "padding"),
     ("upholstery installation", "upholstery removal"),
-    ("assembly", "upholstery installation"),
+    ("upholstery installation", "disassembly"),
+    ("assembly", "disassembly"),
+    ("assembly", "cleaning"),
     ("assembly", "structural repair"),
     ("assembly", "sanding"),
-    ("sewing", "disassembly"),
+    ("assembly", "upholstery removal"),
+    ("assembly", "padding"),
+    ("assembly", "upholstery installation"),
+    ("sewing", "padding"),
     ("sewing", "upholstery removal"),
-    ("weaving", "sewing"),
+    ("sewing", "disassembly"),
+    ("weaving", "padding"),
+    ("weaving", "upholstery removal"),
+    ("weaving", "disassembly"),
     ("ground oil", "wood fix"),
     ("hardwax oil", "wood fix"),
+    ("hardwax oil", "ground oil"),
 ]
 
 
@@ -72,7 +101,12 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             section_ids[name] = existing.client_id
             continue
 
-        section = WorkingSection(workspace_id=workspace_id, name=name, image=_SECTION_IMAGE_URLS.get(name))
+        section = WorkingSection(
+            workspace_id=workspace_id,
+            name=name,
+            image=_SECTION_IMAGE_URLS.get(name),
+            order_list=_SECTION_ORDER_LISTS.get(name),
+        )
         session.add(section)
         await session.flush()
         section_ids[name] = section.client_id

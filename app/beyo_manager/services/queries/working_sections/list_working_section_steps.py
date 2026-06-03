@@ -1,5 +1,5 @@
 from sqlalchemy import and_, distinct, func, or_, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
@@ -12,6 +12,7 @@ from beyo_manager.domain.tasks.serializers import (
     serialize_task_light,
 )
 from beyo_manager.domain.users.serializers import serialize_user_working_section_member
+from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_conversation import CaseConversation
@@ -26,6 +27,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
@@ -333,6 +335,57 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     )
     first_started_map = {row.step_id: row.first_started_at for row in first_started_result.all()}
 
+    dep_ws_map: dict[str, list[dict]] = {}
+    PrerequisiteStep = aliased(TaskStep)
+    dep_rows_result = await ctx.session.execute(
+        select(
+            TaskStepDependency.dependent_step_id,
+            PrerequisiteStep.state.label("prereq_state"),
+            WorkingSection.client_id.label("ws_client_id"),
+            WorkingSection.name.label("ws_name"),
+            WorkingSection.image.label("ws_image"),
+            WorkingSection.order_list.label("ws_order_list"),
+        )
+        .select_from(TaskStepDependency)
+        .join(
+            PrerequisiteStep,
+            and_(
+                PrerequisiteStep.client_id == TaskStepDependency.prerequisite_step_id,
+                PrerequisiteStep.workspace_id == ctx.workspace_id,
+                PrerequisiteStep.is_deleted.is_(False),
+            ),
+        )
+        .join(
+            WorkingSection,
+            and_(
+                WorkingSection.client_id == PrerequisiteStep.working_section_id,
+                WorkingSection.workspace_id == ctx.workspace_id,
+                WorkingSection.is_deleted.is_(False),
+            ),
+        )
+        .where(
+            TaskStepDependency.workspace_id == ctx.workspace_id,
+            TaskStepDependency.dependent_step_id.in_(page_ids),
+            TaskStepDependency.removed_at.is_(None),
+        )
+        .order_by(
+            WorkingSection.order_list.asc().nullslast(),
+            WorkingSection.client_id.asc(),
+        )
+    )
+    for row in dep_rows_result.all():
+        dep_ws_map.setdefault(row.dependent_step_id, []).append(
+            {
+                "working_section": serialize_working_section_compact(
+                    client_id=row.ws_client_id,
+                    name=row.ws_name,
+                    image=row.ws_image,
+                    order_list=row.ws_order_list,
+                ),
+                "prerequisite_step_state": row.prereq_state.value,
+            }
+        )
+
     items_payload = []
     for step_id in page_ids:
         step = step_map.get(step_id)
@@ -367,6 +420,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                 "item": serialize_item_worker_light(item, item_reqs, upholstery_by_id),
                 "item_images": item_images_map.get(primary_item_id, []) if primary_item_id else [],
                 "cases_summary": case_summary,
+                "dependency_working_sections": dep_ws_map.get(step.client_id, []),
             }
         )
 

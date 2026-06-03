@@ -1,74 +1,198 @@
-now im building the worker app at the frontend and the backend is needing to build some logic to please the frontend. this is the get  user working sections with steps state counts  and the get  working section setps . the get worker working sections is a router which will take the user and return the current working sections the user is assigned to 
+To simplify the setup, I have grouped the following item categories under the major category “Seat”.
 
-serializer:
-[{working_section_id, working_section_name, , image,  task_steps_counts: {}}]. 
-it will also return the task step state counts for that working section, so task_steps_counts: { pending: int .... } . this return states are pending, working, paused, ended_shift, blocked , that is an overall task step query ( narrow by working section id ). it will also return some of the terminal states but only for those that where marked today ( current user date ), those states are: completed, skipped, failed . perhaps for those the #sym:latest_state_record  can be joined and checked on the current user start of date > ( if that is efficient ).  
+Item categories under major category: “Seat”
 
+Armchair
+Bench
+Dining Chair
+Sofa
+Stool
 
-for the get  working section steps it takes  the working section id, it returns all the steps for that working section, 
+Working sections
 
-that task step serializer:{
+Disassembly
+Cleaning
+Structural Repair
+Sanding
+Padding
+Weaving
 
-    client_id,
-    state,
-    readiness_status,
-    working_section_id,
-    assigned_worker_id,
-    total_dependencies,
-    completed_dependencies,
-    created_at,
-    created_by:{serialize_user_working_section_member},
-    updated_at,
-    last_state_record:{ state record step light serialization},
+The goal is to create an issue type and then an individual configuration for the differnt links to item category and working sections. when same item category but different placemnt it should create an individual record, meaning 1 item category instance for each placement of issue . 
 
-    task:{task light serialization}
-    item:{item light serialization}
-    item_images:[item_image_serializer]
-}
+⸻
 
-state record step light serialization is :{
-    state,
-    entered_at,
-    exited_at,
-}
+Issue Linking Structure
 
-for the user serializations i already have a serializer with that shape that can be used, called: #sym:serialize_user_working_section_member  ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/users/serializers.py )
+1. Upholstery Damage / Padding Damage
 
-task light serialization is :{
-    client_id,
-    task_type,
-    priority,
-    state,
-    return_source,
-    item_location,
-    ready_by_at,
-    return_method
-}
+Linked item categories:
+All item categories with major category “Seat”
 
-item light serialization is :{
-    client_id,
-    article_number,
-    sku,
-    state,
-    item_category_id,
-    quantity,
-    item_position,
-    item_upholstery_id,
-    upholstery_requirement ( if the item has upholstery in ItemUpholstery ):[{state, client_id, source, amount_meters}]
-}
+Issue placement:
 
-item images serialization is we use same strategy as tasks query service "image_list.append(serialize_image(image) if not image_list else serialize_image_light(image))" at  /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py, 
+Seat
+Backrest
 
-this working section steps router accepts a query param called "q" , the query list service uses the same strategy as other services using the "q" param, this string search is against the item article number and sku, upholstery name  upholstery code . 
-the difference in this search is that as default the "q" will always search agains article number and sky, and only if frontend sends paraam "upholstery_search" as true then the search will also include upholstery name and code.
+Linked working sections:
 
+Cleaning
+Disassembly
 
-i will like you to create a implementation plan 
+⸻
 
+2. Screws Missing
 
+Linked item categories:
+All item categories with major category “Seat”
 
+Issue placement:
 
+Frame
 
+Linked working sections:
 
+Disassembly
+Structural Repair
 
+⸻
 
+3. Seat Missing
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Seat
+
+Linked working sections:
+
+Disassembly
+
+⸻
+
+4. Backrest Missing
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Backrest
+
+Linked working sections:
+
+Disassembly
+
+⸻
+
+5. Scratches
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Frame
+
+Linked working sections:
+
+Cleaning
+Structural Repair
+Sanding
+
+⸻
+
+6. Veneer Damage / Cracks / Chips / Water Damage / Woodworms
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Frame
+
+Linked working sections:
+
+Cleaning
+Structural Repair
+Sanding
+
+⸻
+
+7. Wooden Part Missing
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Frame
+
+Linked working sections:
+
+Disassembly
+Structural Repair
+
+⸻
+
+8. Unstable
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Frame
+
+Linked working sections:
+
+Structural Repair
+
+⸻
+
+9. Springs / Ribbon Damage
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Seat
+
+Linked working sections:
+
+Padding
+Weaving
+
+⸻
+
+10. Water Damage
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Seat
+
+Linked working sections:
+
+Padding
+
+⸻
+
+11. Woodworms
+
+Linked item categories:
+All item categories with major category “Seat”
+
+Issue placement:
+
+Seat
+
+Linked working sections:
+
+Padding
+
+⸻

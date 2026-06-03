@@ -4,7 +4,6 @@ from datetime import datetime
 
 from beyo_manager.domain.users.serializers import serialize_user_working_section_member
 from beyo_manager.models.tables.items.item import Item
-from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.history.history_record import HistoryRecord
@@ -74,32 +73,18 @@ def serialize_item(item: Item | None) -> dict | None:
     }
 
 
-def serialize_item_issue(row: ItemIssue) -> dict:
-    return {
-        "client_id": row.client_id,
-        "item_id": row.item_id,
-        "issue_type_id": row.issue_type_id,
-        "issue_severity_id": row.issue_severity_id,
-        "state": row.state.value,
-        "base_time_seconds": row.base_time_seconds,
-        "time_multiplier": float(row.time_multiplier) if row.time_multiplier is not None else None,
-        "issue_name_snapshot": row.issue_name_snapshot,
-        "severity_name_snapshot": row.severity_name_snapshot,
-        "created_by_id": row.created_by_id,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "started_at": row.started_at.isoformat() if row.started_at else None,
-        "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
-
-
-def serialize_upholstery(row: ItemUpholstery, image_url: str | None = None) -> dict:
+def serialize_upholstery(
+    row: ItemUpholstery,
+    image_url: str | None = None,
+    upholstery_name: str | None = None,
+    upholstery_code: str | None = None,
+) -> dict:
     return {
         "client_id": row.client_id,
         "item_id": row.item_id,
         "upholstery_id": row.upholstery_id,
-        "name": row.name,
-        "code": row.code,
+        "name": row.name if row.name is not None else upholstery_name,
+        "code": row.code if row.code is not None else upholstery_code,
         "image_url": image_url,
         "amount_meters": float(row.amount_meters) if row.amount_meters is not None else None,
         "source": row.source.value,
@@ -211,6 +196,25 @@ def serialize_step_flow_record(ssr: StepStateRecord, step: TaskStep, users_map: 
         "description": description,
         "created_at": ssr.created_at.isoformat(),
         "created_by": _serialize_flow_record_user(user, ssr.created_by_id),
+    }
+
+
+def serialize_step_flow_record_group(
+    step_rows: list[tuple[StepStateRecord, TaskStep]],
+    users_map: dict,
+) -> dict:
+    first_ssr, first_step = step_rows[0]
+    user = users_map.get(first_ssr.created_by_id) if first_ssr.created_by_id else None
+    username = user.username if user else (first_ssr.created_by_id or "Unknown")
+    working_section_names = [step.working_section_name_snapshot or "" for _, step in step_rows]
+    description = f"{username} assigned to working sections {', '.join(working_section_names)}"
+    return {
+        "type": "task_step_group",
+        "entity_type": "task_step",
+        "entity_client_id": first_ssr.step_id,
+        "description": description,
+        "created_at": first_ssr.created_at.isoformat(),
+        "created_by": _serialize_flow_record_user(user, first_ssr.created_by_id),
     }
 
 

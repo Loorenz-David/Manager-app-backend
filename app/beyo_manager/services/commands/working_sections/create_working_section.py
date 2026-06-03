@@ -120,6 +120,7 @@ async def create_working_section(ctx: ServiceContext) -> dict:
             workspace_id=ctx.workspace_id,
             name=request.name,
             image=request.image,
+            order_list=request.order_list,
             created_by_id=ctx.user_id,
         )
         ctx.session.add(section)

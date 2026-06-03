@@ -7,15 +7,8 @@ from sqlalchemy.orm import aliased
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
-from beyo_manager.services.commands.task_steps._readiness import recalculate_readiness
-
-
-_TERMINAL_STEP_STATES = frozenset({
-    TaskStepStateEnum.COMPLETED,
-    TaskStepStateEnum.SKIPPED,
-    TaskStepStateEnum.FAILED,
-    TaskStepStateEnum.CANCELLED,
-})
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
+from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 
 
 async def _sync_step_dependencies_for_section_in_session(
@@ -69,7 +62,7 @@ async def _remove_edges_for_sections(
                     dep_step.workspace_id == workspace_id,
                     dep_step.working_section_id == dependent_section_id,
                     dep_step.is_deleted.is_(False),
-                    dep_step.state.notin_(_TERMINAL_STEP_STATES),
+                    dep_step.state.notin_(TERMINAL_STEP_STATES),
                 ),
             )
             .join(
@@ -125,7 +118,7 @@ async def _add_edges_for_sections(
                 dep_step.workspace_id == workspace_id,
                 dep_step.working_section_id == dependent_section_id,
                 dep_step.is_deleted.is_(False),
-                dep_step.state.notin_(_TERMINAL_STEP_STATES),
+                dep_step.state.notin_(TERMINAL_STEP_STATES),
             )
         )
     ).all()

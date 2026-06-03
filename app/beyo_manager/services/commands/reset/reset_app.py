@@ -5,9 +5,6 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 from beyo_manager.errors.validation import ValidationError
-from beyo_manager.services.commands.reset.phases.delete_issue_category_configs import (
-    delete_issue_category_configs,
-)
 from beyo_manager.services.commands.reset.phases.delete_working_section_item_categories import (
     delete_working_section_item_categories,
 )
@@ -21,8 +18,10 @@ from beyo_manager.services.commands.reset.phases.delete_working_section_dependen
     delete_working_section_dependencies,
 )
 from beyo_manager.services.commands.reset.phases.delete_working_sections import delete_working_sections
-from beyo_manager.services.commands.reset.phases.delete_issue_severities import delete_issue_severities
 from beyo_manager.services.commands.reset.phases.delete_issue_types import delete_issue_types
+from beyo_manager.services.commands.reset.phases.delete_item_category_issue_types import (
+    delete_item_category_issue_types,
+)
 from beyo_manager.services.commands.reset.phases.delete_item_issues import delete_item_issues
 from beyo_manager.services.commands.reset.phases.delete_item_upholstery_requirements import (
     delete_item_upholstery_requirements,
@@ -94,7 +93,7 @@ async def reset_app(ctx: ServiceContext) -> dict:
     8. tasks
 
     Bootstrap data:
-    9. issue_category_configs
+    9. item_category_issue_types
     10. working_section_item_categories
     11. working_section_supported_issue_types
     12. working_section_dependencies
@@ -106,9 +105,8 @@ async def reset_app(ctx: ServiceContext) -> dict:
     18. item_upholstery_requirements
     19. item_upholsteries
     20. items
-    21. issue_severities
-    22. issue_types
-    23. item_categories
+    21. issue_types
+    22. item_categories
     
     Upholstery:
     24. upholstery_inventories
@@ -152,7 +150,7 @@ async def reset_app(ctx: ServiceContext) -> dict:
         await delete_tasks(ctx.session, workspace_id)
 
         # Bootstrap data
-        await delete_issue_category_configs(ctx.session, workspace_id)
+        await delete_item_category_issue_types(ctx.session, workspace_id)
         await delete_working_section_item_categories(ctx.session, workspace_id)
         await delete_working_section_supported_issue_types(ctx.session, workspace_id)
         await delete_working_section_dependencies(ctx.session, workspace_id)
@@ -164,7 +162,6 @@ async def reset_app(ctx: ServiceContext) -> dict:
         await delete_item_upholstery_requirements(ctx.session, workspace_id)
         await delete_item_upholsteries(ctx.session, workspace_id)
         await delete_items(ctx.session, workspace_id)
-        await delete_issue_severities(ctx.session, workspace_id)
         await delete_issue_types(ctx.session, workspace_id)
         await delete_item_categories(ctx.session, workspace_id)
         

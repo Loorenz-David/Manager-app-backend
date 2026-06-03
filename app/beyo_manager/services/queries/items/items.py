@@ -3,11 +3,7 @@
 from sqlalchemy import and_, exists, func, or_, select
 
 from beyo_manager.domain.items.serializers import serialize_item_detail, serialize_item_list
-from beyo_manager.domain.tasks.serializers import (
-    serialize_item_issue,
-    serialize_requirement,
-    serialize_upholstery,
-)
+from beyo_manager.domain.tasks.serializers import serialize_requirement, serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_issue import ItemIssue
@@ -44,7 +40,7 @@ async def list_items(ctx: ServiceContext) -> dict:
                         ItemIssue.workspace_id == ctx.workspace_id,
                         ItemIssue.item_id == Item.client_id,
                         ItemIssue.is_deleted.is_(False),
-                        ItemIssue.issue_name_snapshot.ilike(pattern),
+                        ItemIssue.issue_type_snapshot.ilike(pattern),
                     )
                 ),
                 exists(
@@ -148,34 +144,6 @@ async def get_item(ctx: ServiceContext) -> dict:
     return {"item": serialize_item_detail(item, issues, upholstery, requirements)}
 
 
-async def list_item_issues_by_item_id(ctx: ServiceContext) -> dict:
-    client_id = ctx.incoming_data.get("client_id")
-
-    item_result = await ctx.session.execute(
-        select(Item).where(
-            Item.workspace_id == ctx.workspace_id,
-            Item.client_id == client_id,
-            Item.is_deleted.is_(False),
-        )
-    )
-    item = item_result.scalar_one_or_none()
-    if item is None:
-        raise NotFound("Item not found.")
-
-    issues_result = await ctx.session.execute(
-        select(ItemIssue)
-        .where(
-            ItemIssue.workspace_id == ctx.workspace_id,
-            ItemIssue.item_id == item.client_id,
-            ItemIssue.is_deleted.is_(False),
-        )
-        .order_by(ItemIssue.created_at.asc())
-    )
-    issues = issues_result.scalars().all()
-
-    return {"item_issues": [serialize_item_issue(issue) for issue in issues]}
-
-
 async def list_item_upholstery_by_item_id(ctx: ServiceContext) -> dict:
     client_id = ctx.incoming_data.get("client_id")
 
@@ -191,7 +159,7 @@ async def list_item_upholstery_by_item_id(ctx: ServiceContext) -> dict:
         raise NotFound("Item not found.")
 
     upholstery_result = await ctx.session.execute(
-        select(ItemUpholstery, Upholstery.image_url)
+        select(ItemUpholstery, Upholstery.image_url, Upholstery.name, Upholstery.code)
         .select_from(ItemUpholstery)
         .join(
             Upholstery,
@@ -213,7 +181,15 @@ async def list_item_upholstery_by_item_id(ctx: ServiceContext) -> dict:
     item_upholstery = [row[0] for row in upholstery_rows]
     image_url_by_item_upholstery_id = {
         row.client_id: image_url
-        for row, image_url in upholstery_rows
+        for row, image_url, _, _ in upholstery_rows
+    }
+    upholstery_name_by_item_upholstery_id = {
+        row.client_id: upholstery_name
+        for row, _, upholstery_name, _ in upholstery_rows
+    }
+    upholstery_code_by_item_upholstery_id = {
+        row.client_id: upholstery_code
+        for row, _, _, upholstery_code in upholstery_rows
     }
 
     requirements: list[ItemUpholsteryRequirement] = []
@@ -235,6 +211,8 @@ async def list_item_upholstery_by_item_id(ctx: ServiceContext) -> dict:
             serialize_upholstery(
                 row,
                 image_url=image_url_by_item_upholstery_id.get(row.client_id),
+                upholstery_name=upholstery_name_by_item_upholstery_id.get(row.client_id),
+                upholstery_code=upholstery_code_by_item_upholstery_id.get(row.client_id),
             )
             for row in item_upholstery
         ],

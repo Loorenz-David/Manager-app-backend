@@ -40,6 +40,7 @@ class WorkingSectionCreateBody(BaseModel):
 	client_id: str | None = None
 	name: str
 	image: str | None = None
+	order_list: int | None = None
 	working_section_dependencies: list[str] = Field(default_factory=list)
 	working_section_item_categories: list[str] = Field(default_factory=list)
 	working_section_supported_issue_types: list[str] = Field(default_factory=list)
@@ -48,6 +49,7 @@ class WorkingSectionCreateBody(BaseModel):
 class WorkingSectionEditBody(BaseModel):
 	name: str | None = None
 	image: str | None = None
+	order_list: int | None = None
 	working_section_dependencies: list[str] | None = None
 	working_section_item_categories: list[str] | None = None
 	working_section_supported_issue_types: list[str] | None = None

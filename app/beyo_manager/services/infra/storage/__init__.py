@@ -4,7 +4,24 @@ from beyo_manager.services.infra.storage.local_client import LocalStorageClient
 from beyo_manager.services.infra.storage.s3_client import S3Client
 
 
-def get_storage_client() -> StorageClient:
+_cached_storage_client: StorageClient | None = None
+_cached_storage_signature: tuple[str | None, ...] | None = None
+
+
+def _current_storage_signature() -> tuple[str | None, ...]:
+    return (
+        settings.storage_provider,
+        settings.storage_bucket,
+        settings.storage_region,
+        settings.storage_endpoint_url,
+        settings.aws_access_key_id,
+        settings.aws_secret_access_key,
+        settings.local_storage_path,
+        settings.local_storage_host,
+    )
+
+
+def _build_storage_client() -> StorageClient:
     provider = settings.storage_provider
     if provider == "s3":
         if not settings.storage_bucket:
@@ -26,3 +43,14 @@ def get_storage_client() -> StorageClient:
             endpoint_url=settings.storage_endpoint_url or "http://localhost:4566",
         )
     return LocalStorageClient(base_path=settings.local_storage_path, host=settings.local_storage_host)
+
+
+def get_storage_client() -> StorageClient:
+    global _cached_storage_client, _cached_storage_signature
+
+    signature = _current_storage_signature()
+    if _cached_storage_client is None or _cached_storage_signature != signature:
+        _cached_storage_client = _build_storage_client()
+        _cached_storage_signature = signature
+
+    return _cached_storage_client

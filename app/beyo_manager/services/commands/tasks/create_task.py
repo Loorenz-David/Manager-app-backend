@@ -15,10 +15,12 @@ from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.customers.find_or_create_customer import find_or_create_customer
-from beyo_manager.services.commands.items.create_item_issue import _create_item_issue_in_session
+from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
-from beyo_manager.services.commands.items.requests import CreateItemIssueRequest
+from beyo_manager.services.commands.task_steps._wire_new_step_dependencies import (
+    wire_batch_steps_into_dependency_graph,
+)
 from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _assign_worker_to_step_in_session,
     _resolve_worker_for_section,
@@ -171,27 +173,6 @@ async def create_task(ctx: ServiceContext) -> dict:
             ctx.session.add(task_item)
             await ctx.session.flush()
 
-        if request.item_issues:
-            if item_id is None:
-                raise ValidationError("item_issues require item in payload.")
-            for issue in request.item_issues:
-                issue_data = CreateItemIssueRequest(
-                    item_id=item_id,
-                    issue_type_id=issue.issue_type_id,
-                    issue_severity_id=issue.issue_severity_id,
-                    base_time_seconds=issue.base_time_seconds,
-                    time_multiplier=issue.time_multiplier,
-                    issue_name_snapshot=issue.issue_name_snapshot,
-                    severity_name_snapshot=issue.severity_name_snapshot,
-                )
-                await _create_item_issue_in_session(
-                    session=ctx.session,
-                    workspace_id=ctx.workspace_id,
-                    item_id=item_id,
-                    issue_data=issue_data,
-                    user_id=ctx.user_id,
-                )
-
         if request.item_upholstery is not None:
             if item_id is None:
                 raise ValidationError("item_upholstery requires item in payload.")
@@ -217,6 +198,7 @@ async def create_task(ctx: ServiceContext) -> dict:
 
         if request.steps:
             now = datetime.now(timezone.utc)
+            created_steps: list[TaskStep] = []
             for step_input in request.steps:
                 if step_input.client_id is not None:
                     validate_provided_client_id(step_input.client_id, "tsp")
@@ -243,6 +225,8 @@ async def create_task(ctx: ServiceContext) -> dict:
                     working_section_name_snapshot=section.name,
                     state=TaskStepStateEnum.PENDING,
                     readiness_status=TaskStepReadinessStatusEnum.READY,
+                    total_dependencies=0,
+                    completed_dependencies=0,
                     sequence_order=step_input.sequence_order,
                     created_at=now,
                     created_by_id=ctx.user_id,
@@ -262,6 +246,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                 await ctx.session.flush()
 
                 step.latest_state_record_id = record.client_id
+                created_steps.append(step)
 
                 resolved_worker_id = await _resolve_worker_for_section(
                     session=ctx.session,
@@ -278,6 +263,25 @@ async def create_task(ctx: ServiceContext) -> dict:
                         user_id=ctx.user_id,
                         now=now,
                     )
+
+            if created_steps:
+                await wire_batch_steps_into_dependency_graph(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    new_steps=created_steps,
+                    task_id=task.client_id,
+                    user_id=ctx.user_id,
+                )
+
+        if request.item_issues:
+            if item_id is None:
+                raise ValidationError("item_issues require item in payload.")
+            await _create_item_issues_in_session(
+                session=ctx.session,
+                workspace_id=ctx.workspace_id,
+                item_id=item_id,
+                issues_data=request.item_issues,
+            )
 
         task.updated_at = datetime.now(timezone.utc)
         task.updated_by_id = ctx.user_id

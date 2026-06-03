@@ -7,6 +7,7 @@ class WorkingSectionCreateRequest(BaseModel):
     client_id: str | None = None
     name: str
     image: str | None = None
+    order_list: int | None = None
     working_section_dependencies: list[str] = []
     working_section_item_categories: list[str] = []
     working_section_supported_issue_types: list[str] = []

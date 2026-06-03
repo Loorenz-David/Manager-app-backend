@@ -24,6 +24,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.DELAYED_SEND_REPORT:        "queue:reports",
     TaskType.DELAYED_REMINDER:           "queue:notifications",
     TaskType.DELAYED_BATCH_NOTIFICATION: "queue:notifications",
+    TaskType.DELAYED_STEP_COMPLETION:    "queue:tasks",
     TaskType.RECURRING_SEND_REPORT:      "queue:reports",
     TaskType.RECURRING_REMINDER:         "queue:notifications",
     TaskType.RECURRING_PIN_TASK:         "queue:tasks",

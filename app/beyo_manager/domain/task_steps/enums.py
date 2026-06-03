@@ -24,6 +24,7 @@ class StepEventReasonEnum(enum.Enum):
     PAUSE_LUNCH_BREAK = "pause_lunch_break"
     PAUSE_COFFEE_BREAK = "pause_coffee_break"
     PAUSE_ENDED_SHIFT = "pause_ended_shift"
+    PAUSE_CASE_CREATED = "pause_case_created"
     PAUSE_MEETING = "pause_meeting"
     PAUSE_OTHER_TASK_PRIORITY = "pause_other_task_priority"
 

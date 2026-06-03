@@ -22,6 +22,7 @@ DELAYED_TYPE_TO_TASK_TYPE: dict[DelayedSchedulerTypeEnum, TaskType] = {
     DelayedSchedulerTypeEnum.SEND_REPORT:        TaskType.DELAYED_SEND_REPORT,
     DelayedSchedulerTypeEnum.REMINDER:           TaskType.DELAYED_REMINDER,
     DelayedSchedulerTypeEnum.BATCH_NOTIFICATION: TaskType.DELAYED_BATCH_NOTIFICATION,
+    DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION: TaskType.DELAYED_STEP_COMPLETION,
 }
 
 

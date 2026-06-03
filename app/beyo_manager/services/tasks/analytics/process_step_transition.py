@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.items.enums import ItemIssueStateEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.models.tables.analytics.user_daily_work_stats import UserDailyWorkStats
 from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetimeStats
@@ -16,7 +15,6 @@ from beyo_manager.models.tables.analytics.user_section_daily_work_stats import U
 from beyo_manager.models.tables.analytics.working_section_daily_work_stats import WorkingSectionDailyWorkStats
 from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
-from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.services.infra.execution.db import task_db_session
@@ -174,24 +172,10 @@ async def _apply_issues_at_completion(
     session: AsyncSession, payload: StepTransitionPayload, worker_display_name: str
 ) -> None:
     """Apply increments for issues when step completes."""
-    # Count issues on the item linked to this task
-    # Path: task_id → task_items (PRIMARY, removed_at IS NULL) → item_id → item_issues
-    task_item_result = await session.execute(
-        select(TaskItem).where(
-            TaskItem.workspace_id == payload.workspace_id,
-            TaskItem.task_id == payload.task_id,
-            TaskItem.removed_at.is_(None),
-        )
-    )
-    task_items = task_item_result.scalars().all()
-    if not task_items:
-        return
-
-    item_ids = [ti.item_id for ti in task_items]
     issues_result = await session.execute(
         select(ItemIssue).where(
             ItemIssue.workspace_id == payload.workspace_id,
-            ItemIssue.item_id.in_(item_ids),
+            ItemIssue.step_id == payload.step_id,
             ItemIssue.is_deleted.is_(False),
         )
     )
@@ -200,8 +184,7 @@ async def _apply_issues_at_completion(
         return
 
     total_count = len(issues)
-    # Resolved issues: those with state == RESOLVED
-    resolved_count = sum(1 for issue in issues if issue.state == ItemIssueStateEnum.RESOLVED)
+    resolved_count = total_count
 
     work_date = datetime.fromisoformat(payload.entered_at).date()
 

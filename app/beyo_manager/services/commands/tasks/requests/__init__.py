@@ -1,7 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-
-from pydantic import BaseModel, ValidationError as PydanticValidationError
+from pydantic import BaseModel, ValidationError as PydanticValidationError, field_validator
 
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
 from beyo_manager.domain.tasks.enums import (
@@ -40,11 +39,20 @@ class FindOrCreateItemInput(BaseModel):
 
 class ItemIssueInput(BaseModel):
 	issue_type_id: str | None = None
-	issue_severity_id: str | None = None
-	base_time_seconds: int | None = None
-	time_multiplier: Decimal | None = None
-	issue_name_snapshot: str | None = None
-	severity_name_snapshot: str | None = None
+	step_id: str
+	worker_id: str
+	working_section_id: str
+	item_category_id: str
+	issue_type_snapshot: str
+	placement_of_issue_snapshot: str | None = None
+	intensity: int
+
+	@field_validator("intensity")
+	@classmethod
+	def intensity_must_be_positive(cls, v: int) -> int:
+		if v < 1:
+			raise ValueError("intensity must be >= 1.")
+		return v
 
 
 class ItemUpholsteryInput(BaseModel):

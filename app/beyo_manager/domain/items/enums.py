@@ -19,15 +19,6 @@ class ItemMajorCategoryEnum(enum.Enum):
     SEAT = "seat"
 
 
-class ItemIssueStateEnum(enum.Enum):
-    PENDING = "pending"
-    FIXING = "fixing"
-    BLOCKED = "blocked"
-    DEFERRED = "deferred"
-    SKIPPED = "skipped"
-    RESOLVED = "resolved"
-
-
 class ItemUpholsterySourceEnum(enum.Enum):
     INTERNAL = "internal"
     CUSTOMER = "customer"

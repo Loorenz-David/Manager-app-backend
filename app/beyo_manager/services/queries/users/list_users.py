@@ -121,6 +121,7 @@ async def list_users(ctx: ServiceContext) -> dict:
             WorkingSection.client_id,
             WorkingSection.name,
             WorkingSection.image,
+            WorkingSection.order_list,
         )
         .join(
             WorkingSection,
@@ -133,11 +134,17 @@ async def list_users(ctx: ServiceContext) -> dict:
             WorkingSection.workspace_id == ctx.workspace_id,
             WorkingSection.is_deleted.is_(False),
         )
+        .order_by(WorkingSection.order_list.asc().nulls_last(), WorkingSection.name.asc())
     )
     sections_by_user: dict[str, list[dict]] = {uid: [] for uid in user_ids}
     for sec_row in sections_result.all():
         sections_by_user[sec_row.user_id].append(
-            serialize_working_section_compact(sec_row.client_id, sec_row.name, sec_row.image)
+            serialize_working_section_compact(
+                sec_row.client_id,
+                sec_row.name,
+                sec_row.image,
+                sec_row.order_list,
+            )
         )
 
     return {

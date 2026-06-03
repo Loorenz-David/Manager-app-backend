@@ -168,12 +168,13 @@ async def create_item_upholstery(ctx: ServiceContext) -> dict:
         )
 
         username = ctx.identity.get("username")
+        upholstery_target = f"upholstery '{request.name}'" if request.name else "upholstery"
         await _create_history_record_in_session(
             session=ctx.session,
             entity_type=HistoryRecordEntityTypeEnum.ITEM_UPHOLSTERY,
             entity_client_id=iup_client_id,
             change_type=HistoryRecordChangeTypeEnum.CREATED,
-            description=build_create_message(username, "upholstery", "item"),
+            description=build_create_message(username, upholstery_target, "item"),
             field_name=None,
             from_value=None,
             to_value=None,

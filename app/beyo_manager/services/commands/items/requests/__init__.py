@@ -120,12 +120,22 @@ class ReallocateStockRequest(BaseModel):
 class ItemIssueCreateInput(BaseModel):
     """Nested input for one issue to create atomically with an item."""
 
+    client_id: str | None = None
     issue_type_id: str | None = None
-    issue_severity_id: str | None = None
-    base_time_seconds: int | None = None
-    time_multiplier: Decimal | None = None
-    issue_name_snapshot: str | None = None
-    severity_name_snapshot: str | None = None
+    step_id: str
+    worker_id: str
+    working_section_id: str
+    item_category_id: str
+    issue_type_snapshot: str
+    placement_of_issue_snapshot: str | None = None
+    intensity: int
+
+    @field_validator("intensity")
+    @classmethod
+    def intensity_must_be_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("intensity must be >= 1.")
+        return v
 
 
 class ItemUpholsteryCreateInput(BaseModel):
@@ -192,14 +202,16 @@ class CreateItemRequest(BaseModel):
         return v
 
 
-class CreateItemIssueRequest(BaseModel):
+class BatchCreateItemIssuesRequest(BaseModel):
     item_id: str
-    issue_type_id: str | None = None
-    issue_severity_id: str | None = None
-    base_time_seconds: int | None = None
-    time_multiplier: Decimal | None = None
-    issue_name_snapshot: str | None = None
-    severity_name_snapshot: str | None = None
+    issues: list[ItemIssueCreateInput]
+
+    @field_validator("issues")
+    @classmethod
+    def issues_must_not_be_empty(cls, v: list[ItemIssueCreateInput]) -> list[ItemIssueCreateInput]:
+        if not v:
+            raise ValueError("issues must contain at least one entry.")
+        return v
 
 
 class UpdateItemRequest(BaseModel):
@@ -233,20 +245,18 @@ class DeleteItemRequest(BaseModel):
     client_id: str
 
 
-class DeleteItemIssueRequest(BaseModel):
-    item_id: str
-    client_id: str
+class BatchDeleteItemIssueInput(BaseModel):
+    item_issue_id: str
 
 
-class DeleteItemIssuesRequest(BaseModel):
-    item_id: str
-    issue_ids: list[str]
+class BatchDeleteItemIssuesRequest(BaseModel):
+    issues: list[BatchDeleteItemIssueInput]
 
-    @field_validator("issue_ids")
+    @field_validator("issues")
     @classmethod
-    def issue_ids_must_not_be_empty(cls, v: list[str]) -> list[str]:
+    def issue_ids_must_not_be_empty(cls, v: list[BatchDeleteItemIssueInput]) -> list[BatchDeleteItemIssueInput]:
         if not v:
-            raise ValueError("issue_ids must contain at least one id.")
+            raise ValueError("issues must contain at least one entry.")
         return v
 
 
@@ -372,11 +382,11 @@ def parse_create_item_request(data: dict) -> CreateItemRequest:
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
-def parse_create_item_issue_request(data: dict) -> CreateItemIssueRequest:
+def parse_batch_create_item_issues_request(data: dict) -> BatchCreateItemIssuesRequest:
     from pydantic import ValidationError as PydanticValidationError
 
     try:
-        return CreateItemIssueRequest.model_validate(data)
+        return BatchCreateItemIssuesRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
@@ -405,22 +415,11 @@ def parse_delete_item_request(data: dict) -> DeleteItemRequest:
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
-def parse_delete_item_issue_request(data: dict) -> DeleteItemIssueRequest:
+def parse_batch_delete_item_issues_request(data: dict) -> BatchDeleteItemIssuesRequest:
     from pydantic import ValidationError as PydanticValidationError
 
     try:
-        return DeleteItemIssueRequest.model_validate(data)
-    except PydanticValidationError as exc:
-        first_error = exc.errors()[0]
-        field = ".".join(str(loc) for loc in first_error["loc"])
-        raise ValidationError(f"{field}: {first_error['msg']}") from exc
-
-
-def parse_delete_item_issues_request(data: dict) -> DeleteItemIssuesRequest:
-    from pydantic import ValidationError as PydanticValidationError
-
-    try:
-        return DeleteItemIssuesRequest.model_validate(data)
+        return BatchDeleteItemIssuesRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
