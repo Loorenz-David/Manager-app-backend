@@ -62,7 +62,7 @@ def _normalize_item(raw_item: object, *, prefix: str = "") -> dict:
 
     raw_annotations = raw_item.get("image_annotations")
     annotations: list[tuple] = []
-    if raw_annotations is not None:
+    if raw_annotations:
         annotations = parse_annotation_items(raw_annotations, prefix=f"{prefix}image_annotations")
 
     return {
@@ -175,12 +175,13 @@ async def confirm_upload(ctx: ServiceContext) -> dict:
             await ctx.session.flush()
             image.last_event_id = event.client_id
 
-            for annotation_type, annotation_payload in item["annotations"]:
+            for annotation_type, annotation_payload, accuracy in item["annotations"]:
                 ctx.session.add(
                     ImageAnnotation(
                         image_id=image.client_id,
                         annotation_type=annotation_type,
                         data=annotation_payload,
+                        accuracy=accuracy,
                         created_by_id=ctx.user_id,
                     )
                 )

@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     vapid_public_key:    str | None = Field(default=None, alias="VAPID_PUBLIC_KEY")
     vapid_contact_email: str        = Field(default="admin@example.com", alias="VAPID_CONTACT_EMAIL")
 
+    # External partner APIs
+    beyo_vintage_api_key: str | None = Field(default=None, alias="BEYO_VINTAGE_API_KEY")
+
     # Environment
     environment: str = Field(default="development", alias="ENVIRONMENT")
 

@@ -11,6 +11,7 @@ class ImageSourceTypeEnum(StrEnum):
     UPLOADED = "uploaded"
     SHOPIFY_SYNC = "shopify_sync"
     GENERATED = "generated"
+    EXTERNAL_URL = "external_url"
 
 
 class ImageSourceReferenceEnum(StrEnum):
@@ -39,6 +40,7 @@ class ImageEventTypeEnum(StrEnum):
     UPLOAD_ITEM_IMAGE = "upload_item_image"
     UPLOAD_CASE_IMAGE = "upload_case_image"
     UPLOAD_MESSAGE_IMAGE = "upload_message_image"
+    LINK_EXTERNAL_IMAGE = "link_external_image"
 
 
 class ImageEventErrorEnum(StrEnum):

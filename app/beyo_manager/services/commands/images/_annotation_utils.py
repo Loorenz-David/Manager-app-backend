@@ -42,18 +42,26 @@ def normalize_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload
     return payload
 
 
-def parse_annotation_items(items: list, *, prefix: str = "items") -> list[tuple[ImageAnnotationTypeEnum, dict]]:
+def parse_annotation_items(items: list, *, prefix: str = "items") -> list[tuple[ImageAnnotationTypeEnum, dict, int | None]]:
     if not isinstance(items, list):
         raise ValidationError(f"{prefix} must be an array")
     if not items:
         raise ValidationError(f"{prefix} must not be empty")
 
-    parsed: list[tuple[ImageAnnotationTypeEnum, dict]] = []
+    parsed: list[tuple[ImageAnnotationTypeEnum, dict, int | None]] = []
     for index, item in enumerate(items):
         if not isinstance(item, dict):
             raise ValidationError(f"{prefix}[{index}] must be an object")
-        annotation_type = parse_annotation_type(item.get("tool"), field_name=f"{prefix}[{index}].tool")
+        # Accept canonical "annotation_type" or legacy "tool" alias.
+        annotation_type_raw = item.get("annotation_type") or item.get("tool")
+        annotation_type = parse_annotation_type(annotation_type_raw, field_name=f"{prefix}[{index}].annotation_type")
         normalized_item = normalize_payload_for_type(annotation_type, item)
         validate_payload_for_type(annotation_type, normalized_item, prefix=f"{prefix}[{index}] ")
-        parsed.append((annotation_type, normalized_item))
+        accuracy_raw = item.get("accuracy")
+        accuracy: int | None = None
+        if accuracy_raw is not None:
+            if isinstance(accuracy_raw, bool) or not isinstance(accuracy_raw, int) or not (0 <= accuracy_raw <= 100):
+                raise ValidationError(f"{prefix}[{index}].accuracy must be an integer 0–100")
+            accuracy = accuracy_raw
+        parsed.append((annotation_type, normalized_item, accuracy))
     return parsed

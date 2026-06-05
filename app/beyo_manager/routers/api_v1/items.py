@@ -10,7 +10,7 @@ from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySour
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.items.batch_create_item_issues import batch_create_item_issues
 from beyo_manager.services.commands.items.batch_delete_item_issues import batch_delete_item_issues
 from beyo_manager.services.commands.items.create_item import create_item
@@ -19,6 +19,7 @@ from beyo_manager.services.commands.items.find_or_create_item import find_or_cre
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.items.get_item_issues import get_item_issues
+from beyo_manager.services.queries.items.lookup_item_by_article_number import lookup_item_by_article_number
 from beyo_manager.services.queries.items.items import (
     get_item,
     list_item_upholstery_by_item_id,
@@ -257,6 +258,25 @@ async def route_list_item_upholstery(
         session=session,
     )
     outcome = await run_service(list_item_upholstery_by_item_id, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/lookup")
+async def route_lookup_item_by_article_number(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    article_number: str | None = Query(None, min_length=1, max_length=128),
+    sku: str | None = Query(None, min_length=1, max_length=128),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={"article_number": article_number, "sku": sku},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(lookup_item_by_article_number, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

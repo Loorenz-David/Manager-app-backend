@@ -32,12 +32,12 @@ async def create_annotation(ctx: ServiceContext) -> dict:
                 raise NotFound("Image not found")
 
             created_annotations: list[ImageAnnotation] = []
-            for annotation_type, annotation_payload in annotations_to_create:
+            for annotation_type, annotation_payload, item_accuracy in annotations_to_create:
                 annotation = ImageAnnotation(
                     image_id=image.client_id,
                     annotation_type=annotation_type,
                     data=annotation_payload,
-                    accuracy=accuracy,
+                    accuracy=item_accuracy if item_accuracy is not None else accuracy,
                     created_by_id=ctx.user_id,
                 )
                 ctx.session.add(annotation)

@@ -4,9 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
-from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
+from beyo_manager.routers.utils.jwt_dep import get_jwt_claims, require_roles
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER
 from beyo_manager.services.commands.images.confirm_upload import confirm_upload
 from beyo_manager.services.commands.images.create_annotation import create_annotation
+from beyo_manager.services.commands.images.create_from_url import create_from_url
 from beyo_manager.services.commands.images.delete_annotation import delete_annotation
 from beyo_manager.services.commands.images.generate_upload_url import generate_upload_url
 from beyo_manager.services.commands.images.reorder_links import reorder_links
@@ -41,6 +43,18 @@ class ConfirmImageUploadBody(BaseModel):
     height_px: int | None = None
     image_annotations: list[dict] | None = None
     items: list[dict] | None = None
+
+
+class CreateFromUrlBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    image_url: str
+    entity_type: str
+    entity_client_id: str
+    image_client_id: str | None = None
+    width_px: int | None = None
+    height_px: int | None = None
+    image_annotations: list[dict] | None = None
 
 
 class UnlinkImageBody(BaseModel):
@@ -81,6 +95,16 @@ async def image_upload_url_route(body: GenerateImageUploadUrlBody, claims: dict 
 async def image_confirm_upload_route(body: ConfirmImageUploadBody | list[ConfirmImageUploadBody], claims: dict = Depends(get_jwt_claims), session: AsyncSession = Depends(get_db)):
     payload = {"items": [item.model_dump(exclude_none=True) for item in body]} if isinstance(body, list) else body.model_dump(exclude_none=True)
     return await _run(confirm_upload, payload, claims, session)
+
+
+@router.post("/from-url")
+async def image_create_from_url_route(
+    body: CreateFromUrlBody | list[CreateFromUrlBody],
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    payload = {"items": [item.model_dump(exclude_none=True) for item in body]} if isinstance(body, list) else body.model_dump(exclude_none=True)
+    return await _run(create_from_url, payload, claims, session)
 
 
 @router.get("")
