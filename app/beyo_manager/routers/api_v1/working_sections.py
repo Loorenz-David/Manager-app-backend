@@ -144,6 +144,8 @@ async def list_working_section_steps_route(
 	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
 	session: AsyncSession = Depends(get_db),
 	q: str | None = Query(None),
+	item_major_category: str | None = Query(None),
+	major_category: str | None = Query(None),
 	upholstery_search: bool = Query(False),
 	limit: int = Query(50, le=200),
 	offset: int = Query(0, ge=0),
@@ -153,6 +155,8 @@ async def list_working_section_steps_route(
 		incoming_data={"working_section_id": working_section_id},
 		query_params={
 			"q": q,
+			"item_major_category": item_major_category,
+			"major_category": major_category,
 			"upholstery_search": str(upholstery_search).lower(),
 			"limit": limit,
 			"offset": offset,

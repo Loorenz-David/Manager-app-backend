@@ -68,6 +68,12 @@ class Item(IdentityMixin, Base):
     __table_args__ = (
         Index("ix_items_workspace_state", "workspace_id", "state"),
         Index(
+            "ix_items_workspace_item_major_category_snapshot",
+            "workspace_id",
+            "item_major_category_snapshot",
+            postgresql_where=text("item_major_category_snapshot IS NOT NULL AND is_deleted = false"),
+        ),
+        Index(
             "uix_items_workspace_article_number",
             "workspace_id",
             "article_number",

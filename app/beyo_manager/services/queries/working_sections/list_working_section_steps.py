@@ -1,4 +1,4 @@
-from sqlalchemy import and_, distinct, func, or_, select
+from sqlalchemy import and_, distinct, exists, func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
@@ -44,6 +44,15 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
     record_step_state_raw = ctx.query_params.get("record_step_state")
     record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
+    item_major_category_snapshot_raw = (
+        ctx.query_params.get("item_major_category")
+        or ctx.query_params.get("major_category")
+    )
+    item_major_category_snapshots = (
+        list(dict.fromkeys([s.strip() for s in item_major_category_snapshot_raw.split(",") if s.strip()]))
+        if item_major_category_snapshot_raw
+        else []
+    )
 
     ws_result = await ctx.session.execute(
         select(WorkingSection).where(
@@ -68,6 +77,29 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
     if record_step_states:
         stmt = stmt.where(TaskStep.state.in_(record_step_states))
+
+    if item_major_category_snapshots:
+        stmt = stmt.where(
+            exists(
+                select(1)
+                .select_from(TaskItem)
+                .join(
+                    Item,
+                    and_(
+                        Item.client_id == TaskItem.item_id,
+                        Item.workspace_id == ctx.workspace_id,
+                        Item.is_deleted.is_(False),
+                    ),
+                )
+                .where(
+                    TaskItem.task_id == TaskStep.task_id,
+                    TaskItem.workspace_id == ctx.workspace_id,
+                    TaskItem.removed_at.is_(None),
+                    TaskItem.role == TaskItemRoleEnum.PRIMARY,
+                    Item.item_major_category_snapshot.in_(item_major_category_snapshots),
+                )
+            )
+        )
 
     if q:
         q_like = f"%{q}%"
