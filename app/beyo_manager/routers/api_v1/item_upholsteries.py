@@ -31,6 +31,10 @@ from beyo_manager.services.queries.items.item_upholsteries import (
     list_item_upholsteries,
     list_upholstery_requirements,
 )
+from beyo_manager.services.queries.items.seat_tasks_pending_upholstery import (
+    get_seat_tasks_pending_upholstery_counts,
+    list_seat_tasks_pending_upholstery,
+)
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter(prefix="/api/v1/item-upholsteries", tags=["item-upholsteries"])
@@ -115,6 +119,53 @@ async def route_list_item_upholsteries(
         session=session,
     )
     outcome = await run_service(list_item_upholsteries, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/pending-seat-tasks")
+async def route_list_seat_tasks_pending_upholstery(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    q: str | None = Query(None, max_length=200),
+    missing_selection: bool = Query(False),
+    missing_quantity: bool = Query(False),
+    order_by: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "limit": limit,
+            "offset": offset,
+            "q": q,
+            "missing_selection": missing_selection,
+            "missing_quantity": missing_quantity,
+            "order_by": order_by,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_seat_tasks_pending_upholstery, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/pending-seat-tasks/counts")
+async def route_get_seat_tasks_pending_upholstery_counts(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(get_seat_tasks_pending_upholstery_counts, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
