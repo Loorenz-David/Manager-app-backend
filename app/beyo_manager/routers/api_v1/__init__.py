@@ -20,6 +20,7 @@ from beyo_manager.routers.api_v1 import (
     tasks,
     upholsteries,
     upholstery_inventories,
+    upholstery_orders,
     users,
     user_working_sections,
     working_section_memberships,
@@ -56,6 +57,7 @@ def register_v1_routers(app: FastAPI) -> None:
         tags=["working-section-memberships"],
     )
     app.include_router(upholstery_inventories.router)
+    app.include_router(upholstery_orders.router)
     app.include_router(upholsteries.router)
     app.include_router(item_upholsteries.router)
     app.include_router(item_upholsteries.requirements_router)

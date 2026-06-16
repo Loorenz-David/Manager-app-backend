@@ -1,10 +1,11 @@
 """Request models for upholstery inventory commands."""
 
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, field_validator
 
-from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum
+from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum, UpholsteryOrderStateEnum
 from beyo_manager.errors.validation import ValidationError
 
 
@@ -258,6 +259,58 @@ def parse_mark_upholstery_favorite_request(data: dict) -> MarkUpholsteryFavorite
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
+class CreateUpholsteryOrderRequest(BaseModel):
+    client_id: str | None = None
+    upholstery_id: str
+    order_amount_meters: Decimal
+    priority_item_upholstery_ids: list[str] = []
+    state: UpholsteryOrderStateEnum = UpholsteryOrderStateEnum.ORDERED
+    supplier_id: str | None = None
+    upholstery_supplier_link_id: str | None = None
+    price_minor: int | None = None
+    currency: UpholsteryCurrencyEnum | None = None
+    order_at: datetime | None = None
+    expected_receive_at: datetime | None = None
+
+    @field_validator("state")
+    @classmethod
+    def validate_creation_state(cls, v: UpholsteryOrderStateEnum) -> UpholsteryOrderStateEnum:
+        allowed = {
+            UpholsteryOrderStateEnum.DRAFT,
+            UpholsteryOrderStateEnum.PENDING,
+            UpholsteryOrderStateEnum.APPROVED,
+            UpholsteryOrderStateEnum.ORDERED,
+        }
+        if v not in allowed:
+            raise ValueError("state on creation must be one of: draft, pending, approved, ordered.")
+        return v
+
+    @field_validator("order_amount_meters")
+    @classmethod
+    def amount_must_be_positive(cls, v: Decimal) -> Decimal:
+        if v <= Decimal("0"):
+            raise ValueError("order_amount_meters must be > 0.")
+        return v
+
+    @field_validator("price_minor")
+    @classmethod
+    def price_must_be_non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("price_minor must be >= 0.")
+        return v
+
+
+def parse_create_upholstery_order_request(data: dict) -> CreateUpholsteryOrderRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return CreateUpholsteryOrderRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
 class MarkUpholsteriesFavoriteRequest(BaseModel):
     upholstery_ids: list[str]
     favorite: bool
@@ -298,6 +351,31 @@ def parse_update_upholstery_list_order_request(data: dict) -> UpdateUpholsteryLi
 
     try:
         return UpdateUpholsteryListOrderRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class ReceiveUpholsteryOrderRequest(BaseModel):
+    client_id: str
+    received_amount_meters: Decimal
+    priority_item_upholstery_ids: list[str] = []
+    received_at: datetime | None = None
+
+    @field_validator("received_amount_meters")
+    @classmethod
+    def amount_must_be_positive(cls, v: Decimal) -> Decimal:
+        if v <= Decimal("0"):
+            raise ValueError("received_amount_meters must be > 0.")
+        return v
+
+
+def parse_receive_upholstery_order_request(data: dict) -> ReceiveUpholsteryOrderRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return ReceiveUpholsteryOrderRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
