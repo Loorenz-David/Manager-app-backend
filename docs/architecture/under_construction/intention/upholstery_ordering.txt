@@ -1,0 +1,52 @@
+we need a router for listing the upholstery order needs.
+the service this router will use takes the param "q" which will allow for string query on the columns:
+upholstery name,
+upholstery code,
+all the other task string filtration of list_tasks: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py
+
+This service will search and return the upholsteries that are required to order, because there is items which are waiting for upholstery.
+the query is simple, look for item_upholstery_requirements where state is needs_ordering. 
+
+this service should return:
+upholsteries.name
+upholsteries.code
+upholsteries.image_url
+count of items needing this upholstery ( count of item_upholstery_requirements for that upholstery )
+total amount need it (sum of amount_meters ), the correct way of getting that value is through the addition of item_upholstery_requirements for that uphosltery ( this is because item_upholstery_requirements that are in state of ordered are still a need but not relevant for this service )
+the due date of one of the items / task from those item_upholstery_requirements, this will be the task where the ready_by_at is closest to the user current date, the date is return as date format yyy-mm-dd . in case of a tie it selects the oldest created task.
+
+
+
+The next router that we will create is for obtaining the details of an upholstery order need.
+the service this router will use takse the param "q" which will allow for string query on the columns:
+all the other task string filtration of list_tasks: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py
+this service requires a upholstery id to get the items / tasks / requirements tide to that upholstery. 
+
+this service should return:
+the same serialization as the list_tasks with some extras:
+item_upholsterires.amount_meters
+item_upholstery_requirements.id
+
+
+the next router we will create is for creating an upholstery order.
+the service use for creating an upholstery order.
+
+this service will be use to create an upholstery order instance.
+the request must have an upholstery id.
+it also accepts a list of requirements ids, which it will use to prioritize the change of state to ordering for those upolstery_requirements instances 
+and a ordered amount.
+the frontend can send a client_id for this new upholstery order that will be created, as the frontend will controll that record through optimistic updates, having controll over the created record by creating the client_id for the record, if not provided the service will generate a client id with the already stablish client_id generator utility.
+oder fields to the upholstery order can come in the request, like:
+supplier_id, price_minor, currency, order_at, expected_recieve_at.
+the default state on creation is of "ordered" but the request can override it for ( "draft", "pending", "approved", "ordered")
+
+when creating the instance it will use the passed amount as a resouce to mark the upholstery requirements that have state needs_ordering to state ordered.
+this will be done in order of priority, first is the list of ids passed,
+then it is the upholstery requirements where the task.ready_by_at is closest to the current date ( in case of a ready_by_at tie it solves for the oldest record ).
+then it is the oldest upholstery requirement creation time .
+the system should also use the strategy to fill up upholstery requirements when the left amount is not enough for the next in-line of upholstery requiremnt but it is enough to cover the need of other upholstery requirement ( filling up the gaps with the left amount ).
+there is already a service in charge of handling that fulfillemt at /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/items/mark_requirements_ordered.py . we must make sure the logic is in line with this porpoise 
+
+creating an order for an upholstery should increase the ordered amount for the upholstery inventory, there is already a atomic service that helps with that: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/upholstery/add_ordered_to_inventory.py
+
+on return the service / router bring back the client id of the newly created upholstery order

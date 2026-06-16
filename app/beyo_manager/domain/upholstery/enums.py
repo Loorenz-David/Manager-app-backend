@@ -13,3 +13,13 @@ class UpholsteryInventoryConditionEnum(enum.Enum):
     OUT_OF_STOCK = "out_of_stock"
 
 
+class UpholsteryOrderStateEnum(enum.Enum):
+    DRAFT = "draft"
+    PENDING = "pending"
+    APPROVED = "approved"
+    ORDERED = "ordered"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    PARTIALLY_RECEIVED = "partially_received"
+    RECEIVED = "received"
+

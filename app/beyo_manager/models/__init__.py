@@ -75,6 +75,14 @@ from beyo_manager.models.tables.items import item_upholstery_requirement  # noqa
 # --- Upholstery inventory (depends on upholstery) ---
 from beyo_manager.models.tables.upholstery import upholstery_inventory  # noqa: F401
 
+# --- Supplier registry and upholstery-supplier relationships (depend on upholstery) ---
+from beyo_manager.models.tables.upholstery import supplier  # noqa: F401
+from beyo_manager.models.tables.upholstery import upholstery_supplier_link  # noqa: F401
+
+# --- Upholstery order lifecycle (depends on upholstery_inventory, suppliers, upholstery_supplier_links) ---
+from beyo_manager.models.tables.upholstery import upholstery_order  # noqa: F401
+from beyo_manager.models.tables.upholstery import upholstery_order_history_record  # noqa: F401
+
 # --- Customers ---
 from beyo_manager.models.tables.customers import customer  # noqa: F401
 
