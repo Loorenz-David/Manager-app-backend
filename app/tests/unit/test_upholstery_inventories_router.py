@@ -68,6 +68,7 @@ async def test_route_list_upholstery_inventories_passes_filter_query_params(monk
         session=object(),
         limit=25,
         offset=10,
+        q="oak dune",
         favorite=True,
         in_stock=False,
     )
@@ -80,6 +81,7 @@ async def test_route_list_upholstery_inventories_passes_filter_query_params(monk
     assert captured["ctx"].query_params == {
         "limit": 25,
         "offset": 10,
+        "q": "oak dune",
         "favorite": True,
         "in_stock": False,
     }

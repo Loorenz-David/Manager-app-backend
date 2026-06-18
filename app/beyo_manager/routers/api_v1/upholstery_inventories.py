@@ -74,6 +74,7 @@ async def route_list_upholstery_inventories(
     session: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
     favorite: bool | None = Query(None),
     in_stock: bool | None = Query(None),
 ):
@@ -82,6 +83,7 @@ async def route_list_upholstery_inventories(
         query_params={
             "limit": limit,
             "offset": offset,
+            "q": q,
             "favorite": favorite,
             "in_stock": in_stock,
         },
