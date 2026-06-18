@@ -43,6 +43,21 @@ class UpdateItemUpholsteryRequest(BaseModel):
     amount_meters: Decimal | None = None
     time_to_fix_in_seconds: int | None = None
 
+    @field_validator("amount_meters", mode="before")
+    @classmethod
+    def coerce_zero_to_null(cls, v) -> Decimal | None:
+        if v is None:
+            return None
+        v = Decimal(str(v))
+        return None if v <= Decimal("0") else v
+
+    @field_validator("time_to_fix_in_seconds")
+    @classmethod
+    def time_must_be_non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("time_to_fix_in_seconds must be >= 0.")
+        return v
+
 
 class DeleteItemUpholsteryRequest(BaseModel):
     """Request to soft delete ItemUpholstery."""

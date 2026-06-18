@@ -1,6 +1,7 @@
 from sqlalchemy import String, and_, distinct, func, or_, cast, select
 from sqlalchemy.orm import selectinload
 
+from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
@@ -23,6 +24,40 @@ def _seat_category_match():
     return func.lower(Item.item_major_category_snapshot) == _SEAT_MAJOR_CATEGORY
 
 
+def _is_internal_selection_pending(upholstery: ItemUpholstery) -> bool:
+    return (
+        upholstery.source == ItemUpholsterySourceEnum.INTERNAL
+        and upholstery.upholstery_id is None
+    )
+
+
+def _resolve_pending_upholstery(
+    upholsteries: list[ItemUpholstery],
+) -> tuple[str | None, str | None]:
+    missing_selection_upholstery = next(
+        (upholstery for upholstery in upholsteries if _is_internal_selection_pending(upholstery)),
+        None,
+    )
+    if missing_selection_upholstery is not None:
+        return missing_selection_upholstery.client_id, "missing_selection"
+
+    if not upholsteries:
+        return None, "missing_selection"
+
+    missing_quantity_upholstery = next(
+        (
+            upholstery
+            for upholstery in upholsteries
+            if upholstery.amount_meters is None or upholstery.amount_meters == 0
+        ),
+        None,
+    )
+    if missing_quantity_upholstery is not None:
+        return missing_quantity_upholstery.client_id, "missing_quantity"
+
+    return (upholsteries[0].client_id if upholsteries else None), None
+
+
 def _missing_selection_subquery(ctx: ServiceContext):
     return (
         select(TaskItem.task_id)
@@ -41,7 +76,13 @@ def _missing_selection_subquery(ctx: ServiceContext):
             TaskItem.role == TaskItemRoleEnum.PRIMARY,
             Item.is_deleted.is_(False),
             _seat_category_match(),
-            ItemUpholstery.client_id.is_(None),
+            or_(
+                ItemUpholstery.client_id.is_(None),
+                and_(
+                    ItemUpholstery.source == ItemUpholsterySourceEnum.INTERNAL,
+                    ItemUpholstery.upholstery_id.is_(None),
+                ),
+            ),
         )
         .distinct()
     )
@@ -221,21 +262,10 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
 
         for item_id in primary_item_ids:
             upholsteries = upholsteries_by_item_id.get(item_id, [])
-            if not upholsteries:
-                upholstery_id_by_item_id[item_id] = None
-                upholstery_reason_by_item_id[item_id] = "missing_selection"
-            else:
-                missing_quantity_upholstery = next(
-                    (
-                        upholstery
-                        for upholstery in upholsteries
-                        if upholstery.amount_meters is None or upholstery.amount_meters == 0
-                    ),
-                    None,
-                )
-                upholstery_id_by_item_id[item_id] = missing_quantity_upholstery.client_id if missing_quantity_upholstery else upholsteries[0].client_id
-                if missing_quantity_upholstery is not None:
-                    upholstery_reason_by_item_id[item_id] = "missing_quantity"
+            upholstery_id, reason = _resolve_pending_upholstery(upholsteries)
+            upholstery_id_by_item_id[item_id] = upholstery_id
+            if reason is not None:
+                upholstery_reason_by_item_id[item_id] = reason
 
     item_images_map: dict[str, list] = {}
     if primary_item_ids:

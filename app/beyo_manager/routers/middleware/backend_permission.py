@@ -37,9 +37,6 @@ class BackendPermissionMiddleware(BaseHTTPMiddleware):
         except jwt.PyJWTError:
             return await call_next(request)
 
-        if claims.get("app_scope") == "admin":
-            return await call_next(request)
-
         # Prefer role-based gating to match router-level `require_roles(...)` checks.
         # If token includes a known role name, defer authorization to route dependencies.
         role_name = str(claims.get("role_name", "")).lower()

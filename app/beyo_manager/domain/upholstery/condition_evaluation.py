@@ -4,7 +4,7 @@ Pure function for evaluating upholstery inventory condition.
 Invariants:
 - net = stored − in_need
 - If net <= 0 → OUT_OF_STOCK
-- If threshold is set and net < threshold → LOW_STOCK
+- If threshold is set and net <= threshold → LOW_STOCK
 - Otherwise → AVAILABLE
 - Null fields treated as zero
 - No hysteresis
@@ -38,7 +38,7 @@ def evaluate_inventory_condition(
     if net <= Decimal("0"):
         return UpholsteryInventoryConditionEnum.OUT_OF_STOCK
 
-    if threshold is not None and net < threshold:
+    if threshold is not None and net <= threshold:
         return UpholsteryInventoryConditionEnum.LOW_STOCK
 
     return UpholsteryInventoryConditionEnum.AVAILABLE

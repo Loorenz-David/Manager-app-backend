@@ -1,12 +1,20 @@
 """Request models for upholstery inventory commands."""
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from pydantic import BaseModel, field_validator
 
 from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum, UpholsteryOrderStateEnum
 from beyo_manager.errors.validation import ValidationError
+
+
+_METERS_SCALE = Decimal("0.001")
+
+
+def _normalize_meters(value: Decimal) -> Decimal:
+    """Round meter values to DB-compatible scale (Numeric(14, 3))."""
+    return value.quantize(_METERS_SCALE, rounding=ROUND_HALF_UP)
 
 
 class CreateUpholsteryInventoryRequest(BaseModel):
@@ -138,6 +146,34 @@ def parse_confirm_ordered_request(data: dict) -> ConfirmOrderedRequest:
 
     try:
         return ConfirmOrderedRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class SetCurrentStoredAmountInventoryRequest(BaseModel):
+    """Request to set the absolute stored stock amount for an inventory record."""
+
+    client_id: str
+    current_stored_amount_meters: Decimal
+
+    @field_validator("current_stored_amount_meters")
+    @classmethod
+    def validate_current_stored_amount_meters(cls, v: Decimal) -> Decimal:
+        normalized = _normalize_meters(v)
+        if normalized < Decimal("0"):
+            raise ValueError("current_stored_amount_meters must be >= 0.")
+        return normalized
+
+
+def parse_set_current_stored_amount_inventory_request(
+    data: dict,
+) -> SetCurrentStoredAmountInventoryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return SetCurrentStoredAmountInventoryRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
@@ -366,9 +402,10 @@ class ReceiveUpholsteryOrderRequest(BaseModel):
     @field_validator("received_amount_meters")
     @classmethod
     def amount_must_be_positive(cls, v: Decimal) -> Decimal:
-        if v <= Decimal("0"):
+        normalized = _normalize_meters(v)
+        if normalized <= Decimal("0"):
             raise ValueError("received_amount_meters must be > 0.")
-        return v
+        return normalized
 
 
 def parse_receive_upholstery_order_request(data: dict) -> ReceiveUpholsteryOrderRequest:

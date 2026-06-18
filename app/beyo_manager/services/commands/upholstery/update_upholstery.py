@@ -1,10 +1,8 @@
 from sqlalchemy import select
 
-from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
-from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_update_upholstery_request
 from beyo_manager.services.context import ServiceContext
 
@@ -59,13 +57,4 @@ async def update_upholstery(ctx: ServiceContext) -> dict:
 
         upholstery.updated_by_id = ctx.user_id
 
-        inv_result = await ctx.session.execute(
-            select(UpholsteryInventory).where(
-                UpholsteryInventory.workspace_id == ctx.workspace_id,
-                UpholsteryInventory.upholstery_id == upholstery.client_id,
-                UpholsteryInventory.is_deleted.is_(False),
-            )
-        )
-        inventory = inv_result.scalar_one_or_none()
-
-    return {"upholstery": serialize_upholstery(upholstery, inventory)}
+    return {}

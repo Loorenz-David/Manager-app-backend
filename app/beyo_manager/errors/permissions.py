@@ -17,6 +17,8 @@ class AuthenticationRequired(DomainError):
 
 
 class RefreshTokenRejected(PermissionDenied):
+    http_status = 401
+
     def __init__(self, message: str, reason: str) -> None:
         self.reason = reason
         super().__init__(message, code="auth_refresh_rejected")

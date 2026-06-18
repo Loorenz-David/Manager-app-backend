@@ -6,12 +6,22 @@ from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 
 
-def serialize_upholstery_inventory(inv: UpholsteryInventory) -> dict:
+def serialize_upholstery_inventory(
+    inv: UpholsteryInventory,
+    image_url: str | None = None,
+    upholstery_name: str | None = None,
+    upholstery_code: str | None = None,
+    favorite: bool | None = None,
+) -> dict:
     """Serialize an UpholsteryInventory model to JSON-compatible dict."""
     return {
         "client_id": inv.client_id,
         "workspace_id": inv.workspace_id,
         "upholstery_id": inv.upholstery_id,
+        "upholstery_name": upholstery_name,
+        "upholstery_code": upholstery_code,
+        "image_url": image_url,
+        "favorite": favorite,
         "inventory_condition": inv.inventory_condition.value,
         "current_stored_amount_meters": (
             str(inv.current_stored_amount_meters)
@@ -69,6 +79,42 @@ def serialize_upholstery_inventory(inv: UpholsteryInventory) -> dict:
         "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
         "updated_by_id": inv.updated_by_id,
         "is_deleted": inv.is_deleted,
+    }
+
+
+def serialize_upholstery_inventory_partial(
+    inv: UpholsteryInventory,
+    image_url: str | None = None,
+    upholstery_name: str | None = None,
+    upholstery_code: str | None = None,
+    favorite: bool | None = None,
+) -> dict:
+    """Serialize a subset of UpholsteryInventory fields for list views."""
+    return {
+        "client_id": inv.client_id,
+        "workspace_id": inv.workspace_id,
+        "upholstery_id": inv.upholstery_id,
+        "upholstery_name": upholstery_name,
+        "upholstery_code": upholstery_code,
+        "image_url": image_url,
+        "favorite": favorite,
+        "inventory_condition": inv.inventory_condition.value,
+        "current_stored_amount_meters": (
+            str(inv.current_stored_amount_meters)
+            if inv.current_stored_amount_meters is not None
+            else None
+        ),
+        "current_amount_in_need_meters": (
+            str(inv.current_amount_in_need_meters)
+            if inv.current_amount_in_need_meters is not None
+            else None
+        ),
+        "current_amount_ordered_meters": (
+            str(inv.current_amount_ordered_meters)
+            if inv.current_amount_ordered_meters is not None
+            else None
+        ),
+        "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
     }
 
 

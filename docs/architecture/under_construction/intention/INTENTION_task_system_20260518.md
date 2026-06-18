@@ -190,7 +190,7 @@ This table is the authoritative reference for all implementation plans in this i
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| — | — | — | No implementation plans created yet |
+| `PLAN_internal_upholstery_without_requirement_20260617` | `backend/docs/architecture/archives/implementation/PLAN_internal_upholstery_without_requirement_20260617.md` | `archived` | Deferred internal item upholstery creation in task-linked flows, first-link activation via PATCH, and manager-facing pending upholstery visibility correction |
 
 ---
 
@@ -202,6 +202,7 @@ This table is the authoritative reference for all implementation plans in this i
 - `2026-05-18`: CMD-1 corrected — item linking uses `find_or_create_item` pattern (lookup by `article_number OR sku`; update fields if found, create if not found). Item issues and upholstery are NOT part of `create_task`; they are added via existing item domain commands after task creation. `find_or_create_item` identified as a prerequisite command to be built in the items domain before the first task implementation plan.
 - `2026-05-18`: WORKER-1 analytics rules formalized — six time/count increment rules (one per closing state × seconds + count), two issues rules (count + resolved at step COMPLETED), one cost rule (worker salary from `UserWorkProfile.salary_per_hour_before_tax`). Static station cost deferred as a second cost component. Dispatch design noted: each rule is a discrete function; new stats added by appending, not rewriting.
 - `2026-05-18`: Task notes added — CMD-16 `create_task_note`, CMD-17 `update_task_note`, CMD-18 `delete_task_note` (soft-delete). CMD-1 updated to call `_create_task_note_in_session` for each note in the creation payload. Model gap flagged: `TaskNote` has no `updated_at`/`updated_by_id` — update tracking requires a future migration if needed.
+- `2026-06-17`: `PLAN_internal_upholstery_without_requirement_20260617` implemented, summarized, and archived. Task-linked internal upholsteries may now be created without `upholstery_id` when positive `amount_meters` is provided; requirement creation is deferred until later selection, the PATCH update flow now activates first-link creation without breaking existing swap behavior, and pending seat-task upholstery discovery still surfaces these rows as `missing_selection`.
 
 ---
 

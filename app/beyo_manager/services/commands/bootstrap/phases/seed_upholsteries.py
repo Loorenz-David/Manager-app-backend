@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
 from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
@@ -84,6 +85,11 @@ async def seed_upholsteries(
                 workspace_id=workspace_id,
                 upholstery_id=upholstery_row.client_id,
                 currency=UpholsteryCurrencyEnum.EURO,
+                inventory_condition=evaluate_inventory_condition(
+                    stored=seeded_stored_amount,
+                    in_need=Decimal("0"),
+                    threshold=None,
+                ),
                 current_stored_amount_meters=seeded_stored_amount,
                 created_by_id=created_by_id,
             )

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.config import settings
+from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.roles.permissions import resolve_permissions_for_role
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.models.tables.users.user import User
@@ -14,6 +15,15 @@ from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.context import ServiceContext
+
+
+_DEFAULT_APP_SCOPE = "manager"
+_SCOPE_ALLOWED_ROLES: dict[str, set[str]] = {
+    "manager": {RoleNameEnum.MANAGER.value, RoleNameEnum.ADMIN.value},
+    "worker": {RoleNameEnum.WORKER.value},
+    "seller": {RoleNameEnum.SELLER.value},
+    "admin": {RoleNameEnum.ADMIN.value},
+}
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
@@ -45,7 +55,12 @@ async def sign_in_user(ctx: ServiceContext) -> dict:
         raise PermissionDenied("User has no workspace membership.")
 
     workspace = await ctx.session.get(Workspace, membership.workspace_id)
-    return build_auth_response(user, workspace=workspace, membership=membership, app_scope=data.get("app_scope", "admin"))
+    app_scope = data.get("app_scope", _DEFAULT_APP_SCOPE)
+    actual_role = membership.workspace_role.role.name.value
+    allowed_roles = _SCOPE_ALLOWED_ROLES.get(app_scope)
+    if allowed_roles is None or actual_role not in allowed_roles:
+        raise PermissionDenied("Invalid credentials.")
+    return build_auth_response(user, workspace=workspace, membership=membership, app_scope=app_scope)
 
 
 def build_auth_response(user: User, *, workspace: Workspace, membership: WorkspaceMembership, app_scope: str) -> dict:

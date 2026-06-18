@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.items.enums import ItemStateEnum, ItemUpholsterySourceEnum
+from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
@@ -32,8 +33,18 @@ async def create_item(ctx: ServiceContext) -> dict:
 
     if request.item_upholstery is not None:
         iup_input = request.item_upholstery
-        if iup_input.source == ItemUpholsterySourceEnum.INTERNAL and iup_input.upholstery_id is None:
-            raise ValidationError("item_upholstery.upholstery_id is required when source is internal.")
+        if (
+            iup_input.source == ItemUpholsterySourceEnum.INTERNAL
+            and iup_input.upholstery_id is None
+            and not should_defer_requirement_creation(
+                iup_input.source,
+                iup_input.upholstery_id,
+                iup_input.amount_meters,
+            )
+        ):
+            raise ValidationError(
+                "item_upholstery.upholstery_id is required when source is internal unless positive amount_meters is provided."
+            )
         if iup_input.source == ItemUpholsterySourceEnum.CUSTOMER and iup_input.upholstery_id is not None:
             raise ValidationError("item_upholstery.upholstery_id must be null when source is customer.")
 
@@ -102,7 +113,7 @@ async def create_item(ctx: ServiceContext) -> dict:
             upholstery_name = iup_input.name
             upholstery_code = iup_input.code
 
-            if iup_input.source == ItemUpholsterySourceEnum.INTERNAL:
+            if iup_input.source == ItemUpholsterySourceEnum.INTERNAL and iup_input.upholstery_id is not None:
                 upholstery_result = await ctx.session.execute(
                     select(Upholstery).where(
                         Upholstery.workspace_id == ctx.workspace_id,

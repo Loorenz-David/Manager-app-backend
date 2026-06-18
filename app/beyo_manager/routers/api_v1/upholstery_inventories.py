@@ -15,6 +15,9 @@ from beyo_manager.services.commands.upholstery.confirm_ordered_to_stock_inventor
 )
 from beyo_manager.services.commands.upholstery.create_upholstery_inventory import create_upholstery_inventory
 from beyo_manager.services.commands.upholstery.delete_upholstery_inventory import delete_upholstery_inventory
+from beyo_manager.services.commands.upholstery.set_current_stored_amount_inventory import (
+    set_current_stored_amount_inventory,
+)
 from beyo_manager.services.commands.upholstery.update_upholstery_inventory import update_upholstery_inventory
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.upholstery.get_upholstery_inventory import get_upholstery_inventory
@@ -48,6 +51,10 @@ class _QuantityBody(BaseModel):
     quantity: Decimal
 
 
+class _SetCurrentStoredAmountBody(BaseModel):
+    current_stored_amount_meters: Decimal
+
+
 @router.put("")
 async def route_create_upholstery_inventory(
     body: _CreateBody,
@@ -67,10 +74,17 @@ async def route_list_upholstery_inventories(
     session: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    favorite: bool | None = Query(None),
+    in_stock: bool | None = Query(None),
 ):
     ctx = ServiceContext(
         incoming_data={},
-        query_params={"limit": limit, "offset": offset},
+        query_params={
+            "limit": limit,
+            "offset": offset,
+            "favorite": favorite,
+            "in_stock": in_stock,
+        },
         identity=claims,
         session=session,
     )
@@ -104,6 +118,27 @@ async def route_update_upholstery_inventory(
     data["client_id"] = client_id
     ctx = ServiceContext(incoming_data=data, identity=claims, session=session)
     outcome = await run_service(update_upholstery_inventory, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{client_id}/current-stored-amount")
+async def route_set_current_stored_amount(
+    client_id: str,
+    body: _SetCurrentStoredAmountBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={
+            "client_id": client_id,
+            "current_stored_amount_meters": body.current_stored_amount_meters,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(set_current_stored_amount_inventory, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

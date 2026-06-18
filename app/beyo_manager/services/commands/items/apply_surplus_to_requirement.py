@@ -11,6 +11,9 @@ from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.services.commands.items.requests import parse_apply_surplus_request
+from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
+    ensure_requirement_actions_are_available,
+)
 from beyo_manager.services.commands.upholstery._inventory_mutations import add_stored_surplus
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -36,6 +39,7 @@ async def apply_surplus_to_requirement(ctx: ServiceContext) -> dict:
         iup = iup_result.scalar_one_or_none()
         if iup is None:
             raise NotFound("ItemUpholstery not found.")
+        ensure_requirement_actions_are_available(iup)
 
         req_result = await ctx.session.execute(
             select(ItemUpholsteryRequirement).where(

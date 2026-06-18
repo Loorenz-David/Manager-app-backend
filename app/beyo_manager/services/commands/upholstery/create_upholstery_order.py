@@ -1,7 +1,5 @@
 from dataclasses import asdict
 from datetime import datetime, timezone
-from decimal import Decimal
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,9 +18,11 @@ from beyo_manager.models.tables.upholstery.upholstery_inventory import Upholster
 from beyo_manager.models.tables.upholstery.upholstery_order import UpholsteryOrder
 from beyo_manager.models.tables.upholstery.upholstery_order_history_record import UpholsteryOrderHistoryRecord
 from beyo_manager.models.tables.upholstery.upholstery_supplier_link import UpholsterySupplierLink
-from beyo_manager.services.commands.items._allocation_algorithm import run_skip_and_continue_allocation
 from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.upholstery._inventory_mutations import add_ordered
+from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
+    allocate_pooled_requirements,
+)
 from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_order_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
@@ -137,8 +137,7 @@ async def create_upholstery_order(ctx: ServiceContext) -> dict:
             allocated_item_upholstery_ids = await _allocate_requirements(
                 session=ctx.session,
                 workspace_id=ctx.workspace_id,
-                inventory_id=inventory.client_id,
-                order_amount_meters=request.order_amount_meters,
+                inventory=inventory,
                 priority_item_upholstery_ids=request.priority_item_upholstery_ids,
                 actor_id=ctx.user_id,
             )
@@ -195,15 +194,14 @@ async def create_upholstery_order(ctx: ServiceContext) -> dict:
 async def _allocate_requirements(
     session: AsyncSession,
     workspace_id: str,
-    inventory_id: str,
-    order_amount_meters: Decimal,
+    inventory: UpholsteryInventory,
     priority_item_upholstery_ids: list[str],
     actor_id: str,
 ) -> list[str]:
     req_result = await session.execute(
         select(ItemUpholsteryRequirement).where(
             ItemUpholsteryRequirement.workspace_id == workspace_id,
-            ItemUpholsteryRequirement.upholstery_inventory_id == inventory_id,
+            ItemUpholsteryRequirement.upholstery_inventory_id == inventory.client_id,
             ItemUpholsteryRequirement.state == ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING,
             ItemUpholsteryRequirement.is_deleted.is_(False),
         )
@@ -265,16 +263,11 @@ async def _allocate_requirements(
     )
     ordered_candidates = tier1 + tier2_and_3
 
-    result = run_skip_and_continue_allocation(
-        candidates=ordered_candidates,
-        running_pool=order_amount_meters,
+    return allocate_pooled_requirements(
+        inventory=inventory,
+        ordered_candidates=ordered_candidates,
         target_state=ItemUpholsteryRequirementStateEnum.ORDERED,
+        mode="ordered",
+        actor_id=actor_id,
         timestamp_field="ordered_at",
     )
-
-    resolved_set = set(result["resolved"])
-    for req in ordered_candidates:
-        if req.item_upholstery_id in resolved_set:
-            req.updated_by_id = actor_id
-
-    return result["resolved"]

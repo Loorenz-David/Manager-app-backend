@@ -8,10 +8,15 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
+from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.items.requests import parse_mark_completed_request
+from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
+    ensure_requirement_actions_are_available,
+)
 from beyo_manager.services.commands.upholstery._inventory_mutations import (
     complete_available_direct,
     finish_in_use,
@@ -28,6 +33,18 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
     request = parse_mark_completed_request(ctx.incoming_data)
 
     async with maybe_begin(ctx.session):
+        iup_result = await ctx.session.execute(
+            select(ItemUpholstery).where(
+                ItemUpholstery.workspace_id == ctx.workspace_id,
+                ItemUpholstery.client_id == request.item_upholstery_id,
+                ItemUpholstery.is_deleted.is_(False),
+            )
+        )
+        iup = iup_result.scalar_one_or_none()
+        if iup is None:
+            raise NotFound("ItemUpholstery not found.")
+        ensure_requirement_actions_are_available(iup)
+
         result = await ctx.session.execute(
             select(ItemUpholsteryRequirement).where(
                 ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,

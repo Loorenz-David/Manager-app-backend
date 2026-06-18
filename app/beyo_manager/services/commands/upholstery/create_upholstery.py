@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from beyo_manager.domain.upholstery.enums import UpholsteryInventoryConditionEnum
+from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
@@ -60,15 +60,11 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         await ctx.session.flush()
 
         initial_stock = request.current_stored_amount_meters or Decimal("0")
-        if initial_stock <= Decimal("0"):
-            inventory_condition = UpholsteryInventoryConditionEnum.OUT_OF_STOCK
-        elif (
-            request.low_stock_threshold_meters is not None
-            and initial_stock <= request.low_stock_threshold_meters
-        ):
-            inventory_condition = UpholsteryInventoryConditionEnum.LOW_STOCK
-        else:
-            inventory_condition = UpholsteryInventoryConditionEnum.AVAILABLE
+        inventory_condition = evaluate_inventory_condition(
+            stored=initial_stock,
+            in_need=Decimal("0"),
+            threshold=request.low_stock_threshold_meters,
+        )
 
         inventory = UpholsteryInventory(
             workspace_id=ctx.workspace_id,

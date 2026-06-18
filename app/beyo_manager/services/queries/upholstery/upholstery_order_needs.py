@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import String, and_, case, cast, distinct, func, or_, select
 from sqlalchemy.orm import selectinload
@@ -22,6 +23,29 @@ from beyo_manager.services.context import ServiceContext
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 _NEEDS_ORDERING = ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
+_ZERO_METERS = Decimal("0")
+
+
+def _amount_to_order_expr():
+    return func.greatest(
+        func.coalesce(UpholsteryInventory.current_amount_in_need_meters, _ZERO_METERS)
+        - func.coalesce(UpholsteryInventory.current_stored_amount_meters, _ZERO_METERS)
+        - func.coalesce(UpholsteryInventory.current_amount_ordered_meters, _ZERO_METERS),
+        _ZERO_METERS,
+    )
+
+
+def _needs_ordering_exists_condition(ctx: ServiceContext):
+    return (
+        select(ItemUpholsteryRequirement.client_id)
+        .where(
+            ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
+            ItemUpholsteryRequirement.upholstery_inventory_id == UpholsteryInventory.client_id,
+            ItemUpholsteryRequirement.is_deleted.is_(False),
+            ItemUpholsteryRequirement.state == _NEEDS_ORDERING,
+        )
+        .exists()
+    )
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -72,12 +96,23 @@ def _build_order_by(order_by: str | None):
 async def get_upholstery_order_needs_count(ctx: ServiceContext) -> dict:
     result = await ctx.session.execute(
         select(
-            func.count().label("needs_ordering_count"),
-            func.count(distinct(ItemUpholsteryRequirement.upholstery_inventory_id)).label("upholstery_count"),
-        ).where(
+            func.count(ItemUpholsteryRequirement.client_id).label("needs_ordering_count"),
+            func.count(distinct(UpholsteryInventory.client_id)).label("upholstery_count"),
+        )
+        .select_from(ItemUpholsteryRequirement)
+        .join(
+            UpholsteryInventory,
+            and_(
+                UpholsteryInventory.client_id == ItemUpholsteryRequirement.upholstery_inventory_id,
+                UpholsteryInventory.workspace_id == ctx.workspace_id,
+                UpholsteryInventory.is_deleted.is_(False),
+            ),
+        )
+        .where(
             ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
             ItemUpholsteryRequirement.is_deleted.is_(False),
             ItemUpholsteryRequirement.state == _NEEDS_ORDERING,
+            _amount_to_order_expr() > _ZERO_METERS,
         )
     )
     row = result.one()
@@ -92,60 +127,60 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
 
-    needs_agg = (
+    item_count_subq = (
+        select(func.count(distinct(ItemUpholsteryRequirement.client_id)))
+        .where(
+            ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
+            ItemUpholsteryRequirement.upholstery_inventory_id == UpholsteryInventory.client_id,
+            ItemUpholsteryRequirement.is_deleted.is_(False),
+            ItemUpholsteryRequirement.state == _NEEDS_ORDERING,
+        )
+        .scalar_subquery()
+    )
+
+    actionable_needs = (
         select(
-            Upholstery.client_id.label("client_id"),
+            UpholsteryInventory.client_id.label("inventory_id"),
+            Upholstery.client_id.label("upholstery_id"),
             Upholstery.name.label("name"),
             Upholstery.code.label("code"),
             Upholstery.image_url.label("image_url"),
-            func.count(distinct(ItemUpholsteryRequirement.client_id)).label("item_count"),
-            func.coalesce(func.sum(ItemUpholsteryRequirement.amount_meters), 0).label("total_amount_meters"),
+            item_count_subq.label("item_count"),
+            _amount_to_order_expr().label("amount_to_order_meters"),
         )
-        .select_from(Upholstery)
+        .select_from(UpholsteryInventory)
         .join(
-            UpholsteryInventory,
+            Upholstery,
             and_(
-                UpholsteryInventory.upholstery_id == Upholstery.client_id,
-                UpholsteryInventory.workspace_id == ctx.workspace_id,
-                UpholsteryInventory.is_deleted.is_(False),
-            ),
-        )
-        .join(
-            ItemUpholsteryRequirement,
-            and_(
-                ItemUpholsteryRequirement.upholstery_inventory_id == UpholsteryInventory.client_id,
-                ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
-                ItemUpholsteryRequirement.is_deleted.is_(False),
-                ItemUpholsteryRequirement.state == _NEEDS_ORDERING,
+                Upholstery.client_id == UpholsteryInventory.upholstery_id,
+                Upholstery.workspace_id == ctx.workspace_id,
+                Upholstery.is_deleted.is_(False),
             ),
         )
         .where(
-            Upholstery.workspace_id == ctx.workspace_id,
-            Upholstery.is_deleted.is_(False),
-        )
-        .group_by(
-            Upholstery.client_id,
-            Upholstery.name,
-            Upholstery.code,
-            Upholstery.image_url,
+            UpholsteryInventory.workspace_id == ctx.workspace_id,
+            UpholsteryInventory.is_deleted.is_(False),
+            _needs_ordering_exists_condition(ctx),
+            _amount_to_order_expr() > _ZERO_METERS,
         )
         .subquery()
     )
 
     stmt = (
         select(
-            needs_agg.c.client_id,
-            needs_agg.c.name,
-            needs_agg.c.code,
-            needs_agg.c.image_url,
-            needs_agg.c.item_count,
-            needs_agg.c.total_amount_meters,
+            actionable_needs.c.inventory_id,
+            actionable_needs.c.upholstery_id,
+            actionable_needs.c.name,
+            actionable_needs.c.code,
+            actionable_needs.c.image_url,
+            actionable_needs.c.item_count,
+            actionable_needs.c.amount_to_order_meters,
         )
-        .select_from(needs_agg)
+        .select_from(actionable_needs)
         .outerjoin(
             ItemUpholstery,
             and_(
-                ItemUpholstery.upholstery_id == needs_agg.c.client_id,
+                ItemUpholstery.upholstery_id == actionable_needs.c.upholstery_id,
                 ItemUpholstery.workspace_id == ctx.workspace_id,
                 ItemUpholstery.is_deleted.is_(False),
             ),
@@ -179,29 +214,12 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
     if q:
         q_like = f"%{q}%"
         q_subq = (
-            select(Upholstery.client_id)
-            .select_from(Upholstery)
-            .join(
-                UpholsteryInventory,
-                and_(
-                    UpholsteryInventory.upholstery_id == Upholstery.client_id,
-                    UpholsteryInventory.workspace_id == ctx.workspace_id,
-                    UpholsteryInventory.is_deleted.is_(False),
-                ),
-            )
-            .join(
-                ItemUpholsteryRequirement,
-                and_(
-                    ItemUpholsteryRequirement.upholstery_inventory_id == UpholsteryInventory.client_id,
-                    ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
-                    ItemUpholsteryRequirement.is_deleted.is_(False),
-                    ItemUpholsteryRequirement.state == _NEEDS_ORDERING,
-                ),
-            )
+            select(actionable_needs.c.inventory_id)
+            .select_from(actionable_needs)
             .join(
                 ItemUpholstery,
                 and_(
-                    ItemUpholstery.client_id == ItemUpholsteryRequirement.item_upholstery_id,
+                    ItemUpholstery.upholstery_id == actionable_needs.c.upholstery_id,
                     ItemUpholstery.workspace_id == ctx.workspace_id,
                     ItemUpholstery.is_deleted.is_(False),
                 ),
@@ -235,11 +253,9 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
                 isouter=True,
             )
             .where(
-                Upholstery.workspace_id == ctx.workspace_id,
-                Upholstery.is_deleted.is_(False),
                 or_(
-                    Upholstery.name.ilike(q_like),
-                    Upholstery.code.ilike(q_like),
+                    actionable_needs.c.name.ilike(q_like),
+                    actionable_needs.c.code.ilike(q_like),
                     Task.title.ilike(q_like),
                     cast(Task.additional_details, String).ilike(q_like),
                     Task.primary_phone_number.ilike(q_like),
@@ -256,18 +272,19 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
             )
             .distinct()
         )
-        stmt = stmt.where(needs_agg.c.client_id.in_(q_subq))
+        stmt = stmt.where(actionable_needs.c.inventory_id.in_(q_subq))
 
     stmt = (
         stmt.group_by(
-            needs_agg.c.client_id,
-            needs_agg.c.name,
-            needs_agg.c.code,
-            needs_agg.c.image_url,
-            needs_agg.c.item_count,
-            needs_agg.c.total_amount_meters,
+            actionable_needs.c.inventory_id,
+            actionable_needs.c.upholstery_id,
+            actionable_needs.c.name,
+            actionable_needs.c.code,
+            actionable_needs.c.image_url,
+            actionable_needs.c.item_count,
+            actionable_needs.c.amount_to_order_meters,
         )
-        .order_by(func.min(Task.ready_by_at).asc().nulls_last(), needs_agg.c.name.asc())
+        .order_by(func.min(Task.ready_by_at).asc().nulls_last(), actionable_needs.c.name.asc())
         .offset(offset)
         .limit(limit + 1)
     )
@@ -275,16 +292,16 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
     rows = (await ctx.session.execute(stmt)).all()
     has_more = len(rows) > limit
     page = rows[:limit]
-    page_upholstery_ids = [row.client_id for row in page]
+    page_inventory_ids = [row.inventory_id for row in page]
 
     due_date_map: dict[str, datetime | None] = {}
-    if page_upholstery_ids:
+    if page_inventory_ids:
         ranked_cte = (
             select(
-                Upholstery.client_id.label("upholstery_id"),
+                UpholsteryInventory.client_id.label("inventory_id"),
                 Task.ready_by_at.label("ready_by_at"),
                 func.row_number().over(
-                    partition_by=Upholstery.client_id,
+                    partition_by=UpholsteryInventory.client_id,
                     order_by=[
                         case((Task.ready_by_at.is_(None), 1), else_=0).asc(),
                         func.abs(
@@ -295,15 +312,7 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
                     ],
                 ).label("rn"),
             )
-            .select_from(Upholstery)
-            .join(
-                UpholsteryInventory,
-                and_(
-                    UpholsteryInventory.upholstery_id == Upholstery.client_id,
-                    UpholsteryInventory.workspace_id == ctx.workspace_id,
-                    UpholsteryInventory.is_deleted.is_(False),
-                ),
-            )
+            .select_from(UpholsteryInventory)
             .join(
                 ItemUpholsteryRequirement,
                 and_(
@@ -345,30 +354,32 @@ async def list_upholstery_order_needs(ctx: ServiceContext) -> dict:
                     Task.is_deleted.is_(False),
                 ),
             )
-            .where(Upholstery.client_id.in_(page_upholstery_ids))
+            .where(
+                UpholsteryInventory.workspace_id == ctx.workspace_id,
+                UpholsteryInventory.is_deleted.is_(False),
+                UpholsteryInventory.client_id.in_(page_inventory_ids),
+            )
             .cte("ranked")
         )
 
         due_date_rows = await ctx.session.execute(
-            select(ranked_cte.c.upholstery_id, ranked_cte.c.ready_by_at).where(ranked_cte.c.rn == 1)
+            select(ranked_cte.c.inventory_id, ranked_cte.c.ready_by_at).where(ranked_cte.c.rn == 1)
         )
-        due_date_map = {
-            row.upholstery_id: row.ready_by_at for row in due_date_rows
-        }
+        due_date_map = {row.inventory_id: row.ready_by_at for row in due_date_rows}
 
     return {
         "upholstery_needs_pagination": {
             "items": [
                 {
-                    "upholstery_id": row.client_id,
+                    "upholstery_id": row.upholstery_id,
                     "upholstery_name": row.name,
                     "upholstery_code": row.code,
                     "upholstery_image_url": row.image_url,
                     "item_count": row.item_count,
-                    "total_amount_meters": float(row.total_amount_meters or 0),
+                    "amount_to_order_meters": float(row.amount_to_order_meters or 0),
                     "earliest_due_date": (
-                        due_date_map[row.client_id].date().isoformat()
-                        if due_date_map.get(row.client_id) is not None
+                        due_date_map[row.inventory_id].date().isoformat()
+                        if due_date_map.get(row.inventory_id) is not None
                         else None
                     ),
                 }

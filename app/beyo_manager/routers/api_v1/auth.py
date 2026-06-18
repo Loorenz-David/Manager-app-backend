@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,14 +20,18 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
-_REFRESH_COOKIE = "refresh_token"
+_LEGACY_REFRESH_COOKIE = "refresh_token"
+
+
+def _scope_cookie(scope: str) -> str:
+    return f"{scope}_refresh_token"
 
 
 class SignInBody(BaseModel):
     email: str | None = None
     username: str | None = None
     password: str
-    app_scope: str = "admin"
+    app_scope: str = "manager"
 
 
 class RegisterUserBody(BaseModel):
@@ -55,7 +59,7 @@ async def sign_in_route(
     refresh_token_value = data.pop("_refresh_token")
     json_response = build_ok(data)
     json_response.set_cookie(
-        _REFRESH_COOKIE,
+        _scope_cookie(body.app_scope),
         refresh_token_value,
         httponly=True,
         secure=settings.auth_refresh_cookie_secure,
@@ -63,6 +67,11 @@ async def sign_in_route(
         path=settings.auth_refresh_cookie_path,
         domain=settings.auth_refresh_cookie_domain,
         max_age=settings.auth_refresh_cookie_max_age_seconds,
+    )
+    json_response.delete_cookie(
+        _LEGACY_REFRESH_COOKIE,
+        path=settings.auth_refresh_cookie_path,
+        domain=settings.auth_refresh_cookie_domain,
     )
     return json_response
 
@@ -73,23 +82,37 @@ async def logout_route(
     claims: dict = Depends(get_jwt_claims),
     session: AsyncSession = Depends(get_db),
 ):
-    ctx = ServiceContext(identity=claims, incoming_data={"refresh_token": request.cookies.get(_REFRESH_COOKIE)}, session=session)
+    scope = str(claims.get("app_scope", ""))
+    cookie_name = _scope_cookie(scope)
+    ctx = ServiceContext(identity=claims, incoming_data={"refresh_token": request.cookies.get(cookie_name)}, session=session)
     outcome = await run_service(logout_user, ctx)
     json_response = build_ok(outcome.data) if outcome.success else build_err(outcome.error)
-    json_response.delete_cookie(
-        _REFRESH_COOKIE,
-        httponly=True,
-        secure=settings.auth_refresh_cookie_secure,
-        samesite=settings.auth_refresh_cookie_samesite,
-        path=settings.auth_refresh_cookie_path,
-        domain=settings.auth_refresh_cookie_domain,
-    )
+    for name in (cookie_name, _LEGACY_REFRESH_COOKIE):
+        json_response.delete_cookie(
+            name,
+            httponly=True,
+            secure=settings.auth_refresh_cookie_secure,
+            samesite=settings.auth_refresh_cookie_samesite,
+            path=settings.auth_refresh_cookie_path,
+            domain=settings.auth_refresh_cookie_domain,
+        )
     return json_response
 
 
 @router.post("/refresh")
-async def refresh_route(request: Request, session: AsyncSession = Depends(get_db)):
-    ctx = ServiceContext(identity={}, incoming_data={"refresh_token": request.cookies.get(_REFRESH_COOKIE)}, session=session)
+async def refresh_route(
+    request: Request,
+    scope: str = Query(..., min_length=1),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        identity={},
+        incoming_data={
+            "scope": scope,
+            "refresh_token": request.cookies.get(_scope_cookie(scope)),
+        },
+        session=session,
+    )
     outcome = await run_service(refresh_token, ctx)
     if not outcome.success and isinstance(outcome.error, RefreshTokenRejected):
         return JSONResponse(

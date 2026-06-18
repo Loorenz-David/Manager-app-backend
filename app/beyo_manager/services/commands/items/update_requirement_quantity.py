@@ -9,6 +9,9 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
+    ensure_requirement_actions_are_available,
+)
 from beyo_manager.services.commands.items.requests import (
     parse_update_requirement_quantity_request,
 )
@@ -41,6 +44,7 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
         iup = iup_result.scalar_one_or_none()
         if iup is None:
             raise NotFound("ItemUpholstery not found.")
+        ensure_requirement_actions_are_available(iup)
 
         req_result = await ctx.session.execute(
             select(ItemUpholsteryRequirement).where(

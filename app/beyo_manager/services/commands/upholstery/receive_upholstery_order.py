@@ -12,11 +12,15 @@ from beyo_manager.domain.upholstery.enums import UpholsteryOrderStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.models.tables.upholstery.upholstery_order import UpholsteryOrder
 from beyo_manager.models.tables.upholstery.upholstery_order_history_record import UpholsteryOrderHistoryRecord
-from beyo_manager.services.commands.items._allocation_algorithm import run_skip_and_continue_allocation
 from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.upholstery._inventory_mutations import confirm_ordered_to_stock
+from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
+    allocate_pooled_requirements,
+    fetch_earliest_ready_by_at,
+)
 from beyo_manager.services.commands.upholstery.requests import parse_receive_upholstery_order_request
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -91,7 +95,6 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
             session=ctx.session,
             workspace_id=ctx.workspace_id,
             inventory_id=order.upholstery_inventory_id,
-            received_amount_meters=request.received_amount_meters,
             priority_item_upholstery_ids=request.priority_item_upholstery_ids,
             actor_id=ctx.user_id,
         )
@@ -144,17 +147,23 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
             ]
         )
 
-    return {"client_id": order.client_id}
+    return {
+        "client_id": order.client_id,
+        "state": order.state.value,
+    }
 
 
 async def _allocate_received_requirements(
     session: AsyncSession,
     workspace_id: str,
     inventory_id: str,
-    received_amount_meters: Decimal,
     priority_item_upholstery_ids: list[str],
     actor_id: str,
 ) -> list[str]:
+    inventory = await session.get(UpholsteryInventory, inventory_id)
+    if inventory is None or inventory.workspace_id != workspace_id or inventory.is_deleted:
+        raise NotFound("UpholsteryInventory not found.")
+
     req_result = await session.execute(
         select(ItemUpholsteryRequirement).where(
             ItemUpholsteryRequirement.workspace_id == workspace_id,
@@ -177,6 +186,10 @@ async def _allocate_received_requirements(
         item_upholstery_id: index
         for index, item_upholstery_id in enumerate(priority_item_upholstery_ids)
     }
+    non_pinned_iup_ids = [
+        req.item_upholstery_id for req in candidates if req.item_upholstery_id not in priority_set
+    ]
+    ready_by_at_map = await fetch_earliest_ready_by_at(session, workspace_id, non_pinned_iup_ids)
 
     tier1 = sorted(
         [req for req in candidates if req.item_upholstery_id in priority_set],
@@ -192,7 +205,11 @@ async def _allocate_received_requirements(
             if req.item_upholstery_id not in priority_set
             and req.state == ItemUpholsteryRequirementStateEnum.ORDERED
         ],
-        key=lambda req: req.created_at,
+        key=lambda req: (
+            ready_by_at_map.get(req.item_upholstery_id) is None,
+            ready_by_at_map.get(req.item_upholstery_id),
+            req.created_at,
+        ),
     )
     tier3 = sorted(
         [
@@ -201,20 +218,19 @@ async def _allocate_received_requirements(
             if req.item_upholstery_id not in priority_set
             and req.state == ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
         ],
-        key=lambda req: req.created_at,
+        key=lambda req: (
+            ready_by_at_map.get(req.item_upholstery_id) is None,
+            ready_by_at_map.get(req.item_upholstery_id),
+            req.created_at,
+        ),
     )
     ordered_candidates = tier1 + tier2 + tier3
 
-    result = run_skip_and_continue_allocation(
-        candidates=ordered_candidates,
-        running_pool=received_amount_meters,
+    return allocate_pooled_requirements(
+        inventory=inventory,
+        ordered_candidates=ordered_candidates,
         target_state=ItemUpholsteryRequirementStateEnum.AVAILABLE,
+        mode="stored",
+        actor_id=actor_id,
         timestamp_field=None,
     )
-
-    resolved_set = set(result["resolved"])
-    for req in ordered_candidates:
-        if req.item_upholstery_id in resolved_set:
-            req.updated_by_id = actor_id
-
-    return result["resolved"]

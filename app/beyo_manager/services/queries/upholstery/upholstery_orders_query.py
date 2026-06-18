@@ -223,6 +223,11 @@ async def list_upholstery_orders(ctx: ServiceContext) -> dict:
                     "upholstery_code": upholstery.code if upholstery else None,
                     "upholstery_image_url": upholstery.image_url if upholstery else None,
                     "order_amount_meters": float(order.order_amount_meters),
+                    "received_amount_meters": (
+                        float(order.received_amount_meters)
+                        if order.received_amount_meters is not None
+                        else None
+                    ),
                     "expected_receive_at": order.expected_receive_at.isoformat() if order.expected_receive_at else None,
                     "received_at": order.received_at.isoformat() if order.received_at else None,
                     "state": order.state.value,

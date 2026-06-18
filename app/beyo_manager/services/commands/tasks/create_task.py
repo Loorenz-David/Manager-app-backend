@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, text
 
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
+from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
@@ -179,8 +180,15 @@ async def create_task(ctx: ServiceContext) -> dict:
             if (
                 request.item_upholstery.source == ItemUpholsterySourceEnum.INTERNAL
                 and request.item_upholstery.upholstery_id is None
+                and not should_defer_requirement_creation(
+                    request.item_upholstery.source,
+                    request.item_upholstery.upholstery_id,
+                    request.item_upholstery.amount_meters,
+                )
             ):
-                raise ValidationError("upholstery_id is required when source is INTERNAL.")
+                raise ValidationError(
+                    "upholstery_id is required when source is INTERNAL unless positive amount_meters is provided."
+                )
 
             await _create_item_upholstery_in_session(
                 session=ctx.session,

@@ -11,6 +11,10 @@ from beyo_manager.domain.items.enums import (
     ItemUpholsteryRequirementStateEnum,
     ItemUpholsterySourceEnum,
 )
+from beyo_manager.domain.items.upholstery_selection import (
+    has_positive_amount_meters,
+    should_defer_requirement_creation,
+)
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
@@ -27,6 +31,17 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+
+
+def _validate_internal_upholstery_selection(
+    source: ItemUpholsterySourceEnum,
+    upholstery_id: str | None,
+    amount_meters: Decimal | None,
+    *,
+    missing_id_error: str,
+) -> None:
+    if source == ItemUpholsterySourceEnum.INTERNAL and upholstery_id is None and not has_positive_amount_meters(amount_meters):
+        raise ValidationError(missing_id_error)
 
 
 async def _create_initial_requirement_for_item_upholstery(
@@ -124,14 +139,15 @@ async def _create_item_upholstery_in_session(
     session.add(iup)
     await session.flush()
 
-    await _create_initial_requirement_for_item_upholstery(
-        session=session,
-        workspace_id=workspace_id,
-        item_upholstery=iup,
-        amount_meters=amount_meters,
-        source=source,
-        user_id=user_id,
-    )
+    if not should_defer_requirement_creation(source, upholstery_id, amount_meters):
+        await _create_initial_requirement_for_item_upholstery(
+            session=session,
+            workspace_id=workspace_id,
+            item_upholstery=iup,
+            amount_meters=amount_meters,
+            source=source,
+            user_id=user_id,
+        )
     return iup.client_id
 
 
@@ -139,8 +155,12 @@ async def create_item_upholstery(ctx: ServiceContext) -> dict:
     """Create ItemUpholstery and initial ItemUpholsteryRequirement (standalone command)."""
     request = parse_create_item_upholstery_request(ctx.incoming_data)
 
-    if request.upholstery_id is None and request.source != ItemUpholsterySourceEnum.CUSTOMER:
-        raise ValidationError("upholstery_id is required when source is not CUSTOMER.")
+    _validate_internal_upholstery_selection(
+        request.source,
+        request.upholstery_id,
+        request.amount_meters,
+        missing_id_error="upholstery_id is required when source is INTERNAL unless positive amount_meters is provided.",
+    )
 
     async with maybe_begin(ctx.session):
         item_result = await ctx.session.execute(

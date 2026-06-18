@@ -328,7 +328,7 @@ async def route_update_item_upholstery(
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
-    data = body.model_dump()
+    data = body.model_dump(exclude_unset=True)
     data["client_id"] = client_id
     ctx = ServiceContext(incoming_data=data, identity=claims, session=session)
     outcome = await run_service(update_item_upholstery, ctx)
