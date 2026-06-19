@@ -13,8 +13,9 @@ from beyo_manager.services.infra.sleep.activity_tracker import ActivityTracker
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS      = 10
+POLL_INTERVAL_SECONDS       = 10
 SCHEDULER_SLEEP_CAP_SECONDS = 300   # max sleep even when no jobs are due
+WAKE_CHECK_INTERVAL_SECONDS = 2     # re-check is_sleeping() at this cadence
 ERROR_RETRY_MINUTES         = 15
 
 DELAYED_TYPE_TO_TASK_TYPE: dict[DelayedSchedulerTypeEnum, TaskType] = {
@@ -37,7 +38,12 @@ async def run_delayed_scheduler_runner() -> None:
                 sleep_for = min(sleep_for, SCHEDULER_SLEEP_CAP_SECONDS)
             else:
                 sleep_for = SCHEDULER_SLEEP_CAP_SECONDS
-            await asyncio.sleep(sleep_for)
+            deadline = datetime.now(timezone.utc) + timedelta(seconds=sleep_for)
+            while ActivityTracker.is_sleeping():
+                remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(WAKE_CHECK_INTERVAL_SECONDS, remaining))
             if next_due_at is None or datetime.now(timezone.utc) < next_due_at:
                 continue
             ActivityTracker.touch()  # due time arrived — wake the system before firing

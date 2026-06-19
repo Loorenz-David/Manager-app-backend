@@ -1,7 +1,12 @@
+from dataclasses import asdict
+
 from sqlalchemy import func, select, update
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseLinkRoleEnum, CaseStateEnum
 from beyo_manager.domain.cases.events import CaseEvent, ConversationMessageEvent, conversation_message_extra
+from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.execution.payloads.notification import NotificationPayload
+from beyo_manager.domain.notifications.enums import NotificationType
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_conversation import CaseConversation
@@ -13,9 +18,13 @@ from beyo_manager.services.commands.cases.requests import parse_create_case_requ
 from beyo_manager.services.commands.cases.message_writes import write_case_message
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.infra.events.build_event import build_conversation_event
 from beyo_manager.services.infra.events import dispatch
-from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.build_event import (
+    build_conversation_event,
+    build_user_event,
+    build_workspace_event,
+)
+from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
 async def create_case(ctx: ServiceContext) -> dict:
@@ -134,6 +143,32 @@ async def create_case(ctx: ServiceContext) -> dict:
                     )
                 )
             )
+
+        notify_ids = [user_id for user_id in participant_ids if user_id != ctx.user_id]
+        if notify_ids:
+            if initial_message is not None:
+                notif_type = NotificationType.CASE_MESSAGE
+                notif_title = "New case"
+                notif_body = (request.initial_message.plain_text or "")[:80]
+            else:
+                notif_type = NotificationType.CASE_PARTICIPANT_ADDED
+                notif_title = "You've been added to a case"
+                notif_body = "A new case was created and you are a participant."
+            await create_instant_task(
+                session=ctx.session,
+                task_type=TaskType.CREATE_NOTIFICATIONS,
+                payload=asdict(
+                    NotificationPayload(
+                        notification_type=notif_type,
+                        user_ids=notify_ids,
+                        title=notif_title,
+                        body=notif_body,
+                        entity_type="case",
+                        entity_client_id=case.client_id,
+                        exclude_viewing=[{"entity_type": "case", "entity_client_id": case.client_id}],
+                    )
+                ),
+            )
     event = build_workspace_event(case, CaseEvent.CREATED, workspace_id=ctx.workspace_id)
     events = [event]
     if initial_message is not None and initial_message_seq is not None:
@@ -144,6 +179,17 @@ async def create_case(ctx: ServiceContext) -> dict:
                 conversation_id=conversation.client_id,
                 workspace_id=ctx.workspace_id,
                 extra=conversation_message_extra(initial_message_seq),
+            )
+        )
+    has_initial_message = initial_message is not None
+    for user_id in participant_ids:
+        unread_count = 1 if has_initial_message and user_id != ctx.user_id else 0
+        events.append(
+            build_user_event(
+                user_id=user_id,
+                event_name=CaseEvent.PARTICIPANT_ADDED,
+                client_id=case.client_id,
+                extra={"unread_count": unread_count},
             )
         )
     await dispatch(events)

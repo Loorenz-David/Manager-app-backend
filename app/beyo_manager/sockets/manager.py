@@ -1,5 +1,9 @@
+import logging
+
 from beyo_manager.sockets import sio
 from beyo_manager.sockets.connection_meta import ConnectionMeta
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -10,6 +14,13 @@ class ConnectionManager:
         self._connections[sid] = meta
         await sio.enter_room(sid, self.user_room(meta.user_id))
         await sio.enter_room(sid, self.workspace_room(meta.workspace_id))
+        logger.info(
+            "[manager] connect | sid=%s user=%s joined rooms: %s %s",
+            sid,
+            meta.user_id,
+            self.user_room(meta.user_id),
+            self.workspace_room(meta.workspace_id),
+        )
 
     async def disconnect(self, sid: str) -> ConnectionMeta | None:
         meta = self._connections.pop(sid, None)
@@ -19,15 +30,22 @@ class ConnectionManager:
         return meta
 
     async def join_conversation(self, sid: str, conversation_client_id: str) -> None:
-        await sio.enter_room(sid, self.conversation_room(conversation_client_id))
+        room = self.conversation_room(conversation_client_id)
+        logger.info("[manager] join_conversation | sid=%s room=%s", sid, room)
+        await sio.enter_room(sid, room)
 
     async def leave_conversation(self, sid: str, conversation_client_id: str) -> None:
-        await sio.leave_room(sid, self.conversation_room(conversation_client_id))
+        room = self.conversation_room(conversation_client_id)
+        logger.info("[manager] leave_conversation | sid=%s room=%s", sid, room)
+        await sio.leave_room(sid, room)
 
     async def send_to_user(self, user_id: str, event: str, payload: dict) -> None:
-        await sio.emit(event, payload, room=self.user_room(user_id))
+        room = self.user_room(user_id)
+        logger.info("[manager] send_to_user | event=%s room=%s payload=%s", event, room, payload)
+        await sio.emit(event, payload, room=room)
 
     async def broadcast_to_room(self, room: str, event: str, payload: dict) -> None:
+        logger.info("[manager] broadcast_to_room | event=%s room=%s payload=%s", event, room, payload)
         await sio.emit(event, payload, room=room)
 
     def get(self, sid: str) -> ConnectionMeta | None:

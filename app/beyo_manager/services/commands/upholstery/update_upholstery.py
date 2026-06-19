@@ -5,6 +5,8 @@ from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.services.commands.upholstery.requests import parse_update_upholstery_request
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
 async def update_upholstery(ctx: ServiceContext) -> dict:
@@ -57,4 +59,12 @@ async def update_upholstery(ctx: ServiceContext) -> dict:
 
         upholstery.updated_by_id = ctx.user_id
 
+    await event_bus.dispatch([
+        WorkspaceEvent(
+            event_name="upholstery:updated",
+            client_id=upholstery.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+    ])
     return {}

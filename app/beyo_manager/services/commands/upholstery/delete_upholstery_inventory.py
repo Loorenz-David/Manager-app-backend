@@ -9,6 +9,8 @@ from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_delete_upholstery_inventory_request
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
 async def delete_upholstery_inventory(ctx: ServiceContext) -> dict:
@@ -47,4 +49,23 @@ async def delete_upholstery_inventory(ctx: ServiceContext) -> dict:
             upholstery.deleted_by_id = ctx.user_id
             upholstery.list_order = None
 
+    pending_events = [
+        WorkspaceEvent(
+            event_name="upholstery:inventory-deleted",
+            client_id=inv.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+    ]
+    if upholstery is not None:
+        pending_events.append(
+            WorkspaceEvent(
+                event_name="upholstery:deleted",
+                client_id=upholstery.client_id,
+                workspace_id=ctx.workspace_id,
+                extra={},
+            )
+        )
+
+    await event_bus.dispatch(pending_events)
     return {}

@@ -254,6 +254,12 @@ async def update_item_upholstery(ctx: ServiceContext) -> dict:
             workspace_id=ctx.workspace_id,
             extra={},
         ),
+        WorkspaceEvent(
+            event_name="item:upholstery-updated",
+            client_id=iup.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
     ])
     return {}
 
@@ -297,6 +303,12 @@ async def delete_item_upholstery(ctx: ServiceContext) -> dict:
         WorkspaceEvent(
             event_name="item:updated",
             client_id=iup.item_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+        WorkspaceEvent(
+            event_name="item:upholstery-deleted",
+            client_id=iup.client_id,
             workspace_id=ctx.workspace_id,
             extra={},
         ),

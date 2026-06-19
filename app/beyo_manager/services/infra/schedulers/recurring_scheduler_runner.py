@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS       = 10
 SCHEDULER_SLEEP_CAP_SECONDS = 300   # max sleep between checks when sleeping
+WAKE_CHECK_INTERVAL_SECONDS = 2     # re-check is_sleeping() at this cadence
 BATCH_SIZE                  = 200   # prevents unbounded memory load
 
 RECURRING_TYPE_TO_TASK_TYPE: dict[RecurringSchedulerTypeEnum, TaskType] = {
@@ -46,7 +47,12 @@ async def run_recurring_scheduler_runner() -> None:
                 sleep_for = min(sleep_for, SCHEDULER_SLEEP_CAP_SECONDS)
             else:
                 sleep_for = SCHEDULER_SLEEP_CAP_SECONDS
-            await asyncio.sleep(sleep_for)
+            deadline = datetime.now(timezone.utc) + timedelta(seconds=sleep_for)
+            while ActivityTracker.is_sleeping():
+                remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(WAKE_CHECK_INTERVAL_SECONDS, remaining))
             if next_due_at is None or datetime.now(timezone.utc) < next_due_at:
                 continue
             ActivityTracker.touch()  # due time arrived — wake the system before firing

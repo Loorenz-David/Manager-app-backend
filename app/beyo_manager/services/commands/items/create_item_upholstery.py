@@ -209,5 +209,11 @@ async def create_item_upholstery(ctx: ServiceContext) -> dict:
             workspace_id=ctx.workspace_id,
             extra={},
         ),
+        WorkspaceEvent(
+            event_name="item:upholstery-created",
+            client_id=iup_client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
     ])
     return {"client_id": iup_client_id}

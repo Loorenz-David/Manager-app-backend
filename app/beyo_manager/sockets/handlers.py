@@ -6,6 +6,7 @@ from beyo_manager.config import settings
 logger = logging.getLogger(__name__)
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.presence.enums import EntityType
+from beyo_manager.models.database import get_db_session
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.infra.presence import mark_left, mark_viewing
 from beyo_manager.services.infra.presence.user_online_key import delete_user_online, set_user_online
@@ -42,7 +43,7 @@ async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
 async def _handle_disconnect(sid: str, reason: str | None = None):
     meta = await manager.disconnect(sid)
     if meta:
-        _cleanup_presence(meta)
+        await _cleanup_presence(meta)
         if not manager.is_user_connected(meta.user_id):
             try:
                 await delete_user_online(meta.user_id)
@@ -63,9 +64,15 @@ async def _handle_view_entity(sid: str, data: dict):
         return
     mark_viewing(entity_type.value, entity_client_id, meta.user_id)
     meta.entity_views.add((entity_type.value, entity_client_id))
-    create_instant_task(TaskType.RECORD_VIEW_START, {"user_id": meta.user_id, "entity_type": entity_type.value, "entity_client_id": entity_client_id})
     if entity_type == EntityType.CONVERSATION:
         await manager.join_conversation(sid, entity_client_id)
+    async for session in get_db_session():
+        await create_instant_task(
+            session=session,
+            task_type=TaskType.RECORD_VIEW_START,
+            payload={"user_id": meta.user_id, "entity_type": entity_type.value, "entity_client_id": entity_client_id},
+        )
+        await session.commit()
 
 
 async def _handle_leave_entity(sid: str, data: dict):
@@ -81,15 +88,27 @@ async def _handle_leave_entity(sid: str, data: dict):
         return
     mark_left(entity_type.value, entity_client_id, meta.user_id)
     meta.entity_views.discard((entity_type.value, entity_client_id))
-    create_instant_task(TaskType.RECORD_VIEW_END, {"user_id": meta.user_id, "entity_type": entity_type.value, "entity_client_id": entity_client_id})
     if entity_type == EntityType.CONVERSATION:
         await manager.leave_conversation(sid, entity_client_id)
+    async for session in get_db_session():
+        await create_instant_task(
+            session=session,
+            task_type=TaskType.RECORD_VIEW_END,
+            payload={"user_id": meta.user_id, "entity_type": entity_type.value, "entity_client_id": entity_client_id},
+        )
+        await session.commit()
 
 
-def _cleanup_presence(meta: ConnectionMeta) -> None:
-    for entity_type, entity_client_id in list(meta.entity_views):
-        mark_left(entity_type, entity_client_id, meta.user_id)
-        create_instant_task(TaskType.RECORD_VIEW_END, {"user_id": meta.user_id, "entity_type": entity_type, "entity_client_id": entity_client_id})
+async def _cleanup_presence(meta: ConnectionMeta) -> None:
+    async for session in get_db_session():
+        for entity_type, entity_client_id in list(meta.entity_views):
+            mark_left(entity_type, entity_client_id, meta.user_id)
+            await create_instant_task(
+                session=session,
+                task_type=TaskType.RECORD_VIEW_END,
+                payload={"user_id": meta.user_id, "entity_type": entity_type, "entity_client_id": entity_client_id},
+            )
+        await session.commit()
 
 
 def _query_token(environ: dict) -> str | None:

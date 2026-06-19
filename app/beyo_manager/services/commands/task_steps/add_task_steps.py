@@ -162,6 +162,15 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
         return {"step_ids": []}
 
     pending_events: list = [build_workspace_event(task, "task:updated")]
+    for step in created_steps:
+        pending_events.append(
+            WorkspaceEvent(
+                event_name="task:step-created",
+                client_id=step.client_id,
+                workspace_id=ctx.workspace_id,
+                extra={"working_section_id": step.working_section_id},
+            )
+        )
     for step in readiness_changed:
         pending_events.append(
             WorkspaceEvent(

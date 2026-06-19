@@ -204,9 +204,9 @@ async def create_task(ctx: ServiceContext) -> dict:
                 client_id=request.item_upholstery.client_id,
             )
 
+        created_steps: list[TaskStep] = []
         if request.steps:
             now = datetime.now(timezone.utc)
-            created_steps: list[TaskStep] = []
             for step_input in request.steps:
                 if step_input.client_id is not None:
                     validate_provided_client_id(step_input.client_id, "tsp")
@@ -309,6 +309,10 @@ async def create_task(ctx: ServiceContext) -> dict:
         )
 
     await event_bus.dispatch([
-        build_workspace_event(task, "task:created"),
+        build_workspace_event(
+            task,
+            "task:created",
+            extra={"working_section_ids": [step.working_section_id for step in created_steps]},
+        ),
     ])
     return {"client_id": task.client_id, "task_scalar_id": task.task_scalar_id}

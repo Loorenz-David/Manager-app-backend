@@ -83,7 +83,7 @@ async def _remove_task_steps_in_session(
     ctx: ServiceContext,
     task_id: str,
     step_ids: list[str],
-) -> tuple[Task, TaskStateEnum, list[tuple[TaskStep, object]]]:
+) -> tuple[Task, TaskStateEnum, list[tuple[TaskStep, object]], list[TaskStep]]:
     now = datetime.now(timezone.utc)
     requested_step_ids = set(step_ids)
 
@@ -211,7 +211,7 @@ async def _remove_task_steps_in_session(
         task.updated_by_id = ctx.user_id
 
     await ctx.session.flush()
-    return task, old_task_state, readiness_changes
+    return task, old_task_state, readiness_changes, steps_to_remove
 
 
 async def _dispatch_remove_step_events(
@@ -220,10 +220,18 @@ async def _dispatch_remove_step_events(
     task: Task,
     old_task_state: TaskStateEnum,
     readiness_changes: list[tuple[TaskStep, object]],
+    removed_steps: list[TaskStep],
 ) -> None:
     pending_events: list = [
         build_workspace_event(task, "task:updated"),
     ]
+    for step in removed_steps:
+        pending_events.append(WorkspaceEvent(
+            event_name="task:step-deleted",
+            client_id=step.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={"working_section_id": step.working_section_id},
+        ))
     for affected_step, old_aff_readiness in readiness_changes:
         if affected_step.readiness_status != old_aff_readiness:
             pending_events.append(WorkspaceEvent(
@@ -243,7 +251,7 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
     request = parse_remove_task_step_request(ctx.incoming_data)
 
     async with maybe_begin(ctx.session):
-        task, old_task_state, readiness_changes = await _remove_task_steps_in_session(
+        task, old_task_state, readiness_changes, removed_steps = await _remove_task_steps_in_session(
             ctx=ctx,
             task_id=request.task_id,
             step_ids=[request.step_id],
@@ -254,6 +262,7 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
         task=task,
         old_task_state=old_task_state,
         readiness_changes=readiness_changes,
+        removed_steps=removed_steps,
     )
     return {"step_id": request.step_id}
 
@@ -263,7 +272,7 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
     step_ids = _dedupe_step_ids(request.step_ids)
 
     async with maybe_begin(ctx.session):
-        task, old_task_state, readiness_changes = await _remove_task_steps_in_session(
+        task, old_task_state, readiness_changes, removed_steps = await _remove_task_steps_in_session(
             ctx=ctx,
             task_id=request.task_id,
             step_ids=step_ids,
@@ -274,5 +283,6 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
         task=task,
         old_task_state=old_task_state,
         readiness_changes=readiness_changes,
+        removed_steps=removed_steps,
     )
     return {"step_ids": step_ids}

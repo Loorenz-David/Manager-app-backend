@@ -11,6 +11,7 @@ class CaseEvent(StrEnum):
     PARTICIPANT_ADDED = "case:participant-added"
     PARTICIPANT_REMOVED = "case:participant-removed"
     CONVERSATION_CREATED = "case:conversation-created"
+    UNREAD_UPDATED = "case:unread-updated"
 
 
 class ConversationMessageEvent(StrEnum):

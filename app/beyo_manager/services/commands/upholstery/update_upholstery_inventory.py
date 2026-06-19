@@ -8,6 +8,8 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_update_upholstery_inventory_request
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
 async def update_upholstery_inventory(ctx: ServiceContext) -> dict:
@@ -42,4 +44,12 @@ async def update_upholstery_inventory(ctx: ServiceContext) -> dict:
         inv.updated_at = datetime.now(timezone.utc)
         inv.updated_by_id = ctx.user_id
 
+    await event_bus.dispatch([
+        WorkspaceEvent(
+            event_name="upholstery:inventory-updated",
+            client_id=inv.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+    ])
     return {}

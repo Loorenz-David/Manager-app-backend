@@ -13,7 +13,7 @@ from beyo_manager.domain.schedulers.enums import (
     SchedulerOriginSourceEnum,
     SchedulerStateEnum,
 )
-from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
@@ -128,45 +128,47 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         effective_user_ids = list({ctx.user_id, credited_user_id})
 
         # COMPLETED transitions are deferred to a delayed scheduler to provide an undo window.
-        if request.new_state == TaskStepStateEnum.COMPLETED:
-            existing_scheduler_result = await ctx.session.execute(
-                select(DelayedScheduler).where(
-                    DelayedScheduler.event_client_id == step.client_id,
-                    DelayedScheduler.type == DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
-                    DelayedScheduler.state == SchedulerStateEnum.ACTIVE,
-                )
-            )
-            existing_scheduler = existing_scheduler_result.scalar_one_or_none()
-            if existing_scheduler is not None:
-                raise ConflictError("A pending completion already exists for this step.")
-
-            completion_delay_seconds = 5
-            scheduled_for = now + timedelta(seconds=completion_delay_seconds)
-
-            scheduler = DelayedScheduler(
-                type=DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
-                state=SchedulerStateEnum.ACTIVE,
-                origin_source=SchedulerOriginSourceEnum.COMMAND,
-                event_client_id=step.client_id,
-                scheduled_for=scheduled_for,
-                payload_snapshot={
-                    "step_id": step.client_id,
-                    "task_id": task.client_id,
-                    "workspace_id": ctx.workspace_id,
-                    "completion_requested_at": now.isoformat(),
-                    "performed_by_user_id": ctx.user_id,
-                    "credited_user_id": credited_user_id,
-                    "reason": request.reason.value if request.reason else None,
-                    "description": request.description,
-                },
-            )
-            ctx.session.add(scheduler)
-            await ctx.session.flush()
-
-            return {
-                "pending_completion_id": scheduler.client_id,
-                "expires_at": scheduled_for.isoformat(),
-            }
+        # NOTE: Undo-window scheduling is temporarily disabled — COMPLETED falls through to the
+        # normal transition path below. Keep this block intact for future re-enablement.
+        # if request.new_state == TaskStepStateEnum.COMPLETED:
+        #     existing_scheduler_result = await ctx.session.execute(
+        #         select(DelayedScheduler).where(
+        #             DelayedScheduler.event_client_id == step.client_id,
+        #             DelayedScheduler.type == DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
+        #             DelayedScheduler.state == SchedulerStateEnum.ACTIVE,
+        #         )
+        #     )
+        #     existing_scheduler = existing_scheduler_result.scalar_one_or_none()
+        #     if existing_scheduler is not None:
+        #         raise ConflictError("A pending completion already exists for this step.")
+        #
+        #     completion_delay_seconds = 5
+        #     scheduled_for = now + timedelta(seconds=completion_delay_seconds)
+        #
+        #     scheduler = DelayedScheduler(
+        #         type=DelayedSchedulerTypeEnum.PENDING_STEP_COMPLETION,
+        #         state=SchedulerStateEnum.ACTIVE,
+        #         origin_source=SchedulerOriginSourceEnum.COMMAND,
+        #         event_client_id=step.client_id,
+        #         scheduled_for=scheduled_for,
+        #         payload_snapshot={
+        #             "step_id": step.client_id,
+        #             "task_id": task.client_id,
+        #             "workspace_id": ctx.workspace_id,
+        #             "completion_requested_at": now.isoformat(),
+        #             "performed_by_user_id": ctx.user_id,
+        #             "credited_user_id": credited_user_id,
+        #             "reason": request.reason.value if request.reason else None,
+        #             "description": request.description,
+        #         },
+        #     )
+        #     ctx.session.add(scheduler)
+        #     await ctx.session.flush()
+        #
+        #     return {
+        #         "pending_completion_id": scheduler.client_id,
+        #         "expires_at": scheduled_for.isoformat(),
+        #     }
 
         # 4. Auto-pause any other WORKING record for this user (one-active-step rule)
         if request.new_state == TaskStepStateEnum.WORKING:
@@ -287,6 +289,21 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             task.state = TaskStateEnum.WORKING
             task.updated_at = now
             task.updated_by_id = ctx.user_id
+
+        if request.new_state in TERMINAL_STEP_STATES:
+            all_steps_result = await ctx.session.execute(
+                select(TaskStep).where(
+                    TaskStep.workspace_id == ctx.workspace_id,
+                    TaskStep.task_id == task.client_id,
+                    TaskStep.is_deleted.is_(False),
+                )
+            )
+            all_steps = all_steps_result.scalars().all()
+            if all_steps and all(s.state in TERMINAL_STEP_STATES for s in all_steps):
+                if task.state not in TERMINAL_TASK_STATES:
+                    task.state = TaskStateEnum.READY
+                    task.updated_at = now
+                    task.updated_by_id = ctx.user_id
 
         # 8. Extension point for section-specific side effects (stub)
         await _dispatch_section_side_effects(step, request.new_state, ctx.session)

@@ -21,6 +21,8 @@ from beyo_manager.services.commands.upholstery._inventory_mutations import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events import event_bus
+from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 _MUTABLE_STATES = {
     ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY,
@@ -109,4 +111,18 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
             )
             active_req.updated_by_id = ctx.user_id
 
+    await event_bus.dispatch([
+        WorkspaceEvent(
+            event_name="item:upholstery-updated",
+            client_id=iup.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={},
+        ),
+        WorkspaceEvent(
+            event_name="item:upholstery-requirement-state-changed",
+            client_id=iup.client_id,
+            workspace_id=ctx.workspace_id,
+            extra={"new_state": active_req.state.value},
+        ),
+    ])
     return {}
