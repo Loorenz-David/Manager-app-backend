@@ -37,6 +37,7 @@ from beyo_manager.services.commands.history.message_builder import build_create_
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
 _SELLER_ROLES = {"seller"}
@@ -308,11 +309,26 @@ async def create_task(ctx: ServiceContext) -> dict:
             username_snapshot=username,
         )
 
-    await event_bus.dispatch([
+    pending_events: list = [
         build_workspace_event(
             task,
             "task:created",
             extra={"working_section_ids": [step.working_section_id for step in created_steps]},
-        ),
-    ])
+        )
+    ]
+    if created_steps:
+        pending_events.append(
+            BatchWorkspaceEvent(
+                event_name="task:step-created",
+                workspace_id=ctx.workspace_id,
+                items=[
+                    {
+                        "client_id": step.client_id,
+                        "working_section_id": step.working_section_id,
+                    }
+                    for step in created_steps
+                ],
+            )
+        )
+    await event_bus.dispatch(pending_events)
     return {"client_id": task.client_id, "task_scalar_id": task.task_scalar_id}

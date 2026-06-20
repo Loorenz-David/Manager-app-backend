@@ -11,10 +11,10 @@ from beyo_manager.domain.execution.payloads.notification import NotificationPayl
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.database import get_db_session
-from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -187,13 +187,14 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                 payload=asdict(analytics_payload),
             )
 
-            step_pins_result = await session.execute(
-                select(NotificationPin.user_id).where(
-                    NotificationPin.entity_type == "task_step",
-                    NotificationPin.entity_client_id == step.client_id,
+            step_pin_user_ids = list(
+                await resolve_task_step_notification_targets(
+                    session,
+                    step.client_id,
+                    performed_by,
+                    {"state": TaskStepStateEnum.COMPLETED.value},
                 )
             )
-            step_pin_user_ids = [uid for uid in step_pins_result.scalars().all() if uid != performed_by]
             if step_pin_user_ids:
                 await create_instant_task(
                     session=session,

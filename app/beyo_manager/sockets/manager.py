@@ -48,6 +48,10 @@ class ConnectionManager:
         logger.info("[manager] broadcast_to_room | event=%s room=%s payload=%s", event, room, payload)
         await sio.emit(event, payload, room=room)
 
+    async def broadcast_items_to_room(self, room: str, event: str, items: list[dict]) -> None:
+        logger.info("[manager] broadcast_items_to_room | event=%s room=%s count=%d", event, room, len(items))
+        await sio.emit(event, items, room=room)
+
     def get(self, sid: str) -> ConnectionMeta | None:
         return self._connections.get(sid)
 

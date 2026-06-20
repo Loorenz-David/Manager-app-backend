@@ -2,12 +2,15 @@ import logging
 from datetime import datetime, timezone
 
 from beyo_manager.services.infra.audit.audited_events import get_audited_events
-from beyo_manager.services.infra.events.domain_event import Event
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, Event
 
 logger = logging.getLogger(__name__)
 
 
-async def handle(event: Event) -> None:
+async def handle(event: Event | BatchWorkspaceEvent) -> None:
+    if isinstance(event, BatchWorkspaceEvent):
+        return
+
     if event.event_name not in get_audited_events():
         return
 

@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from beyo_manager.services.infra.audit import audited_events as _audited_events_module
-from beyo_manager.services.infra.events.domain_event import UserEvent, WorkspaceEvent
+from beyo_manager.services.infra.events.domain_event import (
+    BatchWorkspaceEvent,
+    UserEvent,
+    WorkspaceEvent,
+)
 
 
 async def _call_handle(event):
@@ -26,6 +30,22 @@ async def test_skip_non_audited_event():
                    return_value=frozenset()):
             # Should return without writing — no DB call
             await _call_handle(event)  # must not raise
+
+
+@pytest.mark.unit
+async def test_skip_batch_workspace_event():
+    event = BatchWorkspaceEvent(
+        event_name="task:step-created",
+        workspace_id="ws_1",
+        items=[{"client_id": "tsp_1"}],
+    )
+    with patch(
+        f"beyo_manager.services.infra.events.handlers.audit_handler.get_audited_events",
+        return_value=frozenset({"task:step-created"}),
+    ) as audited_events_mock:
+        await _call_handle(event)
+
+    audited_events_mock.assert_not_called()
 
 
 @pytest.mark.unit

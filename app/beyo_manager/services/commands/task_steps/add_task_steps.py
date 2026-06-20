@@ -25,7 +25,7 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
 async def add_task_steps(ctx: ServiceContext) -> dict:
@@ -161,23 +161,33 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
     if not created_steps:
         return {"step_ids": []}
 
-    pending_events: list = [build_workspace_event(task, "task:updated")]
-    for step in created_steps:
+    pending_events: list = [
+        build_workspace_event(task, "task:updated"),
+        BatchWorkspaceEvent(
+            event_name="task:step-created",
+            workspace_id=ctx.workspace_id,
+            items=[
+                {
+                    "client_id": step.client_id,
+                    "working_section_id": step.working_section_id,
+                }
+                for step in created_steps
+            ],
+        ),
+    ]
+    readiness_items = [
+        {
+            "client_id": step.client_id,
+            "new_readiness": step.readiness_status.value,
+        }
+        for step in readiness_changed
+    ]
+    if readiness_items:
         pending_events.append(
-            WorkspaceEvent(
-                event_name="task:step-created",
-                client_id=step.client_id,
-                workspace_id=ctx.workspace_id,
-                extra={"working_section_id": step.working_section_id},
-            )
-        )
-    for step in readiness_changed:
-        pending_events.append(
-            WorkspaceEvent(
+            BatchWorkspaceEvent(
                 event_name="task:step-readiness-changed",
-                client_id=step.client_id,
                 workspace_id=ctx.workspace_id,
-                extra={"new_readiness": step.readiness_status.value},
+                items=readiness_items,
             )
         )
     await event_bus.dispatch(pending_events)

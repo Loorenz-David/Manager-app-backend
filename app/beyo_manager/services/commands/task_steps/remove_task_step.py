@@ -20,7 +20,7 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
 def _dedupe_step_ids(step_ids: list[str]) -> list[str]:
@@ -224,22 +224,34 @@ async def _dispatch_remove_step_events(
 ) -> None:
     pending_events: list = [
         build_workspace_event(task, "task:updated"),
-    ]
-    for step in removed_steps:
-        pending_events.append(WorkspaceEvent(
+        BatchWorkspaceEvent(
             event_name="task:step-deleted",
-            client_id=step.client_id,
             workspace_id=ctx.workspace_id,
-            extra={"working_section_id": step.working_section_id},
-        ))
-    for affected_step, old_aff_readiness in readiness_changes:
-        if affected_step.readiness_status != old_aff_readiness:
-            pending_events.append(WorkspaceEvent(
+            items=[
+                {
+                    "client_id": step.client_id,
+                    "working_section_id": step.working_section_id,
+                }
+                for step in removed_steps
+            ],
+        ),
+    ]
+    readiness_items = [
+        {
+            "client_id": affected_step.client_id,
+            "new_readiness": affected_step.readiness_status.value,
+        }
+        for affected_step, old_aff_readiness in readiness_changes
+        if affected_step.readiness_status != old_aff_readiness
+    ]
+    if readiness_items:
+        pending_events.append(
+            BatchWorkspaceEvent(
                 event_name="task:step-readiness-changed",
-                client_id=affected_step.client_id,
                 workspace_id=ctx.workspace_id,
-                extra={"new_readiness": affected_step.readiness_status.value},
-            ))
+                items=readiness_items,
+            )
+        )
     if task.state != old_task_state:
         pending_events.append(
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})

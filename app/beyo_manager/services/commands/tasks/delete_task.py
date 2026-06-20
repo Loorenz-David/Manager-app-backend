@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
+from beyo_manager.domain.notifications.pin_cleanup import cleanup_task_pins
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.tasks.task import Task
@@ -50,6 +51,7 @@ async def delete_task(ctx: ServiceContext) -> dict:
             created_by_id=ctx.user_id,
             username_snapshot=username,
         )
+        await cleanup_task_pins(ctx.session, task.client_id)
 
     await event_bus.dispatch([
         build_workspace_event(task, "task:deleted"),

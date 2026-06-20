@@ -15,11 +15,11 @@ from beyo_manager.domain.schedulers.enums import (
 )
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
-from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.schedulers.delayed_scheduler import DelayedScheduler
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -32,6 +32,7 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
@@ -331,16 +332,14 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             payload=asdict(payload),
         )
 
-        step_pins_result = await ctx.session.execute(
-            select(NotificationPin.user_id).where(
-                NotificationPin.entity_type == "task_step",
-                NotificationPin.entity_client_id == step.client_id,
+        step_pin_user_ids = list(
+            await resolve_task_step_notification_targets(
+                ctx.session,
+                step.client_id,
+                ctx.user_id,
+                {"state": request.new_state.value},
             )
         )
-        step_pin_user_ids = [
-            uid for uid in step_pins_result.scalars().all()
-            if uid != ctx.user_id
-        ]
         if step_pin_user_ids:
             await create_instant_task(
                 session=ctx.session,
@@ -356,13 +355,26 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 )),
             )
 
-    pending_events: list = [
-        build_workspace_event(step, "task:step-state-changed", extra={"new_state": request.new_state.value}),
+    state_changed_items = [
+        {
+            "client_id": step.client_id,
+            "new_state": request.new_state.value,
+        }
     ]
     if auto_paused_step is not None:
-        pending_events.append(
-            build_workspace_event(auto_paused_step, "task:step-state-changed", extra={"new_state": TaskStepStateEnum.PAUSED.value})
+        state_changed_items.append(
+            {
+                "client_id": auto_paused_step.client_id,
+                "new_state": TaskStepStateEnum.PAUSED.value,
+            }
         )
+    pending_events: list = [
+        BatchWorkspaceEvent(
+            event_name="task:step-state-changed",
+            workspace_id=ctx.workspace_id,
+            items=state_changed_items,
+        ),
+    ]
     if task.state != old_task_state:
         pending_events.append(
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})

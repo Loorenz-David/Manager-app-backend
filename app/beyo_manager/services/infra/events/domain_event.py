@@ -10,6 +10,14 @@ class Event:
 
 
 @dataclass(kw_only=True)
+class BatchWorkspaceEvent:
+    """Broadcast a list payload to all users in a workspace room."""
+    event_name: str
+    workspace_id: str
+    items: list[dict]
+
+
+@dataclass(kw_only=True)
 class WorkspaceEvent(Event):
     """Broadcast to all users connected to a workspace room."""
     workspace_id: str

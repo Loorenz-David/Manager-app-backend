@@ -8,11 +8,11 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
+from beyo_manager.domain.items.notification_targets import resolve_upholstery_notification_targets
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
-from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.items.requests import parse_mark_in_use_request
 from beyo_manager.services.commands.items.update_and_delete_item_upholstery import (
     ensure_requirement_actions_are_available,
@@ -70,11 +70,14 @@ async def mark_requirements_in_use(ctx: ServiceContext) -> dict:
             req.in_use_at = now
             req.updated_by_id = ctx.user_id
 
-        target_user_ids = await _resolve_upholstery_audience(
-            session=ctx.session,
-            workspace_id=ctx.workspace_id,
-            item_upholstery_ids=[request.item_upholstery_id],
-            actor_id=ctx.user_id,
+        target_user_ids = list(
+            await resolve_upholstery_notification_targets(
+                ctx.session,
+                ctx.workspace_id,
+                [request.item_upholstery_id],
+                ctx.user_id,
+                {"state": ItemUpholsteryRequirementStateEnum.IN_USE.value},
+            )
         )
         if target_user_ids:
             await create_instant_task(

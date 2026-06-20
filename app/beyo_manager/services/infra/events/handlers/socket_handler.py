@@ -1,6 +1,7 @@
 import logging
 
 from beyo_manager.services.infra.events.domain_event import (
+    BatchWorkspaceEvent,
     ConversationRoomEvent,
     UserEvent,
     WorkspaceEvent,
@@ -9,6 +10,7 @@ from beyo_manager.services.infra.events.realtime_push import (
     push_to_conversation,
     push_to_user,
     push_workspace_batch,
+    push_workspace_event_items,
     push_workspace_refresh,
 )
 
@@ -31,6 +33,14 @@ async def handle(event) -> None:
             event.event_name,
             {"client_id": event.client_id, **event.extra},
         )
+    elif isinstance(event, BatchWorkspaceEvent):
+        logger.info(
+            "[socket_handler] BatchWorkspaceEvent | event=%s room=workspace:%s count=%d",
+            event.event_name,
+            event.workspace_id,
+            len(event.items),
+        )
+        await push_workspace_event_items(event.workspace_id, event.event_name, event.items)
     elif isinstance(event, WorkspaceEvent):
         if "ids" in event.extra:
             logger.info(

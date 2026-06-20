@@ -7,6 +7,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.tasks.task import Task
@@ -14,7 +15,6 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_state_change_message
-from beyo_manager.services.commands.tasks._notification_helpers import _resolve_task_audience
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -70,12 +70,15 @@ async def cancel_task(ctx: ServiceContext) -> dict:
             username_snapshot=username,
         )
 
-        target_user_ids = await _resolve_task_audience(
-            session=ctx.session,
-            workspace_id=ctx.workspace_id,
-            task_client_id=task.client_id,
-            task_created_by_id=task.created_by_id,
-            actor_id=ctx.user_id,
+        target_user_ids = list(
+            await resolve_task_notification_targets(
+                ctx.session,
+                ctx.workspace_id,
+                task.client_id,
+                task.created_by_id,
+                ctx.user_id,
+                {"state": task.state.value},
+            )
         )
         if target_user_ids:
             await create_instant_task(

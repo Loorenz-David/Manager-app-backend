@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
+from beyo_manager.domain.items.notification_targets import resolve_upholstery_notification_targets
 from beyo_manager.domain.upholstery.enums import UpholsteryOrderStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
@@ -15,7 +16,6 @@ from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUph
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.models.tables.upholstery.upholstery_order import UpholsteryOrder
 from beyo_manager.models.tables.upholstery.upholstery_order_history_record import UpholsteryOrderHistoryRecord
-from beyo_manager.services.commands.items._notification_helpers import _resolve_upholstery_audience
 from beyo_manager.services.commands.upholstery._inventory_mutations import confirm_ordered_to_stock
 from beyo_manager.services.commands.upholstery._pooled_requirement_allocation import (
     allocate_pooled_requirements,
@@ -99,11 +99,14 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
             actor_id=ctx.user_id,
         )
         if allocated_item_upholstery_ids:
-            target_user_ids = await _resolve_upholstery_audience(
-                session=ctx.session,
-                workspace_id=ctx.workspace_id,
-                item_upholstery_ids=allocated_item_upholstery_ids,
-                actor_id=ctx.user_id,
+            target_user_ids = list(
+                await resolve_upholstery_notification_targets(
+                    ctx.session,
+                    ctx.workspace_id,
+                    allocated_item_upholstery_ids,
+                    ctx.user_id,
+                    {"state": ItemUpholsteryRequirementStateEnum.AVAILABLE.value},
+                )
             )
             if target_user_ids:
                 await create_instant_task(

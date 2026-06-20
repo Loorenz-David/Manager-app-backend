@@ -11,6 +11,10 @@ async def push_workspace_batch(workspace_id: str, event_name: str, ids: list) ->
     )
 
 
+async def push_workspace_event_items(workspace_id: str, event_name: str, items: list[dict]) -> None:
+    await manager.broadcast_items_to_room(manager.workspace_room(workspace_id), event_name, items)
+
+
 async def push_to_conversation(conversation_id: str, event_name: str, payload: dict) -> None:
     await manager.broadcast_to_room(
         manager.conversation_room(conversation_id), event_name, payload

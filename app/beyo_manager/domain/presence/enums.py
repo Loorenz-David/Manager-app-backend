@@ -6,3 +6,6 @@ class EntityType(StrEnum):
     CASE = "case"
     CONVERSATION_LIST = "conversation_list"
     CONVERSATION = "conversation"
+    TASK = "task"
+    TASK_STEP = "task_step"
+    ITEM_UPHOLSTERY = "item_upholstery"

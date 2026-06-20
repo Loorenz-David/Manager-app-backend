@@ -45,6 +45,7 @@ from beyo_manager.services.commands.task_steps.remove_task_step import (
 )
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
 from beyo_manager.services.queries.tasks.tasks import get_task, list_tasks
 from beyo_manager.services.run_service import run_service
@@ -451,6 +452,26 @@ async def route_delete_note(
         session=session,
     )
     outcome = await run_service(delete_task_note, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{task_id}/steps")
+async def route_list_task_steps(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id},
+        query_params={"limit": limit, "offset": offset},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_task_steps, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
