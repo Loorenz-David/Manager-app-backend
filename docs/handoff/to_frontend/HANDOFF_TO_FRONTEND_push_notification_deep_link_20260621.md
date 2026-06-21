@@ -19,7 +19,7 @@
 1. In the service worker `push` event handler, read `event.data.json()` and extract `data.entity_type` and `data.entity_client_id` to determine the deep-link target.
 2. When the user taps the notification, call `clients.openWindow(url)` with the resolved URL, or post a message to the active client to navigate in-app.
 3. After the notification is tapped (or opened from the in-app notification list), call `POST /api/v1/notifications/mark-read` with `notification_client_ids: [data.notification_client_id]` to mark it read and update the badge count.
-4. For `entity_type: "task_step"` — the step ID alone is not sufficient to build the URL; fetch the step record first to obtain its parent `task_id` (see routing table below).
+4. For `entity_type: "task_step"` — use `data.task_client_id` as the parent task ID when building the deep link; no extra fetch is required from the push payload.
 5. For the 4 bulk upholstery notification types (`entity_type: null`) — there is no single deep-link target; navigate to the upholstery requirements list view instead.
 
 ---
@@ -35,7 +35,8 @@ The JSON delivered to the service worker `push` event is:
   "data": {
     "notification_client_id": "ntf_...",
     "entity_type":            "<string | null>",
-    "entity_client_id":       "<string | null>"
+    "entity_client_id":       "<string | null>",
+    "task_client_id":         "<string | null>"
   }
 }
 ```
@@ -49,6 +50,7 @@ The JSON delivered to the service worker `push` event is:
 | `data.notification_client_id` | `string` | yes | ID of the persisted `Notification` row — use to mark read |
 | `data.entity_type` | `string \| null` | yes | Routing discriminant — see table below |
 | `data.entity_client_id` | `string \| null` | yes | ID of the entity to open — null for bulk events |
+| `data.task_client_id` | `string \| null` | yes | Parent task ID for step notifications; null for non-task-step events |
 
 ---
 
@@ -59,20 +61,25 @@ Route on `data.entity_type`. When `entity_type` is `null` fall through to the de
 | `entity_type` | `entity_client_id` prefix | Triggered by | Recommended route |
 |---|---|---|---|
 | `"task"` | `tsk_` | Task resolved / cancelled / failed | Task detail page for `entity_client_id` |
-| `"task_step"` | `tss_` | Step state changed / step assigned | Step detail — requires parent `task_id` (see note A) |
+| `"task_step"` | `tss_` | Step state changed / step assigned | Step detail using `task_client_id` + `entity_client_id` |
 | `"case"` | `ca_` | New case message | Case conversation page for `entity_client_id` |
 | `"item_upholstery"` | `iup_` | Requirements completed / in use | Item upholstery detail for `entity_client_id` |
 | `null` | — | Requirements ordered / resolved / available (bulk) | Upholstery requirements list (see note B) |
 
 ### Note A — `task_step` navigation
 
-The step `entity_client_id` (`tss_...`) alone does not contain the parent task. The frontend must resolve the task before navigating:
+For step notifications, the push payload now includes both IDs needed for navigation:
 
-**Option 1 — fetch on tap (recommended):**
-Call `GET /api/v1/tasks/{task_id}/steps` or a step-detail endpoint using the step `client_id` to retrieve the parent `task_id`, then navigate to the task page scrolled to or highlighting that step.
+```json
+{
+  "entity_type": "task_step",
+  "entity_client_id": "tss_...",
+  "task_client_id": "tsk_..."
+}
+```
 
-**Option 2 — navigate to step directly:**
-If the app has a standalone step view accessible by step `client_id` without the task context, link directly.
+Recommended behavior:
+Use `task_client_id` to open the task detail page and `entity_client_id` to scroll to, focus, or highlight the specific step.
 
 ### Note B — bulk upholstery notifications (`entity_type: null`)
 
@@ -213,9 +220,9 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const { entity_type, entity_client_id, notification_client_id } = event.notification.data;
+  const { entity_type, entity_client_id, task_client_id, notification_client_id } = event.notification.data;
 
-  const url = resolveDeepLink(entity_type, entity_client_id); // see routing table above
+  const url = resolveDeepLink(entity_type, entity_client_id, task_client_id); // see routing table above
 
   event.waitUntil(
     clients.matchAll({ type: 'window' }).then(windowClients => {

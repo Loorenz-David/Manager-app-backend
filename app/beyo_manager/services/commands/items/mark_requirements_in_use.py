@@ -87,7 +87,7 @@ async def mark_requirements_in_use(ctx: ServiceContext) -> dict:
                     notification_type="upholstery_requirement_in_use",
                     user_ids=target_user_ids,
                     title="Requirements in use",
-                    body="Upholstery requirements are now in use.",
+                    body=f'{iup.name or "Upholstery"} was marked in use for {len(requirements)} item(s)',
                     entity_type="item_upholstery",
                     entity_client_id=request.item_upholstery_id,
                     exclude_viewing=[],

@@ -93,7 +93,7 @@ async def mark_requirements_ordered(ctx: ServiceContext) -> dict:
                         notification_type="upholstery_requirement_ordered",
                         user_ids=target_user_ids,
                         title="Requirements ordered",
-                        body="Upholstery requirements have been ordered.",
+                        body=f'{len(resolved_ids_for_notif)} item(s) with upholstery requirements ordered',
                         entity_type=None,
                         entity_client_id=None,
                         exclude_viewing=[],

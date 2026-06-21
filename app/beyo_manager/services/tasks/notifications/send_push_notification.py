@@ -28,6 +28,7 @@ async def handle_send_push_notification(payload: dict, task_id: str) -> None:
                 "notification_client_id": payload.get("notification_client_id"),
                 "entity_type":            payload.get("entity_type"),
                 "entity_client_id":       payload.get("entity_client_id"),
+                "task_client_id":         payload.get("task_client_id"),
             },
         }
 

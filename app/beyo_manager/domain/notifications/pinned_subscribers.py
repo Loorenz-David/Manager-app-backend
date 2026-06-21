@@ -1,12 +1,8 @@
-import logging
-
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.notifications.pin_conditions import EventFacts, pin_conditions_match
 from beyo_manager.models.tables.notifications.notification_pin import NotificationPin
-
-_logger = logging.getLogger(__name__)
 
 
 async def resolve_pinned_subscribers(
@@ -29,21 +25,11 @@ async def resolve_pinned_subscribers(
         )
     ).all()
 
-    _logger.info(
-        "PIN_LOOKUP entity_type=%s entity_client_id=%s event_facts=%s pins_found=%d",
-        entity_type, entity_client_id, event_facts, len(rows),
-    )
-
     matched_user_ids: set[str] = set()
     fire_once_pin_ids: list[str] = []
 
     for pin_id, user_id, conditions, fire_once in rows:
-        matched = pin_conditions_match(conditions, event_facts)
-        _logger.info(
-            "PIN_MATCH pin_id=%s user_id=%s conditions=%s matched=%s",
-            pin_id, user_id, conditions, matched,
-        )
-        if matched:
+        if pin_conditions_match(conditions, event_facts):
             matched_user_ids.add(user_id)
             if fire_once:
                 fire_once_pin_ids.append(pin_id)
@@ -53,8 +39,4 @@ async def resolve_pinned_subscribers(
             delete(NotificationPin).where(NotificationPin.client_id.in_(fire_once_pin_ids))
         )
 
-    _logger.info(
-        "PIN_LOOKUP result entity_type=%s entity_client_id=%s matched_users=%s",
-        entity_type, entity_client_id, list(matched_user_ids),
-    )
     return matched_user_ids

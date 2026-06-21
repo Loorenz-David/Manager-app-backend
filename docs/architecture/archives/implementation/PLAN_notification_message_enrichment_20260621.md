@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_notification_message_enrichment_20260621`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `codex`
 - Created at (UTC): `2026-06-21T00:00:00Z`
-- Last updated at (UTC): `2026-06-21T13:00:00Z`
+- Last updated at (UTC): `2026-06-21T15:00:49Z`
 - Related issue/ticket: —
 - Intention plan: —
 
@@ -24,11 +24,11 @@
 
 - **In scope:**
   - New file: `domain/tasks/notification_labels.py` — two pure async helpers that fetch item context for a task.
-  - Modify 12 command files — only the `title=` and `body=` string literals inside existing `NotificationPayload(...)` calls:
+  - Modify 12 command files — `title=` and `body=` string literals inside existing `NotificationPayload(...)` calls, plus one new `CREATE_NOTIFICATIONS` block in `transition_step_state.py`:
     - `services/commands/tasks/resolve_task.py`
     - `services/commands/tasks/cancel_task.py`
     - `services/commands/tasks/fail_task.py`
-    - `services/commands/task_steps/transition_step_state.py`
+    - `services/commands/task_steps/transition_step_state.py` ← **two changes**: Step 4 (enrich step notification) + Step 4a (add task-state notification for indirect transitions)
     - `services/commands/task_steps/assign_worker_to_step.py`
     - `services/commands/items/mark_requirements_completed.py`
     - `services/commands/items/mark_requirements_in_use.py`
@@ -45,6 +45,7 @@
   - `task.task_scalar_id` is guaranteed non-null (DB column `nullable=False`).
   - `username` from `ctx.identity.get("username")` can be `None` for system-initiated actions; the body must handle that case gracefully with a fallback string.
   - In `transition_step_state.py`, the `task` object is already loaded in scope (line 120). No extra task query is needed — only the item label query is added.
+  - `old_task_state` is captured at line 82 (`old_task_state = None`) and assigned at line 123 (`old_task_state = task.state`) before any state mutations. It is non-`None` at the notification site because the task must be loaded for the command to proceed. The guard `old_task_state is not None and task.state != old_task_state` is therefore only defensive for the `None` initializer, but makes the intent explicit and mirrors the existing socket-event check at line 378.
   - In `assign_worker_to_step.py`, the `task` object is _not_ loaded. A single LEFT JOIN query fetching both `task_scalar_id` and item label is used instead of two separate queries.
   - `expire_on_commit=False` is set on the session factory — all ORM attributes accessed after the `maybe_begin` block are safe. The new label queries are placed _inside_ the block so this assumption is not exercised for them.
   - For upholstery single-entity commands (`mark_requirements_completed`, `mark_requirements_in_use`): the `iup` object is already loaded and `iup.name` is `str | None`. The `requirements` list is already in scope and `len(requirements)` is always > 0 (the command raises `ValidationError` before this point if the list is empty).
@@ -66,9 +67,12 @@ _(none — all design decisions resolved below)_
 5. After `mark_requirements_in_use`, same structure with "in use" phrasing.
 6. After `mark_requirements_ordered`, `resolve_requirements_after_stock`, `create_upholstery_order`, `receive_upholstery_order` — the body contains the count of `item_upholstery_ids` affected (always > 0) and the action verb.
 7. After `send_message`, the push notification `title` is `"Message from {username} for {type_label}"` when `type_label` is set, or `"Message from {username}"` when it is null. The `body` remains `(request.plain_text or "")[:80]` — unchanged.
-8. All 12 modified files remain functionally identical in every respect except the `title=` and `body=` arguments passed to `NotificationPayload(...)`.
-9. No change to `entity_type`, `entity_client_id`, `exclude_viewing`, `notification_type`, or `user_ids` in any file.
+8. All 12 modified files remain functionally identical in every respect except the `title=` and `body=` arguments passed to `NotificationPayload(...)`, with the sole addition of one new `CREATE_NOTIFICATIONS` block in `transition_step_state.py` (Step 4a).
+9. No change to `entity_type`, `entity_client_id`, `exclude_viewing`, `notification_type`, or `user_ids` in any existing `NotificationPayload(...)` call.
 10. The new `notification_labels.py` file has no side effects — it is read-only (SELECT only, no session mutations).
+11. After a step transition that advances the task from `ASSIGNED` → `WORKING`, a `CREATE_NOTIFICATIONS` task is enqueued with `notification_type="task_state_changed"`, `entity_type="task"`, `entity_client_id=task.client_id`, for all users returned by `resolve_task_notification_targets` with `event_facts={"state": "working"}`, excluding the actor.
+12. After a step transition that advances the task to `READY` (all steps terminal), the same pattern fires with `event_facts={"state": "ready"}`.
+13. No task notification is enqueued when the task state does not change as a side effect of the step transition (`old_task_state == task.state`).
 
 ## Contracts and skills
 
@@ -316,6 +320,83 @@ No other lines change. The label query executes only when `step_pin_user_ids` is
 >                 )),
 >             )
 > ```
+
+---
+
+### Step 4a — Task state notifications in `transition_step_state.py` (indirect-transition path)
+
+**File:** `backend/app/beyo_manager/services/commands/task_steps/transition_step_state.py`
+
+**Context:** Step 4 enriches the existing step-pin notification. This step adds an entirely new `CREATE_NOTIFICATIONS` block that fires when a step transition causes the *parent task* to change state as a side effect — specifically:
+- Step enters `WORKING` while task is `ASSIGNED` → task advances to `WORKING` (lines 289–292)
+- Step enters a terminal state and all steps are terminal → task advances to `READY` (lines 294–307)
+
+Both paths update `task.state` in-place but currently never enqueue a push notification. The socket event at lines 378–381 (`task:state-changed`) only reaches connected clients; offline users with a task PIN for state `working` or `ready` are never notified.
+
+**Amends Step 4 placement:** Step 4's preferred placement puts `item_label` and `item_suffix` inside `if step_pin_user_ids:`. This step requires `item_suffix` for the task notification as well. **Override** that guidance: move the `item_label` query and `item_suffix` construction **before** the `if step_pin_user_ids:` guard (immediately after `resolve_task_step_notification_targets`). The label query runs in the request path against indexed columns and is negligible cost; the simplicity of sharing `item_suffix` across both blocks outweighs the marginal cost of the extra SELECT in the no-step-subscriber case.
+
+**Add import** (alongside the existing `resolve_task_step_notification_targets` import):
+```python
+from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
+```
+
+**Revised block** (replacing lines 335–356 from current code and appending the task-notification block, all still inside `async with maybe_begin(ctx.session):`):
+
+```python
+        step_pin_user_ids = list(
+            await resolve_task_step_notification_targets(
+                ctx.session,
+                step.client_id,
+                ctx.user_id,
+                {"state": request.new_state.value},
+            )
+        )
+        item_label = await resolve_item_label_for_task(ctx.session, task.client_id)
+        item_suffix = f" · {item_label}" if item_label else ""
+        if step_pin_user_ids:
+            await create_instant_task(
+                session=ctx.session,
+                task_type=TaskType.CREATE_NOTIFICATIONS,
+                payload=asdict(NotificationPayload(
+                    notification_type="task_step_state_changed",
+                    user_ids=step_pin_user_ids,
+                    title="Step state changed",
+                    body=f'"{step.working_section_name_snapshot or "step"}" · task #{task.task_scalar_id}{item_suffix}',
+                    entity_type="task_step",
+                    entity_client_id=step.client_id,
+                    exclude_viewing=[{"entity_type": "task_step", "entity_client_id": step.client_id}],
+                )),
+            )
+
+        if old_task_state is not None and task.state != old_task_state:
+            actor = ctx.identity.get("username") or "someone"
+            task_pin_user_ids = list(
+                await resolve_task_notification_targets(
+                    ctx.session,
+                    ctx.workspace_id,
+                    task.client_id,
+                    task.created_by_id,
+                    ctx.user_id,
+                    {"state": task.state.value},
+                )
+            )
+            if task_pin_user_ids:
+                await create_instant_task(
+                    session=ctx.session,
+                    task_type=TaskType.CREATE_NOTIFICATIONS,
+                    payload=asdict(NotificationPayload(
+                        notification_type="task_state_changed",
+                        user_ids=task_pin_user_ids,
+                        title=f"Task #{task.task_scalar_id} {task.state.value}",
+                        body=f"#{task.task_scalar_id}{item_suffix} · by {actor}",
+                        entity_type="task",
+                        entity_client_id=task.client_id,
+                        exclude_viewing=[{"entity_type": "task", "entity_client_id": task.client_id}],
+                    )),
+                )
+```
+
+The rest of the function from line 358 onward — `state_changed_items`, `pending_events`, `event_bus.dispatch` — remains **unchanged**. The socket event at line 378–381 continues to fire for connected clients; the new block above handles push for offline subscribers.
 
 ---
 
@@ -577,6 +658,9 @@ As new notification call sites are added, extend this plan with additional steps
 - **Risk:** `resolve_item_label_for_task` adds one SELECT per task-state notification; `resolve_scalar_and_item_label` adds one LEFT JOIN SELECT per step assignment.
   **Mitigation:** Both queries hit indexed columns (`task_items.task_id`, `task_items.role`, `task_items.removed_at`, `items.client_id`). The audience for these notifications is small (< 10 users typically) and these queries run in the background worker, not the request path.
 
+- **Risk:** `resolve_task_notification_targets` (Step 4a) runs only when `task.state != old_task_state`, but `item_label` is now queried unconditionally (before `if step_pin_user_ids:`). In the common case where neither step-pin nor task-pin subscribers exist, one extra SELECT runs that previously did not.
+  **Mitigation:** The SELECT hits `task_items.task_id + role + removed_at` (indexed) and is bounded by the partial unique index on primary active items — effectively a single-row lookup. The transition command already executes several indexed queries; this adds negligible latency.
+
 - **Risk:** `step.working_section_name_snapshot` can be `None` if the section was soft-deleted after the step was created.
   **Mitigation:** In Python, `f'"{None}"'` produces `"None"` — which is ugly. Guard with `step.working_section_name_snapshot or "step"` in the body f-string if Codex judges the field may realistically be null. The model column is `nullable=True`.
 
@@ -601,7 +685,11 @@ As new notification call sites are added, extend this plan with additional steps
 - `resolve_task` smoke test (no item): resolve a task with no item attached → `body` is `"#42 · by john"` (no item suffix).
 - `cancel_task` smoke test: same pattern with `"cancelled"`.
 - `fail_task` smoke test: same pattern with `"failed"`.
-- `transition_step_state` smoke test: transition a pinned step → `body` contains `working_section_name_snapshot` and `task_scalar_id`.
+- `transition_step_state` smoke test (step PIN): transition a step that a user has pinned → `body` is `'"Section name" · task #42 · A-1234'`.
+- `transition_step_state` smoke test (task ASSIGNED→WORKING, task PIN): worker "john" starts a step on an ASSIGNED task → a second `CREATE_NOTIFICATIONS` task is enqueued with `notification_type="task_state_changed"`, `title="Task #42 working"`, `body="#42 · A-1234 · by john"`, for all task-level PIN subscribers (state condition `working`) excluding the actor.
+- `transition_step_state` smoke test (all steps terminal → READY, task PIN): last step completes on a task that has a PIN subscriber for state `ready` → `CREATE_NOTIFICATIONS` enqueued with `title="Task #42 ready"`.
+- `transition_step_state` smoke test (no task state change): transition a step that does NOT change task state (e.g., WORKING→PAUSED on an already-WORKING task) → no task-level `CREATE_NOTIFICATIONS` enqueued; only the step-pin notification fires (if there are step subscribers).
+- `transition_step_state` smoke test (step PIN + task PIN, shared item_suffix): both a step subscriber and a task subscriber exist → both `CREATE_NOTIFICATIONS` tasks use the same `item_suffix` computed from one SELECT.
 - `assign_worker_to_step` smoke test: assign a worker to a step on task #7 (item SKU "SKU-99", no article_number) → `body` is `'"Upholstery" · #7 · SKU-99'`.
 - `assign_worker_to_step` self-assign smoke test: actor assigns themselves → no `CREATE_NOTIFICATIONS` task created, no label query executed.
 - `mark_requirements_completed` smoke test: complete requirements for an `ItemUpholstery` named "Black Velvet" with 2 active requirements → `body` is `"Black Velvet was completed for 2 item(s)"`.

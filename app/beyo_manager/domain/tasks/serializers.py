@@ -121,6 +121,15 @@ def serialize_step(step: TaskStep) -> dict:
         "assigned_worker_display_name_snapshot": step.assigned_worker_display_name_snapshot,
         "created_at": step.created_at.isoformat() if step.created_at else None,
         "closed_at": step.closed_at.isoformat() if step.closed_at else None,
+        "total_working_seconds": step.total_working_seconds,
+        "total_pause_seconds": step.total_pause_seconds,
+        "total_ended_shift_seconds": step.total_ended_shift_seconds,
+        "total_working_count": step.total_working_count,
+        "total_pause_count": step.total_pause_count,
+        "total_ended_shift_count": step.total_ended_shift_count,
+        "total_issues_count": step.total_issues_count,
+        "total_issues_resolved_count": step.total_issues_resolved_count,
+        "total_cost_minor": step.total_cost_minor,
     }
 
 

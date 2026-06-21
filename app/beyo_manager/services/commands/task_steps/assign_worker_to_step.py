@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
+from beyo_manager.domain.tasks.notification_labels import resolve_scalar_and_item_label
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_assignment_record import TaskStepAssignmentRecord
@@ -121,6 +122,9 @@ async def assign_worker_to_step(ctx: ServiceContext) -> dict:
         )
 
         if request.worker_id != ctx.user_id:
+            scalar_id, item_label = await resolve_scalar_and_item_label(ctx.session, step.task_id)
+            item_suffix = f" · {item_label}" if item_label else ""
+            task_ref = f"#{scalar_id}" if scalar_id is not None else "task"
             await create_instant_task(
                 session=ctx.session,
                 task_type=TaskType.CREATE_NOTIFICATIONS,
@@ -128,9 +132,10 @@ async def assign_worker_to_step(ctx: ServiceContext) -> dict:
                     notification_type="task_step_assigned",
                     user_ids=[request.worker_id],
                     title="Step assigned to you",
-                    body="You have been assigned to a step on a task.",
+                    body=f'"{step.working_section_name_snapshot or "step"}" · {task_ref}{item_suffix}',
                     entity_type="task_step",
                     entity_client_id=step.client_id,
+                    task_client_id=step.task_id,
                     exclude_viewing=[],
                 )),
             )

@@ -114,7 +114,7 @@ async def resolve_requirements_after_stock(ctx: ServiceContext) -> dict:
                         notification_type="upholstery_requirement_resolved",
                         user_ids=target_user_ids,
                         title="Requirements resolved",
-                        body="Upholstery requirements have been resolved from stock.",
+                        body=f'{len(resolved_ids_for_notif)} item(s) with upholstery requirements resolved from stock',
                         entity_type=None,
                         entity_client_id=None,
                         exclude_viewing=[],

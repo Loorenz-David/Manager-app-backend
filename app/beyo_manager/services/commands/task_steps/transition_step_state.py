@@ -8,6 +8,7 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
+from beyo_manager.domain.task_steps.aggregate_metrics import increment_step_time_metrics
 from beyo_manager.domain.schedulers.enums import (
     DelayedSchedulerTypeEnum,
     SchedulerOriginSourceEnum,
@@ -17,6 +18,8 @@ from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMI
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
+from beyo_manager.domain.tasks.notification_labels import resolve_item_label_for_task
+from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
@@ -225,6 +228,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
 
                 auto_paused_step = conflicting_step
 
+                if not conflicting_record.recorded_time_marked_wrong:
+                    auto_pause_interval = max(0, int((now - conflicting_closing_entered_at).total_seconds()))
+                    increment_step_time_metrics(conflicting_step, TaskStepStateEnum.WORKING, auto_pause_interval)
+
                 await create_instant_task(
                     session=ctx.session,
                     task_type=TaskType.PROCESS_STEP_TRANSITION,
@@ -280,6 +287,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         step.latest_state_record_id = new_record.client_id
         step.updated_at = now
         step.updated_by_id = ctx.user_id
+
+        if not closing_record.recorded_time_marked_wrong:
+            interval_seconds = max(0, int((now - closing_entered_at).total_seconds()))
+            increment_step_time_metrics(step, closing_state, interval_seconds)
 
         # If entering a terminal state, set closed_at
         if request.new_state in TERMINAL_STEP_STATES:
@@ -340,6 +351,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 {"state": request.new_state.value},
             )
         )
+        item_label = await resolve_item_label_for_task(ctx.session, task.client_id)
+        item_suffix = f" · {item_label}" if item_label else ""
         if step_pin_user_ids:
             await create_instant_task(
                 session=ctx.session,
@@ -348,12 +361,39 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                     notification_type="task_step_state_changed",
                     user_ids=step_pin_user_ids,
                     title="Step state changed",
-                    body="A step you are following has changed state.",
+                    body=f'"{step.working_section_name_snapshot or "step"}" · task #{task.task_scalar_id}{item_suffix}',
                     entity_type="task_step",
                     entity_client_id=step.client_id,
+                    task_client_id=task.client_id,
                     exclude_viewing=[{"entity_type": "task_step", "entity_client_id": step.client_id}],
                 )),
             )
+        if old_task_state is not None and task.state != old_task_state:
+            actor = ctx.identity.get("username") or "someone"
+            task_pin_user_ids = list(
+                await resolve_task_notification_targets(
+                    ctx.session,
+                    ctx.workspace_id,
+                    task.client_id,
+                    task.created_by_id,
+                    ctx.user_id,
+                    {"state": task.state.value},
+                )
+            )
+            if task_pin_user_ids:
+                await create_instant_task(
+                    session=ctx.session,
+                    task_type=TaskType.CREATE_NOTIFICATIONS,
+                    payload=asdict(NotificationPayload(
+                        notification_type="task_state_changed",
+                        user_ids=task_pin_user_ids,
+                        title=f"Task #{task.task_scalar_id} {task.state.value}",
+                        body=f"#{task.task_scalar_id}{item_suffix} · by {actor}",
+                        entity_type="task",
+                        entity_client_id=task.client_id,
+                        exclude_viewing=[{"entity_type": "task", "entity_client_id": task.client_id}],
+                    )),
+                )
 
     state_changed_items = [
         {

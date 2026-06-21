@@ -9,6 +9,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.notifications.enums import NotificationType
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_conversation import CaseConversation
 from beyo_manager.models.tables.cases.case_participant import CaseParticipant
 from beyo_manager.services.commands.cases.requests import parse_send_message_request
@@ -43,6 +44,9 @@ async def send_message(ctx: ServiceContext) -> dict:
         )
         case_client_id = conversation.case_id
         conversation_client_id = conversation.client_id
+        case_type_label = await ctx.session.scalar(
+            select(Case.type_label).where(Case.client_id == case_client_id)
+        )
 
         participant_result = await ctx.session.execute(
             select(CaseParticipant.user_id, CaseParticipant.last_read_message_seq).where(
@@ -64,6 +68,12 @@ async def send_message(ctx: ServiceContext) -> dict:
             unread_by_user,
         )
         if notify_ids:
+            sender_name = ctx.identity.get("username") or "someone"
+            title = (
+                f"Message from {sender_name} for {case_type_label}"
+                if case_type_label
+                else f"Message from {sender_name}"
+            )
             await create_instant_task(
                 session=ctx.session,
                 task_type=TaskType.CREATE_NOTIFICATIONS,
@@ -71,7 +81,7 @@ async def send_message(ctx: ServiceContext) -> dict:
                     NotificationPayload(
                         notification_type=NotificationType.CASE_MESSAGE,
                         user_ids=notify_ids,
-                        title="New message",
+                        title=title,
                         body=(request.plain_text or "")[:80],
                         entity_type="case",
                         entity_client_id=case_client_id,

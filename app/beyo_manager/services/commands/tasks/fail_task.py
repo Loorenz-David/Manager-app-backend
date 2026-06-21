@@ -7,6 +7,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.tasks.notification_labels import resolve_item_label_for_task
 from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
@@ -81,14 +82,17 @@ async def fail_task(ctx: ServiceContext) -> dict:
             )
         )
         if target_user_ids:
+            item_label = await resolve_item_label_for_task(ctx.session, task.client_id)
+            actor = username or "someone"
+            item_suffix = f" · {item_label}" if item_label else ""
             await create_instant_task(
                 session=ctx.session,
                 task_type=TaskType.CREATE_NOTIFICATIONS,
                 payload=asdict(NotificationPayload(
                     notification_type="task_state_changed",
                     user_ids=target_user_ids,
-                    title="Task failed",
-                    body="A task has been failed.",
+                    title=f"Task #{task.task_scalar_id} failed",
+                    body=f"#{task.task_scalar_id}{item_suffix} · by {actor}",
                     entity_type="task",
                     entity_client_id=task.client_id,
                     exclude_viewing=[{"entity_type": "task", "entity_client_id": task.client_id}],

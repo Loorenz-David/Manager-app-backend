@@ -207,6 +207,7 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                             body="A step you are following has changed state.",
                             entity_type="task_step",
                             entity_client_id=step.client_id,
+                            task_client_id=task.client_id,
                             exclude_viewing=[
                                 {"entity_type": "task_step", "entity_client_id": step.client_id}
                             ],

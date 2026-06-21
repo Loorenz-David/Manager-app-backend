@@ -18,6 +18,7 @@ async def handle_create_notifications(payload: dict, task_id: str) -> None:
     body              = payload["body"]
     entity_type       = payload.get("entity_type")
     entity_client_id  = payload.get("entity_client_id")
+    task_client_id    = payload.get("task_client_id")
     exclude_viewing   = payload.get("exclude_viewing", [])
 
     # Exclude users currently viewing the entity contexts
@@ -70,6 +71,7 @@ async def handle_create_notifications(payload: dict, task_id: str) -> None:
                     "body":                   body,
                     "entity_type":            entity_type,
                     "entity_client_id":       entity_client_id,
+                    "task_client_id":         task_client_id,
                 },
             )
 

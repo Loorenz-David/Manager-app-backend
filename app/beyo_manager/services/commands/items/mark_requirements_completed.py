@@ -104,7 +104,7 @@ async def mark_requirements_completed(ctx: ServiceContext) -> dict:
                     notification_type="upholstery_requirement_completed",
                     user_ids=target_user_ids,
                     title="Requirements completed",
-                    body="Upholstery requirements have been marked as completed.",
+                    body=f'{iup.name or "Upholstery"} was completed for {len(requirements)} item(s)',
                     entity_type="item_upholstery",
                     entity_client_id=request.item_upholstery_id,
                     exclude_viewing=[],

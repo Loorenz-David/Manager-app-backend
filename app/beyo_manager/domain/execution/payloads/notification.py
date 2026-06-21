@@ -10,4 +10,5 @@ class NotificationPayload:
     body:              str
     entity_type:       str | None = None
     entity_client_id:  str | None = None
+    task_client_id:    str | None = None
     exclude_viewing:   list[dict] | None = None
