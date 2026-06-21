@@ -1,6 +1,9 @@
+import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from decimal import Decimal
+
+_logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,6 +101,10 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
             priority_item_upholstery_ids=request.priority_item_upholstery_ids,
             actor_id=ctx.user_id,
         )
+        _logger.info(
+            "RECEIVE_ORDER allocated inventory_id=%s item_upholstery_ids=%s",
+            order.upholstery_inventory_id, allocated_item_upholstery_ids,
+        )
         if allocated_item_upholstery_ids:
             target_user_ids = list(
                 await resolve_upholstery_notification_targets(
@@ -108,6 +115,7 @@ async def receive_upholstery_order(ctx: ServiceContext) -> dict:
                     {"state": ItemUpholsteryRequirementStateEnum.AVAILABLE.value},
                 )
             )
+            _logger.info("RECEIVE_ORDER notification target_user_ids=%s", target_user_ids)
             if target_user_ids:
                 await create_instant_task(
                     session=ctx.session,
