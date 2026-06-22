@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import and_, distinct, func, or_, select
 
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery_category
 from beyo_manager.errors.not_found import NotFound
@@ -22,7 +22,30 @@ async def list_upholstery_categories(ctx: ServiceContext) -> dict:
     )
 
     if q:
-        stmt = stmt.where(UpholsteryCategory.name.ilike(f"%{q}%"))
+        q_like = f"%{q}%"
+        q_subq = (
+            select(distinct(UpholsteryCategory.client_id))
+            .select_from(UpholsteryCategory)
+            .join(
+                Upholstery,
+                and_(
+                    Upholstery.upholstery_category_id == UpholsteryCategory.client_id,
+                    Upholstery.workspace_id == ctx.workspace_id,
+                    Upholstery.is_deleted.is_(False),
+                ),
+                isouter=True,
+            )
+            .where(
+                UpholsteryCategory.workspace_id == ctx.workspace_id,
+                UpholsteryCategory.is_deleted.is_(False),
+                or_(
+                    UpholsteryCategory.name.ilike(q_like),
+                    Upholstery.name.ilike(q_like),
+                    Upholstery.code.ilike(q_like),
+                ),
+            )
+        )
+        stmt = stmt.where(UpholsteryCategory.client_id.in_(q_subq))
 
     if favorite_raw is not None:
         favorite = str(favorite_raw).strip().lower() == "true"
