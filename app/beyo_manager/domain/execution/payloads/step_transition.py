@@ -24,3 +24,4 @@ class StepTransitionPayload:
     entered_at: str             # ISO 8601 string of the closing record's entered_at
     exited_at: str              # ISO 8601 string of the closing record's exited_at (now)
     step_task_id: str           # same as task_id — included for worker convenience
+    closing_record_marked_wrong: bool = False  # True when recorded_time_marked_wrong was set on the closing record

@@ -14,6 +14,17 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
+def _apply_inaccurate_time_flag(
+    record: StepStateRecord,
+    step: TaskStep,
+    now: datetime,
+) -> None:
+    record.recorded_time_marked_wrong = True
+    step.taken_from_average = True
+    record.updated_at = now
+    step.updated_at = now
+
+
 async def mark_step_time_inaccurate(ctx: ServiceContext) -> dict:
     """Mark a step state record as inaccurate (recorded_time_marked_wrong = True)."""
     request = parse_mark_step_time_inaccurate_request(ctx.incoming_data)
@@ -43,10 +54,8 @@ async def mark_step_time_inaccurate(ctx: ServiceContext) -> dict:
         if step is None:
             raise NotFound("Task step not found.")
 
-        record.recorded_time_marked_wrong = True
-        step.taken_from_average = True
-        record.updated_at = datetime.now(timezone.utc)
-        step.updated_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        _apply_inaccurate_time_flag(record, step, now)
 
     await event_bus.dispatch([
         WorkspaceEvent(

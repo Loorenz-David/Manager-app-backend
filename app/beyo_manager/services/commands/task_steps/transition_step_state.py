@@ -14,7 +14,7 @@ from beyo_manager.domain.schedulers.enums import (
     SchedulerOriginSourceEnum,
     SchedulerStateEnum,
 )
-from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES, TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
@@ -30,6 +30,9 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
+from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
+    _apply_inaccurate_time_flag,
+)
 from beyo_manager.services.commands.task_steps.requests import parse_transition_step_state_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -250,6 +253,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                         entered_at=conflicting_closing_entered_at.isoformat(),
                         exited_at=now.isoformat(),
                         step_task_id=conflicting_step.task_id,
+                        closing_record_marked_wrong=conflicting_record.recorded_time_marked_wrong,
                     )),
                 )
 
@@ -268,6 +272,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         closing_state = closing_record.state  # save before flush
         closing_entered_at = closing_record.entered_at
 
+        # 5b. Optionally mark the closing record as inaccurate — only meaningful for time-bearing states.
+        if request.mark_closing_record_inaccurate and closing_state in TIME_BEARING_STATES:
+            _apply_inaccurate_time_flag(closing_record, step, now)
+
         # 6. Open new StepStateRecord
         new_record = StepStateRecord(
             workspace_id=ctx.workspace_id,
@@ -282,7 +290,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         ctx.session.add(new_record)
         await ctx.session.flush()  # assign new_record.client_id
 
-        # 6. Update step state and latest pointer (circular FK — must be in same transaction)
+        # 6b. Update step state and latest pointer (circular FK — must be in same transaction)
         step.state = request.new_state
         step.latest_state_record_id = new_record.client_id
         step.updated_at = now
@@ -336,6 +344,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             entered_at=closing_entered_at.isoformat(),
             exited_at=now.isoformat(),
             step_task_id=task.client_id,
+            closing_record_marked_wrong=closing_record.recorded_time_marked_wrong,
         )
         await create_instant_task(
             session=ctx.session,

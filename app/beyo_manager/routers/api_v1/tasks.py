@@ -168,6 +168,7 @@ class _TransitionStepBody(BaseModel):
     credited_user_id: str | None = None
     reason: StepEventReasonEnum | None = None
     description: str | None = None
+    mark_closing_record_inaccurate: bool = False
 
 
 class _MarkStepTimeInaccurateBody(BaseModel):
