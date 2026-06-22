@@ -20,6 +20,8 @@ def _apply_inaccurate_time_flag(
     now: datetime,
 ) -> None:
     record.recorded_time_marked_wrong = True
+    record.taken_from_average = True
+    step.recorded_time_marked_wrong = True
     step.taken_from_average = True
     record.updated_at = now
     step.updated_at = now

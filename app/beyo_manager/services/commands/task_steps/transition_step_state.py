@@ -82,6 +82,17 @@ def _resolve_transition_credit_user_id(ctx: ServiceContext, request) -> str:
     return request.credited_user_id or ctx.user_id
 
 
+def _should_mark_latest_record_inaccurate(
+    request,
+    closing_state: TaskStepStateEnum,
+) -> bool:
+    return (
+        request.mark_closing_record_inaccurate
+        and request.new_state == TaskStepStateEnum.COMPLETED
+        and closing_state in TIME_BEARING_STATES
+    )
+
+
 async def transition_step_state(ctx: ServiceContext) -> dict:
     """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox."""
     request = parse_transition_step_state_request(ctx.incoming_data)
@@ -289,6 +300,9 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         )
         ctx.session.add(new_record)
         await ctx.session.flush()  # assign new_record.client_id
+
+        if _should_mark_latest_record_inaccurate(request, closing_state):
+            _apply_inaccurate_time_flag(new_record, step, now)
 
         # 6b. Update step state and latest pointer (circular FK — must be in same transaction)
         step.state = request.new_state
