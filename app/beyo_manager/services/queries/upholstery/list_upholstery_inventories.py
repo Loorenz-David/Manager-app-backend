@@ -12,6 +12,12 @@ _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 
 
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
     """List upholstery inventories with offset pagination."""
     limit = int(ctx.query_params.get("limit", _DEFAULT_LIMIT))
@@ -19,6 +25,7 @@ async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
     q = ctx.query_params.get("q")
     favorite = ctx.query_params.get("favorite")
     in_stock = ctx.query_params.get("in_stock")
+    upholstery_category_ids = _split_csv(ctx.query_params.get("upholstery_category_ids"))
 
     # Guard: limit constraints
     if limit < 1 or limit > _MAX_LIMIT:
@@ -47,6 +54,9 @@ async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
                 Upholstery.code.ilike(q_like),
             )
         )
+
+    if upholstery_category_ids:
+        stmt = stmt.where(Upholstery.upholstery_category_id.in_(upholstery_category_ids))
 
     if favorite is True:
         stmt = stmt.where(Upholstery.favorite.is_(True))
