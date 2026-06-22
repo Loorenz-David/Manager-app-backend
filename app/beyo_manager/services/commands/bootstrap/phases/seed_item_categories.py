@@ -18,14 +18,14 @@ _WOOD_CATEGORIES = [
     "Bedside Tables",
     "Coffee Tables",
     "Side Tables",
-    "Hallway Tables",
+    "Hall Tables",
     "Writing Desks",
     "Nest Of Tables",
     "Sideboards",
     "Highboards",
     "Bookshelves",
     "Shelving Units",
-    "Chests Of Drawers",
+    "Chest of Drawers",
     "Secretary Cabinets",
     "Bar Cabinets",
     "Wardrobes",
@@ -48,14 +48,14 @@ _CATEGORY_IMAGE_URLS = {
     "Bedside Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/bed_side_table.webp",
     "Coffee Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/coffee_table.webp",
     "Side Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/sofa_table.webp",
-    "Hallway Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/coffee_table.webp",
+    "Hall Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/coffee_table.webp",
     "Writing Desks": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/writing_desk%201.webp",
     "Nest Of Tables": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/nest_of_tables.webp",
     "Sideboards": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/sideboard.webp",
     "Highboards": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/highboard.webp",
     "Bookshelves": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/bookshelf.webp",
-    "Sheving Units": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/shelving_system.webp",
-    "Chests Of Drawers": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/chest_of_drawer.webp",
+    "Shelving Units": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/shelving_system.webp",
+    "Chest of Drawers": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/chest_of_drawer.webp",
     "Secretary Cabinets": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/secretary_table.webp",
     "Bar Cabinets": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/bar_cabinet.webp",
     "Wardrobes": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/cabinet.webp",
@@ -65,6 +65,11 @@ _CATEGORY_IMAGE_URLS = {
     "Porcelain": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/cabinet.webp",
     "Carpets": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/poster.webp",
     "Lamps": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/item_categories/lamp.webp",
+}
+
+_CATEGORY_RENAMES = {
+    "Hallway Tables": "Hall Tables",
+    "Chests Of Drawers": "Chest of Drawers",
 }
 
 
@@ -85,6 +90,21 @@ async def seed_item_categories(session: AsyncSession, workspace_id: str) -> dict
         if existing is not None:
             category_ids[name] = existing.client_id
             continue
+
+        old_name = next((old for old, new in _CATEGORY_RENAMES.items() if new == name), None)
+        if old_name:
+            old_existing = await session.scalar(
+                select(ItemCategory).where(
+                    ItemCategory.workspace_id == workspace_id,
+                    ItemCategory.name == old_name,
+                )
+            )
+            if old_existing is not None:
+                old_existing.name = name
+                old_existing.image_url = image_url
+                await session.flush()
+                category_ids[name] = old_existing.client_id
+                continue
 
         category = ItemCategory(
             workspace_id=workspace_id,
