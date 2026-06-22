@@ -3,6 +3,7 @@ from sqlalchemy import select
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.services.commands.upholstery.requests import parse_update_upholstery_request
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -47,6 +48,22 @@ async def update_upholstery(ctx: ServiceContext) -> dict:
             )
             if code_conflict.scalar_one_or_none() is not None:
                 raise ConflictError("An upholstery with this code already exists in the workspace.")
+
+        if "upholstery_category_id" in request.model_fields_set:
+            if request.upholstery_category_id is None:
+                upholstery.upholstery_category_id = None
+            else:
+                category_result = await ctx.session.execute(
+                    select(UpholsteryCategory).where(
+                        UpholsteryCategory.workspace_id == ctx.workspace_id,
+                        UpholsteryCategory.client_id == request.upholstery_category_id,
+                        UpholsteryCategory.is_deleted.is_(False),
+                    )
+                )
+                category = category_result.scalar_one_or_none()
+                if category is None:
+                    raise NotFound("Upholstery category not found.")
+                upholstery.upholstery_category_id = category.client_id
 
         if request.name is not None:
             upholstery.name = request.name

@@ -6,11 +6,18 @@ from beyo_manager.domain.upholstery.enums import UpholsteryInventoryConditionEnu
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.context import ServiceContext
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
 
 
 async def list_upholsteries(ctx: ServiceContext) -> dict:
@@ -19,6 +26,7 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     q = ctx.query_params.get("q")
     in_stock_raw = ctx.query_params.get("in_stock")
     favorite_raw = ctx.query_params.get("favorite")
+    upholstery_category_ids = _split_csv(ctx.query_params.get("upholstery_category_ids"))
 
     stmt = select(Upholstery).where(
         Upholstery.workspace_id == ctx.workspace_id,
@@ -37,6 +45,9 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     if favorite_raw is not None:
         favorite = str(favorite_raw).strip().lower() == "true"
         stmt = stmt.where(Upholstery.favorite.is_(favorite))
+
+    if upholstery_category_ids:
+        stmt = stmt.where(Upholstery.upholstery_category_id.in_(upholstery_category_ids))
 
     if in_stock_raw is not None:
         in_stock = str(in_stock_raw).strip().lower() == "true"
@@ -80,6 +91,7 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     # Batch-load active inventory per upholstery — single query, no N+1.
     # The partial unique index guarantees at most one active row per upholstery_id.
     inventory_map: dict[str, UpholsteryInventory] = {}
+    category_map: dict[str, UpholsteryCategory] = {}
     if page:
         inv_result = await ctx.session.execute(
             select(UpholsteryInventory).where(
@@ -90,9 +102,24 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
         )
         inventory_map = {inv.upholstery_id: inv for inv in inv_result.scalars().all()}
 
+        category_ids = list({u.upholstery_category_id for u in page if u.upholstery_category_id})
+        if category_ids:
+            cat_result = await ctx.session.execute(
+                select(UpholsteryCategory).where(
+                    UpholsteryCategory.workspace_id == ctx.workspace_id,
+                    UpholsteryCategory.client_id.in_(category_ids),
+                    UpholsteryCategory.is_deleted.is_(False),
+                )
+            )
+            category_map = {cat.client_id: cat for cat in cat_result.scalars().all()}
+
     return {
         "upholsteries": [
-            serialize_upholstery(u, inventory_map.get(u.client_id))
+            serialize_upholstery(
+                u,
+                inventory_map.get(u.client_id),
+                category_map.get(u.upholstery_category_id) if u.upholstery_category_id else None,
+            )
             for u in page
         ],
         "upholsteries_pagination": {
@@ -125,5 +152,15 @@ async def get_upholstery(ctx: ServiceContext) -> dict:
         )
     )
     inventory = inv_result.scalar_one_or_none()
+    category = None
+    if upholstery.upholstery_category_id:
+        cat_result = await ctx.session.execute(
+            select(UpholsteryCategory).where(
+                UpholsteryCategory.workspace_id == ctx.workspace_id,
+                UpholsteryCategory.client_id == upholstery.upholstery_category_id,
+                UpholsteryCategory.is_deleted.is_(False),
+            )
+        )
+        category = cat_result.scalar_one_or_none()
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory)}
+    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}

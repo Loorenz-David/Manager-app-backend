@@ -19,6 +19,7 @@ from beyo_manager.routers.api_v1 import (
     reset,
     tasks,
     upholsteries,
+    upholstery_categories,
     upholstery_inventories,
     upholstery_order_needs,
     upholstery_orders,
@@ -60,6 +61,7 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(upholstery_inventories.router)
     app.include_router(upholstery_orders.router)
     app.include_router(upholstery_order_needs.router)
+    app.include_router(upholstery_categories.router)
     app.include_router(upholsteries.router)
     app.include_router(item_upholsteries.router)
     app.include_router(item_upholsteries.requirements_router)

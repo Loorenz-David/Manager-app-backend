@@ -57,6 +57,7 @@ from beyo_manager.models.tables.working_sections import working_section_item_cat
 from beyo_manager.models.tables.working_sections import working_section_supported_issue_type  # noqa: F401
 
 # --- Upholstery registry ---
+from beyo_manager.models.tables.upholstery import upholstery_category  # noqa: F401
 from beyo_manager.models.tables.upholstery import upholstery  # noqa: F401
 
 # --- Items (depends on item_category) ---

@@ -3,6 +3,7 @@ from sqlalchemy import select
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_mark_upholstery_favorite_request
 from beyo_manager.services.context import ServiceContext
@@ -34,5 +35,15 @@ async def mark_upholstery_favorite(ctx: ServiceContext) -> dict:
             )
         )
         inventory = inv_result.scalar_one_or_none()
+        category = None
+        if upholstery.upholstery_category_id:
+            cat_result = await ctx.session.execute(
+                select(UpholsteryCategory).where(
+                    UpholsteryCategory.workspace_id == ctx.workspace_id,
+                    UpholsteryCategory.client_id == upholstery.upholstery_category_id,
+                    UpholsteryCategory.is_deleted.is_(False),
+                )
+            )
+            category = cat_result.scalar_one_or_none()
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory)}
+    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}

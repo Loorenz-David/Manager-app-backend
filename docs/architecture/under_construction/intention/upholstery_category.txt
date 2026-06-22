@@ -1,0 +1,51 @@
+I will like you to create an implementation plan for codex to implement using the template: 
+
+We will now improve the current upholstery system to support upholstery category, current upholstery table:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/upholstery/upholstery.py
+
+We will create an upholstery cateogry table, this will be used as a one to many relationship, where an upholstery belongs to an upholstery category .
+
+an upholstery category will heritage from IdentityMixin, Base, and it will have the following columns:
+* name
+* image_url
+* favorite
+* created_at
+* created_by_id
+* updated_at
+* updated_by_id
+* is_deleted
+* deleted_at
+* deleted_by_id
+
+we can create this model on the same folder:  /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/upholstery
+
+after the migration is made, we will create the routers and services for creating an updating this instances. 
+we follow same create, update, delete patterns than for the upholstery routers: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/upholsteries.py
+and same pattern on the services used also as this entities will be created individually from upholsteries, and the linkage of an upholstery to a category will hapeen at the upholstery creation or update of an upholstery.
+we follow same approach for the get routers and services, we should have a single get target upholstery category router / service / serialization , 
+and a list upholstery categories router / service / serialization , which accepts query parama "q" ( and same filters as get list upholstery service uses ), this list service will be a join with the upholstery instance and will search on the same string columns as the list upholstery service uses, the serialization of this service will bring back: upholstery_category.name, upholstery_category.image_url, upholstery_category.client_id, upholstery_category.favority, count of upholstery linkages it has as children .
+we should also create a router and service for allowing the user to change the favorite value of an upholstery category, like we do with the upholstery instances.
+
+This category instances will be only used by the frontend to render upholsteries as a folder selection.
+
+after the creation of those routers and services Codex should create a handoff documentation for for this new routers at: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend
+using the template: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend/TEMPLATE_HANDOFF_TO_FRONTEND.md
+and example is: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_upholstery_update_endpoints_20260618.md
+
+
+after this upholstery category implementation we will modify the current get, create and update routers and services for upholstery instances. 
+
+the creation and update of an upholstery now accepts an upholstery category id for linking those two.
+
+the get upholstery serialization ( serialize_upholstery: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/upholstery/serializers.py ) for single upholstery now return the upholstery category key with the id the name and the image_url of the upholstery category.
+
+
+the current list upholstery service and router will now accept the query param for upholstery category id , the user can send a list of upholstery categories as query param ( coma separated ).
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/upholstery/upholsteries.py
+
+
+after this changes on the upholstery services and routers codex should document this changes on the same handoff previously created for the new routers for upholstery category. this entiry documentation will help the frontend to correctly build the schema for the expected responses and understand how to use the endpoints.
+
+
+
+

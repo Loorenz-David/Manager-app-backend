@@ -76,6 +76,7 @@ class ItemUpholstery(IdentityMixin, Base):
 
     __table_args__ = (
         Index("ix_item_upholsteries_workspace_item", "workspace_id", "item_id"),
+        Index("ix_item_upholsteries_workspace_upholstery_id", "workspace_id", "upholstery_id"),
         CheckConstraint("amount_meters IS NULL OR amount_meters >= 0", name="ck_item_upholsteries_amount_positive"),
         CheckConstraint(
             "time_to_fix_in_seconds IS NULL OR time_to_fix_in_seconds >= 0",

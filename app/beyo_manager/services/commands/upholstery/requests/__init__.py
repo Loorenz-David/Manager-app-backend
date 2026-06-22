@@ -193,6 +193,7 @@ class CreateUpholsteryRequest(BaseModel):
     projected_inventory_value_minor: int | None = None
     currency: UpholsteryCurrencyEnum | None = None
     planning_position: str | None = None
+    upholstery_category_id: str | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -241,6 +242,7 @@ class UpdateUpholsteryRequest(BaseModel):
     code: str | None = None
     image_url: str | None = None
     favorite: bool | None = None
+    upholstery_category_id: str | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -258,6 +260,90 @@ def parse_update_upholstery_request(data: dict) -> UpdateUpholsteryRequest:
 
     try:
         return UpdateUpholsteryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class CreateUpholsteryCategoryRequest(BaseModel):
+    client_id: str | None = None
+    name: str
+    image_url: str | None = None
+    favorite: bool = False
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: str) -> str:
+        value = (v or "").strip()
+        if not value:
+            raise ValueError("name must not be blank.")
+        return value
+
+
+def parse_create_upholstery_category_request(data: dict) -> CreateUpholsteryCategoryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return CreateUpholsteryCategoryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class UpdateUpholsteryCategoryRequest(BaseModel):
+    client_id: str
+    name: str | None = None
+    image_url: str | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            raise ValueError("name must not be blank.")
+        return value
+
+
+def parse_update_upholstery_category_request(data: dict) -> UpdateUpholsteryCategoryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return UpdateUpholsteryCategoryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class DeleteUpholsteryCategoryRequest(BaseModel):
+    client_id: str
+
+
+def parse_delete_upholstery_category_request(data: dict) -> DeleteUpholsteryCategoryRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return DeleteUpholsteryCategoryRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class MarkUpholsteryCategoryFavoriteRequest(BaseModel):
+    client_id: str
+    favorite: bool
+
+
+def parse_mark_upholstery_category_favorite_request(data: dict) -> MarkUpholsteryCategoryFavoriteRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return MarkUpholsteryCategoryFavoriteRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])

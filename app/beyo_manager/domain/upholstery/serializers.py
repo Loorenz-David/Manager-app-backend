@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 
 
@@ -121,6 +122,7 @@ def serialize_upholstery_inventory_partial(
 def serialize_upholstery(
     row: Upholstery,
     inventory: UpholsteryInventory | None = None,
+    category: UpholsteryCategory | None = None,
 ) -> dict:
     available_stored_amount = None
     if inventory is not None and inventory.current_stored_amount_meters is not None:
@@ -138,4 +140,30 @@ def serialize_upholstery(
         "list_order": row.list_order,
         "current_stored_amount_meters": available_stored_amount,
         "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
+        "upholstery_category": {
+            "id": category.client_id,
+            "name": category.name,
+            "image_url": category.image_url,
+        } if category is not None else None,
     }
+
+
+def serialize_upholstery_category(
+    cat: UpholsteryCategory,
+    upholstery_count: int | None = None,
+) -> dict:
+    result = {
+        "client_id": cat.client_id,
+        "workspace_id": cat.workspace_id,
+        "name": cat.name,
+        "image_url": cat.image_url,
+        "favorite": cat.favorite,
+        "created_at": cat.created_at.isoformat(),
+        "created_by_id": cat.created_by_id,
+        "updated_at": cat.updated_at.isoformat() if cat.updated_at else None,
+        "updated_by_id": cat.updated_by_id,
+        "is_deleted": cat.is_deleted,
+    }
+    if upholstery_count is not None:
+        result["upholstery_count"] = upholstery_count
+    return result

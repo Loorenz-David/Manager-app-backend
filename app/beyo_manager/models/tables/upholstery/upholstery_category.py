@@ -1,30 +1,22 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
 
 
-class Upholstery(IdentityMixin, Base):
-    CLIENT_ID_PREFIX = "uph"
-    __tablename__ = "upholsteries"
+class UpholsteryCategory(IdentityMixin, Base):
+    CLIENT_ID_PREFIX = "upc"
+    __tablename__ = "upholstery_categories"
 
     workspace_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("workspaces.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    upholstery_category_id: Mapped[str | None] = mapped_column(
-        String(64),
-        ForeignKey("upholstery_categories.client_id", ondelete="RESTRICT"),
-        nullable=True,
-        index=True,
-    )
-    list_order: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -44,21 +36,6 @@ class Upholstery(IdentityMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_upholsteries_workspace_name"),
-        Index(
-            "uix_upholsteries_workspace_code",
-            "workspace_id",
-            "code",
-            unique=True,
-            postgresql_where=text("code IS NOT NULL"),
-        ),
-        Index(
-            "uix_upholsteries_workspace_list_order",
-            "workspace_id",
-            "list_order",
-            unique=True,
-            postgresql_where=text("list_order IS NOT NULL"),
-        ),
-        Index("ix_upholsteries_workspace_favorite", "workspace_id", "favorite"),
-        Index("ix_upholsteries_workspace_list_order", "workspace_id", "list_order"),
+        UniqueConstraint("workspace_id", "name", name="uq_upholstery_categories_workspace_name"),
+        Index("ix_upholstery_categories_workspace_favorite", "workspace_id", "favorite"),
     )

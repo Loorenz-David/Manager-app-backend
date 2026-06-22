@@ -20,6 +20,7 @@ _WORKER_NAMES = [
     "Tatiana",
     "Feruza",
     "Kola",
+    "Mykola",
     "Norby",
     "Vitaly",
     "Stina",
@@ -28,6 +29,10 @@ _WORKER_NAMES = [
 ]
 
 _WORKER_PASSWORD = "Admin1234!"
+
+_WORKER_EMAILS: dict[str, str] = {
+    "Mykola": "mykola@beyovintage.se",
+}
 
 # Select workspace role per seeded bootstrap user.
 # Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller".
@@ -66,6 +71,12 @@ _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
         "sanding",
         "assembly",
     ),
+    "restoration_core": (
+        "disassembly",
+        "structural repair",
+        "sanding",
+        "assembly",
+    ),
     "upholstery": (
         "upholstery removal",
         "padding",
@@ -78,16 +89,23 @@ _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
         "ground oil",
         "hardwax oil",
     ),
+    "kola_sections": (
+        "cleaning",
+        "wood fix",
+        "ground oil",
+        "hardwax oil",
+    ),
 }
 
 _SECTION_GROUPS["all"] = tuple(_WORKING_SECTION_ASSIGNMENT_MAP.keys())
 
 # Select section groups per worker.
-# Default keeps current behavior: every worker gets all working sections.
+# Default: restoration_core + upholstery (excludes kola_sections which belong to Mykola only).
 _WORKER_SECTION_GROUPS: dict[str, tuple[str, ...]] = {
-    worker_name: ("all",)
+    worker_name: ("restoration_core", "upholstery")
     for worker_name in _WORKER_NAMES
 }
+_WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
 _WORKER_SECTION_GROUPS["Stina"] = ()
 _WORKER_SECTION_GROUPS["Betty"] = ()
 
@@ -132,7 +150,7 @@ async def seed_workers(
 
     for worker_name in _WORKER_NAMES:
         username = worker_name
-        email = f"{worker_name.lower()}@test.dev"
+        email = _WORKER_EMAILS.get(worker_name, f"{worker_name.lower()}@test.dev")
 
         existing_user = await session.scalar(select(User).where(User.email == email))
         if existing_user is None:
@@ -207,9 +225,6 @@ async def seed_workers(
     for worker_name, worker_user_id in worker_name_to_user_id.items():
         worker_section_names = _resolve_worker_section_names(worker_name)
         for section_name, section_id in section_ids.items():
-            if section_name not in worker_section_names:
-                continue
-
             existing_section_membership = await session.scalar(
                 select(WorkingSectionMembership).where(
                     WorkingSectionMembership.workspace_id == workspace_id,
@@ -218,6 +233,13 @@ async def seed_workers(
                     WorkingSectionMembership.removed_at.is_(None),
                 )
             )
+
+            if section_name not in worker_section_names:
+                if existing_section_membership is not None:
+                    existing_section_membership.removed_at = now
+                    await session.flush()
+                continue
+
             if existing_section_membership is not None:
                 continue
 

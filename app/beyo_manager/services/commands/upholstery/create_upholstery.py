@@ -4,8 +4,10 @@ from sqlalchemy import select
 
 from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
 from beyo_manager.domain.upholstery.serializers import serialize_upholstery
+from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
@@ -18,6 +20,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
     if request.client_id is not None:
         validate_provided_client_id(request.client_id, "uph")
 
+    category = None
     async with ctx.session.begin():
         uph_kwargs: dict[str, str] = {}
         if request.client_id is not None:
@@ -47,6 +50,18 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             if code_conflict.scalar_one_or_none() is not None:
                 raise ConflictError("An upholstery with this code already exists in the workspace.")
 
+        if request.upholstery_category_id is not None:
+            category_result = await ctx.session.execute(
+                select(UpholsteryCategory).where(
+                    UpholsteryCategory.workspace_id == ctx.workspace_id,
+                    UpholsteryCategory.client_id == request.upholstery_category_id,
+                    UpholsteryCategory.is_deleted.is_(False),
+                )
+            )
+            category = category_result.scalar_one_or_none()
+            if category is None:
+                raise NotFound("Upholstery category not found.")
+
         upholstery = Upholstery(
             **uph_kwargs,
             workspace_id=ctx.workspace_id,
@@ -54,6 +69,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             code=request.code,
             image_url=request.image_url,
             favorite=request.favorite,
+            upholstery_category_id=request.upholstery_category_id,
             created_by_id=ctx.user_id,
         )
         ctx.session.add(upholstery)
@@ -88,4 +104,4 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         )
         ctx.session.add(inventory)
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory)}
+    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}

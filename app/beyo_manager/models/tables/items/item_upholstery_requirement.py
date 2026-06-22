@@ -91,6 +91,12 @@ class ItemUpholsteryRequirement(IdentityMixin, Base):
             "item_upholstery_id",
             "state",
         ),
+        Index("ix_item_upholstery_requirements_workspace_state", "workspace_id", "state"),
+        Index(
+            "ix_item_upholstery_requirements_workspace_inventory_id",
+            "workspace_id",
+            "upholstery_inventory_id",
+        ),
         CheckConstraint(
             "amount_meters IS NULL OR amount_meters >= 0",
             name="ck_item_upholstery_requirements_amount_positive",
