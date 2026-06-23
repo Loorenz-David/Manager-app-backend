@@ -53,6 +53,11 @@ _SECTION_ORDER_LISTS: dict[str, int] = {
     "hardwax oil": 3,
 }
 
+_SECTION_BATCH_MAP: dict[str, bool] = {
+    "ground oil": True,
+    "hardwax oil": True,
+}
+
 _DEPENDENCIES: list[tuple[str, str]] = [
     ("cleaning", "disassembly"),
     ("structural repair", "disassembly"),
@@ -106,6 +111,7 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             name=name,
             image=_SECTION_IMAGE_URLS.get(name),
             order_list=_SECTION_ORDER_LISTS.get(name),
+            allows_batch_working=_SECTION_BATCH_MAP.get(name, False),
         )
         session.add(section)
         await session.flush()

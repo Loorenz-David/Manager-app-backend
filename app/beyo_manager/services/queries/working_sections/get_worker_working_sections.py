@@ -121,6 +121,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
                     section.name,
                     section.image,
                     section.order_list,
+                    section.allows_batch_working,
                 ),
                 "task_steps_counts": {
                     state: counts_map[section.client_id].get(state, 0)

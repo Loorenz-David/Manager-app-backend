@@ -10,12 +10,14 @@ def serialize_working_section_compact(
     name: str,
     image: str | None,
     order_list: int | None,
+    allows_batch_working: bool,
 ) -> dict:
     return {
         "client_id": client_id,
         "name": name,
         "image": image,
         "order_list": order_list,
+        "allows_batch_working": allows_batch_working,
     }
 
 
@@ -31,6 +33,7 @@ def serialize_working_section_full(
         "name": section.name,
         "image": section.image,
         "order_list": section.order_list,
+        "allows_batch_working": section.allows_batch_working,
         "dependencies": [
             {"client_id": dep_id, "name": dep_name} for dep_id, dep_name in dependencies
         ],

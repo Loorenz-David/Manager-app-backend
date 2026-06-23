@@ -8,6 +8,7 @@ class WorkingSectionCreateRequest(BaseModel):
     name: str
     image: str | None = None
     order_list: int | None = None
+    allows_batch_working: bool = False
     working_section_dependencies: list[str] = []
     working_section_item_categories: list[str] = []
     working_section_supported_issue_types: list[str] = []

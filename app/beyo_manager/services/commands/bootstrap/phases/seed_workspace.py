@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import Settings
+from beyo_manager.domain.workspaces.enums import WorkspaceRoleNameEnum
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 
@@ -10,6 +11,7 @@ _DISPLAY_NAMES: dict[str, str] = {
     "worker": "Worker",
     "manager": "Manager",
     "seller": "Seller",
+    "wood_worker": "Wood Worker",
 }
 
 
@@ -35,20 +37,36 @@ async def seed_workspace(
     existing_roles = await session.execute(
         select(WorkspaceRole).where(WorkspaceRole.workspace_id == workspace_id)
     )
-    workspace_roles = {row.name: row for row in existing_roles.scalars().all()}
+    workspace_role_rows = existing_roles.scalars().all()
+    workspace_roles_by_role_id = {row.role_id: row for row in workspace_role_rows if row.is_system}
+    workspace_roles_by_name = {row.name: row for row in workspace_role_rows if row.name is not None}
 
     for role_name_value, role_client_id in role_ids.items():
-        workspace_role = workspace_roles.get(role_name_value)
+        workspace_role = workspace_roles_by_role_id.get(role_client_id)
         if workspace_role is None:
             workspace_role = WorkspaceRole(
                 workspace_id=workspace_id,
                 role_id=role_client_id,
-                name=role_name_value,
+                name=None,
                 description=_DISPLAY_NAMES[role_name_value],
                 is_system=True,
             )
             session.add(workspace_role)
             await session.flush()
+            workspace_roles_by_role_id[role_client_id] = workspace_role
         result[role_name_value] = workspace_role.client_id
+
+    wood_worker_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.WOOD_WORKER)
+    if wood_worker_role is None:
+        wood_worker_role = WorkspaceRole(
+            workspace_id=workspace_id,
+            role_id=role_ids["worker"],
+            name=WorkspaceRoleNameEnum.WOOD_WORKER,
+            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.WOOD_WORKER.value],
+            is_system=False,
+        )
+        session.add(wood_worker_role)
+        await session.flush()
+    result[WorkspaceRoleNameEnum.WOOD_WORKER.value] = wood_worker_role.client_id
 
     return result

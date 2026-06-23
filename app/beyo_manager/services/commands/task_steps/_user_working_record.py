@@ -31,6 +31,7 @@ async def fetch_open_user_working_record(
             StepStateRecord.exited_at.is_(None),
             StepStateRecord.step_id != exclude_step_id,
             TaskStep.is_deleted.is_(False),
+            TaskStep.allows_batch_working.is_(False),
         )
         .limit(1)
     )

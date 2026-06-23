@@ -232,6 +232,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                     task_id=task.client_id,
                     working_section_id=step_input.working_section_id,
                     working_section_name_snapshot=section.name,
+                    allows_batch_working=section.allows_batch_working,
                     state=TaskStepStateEnum.PENDING,
                     readiness_status=TaskStepReadinessStatusEnum.READY,
                     total_dependencies=0,

@@ -79,7 +79,13 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
             sections = (
                 await ctx.session.execute(
                     select(WorkingSection)
-                    .options(load_only(WorkingSection.client_id, WorkingSection.name))
+                    .options(
+                        load_only(
+                            WorkingSection.client_id,
+                            WorkingSection.name,
+                            WorkingSection.allows_batch_working,
+                        )
+                    )
                     .where(
                         WorkingSection.workspace_id == ctx.workspace_id,
                         WorkingSection.client_id.in_(section_ids),
@@ -103,6 +109,7 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 task_id=request.task_id,
                 working_section_id=step_input.working_section_id,
                 working_section_name_snapshot=section.name,
+                allows_batch_working=section.allows_batch_working,
                 state=TaskStepStateEnum.PENDING,
                 readiness_status=TaskStepReadinessStatusEnum.READY,
                 total_dependencies=0,

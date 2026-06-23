@@ -122,6 +122,7 @@ async def list_users(ctx: ServiceContext) -> dict:
             WorkingSection.name,
             WorkingSection.image,
             WorkingSection.order_list,
+            WorkingSection.allows_batch_working,
         )
         .join(
             WorkingSection,
@@ -144,6 +145,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                 sec_row.name,
                 sec_row.image,
                 sec_row.order_list,
+                sec_row.allows_batch_working,
             )
         )
 

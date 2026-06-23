@@ -976,7 +976,7 @@
 | client_id | `str` | `String(64)` |
 | workspace_id | `str` | `String(64)` |
 | role_id | `str` | `String(64)` |
-| name | `str` | `String(64)` |
+| name | `WorkspaceRoleNameEnum | None` | `Enum(workspace_role_name_enum)` |
 | description | `str | None` | `String(255)` |
 | is_system | `bool` | `Boolean` |
 

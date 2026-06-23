@@ -17,6 +17,12 @@ class WorkingSection(IdentityMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     image: Mapped[str | None] = mapped_column(String(512), nullable=True)
     order_list: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allows_batch_working: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

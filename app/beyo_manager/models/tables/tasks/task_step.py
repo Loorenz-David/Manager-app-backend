@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -68,6 +69,12 @@ class TaskStep(
     recorded_time_marked_wrong: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     taken_from_average: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     working_section_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    allows_batch_working: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     assigned_worker_display_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

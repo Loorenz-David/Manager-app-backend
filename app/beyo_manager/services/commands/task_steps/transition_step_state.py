@@ -189,7 +189,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         #     }
 
         # 4. Auto-pause any other WORKING record for this user (one-active-step rule)
-        if request.new_state == TaskStepStateEnum.WORKING:
+        if request.new_state == TaskStepStateEnum.WORKING and not step.allows_batch_working:
             conflicting_record, conflicting_step = await fetch_open_user_working_record(
                 ctx.session, effective_user_ids, ctx.workspace_id, exclude_step_id=step.client_id
             )

@@ -35,7 +35,7 @@ _WORKER_EMAILS: dict[str, str] = {
 }
 
 # Select workspace role per seeded bootstrap user.
-# Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller".
+# Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller", "wood_worker".
 _WORKER_WORKSPACE_ROLES: dict[str, str] = {
     worker_name: "worker"
     for worker_name in _WORKER_NAMES
@@ -44,6 +44,7 @@ _WORKER_WORKSPACE_ROLES["Norby"] = "manager"
 _WORKER_WORKSPACE_ROLES["Stina"] = "manager"
 _WORKER_WORKSPACE_ROLES["Betty"] = "manager"
 _WORKER_WORKSPACE_ROLES["Fayoz"] = "admin"
+_WORKER_WORKSPACE_ROLES["Mykola"] = "wood_worker"
 
 # Toggle worker assignment per working section.
 # Set any section to False to skip automatic assignment for that section.

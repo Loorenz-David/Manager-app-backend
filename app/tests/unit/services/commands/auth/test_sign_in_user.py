@@ -8,6 +8,8 @@ from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.services.commands.auth.sign_in_user import sign_in_user
 from beyo_manager.services.context import ServiceContext
 
+_DEFAULT_WORKSPACE_ROLE_NAME = object()
+
 
 def _hashed_password(raw: str) -> str:
     return bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode()
@@ -38,7 +40,12 @@ class _Session:
         return self._workspace
 
 
-def _ctx(*, role_name: RoleNameEnum, app_scope: str):
+def _ctx(
+    *,
+    role_name: RoleNameEnum,
+    app_scope: str,
+    workspace_role_name: str | None | object = _DEFAULT_WORKSPACE_ROLE_NAME,
+):
     user = SimpleNamespace(
         client_id="usr_1",
         email="user@test.local",
@@ -46,7 +53,11 @@ def _ctx(*, role_name: RoleNameEnum, app_scope: str):
         password=_hashed_password("Test1234!"),
     )
     role = SimpleNamespace(name=role_name)
-    workspace_role = SimpleNamespace(client_id="wsr_1", role=role, name=role_name.value)
+    workspace_role = SimpleNamespace(
+        client_id="wsr_1",
+        role=role,
+        name=role_name.value if workspace_role_name is _DEFAULT_WORKSPACE_ROLE_NAME else workspace_role_name,
+    )
     membership = SimpleNamespace(workspace_id="ws_1", workspace_role=workspace_role)
     workspace = SimpleNamespace(client_id="ws_1", time_zone="UTC")
     session = _Session(user, membership, workspace)
@@ -75,3 +86,21 @@ async def test_sign_in_user_rejects_manager_role_for_worker_scope() -> None:
 async def test_sign_in_user_rejects_unknown_scope() -> None:
     with pytest.raises(PermissionDenied, match="Invalid credentials."):
         await sign_in_user(_ctx(role_name=RoleNameEnum.MANAGER, app_scope="unknown_scope"))
+
+
+@pytest.mark.unit
+async def test_sign_in_user_falls_back_to_permission_role_name_for_system_workspace_roles() -> None:
+    result = await sign_in_user(
+        _ctx(role_name=RoleNameEnum.MANAGER, app_scope="manager", workspace_role_name=None)
+    )
+
+    assert result["user"]["role"] == "manager"
+
+
+@pytest.mark.unit
+async def test_sign_in_user_preserves_custom_workspace_role_name() -> None:
+    result = await sign_in_user(
+        _ctx(role_name=RoleNameEnum.WORKER, app_scope="worker", workspace_role_name="wood_worker")
+    )
+
+    assert result["user"]["role"] == "wood_worker"

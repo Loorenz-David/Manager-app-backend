@@ -377,6 +377,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             WorkingSection.name.label("ws_name"),
             WorkingSection.image.label("ws_image"),
             WorkingSection.order_list.label("ws_order_list"),
+            WorkingSection.allows_batch_working.label("ws_allows_batch_working"),
         )
         .select_from(TaskStepDependency)
         .join(
@@ -413,6 +414,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                     name=row.ws_name,
                     image=row.ws_image,
                     order_list=row.ws_order_list,
+                    allows_batch_working=row.ws_allows_batch_working,
                 ),
                 "prerequisite_step_state": row.prereq_state.value,
             }
