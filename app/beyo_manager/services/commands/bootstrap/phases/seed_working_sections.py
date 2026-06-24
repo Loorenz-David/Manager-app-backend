@@ -8,7 +8,8 @@ from beyo_manager.models.tables.working_sections.working_section_dependency impo
 # Set any section to False to skip creating it during bootstrap.
 _SECTION_CREATION_MAP: dict[str, bool] = {
     "disassembly": True,
-    "cleaning": True,
+    "cleaning seat": True,
+    "cleaning wood": True,
     "structural repair": True,
     "sanding": True,
     "upholstery removal": True,
@@ -24,7 +25,8 @@ _SECTION_CREATION_MAP: dict[str, bool] = {
 
 _SECTION_IMAGE_URLS: dict[str, str] = {
     "assembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/assembly.webp",
-    "cleaning": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
+    "cleaning seat": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
+    "cleaning wood": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
     "disassembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/dismantler.webp",
     "structural repair": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/gluing_2.webp",
     "ground oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/ground_oil.webp",
@@ -39,7 +41,8 @@ _SECTION_IMAGE_URLS: dict[str, str] = {
 
 _SECTION_ORDER_LISTS: dict[str, int] = {
     "disassembly": 1,
-    "cleaning": 2,
+    "cleaning seat": 2,
+    "cleaning wood": 2,
     "structural repair": 3,
     "sanding": 4,
     "upholstery removal": 5,
@@ -59,11 +62,12 @@ _SECTION_BATCH_MAP: dict[str, bool] = {
 }
 
 _DEPENDENCIES: list[tuple[str, str]] = [
-    ("cleaning", "disassembly"),
+    ("cleaning seat", "disassembly"),
+    ("cleaning wood", "disassembly"),
     ("structural repair", "disassembly"),
-    ("structural repair", "cleaning"),
+    ("structural repair", "cleaning wood"),
     ("sanding", "structural repair"),
-    ("sanding", "cleaning"),
+    ("sanding", "cleaning wood"),
     ("sanding", "disassembly"),
     ("upholstery removal", "disassembly"),
     ("padding", "upholstery removal"),
@@ -72,7 +76,8 @@ _DEPENDENCIES: list[tuple[str, str]] = [
     ("upholstery installation", "upholstery removal"),
     ("upholstery installation", "disassembly"),
     ("assembly", "disassembly"),
-    ("assembly", "cleaning"),
+    ("assembly", "cleaning seat"),
+    ("assembly", "cleaning wood"),
     ("assembly", "structural repair"),
     ("assembly", "sanding"),
     ("assembly", "upholstery removal"),

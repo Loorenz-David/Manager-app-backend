@@ -36,6 +36,8 @@ def serialize_user_profile(user: User, work_profile: UserWorkProfile | None = No
 
 def serialize_user_list_item(
     user: User,
+    role_client_id: str,
+    role_name: str,
     workspace_role_client_id: str,
     workspace_role_name: str,
     working_sections: list[dict],
@@ -47,6 +49,10 @@ def serialize_user_list_item(
         "phone_number": user.phone_number,
         "profile_picture": user.profile_picture,
         "role": {
+            "client_id": role_client_id,
+            "name": role_name,
+        },
+        "workspace_role": {
             "client_id": workspace_role_client_id,
             "name": workspace_role_name,
         },
@@ -64,6 +70,8 @@ def serialize_user_working_section_member(user: User) -> dict:
 
 def serialize_user_compact_with_role(
     user: User,
+    role_client_id: str,
+    role_name: str,
     workspace_role_client_id: str,
     workspace_role_name: str,
 ) -> dict:
@@ -72,6 +80,10 @@ def serialize_user_compact_with_role(
         "username": user.username,
         "profile_picture": user.profile_picture,
         "role": {
+            "client_id": role_client_id,
+            "name": role_name,
+        },
+        "workspace_role": {
             "client_id": workspace_role_client_id,
             "name": workspace_role_name,
         },

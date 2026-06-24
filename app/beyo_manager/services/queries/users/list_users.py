@@ -2,6 +2,7 @@ from sqlalchemy import exists, func, select
 
 from beyo_manager.domain.users.serializers import serialize_user_list_item, serialize_user_working_section_member, serialize_user_compact_with_role
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
+from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
@@ -35,11 +36,14 @@ async def list_users(ctx: ServiceContext) -> dict:
             q_stmt = (
                 select(
                     User,
-                    WorkspaceRole.client_id.label("role_client_id"),
-                    WorkspaceRole.name.label("role_name"),
+                    Role.client_id.label("role_client_id"),
+                    Role.name.label("role_name"),
+                    WorkspaceRole.client_id.label("workspace_role_client_id"),
+                    WorkspaceRole.name.label("workspace_role_name"),
                 )
                 .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
                 .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
+                .join(Role, Role.client_id == WorkspaceRole.role_id)
                 .where(
                     WorkspaceMembership.workspace_id == ctx.workspace_id,
                     WorkspaceMembership.is_active.is_(True),
@@ -50,6 +54,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                 select(func.count(User.client_id.distinct()))
                 .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
                 .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
+                .join(Role, Role.client_id == WorkspaceRole.role_id)
                 .where(
                     WorkspaceMembership.workspace_id == ctx.workspace_id,
                     WorkspaceMembership.is_active.is_(True),
@@ -104,7 +109,13 @@ async def list_users(ctx: ServiceContext) -> dict:
     # In compact mode, we don't need to fetch working sections
     if compact:
         users_data = [
-            serialize_user_compact_with_role(row.User, row.role_client_id, row.role_name)
+            serialize_user_compact_with_role(
+                row.User,
+                row.role_client_id,
+                row.role_name,
+                row.workspace_role_client_id,
+                row.workspace_role_name,
+            )
             for row in page
         ]
         return {
@@ -155,6 +166,8 @@ async def list_users(ctx: ServiceContext) -> dict:
                 row.User,
                 row.role_client_id,
                 row.role_name,
+                row.workspace_role_client_id,
+                row.workspace_role_name,
                 sections_by_user[row.User.client_id],
             )
             for row in page

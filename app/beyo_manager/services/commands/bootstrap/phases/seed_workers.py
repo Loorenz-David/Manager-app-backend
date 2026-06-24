@@ -14,24 +14,27 @@ from beyo_manager.models.tables.working_sections.working_section_membership impo
 
 
 _WORKER_NAMES = [
-    "Roma",
     "Andrii",
+    "Roman",
+    "Tetiana",
     "Nazar",
-    "Tatiana",
-    "Feruza",
-    "Kola",
+    "Norbi",
     "Mykola",
-    "Norby",
-    "Vitaly",
-    "Stina",
-    "Betty",
-    "Fayoz",
+    "Vitalii",
+    "Feruza",
 ]
 
 _WORKER_PASSWORD = "Admin1234!"
 
 _WORKER_EMAILS: dict[str, str] = {
+    "Andrii": "andrii@beyovintage.se",
+    "Roman": "roman@beyovintage.se",
+    "Tetiana": "tetiana@beyovintage.se",
+    "Nazar": "nazar@beyovintage.se",
+    "Norbi": "norbi@beyovintage.se",
     "Mykola": "mykola@beyovintage.se",
+    "Vitalii": "vitalii@beyovintage.se",
+    "Feruza": "feruza@beyovintage.se",
 }
 
 # Select workspace role per seeded bootstrap user.
@@ -40,17 +43,15 @@ _WORKER_WORKSPACE_ROLES: dict[str, str] = {
     worker_name: "worker"
     for worker_name in _WORKER_NAMES
 }
-_WORKER_WORKSPACE_ROLES["Norby"] = "manager"
-_WORKER_WORKSPACE_ROLES["Stina"] = "manager"
-_WORKER_WORKSPACE_ROLES["Betty"] = "manager"
-_WORKER_WORKSPACE_ROLES["Fayoz"] = "admin"
+_WORKER_WORKSPACE_ROLES["Norbi"] = "manager"
 _WORKER_WORKSPACE_ROLES["Mykola"] = "wood_worker"
 
 # Toggle worker assignment per working section.
 # Set any section to False to skip automatic assignment for that section.
 _WORKING_SECTION_ASSIGNMENT_MAP: dict[str, bool] = {
     "disassembly": True,
-    "cleaning": True,
+    "cleaning seat": True,
+    "cleaning wood": True,
     "structural repair": True,
     "sanding": True,
     "upholstery removal": True,
@@ -67,13 +68,15 @@ _WORKING_SECTION_ASSIGNMENT_MAP: dict[str, bool] = {
 _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
     "restoration": (
         "disassembly",
-        "cleaning",
+        "cleaning seat",
+        "cleaning wood",
         "structural repair",
         "sanding",
         "assembly",
     ),
     "restoration_core": (
         "disassembly",
+        "cleaning seat",
         "structural repair",
         "sanding",
         "assembly",
@@ -91,10 +94,14 @@ _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
         "hardwax oil",
     ),
     "kola_sections": (
-        "cleaning",
+        "cleaning wood",
         "wood fix",
         "ground oil",
         "hardwax oil",
+    ),
+    "cleaning_both": (
+        "cleaning seat",
+        "cleaning wood",
     ),
 }
 
@@ -107,8 +114,8 @@ _WORKER_SECTION_GROUPS: dict[str, tuple[str, ...]] = {
     for worker_name in _WORKER_NAMES
 }
 _WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
-_WORKER_SECTION_GROUPS["Stina"] = ()
-_WORKER_SECTION_GROUPS["Betty"] = ()
+_WORKER_SECTION_GROUPS["Feruza"] = ("restoration_core", "upholstery", "cleaning_both")
+_WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning_both")
 
 
 def _resolve_worker_section_names(worker_name: str) -> set[str]:
@@ -155,6 +162,8 @@ async def seed_workers(
 
         existing_user = await session.scalar(select(User).where(User.email == email))
         if existing_user is None:
+            existing_user = await session.scalar(select(User).where(User.username == username))
+        if existing_user is None:
             hashed_password = bcrypt.hashpw(
                 _WORKER_PASSWORD.encode(),
                 bcrypt.gensalt(),
@@ -169,6 +178,9 @@ async def seed_workers(
             await session.flush()
             worker_user = user
         else:
+            if existing_user.email != email:
+                existing_user.email = email
+                await session.flush()
             worker_user = existing_user
 
         worker_user_id = worker_user.client_id

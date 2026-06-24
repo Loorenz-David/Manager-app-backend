@@ -114,7 +114,7 @@ async def route_list_upholsteries(
 @router.patch("/favorite")
 async def route_mark_upholsteries_favorite(
     body: _BatchFavoriteBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(incoming_data=body.model_dump(), identity=claims, session=session)

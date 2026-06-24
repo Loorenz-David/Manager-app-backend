@@ -94,12 +94,8 @@ def build_auth_response(user: User, *, workspace: Workspace, membership: Workspa
         "access_token": access_token,
         "_refresh_token": refresh_token,
         "user": {
-            "client_id": user.client_id,
+            **claims,
             "email": user.email,
-            "username": user.username,
-            "role": workspace_role.name or permission_role.name.value,
-            "backend_permissions": permissions["backend"],
-            "ui": permissions["ui"],
         },
         "workspace_id": workspace.client_id,
     }

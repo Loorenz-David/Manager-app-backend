@@ -265,7 +265,7 @@ async def route_list_item_upholstery(
 
 @router.get("/lookup")
 async def route_lookup_item_by_article_number(
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
     article_number: str | None = Query(None, min_length=1, max_length=128),
     sku: str | None = Query(None, min_length=1, max_length=128),

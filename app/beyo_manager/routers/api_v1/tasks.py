@@ -192,7 +192,7 @@ class _MarkStepTimeInaccurateBody(BaseModel):
 @router.put("")
 async def route_create_task(
     body: _CreateTaskBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

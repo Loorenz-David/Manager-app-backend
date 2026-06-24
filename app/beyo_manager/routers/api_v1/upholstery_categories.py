@@ -129,7 +129,7 @@ async def route_delete_upholstery_category(
 async def route_mark_upholstery_category_favorite(
     client_id: str,
     body: _FavoriteBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
