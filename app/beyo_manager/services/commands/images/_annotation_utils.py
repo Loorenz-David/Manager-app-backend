@@ -30,14 +30,33 @@ def validate_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload:
 
 
 def normalize_payload_for_type(annotation_type: ImageAnnotationTypeEnum, payload: dict) -> dict:
-    # Frontend arrow drawings may send scalar endpoints instead of nested points.
-    # Normalize to backend canonical keys while preserving original fields.
+    # Frontend sends camelCase field names; add canonical backend keys while preserving originals
+    # so that round-tripped data is still readable by the frontend.
     if annotation_type == ImageAnnotationTypeEnum.ARROW:
         normalized = dict(payload)
         if "from" not in normalized and {"fromX", "fromY"}.issubset(normalized.keys()):
             normalized["from"] = {"x": normalized["fromX"], "y": normalized["fromY"]}
         if "to" not in normalized and {"toX", "toY"}.issubset(normalized.keys()):
             normalized["to"] = {"x": normalized["toX"], "y": normalized["toY"]}
+        return normalized
+    if annotation_type == ImageAnnotationTypeEnum.CIRCLE:
+        normalized = dict(payload)
+        if "cx" not in normalized and "centerX" in normalized:
+            normalized["cx"] = normalized["centerX"]
+        if "cy" not in normalized and "centerY" in normalized:
+            normalized["cy"] = normalized["centerY"]
+        if "r" not in normalized:
+            if "radiusX" in normalized:
+                normalized["r"] = normalized["radiusX"]
+            elif "radiusY" in normalized:
+                normalized["r"] = normalized["radiusY"]
+        return normalized
+    if annotation_type in {ImageAnnotationTypeEnum.RECTANGLE, ImageAnnotationTypeEnum.HIGHLIGHT}:
+        normalized = dict(payload)
+        if "w" not in normalized and "width" in normalized:
+            normalized["w"] = normalized["width"]
+        if "h" not in normalized and "height" in normalized:
+            normalized["h"] = normalized["height"]
         return normalized
     return payload
 
