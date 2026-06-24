@@ -18,11 +18,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute("CREATE TYPE workspace_role_name_enum AS ENUM ('wood_worker')")
+    op.execute("ALTER TABLE workspace_roles ALTER COLUMN name DROP NOT NULL")
     op.execute("UPDATE workspace_roles SET name = NULL")
     op.execute(
         """
         ALTER TABLE workspace_roles
-        ALTER COLUMN name DROP NOT NULL,
         ALTER COLUMN name TYPE workspace_role_name_enum
         USING name::workspace_role_name_enum
         """
