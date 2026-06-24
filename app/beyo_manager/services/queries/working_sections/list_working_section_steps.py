@@ -4,6 +4,7 @@ from sqlalchemy.orm import aliased, selectinload
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
+from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item_worker_light,
@@ -44,6 +45,12 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
     record_step_state_raw = ctx.query_params.get("record_step_state")
     record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
+    readiness_statuses_raw = ctx.query_params.get("readiness_statuses")
+    readiness_statuses = (
+        [TaskStepReadinessStatusEnum(s.strip()) for s in readiness_statuses_raw.split(",") if s.strip()]
+        if readiness_statuses_raw
+        else []
+    )
     item_major_category_snapshot_raw = (
         ctx.query_params.get("item_major_category")
         or ctx.query_params.get("major_category")
@@ -77,6 +84,9 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
     if record_step_states:
         stmt = stmt.where(TaskStep.state.in_(record_step_states))
+
+    if readiness_statuses:
+        stmt = stmt.where(TaskStep.readiness_status.in_(readiness_statuses))
 
     if item_major_category_snapshots:
         stmt = stmt.where(

@@ -121,3 +121,38 @@ def parse_mark_step_time_inaccurate_request(data: dict) -> MarkStepTimeInaccurat
         return MarkStepTimeInaccurateRequest(**data)
     except PydanticValidationError as e:
         raise ValidationError(str(e)) from e
+
+
+_MAX_BATCH_TRANSITION_ITEMS = 100
+
+
+class BatchTransitionItem(BaseModel):
+    task_id: str
+    step_id: str
+    mark_closing_record_inaccurate: bool = False
+
+
+class BatchTransitionStepStateRequest(BaseModel):
+    items: list[BatchTransitionItem]
+    new_state: TaskStepStateEnum
+    reason: StepEventReasonEnum | None = None
+    description: str | None = None
+
+    @field_validator("items")
+    @classmethod
+    def validate_items(cls, value: list[BatchTransitionItem]) -> list[BatchTransitionItem]:
+        if not value:
+            raise ValueError("items must not be empty.")
+        if len(value) > _MAX_BATCH_TRANSITION_ITEMS:
+            raise ValueError(f"items must not exceed {_MAX_BATCH_TRANSITION_ITEMS} entries.")
+        step_ids = [item.step_id for item in value]
+        if len(step_ids) != len(set(step_ids)):
+            raise ValueError("Duplicate step_id values are not allowed.")
+        return value
+
+
+def parse_batch_transition_step_state_request(data: dict) -> BatchTransitionStepStateRequest:
+    try:
+        return BatchTransitionStepStateRequest.model_validate(data)
+    except PydanticValidationError as e:
+        raise ValidationError(str(e)) from e

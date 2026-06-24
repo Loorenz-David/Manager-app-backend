@@ -44,6 +44,7 @@ from beyo_manager.services.commands.task_steps.remove_task_step import (
     remove_task_steps,
 )
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
+from beyo_manager.services.commands.task_steps.transition_step_state_batch import transition_step_state_batch
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
@@ -169,6 +170,19 @@ class _TransitionStepBody(BaseModel):
     reason: StepEventReasonEnum | None = None
     description: str | None = None
     mark_closing_record_inaccurate: bool = False
+
+
+class _BatchTransitionItemBody(BaseModel):
+    task_id: str
+    step_id: str
+    mark_closing_record_inaccurate: bool = False
+
+
+class _BatchTransitionStepBody(BaseModel):
+    items: list[_BatchTransitionItemBody]
+    new_state: TaskStepStateEnum
+    reason: StepEventReasonEnum | None = None
+    description: str | None = None
 
 
 class _MarkStepTimeInaccurateBody(BaseModel):
@@ -610,6 +624,23 @@ async def route_transition_step_state(
         session=session,
     )
     outcome = await run_service(transition_step_state, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/steps/transition-batch")
+async def route_transition_step_state_batch(
+    body: _BatchTransitionStepBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data=body.model_dump(),
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(transition_step_state_batch, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

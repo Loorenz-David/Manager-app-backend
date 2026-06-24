@@ -12,6 +12,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
 from beyo_manager.services.context import ServiceContext
@@ -51,7 +52,9 @@ async def _seed_workspace_user_and_task(db_session) -> tuple[Workspace, User, Ta
         state=TaskStateEnum.ASSIGNED,
         created_by_id=user.client_id,
     )
-    db_session.add_all([workspace, user, task])
+    db_session.add_all([workspace, user])
+    await db_session.flush()
+    db_session.add(task)
     await db_session.flush()
     return workspace, user, task
 
@@ -66,11 +69,18 @@ async def _seed_step(
     state: TaskStepStateEnum,
     allows_batch_working: bool,
 ) -> TaskStep:
+    section = WorkingSection(
+        client_id=f"wsec_{step_id}",
+        workspace_id=workspace_id,
+        name=f"Section {step_id}",
+    )
+    db_session.add(section)
+    await db_session.flush()
     step = TaskStep(
         client_id=step_id,
         workspace_id=workspace_id,
         task_id=task_id,
-        working_section_id=f"wsec_{step_id}",
+        working_section_id=section.client_id,
         working_section_name_snapshot=f"Section {step_id}",
         allows_batch_working=allows_batch_working,
         state=state,

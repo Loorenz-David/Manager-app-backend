@@ -29,6 +29,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.services.commands.task_steps._cascade_completion import cascade_step_completion
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
     _apply_inaccurate_time_flag,
@@ -38,7 +39,7 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
@@ -94,7 +95,15 @@ def _should_mark_latest_record_inaccurate(
 
 
 async def transition_step_state(ctx: ServiceContext) -> dict:
-    """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox."""
+    """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox.
+
+    DRIFT NOTE: the per-step transition sub-processes below are MIRRORED by
+    `_step_transition_core._apply_step_transition` (used by `transition_step_state_batch`).
+    Any change here to the state machine, record close/open, metrics, terminal handling,
+    task side-effects, or the PROCESS_STEP_TRANSITION outbox MUST be evaluated for that core,
+    and vice versa — they are intentionally kept in sync by convention (Option B).
+    `_ALLOWED_TRANSITIONS` is imported by the batch command, so the transition rules are single-sourced here.
+    """
     request = parse_transition_step_state_request(ctx.incoming_data)
     old_task_state = None
     auto_paused_step: TaskStep | None = None
@@ -339,6 +348,11 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                     task.updated_at = now
                     task.updated_by_id = ctx.user_id
 
+        # 7b. Cascade completed_dependencies to downstream dependent steps
+        readiness_changes: list = []
+        if request.new_state == TaskStepStateEnum.COMPLETED:
+            readiness_changes = await cascade_step_completion(ctx.session, ctx.workspace_id, step)
+
         # 8. Extension point for section-specific side effects (stub)
         await _dispatch_section_side_effects(step, request.new_state, ctx.session)
 
@@ -441,6 +455,15 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     if task.state != old_task_state:
         pending_events.append(
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})
+        )
+    for dep_step, _ in readiness_changes:
+        pending_events.append(
+            WorkspaceEvent(
+                event_name="task:step-readiness-changed",
+                client_id=dep_step.client_id,
+                workspace_id=ctx.workspace_id,
+                extra={"new_readiness": dep_step.readiness_status.value},
+            )
         )
     await event_bus.dispatch(pending_events)
     return {

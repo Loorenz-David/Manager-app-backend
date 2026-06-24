@@ -103,6 +103,10 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             )
         )
         if existing is not None:
+            existing.image = _SECTION_IMAGE_URLS.get(name)
+            existing.order_list = _SECTION_ORDER_LISTS.get(name)
+            existing.allows_batch_working = _SECTION_BATCH_MAP.get(name, False)
+            await session.flush()
             section_ids[name] = existing.client_id
             continue
 

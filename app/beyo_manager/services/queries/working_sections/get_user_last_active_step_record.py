@@ -44,47 +44,16 @@ _ACTIVE_RECORD_PRIORITY = case(
 )
 
 
-async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
-    # 1. Find the step_id of the user's most relevant active record
-    step_id_result = await ctx.session.execute(
-        select(StepStateRecord.step_id)
-        .join(
-            TaskStep,
-            and_(
-                TaskStep.client_id == StepStateRecord.step_id,
-                TaskStep.workspace_id == ctx.workspace_id,
-                TaskStep.is_deleted.is_(False),
-            ),
-        )
-        .where(
-            StepStateRecord.created_by_id == ctx.user_id,
-            StepStateRecord.state.in_(_ACTIVE_STATES),
-        )
-        .order_by(_ACTIVE_RECORD_PRIORITY.asc(), StepStateRecord.created_at.desc())
-        .limit(1)
-    )
-    step_id = step_id_result.scalar_one_or_none()
-    if step_id is None:
-        return {"user_last_active_step_record": None}
+async def _build_step_record_payload(ctx: ServiceContext, step: TaskStep) -> dict:
+    """Assemble the full resume-card payload for a single step (task + item + images + cases + users).
 
-    # 2. Load the TaskStep with its latest state record
-    step_result = await ctx.session.execute(
-        select(TaskStep)
-        .options(selectinload(TaskStep.latest_state_record))
-        .where(
-            TaskStep.workspace_id == ctx.workspace_id,
-            TaskStep.client_id == step_id,
-            TaskStep.is_deleted.is_(False),
-        )
-    )
-    step = step_result.scalar_one_or_none()
-    if step is None:
-        return {"user_last_active_step_record": None}
-
+    The step must be loaded with its `latest_state_record` relationship populated.
+    """
+    step_id = step.client_id
     task_id = step.task_id
     empty_case_summary = {"total_unread": 0}
 
-    # 3. Case summary for this task
+    # Case summary for this task
     case_summary = empty_case_summary.copy()
     try:
         case_rows = await ctx.session.execute(
@@ -127,7 +96,7 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
     except Exception:
         pass
 
-    # 4. Task
+    # Task
     task_result = await ctx.session.execute(
         select(Task).where(
             Task.workspace_id == ctx.workspace_id,
@@ -137,7 +106,7 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
     )
     task = task_result.scalar_one_or_none()
 
-    # 5. Primary task item
+    # Primary task item
     task_item_result = await ctx.session.execute(
         select(TaskItem).where(
             TaskItem.workspace_id == ctx.workspace_id,
@@ -210,7 +179,7 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
             else:
                 item_images.append(serialize_image_light(image))
 
-    # 6. Users (creator, updater, state record author)
+    # Users (creator, updater, state record author)
     user_ids = list({
         uid
         for uid in (
@@ -227,13 +196,13 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
         )
         users_map = {user.client_id: user for user in users_result.scalars().all()}
 
-    # 7. first_started_at across all state records for this step
+    # first_started_at across all state records for this step
     first_started_result = await ctx.session.execute(
         select(func.min(StepStateRecord.entered_at)).where(StepStateRecord.step_id == step_id)
     )
     first_started_at = first_started_result.scalar_one_or_none()
 
-    # 8. Assemble full step payload (same shape as list_working_section_steps items)
+    # Assemble full step payload (same shape as list_working_section_steps items)
     creator = users_map.get(step.created_by_id) if step.created_by_id else None
     updater = users_map.get(step.updated_by_id) if step.updated_by_id else None
     state_record_user = (
@@ -243,19 +212,111 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
     )
 
     return {
-        "user_last_active_step_record": {
-            **serialize_step(step),
-            "updated_at": step.updated_at.isoformat() if step.updated_at else None,
-            "created_by": serialize_user_working_section_member(creator) if creator else None,
-            "updated_by": serialize_user_working_section_member(updater) if updater else None,
-            "last_state_record": serialize_step_state_record_light(
-                step.latest_state_record,
-                user=state_record_user,
-                first_started_at=first_started_at,
+        **serialize_step(step),
+        "updated_at": step.updated_at.isoformat() if step.updated_at else None,
+        "created_by": serialize_user_working_section_member(creator) if creator else None,
+        "updated_by": serialize_user_working_section_member(updater) if updater else None,
+        "last_state_record": serialize_step_state_record_light(
+            step.latest_state_record,
+            user=state_record_user,
+            first_started_at=first_started_at,
+        ),
+        "task": serialize_task_light(task) if task else None,
+        "item": serialize_item_worker_light(item, item_reqs, upholstery_by_id),
+        "item_images": item_images,
+        "cases_summary": case_summary,
+    }
+
+
+async def _load_step_with_latest_record(ctx: ServiceContext, step_id: str) -> TaskStep | None:
+    result = await ctx.session.execute(
+        select(TaskStep)
+        .options(selectinload(TaskStep.latest_state_record))
+        .where(
+            TaskStep.workspace_id == ctx.workspace_id,
+            TaskStep.client_id == step_id,
+            TaskStep.is_deleted.is_(False),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
+    # 1. Find the step_id of the user's most relevant active record (the resume-card primary)
+    step_id_result = await ctx.session.execute(
+        select(StepStateRecord.step_id)
+        .join(
+            TaskStep,
+            and_(
+                TaskStep.client_id == StepStateRecord.step_id,
+                TaskStep.workspace_id == ctx.workspace_id,
+                TaskStep.is_deleted.is_(False),
             ),
-            "task": serialize_task_light(task) if task else None,
-            "item": serialize_item_worker_light(item, item_reqs, upholstery_by_id),
-            "item_images": item_images,
-            "cases_summary": case_summary,
-        }
+        )
+        .where(
+            StepStateRecord.created_by_id == ctx.user_id,
+            StepStateRecord.state.in_(_ACTIVE_STATES),
+        )
+        .order_by(_ACTIVE_RECORD_PRIORITY.asc(), StepStateRecord.created_at.desc())
+        .limit(1)
+    )
+    step_id = step_id_result.scalar_one_or_none()
+    if step_id is None:
+        return {"user_last_active_step_record": None, "active_batch_steps": None}
+
+    # 2. Load the primary TaskStep with its latest state record
+    primary_step = await _load_step_with_latest_record(ctx, step_id)
+    if primary_step is None:
+        return {"user_last_active_step_record": None, "active_batch_steps": None}
+
+    primary_payload = await _build_step_record_payload(ctx, primary_step)
+
+    # 3. If the primary step is batch-capable, surface the user's whole *open* active batch group.
+    #    "Active batch group" = the user's batch steps that currently have an open active record
+    #    (WORKING/PAUSED/ENDED_SHIFT, exited_at IS NULL). Non-batch primaries keep the single-step
+    #    behavior untouched (active_batch_steps stays null).
+    #    NOTE: this assembles per step; the active batch set is expected to be small (a worker's
+    #    concurrently-open batch steps). If that set can grow large, batch-load the per-step data.
+    active_batch_steps: list[dict] | None = None
+    if primary_step.allows_batch_working:
+        open_batch_rows = await ctx.session.execute(
+            select(StepStateRecord.step_id)
+            .join(
+                TaskStep,
+                and_(
+                    TaskStep.client_id == StepStateRecord.step_id,
+                    TaskStep.workspace_id == ctx.workspace_id,
+                    TaskStep.is_deleted.is_(False),
+                    TaskStep.allows_batch_working.is_(True),
+                ),
+            )
+            .where(
+                StepStateRecord.created_by_id == ctx.user_id,
+                StepStateRecord.state.in_(_ACTIVE_STATES),
+                StepStateRecord.exited_at.is_(None),
+            )
+            .order_by(StepStateRecord.entered_at.desc())
+        )
+        # Distinct, order-preserving (one open active record per step under the one-active invariant).
+        ordered_step_ids: list[str] = []
+        seen: set[str] = set()
+        for (sid,) in open_batch_rows.all():
+            if sid not in seen:
+                seen.add(sid)
+                ordered_step_ids.append(sid)
+
+        if ordered_step_ids:
+            payloads: list[dict] = []
+            for sid in ordered_step_ids:
+                if sid == primary_step.client_id:
+                    payloads.append(primary_payload)
+                    continue
+                batch_step = await _load_step_with_latest_record(ctx, sid)
+                if batch_step is not None:
+                    payloads.append(await _build_step_record_payload(ctx, batch_step))
+            active_batch_steps = payloads
+
+    return {
+        "user_last_active_step_record": primary_payload,
+        "active_batch_steps": active_batch_steps,
     }

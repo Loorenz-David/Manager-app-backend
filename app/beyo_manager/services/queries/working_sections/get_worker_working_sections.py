@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
 
-from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -105,11 +105,30 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
         .group_by(TaskStep.working_section_id, TaskStep.state)
     )
 
+    ready_and_pending_result = await ctx.session.execute(
+        select(
+            TaskStep.working_section_id,
+            func.count().label("cnt"),
+        )
+        .where(
+            TaskStep.workspace_id == ctx.workspace_id,
+            TaskStep.working_section_id.in_(active_section_ids),
+            TaskStep.is_deleted.is_(False),
+            TaskStep.state == TaskStepStateEnum.PENDING,
+            TaskStep.readiness_status == TaskStepReadinessStatusEnum.READY,
+        )
+        .group_by(TaskStep.working_section_id)
+    )
+
     counts_map: dict[str, dict[str, int]] = {sid: {} for sid in active_section_ids}
     for row in active_counts_result.all():
         counts_map[row.working_section_id][row.state.value] = row.cnt
     for row in terminal_counts_result.all():
         counts_map[row.working_section_id][row.state.value] = row.cnt
+
+    ready_and_pending_map: dict[str, int] = {}
+    for row in ready_and_pending_result.all():
+        ready_and_pending_map[row.working_section_id] = row.cnt
 
     all_states = [state.value for state in (_ACTIVE_STATES + _TERMINAL_STATES)]
 
@@ -127,6 +146,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
                     state: counts_map[section.client_id].get(state, 0)
                     for state in all_states
                 },
+                "ready_and_pending_count": ready_and_pending_map.get(section.client_id, 0),
             }
             for section in sections
         ]
