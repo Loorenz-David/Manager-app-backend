@@ -209,7 +209,9 @@ class CreateUpholsteryRequest(BaseModel):
     currency: UpholsteryCurrencyEnum | None = None
     planning_position: str | None = None
     upholstery_category_id: str | None = None
+    upholstery_category_name: str | None = None
     create_category: CreateUpholsteryCategoryInlineRequest | None = None
+    upholstery_inventory_id: str | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -240,12 +242,25 @@ class CreateUpholsteryRequest(BaseModel):
             raise ValueError("Value must be >= 0.")
         return v
 
+    @field_validator("upholstery_category_name", mode="before")
+    @classmethod
+    def normalize_category_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        value = v.strip()
+        return value if value else None
+
     @model_validator(mode="after")
     def validate_category_fields(self) -> "CreateUpholsteryRequest":
-        if self.create_category is not None and self.upholstery_category_id is not None:
+        provided = sum([
+            self.create_category is not None,
+            self.upholstery_category_id is not None,
+            self.upholstery_category_name is not None,
+        ])
+        if provided > 1:
             raise ValueError(
-                "create_category and upholstery_category_id are mutually exclusive. "
-                "Provide one or the other, not both."
+                "create_category, upholstery_category_id, and upholstery_category_name "
+                "are mutually exclusive. Provide at most one."
             )
         return self
 

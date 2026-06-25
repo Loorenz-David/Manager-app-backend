@@ -55,7 +55,9 @@ class _CreateBody(BaseModel):
     currency: UpholsteryCurrencyEnum | None = None
     planning_position: str | None = None
     upholstery_category_id: str | None = None
+    upholstery_category_name: str | None = None
     create_category: _InlineCategoryBody | None = None
+    upholstery_inventory_id: str | None = None
 
 
 class _UpdateBody(BaseModel):

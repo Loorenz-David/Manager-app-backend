@@ -1,0 +1,45 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /var/www/managerbeyo-backend
+            git pull origin main
+
+            cd /var/www/managerbeyo-backend/app
+            source .venv/bin/activate
+
+            pip install -r requirements.txt
+
+            set -a
+            source /home/ubuntu/config/managerbeyo/.env
+            set +a
+
+            APP_ENV=production alembic upgrade head
+            APP_ENV=production PYTHONPATH=. python scripts/apply_db_triggers.py
+
+            sudo systemctl daemon-reload && sudo systemctl restart \
+              managerbeyo-backend \
+              managerbeyo-task-router \
+              managerbeyo-presence-worker \
+              managerbeyo-analytics-worker \
+              managerbeyo-notification-worker \
+              managerbeyo-delayed-scheduler \
+              managerbeyo-recurring-scheduler \
+              managerbeyo-tasks-worker
+
+            systemctl list-units --type=service | grep managerbeyo

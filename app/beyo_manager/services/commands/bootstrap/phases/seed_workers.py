@@ -22,6 +22,8 @@ _WORKER_NAMES = [
     "Mykola",
     "Vitalii",
     "Feruza",
+    "Fayoz",
+    "Betty",
 ]
 
 _WORKER_PASSWORD = "Admin1234!"
@@ -35,16 +37,22 @@ _WORKER_EMAILS: dict[str, str] = {
     "Mykola": "mykola@beyovintage.se",
     "Vitalii": "vitalii@beyovintage.se",
     "Feruza": "feruza@beyovintage.se",
+    "Fayoz": "fayoz@beyovintage.se",
+    "Betty": "betty@beyovintage.se",
 }
 
 # Select workspace role per seeded bootstrap user.
-# Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller", "wood_worker".
+# Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller", "wood_worker", "upholstery_worker", "quality_control".
 _WORKER_WORKSPACE_ROLES: dict[str, str] = {
     worker_name: "worker"
     for worker_name in _WORKER_NAMES
 }
 _WORKER_WORKSPACE_ROLES["Norbi"] = "manager"
 _WORKER_WORKSPACE_ROLES["Mykola"] = "wood_worker"
+_WORKER_WORKSPACE_ROLES["Roman"] = "upholstery_worker"
+_WORKER_WORKSPACE_ROLES["Vitalii"] = "quality_control"
+_WORKER_WORKSPACE_ROLES["Fayoz"] = "admin"
+_WORKER_WORKSPACE_ROLES["Betty"] = "admin"
 
 # Toggle worker assignment per working section.
 # Set any section to False to skip automatic assignment for that section.
@@ -116,6 +124,8 @@ _WORKER_SECTION_GROUPS: dict[str, tuple[str, ...]] = {
 _WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
 _WORKER_SECTION_GROUPS["Feruza"] = ("restoration_core", "upholstery", "cleaning_both")
 _WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning_both")
+_WORKER_SECTION_GROUPS["Fayoz"] = ()
+_WORKER_SECTION_GROUPS["Betty"] = ()
 
 
 def _resolve_worker_section_names(worker_name: str) -> set[str]:

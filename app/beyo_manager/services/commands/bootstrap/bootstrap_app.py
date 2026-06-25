@@ -5,7 +5,7 @@ from beyo_manager.services.commands.bootstrap.phases.seed_admin_user import seed
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import seed_item_categories
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_type_links import seed_issue_type_links
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_types import seed_issue_types
-from beyo_manager.services.commands.bootstrap.phases.seed_upholsteries import seed_upholsteries
+from beyo_manager.services.commands.bootstrap.phases.seed_upholsteries import delete_seeded_upholsteries
 from beyo_manager.services.commands.bootstrap.phases.seed_roles import seed_roles
 from beyo_manager.services.commands.bootstrap.phases.seed_workers import seed_workers
 from beyo_manager.services.commands.bootstrap.phases.seed_working_section_item_categories import seed_working_section_item_categories
@@ -39,7 +39,7 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
             item_category_ids,
         )
         user_result = await seed_admin_user(ctx.session, settings, workspace_result)
-        upholstery_result = await seed_upholsteries(
+        await delete_seeded_upholsteries(
             ctx.session,
             workspace_result["workspace_id"],
             user_result["admin_user_id"],
@@ -55,7 +55,6 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
     return {
         "workspace_id": workspace_result["workspace_id"],
         "admin_user_id": user_result["admin_user_id"],
-        "upholstery_seeded": upholstery_result,
         "worker_user_ids": worker_result,
         "roles_seeded": list(role_ids.keys()),
     }

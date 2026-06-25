@@ -12,6 +12,8 @@ _DISPLAY_NAMES: dict[str, str] = {
     "manager": "Manager",
     "seller": "Seller",
     "wood_worker": "Wood Worker",
+    "upholstery_worker": "Upholstery Worker",
+    "quality_control": "Quality Control",
 }
 
 
@@ -68,5 +70,31 @@ async def seed_workspace(
         session.add(wood_worker_role)
         await session.flush()
     result[WorkspaceRoleNameEnum.WOOD_WORKER.value] = wood_worker_role.client_id
+
+    upholstery_worker_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.UPHOLSTERY_WORKER)
+    if upholstery_worker_role is None:
+        upholstery_worker_role = WorkspaceRole(
+            workspace_id=workspace_id,
+            role_id=role_ids["worker"],
+            name=WorkspaceRoleNameEnum.UPHOLSTERY_WORKER,
+            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.UPHOLSTERY_WORKER.value],
+            is_system=False,
+        )
+        session.add(upholstery_worker_role)
+        await session.flush()
+    result[WorkspaceRoleNameEnum.UPHOLSTERY_WORKER.value] = upholstery_worker_role.client_id
+
+    quality_control_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.QUALITY_CONTROL)
+    if quality_control_role is None:
+        quality_control_role = WorkspaceRole(
+            workspace_id=workspace_id,
+            role_id=role_ids["worker"],
+            name=WorkspaceRoleNameEnum.QUALITY_CONTROL,
+            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.QUALITY_CONTROL.value],
+            is_system=False,
+        )
+        session.add(quality_control_role)
+        await session.flush()
+    result[WorkspaceRoleNameEnum.QUALITY_CONTROL.value] = quality_control_role.client_id
 
     return result

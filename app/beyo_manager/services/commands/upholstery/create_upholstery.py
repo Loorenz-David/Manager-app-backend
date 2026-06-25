@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -13,6 +14,8 @@ from beyo_manager.services.commands.upholstery.requests import parse_create_upho
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
 
+logger = logging.getLogger(__name__)
+
 
 async def create_upholstery(ctx: ServiceContext) -> dict:
     request = parse_create_upholstery_request(ctx.incoming_data)
@@ -23,6 +26,9 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
     if request.create_category is not None and request.create_category.client_id is not None:
         validate_provided_client_id(request.create_category.client_id, "upc")
 
+    if request.upholstery_inventory_id is not None:
+        validate_provided_client_id(request.upholstery_inventory_id, "uin")
+
     category = None
     async with ctx.session.begin():
         uph_kwargs: dict[str, str] = {}
@@ -31,6 +37,13 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             if dup is not None:
                 raise ConflictError("Provided client_id is already in use.")
             uph_kwargs["client_id"] = request.client_id
+
+        inv_kwargs: dict[str, str] = {}
+        if request.upholstery_inventory_id is not None:
+            dup_inv = await ctx.session.get(UpholsteryInventory, request.upholstery_inventory_id)
+            if dup_inv is not None:
+                raise ConflictError("Provided upholstery_inventory_id is already in use.")
+            inv_kwargs["client_id"] = request.upholstery_inventory_id
 
         name_conflict = await ctx.session.execute(
             select(Upholstery).where(
@@ -102,6 +115,31 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             if category is None:
                 raise NotFound("Upholstery category not found.")
             resolved_category_id = category.client_id
+        elif request.upholstery_category_name is not None:
+            logger.info("[create_upholstery] entering upholstery_category_name branch — name=%r", request.upholstery_category_name)
+            cat_by_name = await ctx.session.execute(
+                select(UpholsteryCategory).where(
+                    UpholsteryCategory.workspace_id == ctx.workspace_id,
+                    UpholsteryCategory.name == request.upholstery_category_name,
+                    UpholsteryCategory.is_deleted.is_(False),
+                )
+            )
+            category = cat_by_name.scalar_one_or_none()
+            logger.info("[create_upholstery] category lookup result — found=%r", category is not None)
+            if category is None:
+                logger.info("[create_upholstery] creating new category — name=%r", request.upholstery_category_name)
+                category = UpholsteryCategory(
+                    workspace_id=ctx.workspace_id,
+                    name=request.upholstery_category_name,
+                    image_url=request.image_url,
+                    favorite=False,
+                    created_by_id=ctx.user_id,
+                )
+                ctx.session.add(category)
+                await ctx.session.flush()
+                logger.info("[create_upholstery] new category flushed — client_id=%r", category.client_id)
+            resolved_category_id = category.client_id
+            logger.info("[create_upholstery] resolved_category_id=%r", resolved_category_id)
 
         upholstery = Upholstery(
             **uph_kwargs,
@@ -124,6 +162,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         )
 
         inventory = UpholsteryInventory(
+            **inv_kwargs,
             workspace_id=ctx.workspace_id,
             upholstery_id=upholstery.client_id,
             inventory_condition=inventory_condition,
