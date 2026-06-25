@@ -45,6 +45,9 @@ from beyo_manager.services.commands.task_steps.remove_task_step import (
 )
 from beyo_manager.services.commands.task_steps.transition_step_state import transition_step_state
 from beyo_manager.services.commands.task_steps.transition_step_state_batch import transition_step_state_batch
+from beyo_manager.services.commands.task_steps.update_task_step_ready_by_at import (
+    update_task_step_ready_by_at,
+)
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
@@ -158,6 +161,16 @@ class _TaskStepInputBody(BaseModel):
     working_section_id: str
     worker_id: str | None = None
     sequence_order: int | None = None
+    ready_by_at: datetime | None = None
+
+
+class _UpdateStepReadyByAtItemBody(BaseModel):
+    step_id: str
+    ready_by_at: datetime | None = None
+
+
+class _UpdateStepsReadyByAtBody(BaseModel):
+    items: list[_UpdateStepReadyByAtItemBody]
 
 
 class _AssignWorkerBody(BaseModel):
@@ -508,6 +521,27 @@ async def route_add_task_step(
         session=session,
     )
     outcome = await run_service(add_task_steps, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{task_id}/steps/ready-by-at")
+async def route_update_task_steps_ready_by_at(
+    task_id: str,
+    body: _UpdateStepsReadyByAtBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={
+            "task_id": task_id,
+            "items": [item.model_dump() for item in body.items],
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(update_task_step_ready_by_at, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

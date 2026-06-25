@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum, UpholsteryOrderStateEnum
 from beyo_manager.errors.validation import ValidationError
@@ -180,6 +180,21 @@ def parse_set_current_stored_amount_inventory_request(
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
+class CreateUpholsteryCategoryInlineRequest(BaseModel):
+    client_id: str | None = None
+    name: str
+    image_url: str | None = None
+    favorite: bool = False
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, v: str) -> str:
+        value = (v or "").strip()
+        if not value:
+            raise ValueError("name must not be blank.")
+        return value
+
+
 class CreateUpholsteryRequest(BaseModel):
     client_id: str | None = None
     name: str
@@ -194,6 +209,7 @@ class CreateUpholsteryRequest(BaseModel):
     currency: UpholsteryCurrencyEnum | None = None
     planning_position: str | None = None
     upholstery_category_id: str | None = None
+    create_category: CreateUpholsteryCategoryInlineRequest | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -224,6 +240,15 @@ class CreateUpholsteryRequest(BaseModel):
             raise ValueError("Value must be >= 0.")
         return v
 
+    @model_validator(mode="after")
+    def validate_category_fields(self) -> "CreateUpholsteryRequest":
+        if self.create_category is not None and self.upholstery_category_id is not None:
+            raise ValueError(
+                "create_category and upholstery_category_id are mutually exclusive. "
+                "Provide one or the other, not both."
+            )
+        return self
+
 
 def parse_create_upholstery_request(data: dict) -> CreateUpholsteryRequest:
     from pydantic import ValidationError as PydanticValidationError
@@ -232,8 +257,9 @@ def parse_create_upholstery_request(data: dict) -> CreateUpholsteryRequest:
         return CreateUpholsteryRequest.model_validate(data)
     except PydanticValidationError as exc:
         first_error = exc.errors()[0]
-        field = ".".join(str(loc) for loc in first_error["loc"])
-        raise ValidationError(f"{field}: {first_error['msg']}") from exc
+        loc_parts = [str(loc) for loc in first_error["loc"]]
+        prefix = ".".join(loc_parts) + ": " if loc_parts else ""
+        raise ValidationError(f"{prefix}{first_error['msg']}") from exc
 
 
 class UpdateUpholsteryRequest(BaseModel):

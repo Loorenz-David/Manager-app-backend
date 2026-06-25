@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.domain.upholstery.condition_evaluation import evaluate_inventory_condition
 from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
+from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 
+_SEED_CATEGORY_NAME = "Sample Fabrics"
 
 _UPHOLSTERIES: list[dict[str, str]] = [
     {
@@ -44,6 +46,25 @@ async def seed_upholsteries(
 ) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
 
+    existing_category = await session.scalar(
+        select(UpholsteryCategory).where(
+            UpholsteryCategory.workspace_id == workspace_id,
+            UpholsteryCategory.name == _SEED_CATEGORY_NAME,
+            UpholsteryCategory.is_deleted.is_(False),
+        )
+    )
+    if existing_category is None:
+        category = UpholsteryCategory(
+            workspace_id=workspace_id,
+            name=_SEED_CATEGORY_NAME,
+            created_by_id=created_by_id,
+        )
+        session.add(category)
+        await session.flush()
+        category_row = category
+    else:
+        category_row = existing_category
+
     for idx, seed in enumerate(_UPHOLSTERIES):
         name = seed["name"]
         code = seed["code"]
@@ -61,14 +82,21 @@ async def seed_upholsteries(
                 name=name,
                 code=code,
                 image_url=image_url,
+                upholstery_category_id=category_row.client_id,
                 created_by_id=created_by_id,
             )
             session.add(upholstery)
             await session.flush()
             upholstery_row = upholstery
         else:
+            dirty = False
             if existing_upholstery.image_url is None:
                 existing_upholstery.image_url = image_url
+                dirty = True
+            if existing_upholstery.upholstery_category_id is None:
+                existing_upholstery.upholstery_category_id = category_row.client_id
+                dirty = True
+            if dirty:
                 await session.flush()
             upholstery_row = existing_upholstery
 

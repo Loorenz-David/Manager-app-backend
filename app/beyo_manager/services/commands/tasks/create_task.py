@@ -238,6 +238,11 @@ async def create_task(ctx: ServiceContext) -> dict:
                     total_dependencies=0,
                     completed_dependencies=0,
                     sequence_order=step_input.sequence_order,
+                    ready_by_at=(
+                        step_input.ready_by_at
+                        if step_input.ready_by_at is not None
+                        else request.ready_by_at
+                    ),
                     created_at=now,
                     created_by_id=ctx.user_id,
                 )

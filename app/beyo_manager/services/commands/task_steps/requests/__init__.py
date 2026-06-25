@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ValidationError as PydanticValidationError, field_validator
 
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
@@ -9,6 +11,7 @@ class StepInputItem(BaseModel):
     working_section_id: str
     sequence_order: int | None = None
     worker_id: str | None = None
+    ready_by_at: datetime | None = None
 
 
 class AddTaskStepsRequest(BaseModel):
@@ -22,6 +25,26 @@ class AssignWorkerToStepRequest(BaseModel):
     worker_id: str
 
 
+class UpdateStepReadyByAtItem(BaseModel):
+    step_id: str
+    ready_by_at: datetime | None = None
+
+
+class UpdateStepReadyByAtRequest(BaseModel):
+    task_id: str
+    items: list[UpdateStepReadyByAtItem]
+
+    @field_validator("items")
+    @classmethod
+    def validate_items(cls, value: list[UpdateStepReadyByAtItem]) -> list[UpdateStepReadyByAtItem]:
+        if not value:
+            raise ValueError("items must not be empty.")
+        step_ids = [item.step_id for item in value]
+        if len(step_ids) != len(set(step_ids)):
+            raise ValueError("Duplicate step_id values are not allowed.")
+        return value
+
+
 def parse_add_task_steps_request(data: dict) -> AddTaskStepsRequest:
     try:
         return AddTaskStepsRequest(**data)
@@ -32,6 +55,13 @@ def parse_add_task_steps_request(data: dict) -> AddTaskStepsRequest:
 def parse_assign_worker_to_step_request(data: dict) -> AssignWorkerToStepRequest:
     try:
         return AssignWorkerToStepRequest(**data)
+    except PydanticValidationError as e:
+        raise ValidationError(str(e)) from e
+
+
+def parse_update_step_ready_by_at_request(data: dict) -> UpdateStepReadyByAtRequest:
+    try:
+        return UpdateStepReadyByAtRequest.model_validate(data)
     except PydanticValidationError as e:
         raise ValidationError(str(e)) from e
 

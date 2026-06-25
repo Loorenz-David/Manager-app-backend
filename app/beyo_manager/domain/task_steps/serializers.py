@@ -17,4 +17,5 @@ def serialize_task_step_compact(step: TaskStep, working_section: WorkingSection 
         "working_section_image": working_section.image if working_section else None,
         "created_at": step.created_at.isoformat() if step.created_at else None,
         "closed_at": step.closed_at.isoformat() if step.closed_at else None,
+        "ready_by_at": step.ready_by_at.isoformat() if step.ready_by_at else None,
     }

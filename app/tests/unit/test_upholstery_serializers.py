@@ -31,6 +31,7 @@ def test_serialize_upholstery_returns_net_available_meters():
 
     assert result["current_stored_amount_meters"] == "4.000"
     assert result["image_url"] == "https://cdn.example.com/uph-1.jpg"
+    assert result["origin"] == "database"
 
 
 @pytest.mark.unit

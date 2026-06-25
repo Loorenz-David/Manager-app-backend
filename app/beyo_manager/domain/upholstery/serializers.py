@@ -145,6 +145,7 @@ def serialize_upholstery(
             "name": category.name,
             "image_url": category.image_url,
         } if category is not None else None,
+        "origin": "database",
     }
 
 

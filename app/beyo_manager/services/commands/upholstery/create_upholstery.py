@@ -20,6 +20,9 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
     if request.client_id is not None:
         validate_provided_client_id(request.client_id, "uph")
 
+    if request.create_category is not None and request.create_category.client_id is not None:
+        validate_provided_client_id(request.create_category.client_id, "upc")
+
     category = None
     async with ctx.session.begin():
         uph_kwargs: dict[str, str] = {}
@@ -50,7 +53,44 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             if code_conflict.scalar_one_or_none() is not None:
                 raise ConflictError("An upholstery with this code already exists in the workspace.")
 
-        if request.upholstery_category_id is not None:
+        resolved_category_id: str | None = None
+
+        if request.create_category is not None:
+            cat_req = request.create_category
+
+            if cat_req.client_id is not None:
+                dup_cat = await ctx.session.get(UpholsteryCategory, cat_req.client_id)
+                if dup_cat is not None:
+                    raise ConflictError("Provided category client_id is already in use.")
+
+            cat_name_conflict = await ctx.session.execute(
+                select(UpholsteryCategory).where(
+                    UpholsteryCategory.workspace_id == ctx.workspace_id,
+                    UpholsteryCategory.name == cat_req.name,
+                    UpholsteryCategory.is_deleted.is_(False),
+                )
+            )
+            if cat_name_conflict.scalar_one_or_none() is not None:
+                raise ConflictError(
+                    "An upholstery category with this name already exists in the workspace."
+                )
+
+            cat_kwargs: dict[str, str] = {}
+            if cat_req.client_id is not None:
+                cat_kwargs["client_id"] = cat_req.client_id
+
+            category = UpholsteryCategory(
+                **cat_kwargs,
+                workspace_id=ctx.workspace_id,
+                name=cat_req.name,
+                image_url=cat_req.image_url,
+                favorite=cat_req.favorite,
+                created_by_id=ctx.user_id,
+            )
+            ctx.session.add(category)
+            await ctx.session.flush()
+            resolved_category_id = category.client_id
+        elif request.upholstery_category_id is not None:
             category_result = await ctx.session.execute(
                 select(UpholsteryCategory).where(
                     UpholsteryCategory.workspace_id == ctx.workspace_id,
@@ -61,6 +101,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             category = category_result.scalar_one_or_none()
             if category is None:
                 raise NotFound("Upholstery category not found.")
+            resolved_category_id = category.client_id
 
         upholstery = Upholstery(
             **uph_kwargs,
@@ -69,7 +110,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             code=request.code,
             image_url=request.image_url,
             favorite=request.favorite,
-            upholstery_category_id=request.upholstery_category_id,
+            upholstery_category_id=resolved_category_id,
             created_by_id=ctx.user_id,
         )
         ctx.session.add(upholstery)

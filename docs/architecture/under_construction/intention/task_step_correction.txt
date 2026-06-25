@@ -1,0 +1,45 @@
+You will now create an implemenation plan using the template 
+
+we will now make an improvment to the current task step model  
+(  /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/tasks/task_step.py )  
+the current task step model doesn't store any due date ( in task model it is called ready_by_at /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/tasks/task.py ). 
+We will make this addition to the task step, the same way we have it configure in the task model .
+ 
+ 
+We will also make the modification on the task creation service  and task router so that this value can be passed at the moment of creating a task, or at the momenet of adding task steps to a task.
+
+create task router: route_create_task ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py )
+uses service: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/tasks/create_task.py
+
+that service supports passing task steps ( _TaskStepInputBody router class enum ).
+we will add the possibility of passing the ready_by_at for each object also. If a working section has no ready_by_at then the serivce should use the task.ready_by_at value passed, if no task.ready_by_at then the value can be null.
+
+the router route_add_task_step ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py )
+uses service: /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/task_steps/add_task_steps.py
+
+that service supports passing task steps ( _TaskStepInputBody router class enum ).
+we will add the possibility of passing the ready_by_at for each object also. If a working section has no ready_by_at then the serivce should use the task.ready_by_at value stored in the task, if no task.ready_by_at then the value can be null.
+
+
+
+we will create a router / service that allows to change the ready_by_at of on or more task steps, 
+
+
+the serializers: 
+serialize_task_step_compact  ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/task_steps/serializers.py )
+serialize_step ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/tasks/serializers.py )
+
+should now serialize that task step column "ready_by_at"
+
+routers that use that serialization on return shape:
+
+route_list_task_steps ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py )
+
+router: route_get_task ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py )
+
+router: get_user_last_active_step_record_route ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/working_sections.py )
+
+router: list_working_section_steps_route ( /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/working_sections.py )
+
+Codex should make a handoff documentation for the frontend to undestatnd what schemas to change now, as the task step now brings this value, and the creation of the task steps now accept that column. and the new router which allows to update the ready_by_at of one or more task steps. 
+this document can be created at /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend using the template /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend/TEMPLATE_HANDOFF_TO_FRONTEND.md

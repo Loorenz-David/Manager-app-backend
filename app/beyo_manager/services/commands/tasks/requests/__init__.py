@@ -76,6 +76,7 @@ class TaskStepInput(BaseModel):
 	working_section_id: str
 	worker_id: str | None = None
 	sequence_order: int | None = None
+	ready_by_at: datetime | None = None
 
 
 class CreateTaskRequest(BaseModel):

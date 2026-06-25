@@ -80,6 +80,7 @@ class TaskStep(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ready_by_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True, index=True
     )

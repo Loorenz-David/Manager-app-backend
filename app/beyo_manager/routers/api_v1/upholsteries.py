@@ -22,6 +22,9 @@ from beyo_manager.services.commands.upholstery.update_upholstery_list_order impo
     update_upholstery_list_order,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery.list_nevotex_upholsteries import (
+    list_nevotex_upholsteries,
+)
 from beyo_manager.services.queries.upholstery.upholsteries import (
     get_upholstery,
     list_upholsteries,
@@ -29,6 +32,13 @@ from beyo_manager.services.queries.upholstery.upholsteries import (
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter(prefix="/api/v1/upholsteries", tags=["upholsteries"])
+
+
+class _InlineCategoryBody(BaseModel):
+    client_id: str | None = None
+    name: str
+    image_url: str | None = None
+    favorite: bool = False
 
 
 class _CreateBody(BaseModel):
@@ -45,6 +55,7 @@ class _CreateBody(BaseModel):
     currency: UpholsteryCurrencyEnum | None = None
     planning_position: str | None = None
     upholstery_category_id: str | None = None
+    create_category: _InlineCategoryBody | None = None
 
 
 class _UpdateBody(BaseModel):
@@ -106,6 +117,25 @@ async def route_list_upholsteries(
         session=session,
     )
     outcome = await run_service(list_upholsteries, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/external/nevotex")
+async def route_list_nevotex_upholsteries(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(7, ge=1, le=20),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={"q": q, "limit": limit},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_nevotex_upholsteries, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
