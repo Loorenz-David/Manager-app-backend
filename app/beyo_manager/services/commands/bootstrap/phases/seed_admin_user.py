@@ -9,7 +9,7 @@ from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetim
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
-
+#coment
 
 async def seed_admin_user(
     session: AsyncSession,
