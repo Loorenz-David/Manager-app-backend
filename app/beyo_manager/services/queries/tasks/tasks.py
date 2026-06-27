@@ -7,7 +7,6 @@ from beyo_manager.domain.images.serializers import serialize_image, serialize_im
 from beyo_manager.domain.tasks.enums import TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item,
-    serialize_note,
     serialize_requirement,
     serialize_step,
     serialize_step_latest_state_record,
@@ -25,7 +24,6 @@ from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
-from beyo_manager.models.tables.tasks.task_note import TaskNote
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
 
@@ -407,14 +405,6 @@ async def get_task(ctx: ServiceContext) -> dict:
     )
     steps = steps_result.scalars().all()
 
-    notes_result = await ctx.session.execute(
-        select(TaskNote).where(
-            TaskNote.workspace_id == ctx.workspace_id,
-            TaskNote.task_id == task.client_id,
-        )
-    )
-    notes = notes_result.scalars().all()
-
     unread_result = await ctx.session.execute(
         select(func.sum(
             case(
@@ -449,6 +439,5 @@ async def get_task(ctx: ServiceContext) -> dict:
             }
             for step in steps
         ],
-        "task_notes": [serialize_note(n) for n in notes],
         "unread_message_count": unread_message_count,
     }

@@ -68,7 +68,9 @@ class ItemUpholsteryInput(BaseModel):
 class TaskNoteInput(BaseModel):
 	client_id: str | None = None
 	note_type: TaskNoteTypeEnum
-	content: dict
+	content: list
+	plain_text: str = ""
+	users_read_list: list[str] | None = None
 
 
 class TaskStepInput(BaseModel):
@@ -123,6 +125,17 @@ class UpdateTaskRequest(BaseModel):
 	additional_details: dict | None = None
 
 
+class UpdateTaskReadyByAtRequest(BaseModel):
+	client_id: str
+	ready_by_at: datetime | None = None
+
+
+class UpdateTaskScheduleRequest(BaseModel):
+	client_id: str
+	scheduled_start_at: datetime | None = None
+	scheduled_end_at: datetime | None = None
+
+
 class TerminalTaskRequest(BaseModel):
 	client_id: str
 
@@ -142,13 +155,27 @@ class CreateTaskNoteRequest(BaseModel):
 	client_id: str | None = None
 	task_id: str
 	note_type: TaskNoteTypeEnum
-	content: dict
+	content: list
+	plain_text: str = ""
+	users_read_list: list[str] | None = None
+
+
+class CreateBatchTaskNotesRequest(BaseModel):
+	task_id: str
+	notes: list[TaskNoteInput]
 
 
 class UpdateTaskNoteRequest(BaseModel):
 	client_id: str
 	note_type: TaskNoteTypeEnum | None = None
-	content: dict | None = None
+	content: list | None = None
+	plain_text: str | None = None
+
+
+class MarkNoteReadByRequest(BaseModel):
+	client_id: str
+	task_id: str
+	user_ids: list[str]
 
 
 class DeleteTaskNoteRequest(BaseModel):
@@ -171,6 +198,20 @@ def parse_create_task_request(data: dict) -> CreateTaskRequest:
 def parse_update_task_request(data: dict) -> UpdateTaskRequest:
 	try:
 		return UpdateTaskRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_update_task_ready_by_at_request(data: dict) -> UpdateTaskReadyByAtRequest:
+	try:
+		return UpdateTaskReadyByAtRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_update_task_schedule_request(data: dict) -> UpdateTaskScheduleRequest:
+	try:
+		return UpdateTaskScheduleRequest.model_validate(data)
 	except PydanticValidationError as exc:
 		_raise_validation_error(exc)
 
@@ -203,6 +244,13 @@ def parse_create_task_note_request(data: dict) -> CreateTaskNoteRequest:
 		_raise_validation_error(exc)
 
 
+def parse_create_batch_task_notes_request(data: dict) -> CreateBatchTaskNotesRequest:
+	try:
+		return CreateBatchTaskNotesRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
 def parse_update_task_note_request(data: dict) -> UpdateTaskNoteRequest:
 	try:
 		return UpdateTaskNoteRequest.model_validate(data)
@@ -213,5 +261,12 @@ def parse_update_task_note_request(data: dict) -> UpdateTaskNoteRequest:
 def parse_delete_task_note_request(data: dict) -> DeleteTaskNoteRequest:
 	try:
 		return DeleteTaskNoteRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_mark_note_read_by_request(data: dict) -> MarkNoteReadByRequest:
+	try:
+		return MarkNoteReadByRequest.model_validate(data)
 	except PydanticValidationError as exc:
 		_raise_validation_error(exc)

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, JSON, String
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, JSON, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.domain.tasks.enums import TaskNoteTypeEnum
@@ -25,7 +26,9 @@ class TaskNote(IdentityMixin, Base):
     note_type: Mapped[TaskNoteTypeEnum] = mapped_column(
         SAEnum(TaskNoteTypeEnum, name="task_note_type_enum", create_type=True), nullable=False
     )
-    content: Mapped[dict] = mapped_column(JSON, nullable=False)
+    content: Mapped[list | dict] = mapped_column(JSON, nullable=False)
+    plain_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    users_read_list: Mapped[list | None] = mapped_column(JSONB, nullable=True, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

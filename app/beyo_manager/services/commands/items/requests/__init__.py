@@ -485,3 +485,32 @@ def parse_find_or_create_item_request(data: dict) -> FindOrCreateItemRequest:
         first_error = exc.errors()[0]
         field = ".".join(str(loc) for loc in first_error["loc"])
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
+
+
+class ItemPositionEntry(BaseModel):
+    client_id: str
+    item_position: str | None = None
+
+
+class BatchUpdateItemPositionsRequest(BaseModel):
+    entries: list[ItemPositionEntry]
+
+    @field_validator("entries")
+    @classmethod
+    def entries_must_not_be_empty(cls, v: list[ItemPositionEntry]) -> list[ItemPositionEntry]:
+        if not v:
+            raise ValueError("entries must contain at least one item.")
+        if len(v) > 200:
+            raise ValueError("entries must not exceed 200 items.")
+        return v
+
+
+def parse_batch_update_item_positions_request(data: dict) -> BatchUpdateItemPositionsRequest:
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        return BatchUpdateItemPositionsRequest.model_validate(data)
+    except PydanticValidationError as exc:
+        first_error = exc.errors()[0]
+        field = ".".join(str(loc) for loc in first_error["loc"])
+        raise ValidationError(f"{field}: {first_error['msg']}") from exc

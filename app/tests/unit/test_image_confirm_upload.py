@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from beyo_manager.domain.files.enums import PendingUploadStatusEnum
+from beyo_manager.domain.images.enums import ImageEventTypeEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.base.identity import generate_id
 from beyo_manager.services.commands.images import confirm_upload as confirm_upload_module
@@ -204,3 +205,31 @@ async def test_confirm_upload_rejects_non_positive_dimensions(monkeypatch):
 
     with pytest.raises(ValidationError, match="width_px must be a positive integer"):
         await confirm_upload(ctx)
+
+
+@pytest.mark.unit
+async def test_confirm_upload_note_entity_emits_note_image_event(monkeypatch):
+    monkeypatch.setattr(confirm_upload_module.settings, "storage_provider", "local")
+    monkeypatch.setattr(
+        confirm_upload_module,
+        "get_storage_client",
+        lambda: SimpleNamespace(head_object=lambda _key: {"content_length": 1024}),
+    )
+
+    upload = _build_upload("pu_note_1", "images/ws/notes/a.webp")
+    session = _FakeSession({"pu_note_1": upload})
+    ctx = ServiceContext(
+        identity={"user_id": "usr_1"},
+        incoming_data={
+            "pending_upload_client_id": "pu_note_1",
+            "entity_type": "note",
+            "entity_client_id": "tno_1",
+        },
+        session=session,
+    )
+
+    result = await confirm_upload(ctx)
+
+    assert result["image"]["client_id"].startswith("img_")
+    event_row = next(obj for obj in session.added if obj.__class__.__name__ == "ImageEvent")
+    assert event_row.type == ImageEventTypeEnum.UPLOAD_NOTE_IMAGE

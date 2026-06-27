@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
-from beyo_manager.domain.users.serializers import serialize_user_working_section_member
+from beyo_manager.domain.images.serializers import serialize_image
+from beyo_manager.domain.users.serializers import serialize_user_compact_with_role, serialize_user_working_section_member
+from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
@@ -153,16 +155,65 @@ def serialize_step_latest_state_record(record: StepStateRecord | None) -> dict |
     }
 
 
-def serialize_note(note: TaskNote) -> dict:
+def serialize_note_with_images(
+    note: TaskNote,
+    created_by_user: User | None = None,
+    created_by_role_client_id: str | None = None,
+    created_by_role_name: str | None = None,
+    created_by_workspace_role_client_id: str | None = None,
+    created_by_workspace_role_name: str | None = None,
+    updated_by_user: User | None = None,
+    updated_by_role_client_id: str | None = None,
+    updated_by_role_name: str | None = None,
+    updated_by_workspace_role_client_id: str | None = None,
+    updated_by_workspace_role_name: str | None = None,
+    note_images: list[Image] | None = None,
+) -> dict:
+    def _user_compact(
+        user: User | None,
+        role_client_id: str | None,
+        role_name: str | None,
+        workspace_role_client_id: str | None,
+        workspace_role_name: str | None,
+    ) -> dict | None:
+        if user is None:
+            return None
+        return serialize_user_compact_with_role(
+            user,
+            role_client_id=role_client_id or "",
+            role_name=role_name or "",
+            workspace_role_client_id=workspace_role_client_id or "",
+            workspace_role_name=workspace_role_name or "",
+        )
+
     return {
-        "client_id": note.client_id,
-        "task_id": note.task_id,
-        "note_type": note.note_type.value,
-        "content": note.content,
-        "created_at": note.created_at.isoformat() if note.created_at else None,
-        "updated_at": note.updated_at.isoformat() if note.updated_at else None,
-        "is_deleted": note.is_deleted,
-        "deleted_at": note.deleted_at.isoformat() if note.deleted_at else None,
+        "note": {
+            "client_id": note.client_id,
+            "task_id": note.task_id,
+            "note_type": note.note_type.value,
+            "content": note.content,
+            "plain_text": note.plain_text,
+            "users_read_list": note.users_read_list or [],
+            "created_at": note.created_at.isoformat() if note.created_at else None,
+            "created_by": _user_compact(
+                created_by_user,
+                created_by_role_client_id,
+                created_by_role_name,
+                created_by_workspace_role_client_id,
+                created_by_workspace_role_name,
+            ),
+            "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+            "updated_by": _user_compact(
+                updated_by_user,
+                updated_by_role_client_id,
+                updated_by_role_name,
+                updated_by_workspace_role_client_id,
+                updated_by_workspace_role_name,
+            ),
+            "is_deleted": note.is_deleted,
+            "deleted_at": note.deleted_at.isoformat() if note.deleted_at else None,
+        },
+        "note_images": [serialize_image(image, include_annotations=True) for image in (note_images or [])],
     }
 
 
@@ -237,6 +288,8 @@ def serialize_task_light(task: Task) -> dict:
         "return_source": task.return_source.value if task.return_source else None,
         "item_location": task.item_location.value if task.item_location else None,
         "ready_by_at": task.ready_by_at.isoformat() if task.ready_by_at else None,
+        "scheduled_start_at": task.scheduled_start_at.isoformat() if task.scheduled_start_at else None,
+        "scheduled_end_at": task.scheduled_end_at.isoformat() if task.scheduled_end_at else None,
         "return_method": task.return_method.value if task.return_method else None,
     }
 

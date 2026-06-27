@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from beyo_manager.domain.content.enums import ContentMentionLinkEntityTypeEnum
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
@@ -13,13 +14,14 @@ from beyo_manager.services.commands.history.message_builder import build_update_
 from beyo_manager.services.commands.tasks.requests import parse_update_task_note_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.content import process_content_mentions, validate_content
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
 async def update_task_note(ctx: ServiceContext) -> dict:
     request = parse_update_task_note_request(ctx.incoming_data)
-    updated_fields = [field for field in ["note_type", "content"] if field in request.model_fields_set]
+    updated_fields = [field for field in ["note_type", "content", "plain_text"] if field in request.model_fields_set]
 
     async with maybe_begin(ctx.session):
         result = await ctx.session.execute(
@@ -37,7 +39,18 @@ async def update_task_note(ctx: ServiceContext) -> dict:
         if "note_type" in request.model_fields_set:
             note.note_type = request.note_type
         if "content" in request.model_fields_set:
-            note.content = request.content
+            blocks = validate_content(request.content)
+            note.content = [block.__dict__ for block in blocks]
+            await process_content_mentions(
+                ctx.session,
+                note.content,
+                ContentMentionLinkEntityTypeEnum.TASK_NOTE_MENTION,
+                note.client_id,
+                ctx.user_id,
+                replace=True,
+            )
+        if "plain_text" in request.model_fields_set:
+            note.plain_text = request.plain_text
 
         note.updated_at = datetime.now(timezone.utc)
         note.updated_by_id = ctx.user_id
@@ -58,10 +71,10 @@ async def update_task_note(ctx: ServiceContext) -> dict:
 
     await event_bus.dispatch([
         WorkspaceEvent(
-            event_name="task:updated",
+            event_name="task:note-updated",
             client_id=note.task_id,
             workspace_id=ctx.workspace_id,
-            extra={},
+            extra={"note_id": note.client_id},
         ),
     ])
     return {"client_id": note.client_id}

@@ -195,6 +195,26 @@ async def test_create_from_url_empty_annotations_list_creates_no_annotations():
 
 
 @pytest.mark.unit
+async def test_create_from_url_accepts_note_entity_type():
+    session = _FakeSession()
+    ctx = ServiceContext(
+        identity={"user_id": "usr_1"},
+        incoming_data={
+            "image_url": "https://cdn.example.com/notes/1.webp",
+            "entity_type": "note",
+            "entity_client_id": "tno_1",
+        },
+        session=session,
+    )
+
+    result = await create_from_url(ctx)
+
+    assert result["image"]["client_id"].startswith("img_")
+    link_row = next(obj for obj in session.added if obj.__class__.__name__ == "ImageLink")
+    assert link_row.entity_type.value == "note"
+
+
+@pytest.mark.unit
 async def test_create_from_url_rejects_invalid_annotation_type():
     session = _FakeSession()
     ctx = ServiceContext(

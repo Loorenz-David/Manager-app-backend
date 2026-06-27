@@ -20,6 +20,7 @@ _ENTITY_EVENT_MAP = {
     ImageLinkEntityTypeEnum.CASE: ImageEventTypeEnum.UPLOAD_CASE_IMAGE,
     ImageLinkEntityTypeEnum.CASE_CONVERSATION_MESSAGE: ImageEventTypeEnum.UPLOAD_MESSAGE_IMAGE,
     ImageLinkEntityTypeEnum.ITEM_CATEGORY: ImageEventTypeEnum.UPLOAD_ITEM_IMAGE,
+    ImageLinkEntityTypeEnum.NOTE: ImageEventTypeEnum.UPLOAD_NOTE_IMAGE,
 }
 
 

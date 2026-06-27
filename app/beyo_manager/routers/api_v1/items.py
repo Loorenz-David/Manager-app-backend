@@ -13,6 +13,7 @@ from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.items.batch_create_item_issues import batch_create_item_issues
 from beyo_manager.services.commands.items.batch_delete_item_issues import batch_delete_item_issues
+from beyo_manager.services.commands.items.batch_update_item_positions import batch_update_item_positions
 from beyo_manager.services.commands.items.create_item import create_item
 from beyo_manager.services.commands.items.delete_item import delete_item
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
@@ -123,6 +124,15 @@ class _BatchDeleteIssueInput(BaseModel):
 
 class _BatchDeleteIssuesBody(BaseModel):
     issues: list[_BatchDeleteIssueInput]
+
+
+class _ItemPositionEntry(BaseModel):
+    client_id: str
+    item_position: str | None = None
+
+
+class _BatchUpdateItemPositionsBody(BaseModel):
+    entries: list[_ItemPositionEntry]
 
 
 @router.put("")
@@ -294,6 +304,23 @@ async def route_get_item(
         session=session,
     )
     outcome = await run_service(get_item, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/positions")
+async def route_batch_update_item_positions(
+    body: _BatchUpdateItemPositionsBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"entries": [entry.model_dump() for entry in body.entries]},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(batch_update_item_positions, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

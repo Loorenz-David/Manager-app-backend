@@ -1,0 +1,79 @@
+
+INTENTION:
+
+We will now improve the current nove model TaskNote and routers for creating and updateing a note (route_create_note , route_update_note ).
+
+The note model will have one more column called "users_read_list", that column will be a jsonb object holding a list of strings.
+The note model will have one more column called "plain_text" that column will be a string
+
+the note router and the service used for creating a note route_create_note support the incoming key "users_read_list"
+
+The note "content" will be a list of objects because this content received by the create and update router will be a list of objects, like the case converstation router receives ( send_message_route ).
+The note services for creating a note and updating it should have similar architecture as the case service send_message with a helper like write_case_message where the content is validated with the enum InputContentTypeEnum
+
+We will create a router and service specialize on adding to the TaskNote.users_read_list list, the service use for this task router should be indepondent on the list of strings it stores. this service can be created at task service folder
+
+We will create a router and service specize on getting the notes given a task id, this service should obtain all the notes and the image_links for each note, we use the note ids for obtaining those images through the image link model.
+This service will have a serializer which serializes:
+[{
+note: client_id, task_id, note_type, content, created_at, created_by ( ### ), updated_at, updated_by ( ### ), plain_text, user_read_list 
+note_images: image objects using the serializer serialize_image
+}]
+the note serializer can live at the task serializers, the current note serializer serialize_note will be replaced by that new serializer
+
+the current get_task service will no longer bring the serialize notes 
+
+the image link link model ( ImageLink ) will now support entity type of NOTE="note" in the ImageLinkEntityTypeEnum ( migration file should reflect this update ).
+
+the image link model will now support a major_entity_type and a major_entity_client_id column like the NotificationPin model 
+
+GOAL:
+create an implementation plan for codex using the @template_plan .
+align the implementation to the architectural principles outline on the architectural contracts, use the contract guide for locating and choosing the correct contracts relevant to this implementation @backend
+
+at the end of the implementation codex should make a document at to_frontend handoffs, this file should docuemnt the endpoints that has changed and the new endpoints for the frontend to use.
+what each endpoint returns and how to use the endpoint should be documented explicitly.
+
+codex should generate the migration files and upgrade.
+
+RELEVANT FILES:
+
+note model:
+app/beyo_manager/models/tables/tasks/task_note.py
+
+note routers:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py
+
+task service folder:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/tasks
+
+case converstation message service for creation:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/cases/send_message.py
+
+case routers :
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/cases.py
+
+content validators:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/cases/message_writes.py
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/infra/content.py
+
+InputContentTypeEnum enum:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/content/enums.py
+
+image link model:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/images/image_link.py
+
+notification pin model:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/notifications/notification_pin.py
+
+serialize_image: 
+app/beyo_manager/domain/images/serializers.py
+
+task serializers:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/tasks/serializers.py
+
+get_task:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py
+
+to_frontend handoffs:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend 

@@ -26,7 +26,7 @@ from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _assign_worker_to_step_in_session,
     _resolve_worker_for_section,
 )
-from beyo_manager.services.commands.tasks.create_task_note import _create_task_note_in_session
+from beyo_manager.services.commands.tasks.note_writes import write_task_note
 from beyo_manager.services.commands.tasks.requests import parse_create_task_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -145,13 +145,13 @@ async def create_task(ctx: ServiceContext) -> dict:
 
         if request.notes:
             for note_input in request.notes:
-                await _create_task_note_in_session(
-                    session=ctx.session,
-                    workspace_id=ctx.workspace_id,
+                await write_task_note(
+                    ctx,
                     task_id=task.client_id,
                     note_type=note_input.note_type,
                     content=note_input.content,
-                    user_id=ctx.user_id,
+                    plain_text=note_input.plain_text,
+                    users_read_list=note_input.users_read_list,
                     client_id=note_input.client_id,
                 )
 

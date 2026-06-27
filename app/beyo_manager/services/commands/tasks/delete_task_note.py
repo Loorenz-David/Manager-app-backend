@@ -53,10 +53,10 @@ async def delete_task_note(ctx: ServiceContext) -> dict:
 
     await event_bus.dispatch([
         WorkspaceEvent(
-            event_name="task:updated",
+            event_name="task:note-deleted",
             client_id=note.task_id,
             workspace_id=ctx.workspace_id,
-            extra={},
+            extra={"note_id": note.client_id},
         ),
     ])
     return {"client_id": note.client_id}

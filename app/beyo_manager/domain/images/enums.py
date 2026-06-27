@@ -24,6 +24,7 @@ class ImageLinkEntityTypeEnum(StrEnum):
     CASE = "case"
     CASE_CONVERSATION_MESSAGE = "case_conversation_message"
     ITEM_CATEGORY = "item_category"
+    NOTE = "note"
 
 
 class ImageAnnotationTypeEnum(StrEnum):
@@ -40,6 +41,7 @@ class ImageEventTypeEnum(StrEnum):
     UPLOAD_ITEM_IMAGE = "upload_item_image"
     UPLOAD_CASE_IMAGE = "upload_case_image"
     UPLOAD_MESSAGE_IMAGE = "upload_message_image"
+    UPLOAD_NOTE_IMAGE = "upload_note_image"
     LINK_EXTERNAL_IMAGE = "link_external_image"
 
 

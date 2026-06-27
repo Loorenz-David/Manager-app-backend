@@ -29,5 +29,7 @@ class ImageLink(IdentityMixin, Base):
     entity_client_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    major_entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    major_entity_client_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     image: Mapped["Image"] = relationship("Image", back_populates="image_links")

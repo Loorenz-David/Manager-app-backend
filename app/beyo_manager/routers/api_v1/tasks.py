@@ -21,6 +21,7 @@ from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.tasks.add_item_to_task import add_item_to_task
+from beyo_manager.services.commands.tasks.append_note_read_by import append_note_read_by
 from beyo_manager.services.commands.tasks.cancel_task import cancel_task
 from beyo_manager.services.commands.tasks.create_task import create_task
 from beyo_manager.services.commands.tasks.create_task_note import create_task_note
@@ -30,6 +31,8 @@ from beyo_manager.services.commands.tasks.fail_task import fail_task
 from beyo_manager.services.commands.tasks.remove_item_from_task import remove_item_from_task
 from beyo_manager.services.commands.tasks.resolve_task import resolve_task
 from beyo_manager.services.commands.tasks.update_task import update_task
+from beyo_manager.services.commands.tasks.update_task_ready_by_at import update_task_ready_by_at
+from beyo_manager.services.commands.tasks.update_task_schedule import update_task_schedule
 from beyo_manager.services.commands.tasks.update_task_note import update_task_note
 from beyo_manager.services.commands.task_steps.add_step_dependency import add_step_dependency
 from beyo_manager.services.commands.task_steps.add_task_steps import add_task_steps
@@ -49,6 +52,7 @@ from beyo_manager.services.commands.task_steps.update_task_step_ready_by_at impo
     update_task_step_ready_by_at,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.tasks.get_task_notes import get_task_notes
 from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
 from beyo_manager.services.queries.tasks.tasks import get_task, list_tasks
@@ -101,7 +105,9 @@ class _TaskItemUpholsteryBody(BaseModel):
 class _TaskNoteInputBody(BaseModel):
     client_id: str | None = None
     note_type: TaskNoteTypeEnum
-    content: dict
+    content: list
+    plain_text: str = ""
+    users_read_list: list[str] | None = None
 
 
 class _CreateTaskBody(BaseModel):
@@ -146,6 +152,15 @@ class _UpdateTaskBody(BaseModel):
     additional_details: dict | None = None
 
 
+class _UpdateReadyByAtBody(BaseModel):
+    ready_by_at: datetime | None = None
+
+
+class _UpdateScheduleBody(BaseModel):
+    scheduled_start_at: datetime | None = None
+    scheduled_end_at: datetime | None = None
+
+
 class _AddItemToTaskBody(BaseModel):
     item_id: str
     role: TaskItemRoleEnum
@@ -153,7 +168,12 @@ class _AddItemToTaskBody(BaseModel):
 
 class _UpdateNoteBody(BaseModel):
     note_type: TaskNoteTypeEnum | None = None
-    content: dict | None = None
+    content: list | None = None
+    plain_text: str | None = None
+
+
+class _MarkNoteReadByBody(BaseModel):
+    user_ids: list[str]
 
 
 class _TaskStepInputBody(BaseModel):
@@ -326,6 +346,42 @@ async def route_update_task(
     return build_ok(outcome.data)
 
 
+@router.patch("/{task_id}/ready-by-at")
+async def route_update_task_ready_by_at(
+    task_id: str,
+    body: _UpdateReadyByAtBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(update_task_ready_by_at, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{task_id}/schedule")
+async def route_update_task_schedule(
+    task_id: str,
+    body: _UpdateScheduleBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(update_task_schedule, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
 @router.delete("/{task_id}")
 async def route_delete_task(
     task_id: str,
@@ -433,16 +489,33 @@ async def route_remove_item_from_task(
 @router.post("/{task_id}/notes")
 async def route_create_note(
     task_id: str,
-    body: _TaskNoteInputBody,
+    body: list[_TaskNoteInputBody],
     claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={"task_id": task_id, **body.model_dump()},
+        incoming_data={"task_id": task_id, "notes": [note.model_dump() for note in body]},
         identity=claims,
         session=session,
     )
     outcome = await run_service(create_task_note, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{task_id}/notes")
+async def route_get_task_notes(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(get_task_notes, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -462,6 +535,25 @@ async def route_update_note(
         session=session,
     )
     outcome = await run_service(update_task_note, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/notes/{note_id}/read-by")
+async def route_mark_note_read_by(
+    task_id: str,
+    note_id: str,
+    body: _MarkNoteReadByBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, "client_id": note_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(append_note_read_by, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
