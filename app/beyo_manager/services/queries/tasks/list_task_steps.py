@@ -1,10 +1,13 @@
-from sqlalchemy import and_, select
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from beyo_manager.domain.task_steps.serializers import serialize_task_step_compact
+from beyo_manager.domain.tasks.serializers import (
+    serialize_step,
+    serialize_step_latest_state_record,
+)
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
-from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
 
 _MAX_LIMIT = 200
@@ -27,21 +30,13 @@ async def list_task_steps(ctx: ServiceContext) -> dict:
         raise NotFound("Task not found.")
 
     stmt = (
-        select(TaskStep, WorkingSection)
-        .join(
-            WorkingSection,
-            and_(
-                WorkingSection.workspace_id == ctx.workspace_id,
-                WorkingSection.client_id == TaskStep.working_section_id,
-                WorkingSection.is_deleted.is_(False),
-            ),
-            isouter=True,
-        )
+        select(TaskStep)
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.task_id == task_id,
             TaskStep.is_deleted.is_(False),
         )
+        .options(selectinload(TaskStep.latest_state_record))
         .order_by(
             TaskStep.sequence_order.asc().nullslast(),
             TaskStep.created_at.asc(),
@@ -50,15 +45,18 @@ async def list_task_steps(ctx: ServiceContext) -> dict:
         .limit(limit + 1)
     )
 
-    rows = (await ctx.session.execute(stmt)).all()
+    rows = (await ctx.session.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
 
     return {
         "steps_pagination": {
             "items": [
-                serialize_task_step_compact(step, working_section)
-                for step, working_section in page
+                {
+                    **serialize_step(step),
+                    "latest_state_records": serialize_step_latest_state_record(step.latest_state_record),
+                }
+                for step in page
             ],
             "limit": limit,
             "offset": offset,

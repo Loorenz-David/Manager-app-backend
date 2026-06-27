@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, text
+from sqlalchemy.orm import load_only
 
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
@@ -208,23 +209,47 @@ async def create_task(ctx: ServiceContext) -> dict:
         created_steps: list[TaskStep] = []
         if request.steps:
             now = datetime.now(timezone.utc)
-            for step_input in request.steps:
-                if step_input.client_id is not None:
-                    validate_provided_client_id(step_input.client_id, "tsp")
-                    dup_step = await ctx.session.get(TaskStep, step_input.client_id)
-                    if dup_step is not None:
-                        raise ConflictError("Provided client_id for step is already in use.")
 
-                section_result = await ctx.session.execute(
-                    select(WorkingSection).where(
+            section_ids = {s.working_section_id for s in request.steps}
+            sections = (
+                await ctx.session.execute(
+                    select(WorkingSection)
+                    .options(
+                        load_only(
+                            WorkingSection.client_id,
+                            WorkingSection.name,
+                            WorkingSection.allows_batch_working,
+                        )
+                    )
+                    .where(
                         WorkingSection.workspace_id == ctx.workspace_id,
-                        WorkingSection.client_id == step_input.working_section_id,
+                        WorkingSection.client_id.in_(section_ids),
                         WorkingSection.is_deleted.is_(False),
                     )
                 )
-                section = section_result.scalar_one_or_none()
-                if section is None:
-                    raise NotFound(f"Working section {step_input.working_section_id!r} not found.")
+            ).scalars().all()
+            section_map = {s.client_id: s for s in sections}
+            missing_sections = sorted(section_ids - set(section_map))
+            if missing_sections:
+                raise NotFound(f"Working section {missing_sections[0]!r} not found.")
+
+            provided_step_client_ids = [s.client_id for s in request.steps if s.client_id is not None]
+            for cid in provided_step_client_ids:
+                validate_provided_client_id(cid, "tsp")
+            if provided_step_client_ids:
+                existing_step_ids = (
+                    await ctx.session.execute(
+                        select(TaskStep.client_id).where(
+                            TaskStep.workspace_id == ctx.workspace_id,
+                            TaskStep.client_id.in_(provided_step_client_ids),
+                        )
+                    )
+                ).scalars().all()
+                if existing_step_ids:
+                    raise ConflictError("Provided client_id for step is already in use.")
+
+            for step_input in request.steps:
+                section = section_map[step_input.working_section_id]
 
                 step = TaskStep(
                     **({"client_id": step_input.client_id} if step_input.client_id is not None else {}),

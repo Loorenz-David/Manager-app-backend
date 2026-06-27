@@ -52,10 +52,11 @@ from beyo_manager.services.commands.task_steps.update_task_step_ready_by_at impo
     update_task_step_ready_by_at,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.tasks.count_task_step_states import count_task_step_states
 from beyo_manager.services.queries.tasks.get_task_notes import get_task_notes
 from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
-from beyo_manager.services.queries.tasks.tasks import get_task, list_tasks
+from beyo_manager.services.queries.tasks.tasks import get_task, list_task_counts, list_tasks
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -286,6 +287,36 @@ async def route_list_tasks(
         session=session,
     )
     outcome = await run_service(list_tasks, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/counts")
+async def route_list_task_counts(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    task_states: str | None = Query(None),
+    task_step_states: str | None = Query(None),
+    step_readiness_statuses: str | None = Query(None),
+    priorities: str | None = Query(None),
+    task_types: str | None = Query(None),
+    return_sources: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "task_states": task_states,
+            "task_step_states": task_step_states,
+            "step_readiness_statuses": step_readiness_statuses,
+            "priorities": priorities,
+            "task_types": task_types,
+            "return_sources": return_sources,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_task_counts, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -592,6 +623,23 @@ async def route_list_task_steps(
         session=session,
     )
     outcome = await run_service(list_task_steps, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{task_id}/steps/counts")
+async def route_count_task_step_states(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(count_task_step_states, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

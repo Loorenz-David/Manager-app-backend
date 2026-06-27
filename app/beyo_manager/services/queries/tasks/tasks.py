@@ -321,6 +321,174 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     }
 
 
+async def list_task_counts(ctx: ServiceContext) -> dict:
+    task_states = _split_csv(ctx.query_params.get("task_states"))
+    task_step_states = _split_csv(ctx.query_params.get("task_step_states"))
+    step_readiness_statuses = _split_csv(ctx.query_params.get("step_readiness_statuses"))
+    priorities = _split_csv(ctx.query_params.get("priorities"))
+    task_types = _split_csv(ctx.query_params.get("task_types"))
+    return_sources = _split_csv(ctx.query_params.get("return_sources"))
+
+    def _base_stmt():
+        return (
+            select(func.count(Task.client_id))
+            .where(Task.workspace_id == ctx.workspace_id, Task.is_deleted.is_(False))
+        )
+
+    def _apply_step_state_filter(stmt, states):
+        subq = (
+            select(TaskStep.task_id)
+            .where(
+                TaskStep.workspace_id == ctx.workspace_id,
+                TaskStep.is_deleted.is_(False),
+                TaskStep.state.in_(states),
+            )
+            .distinct()
+        )
+        return stmt.where(Task.client_id.in_(subq))
+
+    def _apply_readiness_filter(stmt, statuses):
+        subq = (
+            select(TaskStep.task_id)
+            .where(
+                TaskStep.workspace_id == ctx.workspace_id,
+                TaskStep.is_deleted.is_(False),
+                TaskStep.readiness_status.in_(statuses),
+            )
+            .distinct()
+        )
+        return stmt.where(Task.client_id.in_(subq))
+
+    async def _count(stmt) -> int:
+        result = await ctx.session.execute(stmt)
+        return result.scalar_one() or 0
+
+    # total — all active filters combined
+    total_stmt = _base_stmt()
+    if task_states:
+        total_stmt = total_stmt.where(Task.state.in_(task_states))
+    if priorities:
+        total_stmt = total_stmt.where(Task.priority.in_(priorities))
+    if task_types:
+        total_stmt = total_stmt.where(Task.task_type.in_(task_types))
+    if return_sources:
+        total_stmt = total_stmt.where(Task.return_source.in_(return_sources))
+    if task_step_states:
+        total_stmt = _apply_step_state_filter(total_stmt, task_step_states)
+    if step_readiness_statuses:
+        total_stmt = _apply_readiness_filter(total_stmt, step_readiness_statuses)
+
+    total = await _count(total_stmt)
+
+    granularity: dict[str, dict[str, int]] = {}
+
+    if task_states:
+        counts = {}
+        for state in task_states:
+            stmt = _base_stmt().where(Task.state == state)
+            if priorities:
+                stmt = stmt.where(Task.priority.in_(priorities))
+            if task_types:
+                stmt = stmt.where(Task.task_type.in_(task_types))
+            if return_sources:
+                stmt = stmt.where(Task.return_source.in_(return_sources))
+            if task_step_states:
+                stmt = _apply_step_state_filter(stmt, task_step_states)
+            if step_readiness_statuses:
+                stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
+            counts[state] = await _count(stmt)
+        granularity["task_states"] = counts
+
+    if task_step_states:
+        counts = {}
+        for step_state in task_step_states:
+            stmt = _base_stmt()
+            if task_states:
+                stmt = stmt.where(Task.state.in_(task_states))
+            if priorities:
+                stmt = stmt.where(Task.priority.in_(priorities))
+            if task_types:
+                stmt = stmt.where(Task.task_type.in_(task_types))
+            if return_sources:
+                stmt = stmt.where(Task.return_source.in_(return_sources))
+            stmt = _apply_step_state_filter(stmt, [step_state])
+            if step_readiness_statuses:
+                stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
+            counts[step_state] = await _count(stmt)
+        granularity["task_step_states"] = counts
+
+    if step_readiness_statuses:
+        counts = {}
+        for readiness in step_readiness_statuses:
+            stmt = _base_stmt()
+            if task_states:
+                stmt = stmt.where(Task.state.in_(task_states))
+            if priorities:
+                stmt = stmt.where(Task.priority.in_(priorities))
+            if task_types:
+                stmt = stmt.where(Task.task_type.in_(task_types))
+            if return_sources:
+                stmt = stmt.where(Task.return_source.in_(return_sources))
+            if task_step_states:
+                stmt = _apply_step_state_filter(stmt, task_step_states)
+            stmt = _apply_readiness_filter(stmt, [readiness])
+            counts[readiness] = await _count(stmt)
+        granularity["step_readiness_statuses"] = counts
+
+    if priorities:
+        counts = {}
+        for priority in priorities:
+            stmt = _base_stmt().where(Task.priority == priority)
+            if task_states:
+                stmt = stmt.where(Task.state.in_(task_states))
+            if task_types:
+                stmt = stmt.where(Task.task_type.in_(task_types))
+            if return_sources:
+                stmt = stmt.where(Task.return_source.in_(return_sources))
+            if task_step_states:
+                stmt = _apply_step_state_filter(stmt, task_step_states)
+            if step_readiness_statuses:
+                stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
+            counts[priority] = await _count(stmt)
+        granularity["priorities"] = counts
+
+    if task_types:
+        counts = {}
+        for task_type in task_types:
+            stmt = _base_stmt().where(Task.task_type == task_type)
+            if task_states:
+                stmt = stmt.where(Task.state.in_(task_states))
+            if priorities:
+                stmt = stmt.where(Task.priority.in_(priorities))
+            if return_sources:
+                stmt = stmt.where(Task.return_source.in_(return_sources))
+            if task_step_states:
+                stmt = _apply_step_state_filter(stmt, task_step_states)
+            if step_readiness_statuses:
+                stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
+            counts[task_type] = await _count(stmt)
+        granularity["task_types"] = counts
+
+    if return_sources:
+        counts = {}
+        for source in return_sources:
+            stmt = _base_stmt().where(Task.return_source == source)
+            if task_states:
+                stmt = stmt.where(Task.state.in_(task_states))
+            if priorities:
+                stmt = stmt.where(Task.priority.in_(priorities))
+            if task_types:
+                stmt = stmt.where(Task.task_type.in_(task_types))
+            if task_step_states:
+                stmt = _apply_step_state_filter(stmt, task_step_states)
+            if step_readiness_statuses:
+                stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
+            counts[source] = await _count(stmt)
+        granularity["return_sources"] = counts
+
+    return {"total": total, "granularity": granularity}
+
+
 async def get_task(ctx: ServiceContext) -> dict:
     client_id = ctx.incoming_data.get("client_id")
     include_deleted = bool(ctx.query_params.get("include_deleted", False))
