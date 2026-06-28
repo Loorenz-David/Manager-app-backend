@@ -649,7 +649,7 @@ async def route_count_task_step_states(
 async def route_add_task_step(
     task_id: str,
     body: list[_TaskStepInputBody],
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -670,7 +670,7 @@ async def route_add_task_step(
 async def route_update_task_steps_ready_by_at(
     task_id: str,
     body: _UpdateStepsReadyByAtBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -692,7 +692,7 @@ async def route_assign_worker_to_step(
     task_id: str,
     step_id: str,
     body: _AssignWorkerBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

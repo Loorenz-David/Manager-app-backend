@@ -35,6 +35,8 @@ def serialize_case(case, *, case_type=None) -> dict:
     resolved_case_type = case_type if case_type is not None else _loaded_case_type(case)
     payload = {
         "client_id": case.client_id,
+        "scalar_id": case.scalar_id,
+        "reference_number": case.reference_number,
         "state": _value(case.state),
         "case_type": serialize_case_type(resolved_case_type),
         "participants_count": case.participants_count,
@@ -121,6 +123,8 @@ def serialize_case_list_item(
     resolved_case_type = case_type if case_type is not None else _loaded_case_type(case)
     payload = {
         "client_id": case.client_id,
+        "scalar_id": case.scalar_id,
+        "reference_number": case.reference_number,
         "created_at": case.created_at.isoformat(),
         "state": _value(case.state),
         "case_type_id": case.case_type_id,

@@ -44,6 +44,8 @@ class Case(IdentityMixin, HistoryRecordMixin, Base):
     participants_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     conversations_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     messages_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scalar_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    reference_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
 
     case_type: Mapped["CaseType | None"] = relationship("CaseType", foreign_keys=[case_type_id], back_populates="cases")
     created_by: Mapped["User"] = relationship("User", foreign_keys="[Case.created_by_id]")

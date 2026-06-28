@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseLinkRoleEnum, CaseStateEnum
 from beyo_manager.domain.cases.events import CaseEvent, ConversationMessageEvent, conversation_message_extra
@@ -65,6 +65,15 @@ async def create_case(ctx: ServiceContext) -> dict:
             case_type = await ctx.session.get(CaseType, case_type_id)
             if case_type and type_label is None:
                 type_label = case_type.name
+        await ctx.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext('cases_scalar_id'))")
+        )
+        scalar_id_result = await ctx.session.execute(
+            select(func.coalesce(func.max(Case.scalar_id), 0) + 1)
+        )
+        case_scalar_id = scalar_id_result.scalar_one()
+        ref_index = entity_client_id.split("-", 1)[0] if entity_client_id else "N"
+        reference_number = f"{ref_index}-{str(case_scalar_id).zfill(4)}"
         case = Case(
             **case_kwargs,
             created_by_id=ctx.user_id,
@@ -72,6 +81,8 @@ async def create_case(ctx: ServiceContext) -> dict:
             state=CaseStateEnum.OPEN,
             case_type_id=case_type_id,
             type_label=type_label,
+            scalar_id=case_scalar_id,
+            reference_number=reference_number,
         )
         ctx.session.add(case)
         await ctx.session.flush()

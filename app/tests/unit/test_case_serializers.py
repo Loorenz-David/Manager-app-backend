@@ -20,6 +20,8 @@ def test_serialize_case_returns_case_type_object():
     )
     case = SimpleNamespace(
         client_id="ca_1",
+        scalar_id=23,
+        reference_number="tsk-0023",
         state="open",
         participants_count=2,
         conversations_count=1,
@@ -36,6 +38,8 @@ def test_serialize_case_returns_case_type_object():
         "name": "broken tool",
         "image": "https://cdn.example.com/case-types/broken-tool.webp",
     }
+    assert serialized["scalar_id"] == 23
+    assert serialized["reference_number"] == "tsk-0023"
     assert "type_label" not in serialized
 
 
@@ -52,6 +56,8 @@ def test_serialize_case_list_item_returns_case_type_object():
     )
     case = SimpleNamespace(
         client_id="ca_2",
+        scalar_id=7,
+        reference_number="N-0007",
         created_at=datetime(2026, 5, 26, tzinfo=timezone.utc),
         state="resolving",
         case_type_id="cty_1",
@@ -69,4 +75,6 @@ def test_serialize_case_list_item_returns_case_type_object():
 
     assert serialized["case_type_id"] == "cty_1"
     assert serialized["case_type"] == {"name": "out of upholstery", "image": None}
+    assert serialized["scalar_id"] == 7
+    assert serialized["reference_number"] == "N-0007"
     assert "type_label" not in serialized
