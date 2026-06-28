@@ -72,6 +72,8 @@ async def test_create_case_assigns_global_scalar_id_and_default_reference_number
     case = await db_session.scalar(select(Case).where(Case.client_id == result["case_client_id"]))
 
     assert case is not None
+    assert result["scalar_id"] == case.scalar_id
+    assert result["reference_number"] == case.reference_number
     assert case.scalar_id >= 1
     assert case.reference_number == f"N-{case.scalar_id:04d}"
 
@@ -100,7 +102,7 @@ async def test_create_case_uses_entity_prefix_and_serializers_expose_reference_f
             user_id=user.client_id,
             incoming_data={
                 "entity_type": "task",
-                "entity_client_id": "tsk-abc123",
+                "entity_client_id": "tsk_01KW4MQ1QMTGZXWEPMYR1Y8RGQ",
             },
         )
     )
@@ -124,6 +126,8 @@ async def test_create_case_uses_entity_prefix_and_serializers_expose_reference_f
     case = await db_session.scalar(select(Case).where(Case.client_id == create_result["case_client_id"]))
 
     assert case is not None
+    assert create_result["scalar_id"] == case.scalar_id
+    assert create_result["reference_number"] == case.reference_number
     assert case.reference_number == f"tsk-{case.scalar_id:04d}"
     assert case_payload["case"]["scalar_id"] == case.scalar_id
     assert case_payload["case"]["reference_number"] == case.reference_number

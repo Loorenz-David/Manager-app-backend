@@ -72,7 +72,7 @@ async def create_case(ctx: ServiceContext) -> dict:
             select(func.coalesce(func.max(Case.scalar_id), 0) + 1)
         )
         case_scalar_id = scalar_id_result.scalar_one()
-        ref_index = entity_client_id.split("-", 1)[0] if entity_client_id else "N"
+        ref_index = entity_client_id.split("_", 1)[0] if entity_client_id else "N"
         reference_number = f"{ref_index}-{str(case_scalar_id).zfill(4)}"
         case = Case(
             **case_kwargs,
@@ -204,4 +204,8 @@ async def create_case(ctx: ServiceContext) -> dict:
             )
         )
     await dispatch(events)
-    return {"case_client_id": case.client_id}
+    return {
+        "case_client_id": case.client_id,
+        "scalar_id": case.scalar_id,
+        "reference_number": case.reference_number,
+    }
