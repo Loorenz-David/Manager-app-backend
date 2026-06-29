@@ -2,6 +2,7 @@ import bcrypt
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.serializers import serialize_user_profile
@@ -43,9 +44,12 @@ async def register_user(ctx: ServiceContext) -> dict:
             )
         else:
             workspace_role = await ctx.session.scalar(
-                select(WorkspaceRole).where(
-                    WorkspaceRole.name == request.role_name,
+                select(WorkspaceRole)
+                .options(selectinload(WorkspaceRole.role))
+                .where(
+                    WorkspaceRole.specialization.is_(None),
                     WorkspaceRole.workspace_id == ctx.workspace_id,
+                    WorkspaceRole.role.has(Role.name == request.role_name),
                 )
             )
         if workspace_role is None:

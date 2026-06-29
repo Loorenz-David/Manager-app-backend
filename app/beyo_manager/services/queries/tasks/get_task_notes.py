@@ -54,7 +54,7 @@ async def get_task_notes(ctx: ServiceContext) -> dict:
                 Role.client_id.label("role_client_id"),
                 Role.name.label("role_name"),
                 WorkspaceRole.client_id.label("workspace_role_client_id"),
-                WorkspaceRole.name.label("workspace_role_name"),
+                WorkspaceRole.specialization.label("workspace_role_name"),
             )
             .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
             .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
@@ -71,7 +71,7 @@ async def get_task_notes(ctx: ServiceContext) -> dict:
                 row.role_client_id,
                 row.role_name,
                 row.workspace_role_client_id,
-                row.workspace_role_name,
+                row.workspace_role_name or row.role_name,
             )
 
     note_ids = [note.client_id for note in notes]

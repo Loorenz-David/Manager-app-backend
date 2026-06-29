@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import Settings
+from beyo_manager.domain.workspaces.enums import WorkspaceSpecializationEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetimeStats
 from beyo_manager.models.tables.users.user import User
@@ -42,17 +43,23 @@ _WORKER_EMAILS: dict[str, str] = {
 }
 
 # Select workspace role per seeded bootstrap user.
-# Valid values are workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller", "wood_worker", "upholstery_worker", "quality_control".
-_WORKER_WORKSPACE_ROLES: dict[str, str] = {
+# Valid values are base workspace role keys produced by seed_workspace: "admin", "worker", "manager", "seller".
+_WORKER_BASE_WORKSPACE_ROLES: dict[str, str] = {
     worker_name: "worker"
     for worker_name in _WORKER_NAMES
 }
-_WORKER_WORKSPACE_ROLES["Mykola"] = "wood_worker"
-_WORKER_WORKSPACE_ROLES["Norbi"] = _WORKER_WORKSPACE_ROLES["Mykola"]
-_WORKER_WORKSPACE_ROLES["Roman"] = "upholstery_worker"
-_WORKER_WORKSPACE_ROLES["Vitalii"] = "quality_control"
-_WORKER_WORKSPACE_ROLES["Fayoz"] = "admin"
-_WORKER_WORKSPACE_ROLES["Betty"] = "admin"
+_WORKER_BASE_WORKSPACE_ROLES["Norbi"] = "manager"
+_WORKER_BASE_WORKSPACE_ROLES["Fayoz"] = "admin"
+_WORKER_BASE_WORKSPACE_ROLES["Betty"] = "admin"
+
+_WORKER_WORKSPACE_SPECIALIZATIONS: dict[str, WorkspaceSpecializationEnum | None] = {
+    worker_name: None
+    for worker_name in _WORKER_NAMES
+}
+_WORKER_WORKSPACE_SPECIALIZATIONS["Mykola"] = WorkspaceSpecializationEnum.WOOD_WORKER
+_WORKER_WORKSPACE_SPECIALIZATIONS["Norbi"] = _WORKER_WORKSPACE_SPECIALIZATIONS["Mykola"]
+_WORKER_WORKSPACE_SPECIALIZATIONS["Roman"] = WorkspaceSpecializationEnum.UPHOLSTERY_WORKER
+_WORKER_WORKSPACE_SPECIALIZATIONS["Vitalii"] = WorkspaceSpecializationEnum.QUALITY_CONTROL
 
 # Toggle worker assignment per working section.
 # Set any section to False to skip automatic assignment for that section.
@@ -147,11 +154,13 @@ def _resolve_worker_workspace_role_id(
     worker_name: str,
     workspace_result: dict[str, str],
 ) -> str:
-    role_key = _WORKER_WORKSPACE_ROLES.get(worker_name, "worker")
-    workspace_role_id = workspace_result.get(role_key)
+    base_role_key = _WORKER_BASE_WORKSPACE_ROLES.get(worker_name, "worker")
+    specialization = _WORKER_WORKSPACE_SPECIALIZATIONS.get(worker_name)
+    workspace_role_key = base_role_key if specialization is None else f"{base_role_key}:{specialization.value}"
+    workspace_role_id = workspace_result.get(workspace_role_key)
     if workspace_role_id is None:
         raise ValidationError(
-            f"Unknown workspace role '{role_key}' configured for seeded worker '{worker_name}'."
+            f"Unknown workspace role '{workspace_role_key}' configured for seeded worker '{worker_name}'."
         )
     return workspace_role_id
 

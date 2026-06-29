@@ -8,7 +8,7 @@ from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.services.commands.auth.sign_in_user import sign_in_user
 from beyo_manager.services.context import ServiceContext
 
-_DEFAULT_WORKSPACE_ROLE_NAME = object()
+_DEFAULT_WORKSPACE_SPECIALIZATION = object()
 
 
 def _hashed_password(raw: str) -> str:
@@ -44,7 +44,7 @@ def _ctx(
     *,
     role_name: RoleNameEnum,
     app_scope: str,
-    workspace_role_name: str | None | object = _DEFAULT_WORKSPACE_ROLE_NAME,
+    workspace_specialization: str | None | object = _DEFAULT_WORKSPACE_SPECIALIZATION,
 ):
     user = SimpleNamespace(
         client_id="usr_1",
@@ -56,7 +56,11 @@ def _ctx(
     workspace_role = SimpleNamespace(
         client_id="wsr_1",
         role=role,
-        name=role_name.value if workspace_role_name is _DEFAULT_WORKSPACE_ROLE_NAME else workspace_role_name,
+        specialization=(
+            None
+            if workspace_specialization is _DEFAULT_WORKSPACE_SPECIALIZATION
+            else workspace_specialization
+        ),
     )
     membership = SimpleNamespace(workspace_id="ws_1", workspace_role=workspace_role)
     workspace = SimpleNamespace(client_id="ws_1", time_zone="UTC")
@@ -93,16 +97,18 @@ async def test_sign_in_user_rejects_unknown_scope() -> None:
 @pytest.mark.unit
 async def test_sign_in_user_falls_back_to_permission_role_name_for_system_workspace_roles() -> None:
     result = await sign_in_user(
-        _ctx(role_name=RoleNameEnum.MANAGER, app_scope="manager", workspace_role_name=None)
+        _ctx(role_name=RoleNameEnum.MANAGER, app_scope="manager", workspace_specialization=None)
     )
 
-    assert result["user"]["role"] == "manager"
+    assert result["user"]["workspace_role_name"] == "manager"
+    assert result["user"]["workspace_specialization"] is None
 
 
 @pytest.mark.unit
 async def test_sign_in_user_preserves_custom_workspace_role_name() -> None:
     result = await sign_in_user(
-        _ctx(role_name=RoleNameEnum.WORKER, app_scope="worker", workspace_role_name="wood_worker")
+        _ctx(role_name=RoleNameEnum.WORKER, app_scope="worker", workspace_specialization="wood_worker")
     )
 
-    assert result["user"]["role"] == "wood_worker"
+    assert result["user"]["workspace_role_name"] == "wood_worker"
+    assert result["user"]["workspace_specialization"] == "wood_worker"

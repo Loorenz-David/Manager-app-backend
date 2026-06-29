@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import Settings
-from beyo_manager.domain.workspaces.enums import WorkspaceRoleNameEnum
+from beyo_manager.domain.workspaces.enums import WorkspaceSpecializationEnum
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 
@@ -15,6 +15,26 @@ _DISPLAY_NAMES: dict[str, str] = {
     "upholstery_worker": "Upholstery Worker",
     "quality_control": "Quality Control",
 }
+
+_SPECIALIZATION_DISPLAY_NAMES: dict[WorkspaceSpecializationEnum, str] = {
+    WorkspaceSpecializationEnum.WOOD_WORKER: _DISPLAY_NAMES["wood_worker"],
+    WorkspaceSpecializationEnum.UPHOLSTERY_WORKER: _DISPLAY_NAMES["upholstery_worker"],
+    WorkspaceSpecializationEnum.QUALITY_CONTROL: _DISPLAY_NAMES["quality_control"],
+}
+
+
+def _workspace_role_variant_key(role_key: str, specialization: WorkspaceSpecializationEnum | None = None) -> str:
+    if specialization is None:
+        return role_key
+    return f"{role_key}:{specialization.value}"
+
+
+def _workspace_role_description(role_key: str, specialization: WorkspaceSpecializationEnum | None = None) -> str:
+    if specialization is None:
+        return _DISPLAY_NAMES[role_key]
+    if role_key == "worker":
+        return _SPECIALIZATION_DISPLAY_NAMES[specialization]
+    return f"{_DISPLAY_NAMES[role_key]} - {_SPECIALIZATION_DISPLAY_NAMES[specialization]}"
 
 
 async def seed_workspace(
@@ -40,61 +60,41 @@ async def seed_workspace(
         select(WorkspaceRole).where(WorkspaceRole.workspace_id == workspace_id)
     )
     workspace_role_rows = existing_roles.scalars().all()
-    workspace_roles_by_role_id = {row.role_id: row for row in workspace_role_rows if row.is_system}
-    workspace_roles_by_name = {row.name: row for row in workspace_role_rows if row.name is not None}
+    workspace_roles_by_signature = {
+        (row.role_id, row.specialization): row
+        for row in workspace_role_rows
+    }
 
     for role_name_value, role_client_id in role_ids.items():
-        workspace_role = workspace_roles_by_role_id.get(role_client_id)
+        workspace_role = workspace_roles_by_signature.get((role_client_id, None))
         if workspace_role is None:
             workspace_role = WorkspaceRole(
                 workspace_id=workspace_id,
                 role_id=role_client_id,
-                name=None,
-                description=_DISPLAY_NAMES[role_name_value],
+                specialization=None,
+                description=_workspace_role_description(role_name_value),
                 is_system=True,
             )
             session.add(workspace_role)
             await session.flush()
-            workspace_roles_by_role_id[role_client_id] = workspace_role
-        result[role_name_value] = workspace_role.client_id
+            workspace_roles_by_signature[(role_client_id, None)] = workspace_role
+        result[_workspace_role_variant_key(role_name_value)] = workspace_role.client_id
 
-    wood_worker_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.WOOD_WORKER)
-    if wood_worker_role is None:
-        wood_worker_role = WorkspaceRole(
-            workspace_id=workspace_id,
-            role_id=role_ids["worker"],
-            name=WorkspaceRoleNameEnum.WOOD_WORKER,
-            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.WOOD_WORKER.value],
-            is_system=False,
-        )
-        session.add(wood_worker_role)
-        await session.flush()
-    result[WorkspaceRoleNameEnum.WOOD_WORKER.value] = wood_worker_role.client_id
-
-    upholstery_worker_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.UPHOLSTERY_WORKER)
-    if upholstery_worker_role is None:
-        upholstery_worker_role = WorkspaceRole(
-            workspace_id=workspace_id,
-            role_id=role_ids["worker"],
-            name=WorkspaceRoleNameEnum.UPHOLSTERY_WORKER,
-            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.UPHOLSTERY_WORKER.value],
-            is_system=False,
-        )
-        session.add(upholstery_worker_role)
-        await session.flush()
-    result[WorkspaceRoleNameEnum.UPHOLSTERY_WORKER.value] = upholstery_worker_role.client_id
-
-    quality_control_role = workspace_roles_by_name.get(WorkspaceRoleNameEnum.QUALITY_CONTROL)
-    if quality_control_role is None:
-        quality_control_role = WorkspaceRole(
-            workspace_id=workspace_id,
-            role_id=role_ids["worker"],
-            name=WorkspaceRoleNameEnum.QUALITY_CONTROL,
-            description=_DISPLAY_NAMES[WorkspaceRoleNameEnum.QUALITY_CONTROL.value],
-            is_system=False,
-        )
-        session.add(quality_control_role)
-        await session.flush()
-    result[WorkspaceRoleNameEnum.QUALITY_CONTROL.value] = quality_control_role.client_id
+    for role_key in ("worker", "manager"):
+        for specialization in WorkspaceSpecializationEnum:
+            signature = (role_ids[role_key], specialization)
+            workspace_role = workspace_roles_by_signature.get(signature)
+            if workspace_role is None:
+                workspace_role = WorkspaceRole(
+                    workspace_id=workspace_id,
+                    role_id=role_ids[role_key],
+                    specialization=specialization,
+                    description=_workspace_role_description(role_key, specialization),
+                    is_system=False,
+                )
+                session.add(workspace_role)
+                await session.flush()
+                workspace_roles_by_signature[signature] = workspace_role
+            result[_workspace_role_variant_key(role_key, specialization)] = workspace_role.client_id
 
     return result

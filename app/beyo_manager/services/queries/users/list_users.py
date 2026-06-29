@@ -1,4 +1,4 @@
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, or_, select
 
 from beyo_manager.domain.users.serializers import serialize_user_list_item, serialize_user_working_section_member, serialize_user_compact_with_role
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
@@ -39,7 +39,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                     Role.client_id.label("role_client_id"),
                     Role.name.label("role_name"),
                     WorkspaceRole.client_id.label("workspace_role_client_id"),
-                    WorkspaceRole.name.label("workspace_role_name"),
+                    WorkspaceRole.specialization.label("workspace_role_name"),
                 )
                 .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
                 .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
@@ -65,7 +65,12 @@ async def list_users(ctx: ServiceContext) -> dict:
 
         if role_filter:
             role_names = [r.strip() for r in role_filter.split(",") if r.strip()]
-            q_stmt = q_stmt.where(WorkspaceRole.name.in_(role_names))
+            q_stmt = q_stmt.where(
+                or_(
+                    Role.name.in_(role_names),
+                    WorkspaceRole.specialization.in_(role_names),
+                )
+            )
 
         if sections_filter:
             section_names = [s.strip() for s in sections_filter.split(",") if s.strip()]
@@ -114,7 +119,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                 row.role_client_id,
                 row.role_name,
                 row.workspace_role_client_id,
-                row.workspace_role_name,
+                row.workspace_role_name or row.role_name,
             )
             for row in page
         ]
@@ -167,7 +172,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                 row.role_client_id,
                 row.role_name,
                 row.workspace_role_client_id,
-                row.workspace_role_name,
+                row.workspace_role_name or row.role_name,
                 sections_by_user[row.User.client_id],
             )
             for row in page

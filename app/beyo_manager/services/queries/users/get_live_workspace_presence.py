@@ -3,6 +3,7 @@ import json
 from sqlalchemy import select
 
 from beyo_manager.domain.presence.serializers import serialize_live_user_presence
+from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
@@ -13,9 +14,10 @@ from beyo_manager.services.infra.redis.async_client import get_async_redis
 
 async def get_live_workspace_presence(ctx: ServiceContext) -> dict:
     result = await ctx.session.execute(
-        select(User, WorkspaceRole.name.label("role_name"))
+        select(User, Role.name.label("role_name"))
         .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
         .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
+        .join(Role, Role.client_id == WorkspaceRole.role_id)
         .where(
             WorkspaceMembership.workspace_id == ctx.workspace_id,
             WorkspaceMembership.is_active.is_(True),

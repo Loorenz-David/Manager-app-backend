@@ -24,6 +24,14 @@ async def refresh_token(ctx: ServiceContext) -> dict:
 
     now = datetime.now(timezone.utc)
     claims.pop("exp", None)
+    if "workspace_specialization" not in claims:
+        workspace_role_name = claims.get("workspace_role_name")
+        role_name = claims.get("role_name")
+        claims["workspace_specialization"] = (
+            workspace_role_name
+            if workspace_role_name and workspace_role_name != role_name
+            else None
+        )
     claims["jti"] = str(uuid4())
     access_token = jwt.encode(
         {**claims, "exp": now + timedelta(minutes=settings.jwt_access_token_expire_minutes)},

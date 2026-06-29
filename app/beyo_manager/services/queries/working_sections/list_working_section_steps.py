@@ -37,11 +37,18 @@ _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 
 
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 async def list_working_section_steps(ctx: ServiceContext) -> dict:
     working_section_id = ctx.incoming_data.get("working_section_id")
     limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
+    task_types = _split_csv(ctx.query_params.get("task_types"))
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
     record_step_state_raw = ctx.query_params.get("record_step_state")
     record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
@@ -87,6 +94,9 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
     if readiness_statuses:
         stmt = stmt.where(TaskStep.readiness_status.in_(readiness_statuses))
+
+    if task_types:
+        stmt = stmt.where(Task.task_type.in_(task_types))
 
     if item_major_category_snapshots:
         stmt = stmt.where(

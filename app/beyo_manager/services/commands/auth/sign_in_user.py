@@ -67,6 +67,11 @@ def build_auth_response(user: User, *, workspace: Workspace, membership: Workspa
     workspace_role = membership.workspace_role
     permission_role = workspace_role.role
     permissions = resolve_permissions_for_role(permission_role)
+    workspace_specialization = (
+        workspace_role.specialization.value
+        if workspace_role.specialization is not None
+        else None
+    )
     now = datetime.now(timezone.utc)
     claims = {
         "user_id": user.client_id,
@@ -74,7 +79,8 @@ def build_auth_response(user: User, *, workspace: Workspace, membership: Workspa
         "workspace_id": workspace.client_id,
         "workspace_role_id": workspace_role.client_id,
         "role_name": permission_role.name.value,
-        "workspace_role_name": workspace_role.name,
+        "workspace_role_name": workspace_specialization or permission_role.name.value,
+        "workspace_specialization": workspace_specialization,
         "app_scope": app_scope,
         "time_zone": workspace.time_zone or "UTC",
         "backend_permissions": permissions["backend"],
