@@ -17,24 +17,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE workspace_role_name_enum ADD VALUE 'upholstery_worker'")
-    op.execute("ALTER TYPE workspace_role_name_enum ADD VALUE 'quality_control'")
+    op.execute("ALTER TYPE workspace_role_specialization_enum ADD VALUE 'upholstery_worker'")
+    op.execute("ALTER TYPE workspace_role_specialization_enum ADD VALUE 'quality_control'")
 
 
 def downgrade() -> None:
     op.execute(
         """
         ALTER TABLE workspace_roles
-        ALTER COLUMN name TYPE VARCHAR(64)
-        USING name::text
+        ALTER COLUMN specialization TYPE VARCHAR(64)
+        USING specialization::text
         """
     )
-    op.execute("DROP TYPE workspace_role_name_enum")
-    op.execute("CREATE TYPE workspace_role_name_enum AS ENUM ('wood_worker')")
+    op.execute("DROP TYPE workspace_role_specialization_enum")
+    op.execute("CREATE TYPE workspace_role_specialization_enum AS ENUM ('wood_worker')")
     op.execute(
         """
         ALTER TABLE workspace_roles
-        ALTER COLUMN name TYPE workspace_role_name_enum
-        USING name::workspace_role_name_enum
+        ALTER COLUMN specialization TYPE workspace_role_specialization_enum
+        USING specialization::workspace_role_specialization_enum
         """
     )
