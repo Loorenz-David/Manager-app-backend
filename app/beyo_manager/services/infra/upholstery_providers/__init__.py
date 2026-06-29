@@ -1,0 +1,1 @@
+"""External upholstery provider adapters."""

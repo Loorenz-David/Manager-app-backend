@@ -17,10 +17,24 @@ class _Result:
     def all(self):
         return self._rows
 
+    def one_or_none(self):
+        if not self._rows:
+            return None
+        return self._rows[0]
+
+
+class _ScalarRowsResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
 
 class _Session:
-    def __init__(self, inventory_rows):
+    def __init__(self, inventory_rows, supplier_rows=None):
         self._inventory_rows = inventory_rows
+        self._supplier_rows = supplier_rows or []
         self.execute_calls = 0
         self.first_query = None
 
@@ -28,7 +42,8 @@ class _Session:
         self.execute_calls += 1
         if self.execute_calls == 1:
             self.first_query = _query
-        return _Result(self._inventory_rows)
+            return _Result(self._inventory_rows)
+        return _ScalarRowsResult(self._supplier_rows)
 
 
 def _inventory(client_id: str):
@@ -52,10 +67,30 @@ def _compiled_sql(query) -> str:
 @pytest.mark.unit
 async def test_list_upholstery_inventories_uses_partial_ordered_amount_from_inventory() -> None:
     inventory_rows = [
-        (_inventory("uin_1"), "https://cdn.example.com/1.jpg", "Blue Velvet", "BLU-1", True),
-        (_inventory("uin_2"), "https://cdn.example.com/2.jpg", "Green Linen", "GRN-2", False),
+        (
+            _inventory("uin_1"),
+            "https://cdn.example.com/1.jpg",
+            "Blue Velvet",
+            "BLU-1",
+            "https://supplier.example/blue-velvet",
+            True,
+        ),
+        (
+            _inventory("uin_2"),
+            "https://cdn.example.com/2.jpg",
+            "Green Linen",
+            "GRN-2",
+            "https://supplier.example/green-linen",
+            False,
+        ),
     ]
-    session = _Session(inventory_rows)
+    session = _Session(
+        inventory_rows,
+        supplier_rows=[
+            ("uph_uin_1", "nevotex"),
+            ("uph_uin_2", "fargotex"),
+        ],
+    )
     ctx = ServiceContext(
         identity={"workspace_id": "ws_1"},
         incoming_data={},
@@ -66,16 +101,20 @@ async def test_list_upholstery_inventories_uses_partial_ordered_amount_from_inve
     result = await list_upholstery_inventories(ctx)
     items = result["upholstery_inventories_pagination"]["items"]
 
-    assert session.execute_calls == 1
+    assert session.execute_calls == 2
     assert items[0]["client_id"] == "uin_1"
     assert items[0]["upholstery_id"] == "uph_uin_1"
     assert items[0]["upholstery_name"] == "Blue Velvet"
     assert items[0]["upholstery_code"] == "BLU-1"
     assert items[0]["favorite"] is True
+    assert items[0]["page_link"] == "https://supplier.example/blue-velvet"
+    assert items[0]["supplier_name"] == "nevotex"
     assert items[0]["current_amount_in_need_meters"] == "1.750"
     assert items[0]["current_amount_ordered_meters"] == "1.250"
     assert items[1]["client_id"] == "uin_2"
     assert items[1]["favorite"] is False
+    assert items[1]["page_link"] == "https://supplier.example/green-linen"
+    assert items[1]["supplier_name"] == "fargotex"
     assert items[1]["current_amount_in_need_meters"] == "1.750"
     assert items[1]["current_amount_ordered_meters"] == "1.250"
     assert result["upholstery_inventories_pagination"]["has_more"] is False
@@ -99,7 +138,7 @@ async def test_list_upholstery_inventories_skips_count_query_when_page_is_empty(
 
 @pytest.mark.unit
 async def test_list_upholstery_inventories_adds_q_filter_for_name_and_code() -> None:
-    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", True)]
+    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", None, True)]
     session = _Session(inventory_rows)
     ctx = ServiceContext(
         identity={"workspace_id": "ws_1"},
@@ -118,7 +157,7 @@ async def test_list_upholstery_inventories_adds_q_filter_for_name_and_code() -> 
 
 @pytest.mark.unit
 async def test_list_upholstery_inventories_filters_favorite() -> None:
-    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", True)]
+    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", None, True)]
     session = _Session(inventory_rows)
     ctx = ServiceContext(
         identity={"workspace_id": "ws_1"},
@@ -135,7 +174,7 @@ async def test_list_upholstery_inventories_filters_favorite() -> None:
 
 @pytest.mark.unit
 async def test_list_upholstery_inventories_filters_in_stock_true_to_available_and_low_stock() -> None:
-    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", True)]
+    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", None, True)]
     session = _Session(inventory_rows)
     ctx = ServiceContext(
         identity={"workspace_id": "ws_1"},
@@ -152,7 +191,7 @@ async def test_list_upholstery_inventories_filters_in_stock_true_to_available_an
 
 @pytest.mark.unit
 async def test_list_upholstery_inventories_filters_in_stock_false_to_out_of_stock() -> None:
-    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", True)]
+    inventory_rows = [(_inventory("uin_1"), None, "Blue Velvet", "BLU-1", None, True)]
     session = _Session(inventory_rows)
     ctx = ServiceContext(
         identity={"workspace_id": "ws_1"},

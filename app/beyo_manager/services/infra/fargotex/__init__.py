@@ -1,0 +1,1 @@
+"""Fargotex integration adapters."""

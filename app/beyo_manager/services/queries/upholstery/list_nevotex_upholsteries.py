@@ -1,23 +1,17 @@
+from beyo_manager.domain.upholstery.enums import UpholsteryExternalProviderEnum
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.infra.nevotex.client import fetch_nevotex_raw_products
-from beyo_manager.services.infra.nevotex.normalizer import normalize_nevotex_candidates
-
-_MAX_LIMIT = 20
-_DEFAULT_LIMIT = 7
+from beyo_manager.services.queries.upholstery.list_external_upholsteries import (
+    list_external_upholsteries,
+)
 
 
 async def list_nevotex_upholsteries(ctx: ServiceContext) -> dict:
-    q = str(ctx.query_params.get("q", "")).strip()
-    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
-
-    raw_products = await fetch_nevotex_raw_products(q=q, limit=limit)
-    candidates = normalize_nevotex_candidates(raw_products)
-
-    return {
-        "upholsteries": candidates,
-        "upholsteries_pagination": {
-            "has_more": False,
-            "limit": limit,
-            "offset": 0,
-        },
-    }
+    query_params = dict(ctx.query_params)
+    query_params["provider"] = UpholsteryExternalProviderEnum.NEVOTEX
+    wrapper_ctx = ServiceContext(
+        identity=ctx.identity,
+        incoming_data=ctx.incoming_data,
+        session=ctx.session,
+        query_params=query_params,
+    )
+    return await list_external_upholsteries(wrapper_ctx)

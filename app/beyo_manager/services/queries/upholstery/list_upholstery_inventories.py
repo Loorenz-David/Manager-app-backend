@@ -7,6 +7,9 @@ from beyo_manager.domain.upholstery.serializers import serialize_upholstery_inve
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery._supplier_names import (
+    load_supplier_names_by_upholstery_ids,
+)
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
@@ -37,6 +40,7 @@ async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
             Upholstery.image_url,
             Upholstery.name,
             Upholstery.code,
+            Upholstery.page_link,
             Upholstery.favorite,
         )
         .outerjoin(Upholstery, Upholstery.client_id == UpholsteryInventory.upholstery_id)
@@ -83,6 +87,12 @@ async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
 
     has_more = len(rows) > limit
     items = rows[:limit]
+    upholstery_ids = [inv.upholstery_id for inv, *_ in items if inv.upholstery_id]
+    supplier_name_map = await load_supplier_names_by_upholstery_ids(
+        session=ctx.session,
+        workspace_id=ctx.workspace_id,
+        upholstery_ids=upholstery_ids,
+    )
 
     return {
         "upholstery_inventories_pagination": {
@@ -92,9 +102,11 @@ async def list_upholstery_inventories(ctx: ServiceContext) -> dict:
                     image_url=image_url,
                     upholstery_name=upholstery_name,
                     upholstery_code=upholstery_code,
+                    page_link=page_link,
+                    supplier_name=supplier_name_map.get(inv.upholstery_id),
                     favorite=favorite,
                 )
-                for inv, image_url, upholstery_name, upholstery_code, favorite in items
+                for inv, image_url, upholstery_name, upholstery_code, page_link, favorite in items
             ],
             "limit": limit,
             "offset": offset,

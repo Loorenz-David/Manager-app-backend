@@ -7,6 +7,7 @@ from beyo_manager.models.tables.upholstery.upholstery_category import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.commands.upholstery.requests import parse_update_upholstery_list_order_request
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery._supplier_names import load_supplier_name_for_upholstery
 
 
 async def update_upholstery_list_order(ctx: ServiceContext) -> dict:
@@ -59,5 +60,17 @@ async def update_upholstery_list_order(ctx: ServiceContext) -> dict:
                 )
             )
             category = cat_result.scalar_one_or_none()
+        supplier_name = await load_supplier_name_for_upholstery(
+            session=ctx.session,
+            workspace_id=ctx.workspace_id,
+            upholstery_id=upholstery.client_id,
+        )
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}
+    return {
+        "upholstery": serialize_upholstery(
+            upholstery,
+            inventory,
+            category,
+            supplier_name=supplier_name,
+        )
+    }

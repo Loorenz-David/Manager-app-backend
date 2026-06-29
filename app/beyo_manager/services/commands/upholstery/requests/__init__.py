@@ -200,6 +200,7 @@ class CreateUpholsteryRequest(BaseModel):
     name: str
     code: str | None = None
     image_url: str | None = None
+    page_link: str | None = None
     favorite: bool = False
     current_stored_amount_meters: Decimal | None = None
     low_stock_threshold_meters: Decimal | None = None
@@ -212,6 +213,11 @@ class CreateUpholsteryRequest(BaseModel):
     upholstery_category_name: str | None = None
     create_category: CreateUpholsteryCategoryInlineRequest | None = None
     upholstery_inventory_id: str | None = None
+    supplier_name: str | None = None
+    supplier_base_url: str | None = None
+    supplier_country: str | None = None
+    supplier_city: str | None = None
+    supplier_street_address: str | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -250,6 +256,24 @@ class CreateUpholsteryRequest(BaseModel):
         value = v.strip()
         return value if value else None
 
+    @field_validator(
+        "code",
+        "image_url",
+        "page_link",
+        "supplier_name",
+        "supplier_base_url",
+        "supplier_country",
+        "supplier_city",
+        "supplier_street_address",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_strings(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        value = v.strip()
+        return value if value else None
+
     @model_validator(mode="after")
     def validate_category_fields(self) -> "CreateUpholsteryRequest":
         provided = sum([
@@ -262,6 +286,16 @@ class CreateUpholsteryRequest(BaseModel):
                 "create_category, upholstery_category_id, and upholstery_category_name "
                 "are mutually exclusive. Provide at most one."
             )
+        if (
+            self.supplier_name is None
+            and any([
+                self.supplier_base_url is not None,
+                self.supplier_country is not None,
+                self.supplier_city is not None,
+                self.supplier_street_address is not None,
+            ])
+        ):
+            raise ValueError("supplier_name is required when supplier details are provided.")
         return self
 
 

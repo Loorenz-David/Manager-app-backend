@@ -10,6 +10,8 @@ from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
+from beyo_manager.models.tables.upholstery.supplier import Supplier
+from beyo_manager.models.tables.upholstery.upholstery_supplier_link import UpholsterySupplierLink
 from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
@@ -30,6 +32,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         validate_provided_client_id(request.upholstery_inventory_id, "uin")
 
     category = None
+    supplier_name: str | None = None
     async with ctx.session.begin():
         uph_kwargs: dict[str, str] = {}
         if request.client_id is not None:
@@ -116,7 +119,6 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
                 raise NotFound("Upholstery category not found.")
             resolved_category_id = category.client_id
         elif request.upholstery_category_name is not None:
-            logger.info("[create_upholstery] entering upholstery_category_name branch — name=%r", request.upholstery_category_name)
             cat_by_name = await ctx.session.execute(
                 select(UpholsteryCategory).where(
                     UpholsteryCategory.workspace_id == ctx.workspace_id,
@@ -125,9 +127,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
                 )
             )
             category = cat_by_name.scalar_one_or_none()
-            logger.info("[create_upholstery] category lookup result — found=%r", category is not None)
             if category is None:
-                logger.info("[create_upholstery] creating new category — name=%r", request.upholstery_category_name)
                 category = UpholsteryCategory(
                     workspace_id=ctx.workspace_id,
                     name=request.upholstery_category_name,
@@ -137,9 +137,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
                 )
                 ctx.session.add(category)
                 await ctx.session.flush()
-                logger.info("[create_upholstery] new category flushed — client_id=%r", category.client_id)
             resolved_category_id = category.client_id
-            logger.info("[create_upholstery] resolved_category_id=%r", resolved_category_id)
 
         upholstery = Upholstery(
             **uph_kwargs,
@@ -147,6 +145,7 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             name=request.name,
             code=request.code,
             image_url=request.image_url,
+            page_link=request.page_link,
             favorite=request.favorite,
             upholstery_category_id=resolved_category_id,
             created_by_id=ctx.user_id,
@@ -184,4 +183,47 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         )
         ctx.session.add(inventory)
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}
+        if request.supplier_name is not None:
+            supplier_result = await ctx.session.execute(
+                select(Supplier).where(
+                    Supplier.workspace_id == ctx.workspace_id,
+                    Supplier.name == request.supplier_name,
+                )
+            )
+            supplier = supplier_result.scalar_one_or_none()
+            if supplier is not None and supplier.is_deleted:
+                raise ConflictError("A deleted supplier with this name already exists in the workspace.")
+
+            if supplier is None:
+                supplier = Supplier(
+                    workspace_id=ctx.workspace_id,
+                    name=request.supplier_name,
+                    base_url=request.supplier_base_url,
+                    country=request.supplier_country,
+                    city=request.supplier_city,
+                    street_address=request.supplier_street_address,
+                    created_by_id=ctx.user_id,
+                )
+                ctx.session.add(supplier)
+                await ctx.session.flush()
+
+            supplier_name = supplier.name
+            ctx.session.add(
+                UpholsterySupplierLink(
+                    workspace_id=ctx.workspace_id,
+                    upholstery_id=upholstery.client_id,
+                    supplier_id=supplier.client_id,
+                    priority_order=0,
+                    preferred=True,
+                    created_by_id=ctx.user_id,
+                )
+            )
+
+    return {
+        "upholstery": serialize_upholstery(
+            upholstery,
+            inventory,
+            category,
+            supplier_name=supplier_name,
+        )
+    }

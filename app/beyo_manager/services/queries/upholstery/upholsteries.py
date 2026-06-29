@@ -9,6 +9,10 @@ from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery._supplier_names import (
+    load_supplier_name_for_upholstery,
+    load_supplier_names_by_upholstery_ids,
+)
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
@@ -92,6 +96,7 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     # The partial unique index guarantees at most one active row per upholstery_id.
     inventory_map: dict[str, UpholsteryInventory] = {}
     category_map: dict[str, UpholsteryCategory] = {}
+    supplier_name_map: dict[str, str] = {}
     if page:
         inv_result = await ctx.session.execute(
             select(UpholsteryInventory).where(
@@ -113,12 +118,19 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
             )
             category_map = {cat.client_id: cat for cat in cat_result.scalars().all()}
 
+        supplier_name_map = await load_supplier_names_by_upholstery_ids(
+            session=ctx.session,
+            workspace_id=ctx.workspace_id,
+            upholstery_ids=upholstery_ids,
+        )
+
     return {
         "upholsteries": [
             serialize_upholstery(
                 u,
                 inventory_map.get(u.client_id),
                 category_map.get(u.upholstery_category_id) if u.upholstery_category_id else None,
+                supplier_name=supplier_name_map.get(u.client_id),
             )
             for u in page
         ],
@@ -162,5 +174,17 @@ async def get_upholstery(ctx: ServiceContext) -> dict:
             )
         )
         category = cat_result.scalar_one_or_none()
+    supplier_name = await load_supplier_name_for_upholstery(
+        session=ctx.session,
+        workspace_id=ctx.workspace_id,
+        upholstery_id=upholstery.client_id,
+    )
 
-    return {"upholstery": serialize_upholstery(upholstery, inventory, category)}
+    return {
+        "upholstery": serialize_upholstery(
+            upholstery,
+            inventory,
+            category,
+            supplier_name=supplier_name,
+        )
+    }

@@ -7,6 +7,7 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery._supplier_names import load_supplier_name_for_upholstery
 
 
 async def get_upholstery_inventory(ctx: ServiceContext) -> dict:
@@ -19,6 +20,7 @@ async def get_upholstery_inventory(ctx: ServiceContext) -> dict:
             Upholstery.image_url,
             Upholstery.name,
             Upholstery.code,
+            Upholstery.page_link,
             Upholstery.favorite,
         )
         .outerjoin(Upholstery, Upholstery.client_id == UpholsteryInventory.upholstery_id)
@@ -31,7 +33,12 @@ async def get_upholstery_inventory(ctx: ServiceContext) -> dict:
     row = result.one_or_none()
     if row is None:
         raise NotFound("UpholsteryInventory not found.")
-    inv, image_url, upholstery_name, upholstery_code, favorite = row
+    inv, image_url, upholstery_name, upholstery_code, page_link, favorite = row
+    supplier_name = await load_supplier_name_for_upholstery(
+        session=ctx.session,
+        workspace_id=ctx.workspace_id,
+        upholstery_id=inv.upholstery_id,
+    )
 
     return {
         "inventory": serialize_upholstery_inventory(
@@ -39,6 +46,8 @@ async def get_upholstery_inventory(ctx: ServiceContext) -> dict:
             image_url=image_url,
             upholstery_name=upholstery_name,
             upholstery_code=upholstery_code,
+            page_link=page_link,
+            supplier_name=supplier_name,
             favorite=favorite,
         )
     }

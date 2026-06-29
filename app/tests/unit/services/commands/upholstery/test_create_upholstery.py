@@ -4,8 +4,9 @@ from typing import Any, cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from beyo_manager.errors.validation import ConflictError
+from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.services.commands.upholstery.create_upholstery import create_upholstery
+from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_request
 from beyo_manager.services.context import ServiceContext
 
 
@@ -116,3 +117,49 @@ async def test_create_upholstery_rejects_inline_category_name_conflict() -> None
         )
 
     assert session.added == []
+
+
+@pytest.mark.unit
+async def test_create_upholstery_creates_supplier_link_and_page_link() -> None:
+    session = _Session()
+
+    result = await create_upholstery(
+        _ctx(
+            session,
+            {
+                "client_id": "uph_01ARZ3NDEKTSV4RRFFQ69G5FAB",
+                "name": "Green Linen",
+                "page_link": "https://supplier.example/products/green-linen",
+                "supplier_name": "Nevotex",
+                "supplier_base_url": "https://supplier.example",
+            },
+        )
+    )
+
+    upholstery = session.added[0]
+    inventory = session.added[1]
+    supplier = session.added[2]
+    supplier_link = session.added[3]
+
+    assert upholstery.page_link == "https://supplier.example/products/green-linen"
+    assert inventory.upholstery_id == "uph_01ARZ3NDEKTSV4RRFFQ69G5FAB"
+    assert supplier.name == "Nevotex"
+    assert supplier.base_url == "https://supplier.example"
+    assert supplier_link.upholstery_id == "uph_01ARZ3NDEKTSV4RRFFQ69G5FAB"
+    assert supplier_link.preferred is True
+    assert result["upholstery"]["page_link"] == "https://supplier.example/products/green-linen"
+    assert result["upholstery"]["supplier_name"] == "Nevotex"
+
+
+@pytest.mark.unit
+def test_parse_create_upholstery_request_requires_supplier_name_when_supplier_details_present() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="supplier_name is required when supplier details are provided",
+    ):
+        parse_create_upholstery_request(
+            {
+                "name": "Green Linen",
+                "supplier_base_url": "https://supplier.example",
+            }
+        )

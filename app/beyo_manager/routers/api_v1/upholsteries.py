@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from beyo_manager.domain.upholstery.enums import UpholsteryCurrencyEnum
+from beyo_manager.domain.upholstery.enums import (
+    UpholsteryCurrencyEnum,
+    UpholsteryExternalProviderEnum,
+)
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
@@ -22,6 +25,9 @@ from beyo_manager.services.commands.upholstery.update_upholstery_list_order impo
     update_upholstery_list_order,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery.list_external_upholsteries import (
+    list_external_upholsteries,
+)
 from beyo_manager.services.queries.upholstery.list_nevotex_upholsteries import (
     list_nevotex_upholsteries,
 )
@@ -46,6 +52,7 @@ class _CreateBody(BaseModel):
     name: str
     code: str | None = None
     image_url: str | None = None
+    page_link: str | None = None
     favorite: bool = False
     current_stored_amount_meters: Decimal | None = None
     low_stock_threshold_meters: Decimal | None = None
@@ -58,6 +65,11 @@ class _CreateBody(BaseModel):
     upholstery_category_name: str | None = None
     create_category: _InlineCategoryBody | None = None
     upholstery_inventory_id: str | None = None
+    supplier_name: str | None = None
+    supplier_base_url: str | None = None
+    supplier_country: str | None = None
+    supplier_city: str | None = None
+    supplier_street_address: str | None = None
 
 
 class _UpdateBody(BaseModel):
@@ -126,7 +138,6 @@ async def route_list_upholsteries(
 
 @router.get("/external/nevotex")
 async def route_list_nevotex_upholsteries(
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
     q: str = Query(..., min_length=1, max_length=200),
     limit: int = Query(7, ge=1, le=20),
@@ -134,10 +145,33 @@ async def route_list_nevotex_upholsteries(
     ctx = ServiceContext(
         incoming_data={},
         query_params={"q": q, "limit": limit},
-        identity=claims,
+        identity={},
         session=session,
     )
     outcome = await run_service(list_nevotex_upholsteries, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/external")
+async def route_list_external_upholsteries(
+    session: AsyncSession = Depends(get_db),
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(7, ge=1, le=20),
+    providers: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "q": q,
+            "limit": limit,
+            "providers": providers,
+        },
+        identity={},
+        session=session,
+    )
+    outcome = await run_service(list_external_upholsteries, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

@@ -12,6 +12,8 @@ def serialize_upholstery_inventory(
     image_url: str | None = None,
     upholstery_name: str | None = None,
     upholstery_code: str | None = None,
+    page_link: str | None = None,
+    supplier_name: str | None = None,
     favorite: bool | None = None,
 ) -> dict:
     """Serialize an UpholsteryInventory model to JSON-compatible dict."""
@@ -22,6 +24,8 @@ def serialize_upholstery_inventory(
         "upholstery_name": upholstery_name,
         "upholstery_code": upholstery_code,
         "image_url": image_url,
+        "page_link": page_link,
+        "supplier_name": supplier_name,
         "favorite": favorite,
         "inventory_condition": inv.inventory_condition.value,
         "current_stored_amount_meters": (
@@ -88,6 +92,8 @@ def serialize_upholstery_inventory_partial(
     image_url: str | None = None,
     upholstery_name: str | None = None,
     upholstery_code: str | None = None,
+    page_link: str | None = None,
+    supplier_name: str | None = None,
     favorite: bool | None = None,
 ) -> dict:
     """Serialize a subset of UpholsteryInventory fields for list views."""
@@ -98,6 +104,8 @@ def serialize_upholstery_inventory_partial(
         "upholstery_name": upholstery_name,
         "upholstery_code": upholstery_code,
         "image_url": image_url,
+        "page_link": page_link,
+        "supplier_name": supplier_name,
         "favorite": favorite,
         "inventory_condition": inv.inventory_condition.value,
         "current_stored_amount_meters": (
@@ -123,6 +131,7 @@ def serialize_upholstery(
     row: Upholstery,
     inventory: UpholsteryInventory | None = None,
     category: UpholsteryCategory | None = None,
+    supplier_name: str | None = None,
 ) -> dict:
     available_stored_amount = None
     if inventory is not None and inventory.current_stored_amount_meters is not None:
@@ -136,11 +145,13 @@ def serialize_upholstery(
         "name": row.name,
         "code": row.code,
         "image_url": row.image_url,
+        "page_link": getattr(row, "page_link", None),
         "favorite": row.favorite,
         "list_order": row.list_order,
-        "inventory_id": inventory.client_id if inventory is not None else None,
+        "inventory_id": getattr(inventory, "client_id", None) if inventory is not None else None,
         "current_stored_amount_meters": available_stored_amount,
         "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
+        "supplier_name": supplier_name,
         "upholstery_category": {
             "id": category.client_id,
             "name": category.name,

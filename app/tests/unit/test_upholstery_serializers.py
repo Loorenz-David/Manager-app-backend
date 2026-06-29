@@ -73,6 +73,8 @@ def test_serialize_upholstery_inventory_partial_includes_upholstery_and_ordered_
         image_url="https://cdn.example.com/uph-1.jpg",
         upholstery_name="Blue Velvet",
         upholstery_code="BLU-1",
+        page_link="https://supplier.example/blue-velvet",
+        supplier_name="nevotex",
         favorite=True,
     )
 
@@ -80,6 +82,8 @@ def test_serialize_upholstery_inventory_partial_includes_upholstery_and_ordered_
     assert result["upholstery_name"] == "Blue Velvet"
     assert result["upholstery_code"] == "BLU-1"
     assert result["favorite"] is True
+    assert result["page_link"] == "https://supplier.example/blue-velvet"
+    assert result["supplier_name"] == "nevotex"
     assert result["current_amount_in_need_meters"] == "1.500"
     assert result["current_amount_ordered_meters"] == "2.500"
     assert result["image_url"] == "https://cdn.example.com/uph-1.jpg"
@@ -101,6 +105,8 @@ def test_serialize_upholstery_inventory_partial_handles_null_ordered_amount():
     result = serialize_upholstery_inventory_partial(inventory)
 
     assert result["favorite"] is None
+    assert result["page_link"] is None
+    assert result["supplier_name"] is None
     assert result["current_amount_in_need_meters"] is None
     assert result["current_amount_ordered_meters"] is None
 
@@ -139,9 +145,13 @@ def test_serialize_upholstery_inventory_includes_upholstery_metadata():
         image_url="https://cdn.example.com/uph-3.jpg",
         upholstery_name="Green Linen",
         upholstery_code="GRN-3",
+        page_link="https://supplier.example/green-linen",
+        supplier_name="ohlssons_tyger",
         favorite=True,
     )
 
     assert result["upholstery_name"] == "Green Linen"
     assert result["upholstery_code"] == "GRN-3"
+    assert result["page_link"] == "https://supplier.example/green-linen"
+    assert result["supplier_name"] == "ohlssons_tyger"
     assert result["favorite"] is True

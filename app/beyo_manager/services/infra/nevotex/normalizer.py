@@ -18,6 +18,25 @@ def _absolutize_image(raw_image: str) -> str:
     return f"{_NEVOTEX_BASE_URL}/{decoded}"
 
 
+def _absolutize_external_url(raw_url: str) -> str:
+    decoded = unquote(raw_url.strip())
+    if not decoded:
+        return ""
+    if decoded.startswith("http://") or decoded.startswith("https://"):
+        return decoded
+    if decoded.startswith("/"):
+        return f"{_NEVOTEX_BASE_URL}{decoded}"
+    return f"{_NEVOTEX_BASE_URL}/{decoded}"
+
+
+def _resolve_external_url(raw: dict) -> str | None:
+    for key in ("link", "url", "productUrl", "productURL", "productLink", "uri"):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            return _absolutize_external_url(value)
+    return None
+
+
 def normalize_nevotex_candidate(raw: dict) -> dict | None:
     name_value = raw.get("name")
     code_value = raw.get("number")
@@ -39,6 +58,7 @@ def normalize_nevotex_candidate(raw: dict) -> dict | None:
         "name": name,
         "code": code,
         "image_url": _absolutize_image(image_raw),
+        "external_url": _resolve_external_url(raw),
         "favorite": None,
         "list_order": None,
         "current_stored_amount_meters": 0,

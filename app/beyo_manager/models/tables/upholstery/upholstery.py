@@ -17,6 +17,7 @@ class Upholstery(IdentityMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    page_link: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     upholstery_category_id: Mapped[str | None] = mapped_column(
         String(64),

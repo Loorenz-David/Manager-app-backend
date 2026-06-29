@@ -13,6 +13,7 @@ def test_normalize_nevotex_candidate_full() -> None:
         "name": "Tyg Afrodite 2 Midnight ",
         "number": "1000402",
         "image": "%2fFiles%2fImages%2fproduktbilder%2f1000402.jpg",
+        "url": "/produkter/tyg-afrodite-2-midnight",
     }
 
     result = normalize_nevotex_candidate(raw)
@@ -22,6 +23,7 @@ def test_normalize_nevotex_candidate_full() -> None:
     assert result["name"] == "Tyg Afrodite 2 Midnight"
     assert result["code"] == "1000402"
     assert result["image_url"] == "https://nevotex.se/Files/Images/produktbilder/1000402.jpg"
+    assert result["external_url"] == "https://nevotex.se/produkter/tyg-afrodite-2-midnight"
     assert result["favorite"] is None
     assert result["list_order"] is None
     assert result["current_stored_amount_meters"] == 0
@@ -42,6 +44,20 @@ def test_normalize_nevotex_candidate_decodes_and_absolutizes_image_url() -> None
 
     assert result is not None
     assert result["image_url"] == "https://nevotex.se/Files/Images/produktbilder/12345.jpg"
+
+
+@pytest.mark.unit
+def test_normalize_nevotex_candidate_handles_missing_external_url() -> None:
+    result = normalize_nevotex_candidate(
+        {
+            "name": "Tyg X",
+            "number": "12345",
+            "image": "%2fFiles%2fImages%2fproduktbilder%2f12345.jpg",
+        }
+    )
+
+    assert result is not None
+    assert result["external_url"] is None
 
 
 @pytest.mark.unit

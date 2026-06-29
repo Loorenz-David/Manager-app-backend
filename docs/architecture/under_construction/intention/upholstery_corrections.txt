@@ -1,0 +1,26 @@
+
+the upholstery table will now have a column called page_link which is a string ( can be nullable ).
+the current router route_create_upholstery will now accept the key for page_link, the supplier_name name key and  all the other fields for creating a supplier ( all optional ).
+this  will be used by the service create_upholstery  for adding the page_link to the upholstery instance and for creating an upholstery suplier instance on the same process if supplier provided.
+
+
+the serializers use to serialize upholstery ( serialize_upholstery ) will now have the key page_link and supplier_name .
+ you should trace back the services that use those serializers as we will now need to join the upholstery supplier to the query.
+
+after the db modifications you can make the run the migration also. 
+
+upholstery:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/upholstery/upholstery.py
+
+route_create_upholstery:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/upholsteries.py
+
+create_upholstery:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/upholstery/create_upholstery.py
+
+supplier:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/upholstery/supplier.py
+
+
+serialize_upholstery: 
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/upholstery/serializers.py
