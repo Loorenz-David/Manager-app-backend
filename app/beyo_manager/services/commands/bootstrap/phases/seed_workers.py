@@ -122,6 +122,7 @@ _WORKER_SECTION_GROUPS: dict[str, tuple[str, ...]] = {
     for worker_name in _WORKER_NAMES
 }
 _WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
+_WORKER_SECTION_GROUPS["Norbi"] = _WORKER_SECTION_GROUPS["Mykola"]
 _WORKER_SECTION_GROUPS["Feruza"] = ("restoration_core", "upholstery", "cleaning_both")
 _WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning_both")
 _WORKER_SECTION_GROUPS["Fayoz"] = ()
