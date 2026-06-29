@@ -47,8 +47,8 @@ _WORKER_WORKSPACE_ROLES: dict[str, str] = {
     worker_name: "worker"
     for worker_name in _WORKER_NAMES
 }
-_WORKER_WORKSPACE_ROLES["Norbi"] = "manager"
 _WORKER_WORKSPACE_ROLES["Mykola"] = "wood_worker"
+_WORKER_WORKSPACE_ROLES["Norbi"] = _WORKER_WORKSPACE_ROLES["Mykola"]
 _WORKER_WORKSPACE_ROLES["Roman"] = "upholstery_worker"
 _WORKER_WORKSPACE_ROLES["Vitalii"] = "quality_control"
 _WORKER_WORKSPACE_ROLES["Fayoz"] = "admin"
