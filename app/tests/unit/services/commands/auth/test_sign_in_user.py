@@ -77,9 +77,11 @@ async def test_sign_in_user_allows_admin_role_for_manager_scope() -> None:
 
 
 @pytest.mark.unit
-async def test_sign_in_user_rejects_manager_role_for_worker_scope() -> None:
-    with pytest.raises(PermissionDenied, match="Invalid credentials."):
-        await sign_in_user(_ctx(role_name=RoleNameEnum.MANAGER, app_scope="worker"))
+async def test_sign_in_user_allows_manager_role_for_worker_scope() -> None:
+    result = await sign_in_user(_ctx(role_name=RoleNameEnum.MANAGER, app_scope="worker"))
+
+    assert result["access_token"]
+    assert result["_refresh_token"]
 
 
 @pytest.mark.unit
