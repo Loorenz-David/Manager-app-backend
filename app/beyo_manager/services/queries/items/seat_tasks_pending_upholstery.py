@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskTypeEnum
 from beyo_manager.domain.tasks.serializers import serialize_item, serialize_task
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.images.image_link import ImageLink
@@ -22,6 +22,13 @@ _SEAT_MAJOR_CATEGORY = "seat"
 
 def _seat_category_match():
     return func.lower(Item.item_major_category_snapshot) == _SEAT_MAJOR_CATEGORY
+
+
+def _include_return_tasks(ctx: ServiceContext) -> bool:
+    raw = ctx.query_params.get("include_return_tasks", False)
+    if isinstance(raw, str):
+        return raw.strip().lower() == "true"
+    return bool(raw)
 
 
 def _is_internal_selection_pending(upholstery: ItemUpholstery) -> bool:
@@ -118,6 +125,7 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
     q = ctx.query_params.get("q")
     missing_selection = bool(ctx.query_params.get("missing_selection", False))
     missing_quantity = bool(ctx.query_params.get("missing_quantity", False))
+    include_return_tasks = _include_return_tasks(ctx)
 
     stmt = (
         select(Task.client_id)
@@ -126,6 +134,8 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
             Task.is_deleted.is_(False),
         )
     )
+    if not include_return_tasks:
+        stmt = stmt.where(Task.task_type != TaskTypeEnum.RETURN)
 
     missing_selection_subq = _missing_selection_subquery(ctx)
     missing_quantity_subq = _missing_quantity_subquery(ctx)
@@ -315,25 +325,28 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
 
 
 async def get_seat_tasks_pending_upholstery_counts(ctx: ServiceContext) -> dict:
+    include_return_tasks = _include_return_tasks(ctx)
     missing_selection_subq = _missing_selection_subquery(ctx)
     missing_quantity_subq = _missing_quantity_subquery(ctx)
 
-    sel_result = await ctx.session.execute(
-        select(func.count(Task.client_id)).where(
-            Task.workspace_id == ctx.workspace_id,
-            Task.is_deleted.is_(False),
-            Task.client_id.in_(missing_selection_subq),
-        )
+    sel_stmt = select(func.count(Task.client_id)).where(
+        Task.workspace_id == ctx.workspace_id,
+        Task.is_deleted.is_(False),
+        Task.client_id.in_(missing_selection_subq),
     )
+    if not include_return_tasks:
+        sel_stmt = sel_stmt.where(Task.task_type != TaskTypeEnum.RETURN)
+    sel_result = await ctx.session.execute(sel_stmt)
     missing_selection_total = sel_result.scalar_one() or 0
 
-    qty_result = await ctx.session.execute(
-        select(func.count(Task.client_id)).where(
-            Task.workspace_id == ctx.workspace_id,
-            Task.is_deleted.is_(False),
-            Task.client_id.in_(missing_quantity_subq),
-        )
+    qty_stmt = select(func.count(Task.client_id)).where(
+        Task.workspace_id == ctx.workspace_id,
+        Task.is_deleted.is_(False),
+        Task.client_id.in_(missing_quantity_subq),
     )
+    if not include_return_tasks:
+        qty_stmt = qty_stmt.where(Task.task_type != TaskTypeEnum.RETURN)
+    qty_result = await ctx.session.execute(qty_stmt)
     missing_quantity_total = qty_result.scalar_one() or 0
 
     return {

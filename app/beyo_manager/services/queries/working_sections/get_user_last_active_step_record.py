@@ -231,6 +231,14 @@ async def _build_step_record_payload(ctx: ServiceContext, step: TaskStep) -> dic
 async def _load_step_with_latest_record(ctx: ServiceContext, step_id: str) -> TaskStep | None:
     result = await ctx.session.execute(
         select(TaskStep)
+        .join(
+            Task,
+            and_(
+                Task.client_id == TaskStep.task_id,
+                Task.workspace_id == ctx.workspace_id,
+                Task.is_deleted.is_(False),
+            ),
+        )
         .options(selectinload(TaskStep.latest_state_record))
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
@@ -251,6 +259,14 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
                 TaskStep.client_id == StepStateRecord.step_id,
                 TaskStep.workspace_id == ctx.workspace_id,
                 TaskStep.is_deleted.is_(False),
+            ),
+        )
+        .join(
+            Task,
+            and_(
+                Task.client_id == TaskStep.task_id,
+                Task.workspace_id == ctx.workspace_id,
+                Task.is_deleted.is_(False),
             ),
         )
         .where(
@@ -288,6 +304,14 @@ async def get_user_last_active_step_record(ctx: ServiceContext) -> dict:
                     TaskStep.workspace_id == ctx.workspace_id,
                     TaskStep.is_deleted.is_(False),
                     TaskStep.allows_batch_working.is_(True),
+                ),
+            )
+            .join(
+                Task,
+                and_(
+                    Task.client_id == TaskStep.task_id,
+                    Task.workspace_id == ctx.workspace_id,
+                    Task.is_deleted.is_(False),
                 ),
             )
             .where(

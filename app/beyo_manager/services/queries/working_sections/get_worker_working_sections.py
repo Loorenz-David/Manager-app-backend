@@ -6,6 +6,7 @@ from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, Ta
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.working_sections.working_section_membership import WorkingSectionMembership
@@ -72,6 +73,14 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
             TaskStep.state,
             func.count().label("cnt"),
         )
+        .join(
+            Task,
+            and_(
+                Task.client_id == TaskStep.task_id,
+                Task.workspace_id == ctx.workspace_id,
+                Task.is_deleted.is_(False),
+            ),
+        )
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.working_section_id.in_(active_section_ids),
@@ -86,6 +95,14 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
             TaskStep.working_section_id,
             TaskStep.state,
             func.count().label("cnt"),
+        )
+        .join(
+            Task,
+            and_(
+                Task.client_id == TaskStep.task_id,
+                Task.workspace_id == ctx.workspace_id,
+                Task.is_deleted.is_(False),
+            ),
         )
         .join(
             StepStateRecord,
@@ -109,6 +126,14 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
         select(
             TaskStep.working_section_id,
             func.count().label("cnt"),
+        )
+        .join(
+            Task,
+            and_(
+                Task.client_id == TaskStep.task_id,
+                Task.workspace_id == ctx.workspace_id,
+                Task.is_deleted.is_(False),
+            ),
         )
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
