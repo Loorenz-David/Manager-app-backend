@@ -12,11 +12,15 @@ from beyo_manager.services.infra.upholstery_providers.nevotex import (
 from beyo_manager.services.infra.upholstery_providers.ohlssons_tyger import (
     OhlssonsTygerExternalUpholsteryProvider,
 )
+from beyo_manager.services.infra.upholstery_providers.selfmade import (
+    SelfmadeExternalUpholsteryProvider,
+)
 
 _PROVIDERS: dict[UpholsteryExternalProviderEnum, ExternalUpholsteryProvider] = {
     UpholsteryExternalProviderEnum.NEVOTEX: NevotexExternalUpholsteryProvider(),
     UpholsteryExternalProviderEnum.OHLSSONS_TYGER: OhlssonsTygerExternalUpholsteryProvider(),
     UpholsteryExternalProviderEnum.FARGOTEX: FargotexExternalUpholsteryProvider(),
+    UpholsteryExternalProviderEnum.SELFMADE: SelfmadeExternalUpholsteryProvider(),
 }
 
 

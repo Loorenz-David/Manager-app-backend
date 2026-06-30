@@ -21,6 +21,7 @@ _SECTION_CREATION_MAP: dict[str, bool] = {
     "wood fix": True,
     "ground oil": True,
     "hardwax oil": True,
+    "photography": True,
 }
 
 _SECTION_IMAGE_URLS: dict[str, str] = {
@@ -37,6 +38,7 @@ _SECTION_IMAGE_URLS: dict[str, str] = {
     "upholstery installation": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_installer.webp",
     "upholstery removal": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_remover_2.webp",
     "wood fix": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/wood_oil.webp",
+    "photography": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/photography.webp",
 }
 
 _SECTION_ORDER_LISTS: dict[str, int] = {
@@ -54,11 +56,13 @@ _SECTION_ORDER_LISTS: dict[str, int] = {
     "wood fix": 1,
     "ground oil": 2,
     "hardwax oil": 3,
+    "photography": 10,
 }
 
 _SECTION_BATCH_MAP: dict[str, bool] = {
     "ground oil": True,
     "hardwax oil": True,
+    "photography": True,
 }
 
 _DEPENDENCIES: list[tuple[str, str]] = [
@@ -92,6 +96,20 @@ _DEPENDENCIES: list[tuple[str, str]] = [
     ("ground oil", "wood fix"),
     ("hardwax oil", "wood fix"),
     ("hardwax oil", "ground oil"),
+    ("photography", "disassembly"),
+    ("photography", "cleaning seat"),
+    ("photography", "cleaning wood"),
+    ("photography", "structural repair"),
+    ("photography", "sanding"),
+    ("photography", "upholstery removal"),
+    ("photography", "padding"),
+    ("photography", "upholstery installation"),
+    ("photography", "assembly"),
+    ("photography", "sewing"),
+    ("photography", "weaving"),
+    ("photography", "wood fix"),
+    ("photography", "ground oil"),
+    ("photography", "hardwax oil"),
 ]
 
 

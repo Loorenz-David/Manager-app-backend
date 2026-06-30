@@ -78,6 +78,7 @@ _WORKING_SECTION_ASSIGNMENT_MAP: dict[str, bool] = {
     "wood fix": True,
     "ground oil": True,
     "hardwax oil": True,
+    "photography": True,
 }
 
 _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
@@ -118,6 +119,9 @@ _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
         "cleaning seat",
         "cleaning wood",
     ),
+    "photography": (
+        "photography",
+    ),
 }
 
 _SECTION_GROUPS["all"] = tuple(_WORKING_SECTION_ASSIGNMENT_MAP.keys())
@@ -132,6 +136,7 @@ _WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
 _WORKER_SECTION_GROUPS["Norbi"] = _WORKER_SECTION_GROUPS["Mykola"]
 _WORKER_SECTION_GROUPS["Feruza"] = ("restoration_core", "upholstery", "cleaning_both")
 _WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning_both")
+_WORKER_SECTION_GROUPS["Vitalii"] = ("photography",)
 _WORKER_SECTION_GROUPS["Fayoz"] = ()
 _WORKER_SECTION_GROUPS["Betty"] = ()
 

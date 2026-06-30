@@ -68,7 +68,10 @@ async def get_case(ctx: ServiceContext) -> dict:
         image_links = (
             await ctx.session.execute(
                 select(ImageLink)
-                .options(selectinload(ImageLink.image).selectinload(Image.last_event))
+                .options(
+                    selectinload(ImageLink.image).selectinload(Image.last_event),
+                    selectinload(ImageLink.image).selectinload(Image.image_annotations),
+                )
                 .where(
                     ImageLink.entity_type == ImageLinkEntityTypeEnum.CASE_CONVERSATION_MESSAGE,
                     ImageLink.entity_client_id.in_(message_ids),
@@ -78,7 +81,9 @@ async def get_case(ctx: ServiceContext) -> dict:
         ).scalars().all()
         for image_link in image_links:
             if image_link.image is not None:
-                images_by_message.setdefault(image_link.entity_client_id, []).append(serialize_image(image_link.image))
+                images_by_message.setdefault(image_link.entity_client_id, []).append(
+                    serialize_image(image_link.image, include_annotations=True)
+                )
 
         mention_rows = await ctx.session.execute(
             select(ContentMentionLink, ContentMention)

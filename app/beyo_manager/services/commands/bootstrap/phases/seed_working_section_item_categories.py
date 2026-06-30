@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import _SEATING_CATEGORIES, _WOOD_CATEGORIES
 from beyo_manager.models.tables.working_sections.working_section_item_category import WorkingSectionItemCategory
 
-_BOTH_CATEGORY_SECTIONS: frozenset[str] = frozenset()
+_BOTH_CATEGORY_SECTIONS: frozenset[str] = frozenset({"photography"})
 _WOOD_ONLY_SECTIONS: frozenset[str] = frozenset({"cleaning wood", "wood fix", "ground oil", "hardwax oil"})
 
 

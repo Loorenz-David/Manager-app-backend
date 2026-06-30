@@ -28,3 +28,4 @@ class UpholsteryExternalProviderEnum(enum.Enum):
     NEVOTEX = "nevotex"
     OHLSSONS_TYGER = "ohlssons_tyger"
     FARGOTEX = "fargotex"
+    SELFMADE = "selfmade"
