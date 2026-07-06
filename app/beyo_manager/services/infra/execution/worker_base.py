@@ -21,9 +21,12 @@ BACKOFF_SECONDS = [30, 120, 300]
 BACKOFF_JITTER  = 0.15  # ±15%
 
 HANDLER_TIMEOUT_SECONDS: dict[str, int] = {
-    "default":      300,   # 5 minutes
-    "upload_image": 3600,  # 1 hour
-    "send_report":  600,   # 10 minutes
+    "default":                       300,   # 5 minutes
+    "upload_image":                  3600,  # 1 hour
+    "send_report":                   600,   # 10 minutes
+    "email_sync_targeted":           300,   # 5 minutes
+    "send_coordination_email_batch": 300,   # 5 minutes
+    "send_email_messages":           300,   # 5 minutes
 }
 
 TaskHandlerFn = Callable[[dict, str], Awaitable[None]]

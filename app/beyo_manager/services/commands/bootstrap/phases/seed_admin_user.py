@@ -23,6 +23,10 @@ async def seed_admin_user(
         select(User).where(User.email == settings.bootstrap_admin_email)
     )
     if existing_user is None:
+        existing_user = await session.scalar(
+            select(User).where(User.username == settings.bootstrap_admin_username)
+        )
+    if existing_user is None:
         hashed_password = bcrypt.hashpw(
             settings.bootstrap_admin_password.encode(),
             bcrypt.gensalt(),
@@ -36,6 +40,9 @@ async def seed_admin_user(
         await session.flush()
         admin_user = user
     else:
+        if existing_user.email != settings.bootstrap_admin_email:
+            existing_user.email = settings.bootstrap_admin_email
+            await session.flush()
         admin_user = existing_user
 
     user_client_id = admin_user.client_id

@@ -7,6 +7,9 @@ from beyo_manager.routers.api_v1 import (
     case_types,
     cases,
     customers,
+    email_connections,
+    email_templates,
+    email_threads,
     files,
     health,
     history,
@@ -69,5 +72,20 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(item_categories.router)
     app.include_router(issue_types.router)
     app.include_router(customers.router, prefix="/api/v1/customers", tags=["customers"])
+    app.include_router(
+        email_connections.router,
+        prefix="/api/v1/email-connections",
+        tags=["email-connections"],
+    )
+    app.include_router(
+        email_threads.router,
+        prefix="/api/v1/email-threads",
+        tags=["email-threads"],
+    )
+    app.include_router(
+        email_templates.router,
+        prefix="/api/v1/email-templates",
+        tags=["email-templates"],
+    )
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
     # Add domain routers here as you build them:

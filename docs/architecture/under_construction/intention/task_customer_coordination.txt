@@ -1,0 +1,58 @@
+INTENITON:
+
+when a task is ready ( chaning to state ready ) through the _task_state_transitions, we currently create a task posthandling instance.
+We will add one more process to this stage.
+
+We will create a table that will track the customer coordination between a user and the handling process to the customer.
+This table will be similar to the TaskPostHandling table, it will be linked to a task, have it's own enum states, have a creation and update columns and the polymorphic history table will also hold the state transtions of this table.
+
+This table will live in task tables folder, and it's state enums will be: pending, coordinating, completed.
+
+We will follow a similar approach to what we did with the services of TaskPostHandling on the _task_state_transitions, which creates a record when the task transitions to ready. with default state of pending.
+Because a task it can have multiple of this instances if there is a instance which is not completed then it wont created, as there is already an open instance in progress. a good example is how the _create_post_handling_in_session does it.
+
+We will create the enum linkage to the email threat polymorphic system with this customer coordination instance. 
+
+We will then need to update the task get list router and query service ( route_list_tasks, list_tasks ), so that it now accepts the query param of customer_coordination_states we approach that query param value and query join like we did with the "upholstery_requirement_states" , list of string that when pass it joins the query and returns the serialization of that instance. otherwise it returns that key with value null.
+
+We will then need to create a router and service for allowing to transition the customer coordination instance to completed, like we did with the route_complete_task_post_handling router and  service complete_task_post_handling. 
+
+We will then need to create also a router and service for getting the counts of the customer coordination instances given query states, the return value is a count object like we did with the router route_count_task_post_handling_states and service count_task_post_handling_states
+
+GOAL
+make an implementation plan for codex using the template @template_plan . use the correct contracts for this implementation using the contract guide @backend
+
+RELEVANT_FILES:
+
+_task_state_transitions:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/tasks/_task_state_transitions.py
+
+task_post_handling:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/tasks/task_post_handling.py
+
+polymorphic history system:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/history
+
+task enums:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/tasks/enums.py
+
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/task_post_handling/_create_post_handling_in_session.py
+
+route_list_tasks, list_tasks
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py
+
+complete_task_post_handling
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/task_post_handling/complete_task_post_handling.py
+
+
+count_task_post_handling_states:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/count_task_post_handling_states.py
+
+email_thread:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/emails/email_thread.py
+
+EmailThreadEntityTypeEnum:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/domain/emails/enums.py

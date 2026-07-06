@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     sleep_mode_enabled: bool = Field(default=True, alias="SLEEP_MODE_ENABLED")
     idle_sleep_threshold_seconds: int = Field(default=600, alias="IDLE_SLEEP_THRESHOLD_SECONDS")
 
+    # Email IDLE watcher
+    email_idle_enabled: bool = Field(default=False, alias="EMAIL_IDLE_ENABLED")
+    email_idle_shard_count: int = Field(default=1, alias="EMAIL_IDLE_SHARD_COUNT")
+    email_idle_shard_index: int = Field(default=0, alias="EMAIL_IDLE_SHARD_INDEX")
+    email_idle_reconcile_seconds: int = Field(default=30, alias="EMAIL_IDLE_RECONCILE_SECONDS")
+    email_idle_renew_seconds: int = Field(default=1500, alias="EMAIL_IDLE_RENEW_SECONDS")
+    email_idle_debounce_seconds: int = Field(default=5, alias="EMAIL_IDLE_DEBOUNCE_SECONDS")
+    email_idle_backoff_max_seconds: int = Field(default=300, alias="EMAIL_IDLE_BACKOFF_MAX_SECONDS")
+
     # Bootstrap
     bootstrap_secret: str | None = Field(default=None, alias="BOOTSTRAP_SECRET")
     bootstrap_admin_email: str | None = Field(default=None, alias="BOOTSTRAP_ADMIN_EMAIL")
@@ -88,6 +97,7 @@ class Settings(BaseSettings):
 
     # Reset (development only)
     reset_secret: str = Field(default="", alias="RESET_SECRET")
+    field_encryption_key: str | None = Field(default=None, alias="FIELD_ENCRYPTION_KEY")
 
     model_config = SettingsConfigDict(
         # Load deterministic env profile selected by APP_ENV.
@@ -125,6 +135,20 @@ class Settings(BaseSettings):
         if missing:
             raise ValueError(f"Missing required settings: {', '.join(missing)}")
         return self
+
+    def validate_email_idle_settings(self) -> None:
+        if self.email_idle_shard_count < 1:
+            raise ValueError("EMAIL_IDLE_SHARD_COUNT must be >= 1.")
+        if not 0 <= self.email_idle_shard_index < self.email_idle_shard_count:
+            raise ValueError("EMAIL_IDLE_SHARD_INDEX must be within [0, EMAIL_IDLE_SHARD_COUNT).")
+        if self.email_idle_renew_seconds <= 0 or self.email_idle_renew_seconds > 1680:
+            raise ValueError("EMAIL_IDLE_RENEW_SECONDS must be within 1..1680.")
+        if self.email_idle_reconcile_seconds <= 0:
+            raise ValueError("EMAIL_IDLE_RECONCILE_SECONDS must be > 0.")
+        if self.email_idle_debounce_seconds <= 0:
+            raise ValueError("EMAIL_IDLE_DEBOUNCE_SECONDS must be > 0.")
+        if self.email_idle_backoff_max_seconds <= 0 or self.email_idle_backoff_max_seconds > 3600:
+            raise ValueError("EMAIL_IDLE_BACKOFF_MAX_SECONDS must be within 1..3600.")
 
 
 settings = Settings()

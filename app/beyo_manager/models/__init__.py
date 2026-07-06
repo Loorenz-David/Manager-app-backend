@@ -92,6 +92,8 @@ from beyo_manager.models.tables.static_costs import static_cost  # noqa: F401
 
 # --- Tasks (depends on customer; use_alter FK to task_event) ---
 from beyo_manager.models.tables.tasks import task  # noqa: F401
+from beyo_manager.models.tables.tasks import task_customer_coordination  # noqa: F401
+from beyo_manager.models.tables.tasks import task_post_handling  # noqa: F401
 
 # --- Task events (depends on task) ---
 from beyo_manager.models.tables.tasks import task_event  # noqa: F401
@@ -119,3 +121,12 @@ from beyo_manager.models.tables.analytics import user_lifetime_stats  # noqa: F4
 from beyo_manager.models.tables.analytics import user_daily_work_stats  # noqa: F401
 from beyo_manager.models.tables.analytics import user_section_daily_work_stats  # noqa: F401
 from beyo_manager.models.tables.analytics import working_section_daily_work_stats  # noqa: F401
+
+# --- Emails ---
+from beyo_manager.models.tables.emails import email_connection  # noqa: F401
+from beyo_manager.models.tables.emails import email_sync_state  # noqa: F401
+from beyo_manager.models.tables.emails import email_thread_topic_preset  # noqa: F401
+from beyo_manager.models.tables.emails import email_thread  # noqa: F401
+from beyo_manager.models.tables.emails import email_message  # noqa: F401
+from beyo_manager.models.tables.emails import email_thread_user_state  # noqa: F401
+from beyo_manager.models.tables.emails import email_template  # noqa: F401

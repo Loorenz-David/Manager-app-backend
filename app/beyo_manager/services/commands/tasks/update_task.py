@@ -11,6 +11,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_update_message
+from beyo_manager.services.commands.task_post_handling._sync_post_handling_state_in_session import (
+    _sync_post_handling_state_in_session,
+)
 from beyo_manager.services.commands.tasks.requests import parse_update_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -29,6 +32,7 @@ _DIRECT_FIELDS = {
     "item_location",
     "return_method",
     "fulfillment_method",
+    "assortment",
     "additional_details",
 }
 
@@ -86,6 +90,16 @@ async def update_task(ctx: ServiceContext) -> dict:
             to_value=None,
             created_by_id=ctx.user_id,
             username_snapshot=username,
+        )
+
+    async with maybe_begin(ctx.session):
+        await _sync_post_handling_state_in_session(
+            ctx.session,
+            task.client_id,
+            workspace_id=ctx.workspace_id,
+            now=datetime.now(timezone.utc),
+            user_id=ctx.user_id,
+            username_snapshot=ctx.identity.get("username"),
         )
 
     await event_bus.dispatch([

@@ -78,3 +78,16 @@ class TaskEventErrorCodeEnum(enum.Enum):
     ORCHESTRATION_CONFLICT = "orchestration_conflict"
     DEPENDENCY_BLOCKED = "dependency_blocked"
     UNKNOWN = "unknown"
+
+
+class TaskPostHandlingStateEnum(enum.Enum):
+    PENDING = "pending"
+    FILLED = "filled"
+    COMPLETED = "completed"
+
+
+class TaskCustomerCoordinationStateEnum(enum.Enum):
+    PENDING = "pending"
+    COORDINATING = "coordinating"
+    COMPLETED = "completed"
+    FAILED = "failed"

@@ -1,6 +1,5 @@
 from sqlalchemy import func, select
 
-from beyo_manager.domain.notifications.results import NotificationResult
 from beyo_manager.models.tables.notifications.notification import Notification
 from beyo_manager.services.context import ServiceContext
 

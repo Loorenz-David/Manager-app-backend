@@ -1,5 +1,6 @@
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
+aioimaplib==2.0.1
 aiosignal==1.4.0
 alembic==1.15.2
 annotated-types==0.7.0
@@ -16,6 +17,7 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.1.8
 cryptography==48.0.0
+email-reply-parser==0.5.12
 fastapi==0.115.12
 freezegun==1.5.1
 frozenlist==1.8.0

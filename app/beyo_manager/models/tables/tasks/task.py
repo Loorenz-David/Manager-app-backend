@@ -12,7 +12,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.domain.tasks.enums import (
     TaskFulfillmentMethodEnum,
@@ -111,6 +111,18 @@ class Task(IdentityMixin, Base):
     )
     recorded_time_marked_wrong: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     taken_from_average: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    assortment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    task_steps: Mapped[list["TaskStep"]] = relationship(
+        "TaskStep",
+        foreign_keys="TaskStep.task_id",
+        lazy="noload",
+    )
+    task_items: Mapped[list["TaskItem"]] = relationship(
+        "TaskItem",
+        foreign_keys="TaskItem.task_id",
+        lazy="noload",
+    )
 
     __table_args__ = (
         UniqueConstraint("workspace_id", "task_scalar_id", name="uq_tasks_workspace_scalar_id"),

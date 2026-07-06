@@ -1,4 +1,4 @@
-from sqlalchemy import String, and_, case, cast, distinct, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
@@ -23,9 +23,12 @@ from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
 from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_customer_coordination import TaskCustomerCoordination
 from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.utils.task_search import build_task_q_subquery
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
@@ -90,6 +93,8 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     task_types = _split_csv(ctx.query_params.get("task_types"))
     return_sources = _split_csv(ctx.query_params.get("return_sources"))
     upholstery_requirement_states = _split_csv(ctx.query_params.get("upholstery_requirement_states"))
+    post_handling_states = _split_csv(ctx.query_params.get("post_handling_states"))
+    customer_coordination_states = _split_csv(ctx.query_params.get("customer_coordination_states"))
 
     ready_from_date = ctx.query_params.get("ready_from_date")
     ready_to_date = ctx.query_params.get("ready_to_date")
@@ -174,59 +179,30 @@ async def list_tasks(ctx: ServiceContext) -> dict:
         )
         stmt = stmt.where(Task.client_id.in_(req_subq))
 
-    if q:
-        q_like = f"%{q}%"
-        q_subq = (
-            select(distinct(Task.client_id))
-            .select_from(Task)
-            .join(
-                TaskItem,
-                and_(
-                    TaskItem.task_id == Task.client_id,
-                    TaskItem.workspace_id == ctx.workspace_id,
-                    TaskItem.removed_at.is_(None),
-                ),
-                isouter=True,
-            )
-            .join(
-                Item,
-                and_(
-                    Item.client_id == TaskItem.item_id,
-                    Item.workspace_id == ctx.workspace_id,
-                    Item.is_deleted.is_(False),
-                ),
-                isouter=True,
-            )
-            .join(
-                ItemUpholstery,
-                and_(
-                    ItemUpholstery.item_id == Item.client_id,
-                    ItemUpholstery.workspace_id == ctx.workspace_id,
-                    ItemUpholstery.is_deleted.is_(False),
-                ),
-                isouter=True,
-            )
+    if post_handling_states:
+        ph_subq = (
+            select(TaskPostHandling.task_id)
             .where(
-                Task.workspace_id == ctx.workspace_id,
-                or_(
-                    Task.title.ilike(q_like),
-                    cast(Task.additional_details, String).ilike(q_like),
-                    Task.primary_phone_number.ilike(q_like),
-                    Task.secondary_phone_number.ilike(q_like),
-                    Task.primary_email.ilike(q_like),
-                    Task.secondary_email.ilike(q_like),
-                    Item.article_number.ilike(q_like),
-                    Item.sku.ilike(q_like),
-                    Item.designer.ilike(q_like),
-                    Item.item_position.ilike(q_like),
-                    Item.item_category_snapshot.ilike(q_like),
-                    Item.item_major_category_snapshot.ilike(q_like),
-                    ItemUpholstery.name.ilike(q_like),
-                    ItemUpholstery.code.ilike(q_like),
-                ),
+                TaskPostHandling.workspace_id == ctx.workspace_id,
+                TaskPostHandling.state.in_(post_handling_states),
             )
+            .distinct()
         )
-        stmt = stmt.where(Task.client_id.in_(q_subq))
+        stmt = stmt.where(Task.client_id.in_(ph_subq))
+
+    if customer_coordination_states:
+        cc_subq = (
+            select(TaskCustomerCoordination.task_id)
+            .where(
+                TaskCustomerCoordination.workspace_id == ctx.workspace_id,
+                TaskCustomerCoordination.state.in_(customer_coordination_states),
+            )
+            .distinct()
+        )
+        stmt = stmt.where(Task.client_id.in_(cc_subq))
+
+    if q:
+        stmt = stmt.where(Task.client_id.in_(build_task_q_subquery(ctx.workspace_id, q)))
 
     stmt = stmt.order_by(*_build_order_by(ctx.query_params.get("order_by")))
     stmt = stmt.offset(offset).limit(limit + 1)
@@ -254,6 +230,32 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     )
     tasks = tasks_result.scalars().all()
     task_map = {task.client_id: task for task in tasks}
+
+    post_handling_map: dict[str, list[TaskPostHandling]] = {}
+    if post_handling_states:
+        ph_result = await ctx.session.execute(
+            select(TaskPostHandling)
+            .where(
+                TaskPostHandling.workspace_id == ctx.workspace_id,
+                TaskPostHandling.task_id.in_(page_ids),
+            )
+            .order_by(TaskPostHandling.created_at.asc())
+        )
+        for ph in ph_result.scalars().all():
+            post_handling_map.setdefault(ph.task_id, []).append(ph)
+
+    customer_coordination_map: dict[str, list[TaskCustomerCoordination]] = {}
+    if customer_coordination_states:
+        cc_result = await ctx.session.execute(
+            select(TaskCustomerCoordination)
+            .where(
+                TaskCustomerCoordination.workspace_id == ctx.workspace_id,
+                TaskCustomerCoordination.task_id.in_(page_ids),
+            )
+            .order_by(TaskCustomerCoordination.created_at.asc())
+        )
+        for cc in cc_result.scalars().all():
+            customer_coordination_map.setdefault(cc.task_id, []).append(cc)
 
     task_items_result = await ctx.session.execute(
         select(TaskItem).where(
@@ -305,7 +307,13 @@ async def list_tasks(ctx: ServiceContext) -> dict:
         primary_item = items_map.get(primary_item_id)
         items_payload.append(
             {
-                "task": serialize_task(task),
+                "task": serialize_task(
+                    task,
+                    post_handling_instances=post_handling_map.get(task_id) if post_handling_states else None,
+                    customer_coordination_instances=(
+                        customer_coordination_map.get(task_id) if customer_coordination_states else None
+                    ),
+                ),
                 "primary_item": serialize_item(primary_item),
                 "item_images": item_images_map.get(primary_item_id, []),
             }
@@ -573,6 +581,16 @@ async def get_task(ctx: ServiceContext) -> dict:
     )
     steps = steps_result.scalars().all()
 
+    post_handling_result = await ctx.session.execute(
+        select(TaskPostHandling)
+        .where(
+            TaskPostHandling.workspace_id == ctx.workspace_id,
+            TaskPostHandling.task_id == task.client_id,
+        )
+        .order_by(TaskPostHandling.created_at.asc())
+    )
+    post_handling_instances = post_handling_result.scalars().all()
+
     unread_result = await ctx.session.execute(
         select(func.sum(
             case(
@@ -595,7 +613,7 @@ async def get_task(ctx: ServiceContext) -> dict:
     unread_message_count = unread_result.scalar_one() or 0
 
     return {
-        "task": serialize_task(task),
+        "task": serialize_task(task, post_handling_instances=list(post_handling_instances)),
         "item": serialize_item(item),
         "item_images": [serialize_image_light(img) for img in item_images],
         "item_upholstery": [serialize_upholstery(u) for u in upholsteries],

@@ -41,6 +41,12 @@ class TaskType(enum.Enum):
     # Analytics — step state transition event
     PROCESS_STEP_TRANSITION = "process_step_transition"
 
+    # Email
+    EMAIL_INBOX_SYNC = "email_inbox_sync"
+    EMAIL_SYNC_TARGETED = "email_sync_targeted"
+    SEND_COORDINATION_EMAIL_BATCH = "send_coordination_email_batch"
+    SEND_EMAIL_MESSAGES = "send_email_messages"
+
 
 class EventTaskOriginSourceEnum(enum.Enum):
     DELAYED_SCHEDULER   = "delayed_scheduler"

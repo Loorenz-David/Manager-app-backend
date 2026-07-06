@@ -4,3 +4,4 @@ task-router: python beyo_manager/workers/task_router_process.py
 delayed-scheduler: python beyo_manager/workers/delayed_scheduler_runner.py
 recurring-scheduler: python beyo_manager/workers/recurring_scheduler_runner.py
 tasks-worker: python beyo_manager/workers/tasks_worker.py
+email-idle-watcher: python beyo_manager/workers/email_idle_watcher.py

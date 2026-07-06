@@ -14,6 +14,7 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | ContentMention | cmt | cmt_xxxxxxx |
 | ContentMentionLink | cml | cml_xxxxxxx |
 | Customer | cus | cus_xxxxxxx |
+| EmailTemplate | etpl | etpl_xxxxxxx |
 | ExecutionPayload | epl | epl_xxxxxxx |
 | ExecutionTask | task | task_xxxxxxx |
 | HistoryRecord | hrec | hrec_xxxxxxx |

@@ -259,7 +259,7 @@ async def route_list_item_issues(
 @router.get("/{client_id}/upholstery")
 async def route_list_item_upholstery(
     client_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

@@ -38,6 +38,7 @@
 | DELETE | /api/v1/customers/{client_id} | customers | route_delete_customer_api_v1_customers__client_id__delete |
 | GET | /api/v1/customers/{client_id} | customers | route_get_customer_api_v1_customers__client_id__get |
 | PATCH | /api/v1/customers/{client_id} | customers | route_update_customer_api_v1_customers__client_id__patch |
+| GET | /api/v1/email-threads/unread-count | email-threads | unread_count_route_api_v1_email_threads_unread_count_get |
 | POST | /api/v1/files/confirm-upload | files | confirm_upload_route_api_v1_files_confirm_upload_post |
 | POST | /api/v1/files/download-url | files | pending_upload_download_url_api_v1_files_download_url_post |
 | POST | /api/v1/files/upload-url | files | request_upload_url_api_v1_files_upload_url_post |
@@ -2485,6 +2486,36 @@ None
 | ok | boolean | Yes |  |
 | data | any | No |  |
 | warnings[] | string | Yes |  |
+
+### GET /api/v1/email-threads/unread-count
+- **Tag**: email-threads
+- **OperationId**: unread_count_route_api_v1_email_threads_unread_count_get
+
+#### Parameters
+| Name | In | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| connection_client_id | query | string | No |  |
+| entity_type | query | string | No |  |
+| entity_client_id | query | string | No |  |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data | any | No |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
 
 ### GET /api/v1/notifications/vapid-public-key
 - **Tag**: notifications

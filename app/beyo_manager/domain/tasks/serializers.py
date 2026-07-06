@@ -12,12 +12,18 @@ from beyo_manager.models.tables.history.history_record import HistoryRecord
 from beyo_manager.models.tables.history.history_record_link import HistoryRecordLink
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_customer_coordination import TaskCustomerCoordination
 from beyo_manager.models.tables.tasks.task_note import TaskNote
+from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 
 
-def serialize_task(task: Task) -> dict:
+def serialize_task(
+    task: Task,
+    post_handling_instances: list[TaskPostHandling] | None = None,
+    customer_coordination_instances: list[TaskCustomerCoordination] | None = None,
+) -> dict:
     return {
         "client_id": task.client_id,
         "task_scalar_id": task.task_scalar_id,
@@ -30,6 +36,7 @@ def serialize_task(task: Task) -> dict:
         "item_location": task.item_location.value if task.item_location else None,
         "return_method": task.return_method.value if task.return_method else None,
         "fulfillment_method": task.fulfillment_method.value if task.fulfillment_method else None,
+        "assortment": task.assortment,
         "additional_details": task.additional_details,
         "ready_by_at": task.ready_by_at.isoformat() if task.ready_by_at else None,
         "scheduled_start_at": task.scheduled_start_at.isoformat() if task.scheduled_start_at else None,
@@ -45,6 +52,36 @@ def serialize_task(task: Task) -> dict:
         "closed_at": task.closed_at.isoformat() if task.closed_at else None,
         "is_deleted": task.is_deleted,
         "deleted_at": task.deleted_at.isoformat() if task.deleted_at else None,
+        "post_handling": (
+            [serialize_task_post_handling(ph) for ph in post_handling_instances]
+            if post_handling_instances is not None
+            else None
+        ),
+        "customer_coordination": (
+            [serialize_task_customer_coordination(tcc) for tcc in customer_coordination_instances]
+            if customer_coordination_instances is not None
+            else None
+        ),
+    }
+
+
+def serialize_task_post_handling(tph: TaskPostHandling) -> dict:
+    return {
+        "client_id": tph.client_id,
+        "task_id": tph.task_id,
+        "state": tph.state.value,
+        "created_at": tph.created_at.isoformat() if tph.created_at else None,
+        "updated_at": tph.updated_at.isoformat() if tph.updated_at else None,
+    }
+
+
+def serialize_task_customer_coordination(tcc: TaskCustomerCoordination) -> dict:
+    return {
+        "client_id": tcc.client_id,
+        "task_id": tcc.task_id,
+        "state": tcc.state.value,
+        "created_at": tcc.created_at.isoformat() if tcc.created_at else None,
+        "updated_at": tcc.updated_at.isoformat() if tcc.updated_at else None,
     }
 
 

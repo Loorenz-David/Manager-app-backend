@@ -87,10 +87,10 @@ def create_app() -> FastAPI:
     _validate_config()
 
     import socketio
-    from beyo_manager.sockets import sio
+    from beyo_manager.sockets import get_sio
     import beyo_manager.sockets as sockets_module
     from beyo_manager.sockets.register import register_socket_handlers
 
     register_socket_handlers()
-    sockets_module.socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+    sockets_module.socket_app = socketio.ASGIApp(get_sio(), other_asgi_app=app)
     return app

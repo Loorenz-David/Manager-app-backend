@@ -31,6 +31,10 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.RECORD_VIEW_START:          "queue:presence",
     TaskType.RECORD_VIEW_END:            "queue:presence",
     TaskType.PROCESS_STEP_TRANSITION:    "queue:analytics",
+    TaskType.EMAIL_INBOX_SYNC:           "queue:tasks",
+    TaskType.EMAIL_SYNC_TARGETED:        "queue:tasks",
+    TaskType.SEND_COORDINATION_EMAIL_BATCH: "queue:tasks",
+    TaskType.SEND_EMAIL_MESSAGES:        "queue:tasks",
 }
 
 FALLBACK_POLL_SECONDS    = 30   # safety net for LISTEN/NOTIFY drop — not routing latency
@@ -99,6 +103,7 @@ async def run_task_router() -> None:
 
 
 async def _route_open_tasks(redis) -> None:
+    now = datetime.now(timezone.utc)
     async for session in get_db_session():
         result = await session.execute(
             select(ExecutionTask)
@@ -117,6 +122,7 @@ async def _route_open_tasks(redis) -> None:
                 continue
             redis.rpush(queue_name, task.client_id)
             task.state = ExecutionTaskStateEnum.PENDING
+            task.locked_at = now
 
         if tasks:
             await session.commit()
@@ -166,13 +172,13 @@ async def _cleanup_stale_tasks() -> None:
 
 
 async def _recover_stuck_pending_tasks() -> None:
-    """Reset PENDING tasks older than STUCK_PENDING_MINUTES whose Redis entry was lost."""
+    """Reset PENDING tasks stuck > STUCK_PENDING_MINUTES without a worker claiming them."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=STUCK_PENDING_MINUTES)
     async for session in get_db_session():
         result = await session.execute(
             select(ExecutionTask).where(
                 ExecutionTask.state == ExecutionTaskStateEnum.PENDING,
-                ExecutionTask.created_at < cutoff,
+                ExecutionTask.locked_at < cutoff,
             ).limit(BATCH_SIZE)
         )
         tasks = result.scalars().all()

@@ -1,0 +1,50 @@
+testing with my email: loorenz.david@gmail.com
+app password: hktrdsogubjavaak
+
+test send emails to: projects@loorenz.dev
+
+
+login to app: 
+
+email: loorenz.david@gmail.com
+pass: Admin1234!
+
+
+cd /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend
+
+python tests/emails/test_email_live.py \
+  loorenz.david@gmail.com \
+  Admin1234! \
+  loorenz.david@gmail.com \
+  $APP_PASS
+
+python tests/emails/test_email_live.py loorenz.david@gmail.com Admin1234! loorenz.david@gmail.com $APP_PASS --send-to projects@loorenz.dev
+
+------
+
+INTENTION:
+
+We will now improve the current endpoint route_list_task_coordination_threads and the service it uses list_task_coordination_threads so that it will now mimic the same query strategy with the query param "q" of the list_tasks service.
+After this implementation we will create a documentation plan at /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend for letting the frontend know how has this endpoint change, and how to use it. 
+
+
+
+
+GOAL:
+make an implementation plan for codex using the template @template_plan . use the correct contracts for this implementation using the contract guide @backend
+Codex should run the migration for creating the email template model.
+Codex should create a hand off documentation explaining to the frontend how to use this endpoints and the responses they bring back at /Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/docs/handoff/to_frontend
+
+
+
+RELEVANT FILES:
+
+task routers: 
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/routers/api_v1/tasks.py
+
+
+list_task_coordination_threads:
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/list_task_coordination_threads.py
+
+list_tasks service
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/queries/tasks/tasks.py

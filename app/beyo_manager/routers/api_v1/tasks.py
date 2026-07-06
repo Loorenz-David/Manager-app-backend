@@ -30,10 +30,28 @@ from beyo_manager.services.commands.tasks.delete_task_note import delete_task_no
 from beyo_manager.services.commands.tasks.fail_task import fail_task
 from beyo_manager.services.commands.tasks.remove_item_from_task import remove_item_from_task
 from beyo_manager.services.commands.tasks.resolve_task import resolve_task
+from beyo_manager.services.commands.tasks.send_customer_coordination_email_batch import (
+    send_customer_coordination_email_batch,
+)
+from beyo_manager.services.commands.tasks.send_customer_coordination_reply import (
+    send_customer_coordination_reply,
+)
 from beyo_manager.services.commands.tasks.update_task import update_task
 from beyo_manager.services.commands.tasks.update_task_ready_by_at import update_task_ready_by_at
 from beyo_manager.services.commands.tasks.update_task_schedule import update_task_schedule
 from beyo_manager.services.commands.tasks.update_task_note import update_task_note
+from beyo_manager.services.commands.tasks.requests.send_customer_coordination_email_batch_request import (
+    SendCustomerCoordinationEmailBatchRequest,
+)
+from beyo_manager.services.commands.task_post_handling.complete_task_post_handling import (
+    complete_task_post_handling,
+)
+from beyo_manager.services.commands.task_customer_coordination.complete_task_customer_coordination import (
+    complete_task_customer_coordination,
+)
+from beyo_manager.services.commands.task_customer_coordination.fail_task_customer_coordination import (
+    fail_task_customer_coordination,
+)
 from beyo_manager.services.commands.task_steps.add_step_dependency import add_step_dependency
 from beyo_manager.services.commands.task_steps.add_task_steps import add_task_steps
 from beyo_manager.services.commands.task_steps.assign_worker_to_step import assign_worker_to_step
@@ -52,12 +70,23 @@ from beyo_manager.services.commands.task_steps.update_task_step_ready_by_at impo
     update_task_step_ready_by_at,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.tasks.count_task_post_handling_states import (
+    count_task_post_handling_states,
+)
+from beyo_manager.services.queries.tasks.count_task_customer_coordination_states import (
+    count_task_customer_coordination_states,
+)
 from beyo_manager.services.queries.tasks.count_task_step_states import count_task_step_states
 from beyo_manager.services.queries.tasks.get_task_notes import get_task_notes
+from beyo_manager.services.queries.tasks.list_task_coordination_threads import (
+    list_task_coordination_threads,
+)
+from beyo_manager.services.queries.tasks.list_task_post_handlings import list_task_post_handlings
 from beyo_manager.services.queries.tasks.list_task_steps import list_task_steps
 from beyo_manager.services.queries.tasks.task_flow_records import get_task_flow_records
 from beyo_manager.services.queries.tasks.tasks import get_task, list_task_counts, list_tasks
 from beyo_manager.services.run_service import run_service
+from beyo_manager.services.commands.task_post_handling.update_task_post_handling import update_task_post_handling
 
 router = APIRouter()
 
@@ -124,6 +153,7 @@ class _CreateTaskBody(BaseModel):
     item_location: TaskItemLocationEnum | None = None
     return_method: TaskReturnMethodEnum | None = None
     fulfillment_method: TaskFulfillmentMethodEnum | None = None
+    assortment: str | None = None
     additional_details: dict | None = None
     customer_id: str | None = None
     customer_display_name: str | None = None
@@ -150,6 +180,7 @@ class _UpdateTaskBody(BaseModel):
     item_location: TaskItemLocationEnum | None = None
     return_method: TaskReturnMethodEnum | None = None
     fulfillment_method: TaskFulfillmentMethodEnum | None = None
+    assortment: str | None = None
     additional_details: dict | None = None
 
 
@@ -160,6 +191,35 @@ class _UpdateReadyByAtBody(BaseModel):
 class _UpdateScheduleBody(BaseModel):
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
+
+
+class _UpdateTaskPostHandlingBody(BaseModel):
+    fulfillment_method: TaskFulfillmentMethodEnum | None = None
+    scheduled_start_at: datetime | None = None
+    scheduled_end_at: datetime | None = None
+    task_type: TaskTypeEnum | None = None
+    assortment: str | None = None
+
+
+class _CompleteTaskPostHandlingBody(BaseModel):
+    post_handling_id: str | None = None
+    force: bool = False
+
+
+class _CompleteTaskCustomerCoordinationBody(BaseModel):
+    coordination_id: str | None = None
+
+
+class _FailTaskCustomerCoordinationBody(BaseModel):
+    coordination_ids: list[str] | None = None
+
+
+class _SendCustomerCoordinationReplyBody(BaseModel):
+    thread_client_id: str
+    connection_client_id: str | None = None
+    subject: str | None = None
+    text_body: str | None = None
+    html_body: str | None = None
 
 
 class _AddItemToTaskBody(BaseModel):
@@ -254,6 +314,8 @@ async def route_list_tasks(
     priorities: str | None = Query(None),
     task_types: str | None = Query(None),
     return_sources: str | None = Query(None),
+    post_handling_states: str | None = Query(None),
+    customer_coordination_states: str | None = Query(None),
     ready_from_date: str | None = Query(None),
     ready_to_date: str | None = Query(None),
     scheduled_from_date: str | None = Query(None),
@@ -275,6 +337,8 @@ async def route_list_tasks(
             "priorities": priorities,
             "task_types": task_types,
             "return_sources": return_sources,
+            "post_handling_states": post_handling_states,
+            "customer_coordination_states": customer_coordination_states,
             "ready_from_date": ready_from_date,
             "ready_to_date": ready_to_date,
             "scheduled_from_date": scheduled_from_date,
@@ -322,6 +386,107 @@ async def route_list_task_counts(
     return build_ok(outcome.data)
 
 
+@router.get("/post-handling/counts")
+async def route_count_task_post_handling_states(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    post_handling_states: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={"post_handling_states": post_handling_states},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(count_task_post_handling_states, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/customer-coordination/counts")
+async def route_count_task_customer_coordination_states(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    customer_coordination_states: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={"customer_coordination_states": customer_coordination_states},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(count_task_customer_coordination_states, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/customer-coordination/email-batch")
+async def route_send_customer_coordination_email_batch(
+    body: SendCustomerCoordinationEmailBatchRequest,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data=body.model_dump(),
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(send_customer_coordination_email_batch, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/customer-coordination/reply")
+async def route_send_customer_coordination_reply(
+    task_id: str,
+    body: _SendCustomerCoordinationReplyBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(send_customer_coordination_reply, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/customer-coordination/threads")
+async def route_list_task_coordination_threads(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    coordination_states: str | None = Query(None),
+    task_states: str | None = Query(None),
+    task_types: str | None = Query(None),
+    q: str | None = Query(None, max_length=200),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "coordination_states": coordination_states,
+            "task_states": task_states,
+            "task_types": task_types,
+            "q": q,
+            "limit": limit,
+            "offset": offset,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_task_coordination_threads, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
 @router.get("/{task_id}")
 async def route_get_task(
     task_id: str,
@@ -354,6 +519,77 @@ async def route_get_task_flow_records(
         session=session,
     )
     outcome = await run_service(get_task_flow_records, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{task_id}/post-handling")
+async def route_list_task_post_handlings(
+    task_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_task_post_handlings, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/post-handling/complete")
+async def route_complete_task_post_handling(
+    task_id: str,
+    body: _CompleteTaskPostHandlingBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(complete_task_post_handling, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/customer-coordination/complete")
+async def route_complete_task_customer_coordination(
+    task_id: str,
+    body: _CompleteTaskCustomerCoordinationBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(complete_task_customer_coordination, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/customer-coordination/fail")
+async def route_fail_task_customer_coordination(
+    task_id: str,
+    body: _FailTaskCustomerCoordinationBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"task_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(fail_task_customer_coordination, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -408,6 +644,24 @@ async def route_update_task_schedule(
         session=session,
     )
     outcome = await run_service(update_task_schedule, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{task_id}/post-handling")
+async def route_update_task_post_handling(
+    task_id: str,
+    body: _UpdateTaskPostHandlingBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": task_id, **body.model_dump(exclude_unset=True)},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(update_task_post_handling, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
@@ -611,7 +865,7 @@ async def route_delete_note(
 @router.get("/{task_id}/steps")
 async def route_list_task_steps(
     task_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
@@ -631,7 +885,7 @@ async def route_list_task_steps(
 @router.get("/{task_id}/steps/counts")
 async def route_count_task_step_states(
     task_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

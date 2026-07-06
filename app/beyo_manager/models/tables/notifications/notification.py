@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+
+if TYPE_CHECKING:
+    from beyo_manager.models.tables.users.user import User
 
 
 class Notification(IdentityMixin, Base):

@@ -18,19 +18,13 @@ resolved step-pin recipients so the caller can dedupe across the batch.
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select
-
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.aggregate_metrics import increment_step_time_metrics
-from beyo_manager.domain.task_steps.constants import (
-    TERMINAL_STEP_STATES,
-    TERMINAL_TASK_STATES,
-    TIME_BEARING_STATES,
-)
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -39,6 +33,10 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.task_steps._cascade_completion import cascade_step_completion
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import _apply_inaccurate_time_flag
+from beyo_manager.services.commands.tasks._task_state_transitions import (
+    maybe_advance_task_to_working,
+    maybe_evaluate_task_ready,
+)
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
@@ -200,26 +198,18 @@ async def _apply_step_transition(
         step.closed_at = now
 
     # Task state side effects
-    if new_state == TaskStepStateEnum.WORKING and task.state == TaskStateEnum.ASSIGNED:
-        task.state = TaskStateEnum.WORKING
-        task.updated_at = now
-        task.updated_by_id = ctx.user_id
+    if new_state == TaskStepStateEnum.WORKING:
+        maybe_advance_task_to_working(task, now=now, updated_by_id=ctx.user_id)
 
     readiness_changes: list = []
     if new_state in TERMINAL_STEP_STATES:
-        all_steps_result = await ctx.session.execute(
-            select(TaskStep).where(
-                TaskStep.workspace_id == ctx.workspace_id,
-                TaskStep.task_id == task.client_id,
-                TaskStep.is_deleted.is_(False),
-            )
+        await maybe_evaluate_task_ready(
+            ctx.session,
+            task,
+            workspace_id=ctx.workspace_id,
+            now=now,
+            updated_by_id=ctx.user_id,
         )
-        all_steps = all_steps_result.scalars().all()
-        if all_steps and all(s.state in TERMINAL_STEP_STATES for s in all_steps):
-            if task.state not in TERMINAL_TASK_STATES:
-                task.state = TaskStateEnum.READY
-                task.updated_at = now
-                task.updated_by_id = ctx.user_id
 
         if new_state == TaskStepStateEnum.COMPLETED:
             readiness_changes = await cascade_step_completion(ctx.session, ctx.workspace_id, step)

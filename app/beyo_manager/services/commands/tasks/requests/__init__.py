@@ -15,6 +15,12 @@ from beyo_manager.domain.tasks.enums import (
 	TaskTypeEnum,
 )
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.services.commands.tasks.requests.send_customer_coordination_email_batch_request import (
+	SendCustomerCoordinationEmailBatchRequest,
+)
+from beyo_manager.services.commands.tasks.requests.send_customer_coordination_reply_request import (
+	SendCustomerCoordinationReplyRequest,
+)
 
 
 class FindOrCreateItemInput(BaseModel):
@@ -95,6 +101,7 @@ class CreateTaskRequest(BaseModel):
 	item_location: TaskItemLocationEnum | None = None
 	return_method: TaskReturnMethodEnum | None = None
 	fulfillment_method: TaskFulfillmentMethodEnum | None = None
+	assortment: str | None = None
 	additional_details: dict | None = None
 	customer_id: str | None = None
 	customer_display_name: str | None = None
@@ -122,6 +129,7 @@ class UpdateTaskRequest(BaseModel):
 	item_location: TaskItemLocationEnum | None = None
 	return_method: TaskReturnMethodEnum | None = None
 	fulfillment_method: TaskFulfillmentMethodEnum | None = None
+	assortment: str | None = None
 	additional_details: dict | None = None
 
 
@@ -212,6 +220,24 @@ def parse_update_task_ready_by_at_request(data: dict) -> UpdateTaskReadyByAtRequ
 def parse_update_task_schedule_request(data: dict) -> UpdateTaskScheduleRequest:
 	try:
 		return UpdateTaskScheduleRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_send_customer_coordination_email_batch_request(
+	data: dict,
+) -> SendCustomerCoordinationEmailBatchRequest:
+	try:
+		return SendCustomerCoordinationEmailBatchRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_send_customer_coordination_reply_request(
+	data: dict,
+) -> SendCustomerCoordinationReplyRequest:
+	try:
+		return SendCustomerCoordinationReplyRequest.model_validate(data)
 	except PydanticValidationError as exc:
 		_raise_validation_error(exc)
 

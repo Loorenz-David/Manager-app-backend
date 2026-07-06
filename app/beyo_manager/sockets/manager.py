@@ -1,7 +1,8 @@
 import logging
 
-from beyo_manager.sockets import sio
+from beyo_manager.sockets import get_sio
 from beyo_manager.sockets.connection_meta import ConnectionMeta
+from beyo_manager.sockets.rooms import conversation_room, user_room, workspace_room
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,7 @@ class ConnectionManager:
 
     async def connect(self, sid: str, meta: ConnectionMeta) -> None:
         self._connections[sid] = meta
+        sio = get_sio()
         await sio.enter_room(sid, self.user_room(meta.user_id))
         await sio.enter_room(sid, self.workspace_room(meta.workspace_id))
         logger.info(
@@ -25,6 +27,7 @@ class ConnectionManager:
     async def disconnect(self, sid: str) -> ConnectionMeta | None:
         meta = self._connections.pop(sid, None)
         if meta:
+            sio = get_sio()
             await sio.leave_room(sid, self.user_room(meta.user_id))
             await sio.leave_room(sid, self.workspace_room(meta.workspace_id))
         return meta
@@ -32,25 +35,25 @@ class ConnectionManager:
     async def join_conversation(self, sid: str, conversation_client_id: str) -> None:
         room = self.conversation_room(conversation_client_id)
         logger.info("[manager] join_conversation | sid=%s room=%s", sid, room)
-        await sio.enter_room(sid, room)
+        await get_sio().enter_room(sid, room)
 
     async def leave_conversation(self, sid: str, conversation_client_id: str) -> None:
         room = self.conversation_room(conversation_client_id)
         logger.info("[manager] leave_conversation | sid=%s room=%s", sid, room)
-        await sio.leave_room(sid, room)
+        await get_sio().leave_room(sid, room)
 
     async def send_to_user(self, user_id: str, event: str, payload: dict) -> None:
         room = self.user_room(user_id)
         logger.info("[manager] send_to_user | event=%s room=%s payload=%s", event, room, payload)
-        await sio.emit(event, payload, room=room)
+        await get_sio().emit(event, payload, room=room)
 
     async def broadcast_to_room(self, room: str, event: str, payload: dict) -> None:
         logger.info("[manager] broadcast_to_room | event=%s room=%s payload=%s", event, room, payload)
-        await sio.emit(event, payload, room=room)
+        await get_sio().emit(event, payload, room=room)
 
     async def broadcast_items_to_room(self, room: str, event: str, items: list[dict]) -> None:
         logger.info("[manager] broadcast_items_to_room | event=%s room=%s count=%d", event, room, len(items))
-        await sio.emit(event, items, room=room)
+        await get_sio().emit(event, items, room=room)
 
     def get(self, sid: str) -> ConnectionMeta | None:
         return self._connections.get(sid)
@@ -60,15 +63,15 @@ class ConnectionManager:
 
     @staticmethod
     def user_room(user_id: str) -> str:
-        return f"user:{user_id}"
+        return user_room(user_id)
 
     @staticmethod
     def workspace_room(workspace_id: str) -> str:
-        return f"workspace:{workspace_id}"
+        return workspace_room(workspace_id)
 
     @staticmethod
     def conversation_room(conversation_client_id: str) -> str:
-        return f"conversation:{conversation_client_id}"
+        return conversation_room(conversation_client_id)
 
 
 manager = ConnectionManager()

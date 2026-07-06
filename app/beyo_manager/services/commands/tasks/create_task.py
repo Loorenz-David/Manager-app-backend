@@ -89,6 +89,7 @@ async def create_task(ctx: ServiceContext) -> dict:
             item_location=request.item_location,
             return_method=request.return_method,
             fulfillment_method=request.fulfillment_method,
+            assortment=request.assortment,
             additional_details=request.additional_details,
             created_by_id=ctx.user_id,
         )

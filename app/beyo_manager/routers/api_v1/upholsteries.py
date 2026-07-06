@@ -11,7 +11,7 @@ from beyo_manager.domain.upholstery.enums import (
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.upholstery.create_upholstery import create_upholstery
 from beyo_manager.services.commands.upholstery.delete_upholstery import delete_upholstery
 from beyo_manager.services.commands.upholstery.mark_upholsteries_favorite import (
@@ -108,7 +108,7 @@ async def route_create_upholstery(
 
 @router.get("")
 async def route_list_upholsteries(
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -180,7 +180,7 @@ async def route_list_external_upholsteries(
 @router.patch("/favorite")
 async def route_mark_upholsteries_favorite(
     body: _BatchFavoriteBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(incoming_data=body.model_dump(), identity=claims, session=session)
@@ -193,7 +193,7 @@ async def route_mark_upholsteries_favorite(
 @router.get("/{client_id}")
 async def route_get_upholstery(
     client_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(incoming_data={"client_id": client_id}, identity=claims, session=session)
@@ -236,7 +236,7 @@ async def route_delete_upholstery(
 async def route_mark_upholstery_favorite(
     client_id: str,
     body: _FavoriteBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

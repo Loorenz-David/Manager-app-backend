@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims, require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.images.confirm_upload import confirm_upload
 from beyo_manager.services.commands.images.create_annotation import create_annotation
 from beyo_manager.services.commands.images.create_from_url import create_from_url
@@ -100,7 +100,7 @@ async def image_confirm_upload_route(body: ConfirmImageUploadBody | list[Confirm
 @router.post("/from-url")
 async def image_create_from_url_route(
     body: CreateFromUrlBody | list[CreateFromUrlBody],
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     payload = {"items": [item.model_dump(exclude_none=True) for item in body]} if isinstance(body, list) else body.model_dump(exclude_none=True)

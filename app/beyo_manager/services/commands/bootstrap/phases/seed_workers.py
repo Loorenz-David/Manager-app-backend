@@ -25,6 +25,7 @@ _WORKER_NAMES = [
     "Feruza",
     "Fayoz",
     "Betty",
+    "Stina",
 ]
 
 _WORKER_PASSWORD = "Admin1234!"
@@ -40,6 +41,7 @@ _WORKER_EMAILS: dict[str, str] = {
     "Feruza": "feruza@beyovintage.se",
     "Fayoz": "fayoz@beyovintage.se",
     "Betty": "betty@beyovintage.se",
+    "Stina": "stina@beyovintage.se",
 }
 
 # Select workspace role per seeded bootstrap user.
@@ -51,6 +53,7 @@ _WORKER_BASE_WORKSPACE_ROLES: dict[str, str] = {
 _WORKER_BASE_WORKSPACE_ROLES["Norbi"] = "manager"
 _WORKER_BASE_WORKSPACE_ROLES["Fayoz"] = "admin"
 _WORKER_BASE_WORKSPACE_ROLES["Betty"] = "admin"
+_WORKER_BASE_WORKSPACE_ROLES["Stina"] = "seller"
 
 _WORKER_WORKSPACE_SPECIALIZATIONS: dict[str, WorkspaceSpecializationEnum | None] = {
     worker_name: None
@@ -139,6 +142,7 @@ _WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning
 _WORKER_SECTION_GROUPS["Vitalii"] = ("photography",)
 _WORKER_SECTION_GROUPS["Fayoz"] = ()
 _WORKER_SECTION_GROUPS["Betty"] = ()
+_WORKER_SECTION_GROUPS["Stina"] = ()
 
 
 def _resolve_worker_section_names(worker_name: str) -> set[str]:

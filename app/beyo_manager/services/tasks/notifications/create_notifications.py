@@ -1,7 +1,5 @@
 import logging
 
-from sqlalchemy import select
-
 from beyo_manager.models.tables.notifications.notification import Notification
 from beyo_manager.models.database import get_db_session
 from beyo_manager.services.infra.events.build_event import build_user_event

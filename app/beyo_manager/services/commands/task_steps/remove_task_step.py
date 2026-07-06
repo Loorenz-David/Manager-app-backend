@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
 
-from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.errors.not_found import NotFound
@@ -12,6 +11,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
+from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.commands.task_steps.requests import (
     parse_remove_task_step_request,
     parse_remove_task_steps_request,
@@ -205,10 +205,14 @@ async def _remove_task_steps_in_session(
         task.state = TaskStateEnum.PENDING
         task.updated_at = now
         task.updated_by_id = ctx.user_id
-    elif all(step.state in TERMINAL_STEP_STATES for step in remaining_steps):
-        task.state = TaskStateEnum.READY
-        task.updated_at = now
-        task.updated_by_id = ctx.user_id
+    else:
+        await maybe_evaluate_task_ready(
+            ctx.session,
+            task,
+            workspace_id=ctx.workspace_id,
+            now=now,
+            updated_by_id=ctx.user_id,
+        )
 
     await ctx.session.flush()
     return task, old_task_state, readiness_changes, steps_to_remove
