@@ -20,6 +20,7 @@ from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.services.commands.history._create_history_record_in_session import (
     _create_history_record_in_session,
 )
@@ -154,6 +155,8 @@ async def _create_item_upholstery_in_session(
 async def create_item_upholstery(ctx: ServiceContext) -> dict:
     """Create ItemUpholstery and initial ItemUpholsteryRequirement (standalone command)."""
     request = parse_create_item_upholstery_request(ctx.incoming_data)
+    upholstery_name = request.name
+    upholstery_code = request.code
 
     _validate_internal_upholstery_selection(
         request.source,
@@ -173,13 +176,29 @@ async def create_item_upholstery(ctx: ServiceContext) -> dict:
         if item_result.scalar_one_or_none() is None:
             raise NotFound("Item not found.")
 
+        if request.source == ItemUpholsterySourceEnum.INTERNAL and request.upholstery_id is not None:
+            upholstery_result = await ctx.session.execute(
+                select(Upholstery).where(
+                    Upholstery.workspace_id == ctx.workspace_id,
+                    Upholstery.client_id == request.upholstery_id,
+                    Upholstery.is_deleted.is_(False),
+                )
+            )
+            upholstery = upholstery_result.scalar_one_or_none()
+            if upholstery is None:
+                raise NotFound("Upholstery not found.")
+            if upholstery_name is None:
+                upholstery_name = upholstery.name
+            if upholstery_code is None:
+                upholstery_code = upholstery.code
+
         iup_client_id = await _create_item_upholstery_in_session(
             session=ctx.session,
             workspace_id=ctx.workspace_id,
             item_id=request.item_id,
             upholstery_id=request.upholstery_id,
-            name=request.name,
-            code=request.code,
+            name=upholstery_name,
+            code=upholstery_code,
             amount_meters=request.amount_meters,
             source=request.source,
             time_to_fix_in_seconds=request.time_to_fix_in_seconds,
