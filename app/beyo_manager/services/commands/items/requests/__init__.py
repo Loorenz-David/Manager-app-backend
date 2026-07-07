@@ -493,6 +493,7 @@ def parse_find_or_create_item_request(data: dict) -> FindOrCreateItemRequest:
 class ItemPositionEntry(BaseModel):
     client_id: str
     item_position: str | None = None
+    item_zone: str | None = None
 
 
 class BatchUpdateItemPositionsRequest(BaseModel):

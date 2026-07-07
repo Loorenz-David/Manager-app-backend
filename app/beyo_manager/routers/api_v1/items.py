@@ -132,6 +132,7 @@ class _BatchDeleteIssuesBody(BaseModel):
 class _ItemPositionEntry(BaseModel):
     client_id: str
     item_position: str | None = None
+    item_zone: str | None = None
 
 
 class _BatchUpdateItemPositionsBody(BaseModel):
@@ -319,7 +320,7 @@ async def route_batch_update_item_positions(
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={"entries": [entry.model_dump() for entry in body.entries]},
+        incoming_data={"entries": [entry.model_dump(exclude_unset=True) for entry in body.entries]},
         identity=claims,
         session=session,
     )
