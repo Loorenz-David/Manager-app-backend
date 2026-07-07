@@ -35,6 +35,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.EMAIL_SYNC_TARGETED:        "queue:tasks",
     TaskType.SEND_COORDINATION_EMAIL_BATCH: "queue:tasks",
     TaskType.SEND_EMAIL_MESSAGES:        "queue:tasks",
+    TaskType.LOCATION_TRACKER_PUSH_LOCATIONS: "queue:tasks",
 }
 
 FALLBACK_POLL_SECONDS    = 30   # safety net for LISTEN/NOTIFY drop — not routing latency

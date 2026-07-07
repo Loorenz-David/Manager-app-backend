@@ -41,6 +41,7 @@ class Item(IdentityMixin, Base):
         SAEnum(ItemCurrencyEnum, name="item_currency_enum", create_type=True), nullable=True
     )
     item_position: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    item_zone: Mapped[str | None] = mapped_column(String(255), nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     external_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     external_source: Mapped[str | None] = mapped_column(String(128), nullable=True)

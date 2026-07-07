@@ -95,6 +95,20 @@ async def test_sign_in_user_rejects_unknown_scope() -> None:
 
 
 @pytest.mark.unit
+async def test_sign_in_user_rejects_seller_role_for_manager_scope() -> None:
+    with pytest.raises(PermissionDenied, match="Invalid credentials."):
+        await sign_in_user(_ctx(role_name=RoleNameEnum.SELLER, app_scope="manager"))
+
+
+@pytest.mark.unit
+async def test_sign_in_user_allows_seller_role_for_seller_scope() -> None:
+    result = await sign_in_user(_ctx(role_name=RoleNameEnum.SELLER, app_scope="seller"))
+
+    assert result["access_token"]
+    assert result["_refresh_token"]
+
+
+@pytest.mark.unit
 async def test_sign_in_user_falls_back_to_permission_role_name_for_system_workspace_roles() -> None:
     result = await sign_in_user(
         _ctx(role_name=RoleNameEnum.MANAGER, app_scope="manager", workspace_specialization=None)

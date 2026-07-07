@@ -18,6 +18,7 @@ from beyo_manager.routers.api_v1 import (
     items,
     item_categories,
     item_upholsteries,
+    location_tracker,
     notifications,
     reset,
     tasks,
@@ -88,4 +89,9 @@ def register_v1_routers(app: FastAPI) -> None:
         tags=["email-templates"],
     )
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
+    app.include_router(
+        location_tracker.router,
+        prefix="/api/v1/location-tracker",
+        tags=["location-tracker"],
+    )
     # Add domain routers here as you build them:

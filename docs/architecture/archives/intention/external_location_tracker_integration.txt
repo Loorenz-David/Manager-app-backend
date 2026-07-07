@@ -1,0 +1,31 @@
+
+
+We will now create a side effect for when an item_zone is added or updated in an item. 
+
+this service will simply send the current item_zone as the item position to the external endpoint of location-tracker app as a position ( patch : manager-app/items/location ) . 
+
+The places where this item_zone is added or updated will delegate this task to a background task using the task_router, the task_worker will be the one specialize for handling this process . 
+
+
+Places where the item_zone is placed or updated:
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/items/create_item.py
+
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/items/find_or_create_item.py
+
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/items/update_item.py
+
+
+At the complete_task_post_handling service:
+
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/services/commands/task_post_handling/complete_task_post_handling.py
+
+the frontend could now send a paylod key of "item_zone:str" . 
+at the service we will now update the task.item.item_position value with the current passed  item_zone from  the request, if none ,then we use the task.item.item_zone value to update  the task.item_position value . then the service will delegate the process for calling the outbound service of changing and item position on the location-tracker application . it will pass as payload the item.item_zone or the passed item_zone . if no item_zone from request nor from the item instance then it never perform the db operation and it never sends the task to the background worker .
+
+
+the route_complete_task_post_handling needs updating for it's payload schema .
+
+and the service ran by the background job needs the item.article_number or item.sku ( both if present ). 

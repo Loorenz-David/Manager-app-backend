@@ -103,6 +103,7 @@ def serialize_item(item: Item | None) -> dict | None:
         "item_cost_minor": item.item_cost_minor,
         "item_currency": item.item_currency.value if item.item_currency else None,
         "item_position": item.item_position,
+        "item_zone": item.item_zone,
         "external_id": item.external_id,
         "external_url": item.external_url,
         "external_source": item.external_source,
@@ -362,6 +363,7 @@ def serialize_item_worker_light(
         "item_category_id": item.item_category_id,
         "quantity": item.quantity,
         "item_position": item.item_position,
+        "item_zone": item.item_zone,
         "upholstery_requirement": [
             {
                 "client_id": req.client_id,

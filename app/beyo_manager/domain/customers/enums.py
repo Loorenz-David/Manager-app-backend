@@ -2,7 +2,7 @@ import enum
 
 
 class CustomerTypeEnum(enum.Enum):
-    PERSON = "person"
+    PRIVATE = "private"
     COMPANY = "company"
     UNKNOWN = "unknown"
 

@@ -19,7 +19,7 @@ from beyo_manager.services.context import ServiceContext
 
 _DEFAULT_APP_SCOPE = "manager"
 _SCOPE_ALLOWED_ROLES: dict[str, set[str]] = {
-    "manager": {RoleNameEnum.MANAGER.value, RoleNameEnum.ADMIN.value, RoleNameEnum.SELLER.value},  # TODO: remove seller when seller app is built
+    "manager": {RoleNameEnum.MANAGER.value, RoleNameEnum.ADMIN.value},
     "worker": {RoleNameEnum.WORKER.value, RoleNameEnum.MANAGER.value},
     "seller": {RoleNameEnum.SELLER.value},
     "admin": {RoleNameEnum.ADMIN.value},

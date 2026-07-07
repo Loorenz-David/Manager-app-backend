@@ -21,7 +21,7 @@ class PushSubscription(IdentityMixin, Base):
     endpoint:     Mapped[str]        = mapped_column(Text,        nullable=False)
     p256dh:       Mapped[str]        = mapped_column(Text,        nullable=False)
     auth:         Mapped[str]        = mapped_column(Text,        nullable=False)
-    device_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    device_label: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at:   Mapped[datetime]        = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

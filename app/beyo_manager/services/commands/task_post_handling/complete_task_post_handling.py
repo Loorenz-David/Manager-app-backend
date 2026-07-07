@@ -4,10 +4,15 @@ from pydantic import BaseModel, ValidationError as PydanticValidationError
 from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
-from beyo_manager.domain.tasks.enums import TaskPostHandlingStateEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPostHandlingStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
+from beyo_manager.services.commands.items.requests import UpdateItemRequest
+from beyo_manager.services.commands.items.update_item import _update_item_in_session
 from beyo_manager.services.commands.history._create_history_record_in_session import (
     _create_history_record_in_session,
 )
@@ -15,11 +20,13 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.event_bus import DomainEvent
 
 
 class CompleteTaskPostHandlingRequest(BaseModel):
     task_id: str | None = None
     post_handling_id: str | None = None
+    completion_zone: str | None = None
     force: bool = False
 
 
@@ -32,10 +39,32 @@ def parse_complete_task_post_handling_request(data: dict) -> CompleteTaskPostHan
         raise ValidationError(f"{field}: {first_error['msg']}") from exc
 
 
+async def _load_primary_item(session, *, workspace_id: str, task_id: str) -> Item | None:
+    result = await session.execute(
+        select(Item)
+        .join(
+            TaskItem,
+            TaskItem.item_id == Item.client_id,
+        )
+        .where(
+            TaskItem.workspace_id == workspace_id,
+            TaskItem.task_id == task_id,
+            TaskItem.role == TaskItemRoleEnum.PRIMARY,
+            TaskItem.removed_at.is_(None),
+            Item.workspace_id == workspace_id,
+            Item.is_deleted.is_(False),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def complete_task_post_handling(ctx: ServiceContext) -> dict:
     request = parse_complete_task_post_handling_request(ctx.incoming_data)
     if request.post_handling_id is None and request.task_id is None:
         raise ValidationError("Either post_handling_id or task_id is required.")
+
+    pending_events: list[DomainEvent] = []
 
     async with maybe_begin(ctx.session):
         if request.post_handling_id is not None:
@@ -68,6 +97,38 @@ async def complete_task_post_handling(ctx: ServiceContext) -> dict:
                 "Post-handling instance must be in state 'filled' to complete. Use force=true to override."
             )
 
+        task_result = await ctx.session.execute(
+            select(Task).where(
+                Task.workspace_id == ctx.workspace_id,
+                Task.client_id == instance.task_id,
+                Task.is_deleted.is_(False),
+            )
+        )
+        task = task_result.scalar_one_or_none()
+        if task is None:
+            raise NotFound("Task not found.")
+
+        requested_completion_zone = (request.completion_zone or "").strip() or None
+        effective_zone = requested_completion_zone or ((task.assortment or "").strip() or None)
+        if effective_zone:
+            primary_item = await _load_primary_item(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                task_id=instance.task_id,
+            )
+            if primary_item is not None:
+                _, item_events = await _update_item_in_session(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    user_id=ctx.user_id,
+                    username=ctx.identity.get("username"),
+                    request=UpdateItemRequest(
+                        client_id=primary_item.client_id,
+                        item_zone=effective_zone,
+                    ),
+                )
+                pending_events.extend(item_events)
+
         old_state = instance.state
         now = datetime.now(timezone.utc)
         instance.state = TaskPostHandlingStateEnum.COMPLETED
@@ -86,7 +147,9 @@ async def complete_task_post_handling(ctx: ServiceContext) -> dict:
             username_snapshot=ctx.identity.get("username"),
         )
 
-    await event_bus.dispatch([
-        build_workspace_event(instance, "task_post_handling:completed", workspace_id=ctx.workspace_id),
-    ])
+        pending_events.append(
+            build_workspace_event(instance, "task_post_handling:completed", workspace_id=ctx.workspace_id)
+        )
+
+    await event_bus.dispatch(pending_events)
     return {"client_id": instance.client_id}

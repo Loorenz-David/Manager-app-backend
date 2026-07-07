@@ -104,6 +104,7 @@ def _serialize_item_base(item: Item) -> dict:
         "item_cost_minor": item.item_cost_minor,
         "item_currency": item.item_currency.value if item.item_currency else None,
         "item_position": item.item_position,
+        "item_zone": item.item_zone,
         "external_id": item.external_id,
         "external_url": item.external_url,
         "external_source": item.external_source,

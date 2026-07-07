@@ -67,6 +67,7 @@ class _CreateItemBody(BaseModel):
     item_cost_minor: int | None = None
     item_currency: ItemCurrencyEnum | None = None
     item_position: str | None = None
+    item_zone: str | None = None
     external_id: str | None = None
     external_url: str | None = None
     external_source: str | None = None
@@ -88,6 +89,7 @@ class _UpdateItemBody(BaseModel):
     item_cost_minor: int | None = None
     item_currency: ItemCurrencyEnum | None = None
     item_position: str | None = None
+    item_zone: str | None = None
     external_id: str | None = None
     external_url: str | None = None
     external_source: str | None = None
@@ -108,6 +110,7 @@ class _FindOrCreateItemBody(BaseModel):
     item_cost_minor: int | None = None
     item_currency: ItemCurrencyEnum | None = None
     item_position: str | None = None
+    item_zone: str | None = None
     external_id: str | None = None
     external_url: str | None = None
     external_source: str | None = None

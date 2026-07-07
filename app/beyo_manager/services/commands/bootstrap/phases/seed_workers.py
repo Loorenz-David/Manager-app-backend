@@ -71,7 +71,6 @@ _WORKING_SECTION_ASSIGNMENT_MAP: dict[str, bool] = {
     "cleaning seat": True,
     "cleaning wood": True,
     "structural repair": True,
-    "sanding": True,
     "upholstery removal": True,
     "padding": True,
     "upholstery installation": True,
@@ -90,14 +89,12 @@ _SECTION_GROUPS: dict[str, tuple[str, ...]] = {
         "cleaning seat",
         "cleaning wood",
         "structural repair",
-        "sanding",
         "assembly",
     ),
     "restoration_core": (
         "disassembly",
         "cleaning seat",
         "structural repair",
-        "sanding",
         "assembly",
     ),
     "upholstery": (

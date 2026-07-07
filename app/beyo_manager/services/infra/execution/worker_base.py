@@ -27,6 +27,7 @@ HANDLER_TIMEOUT_SECONDS: dict[str, int] = {
     "email_sync_targeted":           300,   # 5 minutes
     "send_coordination_email_batch": 300,   # 5 minutes
     "send_email_messages":           300,   # 5 minutes
+    "location_tracker_push_locations": 300, # 5 minutes
 }
 
 TaskHandlerFn = Callable[[dict, str], Awaitable[None]]

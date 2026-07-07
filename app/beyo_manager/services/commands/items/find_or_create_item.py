@@ -9,6 +9,9 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
+    enqueue_item_zone_location_push,
+)
 from beyo_manager.services.commands.items.requests import parse_find_or_create_item_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -27,6 +30,7 @@ _DIRECT_FIELDS = {
     "item_cost_minor",
     "item_currency",
     "item_position",
+    "item_zone",
     "external_id",
     "external_url",
     "external_source",
@@ -89,6 +93,14 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
             existing.updated_at = datetime.now(timezone.utc)
             existing.updated_by_id = ctx.user_id
 
+            if "item_zone" in request.model_fields_set:
+                await enqueue_item_zone_location_push(
+                    ctx.session,
+                    existing,
+                    username=ctx.identity.get("username"),
+                    requested_by_user_id=ctx.user_id,
+                )
+
             return {"client_id": existing.client_id, "was_created": False}
 
         item_category_snapshot: str | None = None
@@ -130,6 +142,7 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
             item_cost_minor=request.item_cost_minor,
             item_currency=request.item_currency,
             item_position=request.item_position,
+            item_zone=request.item_zone,
             external_id=request.external_id,
             external_url=request.external_url,
             external_source=request.external_source,
@@ -140,5 +153,13 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
         )
         ctx.session.add(item)
         await ctx.session.flush()
+
+        if item.item_zone:
+            await enqueue_item_zone_location_push(
+                ctx.session,
+                item,
+                username=ctx.identity.get("username"),
+                requested_by_user_id=ctx.user_id,
+            )
 
     return {"client_id": item.client_id, "was_created": True}

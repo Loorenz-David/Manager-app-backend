@@ -16,6 +16,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
 from beyo_manager.services.commands.history.message_builder import build_create_message
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
+from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
+    enqueue_item_zone_location_push,
+)
 from beyo_manager.services.commands.items.requests import parse_create_item_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -89,6 +92,7 @@ async def create_item(ctx: ServiceContext) -> dict:
             item_cost_minor=request.item_cost_minor,
             item_currency=request.item_currency,
             item_position=request.item_position,
+            item_zone=request.item_zone,
             external_id=request.external_id,
             external_url=request.external_url,
             external_source=request.external_source,
@@ -99,6 +103,14 @@ async def create_item(ctx: ServiceContext) -> dict:
         )
         ctx.session.add(item)
         await ctx.session.flush()
+
+        if item.item_zone:
+            await enqueue_item_zone_location_push(
+                ctx.session,
+                item,
+                username=ctx.identity.get("username"),
+                requested_by_user_id=ctx.user_id,
+            )
 
         if request.item_issues:
             await _create_item_issues_in_session(

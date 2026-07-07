@@ -930,7 +930,7 @@ None
 | --- | --- | --- | --- |
 | client_id | string | No |  |
 | display_name | string | Yes |  |
-| customer_type | string | Yes | `person`, `company`, `unknown` |
+| customer_type | string | Yes | `private`, `company`, `unknown` |
 | primary_email | string | No |  |
 | primary_phone_number | string | No |  |
 | address | object | No |  |
@@ -966,7 +966,7 @@ None
 | display_name | string | Yes |  |
 | primary_email | string | No |  |
 | primary_phone_number | string | No |  |
-| customer_type | string | Yes | `person`, `company`, `unknown` |
+| customer_type | string | Yes | `private`, `company`, `unknown` |
 | address | object | No |  |
 
 #### Responses
@@ -1055,7 +1055,7 @@ None
 | Field Path | Type | Required | Enum |
 | --- | --- | --- | --- |
 | display_name | string | No |  |
-| customer_type | string | Yes | `person`, `company`, `unknown` |
+| customer_type | string | Yes | `private`, `company`, `unknown` |
 | status | string | Yes | `active`, `inactive` |
 | primary_email | string | No |  |
 | primary_phone_number | string | No |  |

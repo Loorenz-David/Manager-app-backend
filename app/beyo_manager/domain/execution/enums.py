@@ -46,6 +46,7 @@ class TaskType(enum.Enum):
     EMAIL_SYNC_TARGETED = "email_sync_targeted"
     SEND_COORDINATION_EMAIL_BATCH = "send_coordination_email_batch"
     SEND_EMAIL_MESSAGES = "send_email_messages"
+    LOCATION_TRACKER_PUSH_LOCATIONS = "location_tracker_push_locations"
 
 
 class EventTaskOriginSourceEnum(enum.Enum):

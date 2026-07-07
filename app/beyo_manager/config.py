@@ -60,6 +60,9 @@ class Settings(BaseSettings):
 
     # External partner APIs
     beyo_vintage_api_key: str | None = Field(default=None, alias="BEYO_VINTAGE_API_KEY")
+    location_tracker_api_key: str | None = Field(default=None, alias="LOCATION_TRACKER_API_KEY")
+    location_tracker_base_url: str | None = Field(default=None, alias="LOCATION_TRACKER_BASE_URL")
+    location_tracker_timeout_seconds: float = Field(default=10.0, alias="LOCATION_TRACKER_TIMEOUT_SECONDS")
 
     # Environment
     environment: str = Field(default="development", alias="ENVIRONMENT")

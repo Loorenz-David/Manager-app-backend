@@ -105,6 +105,7 @@ class _TaskItemInputBody(BaseModel):
     item_cost_minor: int | None = None
     item_currency: ItemCurrencyEnum | None = None
     item_position: str | None = None
+    item_zone: str | None = None
     external_id: str | None = None
     external_url: str | None = None
     external_source: str | None = None
@@ -203,6 +204,7 @@ class _UpdateTaskPostHandlingBody(BaseModel):
 
 class _CompleteTaskPostHandlingBody(BaseModel):
     post_handling_id: str | None = None
+    completion_zone: str | None = None
     force: bool = False
 
 
@@ -968,7 +970,7 @@ class _AddDependencyBody(BaseModel):
 async def route_remove_task_steps(
     task_id: str,
     body: list[str],
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -986,7 +988,7 @@ async def route_remove_task_steps(
 async def route_remove_task_step(
     task_id: str,
     step_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
