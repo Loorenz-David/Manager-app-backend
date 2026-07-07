@@ -72,7 +72,6 @@ _SECTION_BATCH_MAP: dict[str, bool] = {
 _LEGACY_OBSOLETE_SECTION_NAMES: frozenset[str] = frozenset({"sanding"})
 
 _DEPENDENCIES: list[tuple[str, str]] = [
-    ("cleaning seat", "disassembly"),
     ("cleaning wood", "disassembly"),
     ("structural repair", "disassembly"),
     ("structural repair", "cleaning wood"),
