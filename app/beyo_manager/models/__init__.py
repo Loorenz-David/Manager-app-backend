@@ -130,3 +130,10 @@ from beyo_manager.models.tables.emails import email_thread  # noqa: F401
 from beyo_manager.models.tables.emails import email_message  # noqa: F401
 from beyo_manager.models.tables.emails import email_thread_user_state  # noqa: F401
 from beyo_manager.models.tables.emails import email_template  # noqa: F401
+
+# --- Shopify foundation ---
+from beyo_manager.models.tables.shopify import shopify_integration_event  # noqa: F401
+from beyo_manager.models.tables.shopify import shopify_oauth_state  # noqa: F401
+from beyo_manager.models.tables.shopify import shopify_shop_integration  # noqa: F401
+from beyo_manager.models.tables.shopify import shopify_webhook_intake  # noqa: F401
+from beyo_manager.models.tables.shopify import shopify_webhook_subscription  # noqa: F401

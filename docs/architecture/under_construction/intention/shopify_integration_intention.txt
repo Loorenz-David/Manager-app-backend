@@ -1,0 +1,870 @@
+Intention Plan — Scalable Shopify Integration for ManagerBeyo FastAPI Backend
+
+Goal
+
+Design and implement the foundation for a scalable, maintainable Shopify integration inside the ManagerBeyo FastAPI async backend.
+
+The first implementation focus is backend architecture, database tables, routers, services, domain serializers/enums, and background execution wiring required to link Shopify shops to ManagerBeyo workspaces, manage integrations, and process Shopify webhook/API work through the existing execution layer.
+
+
+The implementation must follow the existing ManagerBeyo backend contracts and architecture rules.
+
+This is not a quick one-shop integration. It must support:
+
+* Multiple Shopify shops linked to the same workspace.
+* Services that can target either:
+    * all linked shops in a workspace, or
+    * one specific linked shop.
+* A clean install/connect flow.
+* A clean disconnect/delete integration flow.
+* Scalable webhook registration and removal.
+* Background-job-first processing for Shopify work from day one.
+* A dedicated Shopify worker/queue path so Shopify jobs stay isolated from unrelated task workloads.
+* Future scope changes with minimal backend rewrites.
+* A future move from a single-shop/private/custom Shopify app setup to a public installable Shopify app with minimal backend changes.
+
+⸻
+
+Current context
+
+The ManagerBeyo backend is a Python FastAPI async application.
+
+The frontend is React.
+
+The application is deployed on EC2 and already supports cross-origin frontend/backend communication through CORS.
+
+
+⸻
+
+Architectural requirement
+
+Follow the ManagerBeyo backend contract system.
+
+Before creating an implementation plan, load the backend contract guide and select the minimum needed contracts.
+
+Expected contract direction:
+
+* Use routers/ for HTTP input/output only.
+* Use services/commands/ for write operations.
+* Use services/queries/ for read operations.
+* Use domain/ for pure rules and state logic.
+* Use models/tables/ for SQLAlchemy ORM table definitions only.
+* Use services/infra/ for Shopify API clients, OAuth helpers, webhook registration clients, encryption helpers, and external HTTP calls.
+* Use the existing execution layer for deferred Shopify work that should not block Shopify webhook responses or frontend requests.
+* Add a dedicated Shopify background worker process/entrypoint and queue mapping instead of mixing Shopify workloads into unrelated workers.
+* Use domain/shopify/ for pure Shopify enums, state rules, scope comparison rules, and serializers.
+* Use Alembic migration patterns for all table additions.
+* Use the existing service context and identity/workspace rules.
+* Do not put business logic directly in routers.
+
+Important domain serialization clarification:
+
+* The backend already uses domain-level serializers, for example domain/tasks/serializers.py.
+* When this intention refers to DTOs or frontend response shapes, implement them through the established serializer pattern under domain/shopify/serializers.py or the equivalent contract-compliant domain location.
+* Do not introduce a separate DTO architecture if it conflicts with the existing ManagerBeyo serialization pattern.
+
+The implementation plan must explicitly list:
+
+* Selected contracts.
+* Local extensions loaded.
+* Why each contract is included.
+* Which contracts were excluded and why.
+
+Progress notes
+
+* `2026-07-08`: Completed and validated the first approved child implementation plan, `PLAN_shopify_foundation_schema_config_20260707.md`. Archived plan: `backend/docs/architecture/archives/implementation/PLAN_shopify_foundation_schema_config_20260707.md`. Summary: `backend/docs/architecture/implemented_summaries/SUMMARY_shopify_foundation_schema_config_20260708.md`.
+* `2026-07-08`: Completed and validated the second approved child implementation plan, `PLAN_shopify_oauth_linking_20260707.md`. Archived plan: `backend/docs/architecture/archives/implementation/PLAN_shopify_oauth_linking_20260707.md`. Summary: `backend/docs/architecture/implemented_summaries/SUMMARY_shopify_oauth_linking_20260708.md`.
+* `2026-07-08`: Completed and validated the third approved child implementation plan, `PLAN_shopify_webhook_registry_sync_20260707.md`. Archived plan: `backend/docs/architecture/archives/implementation/PLAN_shopify_webhook_registry_sync_20260707.md`. Summary: `backend/docs/architecture/implemented_summaries/SUMMARY_shopify_webhook_registry_sync_20260708.md`.
+
+⸻
+
+Shopify app model
+
+The backend must be designed so that changing from the first single-shop/custom/private setup to a public Shopify app later requires minimal backend changes.
+
+The first setup may use one Shopify app created for one shop. Later, the app should support installation by multiple shops.
+
+Therefore:
+
+* Shopify app credentials must come from environment/config, not from database records.
+* The database should store shop installation state and tokens per linked shop.
+* The system should not assume there is only one shop per workspace.
+* The system should not assume there is only one workspace using Shopify.
+* The OAuth/install flow should be generic enough to support both:
+    * current single-shop/custom/private app testing, and
+    * future public installable Shopify app.
+* The app identity should be represented through an internal provider or integration type, not hardcoded into random service files.
+
+⸻
+
+API strategy
+
+Use Shopify GraphQL Admin API as the preferred API strategy for new integration work.
+
+Do not design the new backend around REST Admin API unless there is a documented exception.
+
+Create a Shopify API client abstraction under services/infra/shopify/ or an equivalent contract-compliant infra location.
+
+The infra client should centralize:
+
+* GraphQL request execution.
+* API version.
+* Shop domain validation.
+* Access token usage.
+* Shopify request IDs if available.
+* Error normalization.
+* Retry/rate-limit handling later.
+* Logging of important request metadata without leaking secrets.
+
+Do not scatter direct Shopify HTTP calls across commands or routers.
+
+⸻
+
+Environment/config intention
+
+Add explicit Shopify config fields to the backend settings/config system.
+
+Expected fields:
+
+* SHOPIFY_CLIENT_ID
+* SHOPIFY_CLIENT_SECRET
+* SHOPIFY_APP_SCOPES
+* SHOPIFY_REDIRECT_URI
+* SHOPIFY_API_VERSION
+* SHOPIFY_WEBHOOK_BASE_URL
+* SHOPIFY_INTEGRATION_DEBUG_LOGS
+* SHOPIFY_WEBHOOK_SECRET if different from the client secret in the chosen setup
+* Any needed OAuth/state/token encryption settings
+
+Important logging requirement:
+
+* Shopify integration logs must be controllable by a dedicated env var.
+* Do not use only the general app environment to decide whether logs are enabled.
+* In production, the team may still need Shopify integration debug logs while keeping other debug logs off.
+
+Secrets must never be logged.
+
+⸻
+
+Data model intention
+
+Design tables around workspace-owned Shopify integrations.
+
+The implementation plan should propose SQLAlchemy models and Alembic migrations for at least the following conceptual tables.
+
+Use plural table names following this naming intention:
+
+* shopify_shop_integrations
+* shopify_oauth_states
+* shopify_webhook_subscriptions
+* shopify_webhook_intakes
+* shopify_integration_events
+
+If the existing ManagerBeyo table naming contracts require a different convention, the implementation plan must call that out explicitly and explain the deviation.
+
+1. Shopify shop integration table
+
+Purpose: one row per Shopify shop linked to a ManagerBeyo workspace.
+
+Suggested conceptual fields:
+
+* client_id
+* workspace_id
+* shop_domain
+* shop_name
+* provider
+* status
+* access_token_encrypted
+* access_token_expires_at
+* refresh_token_encrypted if required by the selected token model
+* granted_scopes
+* requested_scopes
+* api_version
+* installed_at
+* uninstalled_at
+* last_connected_at
+* last_health_check_at
+* last_health_check_status
+* last_error_code
+* last_error_message
+* created_by_id
+* updated_by_id
+* created_at
+* updated_at
+* is_deleted
+
+Important constraints:
+
+* A workspace can have multiple Shopify shops.
+* A shop domain should not be actively linked twice to the same workspace.
+* Access tokens must be encrypted at rest.
+* Soft delete or status transition should be used for unlinking unless the contracts require hard delete.
+
+A Shopify shop domain can only have one active integration globally across all workspaces.
+
+Reason:
+* A Shopify shop installation grants one external application access to that merchant shop.
+* Allowing the same shop to be active in multiple workspaces can create duplicate webhook processing, duplicate imports, conflicting sync state, and unclear ownership.
+* If a shop must move to another workspace, the existing integration should be disabled/uninstalled first, then reconnected to the new workspace.
+
+Enforce one active Shopify integration per shop_domain globally, excluding soft-deleted/uninstalled rows.
+Also enforce one active Shopify integration per workspace_id + shop_domain.
+
+Suggested status values:
+
+* pending_install
+* active
+* needs_reauth
+* scopes_outdated
+* webhooks_outdated
+* disabled
+* uninstalled
+* error
+
+2. Shopify OAuth state table
+
+Purpose: secure OAuth install/callback flow.
+
+Suggested conceptual fields:
+
+* client_id
+* workspace_id
+* user_id
+* shop_domain
+* state
+* requested_scopes
+* redirect_after_success
+* expires_at
+* consumed_at
+* created_at
+
+Requirements:
+
+* OAuth state must be one-time use.
+* OAuth state must expire.
+* Callback must validate state before token exchange.
+* Callback must bind the resulting shop installation to the correct workspace and user.
+* Avoid storing unnecessary sensitive data.
+
+3. Shopify webhook subscription table
+
+Purpose: track which webhooks should be installed for each linked shop and their remote subscription IDs.
+
+Suggested conceptual fields:
+
+* client_id
+* workspace_id
+* shop_integration_id
+* topic
+* callback_url
+* remote_subscription_id
+* format
+* required_scopes
+* status
+* installed_at
+* last_verified_at
+* last_install_attempt_at
+* last_error_code
+* last_error_message
+* created_at
+* updated_at
+
+Suggested status values:
+
+* desired
+* installed
+* outdated
+* failed
+* removed
+
+Important:
+
+* The database should distinguish desired webhook configuration from actual installed remote webhook state.
+* This allows later reconciliation jobs.
+* Webhook installation/removal should be idempotent.
+
+4. Shopify webhook intake table
+
+Purpose: store incoming webhook deliveries before processing.
+
+Suggested conceptual fields:
+
+* client_id
+* workspace_id
+* shop_integration_id
+* shop_domain
+* topic
+* webhook_id
+* dedupe_key
+* raw_payload
+* status
+* attempts
+* retryable
+* received_at
+* processing_started_at
+* processed_at
+* last_error
+* created_at
+* updated_at
+
+Store raw_payload only in webhook intake during early implementation. Future implementation may move large payloads to S3/object storage and keep only metadata + object reference in Postgres.
+
+Requirements:
+
+* Incoming webhooks must be deduplicated.
+* Use a unique dedupe key such as shop integration + topic + Shopify webhook ID.
+* Webhook routes must return quickly after verification and intake creation.
+* Processing can be synchronous in the first implementation only if documented, but architecture should be compatible with future background workers.
+
+Suggested status values:
+
+* pending
+* processing
+* processed
+* failed
+* ignored
+
+If a webhook delivery is already recorded by dedupe_key:
+* do not enqueue duplicate processing
+* return 200 OK to Shopify
+* optionally record a webhook_deduplicated event
+
+
+5. Shopify integration event/audit table
+
+Purpose: record important integration lifecycle events for debugging and operations.
+
+Suggested conceptual fields:
+
+* client_id
+* workspace_id
+* shop_integration_id
+* event_type
+* severity
+* message
+* metadata
+* created_by_id
+* created_at
+
+Example event types:
+
+* oauth_install_started
+* oauth_callback_received
+* oauth_state_validated
+* access_token_exchanged
+* shop_linked
+* shop_reauthorized
+* shop_unlinked
+* webhook_install_started
+* webhook_installed
+* webhook_install_failed
+* webhook_removed
+* webhook_received
+* webhook_deduplicated
+* webhook_processing_failed
+* scope_mismatch_detected
+
+This table is not a replacement for logs. It is persistent operational history.
+
+
+Desired webhook definitions should be code/config driven, not manually inserted by random commands.
+
+Create a domain-level Shopify webhook registry containing:
+* topic
+* callback path
+* required scopes
+* payload format
+* enabled flag
+⸻
+
+Scope management intention
+
+The system must have a maintainable way to update Shopify app scopes.
+
+Do not hardcode scopes in multiple commands.
+
+Create a single source of truth for required Shopify scopes, ideally from config plus domain validation.
+
+The implementation should support:
+
+* Current requested scopes from environment.
+* Stored granted scopes per shop.
+* Detection when an installed shop has outdated/missing scopes.
+* Marking a shop as scopes_outdated or needs_reauth.
+* A route/query that the frontend can use to show whether a shop requires reauthorization.
+* Future scope upgrades without schema rewrites.
+
+The implementation plan should explicitly define how scope comparison works:
+
+* normalize scope strings
+* sort/dedupe scopes
+* compare requested vs granted
+* store both requested and granted values
+
+⸻
+
+Webhook management intention
+
+Build webhook management as a scalable subsystem, not as one-off code inside OAuth callback.
+
+The first implementation may install webhooks immediately after OAuth callback, but the architecture must allow:
+
+* install webhooks for one shop
+* install webhooks for all shops in a workspace
+* remove webhooks for one shop
+* remove webhooks for all shops in a workspace
+* reconcile desired vs installed webhooks
+* retry failed webhook installation
+* add/remove webhook topics later
+
+Create commands such as:
+
+* install_shopify_webhooks_for_shop
+* remove_shopify_webhooks_for_shop
+* sync_shopify_webhook_subscriptions_for_shop
+* mark_shopify_webhook_subscription_failed
+
+The implementation plan should decide whether initial webhook installation is done:
+
+* during OAuth callback,
+* through a separate admin route,
+* or both.
+
+Preferred design:
+
+* OAuth callback creates/updates shop integration.
+* Then calls a webhook sync command.
+* Webhook sync is idempotent and can be safely called again later.
+
+Webhook verification must be centralized in middleware or infra logic.
+
+Incoming webhook processing must:
+
+* validate Shopify HMAC
+* validate topic
+* resolve shop integration by shop domain
+* create intake record
+* dedupe delivery
+* return success quickly
+* avoid leaking raw payload to logs
+
+⸻
+
+Background job execution intention
+
+Shopify integration must be background-job-first from day one.
+
+Reason:
+
+* Shopify webhook endpoints must respond quickly.
+* Shopify API calls, webhook processing, webhook reconciliation, bulk imports, and retryable sync work should not block HTTP request/response paths.
+* The backend already has an execution layer with task routing, Redis queues, workers, retry scheduling, and task payloads. Shopify should integrate into that layer instead of creating a separate ad-hoc job system.
+
+Required design:
+
+* Add Shopify-specific execution task types to the existing execution domain enum system.
+* Add Shopify task payload definitions under the existing execution payload pattern.
+* Add a dedicated queue for Shopify work, for example queue:shopify.
+* Add a dedicated Shopify worker entrypoint/process that runs only Shopify task handlers.
+* Add the Shopify task types to the existing task router queue map.
+* Keep Shopify task handlers small and delegate real business logic to Shopify commands/services.
+* Preserve the existing execution-layer retry/failure semantics.
+* Ensure Shopify jobs are idempotent because webhooks and retries may deliver the same work more than once.
+
+Initial Shopify background task types to plan:
+
+* SHOPIFY_PROCESS_WEBHOOK
+* SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP
+* SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP
+* SHOPIFY_RECONCILE_SHOP
+
+Do not implement automatic historical product/order import after shop installation in the first Shopify integration phase.
+
+Reason:
+* The first required post-install background work is webhook installation/sync.
+* Product/order import jobs can be added later only when a concrete ManagerBeyo feature requires historical Shopify data.
+* Avoid making OAuth installation unexpectedly heavy or slow.
+
+Webhook route behavior:
+
+* Verify Shopify HMAC using the raw request body.
+* Resolve the shop integration.
+* Create a webhook intake record with deduplication.
+* Enqueue a SHOPIFY_PROCESS_WEBHOOK execution task.
+* Return a fast success response to Shopify after safe intake/enqueue.
+* Do not perform heavy domain work directly inside the webhook route.
+
+OAuth callback behavior:
+
+* The OAuth callback may perform the minimum required work to create/update the shop integration.
+* Webhook installation/sync must be enqueued as a Shopify background task after the shop integration is created or updated.
+* Do not enqueue product/order historical import jobs during OAuth callback in the first phase.
+* If any Shopify API operation is run inline during OAuth, the implementation plan must justify why it is safe and bounded.
+
+Dedicated Shopify worker:
+
+* Create a worker process similar to the existing task worker pattern, but scoped to Shopify jobs.
+* The worker should register handlers only for Shopify task types.
+* The worker should be deployable independently in PM2/systemd alongside the existing backend/task workers.
+* The implementation plan must include deployment notes for starting this worker on EC2.
+
+Router intention
+
+Create clear frontend-facing routes and webhook-facing routes.
+
+Suggested router grouping:
+
+Frontend/admin routes
+
+Prefix example:
+
+/api/v1/integrations/shopify
+
+Routes to plan:
+
+* GET /shops
+    * List Shopify shops linked to the current workspace.
+* GET /shops/{shop_integration_id}
+    * Get one linked Shopify shop integration.
+* POST /install-url
+    * Create Shopify install URL for a requested shop domain.
+    * Creates OAuth state.
+    * Returns authorization URL to frontend.
+POST /install-url expects:
+* shop_domain
+* optional redirect_after_success key or enum, not arbitrary URL
+
+The backend normalizes shop_domain into the canonical myshopify.com domain format before creating OAuth state.
+Do not trust user-entered store display names. The integration identity is the normalized Shopify shop domain.
+
+Shop domain normalization rules:
+* Accept user input such as mystore, mystore.myshopify.com, or https://mystore.myshopify.com.
+* Normalize to lowercase mystore.myshopify.com.
+* Reject domains that are not valid Shopify shop domains.
+* Store only the normalized shop_domain.
+
+* GET /oauth/callback
+    * Shopify redirects here after app installation.
+    * Validates HMAC/query/state.
+    * Exchanges code for token.
+    * Creates or updates shop integration.
+      * Syncs or records scope status.
+    * Enqueues Shopify webhook installation/sync work through the execution layer.
+    * Does not enqueue automatic historical product/order imports in the first phase.
+    * Redirects back to frontend.
+After OAuth callback, redirect to a configured frontend Shopify integration result page.
+
+The redirect should include only safe status information, for example:
+* success=true/false
+* shop_domain
+* error_code if failed
+
+Do not include access tokens, raw Shopify errors, OAuth code, or sensitive state in the redirect URL.
+Allowed frontend redirect URLs must be controlled by backend config or allowlist.
+
+* POST /shops/{shop_integration_id}/reauthorize-url
+    * Creates a new install/authorization URL when scopes are outdated or auth is invalid.
+* DELETE /shops/{shop_integration_id}
+    * Disconnects/unlinks one Shopify shop integration.
+    * Removes or marks webhooks removed.
+    * Clears/revokes token where possible.
+    * Marks integration as uninstalled/disabled.
+* POST /shops/{shop_integration_id}/webhooks/sync
+    * Admin-only or manager-only route to resync webhook subscriptions.
+* POST /webhooks/sync
+    * Admin-only route to sync webhooks for all shops in the workspace.
+* GET /scopes
+    * Returns required scopes and optionally the granted scopes per shop.
+
+Webhook routes
+
+Prefix example:
+
+/api/v1/integrations/shopify/webhooks
+
+Routes to plan:
+
+* POST /products/update
+* POST /orders/create
+* POST /orders/paid
+* any other required webhook topics
+
+Use one generic Shopify webhook route, for example:
+
+POST /api/v1/integrations/shopify/webhooks
+
+The route reads the Shopify topic from the Shopify webhook headers and maps it internally to supported topic handlers.
+
+Reason:
+* Reduces route duplication.
+* Shopify topic support can grow through domain mappings instead of new router functions.
+* Verification/intake/enqueue behavior stays centralized.
+
+Reject unsupported webhook topics after HMAC verification and record an ignored intake/event if useful.
+
+ webhook routes must only verify, resolve, persist intake/dedupe, enqueue Shopify background work, and return quickly.
+
+Initial webhook topics:
+* app/uninstalled
+* orders/create
+* orders/updated
+* orders/paid
+* orders/cancelled
+* products/create
+* products/update
+* products/delete
+
+⸻
+
+Service/command intention
+
+The implementation should use commands and queries matching ManagerBeyo contracts.
+
+Suggested commands:
+
+* create_shopify_install_url
+* handle_shopify_oauth_callback
+* link_or_update_shopify_shop
+* disconnect_shopify_shop
+* sync_shopify_shop_scopes
+* install_shopify_webhooks_for_shop
+* remove_shopify_webhooks_for_shop
+* sync_shopify_webhook_subscriptions_for_shop
+* enqueue_shopify_webhook_sync_after_install
+* enqueue_or_record_shopify_webhook
+* enqueue_shopify_background_task
+* process_shopify_webhook_intake
+* mark_shopify_webhook_processed
+* mark_shopify_webhook_failed
+
+Suggested queries:
+
+* list_shopify_shop_integrations
+* get_shopify_shop_integration
+* get_shopify_scope_status
+* list_shopify_webhook_subscriptions
+* list_shopify_webhook_intake_records
+
+Suggested infra modules:
+
+* shopify_oauth_client
+* shopify_graphql_client
+* shopify_hmac_verifier
+* shopify_webhook_subscription_client
+* shopify_token_crypto
+* shopify_logging
+
+Suggested worker/handler modules:
+
+* workers/shopify_worker.py or an equivalent existing worker entrypoint location
+* services/infra/execution/shopify_handlers.py or services/shopify/background/handlers.py, depending on existing execution-layer conventions
+* domain/execution/payloads/shopify.py for typed Shopify execution payloads if this matches the current payload convention
+
+The implementation plan must inspect the current execution layer and follow its conventions for task type registration, payload creation, queue routing, retry behavior, and worker startup.
+
+
+
+
+------
+Use Shopify offline access tokens for shop integrations.
+
+Reason:
+* Background workers must sync products, orders, webhooks, and reconciliation jobs without a live user session.
+* Tokens are shop-scoped, not ManagerBeyo-user-session-scoped.
+* The installed shop integration owns the token lifecycle.
+
+Do not add refresh_token_encrypted unless the selected Shopify token model requires refresh tokens. For the standard Shopify offline Admin API token flow, store access_token_encrypted only.
+
+⸻
+
+Identity and permissions intention
+
+All frontend-facing integration routes must be workspace-scoped.
+
+The system must prevent users from accessing or modifying Shopify shops outside their workspace.
+
+Expected permissions:
+
+* Admin or manager can link shops.
+* Admin can disconnect shops.
+* Admin can sync webhooks.
+* Manager may view linked shops if product/business flow requires it.
+* Worker should not manage Shopify integrations unless explicitly required.
+
+The implementation plan must use existing ManagerBeyo role dependency patterns.
+
+⸻
+
+Logging intention
+
+Add structured logs at every important Shopify lifecycle step.
+
+Logs should include:
+
+* request ID if available
+* workspace ID
+* user ID where relevant
+* shop integration ID where available
+* shop domain
+* operation name
+* status/result
+* error code
+* safe metadata
+
+Logs must not include:
+
+* access tokens
+* client secret
+* raw OAuth code
+* raw webhook HMAC
+* full raw webhook payload unless explicitly enabled and redacted
+
+Important log points:
+
+* install URL requested
+* OAuth state created
+* OAuth callback received
+* OAuth HMAC validation passed/failed
+* OAuth state validation passed/failed
+* token exchange started/completed/failed
+* shop integration created/updated
+* scope comparison result
+* webhook sync started/completed/failed
+* webhook subscription created/updated/removed
+* webhook received
+* webhook HMAC validation passed/failed
+* webhook deduplicated
+* webhook intake created
+* webhook processing completed/failed
+* shop disconnected
+
+Logging must be controlled by a dedicated Shopify integration debug env var, not by generic app environment.
+
+⸻
+
+Error handling intention
+
+Use existing ManagerBeyo error patterns.
+
+Do not expose sensitive Shopify errors directly to the frontend.
+
+Normalize errors into safe application errors.
+
+Examples:
+
+* invalid shop domain
+* OAuth state expired
+* OAuth state already consumed
+* Shopify OAuth HMAC invalid
+* Shopify token exchange failed
+* shop already linked
+* shop not found
+* access token missing
+* required scopes missing
+* webhook installation failed
+* webhook signature invalid
+
+The implementation plan should define which errors are retryable and which are not.
+
+⸻
+
+Security intention
+
+The implementation must treat Shopify tokens and OAuth state as sensitive.
+
+Requirements:
+
+* Encrypt access tokens at rest.
+* Never log tokens.
+* Validate OAuth callback HMAC.
+* Validate webhook HMAC using raw request body.
+* Ensure raw request body is available for webhook verification.
+* Use one-time expiring OAuth state.
+* Bind OAuth state to workspace and user.
+* Validate shop domain format.
+* Avoid accepting arbitrary redirect URLs unless explicitly allowlisted.
+* Soft-delete or revoke/clear tokens on disconnect.
+* Keep webhook endpoints unauthenticated by ManagerBeyo JWT but authenticated by Shopify HMAC.
+
+⸻
+
+Frontend integration intention
+
+The frontend should be able to:
+
+* list linked Shopify shops
+* start linking a shop
+* receive status after OAuth callback
+* show whether a shop is active, needs reauth, has outdated scopes, or has webhook issues
+* disconnect a shop
+* trigger webhook resync if the user has permission
+
+The backend should provide clear serialized response shapes using the existing domain serializer pattern.
+
+Suggested serialized shop response fields:
+
+* client_id
+* shop_domain
+* shop_name
+* status
+* granted_scopes
+* requested_scopes
+* scopes_status
+* webhooks_status
+* installed_at
+* last_health_check_at
+* last_error_message
+
+⸻
+
+Migration and testing intention
+
+The implementation plan must include Alembic migrations for all new tables and indexes.
+
+Testing should include:
+
+* shop domain validation
+* OAuth state creation and expiration
+* OAuth callback validation
+* scope normalization/comparison
+* shop integration upsert behavior
+* multiple shops per workspace
+* workspace isolation
+* webhook HMAC validation
+* webhook intake deduplication
+* webhook route enqueues SHOPIFY_PROCESS_WEBHOOK instead of doing heavy work inline
+* Shopify task types route to the dedicated Shopify queue
+* Shopify worker registers only Shopify handlers
+* Shopify background task handlers delegate to commands/services and preserve retry behavior
+* webhook subscription desired/installed status transitions
+* disconnect behavior
+* logging redaction
+
+Where external Shopify calls are involved, tests should mock the Shopify infra client.
+
+⸻
+
+Desired output from Claude/Codex
+
+Create a detailed implementation plan, not code yet.
+
+The plan should include:
+
+1. Contracts selected and why.
+2. Existing files to inspect.
+3. New files to create.
+4. Existing files to modify.
+5. Database tables and fields.
+6. Alembic migration plan.
+7. Router definitions.
+8. Command/query/infra module breakdown.
+9. Security and token encryption approach.
+10. Webhook management approach, including webhook installation/sync after OAuth and explicitly excluding automatic historical product/order import from phase one.
+11. Background execution approach, including Shopify task types, queue mapping, dedicated worker, handlers, and EC2 process startup.
+12. Scope management approach.
+13. Logging approach.
+14. Error handling approach.
+15. Test plan.
+16. Risks, edge cases, and open decisions.
+
+Do not implement until the plan is reviewed.

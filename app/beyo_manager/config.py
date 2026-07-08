@@ -102,6 +102,17 @@ class Settings(BaseSettings):
     reset_secret: str = Field(default="", alias="RESET_SECRET")
     field_encryption_key: str | None = Field(default=None, alias="FIELD_ENCRYPTION_KEY")
 
+    # Shopify
+    shopify_client_id: str | None = Field(default=None, alias="SHOPIFY_CLIENT_ID")
+    shopify_client_secret: str | None = Field(default=None, alias="SHOPIFY_CLIENT_SECRET")
+    shopify_app_scopes: str = Field(default="", alias="SHOPIFY_APP_SCOPES")
+    shopify_redirect_uri: str | None = Field(default=None, alias="SHOPIFY_REDIRECT_URI")
+    shopify_oauth_redirect_url: str | None = Field(default=None, alias="SHOPIFY_OAUTH_REDIRECT_URL")
+    shopify_api_version: str = Field(default="2026-01", alias="SHOPIFY_API_VERSION")
+    shopify_webhook_base_url: str | None = Field(default=None, alias="SHOPIFY_WEBHOOK_BASE_URL")
+    shopify_integration_debug_logs: bool = Field(default=False, alias="SHOPIFY_INTEGRATION_DEBUG_LOGS")
+    shopify_webhook_secret: str | None = Field(default=None, alias="SHOPIFY_WEBHOOK_SECRET")
+
     model_config = SettingsConfigDict(
         # Load deterministic env profile selected by APP_ENV.
         # APP_ENV can be: development | testing | validation | production.

@@ -21,6 +21,7 @@ from beyo_manager.routers.api_v1 import (
     location_tracker,
     notifications,
     reset,
+    shopify,
     tasks,
     upholsteries,
     upholstery_categories,
@@ -40,6 +41,11 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(bootstrap.router, prefix="/api/v1/bootstrap", tags=["bootstrap"])
     app.include_router(reset.router, prefix="/api/v1/reset", tags=["reset"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(
+        shopify.router,
+        prefix="/api/v1/integrations/shopify",
+        tags=["shopify"],
+    )
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
     app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])

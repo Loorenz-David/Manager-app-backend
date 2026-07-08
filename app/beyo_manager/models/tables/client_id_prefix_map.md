@@ -35,6 +35,11 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | RecurringScheduler | rsch | rsch_xxxxxxx |
 | Role | role | role_xxxxxxx |
 | StaticCost | stc | stc_xxxxxxx |
+| ShopifyIntegrationEvent | shpevt | shpevt_xxxxxxx |
+| ShopifyOAuthState | shpoau | shpoau_xxxxxxx |
+| ShopifyShopIntegration | shpint | shpint_xxxxxxx |
+| ShopifyWebhookIntake | shpwhi | shpwhi_xxxxxxx |
+| ShopifyWebhookSubscription | shpwhs | shpwhs_xxxxxxx |
 | StepStateRecord | ssr | ssr_xxxxxxx |
 | TaskEvent | tev | tev_xxxxxxx |
 | TaskItem | tki | tki_xxxxxxx |
