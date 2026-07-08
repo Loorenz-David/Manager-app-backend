@@ -29,6 +29,7 @@ jobs:
             source /home/ubuntu/config/managerbeyo/.env
             set +a
 
+            find migrations/versions -type d -name "__pycache__" -prune -exec rm -rf {} +
             APP_ENV=production alembic upgrade head
             APP_ENV=production PYTHONPATH=. python scripts/apply_db_triggers.py
 
