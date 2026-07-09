@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from beyo_manager.config import settings
 from beyo_manager.errors.validation import ValidationError
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_REDIRECT_KEY = "default"
 
@@ -37,4 +40,12 @@ def build_shopify_oauth_redirect_url(
     if error_code:
         query_items.append(("error_code", error_code))
 
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query_items), ""))
+    redirect_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query_items), ""))
+    logger.debug(
+        "Shopify OAuth frontend redirect built | success=%s shop_domain=%s error_code=%s redirect_url=%s",
+        success,
+        shop_domain,
+        error_code,
+        redirect_url,
+    )
+    return redirect_url

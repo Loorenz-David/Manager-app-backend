@@ -22,6 +22,7 @@ from beyo_manager.routers.api_v1 import (
     notifications,
     reset,
     shopify,
+    shopify_webhooks,
     tasks,
     upholsteries,
     upholstery_categories,
@@ -45,6 +46,11 @@ def register_v1_routers(app: FastAPI) -> None:
         shopify.router,
         prefix="/api/v1/integrations/shopify",
         tags=["shopify"],
+    )
+    app.include_router(
+        shopify_webhooks.router,
+        prefix="/api/v1/shopify",
+        tags=["shopify-webhooks"],
     )
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(files.router, prefix="/api/v1/files", tags=["files"])

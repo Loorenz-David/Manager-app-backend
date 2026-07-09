@@ -398,6 +398,9 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             WorkingSection.image.label("ws_image"),
             WorkingSection.order_list.label("ws_order_list"),
             WorkingSection.allows_batch_working.label("ws_allows_batch_working"),
+            WorkingSection.allows_shopify_product_modifications.label(
+                "ws_allows_shopify_product_modifications"
+            ),
         )
         .select_from(TaskStepDependency)
         .join(
@@ -435,6 +438,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                     image=row.ws_image,
                     order_list=row.ws_order_list,
                     allows_batch_working=row.ws_allows_batch_working,
+                    allows_shopify_product_modifications=row.ws_allows_shopify_product_modifications,
                 ),
                 "prerequisite_step_state": row.prereq_state.value,
             }

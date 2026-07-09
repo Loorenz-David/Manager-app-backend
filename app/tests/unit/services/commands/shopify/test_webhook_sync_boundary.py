@@ -24,3 +24,11 @@ def test_phase2_webhook_sync_boundaries_do_not_reference_real_sync_commands() ->
 
     for target_name in target_names:
         assert target_name not in combined_source
+
+
+def test_phase5_webhook_sync_boundary_enqueues_shopify_sync_task_in_shared_helper() -> None:
+    helper_source = inspect.getsource(_webhook_sync)
+
+    assert "create_instant_task(" in helper_source
+    assert "TaskType.SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP" in helper_source
+    assert helper_source.index("create_shopify_integration_event(") < helper_source.index("create_instant_task(")

@@ -1,8 +1,12 @@
 import hashlib
 import hmac
+import base64
 from urllib.parse import urlencode
 
-from beyo_manager.services.infra.shopify.hmac_verifier import is_valid_shopify_oauth_callback_hmac
+from beyo_manager.services.infra.shopify.hmac_verifier import (
+    is_valid_shopify_oauth_callback_hmac,
+    is_valid_shopify_webhook_hmac,
+)
 
 
 def _signed_query(secret: str, params: dict[str, str]) -> str:
@@ -29,3 +33,28 @@ def test_is_valid_shopify_oauth_callback_hmac_rejects_modified_signature(monkeyp
     )
 
     assert is_valid_shopify_oauth_callback_hmac(raw_query) is False
+
+
+def test_is_valid_shopify_webhook_hmac_accepts_valid_signature(monkeypatch) -> None:
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.hmac_verifier.settings.shopify_webhook_secret", "webhook-secret")
+    raw_body = b'{"id":123,"topic":"orders/create"}'
+    digest = hmac.new(b"webhook-secret", raw_body, hashlib.sha256).digest()
+    signature = base64.b64encode(digest).decode()
+
+    assert is_valid_shopify_webhook_hmac(raw_body, signature) is True
+
+
+def test_is_valid_shopify_webhook_hmac_falls_back_to_client_secret(monkeypatch) -> None:
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.hmac_verifier.settings.shopify_webhook_secret", None)
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.hmac_verifier.settings.shopify_client_secret", "client-secret")
+    raw_body = b'{"id":456}'
+    digest = hmac.new(b"client-secret", raw_body, hashlib.sha256).digest()
+    signature = base64.b64encode(digest).decode()
+
+    assert is_valid_shopify_webhook_hmac(raw_body, signature) is True
+
+
+def test_is_valid_shopify_webhook_hmac_rejects_blank_signature(monkeypatch) -> None:
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.hmac_verifier.settings.shopify_webhook_secret", "webhook-secret")
+
+    assert is_valid_shopify_webhook_hmac(b'{"id":1}', "   ") is False

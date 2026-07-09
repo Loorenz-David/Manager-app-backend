@@ -40,7 +40,18 @@ def build_shopify_install_url(
             "state": state,
         }
     )
-    return f"https://{shop_domain}/admin/oauth/authorize?{query}"
+    install_url = f"https://{shop_domain}/admin/oauth/authorize?{query}"
+    logger.debug(
+        "Shopify install URL built | shop_domain=%s client_id=%s redirect_uri=%s scope=%s "
+        "state_prefix=%s install_url=%s",
+        shop_domain,
+        settings.shopify_client_id,
+        settings.shopify_redirect_uri,
+        ",".join(requested_scopes),
+        state[:8],
+        install_url,
+    )
+    return install_url
 
 
 async def exchange_oauth_code_for_offline_token(
@@ -60,6 +71,13 @@ async def exchange_oauth_code_for_offline_token(
         "code": code,
     }
 
+    logger.debug(
+        "Shopify OAuth token exchange starting | shop_domain=%s url=%s client_id=%s code_prefix=%s",
+        shop_domain,
+        url,
+        settings.shopify_client_id,
+        code[:8],
+    )
     start = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:

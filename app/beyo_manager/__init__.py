@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from beyo_manager.config import settings
+from beyo_manager.core.logging.config import configure_logging
+
+configure_logging()
 
 _startup_logger = logging.getLogger("beyo_manager.startup")
 

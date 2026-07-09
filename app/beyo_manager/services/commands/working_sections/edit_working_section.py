@@ -63,6 +63,9 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
         if "allows_batch_working" in request.model_fields_set:
             section.allows_batch_working = request.allows_batch_working
 
+        if "allows_shopify_product_modifications" in request.model_fields_set:
+            section.allows_shopify_product_modifications = request.allows_shopify_product_modifications
+
         if "working_section_dependencies" in request.model_fields_set:
             dep_ids: list[str] = request.working_section_dependencies or []
             old_dep_rows = await ctx.session.execute(

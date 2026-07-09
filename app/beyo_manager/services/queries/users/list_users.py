@@ -139,6 +139,7 @@ async def list_users(ctx: ServiceContext) -> dict:
             WorkingSection.image,
             WorkingSection.order_list,
             WorkingSection.allows_batch_working,
+            WorkingSection.allows_shopify_product_modifications,
         )
         .join(
             WorkingSection,
@@ -162,6 +163,7 @@ async def list_users(ctx: ServiceContext) -> dict:
                 sec_row.image,
                 sec_row.order_list,
                 sec_row.allows_batch_working,
+                sec_row.allows_shopify_product_modifications,
             )
         )
 

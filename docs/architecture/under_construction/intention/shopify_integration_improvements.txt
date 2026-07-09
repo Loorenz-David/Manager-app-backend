@@ -1,0 +1,14 @@
+BACKEND
+
+The current working_sections table has a column called allows_batch_working .
+/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app/beyo_manager/models/tables/working_sections/working_section.py
+
+This column is used by the frontend to change it's behaviour for how a task step is completed when acting as a user with that working seciton.
+
+We will now create one more column in the working_sections table which will allow the frontend to comunicate with the backend shopify integration.
+
+This column will be called allows_shopify_product_modifications, it will be a boolean with default as false.
+
+and it should be included in every serialization where there is the serialization of "allows_batch_working" . we should also included on the creation of the working section services everywhere where there is a "allows_batch_working". 
+
+Create an implementation plan for codex using the 

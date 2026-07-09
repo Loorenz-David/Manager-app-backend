@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventSeverityEnum,
@@ -59,3 +59,4 @@ class ShopifyIntegrationEvent(IdentityMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
+    created_by: Mapped["User | None"] = relationship("User", foreign_keys=[created_by_id])

@@ -122,6 +122,7 @@ async def create_working_section(ctx: ServiceContext) -> dict:
             image=request.image,
             order_list=request.order_list,
             allows_batch_working=request.allows_batch_working,
+            allows_shopify_product_modifications=request.allows_shopify_product_modifications,
             created_by_id=ctx.user_id,
         )
         ctx.session.add(section)

@@ -11,6 +11,7 @@ def serialize_working_section_compact(
     image: str | None,
     order_list: int | None,
     allows_batch_working: bool,
+    allows_shopify_product_modifications: bool,
 ) -> dict:
     return {
         "client_id": client_id,
@@ -18,6 +19,7 @@ def serialize_working_section_compact(
         "image": image,
         "order_list": order_list,
         "allows_batch_working": allows_batch_working,
+        "allows_shopify_product_modifications": allows_shopify_product_modifications,
     }
 
 
@@ -34,6 +36,7 @@ def serialize_working_section_full(
         "image": section.image,
         "order_list": section.order_list,
         "allows_batch_working": section.allows_batch_working,
+        "allows_shopify_product_modifications": section.allows_shopify_product_modifications,
         "dependencies": [
             {"client_id": dep_id, "name": dep_name} for dep_id, dep_name in dependencies
         ],

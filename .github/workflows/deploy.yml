@@ -39,6 +39,7 @@ jobs:
               managerbeyo-presence-worker \
               managerbeyo-analytics-worker \
               managerbeyo-notification-worker \
+              managerbeyo-shopify-worker \
               managerbeyo-delayed-scheduler \
               managerbeyo-recurring-scheduler \
               managerbeyo-tasks-worker

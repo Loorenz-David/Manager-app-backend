@@ -63,6 +63,9 @@ notification-worker:
 tasks-worker:
 	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.tasks_worker
 
+shopify-worker:
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.shopify_worker
+
 email-idle-watcher:
 	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.email_idle_watcher
 
@@ -115,4 +118,4 @@ inspect:
 reset-db:
 	python scripts/ops.py reset-db --dry-run True
 
-.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker notification-worker tasks-worker email-idle-watcher task-worker task_worker
+.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker notification-worker tasks-worker shopify-worker email-idle-watcher task-worker task_worker

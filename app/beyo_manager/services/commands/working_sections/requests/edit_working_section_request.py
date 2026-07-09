@@ -14,6 +14,7 @@ class WorkingSectionEditRequest(BaseModel):
     image: str | None = None
     order_list: int | None = None
     allows_batch_working: bool | None = None
+    allows_shopify_product_modifications: bool | None = None
     working_section_dependencies: list[str] | None = None
     working_section_item_categories: list[str] | None = None
     working_section_supported_issue_types: list[str] | None = None
@@ -43,6 +44,7 @@ class WorkingSectionEditRequest(BaseModel):
             "image",
             "order_list",
             "allows_batch_working",
+            "allows_shopify_product_modifications",
             "working_section_dependencies",
             "working_section_item_categories",
             "working_section_supported_issue_types",
@@ -50,6 +52,7 @@ class WorkingSectionEditRequest(BaseModel):
         if not (updatable & self.model_fields_set):
             raise ValueError(
                 "At least one of name, image, order_list, allows_batch_working, "
+                "allows_shopify_product_modifications, "
                 "working_section_dependencies, working_section_item_categories, "
                 "or working_section_supported_issue_types must be provided."
             )

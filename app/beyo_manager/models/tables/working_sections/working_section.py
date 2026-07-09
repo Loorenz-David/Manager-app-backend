@@ -23,6 +23,12 @@ class WorkingSection(IdentityMixin, Base):
         default=False,
         server_default=text("false"),
     )
+    allows_shopify_product_modifications: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

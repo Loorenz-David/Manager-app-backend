@@ -48,6 +48,12 @@ class TaskType(enum.Enum):
     SEND_EMAIL_MESSAGES = "send_email_messages"
     LOCATION_TRACKER_PUSH_LOCATIONS = "location_tracker_push_locations"
 
+    # Shopify
+    SHOPIFY_PROCESS_WEBHOOK = "shopify_process_webhook"
+    SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP = "shopify_sync_webhooks_for_shop"
+    SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP = "shopify_remove_webhooks_for_shop"
+    SHOPIFY_RECONCILE_SHOP = "shopify_reconcile_shop"
+
 
 class EventTaskOriginSourceEnum(enum.Enum):
     DELAYED_SCHEDULER   = "delayed_scheduler"

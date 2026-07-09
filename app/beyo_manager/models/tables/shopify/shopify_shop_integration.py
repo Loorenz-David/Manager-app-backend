@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.domain.shopify.enums import ShopifyIntegrationStatusEnum
 from beyo_manager.models.base.base import Base
@@ -88,3 +88,5 @@ class ShopifyShopIntegration(IdentityMixin, Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped["User | None"] = relationship("User", foreign_keys=[created_by_id])
+    updated_by: Mapped["User | None"] = relationship("User", foreign_keys=[updated_by_id])

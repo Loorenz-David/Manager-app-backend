@@ -56,6 +56,18 @@ async def create_shopify_install_url(ctx: ServiceContext) -> dict:
     expires_at = datetime.now(timezone.utc) + _OAUTH_STATE_TTL
     state = secrets.token_urlsafe(32)
 
+    logger.debug(
+        "Shopify install URL requested | workspace=%s user=%s raw_shop_domain=%s "
+        "normalized_shop_domain=%s requested_scopes=%s expires_at=%s state_prefix=%s",
+        ctx.workspace_id,
+        ctx.user_id,
+        request.shop_domain,
+        normalized_shop_domain,
+        requested_scopes,
+        expires_at.isoformat(),
+        state[:8],
+    )
+
     oauth_state = ShopifyOAuthState(
         workspace_id=ctx.workspace_id,
         user_id=ctx.user_id,
@@ -81,6 +93,7 @@ async def create_shopify_install_url(ctx: ServiceContext) -> dict:
         ctx.user_id,
         normalized_shop_domain,
     )
+    logger.debug("Shopify install URL full value | install_url=%s", install_url)
     return {
         "install_url": install_url,
         "shop_domain": normalized_shop_domain,

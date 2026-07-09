@@ -42,6 +42,7 @@ class WorkingSectionCreateBody(BaseModel):
 	image: str | None = None
 	order_list: int | None = None
 	allows_batch_working: bool = False
+	allows_shopify_product_modifications: bool = False
 	working_section_dependencies: list[str] = Field(default_factory=list)
 	working_section_item_categories: list[str] = Field(default_factory=list)
 	working_section_supported_issue_types: list[str] = Field(default_factory=list)
@@ -52,6 +53,7 @@ class WorkingSectionEditBody(BaseModel):
 	image: str | None = None
 	order_list: int | None = None
 	allows_batch_working: bool | None = None
+	allows_shopify_product_modifications: bool | None = None
 	working_section_dependencies: list[str] | None = None
 	working_section_item_categories: list[str] | None = None
 	working_section_supported_issue_types: list[str] | None = None

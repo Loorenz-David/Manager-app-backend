@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import Select, select
@@ -15,6 +16,8 @@ from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.services.commands.shopify._events import create_shopify_integration_event
 from beyo_manager.services.infra.crypto.field_encryption import encrypt_field
+
+logger = logging.getLogger(__name__)
 
 _ACTIVE_LIKE_STATUSES = (
     ShopifyIntegrationStatusEnum.PENDING_INSTALL,
@@ -75,11 +78,29 @@ async def link_or_update_shopify_shop_record(
         await session.execute(_active_conflict_stmt(workspace_id=workspace_id, shop_domain=shop_domain))
     ).scalar_one_or_none()
     if conflict is not None:
+        logger.warning(
+            "Shopify shop link rejected | reason=already_linked_to_another_workspace shop_domain=%s "
+            "requesting_workspace_id=%s conflicting_workspace_id=%s conflicting_shop_integration_id=%s "
+            "conflicting_status=%s",
+            shop_domain,
+            workspace_id,
+            conflict.workspace_id,
+            conflict.client_id,
+            conflict.status.value,
+        )
         raise ConflictError("This Shopify shop is already linked to another workspace.")
 
     existing = (
         await session.execute(_same_workspace_shop_rows_stmt(workspace_id=workspace_id, shop_domain=shop_domain))
     ).scalars().first()
+    logger.debug(
+        "Shopify shop link resolving existing row | workspace_id=%s shop_domain=%s existing_found=%s "
+        "existing_status=%s",
+        workspace_id,
+        shop_domain,
+        existing is not None,
+        existing.status.value if existing is not None else None,
+    )
 
     if existing is None:
         integration = ShopifyShopIntegration(
@@ -153,5 +174,14 @@ async def link_or_update_shopify_shop_record(
             "extra_scopes": list(comparison.extra),
         },
         created_by_id=user_id,
+    )
+    logger.info(
+        "Shopify shop link resolved | shop_integration_id=%s shop_domain=%s event_type=%s status=%s "
+        "missing_scopes=%s",
+        integration.client_id,
+        shop_domain,
+        event_type.value,
+        integration.status.value,
+        list(comparison.missing),
     )
     return integration

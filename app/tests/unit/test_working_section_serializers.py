@@ -27,14 +27,16 @@ def test_serialize_working_section_member_includes_working_section_id():
 
 
 @pytest.mark.unit
-def test_serialize_working_section_compact_includes_allows_batch_working():
+def test_serialize_working_section_compact_includes_shopify_modification_flag():
     result = serialize_working_section_compact(
         client_id="wse_1",
         name="Ground oil",
         image="https://example.com/ground-oil.webp",
         order_list=2,
         allows_batch_working=True,
+        allows_shopify_product_modifications=False,
     )
 
     assert result["client_id"] == "wse_1"
     assert result["allows_batch_working"] is True
+    assert result["allows_shopify_product_modifications"] is False

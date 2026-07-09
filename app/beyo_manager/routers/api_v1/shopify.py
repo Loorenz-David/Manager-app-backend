@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -8,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER
+from beyo_manager.services.commands.shopify.create_shopify_reauthorize_url import create_shopify_reauthorize_url
+from beyo_manager.services.commands.shopify.disconnect_shopify_shop import disconnect_shopify_shop
+from beyo_manager.services.commands.shopify.enqueue_shopify_webhook_sync_for_shop import (
+    enqueue_shopify_webhook_sync_for_shop,
+)
+from beyo_manager.services.commands.shopify.enqueue_shopify_webhook_sync_for_workspace import (
+    enqueue_shopify_webhook_sync_for_workspace,
+)
 from beyo_manager.services.commands.shopify._callback_errors import ShopifyOAuthCallbackError
 from beyo_manager.services.commands.shopify.handle_shopify_oauth_callback import (
     build_callback_redirect_payload,
@@ -16,7 +26,18 @@ from beyo_manager.services.commands.shopify.handle_shopify_oauth_callback import
 )
 from beyo_manager.services.commands.shopify.create_shopify_install_url import create_shopify_install_url
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.shopify.get_shopify_scope_status import get_shopify_scope_status
+from beyo_manager.services.queries.shopify.get_shopify_shop_integration import get_shopify_shop_integration
+from beyo_manager.services.queries.shopify.get_shopify_webhook_history_records import (
+    get_shopify_webhook_history_records,
+)
+from beyo_manager.services.queries.shopify.list_shopify_shop_integrations import list_shopify_shop_integrations
+from beyo_manager.services.queries.shopify.lookup_shopify_customers_by_product_identity import (
+    lookup_shopify_customers_by_product_identity,
+)
 from beyo_manager.services.run_service import run_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -26,14 +47,169 @@ class ShopifyInstallUrlBody(BaseModel):
     redirect_after_success: str | None = None
 
 
+class ShopifyShopIntegrationPathBody(BaseModel):
+    shop_integration_id: str
+
+
+class ShopifyProductIdentityCustomerLookupBody(BaseModel):
+    article_number: str | None = None
+    sku: str | None = None
+
+
 @router.post("/install-url")
 async def create_shopify_install_url_route(
     body: ShopifyInstallUrlBody,
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
     session: AsyncSession = Depends(get_db),
 ):
+    logger.debug(
+        "Shopify install-url route hit | shop_domain=%s redirect_after_success=%s",
+        body.shop_domain,
+        body.redirect_after_success,
+    )
     outcome = await run_service(
         create_shopify_install_url,
+        ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
+    )
+    if not outcome.success:
+        logger.warning("Shopify install-url route failed | error=%s", outcome.error)
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/shops")
+async def list_shopify_shops_route(
+    request: Request,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        list_shopify_shop_integrations,
+        ServiceContext(identity=claims, incoming_data={}, query_params=dict(request.query_params), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/shops/{shop_integration_id}")
+async def get_shopify_shop_route(
+    shop_integration_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_shopify_shop_integration,
+        ServiceContext(identity=claims, incoming_data={"shop_integration_id": shop_integration_id}, session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/shops/{shop_integration_id}/reauthorize-url")
+async def create_shopify_reauthorize_url_route(
+    shop_integration_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        create_shopify_reauthorize_url,
+        ServiceContext(identity=claims, incoming_data={"shop_integration_id": shop_integration_id}, session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.delete("/shops/{shop_integration_id}")
+async def disconnect_shopify_shop_route(
+    shop_integration_id: str,
+    claims: dict = Depends(require_roles([ADMIN])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        disconnect_shopify_shop,
+        ServiceContext(identity=claims, incoming_data={"shop_integration_id": shop_integration_id}, session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/shops/{shop_integration_id}/webhooks/sync")
+async def enqueue_shopify_webhook_sync_for_shop_route(
+    shop_integration_id: str,
+    claims: dict = Depends(require_roles([ADMIN])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        enqueue_shopify_webhook_sync_for_shop,
+        ServiceContext(identity=claims, incoming_data={"shop_integration_id": shop_integration_id}, session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/shops/{shop_integration_id}/webhooks/history")
+async def get_shopify_webhook_history_route(
+    shop_integration_id: str,
+    request: Request,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_shopify_webhook_history_records,
+        ServiceContext(
+            identity=claims,
+            incoming_data={"shop_integration_id": shop_integration_id},
+            query_params=dict(request.query_params),
+            session=session,
+        ),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/webhooks/sync")
+async def enqueue_shopify_webhook_sync_for_workspace_route(
+    claims: dict = Depends(require_roles([ADMIN])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        enqueue_shopify_webhook_sync_for_workspace,
+        ServiceContext(identity=claims, incoming_data={}, session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/scopes")
+async def get_shopify_scopes_route(
+    request: Request,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_shopify_scope_status,
+        ServiceContext(identity=claims, incoming_data={}, query_params=dict(request.query_params), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/customers/by-product-identity")
+async def lookup_shopify_customers_by_product_identity_route(
+    body: ShopifyProductIdentityCustomerLookupBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        lookup_shopify_customers_by_product_identity,
         ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
     )
     if not outcome.success:
@@ -48,11 +224,20 @@ async def shopify_oauth_callback_route(
 ):
     incoming_data = dict(request.query_params)
     incoming_data["raw_query_string"] = request.url.query
+    logger.debug(
+        "Shopify OAuth callback route hit | path=%s query=%s",
+        request.url.path,
+        request.url.query,
+    )
     outcome = await run_service(
         handle_shopify_oauth_callback,
         ServiceContext(identity={}, incoming_data=incoming_data, session=session),
     )
     if outcome.success:
+        logger.info(
+            "Shopify OAuth callback redirecting on success | redirect_url=%s",
+            outcome.data["redirect_url"],
+        )
         return RedirectResponse(outcome.data["redirect_url"], status_code=302)
 
     if isinstance(outcome.error, ShopifyOAuthCallbackError):
@@ -61,6 +246,12 @@ async def shopify_oauth_callback_route(
             shop_domain=outcome.error.shop_domain,
             error_code=outcome.error.error_code,
             redirect_key=outcome.error.redirect_key,
+        )
+        logger.warning(
+            "Shopify OAuth callback redirecting on failure | error_code=%s shop_domain=%s redirect_url=%s",
+            outcome.error.error_code,
+            outcome.error.shop_domain,
+            redirect_payload["redirect_url"],
         )
         return RedirectResponse(redirect_payload["redirect_url"], status_code=302)
 
@@ -72,5 +263,14 @@ async def shopify_oauth_callback_route(
             redirect_key="default",
         )
     except Exception:
+        logger.error(
+            "Shopify OAuth callback failed with an unhandled error and could not build a redirect | error=%s",
+            outcome.error,
+        )
         return build_err(outcome.error)
+    logger.error(
+        "Shopify OAuth callback redirecting on unhandled error | error=%s redirect_url=%s",
+        outcome.error,
+        redirect_payload["redirect_url"],
+    )
     return RedirectResponse(redirect_payload["redirect_url"], status_code=302)

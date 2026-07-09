@@ -153,6 +153,7 @@ async def test_batch_flag_round_trips_and_new_step_snapshots_follow_section_valu
             incoming_data={
                 "name": "Ground oil",
                 "allows_batch_working": True,
+                "allows_shopify_product_modifications": True,
             },
         )
     )
@@ -235,6 +236,7 @@ async def test_batch_flag_round_trips_and_new_step_snapshots_follow_section_valu
         )
     )
     assert get_before_edit["working_section"]["allows_batch_working"] is True
+    assert get_before_edit["working_section"]["allows_shopify_product_modifications"] is True
 
     await edit_working_section(
         _ctx(
@@ -244,6 +246,7 @@ async def test_batch_flag_round_trips_and_new_step_snapshots_follow_section_valu
             incoming_data={
                 "client_id": batch_section_id,
                 "allows_batch_working": False,
+                "allows_shopify_product_modifications": False,
             },
         )
     )
@@ -257,6 +260,7 @@ async def test_batch_flag_round_trips_and_new_step_snapshots_follow_section_valu
         )
     )
     assert get_after_edit["working_section"]["allows_batch_working"] is False
+    assert get_after_edit["working_section"]["allows_shopify_product_modifications"] is False
 
     worker_sections = await get_worker_working_sections(
         _ctx(
@@ -271,6 +275,10 @@ async def test_batch_flag_round_trips_and_new_step_snapshots_follow_section_valu
     }
     assert worker_section_by_id[batch_section_id]["allows_batch_working"] is False
     assert worker_section_by_id[non_batch_section_id]["allows_batch_working"] is False
+    assert worker_section_by_id[batch_section_id]["allows_shopify_product_modifications"] is False
+    assert (
+        worker_section_by_id[non_batch_section_id]["allows_shopify_product_modifications"] is False
+    )
 
     second_add_result = await add_task_steps(
         _ctx(

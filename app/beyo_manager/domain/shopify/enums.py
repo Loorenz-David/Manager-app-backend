@@ -42,6 +42,7 @@ class ShopifyIntegrationEventTypeEnum(StrEnum):
     WEBHOOK_PROCESSED = "webhook_processed"
     HEALTH_CHECK = "health_check"
     ERROR = "error"
+    DISCONNECT = "disconnect"
 
 
 class ShopifyIntegrationEventSeverityEnum(StrEnum):
