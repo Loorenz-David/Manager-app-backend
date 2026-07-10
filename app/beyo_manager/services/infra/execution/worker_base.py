@@ -28,6 +28,7 @@ HANDLER_TIMEOUT_SECONDS: dict[str, int] = {
     "send_coordination_email_batch": 300,   # 5 minutes
     "send_email_messages":           300,   # 5 minutes
     "location_tracker_push_locations": 300, # 5 minutes
+    "shopify_process_products":      900,   # 15 minutes
 }
 
 TaskHandlerFn = Callable[[dict, str], Awaitable[None]]

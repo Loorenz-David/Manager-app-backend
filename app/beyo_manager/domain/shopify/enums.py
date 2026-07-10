@@ -34,6 +34,18 @@ class ShopifyWebhookIntakeStatusEnum(StrEnum):
     IGNORED = "ignored"
 
 
+class ShopifyProductSyncOperationEnum(StrEnum):
+    CREATE = "create"
+    UPDATE = "update"
+
+
+class ShopifyProductSyncItemStatusEnum(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class ShopifyIntegrationEventTypeEnum(StrEnum):
     INSTALL = "install"
     REAUTHORIZE = "reauthorize"
@@ -41,6 +53,7 @@ class ShopifyIntegrationEventTypeEnum(StrEnum):
     WEBHOOK_RECEIVED = "webhook_received"
     WEBHOOK_PROCESSED = "webhook_processed"
     HEALTH_CHECK = "health_check"
+    PRODUCT_SYNC = "product_sync"
     ERROR = "error"
     DISCONNECT = "disconnect"
 

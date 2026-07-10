@@ -4,13 +4,13 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.shopify.create_shopify_reauthorize_url import create_shopify_reauthorize_url
 from beyo_manager.services.commands.shopify.disconnect_shopify_shop import disconnect_shopify_shop
 from beyo_manager.services.commands.shopify.enqueue_shopify_webhook_sync_for_shop import (
@@ -24,6 +24,7 @@ from beyo_manager.services.commands.shopify.handle_shopify_oauth_callback import
     build_callback_redirect_payload,
     handle_shopify_oauth_callback,
 )
+from beyo_manager.services.commands.shopify.process_shopify_products import process_shopify_products
 from beyo_manager.services.commands.shopify.create_shopify_install_url import create_shopify_install_url
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.shopify.get_shopify_scope_status import get_shopify_scope_status
@@ -56,6 +57,31 @@ class ShopifyProductIdentityCustomerLookupBody(BaseModel):
     sku: str | None = None
 
 
+class ShopifyProductSyncWeightBody(BaseModel):
+    value: float
+    unit: str
+
+
+class ShopifyProductSyncItemBody(BaseModel):
+    client_id: str
+    target_shop_integration_ids: list[str] | None = None
+    title: str
+    description: str | None = None
+    status: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    product_category: str | None = None
+    price: str | None = None
+    weight: ShopifyProductSyncWeightBody | None = None
+    sku: str | None = None
+    item_article_number: str | None = None
+    article_number: str | None = None
+    metafields: dict[str, object] = Field(default_factory=dict)
+
+
+class ShopifyProcessProductsBody(BaseModel):
+    items: list[ShopifyProductSyncItemBody]
+
+
 @router.post("/install-url")
 async def create_shopify_install_url_route(
     body: ShopifyInstallUrlBody,
@@ -80,7 +106,7 @@ async def create_shopify_install_url_route(
 @router.get("/shops")
 async def list_shopify_shops_route(
     request: Request,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     outcome = await run_service(
@@ -95,7 +121,7 @@ async def list_shopify_shops_route(
 @router.get("/shops/{shop_integration_id}")
 async def get_shopify_shop_route(
     shop_integration_id: str,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     outcome = await run_service(
@@ -210,6 +236,21 @@ async def lookup_shopify_customers_by_product_identity_route(
 ):
     outcome = await run_service(
         lookup_shopify_customers_by_product_identity,
+        ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/products/process")
+async def process_shopify_products_route(
+    body: ShopifyProcessProductsBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        process_shopify_products,
         ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
     )
     if not outcome.success:

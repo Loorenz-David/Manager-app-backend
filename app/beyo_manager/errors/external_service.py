@@ -39,3 +39,16 @@ class ShopifyGraphQLNonRetryableError(ShopifyGraphQLError):
         error_code: str = "shopify_graphql_non_retryable_error",
     ) -> None:
         super().__init__(message, retryable=False, error_code=error_code)
+
+
+class ShopifyProductLookupAmbiguousError(DomainError):
+    http_status = 409
+
+    def __init__(
+        self,
+        message: str = "Multiple Shopify products matched the same identity.",
+        *,
+        error_code: str = "ambiguous_product_match",
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code

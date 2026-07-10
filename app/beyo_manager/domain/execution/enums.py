@@ -53,6 +53,7 @@ class TaskType(enum.Enum):
     SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP = "shopify_sync_webhooks_for_shop"
     SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP = "shopify_remove_webhooks_for_shop"
     SHOPIFY_RECONCILE_SHOP = "shopify_reconcile_shop"
+    SHOPIFY_PROCESS_PRODUCTS = "shopify_process_products"
 
 
 class EventTaskOriginSourceEnum(enum.Enum):

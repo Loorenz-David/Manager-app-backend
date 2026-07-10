@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_shopify_product_sync_20260709`
-- Status: `under_construction`
-- Owner agent: `Codex`
+- Status: `archived`
+- Owner agent: `Codex` (implementation), `Claude` (closeout/validation)
 - Created at (UTC): `2026-07-09T00:00:00Z`
-- Last updated at (UTC): `2026-07-09T00:00:00Z`
+- Last updated at (UTC): `2026-07-10T00:00:00Z`
 - Related issue/ticket: `Shopify create-or-update product capability`
 - Intention plan: `backend/docs/architecture/under_construction/intention/INTENTION_shopify_product_sync_20260709.md`
 
@@ -42,14 +42,16 @@
   - Production deployment/systemd wiring (the worker process already exists and already runs this queue; no new process to deploy).
 - Assumptions:
   - The current single Alembic head is `d4f8a1b2c3e4` (confirmed via `python -m alembic heads` on `2026-07-09`, from `app/`). **Re-run `alembic heads` immediately before writing the first migration** — this branch has many uncommitted changes and the head may have moved.
-  - `settings.shopify_api_version` is `"2026-01"` by default (`app/beyo_manager/config.py:111`). The exact GraphQL mutation field names for `productCreate`/`productUpdate`/`productVariantsBulkUpdate`/`metafieldsSet` at this API version are **not verified** in this plan — see "Clarifications required" item 1.
+  - `settings.shopify_api_version` is `"2026-01"` by default (`app/beyo_manager/config.py:111`). The mutation names and top-level argument shapes for `productCreate`/`productUpdate`/`productVariantsBulkUpdate`/`metafieldsSet` have been verified against Shopify's current Admin GraphQL documentation (see "Resolved decisions" item 7) — only version-specific, field-level behavior at `settings.shopify_api_version` remains to be confirmed via a live introspection/smoke test before final merge, per "Clarifications required" item 2.
   - `ShopifyShopIntegration.access_token_encrypted` and workspace-scoping conventions are unchanged from `57_shopify_integration.md`.
   - The frontend's per-item `client_id` (Section 8 of the source spec) is a frontend-local identifier, not a ManagerBeyo `Item`/`Upholstery` `client_id` — this plan does not attempt to resolve it against any internal catalog table.
 
 ## Clarifications required
 
-- [ ] `Should this capability additionally gate on the caller's current WorkingSection.allows_shopify_product_modifications flag (app/beyo_manager/models/tables/working_sections/working_section.py), in addition to require_roles([ADMIN, MANAGER])?` — This boolean column was added to `WorkingSection` in this same working tree (uncommitted, already plumbed through `create_working_section`/`edit_working_section`/serializers/queries) but is not yet consumed as an authorization check anywhere. It is plausible it was added specifically to gate this capability. The source spec for this plan never mentions working sections. **Recommendation**: do not gate on it in this phase — use role-based gating only (`require_roles([ADMIN, MANAGER])`), consistent with every other Shopify admin route, and leave the flag for the user to wire into a future phase if it was intended for a different (e.g. shop-floor worker UI) purpose. This blocks nothing structural; Codex can proceed with the recommendation, but the user should confirm before this plan moves to `approved`.
-- [ ] `Exact Shopify Admin GraphQL Input field names for ProductCreateInput / ProductUpdateInput / ProductVariantsBulkInput / MetafieldsSetInput at api_version=settings.shopify_api_version.` — This plan's Phase 2 (GraphQL infra) provides a best-known-shape draft based on Shopify's documented Admin API design (see "Resolved decisions" item 7 and the mutation drafts in Implementation plan step 5), but it has not been verified against a live schema introspection call. **This blocks only Phase 2's mutation-writing step**, not the rest of the plan (DB schema, router, task wiring, lookup-by-search — which reuses the already-proven `productVariants(query: ...)` search pattern from `product_identity_client.py` — can all be implemented first). Before writing the final mutation strings, Codex must either introspect the live schema (`{ __type(name: "ProductVariantsBulkInput") { inputFields { name type { name } } } }` via `execute_shopify_graphql` against a real connected dev shop) or consult Shopify's official Admin API changelog for `2026-01`, and record the confirmed field names in this plan's Review log before implementing Phase 2.
+Both items below are now resolved; kept here (checked) for the historical record rather than deleted.
+
+- [x] `Should this capability additionally gate on the caller's current WorkingSection.allows_shopify_product_modifications flag, in addition to require_roles([ADMIN, MANAGER])?` — **Resolved: no.** `docs/architecture/implemented_summaries/SUMMARY_PLAN_working_section_allows_shopify_product_modifications_20260709.md` confirms this flag was added by an unrelated, same-day plan as a general-purpose `WorkingSection` CRUD field (threaded through create/edit/serializers/queries alongside `allows_batch_working`), with no described consumer and no connection to this Shopify product-sync capability. Role-based gating only (`require_roles([ADMIN, MANAGER])`) is implemented, matching the recommendation.
+- [x] `Live-schema/dev-shop confirmation of field-level behavior for ProductCreateInput / ProductUpdateInput / ProductVariantsBulkInput / MetafieldsSetInput at api_version=settings.shopify_api_version.` — **Partially resolved, documented as a known limitation.** The mutation names and main argument shapes (`ProductCreateInput`/`ProductUpdateInput` via a `product:` argument, `sku` nested under `ProductVariantsBulkInput.inventoryItem.sku`, `MetafieldsSetInput`'s five required fields) are implemented exactly as corrected in the 2026-07-09 review pass and covered by unit tests asserting the exact query/variable shapes sent to `execute_shopify_graphql`. A live schema introspection or dev-shop smoke test against a real connected Shopify store was **not** run in this session (no live Shopify shop/credentials available) — this remains an explicit, documented known gap; see "Known gaps or deferred items" in the implementation summary.
 
 ## Acceptance criteria
 
@@ -70,10 +72,10 @@ These design questions are resolved for this plan by direct inspection of the ac
 1. **No internal Item/Upholstery catalog linkage.** This capability operates purely on the fields present in the request payload; the caller's per-item `client_id` is treated as an opaque frontend-local identifier, never resolved against `Item`/`Upholstery`/any other ManagerBeyo catalog table. (Confirmed by direct inspection: `models/tables/upholstery/upholstery.py` has no `sku`/`shopify_product_id` field, and the source spec's own request contract never references an internal entity id.)
 2. **Role gating — `ADMIN` + `MANAGER`, not `SELLER`.** Unlike the read-only `lookup_shopify_customers_by_product_identity` route (which deliberately added `SELLER` as a first-time carve-out for a read-only lookup), this capability writes to Shopify and creates durable DB rows — kept at the same gating level as every other state-mutating Shopify admin route pair (`ADMIN`+`MANAGER` for actions that don't disable/remove state, `ADMIN`-only reserved for destructive ones like disconnect). `SELLER` can be added later behind an explicit permission if shop-floor product entry becomes a requirement.
 3. **Omitted `target_shop_integration_ids` -> every `ACTIVE` shop integration in the workspace.** Matches `enqueue_shopify_webhook_sync_for_workspace`'s already-established "fan out to every shop in the workspace" precedent (`57_shopify_integration.md`'s "Supporting multiple shops per workspace" section) rather than rejecting an otherwise well-formed request that simply didn't specify shops.
-4. **`product_category` maps only to Shopify's legacy `productType` string field**, never the structured `TaxonomyCategory` taxonomy. The taxonomy requires a separate category-tree lookup dependency this plan does not introduce; `productType` is a plain string on `ProductInput` with no such dependency. A future phase can add taxonomy support without changing this plan's schema (the normalized payload already carries a plain string).
+4. **`product_category` maps only to Shopify's legacy `productType` string field**, never the structured `TaxonomyCategory` taxonomy. The taxonomy requires a separate category-tree lookup dependency this plan does not introduce; `productType` is a plain string on both `ProductCreateInput` and `ProductUpdateInput` with no such dependency. A future phase can add taxonomy support without changing this plan's schema (the normalized payload already carries a plain string).
 5. **Two or more exact SKU/barcode matches across distinct parent products is an explicit failure, never a silent pick.** `select_exact_variant_match` (Phase 3) raises `ShopifyProductLookupAmbiguousError` (`error_code="ambiguous_product_match"`) for that row rather than guessing — writing to the wrong product is a worse outcome than a visible per-row failure the frontend can surface to the user.
-6. **Metafields use one fixed `namespace="custom"` and coerce every value to `type: "single_line_text_field"` in phase 1.** The source spec confirms the backend does not need to validate metafield business meaning and defers the namespace decision to this plan; a single fixed namespace with string-typed values is the smallest safe default. Richer per-key typing/namespacing is a documented future enhancement, not attempted here.
-7. **The GraphQL mutation shapes in Phase 2 are a best-known draft, not verified ground truth.** They follow Shopify's documented Admin API design (`productCreate`/`productUpdate` for product-level fields, `productVariantsBulkUpdate` for the single default variant, `metafieldsSet` for metafields — all already-established mutation names in Shopify's Admin API), reusing this codebase's proven `productVariants(query: ...)` search shape unmodified for lookup. Exact input-object field names must still be confirmed against the live schema for `settings.shopify_api_version` before implementation — see "Clarifications required" item 2.
+6. **Metafields use one fixed `namespace="custom"` and coerce every value to `type: "single_line_text_field"` in phase 1.** Each `MetafieldsSetInput` entry the infra layer sends includes `ownerId` (the product GID), `namespace="custom"`, `key` (from the frontend's metafield dict key), `type="single_line_text_field"`, and `value=str(value)`. The source spec confirms the backend does not need to validate metafield business meaning and defers the namespace decision to this plan; a single fixed namespace with string-typed values is the smallest safe default. Richer per-key typing/namespacing is a documented future enhancement, not attempted here.
+7. **The GraphQL mutation names and main argument shapes in Phase 2 have been verified against Shopify's current Admin GraphQL documentation** — `productCreate(product: ProductCreateInput!)`, `productUpdate(product: ProductUpdateInput!)`, `productVariantsBulkUpdate(productId: ID!, variants: [ProductVariantsBulkInput!]!)`, `metafieldsSet(metafields: [MetafieldsSetInput!]!)` — reusing this codebase's proven `productVariants(query: ...)` search shape unmodified for lookup. **`ProductInput` (the older, deprecated combined input type used with an `input:` argument) must not be implemented** — `productCreate`/`productUpdate` take the split `ProductCreateInput`/`ProductUpdateInput` types via a `product:` argument instead. Within `ProductVariantsBulkInput`, `sku` is **not** a top-level field — it lives under `inventoryItem.sku`; `barcode` and `price` remain top-level variant fields; `weight` lives under `inventoryItem.measurement.weight`. Field-level behavior can still vary by exact API version, so a live schema introspection or dev-shop smoke test against `settings.shopify_api_version` remains required before final merge — see "Clarifications required" item 2 — but the mutation/input shapes below are the ones to implement, not a placeholder.
 
 ## Contracts and skills
 
@@ -216,7 +218,7 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 
 ### Phase 2 — GraphQL infra (product lookup, create, update, metafields)
 
-**Blocked on "Clarifications required" item 2 for the exact mutation field names — do the schema verification first.**
+The mutation names and argument shapes below are verified against Shopify's current Admin GraphQL documentation (see "Resolved decisions" item 7) and should be implemented as written. A live schema introspection or dev-shop smoke test against `settings.shopify_api_version` is still required before final merge — "Clarifications required" item 2 — but that is a pre-merge confirmation step, not a blocker on writing this code.
 
 8. Create `services/infra/shopify/product_sync_client.py`. Lookup query copies `product_identity_client.py`'s proven shape exactly:
    ```graphql
@@ -228,17 +230,17 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
    ```
    `searchQuery` built the same way as `product_identity_client.py`'s `_quote_shopify_search_term` (`sku:"value"` / `barcode:"value"`) — duplicate this small private helper locally rather than importing another file's `_`-prefixed function, matching this codebase's existing per-file-helper convention.
 
-   Draft mutation shapes (unverified — confirm against live schema first):
+   Verified mutation shapes (see "Resolved decisions" item 7 — implement as written, live-schema/dev-shop confirmation still required before final merge per "Clarifications required" item 2):
    ```graphql
-   mutation CreateProduct($input: ProductInput!) {
-     productCreate(input: $input) {
+   mutation CreateProduct($product: ProductCreateInput!) {
+     productCreate(product: $product) {
        product { id status variants(first: 1) { edges { node { id } } } }
        userErrors { field message }
      }
    }
 
-   mutation UpdateProduct($input: ProductInput!) {
-     productUpdate(input: $input) {
+   mutation UpdateProduct($product: ProductUpdateInput!) {
+     productUpdate(product: $product) {
        product { id status }
        userErrors { field message }
      }
@@ -246,7 +248,7 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 
    mutation BulkUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-       productVariants { id sku barcode }
+       productVariants { id barcode inventoryItem { sku } }
        userErrors { field message }
      }
    }
@@ -258,15 +260,33 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
      }
    }
    ```
+   **`productCreate`/`productUpdate` take a `product:` argument of type `ProductCreateInput`/`ProductUpdateInput` respectively — never the older combined `ProductInput` with an `input:` argument.** Product-level normalized fields map as: `title` -> `title`, `description` -> `descriptionHtml` (not `bodyHtml`), `status` -> `status`, `tags` -> `tags`, `product_category` -> `productType`.
+
+   **`ProductVariantsBulkInput` does not have a top-level `sku` field.** The variant-update payload each call to `productVariantsBulkUpdate` sends is shaped like:
+   ```json
+   {
+     "id": "gid://shopify/ProductVariant/...",
+     "barcode": "ARTICLE_NUMBER_HERE",
+     "price": "199.00",
+     "inventoryItem": {
+       "sku": "SKU_HERE",
+       "measurement": { "weight": { "value": 1.2, "unit": "KILOGRAMS" } }
+     }
+   }
+   ```
+   i.e. `barcode` and `price` are top-level variant fields; `sku` and `weight` both live under `inventoryItem` (`inventoryItem.sku`, `inventoryItem.measurement.weight`).
+
+   Each `MetafieldsSetInput` entry sent to `metafieldsSet` includes `ownerId` (the product GID), `namespace="custom"`, `key`, `type="single_line_text_field"`, `value=str(value)` — per "Resolved decisions" item 6.
+
    Every mutation call is followed by `raise_for_graphql_user_errors(user_errors=..., operation_name=..., shop_domain=...)` — reuse unmodified, exactly as every existing Shopify infra function does.
 
 9. `find_product_variant_by_identity(*, shop_domain, access_token_encrypted, sku, barcode) -> list[dict]` — runs the SKU search first (if `sku` given), then the barcode search (if `barcode` given and SKU search returned no exact match), mirroring `_lookup_customer_matches_for_shop`'s SKU-preferred/barcode-fallback precedence from `services/queries/shopify/lookup_shopify_customers_by_product_identity.py`.
 
-10. `create_shopify_product(*, shop_domain, access_token_encrypted, normalized_payload) -> dict` — calls `productCreate` with product-level fields (`title`, `descriptionHtml`, `status` defaulting to `DRAFT`, `tags`, `productType`), reads the default variant id off the response, then calls `productVariantsBulkUpdate` with SKU/barcode/price/`inventoryItem.measurement.weight`. Returns `{"shopify_product_id", "shopify_variant_id"}`.
+10. `create_shopify_product(*, shop_domain, access_token_encrypted, normalized_payload) -> dict` — calls `productCreate(product: ProductCreateInput!)` with product-level fields (`title`, `descriptionHtml`, `status` defaulting to `DRAFT`, `tags`, `productType`), reads the default variant id off the response, then calls `productVariantsBulkUpdate` with a `ProductVariantsBulkInput` carrying `barcode`, `price` top-level and `inventoryItem: {sku, measurement: {weight}}` nested (see Phase 2's verified variant-input shape above — `sku` is never a top-level variant field). Returns `{"shopify_product_id", "shopify_variant_id"}`.
 
-11. `update_shopify_product(*, shop_domain, access_token_encrypted, shopify_product_id, shopify_variant_id, normalized_payload) -> dict` — calls `productUpdate` for product-level fields (only if any are present in the normalized payload), then `productVariantsBulkUpdate` on the already-known `shopify_variant_id` for variant-level fields.
+11. `update_shopify_product(*, shop_domain, access_token_encrypted, shopify_product_id, shopify_variant_id, normalized_payload) -> dict` — calls `productUpdate(product: ProductUpdateInput!)` for product-level fields (only if any are present in the normalized payload), then `productVariantsBulkUpdate` on the already-known `shopify_variant_id` for variant-level fields, using the same `barcode`/`price` top-level + `inventoryItem.sku`/`inventoryItem.measurement.weight` nested shape as `create_shopify_product`.
 
-12. `set_shopify_product_metafields(*, shop_domain, access_token_encrypted, shopify_product_id, metafields) -> None` — one `metafieldsSet` call per product, `namespace="custom"` fixed for phase 1 (per "Resolved decisions" item 6), all values coerced to `type: "single_line_text_field"` strings.
+12. `set_shopify_product_metafields(*, shop_domain, access_token_encrypted, shopify_product_id, metafields) -> None` — one `metafieldsSet` call per product; each `MetafieldsSetInput` entry sets `ownerId=shopify_product_id`, `namespace="custom"` fixed for phase 1 (per "Resolved decisions" item 6), `key` from the frontend's metafield dict, `type="single_line_text_field"`, `value=str(value)`.
 
 ### Phase 3 — Domain layer (identity matching, payload normalization)
 
@@ -281,7 +301,10 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 14. Add `ShopifyProductLookupAmbiguousError` to `errors/external_service.py` (or a new small `errors/` addition) as a `DomainError` subclass, `http_status=409`.
 
 15. Create `domain/shopify/product_sync_payloads.py`:
-    - `build_normalized_product_sync_payload(item: ProcessShopifyProductItemRequest) -> dict` — pure function, no I/O. Maps: `title`, `description` -> `descriptionHtml`, `status` (default `"draft"` if omitted — the defaults layer described in the source spec, kept as one small dict-merge function so it's trivially extendable later), `tags`, `product_category` -> `productType`, `price` (kept as the Shopify decimal-string format), `weight`/`weight_unit` -> `{"value": ..., "unit": <mapped WeightUnit>}`, `sku`, identity value (`item_article_number`/`article_number` -> `barcode`), `metafields` dict -> a list of `{"key", "value", "type": "single_line_text_field"}` (namespace applied at the infra layer, not here).
+    - `build_normalized_product_sync_payload(item: ProcessShopifyProductItemRequest) -> dict` — pure function, no I/O. Produces a dict shaped so the infra layer (Phase 2) can pass its pieces straight through to the two mutations without further mapping:
+      - Product-level (-> `ProductCreateInput`/`ProductUpdateInput`): `title` -> `title`, `description` -> `descriptionHtml`, `status` (default `"draft"` if omitted — the defaults layer described in the source spec, kept as one small dict-merge function so it's trivially extendable later), `tags` -> `tags`, `product_category` -> `productType`.
+      - Variant-level (-> `ProductVariantsBulkInput`, nested exactly as Shopify expects — **not flattened**): `price` (kept as the Shopify decimal-string format) and identity value (`item_article_number`/`article_number` -> `barcode`) stay **top-level** variant keys; `sku` -> `inventoryItem.sku`; `weight`/`weight_unit` -> `inventoryItem.measurement.weight` = `{"value": ..., "unit": <mapped WeightUnit>}`. i.e. the normalized payload's variant section already mirrors the `inventoryItem`-nested shape 1:1, so `create_shopify_product`/`update_shopify_product` do not need to re-nest anything.
+      - `metafields` dict -> a list of `{"key", "value": str(value), "type": "single_line_text_field"}` (namespace applied at the infra layer, not here, per "Resolved decisions" item 6).
     - Weight unit mapping table: `{"kg": "KILOGRAMS", "g": "GRAMS", "lb": "POUNDS", "oz": "OUNCES"}` — unrecognized unit raises `ValidationError` in the request parser (Phase 4), not here (this function only runs on already-validated input).
 
 ### Phase 4 — Command (router-triggered: validate, resolve shops, normalize, persist, enqueue)
@@ -467,8 +490,8 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 
 26. Tests (mirroring the existing `tests/{unit,integration}/.../shopify/` tree exactly):
     - `tests/unit/domain/shopify/test_product_sync_identity.py` — 0/1/ambiguous exact-match cases.
-    - `tests/unit/domain/shopify/test_product_sync_payloads.py` — normalizer defaults (status->draft), identity mapping (`item_article_number`->`barcode`), weight-unit mapping.
-    - `tests/unit/services/infra/shopify/test_product_sync_client.py` — mock `execute_shopify_graphql`, assert query/variables shape per function.
+    - `tests/unit/domain/shopify/test_product_sync_payloads.py` — normalizer defaults (status->draft), identity mapping (`item_article_number`->`barcode`, `barcode` stays top-level in the variant section), `sku` is normalized under `inventoryItem.sku` (not top-level), weight is normalized under `inventoryItem.measurement.weight`, weight-unit mapping, metafields normalize to `{"key", "value", "type": "single_line_text_field"}` per entry.
+    - `tests/unit/services/infra/shopify/test_product_sync_client.py` — mock `execute_shopify_graphql`, assert query/variables shape per function, specifically: `create_shopify_product`/`update_shopify_product` call `productCreate`/`productUpdate` with a `product` variable typed as `ProductCreateInput`/`ProductUpdateInput` (never an `input` variable / `ProductInput`); `productVariantsBulkUpdate`'s `variants` payload has no top-level `sku` key and has `barcode` top-level; `set_shopify_product_metafields` sends `MetafieldsSetInput` entries each containing `ownerId`, `namespace`, `key`, `type`, and `value`.
     - `tests/unit/services/commands/shopify/test_process_shopify_products.py` — request validation (identity required, weight unit validation), monkeypatched session.
     - `tests/integration/services/commands/shopify/test_process_shopify_products_integration.py` — DB-backed: omitted `target_shop_integration_ids` fans out to every active shop; explicit foreign shop id -> `NotFound`; persists one row per (item, shop); enqueues exactly one `SHOPIFY_PROCESS_PRODUCTS` task; writes at least one `PRODUCT_SYNC` event.
     - `tests/unit/services/tasks/shopify/test_handle_shopify_process_products.py` — one item succeeds, one fails (mocked GraphQL client), asserts both appear in the emitted socket payload's correct list, asserts the handler does not raise.
@@ -480,8 +503,10 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 
 ## Risks and mitigations
 
-- Risk: The draft GraphQL mutation field names (Phase 2) are wrong for `settings.shopify_api_version`, causing every create/update call to fail with `graphql_user_errors` or a schema validation error at runtime.
-  Mitigation: "Clarifications required" item 2 makes schema verification an explicit, blocking first sub-step of Phase 2, not an assumption baked into the merged code.
+- Risk: A fine-grained, version-specific field behaves differently than expected at `settings.shopify_api_version`, causing a create/update call to fail with `graphql_user_errors` or a schema validation error at runtime, even though the mutation names/main argument shapes (`ProductCreateInput`/`ProductUpdateInput`/`ProductVariantsBulkInput`/`MetafieldsSetInput`) are now confirmed correct.
+  Mitigation: "Clarifications required" item 2 keeps a live-schema introspection or dev-shop smoke test as a required pre-merge confirmation step, so a version-specific mismatch is caught before merge rather than assumed away.
+- Risk: Implementer copies the deprecated `ProductInput`/`input:` mutation shape (still findable in older Shopify examples/blog posts) instead of the required `ProductCreateInput`/`ProductUpdateInput` split via a `product:` argument, or flattens `sku` onto the top level of `ProductVariantsBulkInput` instead of nesting it under `inventoryItem.sku`.
+  Mitigation: "Resolved decisions" item 7 and the Phase 2 mutation drafts state both requirements explicitly and show the exact JSON shape to send; Phase 8's test list requires an explicit assertion that no `input`/`ProductInput` variable and no top-level `sku` key are ever sent.
 - Risk: A batch large enough to exceed the worker's handler timeout (Phase 5 step 22) leaves the task `IN_PROGRESS` until stale-task recovery resets it to `OPEN`, causing a full re-run of already-succeeded rows (this handler is not row-level idempotent across a full task retry).
   Mitigation: Cap batch size in the request parser (Phase 4 step 16) to a number the chosen timeout comfortably covers; document the chosen cap and timeout together in the Review log. A future phase could make `sync_one_product_sync_item` skip rows already in `SUCCEEDED`/`FAILED` at the top of the loop for full retry-idempotency — deliberately deferred here since the source spec did not request exactly-once retry semantics, only "one failure doesn't abort the batch."
 - Risk: Two exact SKU matches on genuinely different Shopify products (a real data-quality problem on the merchant's Shopify side) silently picks the wrong one to update.
@@ -508,9 +533,12 @@ The source spec names conceptual services (`find_shopify_products`, `create_shop
 ## Review log
 
 - `2026-07-09` `Claude`: Drafted this plan from a detailed user-authored capability spec, after reading `57_shopify_integration.md` end to end and the full existing Shopify router/worker/infra/domain/command/query/model/test code, the async-execution (`16_background_jobs.md`), router (`09_routers.md`), command (`06_commands.md`/`06_commands_local.md`), model (`03_models.md`), migration (`30_migrations.md`), testing (`15_testing.md`), and socket (`13_sockets.md`, found stale against the real `python-socketio` implementation) contracts, and confirming the current single Alembic head (`d4f8a1b2c3e4`) directly via `python -m alembic heads`. Discovered an already-added-but-unused `WorkingSection.allows_shopify_product_modifications` flag in the same uncommitted working tree and left it as an open clarification rather than guessing its intended purpose. Left the exact Shopify Admin GraphQL mutation field names as an explicit, scoped-to-Phase-2 open clarification rather than presenting an unverified guess as ground truth. Left in `under_construction` pending both clarifications.
+- `2026-07-09` `User/Claude review`: Corrected Phase 2's draft GraphQL mutation shapes against Shopify's current Admin API documentation. `productCreate`/`productUpdate` take a `product:` argument of type `ProductCreateInput`/`ProductUpdateInput` — the deprecated combined `ProductInput`/`input:` shape must not be implemented. `descriptionHtml` (not `bodyHtml`) confirmed correct for the description mapping. `productVariantsBulkUpdate`'s argument shape confirmed correct, but `sku` is not a top-level `ProductVariantsBulkInput` field — it must be nested under `inventoryItem.sku`, alongside `inventoryItem.measurement.weight` for weight; `barcode` and `price` remain top-level variant fields. `metafieldsSet`'s `MetafieldsSetInput` entries confirmed to require `ownerId`, `namespace`, `key`, `type`, and `value` explicitly. Updated "Resolved decisions" items 4, 6, 7; the "Clarifications required" item 2 wording (narrowed from "mutation shapes unverified" to "field-level, version-specific behavior needs a pre-merge live-schema/dev-shop confirmation"); the Phase 2 mutation drafts and steps 10-12; the Phase 3 normalizer mapping (step 15) to emit the already-nested `inventoryItem` shape; and the Phase 8 test list to assert the corrected shapes explicitly. Broader plan architecture (worker delegation, DB tracking table, router, command, batch behavior, socket-event strategy) unchanged.
+- `2026-07-10` `Codex`: Implemented the full plan per the corrected Phase 2 mutation shapes — schema/enums/task wiring (Phase 1), GraphQL infra client (Phase 2), domain identity-matching and payload normalizer (Phase 3), request parser + command (Phase 4), worker orchestrator + handler + registration (Phase 5), `emit_to_workspace_room` (Phase 6), router route (Phase 7), and a first pass of unit + integration tests (Phase 8, partial — frontend handoff doc update was left incomplete). Session was repeatedly interrupted during final cleanup edits, not the main architecture; left three small items unfinished (a misplaced router-role test-case entry, a worker-integration test assertion, and the frontend handoff doc section) plus all validation runs.
+- `2026-07-10` `Claude`: Picked up the interrupted implementation for closeout. Surveyed every new/changed file against the plan and confirmed the main architecture matches the plan's design exactly (file-to-concept mapping, corrected GraphQL shapes, batch/partial-failure handling, `event_client_id`/one-event-per-shop linkage, socket payload shape all as specified). Fixed the three interrupted items: (1) removed `/products/process` from the "admin-only" router role-test parametrize list (it requires `ADMIN` *or* `MANAGER`, not admin-only, so it was miscategorized there — added an explicit `admin`-role row to the correct "shared role" test instead, alongside the existing `manager`-role row); (2) fixed `test_handle_shopify_process_products_transitions_rows_to_succeeded_and_failed`'s `_fake_create_shopify_product` helper, which called `db_session.get(...)` expecting to see the handler's separate-session commit — this app's session factory uses `expire_on_commit=False` (`models/database.py`), so `.get()` was silently returning the stale, never-refreshed identity-mapped object instead of querying the DB; replaced with an explicit `await db_session.refresh(success_row)`; (3) added the missing Route 13 (`/products/process`) and `shopify.products.synced` realtime-event section to `HANDOFF_TO_FRONTEND_shopify_integration_routes_20260709.md`, plus updating its route count and build-order list. Resolved both "Clarifications required" items: the `WorkingSection.allows_shopify_product_modifications` question is closed (confirmed via `SUMMARY_PLAN_working_section_allows_shopify_product_modifications_20260709.md` to be an unrelated, same-day, general-purpose CRUD field with no connection to this capability — role-based gating only stands as implemented); the GraphQL mutation-shape verification is documented as a known, deferred gap (no live Shopify shop/credentials available in this session) rather than left ambiguous. Ran `alembic upgrade head` against the local dev Postgres (applied cleanly, new head `a3d4e5f6a7b8`, confirmed table/enum/index shapes match the models exactly via `\d`), then the full Shopify unit+integration test tree: **153 passed, 0 failed** (44 new-capability unit tests, 15 new-capability integration tests, all pre-existing Shopify suites still green). A full-repo unit run surfaced 6 pre-existing failures in unrelated modules (auth, analytics, case-type serializers, items router, upholstery-inventories router) that predate and are untouched by this work — left as-is, out of scope. See `SUMMARY_shopify_product_sync_20260710.md` for the full closeout record.
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
-- Transition owner: `Codex` (after the user answers both items in "Clarifications required")
+- Current state: `archived`
+- Next state: `—`
+- Transition owner: `Claude` — archived after both clarifications were resolved and the full Shopify unit/integration test tree passed (153/153) against a locally migrated dev database. See `docs/architecture/implemented_summaries/SUMMARY_shopify_product_sync_20260710.md` and `docs/architecture/archives/implementation/ARCHIVE_RECORD_PLAN_shopify_product_sync_20260710.md`.

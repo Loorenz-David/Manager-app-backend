@@ -6,10 +6,12 @@ from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationStatusEnum,
+    ShopifyProductSyncItemStatusEnum,
     ShopifyWebhookPayloadFormatEnum,
     ShopifyWebhookSubscriptionStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_oauth_state import ShopifyOAuthState
+from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.models.tables.shopify.shopify_webhook_intake import ShopifyWebhookIntake
 from beyo_manager.models.tables.shopify.shopify_webhook_subscription import ShopifyWebhookSubscription
@@ -246,6 +248,48 @@ async def test_duplicate_webhook_dedupe_key_is_rejected(db_session) -> None:
                 dedupe_key="dedupe-1",
             ),
         ]
+    )
+
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+    await db_session.rollback()
+
+
+@pytest.mark.integration
+async def test_shopify_product_sync_item_enforces_foreign_keys_and_default_status(db_session) -> None:
+    workspace, _, user, suffix = await _seed_workspace_and_user(db_session)
+    integration = _shop_integration(
+        suffix=f"{suffix}_sync",
+        workspace_id=workspace.client_id,
+        shop_domain=f"sync-{suffix}.myshopify.com",
+        status=ShopifyIntegrationStatusEnum.ACTIVE,
+    )
+    db_session.add(integration)
+    await db_session.flush()
+
+    sync_item = ShopifyProductSyncItem(
+        client_id=f"shpsi_{suffix}",
+        workspace_id=workspace.client_id,
+        shop_integration_id=integration.client_id,
+        frontend_client_id="frontend_1",
+        normalized_payload_json={"product": {"title": "Chair"}, "variant": {"barcode": "BAR-1"}, "metafields": []},
+        created_by_id=user.client_id,
+    )
+    db_session.add(sync_item)
+    await db_session.commit()
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.PENDING
+
+    db_session.add(
+        ShopifyProductSyncItem(
+            client_id=f"shpsi_{suffix}_bad",
+            workspace_id=workspace.client_id,
+            shop_integration_id="missing_shop",
+            frontend_client_id="frontend_2",
+            normalized_payload_json={"product": {"title": "Table"}, "variant": {"barcode": "BAR-2"}, "metafields": []},
+            created_by_id=user.client_id,
+        )
     )
 
     with pytest.raises(IntegrityError):

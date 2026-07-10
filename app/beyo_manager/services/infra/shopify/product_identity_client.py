@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from beyo_manager.services.infra.shopify.graphql_client import execute_shopify_graphql
+from beyo_manager.services.infra.shopify.graphql_client import execute_shopify_graphql, quote_shopify_search_term
 
 IdentityType = Literal["sku", "barcode"]
 
@@ -156,7 +156,7 @@ async def _search_orders_by_sku(
         access_token_encrypted=access_token_encrypted,
         query=SEARCH_ORDERS_BY_SKU_QUERY,
         variables={
-            "searchQuery": f"sku:{_quote_shopify_search_term(sku)}",
+            "searchQuery": f"sku:{quote_shopify_search_term(sku)}",
             "ordersFirst": _ORDERS_FIRST,
             "lineItemsFirst": _LINE_ITEMS_FIRST,
         },
@@ -177,18 +177,13 @@ async def _find_variants_by_barcode(
         access_token_encrypted=access_token_encrypted,
         query=FIND_VARIANTS_BY_BARCODE_QUERY,
         variables={
-            "searchQuery": f"barcode:{_quote_shopify_search_term(barcode)}",
+            "searchQuery": f"barcode:{quote_shopify_search_term(barcode)}",
             "first": _VARIANTS_FIRST,
         },
         operation_name="find_variants_by_barcode",
     )
     edges = (data.get("productVariants") or {}).get("edges") or []
     return [((edge or {}).get("node") or {}) for edge in edges]
-
-
-def _quote_shopify_search_term(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
 
 
 def _clean_str(value: object) -> str | None:

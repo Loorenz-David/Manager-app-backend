@@ -18,6 +18,15 @@ from beyo_manager.services.infra.crypto.field_encryption import decrypt_field
 logger = logging.getLogger(__name__)
 
 
+def quote_shopify_search_term(value: str) -> str:
+    """Escape and quote a value for use in a Shopify Admin GraphQL search query string
+    (e.g. `sku:"value"`, `barcode:"value"`) — shared by every Shopify identity-lookup
+    client so a single fix to the escaping rule covers every caller.
+    """
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def build_shopify_admin_graphql_endpoint(shop_domain: str) -> str:
     normalized_shop_domain = normalize_shop_domain(shop_domain)
     return f"https://{normalized_shop_domain}/admin/api/{settings.shopify_api_version}/graphql.json"

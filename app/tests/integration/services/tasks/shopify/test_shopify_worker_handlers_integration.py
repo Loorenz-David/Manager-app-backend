@@ -10,15 +10,20 @@ from sqlalchemy import select
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventTypeEnum,
     ShopifyIntegrationStatusEnum,
+    ShopifyProductSyncItemStatusEnum,
     ShopifyWebhookIntakeStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_integration_event import ShopifyIntegrationEvent
+from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.models.tables.shopify.shopify_webhook_intake import ShopifyWebhookIntake
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.tasks.shopify.handle_shopify_process_webhook import (
     handle_shopify_process_webhook,
+)
+from beyo_manager.services.tasks.shopify.handle_shopify_process_products import (
+    handle_shopify_process_products,
 )
 
 
@@ -194,3 +199,173 @@ async def test_handle_shopify_process_webhook_skips_non_processable_statuses(db_
     assert refreshed.processing_started_at == starting_started_at
     assert refreshed.processed_at == starting_processed_at
     assert events == []
+
+
+@pytest.mark.integration
+async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and_failed(db_session, monkeypatch) -> None:
+    workspace, user = await _seed_workspace_and_user(db_session)
+    shop_domain = f"product-sync-{uuid4().hex[:8]}.myshopify.com"
+    integration = await _seed_integration(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+        shop_domain=shop_domain,
+    )
+    success_row = ShopifyProductSyncItem(
+        workspace_id=workspace.client_id,
+        shop_integration_id=integration.client_id,
+        frontend_client_id="frontend_success",
+        normalized_payload_json={
+            "product": {"title": "Chair", "status": "DRAFT"},
+            "variant": {"barcode": "BAR-SUCCESS"},
+            "metafields": [],
+        },
+        created_by_id=user.client_id,
+    )
+    failed_row = ShopifyProductSyncItem(
+        workspace_id=workspace.client_id,
+        shop_integration_id=integration.client_id,
+        frontend_client_id="frontend_failed",
+        normalized_payload_json={
+            "product": {"title": "Table", "status": "DRAFT"},
+            "variant": {"barcode": "BAR-FAILED"},
+            "metafields": [],
+        },
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([success_row, failed_row])
+    await db_session.commit()
+
+    emitted: dict = {}
+
+    async def _fake_find_product_variant_by_identity(**kwargs):
+        if kwargs["barcode"] == "BAR-SUCCESS":
+            return []
+        return [
+            {"id": "gid://shopify/ProductVariant/1", "barcode": "BAR-FAILED", "sku": None, "product": {"id": "gid://shopify/Product/1"}},
+            {"id": "gid://shopify/ProductVariant/2", "barcode": "BAR-FAILED", "sku": None, "product": {"id": "gid://shopify/Product/2"}},
+        ]
+
+    async def _fake_create_shopify_product(**_kwargs):
+        # db_session has expire_on_commit=False, so success_row's cached identity-map
+        # entry never sees the handler's own (separate-session) commit without an
+        # explicit refresh — session.get() alone would just return the stale object.
+        await db_session.refresh(success_row)
+        assert success_row.status == ShopifyProductSyncItemStatusEnum.PROCESSING
+        return {
+            "shopify_product_id": "gid://shopify/Product/created",
+            "shopify_variant_id": "gid://shopify/ProductVariant/created",
+        }
+
+    async def _fake_update_shopify_product(**_kwargs):
+        raise AssertionError("Update path should not be reached in this test")
+
+    async def _fake_set_shopify_product_metafields(**_kwargs):
+        return None
+
+    async def _fake_emit_to_workspace_room(**kwargs):
+        emitted.update(kwargs)
+
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_variant_by_identity",
+        _fake_find_product_variant_by_identity,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.create_shopify_product",
+        _fake_create_shopify_product,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.update_shopify_product",
+        _fake_update_shopify_product,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.set_shopify_product_metafields",
+        _fake_set_shopify_product_metafields,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.emit_to_workspace_room",
+        _fake_emit_to_workspace_room,
+    )
+
+    await handle_shopify_process_products(
+        {
+            "workspace_id": workspace.client_id,
+            "requested_by_user_id": user.client_id,
+            "sync_item_client_ids": [success_row.client_id, failed_row.client_id],
+        },
+        "task_shopify_products_1",
+    )
+
+    await db_session.refresh(success_row)
+    await db_session.refresh(failed_row)
+
+    assert success_row.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    assert success_row.shopify_product_id == "gid://shopify/Product/created"
+    assert success_row.shopify_variant_id == "gid://shopify/ProductVariant/created"
+    assert failed_row.status == ShopifyProductSyncItemStatusEnum.FAILED
+    assert failed_row.error_code == "ambiguous_product_match"
+    assert emitted["payload"]["task_id"] == "task_shopify_products_1"
+    assert emitted["payload"]["succeeded"][0]["frontend_client_id"] == "frontend_success"
+    assert emitted["payload"]["failed"][0]["frontend_client_id"] == "frontend_failed"
+
+
+@pytest.mark.integration
+async def test_handle_shopify_process_products_skips_rows_for_disabled_shop_integration(db_session, monkeypatch) -> None:
+    workspace, user = await _seed_workspace_and_user(db_session)
+    shop_domain = f"product-sync-disabled-{uuid4().hex[:8]}.myshopify.com"
+    integration = await _seed_integration(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+        shop_domain=shop_domain,
+    )
+    # Simulate the shop being disabled after the sync item was enqueued but
+    # before the worker picked up the task.
+    integration.status = ShopifyIntegrationStatusEnum.DISABLED
+    await db_session.commit()
+
+    row = ShopifyProductSyncItem(
+        workspace_id=workspace.client_id,
+        shop_integration_id=integration.client_id,
+        frontend_client_id="frontend_disabled",
+        normalized_payload_json={
+            "product": {"title": "Chair", "status": "DRAFT"},
+            "variant": {"barcode": "BAR-DISABLED"},
+            "metafields": [],
+        },
+        created_by_id=user.client_id,
+    )
+    db_session.add(row)
+    await db_session.commit()
+
+    emitted: dict = {}
+
+    async def _unexpected_graphql_call(**_kwargs):
+        raise AssertionError("Shopify GraphQL must not be called for a disabled shop integration")
+
+    async def _fake_emit_to_workspace_room(**kwargs):
+        emitted.update(kwargs)
+
+    monkeypatch.setattr(
+        "beyo_manager.services.infra.shopify.graphql_client.execute_shopify_graphql",
+        _unexpected_graphql_call,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.emit_to_workspace_room",
+        _fake_emit_to_workspace_room,
+    )
+
+    await handle_shopify_process_products(
+        {
+            "workspace_id": workspace.client_id,
+            "requested_by_user_id": user.client_id,
+            "sync_item_client_ids": [row.client_id],
+        },
+        "task_shopify_products_disabled",
+    )
+
+    await db_session.refresh(row)
+
+    assert row.status == ShopifyProductSyncItemStatusEnum.FAILED
+    assert row.error_code == "missing_shop_integration"
+    assert emitted["payload"]["failed"][0]["error_code"] == "missing_shop_integration"

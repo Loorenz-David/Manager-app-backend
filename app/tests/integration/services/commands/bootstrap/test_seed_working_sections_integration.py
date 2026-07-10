@@ -304,6 +304,7 @@ async def test_seed_working_sections_restores_soft_deleted_managed_section(db_se
     assert refreshed_assembly.deleted_at is None
     assert refreshed_assembly.order_list == 8
     assert refreshed_assembly.allows_batch_working is False
+    assert refreshed_assembly.allows_shopify_product_modifications is False
     assert refreshed_assembly.image is not None
 
 
@@ -437,3 +438,32 @@ async def test_seed_working_sections_syncs_managed_relations_without_touching_cu
     assert stale_item_category_link is None
     assert custom_item_category_link is not None
     assert expected_dependency is not None
+
+
+@pytest.mark.integration
+async def test_seed_working_sections_assigns_expected_capability_flags(db_session):
+    workspace, _ = await _seed_workspace_and_user(db_session)
+
+    await seed_working_sections(db_session, workspace.client_id)
+
+    sections = (
+        await db_session.execute(
+            select(WorkingSection).where(
+                WorkingSection.workspace_id == workspace.client_id,
+                WorkingSection.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    sections_by_name = {section.name: section for section in sections}
+
+    assert sections_by_name["photography"].allows_batch_working is False
+    assert sections_by_name["photography"].allows_shopify_product_modifications is True
+    assert sections_by_name["ground oil"].allows_batch_working is True
+    assert sections_by_name["ground oil"].allows_shopify_product_modifications is False
+    assert sections_by_name["hardwax oil"].allows_batch_working is True
+    assert sections_by_name["hardwax oil"].allows_shopify_product_modifications is False
+
+    for name, section in sections_by_name.items():
+        if name not in {"photography", "ground oil", "hardwax oil"}:
+            assert section.allows_batch_working is False
+            assert section.allows_shopify_product_modifications is False

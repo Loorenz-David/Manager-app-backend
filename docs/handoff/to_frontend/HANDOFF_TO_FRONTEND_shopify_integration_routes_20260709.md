@@ -508,9 +508,115 @@ No match anywhere (including zero active shops in the workspace) is a normal `20
 
 ---
 
+## Route 13 — Create or update Shopify products (batched, async)
+
+`POST /api/v1/integrations/shopify/products/process`
+
+Accepts a batch of product items and creates-or-updates each one in one or more connected Shopify shops. This route never calls Shopify synchronously — it validates the request, persists a tracking row per (item, shop) pair, enqueues one background task, and returns immediately. Actual progress is reported later via the `shopify.products.synced` realtime event (see below), not in this route's response.
+
+**Note on position:** in `routers/api_v1/shopify.py` this route is declared right after Route 12 (`/customers/by-product-identity`) — it is numbered 13 here only to avoid renumbering the already-documented routes above.
+
+
+**Request body:**
+```json
+{
+  "items": [
+    {
+      "client_id": "local-item-id-or-client-id",
+      "target_shop_integration_ids": ["shpint_..."],
+      "title": "Chair",
+      "description": "A soft chair",
+      "status": "draft",
+      "tags": ["living", "sale"],
+      "product_category": "Seating",
+      "price": "199.00",
+      "weight": { "value": 1.2, "unit": "kg" },
+      "sku": "SKU-123",
+      "item_article_number": "0123456789012",
+      "metafields": { "origin": "warehouse-1" }
+    }
+  ]
+}
+```
+
+- `items`: 1-200 entries per request.
+- `client_id`: required, opaque to the backend — it is returned unchanged in the `shopify.products.synced` event so the frontend can map a result back to the item card/row that submitted it. It is **not** a ManagerBeyo `Item`/`Upholstery` id; this route does not read or write any internal catalog table.
+- `target_shop_integration_ids`: optional. Omit it to target every `active` shop integration currently in the workspace. If provided, every id must belong to an `active` shop integration in the caller's workspace — an id that doesn't resolve (foreign workspace, wrong id, inactive shop) fails the **whole request** with `404`, not just that one item (this is a request-validation failure, not a per-item runtime failure).
+- Identity: at least one of `sku`, `item_article_number`, or `article_number` is required per item. `sku` maps to the Shopify variant SKU; `item_article_number`/`article_number` both map to the Shopify variant barcode (same semantics as Route 12's identity fields).
+- `status`: optional, defaults to `"draft"` if omitted.
+- `weight.unit`: one of `kg`, `g`, `lb`, `oz`.
+- `metafields`: a flat `{key: value}` object. All values are stored as Shopify metafields in a single fixed `custom` namespace with type `single_line_text_field` in this phase — no per-key namespace/type control yet.
+- Product images are **not supported yet** — this route does not accept or process any image/media field in this phase.
+
+**Success response `data`** (always `200`, returned immediately — no Shopify call has happened yet when this response is sent):
+```json
+{
+  "queued": true,
+  "task_id": "task_...",
+  "sync_item_client_ids": ["shpsi_...", "shpsi_..."],
+  "target_count": 2
+}
+```
+
+`target_count` is the number of (item, shop) operations that were queued — it can be larger than `items.length` when an item targets multiple shops (or omits `target_shop_integration_ids` and fans out to every active shop).
+
+**Errors:**
+| Status | Cause |
+|---|---|
+| 422 | Missing identity (`sku`/`item_article_number`/`article_number` all blank), invalid `weight.unit`, empty `items`, more than 200 items, or `target_shop_integration_ids: []` explicitly provided as empty |
+| 404 `{"error": "Shopify shop integration not found.", ...}` | An explicit `target_shop_integration_ids` entry does not resolve to an active shop in the caller's workspace |
+| 422 | No active Shopify shop integrations exist at all in the caller's workspace |
+| 401/403 | Auth |
+
+### Realtime event: `shopify.products.synced`
+
+Once the background worker finishes processing the whole batch (all items, all target shops), it emits exactly one socket event to the **workspace room** (not a per-user room — every connected admin/manager in the workspace receives it, matching how this is a shared, workspace-level operation):
+
+```json
+{
+  "event": "shopify.products.synced",
+  "data": {
+    "task_id": "task_...",
+    "succeeded": [
+      {
+        "frontend_client_id": "local-item-id-or-client-id",
+        "shop_integration_id": "shpint_...",
+        "sync_item_client_id": "shpsi_...",
+        "requested_operation": "create",
+        "shopify_product_id": "gid://shopify/Product/...",
+        "shopify_variant_id": "gid://shopify/ProductVariant/..."
+      }
+    ],
+    "failed": [
+      {
+        "frontend_client_id": "local-item-id-or-client-id",
+        "shop_integration_id": "shpint_...",
+        "sync_item_client_id": "shpsi_...",
+        "requested_operation": "update",
+        "error_code": "ambiguous_product_match",
+        "error_message": "Multiple Shopify products matched the same identity."
+      }
+    ]
+  }
+}
+```
+
+- `frontend_client_id` is the same `client_id` the item was submitted with — use it to map each result back to its row/card.
+- `requested_operation` is `"create"` or `"update"`, decided by the backend after looking up the item's identity in the target shop — the frontend never chooses this.
+- One item targeting multiple shops produces one entry per (item, shop) pair in `succeeded`/`failed`, not one entry per item.
+- A batch is normally a mix of `succeeded` and `failed` — one item/shop failing does not fail the others. There is no separate "batch failed" event; a fully-failed batch is just an event where `succeeded` is empty.
+- Known `error_code` values: `ambiguous_product_match` (more than one existing Shopify product matched the same SKU/barcode — the backend never guesses which one to update), `missing_access_token`, `missing_shop_integration`, plus Shopify GraphQL error codes (`graphql_user_errors`, `rate_limited`, `timeout`, etc. — same taxonomy as every other Shopify GraphQL call in this integration).
+- Never contains an access token or any other secret value.
+
+### Known limitation
+
+Live Shopify GraphQL schema/dev-shop verification for the exact `productCreate`/`productUpdate`/`productVariantsBulkUpdate`/`metafieldsSet` mutation field behavior at the configured `SHOPIFY_API_VERSION` has not been run yet — see `PLAN_shopify_product_sync_20260709.md`'s "Clarifications required" for details. The mutation names and top-level argument shapes are correct; only fine-grained, version-specific field behavior remains unverified against a live shop.
+
+---
+
 ## No-secret guarantee
 
-None of the 10 admin/OAuth-callback routes above ever return: an access token (encrypted or decrypted), the Shopify client secret, the webhook secret, a raw OAuth `code`, a raw webhook/GraphQL payload, or an HMAC/signature value. Route 7's `metadata_json` additionally strips any key whose name contains `token`, `secret`, `hmac`, `signature`, `authorization`, `code`, `raw_payload`, `payload`, `raw_response`, or `provider_response` (case-insensitive) before it's serialized — if every key in an event's metadata happens to be unsafe, `metadata_json` will be `null` rather than an empty object.
+None of the 11 admin/OAuth-callback routes above (plus the `shopify.products.synced` realtime event) ever return: an access token (encrypted or decrypted), the Shopify client secret, the webhook secret, a raw OAuth `code`, a raw webhook/GraphQL payload, or an HMAC/signature value. Route 7's `metadata_json` additionally strips any key whose name contains `token`, `secret`, `hmac`, `signature`, `authorization`, `code`, `raw_payload`, `payload`, `raw_response`, or `provider_response` (case-insensitive) before it's serialized — if every key in an event's metadata happens to be unsafe, `metadata_json` will be `null` rather than an empty object.
 
 ## Suggested frontend build order
 
@@ -521,6 +627,7 @@ None of the 10 admin/OAuth-callback routes above ever return: an access token (e
 5. Optional workspace-level "Sync all shops" action → Route 8.
 6. Optional workspace-level scope/health banner → Route 9 (call with no `shop_integration_id` to get every shop at once).
 7. Optional shop-floor scan/lookup UI for staff → Route 12, using SKU and/or barcode to resolve the customer for a physical item.
+8. Product catalog push UI (`admin`/`manager` only) → Route 13, submitting a batch and then listening for `shopify.products.synced` on the workspace room to update each item card's status from "queued" to "succeeded"/"failed".
 
 ## Validation notes
 

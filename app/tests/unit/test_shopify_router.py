@@ -98,6 +98,8 @@ def test_oauth_callback_route_redirects_to_safe_frontend_location(monkeypatch) -
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/reauthorize-url", {"json": {}}, {}, {"shop_integration_id": "shpint_1"}, "manager"),
         ("get", "/api/v1/integrations/shopify/scopes", {"params": {"shop_integration_id": "shpint_1"}}, {"shop_integration_id": "shpint_1"}, {}, "admin"),
         ("post", "/api/v1/integrations/shopify/customers/by-product-identity", {"json": {"sku": "SKU-123", "article_number": "BAR-123"}}, {}, {"sku": "SKU-123", "article_number": "BAR-123"}, "seller"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "metafields": {}, "target_shop_integration_ids": None}]}, "manager"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "metafields": {}, "target_shop_integration_ids": None}]}, "admin"),
     ],
 )
 def test_new_shopify_shared_role_routes_call_service_with_expected_context(
@@ -211,6 +213,7 @@ def test_existing_shopify_admin_only_routes_reject_manager_before_service_logic(
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/webhooks/sync", {}),
         ("post", "/api/v1/integrations/shopify/webhooks/sync", {}),
         ("get", "/api/v1/integrations/shopify/scopes", {"params": {"shop_integration_id": "shpint_1"}}),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}),
     ],
 )
 @pytest.mark.parametrize("role_name", ["worker", "seller"])

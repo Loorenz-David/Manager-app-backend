@@ -40,6 +40,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP: "queue:shopify",
     TaskType.SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP: "queue:shopify",
     TaskType.SHOPIFY_RECONCILE_SHOP:     "queue:shopify",
+    TaskType.SHOPIFY_PROCESS_PRODUCTS:   "queue:shopify",
 }
 
 FALLBACK_POLL_SECONDS    = 30   # safety net for LISTEN/NOTIFY drop — not routing latency

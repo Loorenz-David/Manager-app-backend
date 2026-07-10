@@ -66,6 +66,9 @@ _SECTION_ORDER_LISTS: dict[str, int] = {
 _SECTION_BATCH_MAP: dict[str, bool] = {
     "ground oil": True,
     "hardwax oil": True,
+}
+
+_SECTION_SHOPIFY_PRODUCT_MODIFICATIONS_MAP: dict[str, bool] = {
     "photography": True,
 }
 
@@ -219,6 +222,9 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             existing.image = _SECTION_IMAGE_URLS.get(name)
             existing.order_list = _SECTION_ORDER_LISTS.get(name)
             existing.allows_batch_working = _SECTION_BATCH_MAP.get(name, False)
+            existing.allows_shopify_product_modifications = _SECTION_SHOPIFY_PRODUCT_MODIFICATIONS_MAP.get(
+                name, False
+            )
             existing.is_deleted = False
             existing.deleted_at = None
             existing.deleted_by_id = None
@@ -232,6 +238,7 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             image=_SECTION_IMAGE_URLS.get(name),
             order_list=_SECTION_ORDER_LISTS.get(name),
             allows_batch_working=_SECTION_BATCH_MAP.get(name, False),
+            allows_shopify_product_modifications=_SECTION_SHOPIFY_PRODUCT_MODIFICATIONS_MAP.get(name, False),
         )
         session.add(section)
         await session.flush()

@@ -7,6 +7,9 @@ from beyo_manager.services.infra.execution.worker_base import run_worker
 from beyo_manager.services.tasks.shopify.handle_shopify_process_webhook import (
     handle_shopify_process_webhook,
 )
+from beyo_manager.services.tasks.shopify.handle_shopify_process_products import (
+    handle_shopify_process_products,
+)
 from beyo_manager.services.tasks.shopify.handle_shopify_remove_webhooks_for_shop import (
     handle_shopify_remove_webhooks_for_shop,
 )
@@ -19,6 +22,7 @@ HANDLER_MAP = {
     TaskType.SHOPIFY_SYNC_WEBHOOKS_FOR_SHOP: handle_shopify_sync_webhooks_for_shop,
     TaskType.SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP: handle_shopify_remove_webhooks_for_shop,
     TaskType.SHOPIFY_RECONCILE_SHOP: handle_shopify_sync_webhooks_for_shop,
+    TaskType.SHOPIFY_PROCESS_PRODUCTS: handle_shopify_process_products,
 }
 
 

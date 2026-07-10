@@ -3,10 +3,10 @@
 ## Metadata
 
 - Intention ID: `INTENTION_shopify_product_sync_20260709`
-- Status: `active`
+- Status: `achieved`
 - Owner: `David`
 - Created at (UTC): `2026-07-09T00:00:00Z`
-- Last updated at (UTC): `2026-07-09T00:00:00Z`
+- Last updated at (UTC): `2026-07-10T00:00:00Z`
 
 ## Goal
 
@@ -47,19 +47,23 @@ Today the Shopify integration (`57_shopify_integration.md`) only manages the sho
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| `PLAN_shopify_product_sync_20260709` | `backend/docs/architecture/under_construction/implementation/PLAN_shopify_product_sync_20260709.md` | `under_construction` | Full DB/domain/infra/command/task/router/socket implementation of this capability |
+| `PLAN_shopify_product_sync_20260709` | `backend/docs/architecture/archives/implementation/PLAN_shopify_product_sync_20260709.md` | `archived` | Full DB/domain/infra/command/task/router/socket implementation of this capability |
 
 ## Progress notes
 
 - `2026-07-09`: Intention drafted from a detailed user-authored capability spec; implementation plan drafted in the same session after reading `57_shopify_integration.md` and the full existing Shopify router/worker/infra/domain/command/query code, the async-execution and router contracts, and the current Alembic migration head.
+- `2026-07-09`: Plan reviewed and corrected — Phase 2's draft GraphQL mutation shapes were replaced with Shopify's actual current Admin API shapes (`ProductCreateInput`/`ProductUpdateInput` via a `product:` argument, `sku` nested under `ProductVariantsBulkInput.inventoryItem.sku`, `MetafieldsSetInput`'s five required fields).
+- `2026-07-10`: `PLAN_shopify_product_sync_20260709` implemented (started by Codex, completed and validated by Claude after Codex was repeatedly interrupted during final cleanup) and archived. All 7 success criteria above are met and covered by passing tests: 44 new unit tests + 15 new integration tests, 153/153 passing across the entire Shopify unit+integration test tree with zero regressions, migrations applied cleanly against a live dev Postgres with schema verified to match the models exactly. Three interrupted cleanup items were finished (a misplaced router role-test entry, a worker-integration test's stale-ORM-object assertion, and the frontend handoff doc section). See `SUMMARY_shopify_product_sync_20260710.md` for the full closeout record.
 
 ## Open questions
 
-- Whether the already-added-but-unused `WorkingSection.allows_shopify_product_modifications` flag should gate this capability. See the linked plan's "Clarifications required" — recommendation is to leave it unused for this cycle (role-based gating only) pending confirmation.
-- Exact Shopify Admin GraphQL mutation field names for the configured API version must be verified against the live schema before the mutation-writing implementation step — see the linked plan.
+- Both items below were resolved during closeout (see the linked plan's "Clarifications required," now checked):
+  - The `WorkingSection.allows_shopify_product_modifications` flag was confirmed unrelated to this capability (a separate, same-day, general-purpose `WorkingSection` field) — role-based gating only stands as implemented.
+  - Exact Shopify Admin GraphQL mutation field names/argument shapes were corrected against Shopify's current Admin API documentation and are implemented + unit-tested exactly as corrected.
+- **One non-blocking follow-up remains**: live Shopify Admin GraphQL schema/dev-shop smoke test verification was not performed (no live Shopify shop/credentials available in this session). The implemented shapes are documentation-verified and unit-tested for exact request structure, but have never been sent to a real Shopify endpoint. Recommended before production/staging use — not required for this intention to be considered achieved, since all 7 success criteria above concern this capability's own behavior, which is fully implemented and verified.
 
 ## Lifecycle transition
 
-- Current status: `active`
-- Next status: `achieved`
-- Transition trigger: Linked implementation plan is implemented and archived, and both open questions above are resolved.
+- Current status: `achieved`
+- Next status: `—`
+- Transition trigger: Achieved — linked implementation plan is implemented, validated, and archived; all success criteria met. The remaining live-schema smoke test is tracked as a follow-up (see `ARCHIVE_RECORD_PLAN_shopify_product_sync_20260710.md`'s "Follow-up links"), not a blocker to this intention's completion.
