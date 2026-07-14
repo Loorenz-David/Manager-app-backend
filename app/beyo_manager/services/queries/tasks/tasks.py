@@ -87,6 +87,7 @@ async def list_tasks(ctx: ServiceContext) -> dict:
 
     working_section_ids = _split_csv(ctx.query_params.get("working_section_ids"))
     task_states = _split_csv(ctx.query_params.get("task_states"))
+    not_task_states = _split_csv(ctx.query_params.get("not_task_states"))
     task_step_states = _split_csv(ctx.query_params.get("task_step_states"))
     step_readiness_statuses = _split_csv(ctx.query_params.get("step_readiness_statuses"))
     priorities = _split_csv(ctx.query_params.get("priorities"))
@@ -106,6 +107,8 @@ async def list_tasks(ctx: ServiceContext) -> dict:
 
     if task_states:
         stmt = stmt.where(Task.state.in_(task_states))
+    if not_task_states:
+        stmt = stmt.where(Task.state.not_in(not_task_states))
     if priorities:
         stmt = stmt.where(Task.priority.in_(priorities))
     if task_types:

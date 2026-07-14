@@ -49,7 +49,14 @@ async def execute_shopify_graphql(
 
     start = time.monotonic()
     try:
-        access_token = decrypt_field(access_token_encrypted)
+        # The migration CLI accepts raw Shopify tokens (for example shpat_,
+        # shpca_, or shpua_), while normal application callers continue to
+        # provide encrypted integration credentials.
+        access_token = (
+            access_token_encrypted
+            if access_token_encrypted.startswith(("shpat_", "shpca_", "shpua_", "shppa_"))
+            else decrypt_field(access_token_encrypted)
+        )
         async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
             response = await client.post(
                 url,
@@ -160,13 +167,26 @@ async def execute_shopify_graphql(
 
     errors = body.get("errors") if isinstance(body, dict) else None
     if isinstance(errors, list) and errors:
+        throttle_error = any(
+            isinstance(error, dict)
+            and (
+                str((error.get("extensions") or {}).get("code") or "").upper() in {"THROTTLED", "RATE_LIMITED"}
+                or "throttled" in str(error.get("message") or "").lower()
+            )
+            for error in errors
+        )
         _log_failure(
             operation_name=operation_name,
             shop_domain=normalized_shop_domain,
             latency_ms=latency_ms,
-            reason="graphql_errors",
+            reason="throttled" if throttle_error else "graphql_errors",
             status_code=response.status_code,
         )
+        if throttle_error:
+            raise ShopifyGraphQLRetryableError(
+                "Shopify GraphQL request was throttled.",
+                error_code="throttled",
+            )
         raise ShopifyGraphQLNonRetryableError(
             "Shopify GraphQL returned errors.",
             error_code="graphql_errors",

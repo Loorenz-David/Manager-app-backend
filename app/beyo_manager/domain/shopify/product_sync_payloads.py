@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 
 
 _WEIGHT_UNIT_MAP = {
@@ -12,7 +13,9 @@ _WEIGHT_UNIT_MAP = {
 
 
 def build_normalized_product_sync_payload(item: Mapping[str, object]) -> dict:
-    barcode = _clean_str(item.get("item_article_number")) or _clean_str(item.get("article_number"))
+    barcode = _clean_str(item.get("item_article_number")) or _clean_str(
+        item.get("article_number")
+    )
 
     product = {
         "title": _required_str(item.get("title")),
@@ -42,11 +45,16 @@ def build_normalized_product_sync_payload(item: Mapping[str, object]) -> dict:
         cleaned_key = _clean_str(key)
         if cleaned_key is None:
             continue
+        metafield_type = "single_line_text_field"
+        metafield_value = value
+        if isinstance(value, Mapping) and ("type" in value or "value" in value):
+            metafield_type = _clean_str(value.get("type")) or "single_line_text_field"
+            metafield_value = value.get("value")
         metafields.append(
             {
                 "key": cleaned_key,
-                "type": "single_line_text_field",
-                "value": str(value),
+                "type": metafield_type,
+                "value": _stringify_metafield_value(metafield_value),
             }
         )
 
@@ -101,3 +109,9 @@ def _clean_str(value: object) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _stringify_metafield_value(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, separators=(",", ":"))

@@ -614,6 +614,62 @@ Live Shopify GraphQL schema/dev-shop verification for the exact `productCreate`/
 
 ---
 
+## Metafield preference routes
+
+These routes are implemented by `PLAN_shopify_metafield_preferences_20260713.md` and use the same response envelope described above. Both routes accept Shopify shop integration client IDs; raw shop domains are never request authority.
+
+### Create preferences
+
+`POST /api/v1/integrations/shopify/metafield-preferences`
+
+Roles: `admin`, `manager`, `seller`, `worker`.
+
+```json
+{
+  "item_category_id": "icat_...",
+  "preferences": [
+    {
+      "shop_integration_id": "shpint_...",
+      "shopify_metafield_definition_id": "gid://shopify/MetafieldDefinition/123",
+      "sequence_order": 0
+    }
+  ]
+}
+```
+
+Each preference is validated against its own shop. The request is atomic across all selections, and the success payload is an ordered list of saved preferences. Repeating a selection is idempotent and updates its sequence order.
+
+### Read preferences and search definitions
+
+`GET /api/v1/integrations/shopify/metafield-preferences`
+
+Roles: `admin`, `manager`, `seller`, `worker`.
+
+Required query parameter: `shop_integration_ids=shpint_a,shpint_b`.
+
+At least one of these must also be supplied:
+
+- `item_category_ids=icat_a,icat_b` — loads saved preferences and current Shopify definition characteristics per shop.
+- `q=height` — searches current product metafield definitions by case-insensitive visible-name substring per shop.
+
+Optional: `only_my_preferences=true`, which affects only saved preferences and never live search results. Both flows may be combined. The success payload preserves requested shop order:
+
+```json
+{
+  "shops": [
+    {
+      "shop_integration_id": "shpint_a",
+      "shop_domain": "shop-a.myshopify.com",
+      "item_categories": [],
+      "unavailable_definition_ids": [],
+      "search_results": []
+    }
+  ]
+}
+```
+
+Shopify failures for any requested shop fail the complete read request; no partial shop result is returned. Definition IDs and credentials are always handled independently per shop.
+
 ## No-secret guarantee
 
 None of the 11 admin/OAuth-callback routes above (plus the `shopify.products.synced` realtime event) ever return: an access token (encrypted or decrypted), the Shopify client secret, the webhook secret, a raw OAuth `code`, a raw webhook/GraphQL payload, or an HMAC/signature value. Route 7's `metadata_json` additionally strips any key whose name contains `token`, `secret`, `hmac`, `signature`, `authorization`, `code`, `raw_payload`, `payload`, `raw_response`, or `provider_response` (case-insensitive) before it's serialized — if every key in an event's metadata happens to be unsafe, `metadata_json` will be `null` rather than an empty object.

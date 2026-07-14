@@ -4,9 +4,23 @@ import pytest
 
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.services.commands.tasks.requests import (
+    parse_update_task_request,
     parse_update_task_ready_by_at_request,
     parse_update_task_schedule_request,
 )
+
+
+@pytest.mark.unit
+def test_parse_update_task_request_accepts_task_type():
+    request = parse_update_task_request(
+        {
+            "client_id": "tsk_1",
+            "task_type": "return",
+        }
+    )
+
+    assert request.client_id == "tsk_1"
+    assert request.task_type.value == "return"
 
 
 @pytest.mark.unit

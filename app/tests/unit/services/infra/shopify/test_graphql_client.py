@@ -55,6 +55,31 @@ async def test_execute_shopify_graphql_returns_data_and_never_logs_token(monkeyp
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_execute_shopify_graphql_passes_raw_shopify_token_without_decrypting(monkeypatch) -> None:
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.graphql_client.settings.request_timeout_seconds", 5)
+    decrypt = MagicMock(side_effect=AssertionError("raw token must not be decrypted"))
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.graphql_client.decrypt_field", decrypt)
+
+    with patch("beyo_manager.services.infra.shopify.graphql_client.httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=_mock_response(200, {"data": {"shop": {"id": "shop"}}}))
+        mock_client_class.return_value = mock_client
+
+        await execute_shopify_graphql(
+            shop_domain="valid-shop.myshopify.com",
+            access_token_encrypted="shpca_raw-token",
+            query="query { shop { id } }",
+            operation_name="shop_lookup",
+        )
+
+    decrypt.assert_not_called()
+    assert mock_client.post.call_args.kwargs["headers"]["X-Shopify-Access-Token"] == "shpca_raw-token"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_execute_shopify_graphql_classifies_timeout_as_retryable(monkeypatch) -> None:
     monkeypatch.setattr("beyo_manager.services.infra.shopify.graphql_client.settings.request_timeout_seconds", 5)
     monkeypatch.setattr(
@@ -191,3 +216,27 @@ async def test_execute_shopify_graphql_classifies_non_retryable_failures(
 
     assert exc_info.value.retryable is False
     assert exc_info.value.error_code == expected_error_code
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_shopify_graphql_classifies_graphql_throttling_as_retryable(monkeypatch) -> None:
+    monkeypatch.setattr("beyo_manager.services.infra.shopify.graphql_client.settings.request_timeout_seconds", 5)
+    monkeypatch.setattr(
+        "beyo_manager.services.infra.shopify.graphql_client.decrypt_field",
+        lambda ciphertext: "secret-token-value",
+    )
+    with patch("beyo_manager.services.infra.shopify.graphql_client.httpx.AsyncClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=_mock_response(
+            200, {"errors": [{"message": "Throttled", "extensions": {"code": "THROTTLED"}}]}
+        ))
+        mock_client_class.return_value = mock_client
+        with pytest.raises(ShopifyGraphQLRetryableError) as exc_info:
+            await execute_shopify_graphql(
+                shop_domain="valid-shop.myshopify.com", access_token_encrypted="encrypted-token",
+                query="query { shop { id } }", operation_name="shop_lookup",
+            )
+    assert exc_info.value.error_code == "throttled"

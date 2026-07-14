@@ -22,6 +22,7 @@ from beyo_manager.services.infra.events.build_event import build_workspace_event
 
 
 _DIRECT_FIELDS = {
+    "task_type",
     "title",
     "summary",
     "priority",

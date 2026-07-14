@@ -171,6 +171,7 @@ class _CreateTaskBody(BaseModel):
 
 
 class _UpdateTaskBody(BaseModel):
+    task_type: TaskTypeEnum | None = None
     title: str | None = None
     summary: str | None = None
     priority: TaskPriorityEnum | None = None
@@ -311,6 +312,7 @@ async def route_list_tasks(
     q: str | None = Query(None, max_length=200),
     working_section_ids: str | None = Query(None),
     task_states: str | None = Query(None),
+    not_task_states: str | None = Query(None),
     task_step_states: str | None = Query(None),
     step_readiness_statuses: str | None = Query(None),
     priorities: str | None = Query(None),
@@ -334,6 +336,7 @@ async def route_list_tasks(
             "q": q,
             "working_section_ids": working_section_ids,
             "task_states": task_states,
+            "not_task_states": not_task_states,
             "task_step_states": task_step_states,
             "step_readiness_statuses": step_readiness_statuses,
             "priorities": priorities,

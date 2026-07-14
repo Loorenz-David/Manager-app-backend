@@ -122,3 +122,35 @@ class ShopifyIntegrationEventHistoryRecordResult:
     metadata_json: dict | None
     created_by: dict | None
     created_at: str
+
+
+@dataclass(frozen=True)
+class ShopifyMetafieldPreferenceResult:
+    client_id: str
+    item_category_id: str
+    shop_integration_id: str
+    shopify_metafield_definition_id: str
+    name: str | None
+    namespace: str | None
+    key: str | None
+    description: str | None
+    type: str | None
+    validations: list[dict] | None
+    reference_options: dict | None
+    sequence_order: int
+    is_enabled: bool
+    created_at: str
+    updated_at: str | None
+    created_by: dict | None
+
+
+@dataclass(frozen=True)
+class ShopifyMetafieldDefinitionResult:
+    shopify_metafield_definition_id: str
+    name: str | None
+    namespace: str | None
+    key: str | None
+    description: str | None
+    type: str | None
+    validations: list[dict] | None
+    reference_options: dict | None

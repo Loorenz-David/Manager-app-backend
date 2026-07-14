@@ -20,3 +20,24 @@ async def get_manager_user_ids(session: AsyncSession, workspace_id: str) -> set[
         .distinct()
     )
     return set(rows.scalars().all())
+
+
+async def is_active_user_with_role(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    role_name: RoleNameEnum,
+) -> bool:
+    """Return whether a user has an active workspace membership with a role."""
+    result = await session.execute(
+        select(WorkspaceMembership.user_id)
+        .join(WorkspaceRole, WorkspaceMembership.workspace_role_id == WorkspaceRole.client_id)
+        .join(Role, WorkspaceRole.role_id == Role.client_id)
+        .where(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == user_id,
+            WorkspaceMembership.is_active.is_(True),
+            Role.name == role_name,
+        )
+    )
+    return result.scalar_one_or_none() is not None

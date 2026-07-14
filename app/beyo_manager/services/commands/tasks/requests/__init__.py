@@ -120,6 +120,7 @@ class CreateTaskRequest(BaseModel):
 
 class UpdateTaskRequest(BaseModel):
 	client_id: str
+	task_type: TaskTypeEnum | None = None
 	title: str | None = None
 	summary: str | None = None
 	priority: TaskPriorityEnum | None = None

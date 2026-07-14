@@ -25,6 +25,15 @@ from beyo_manager.services.commands.shopify.handle_shopify_oauth_callback import
     handle_shopify_oauth_callback,
 )
 from beyo_manager.services.commands.shopify.process_shopify_products import process_shopify_products
+from beyo_manager.services.commands.shopify.create_shopify_metafield_preferences import (
+    create_shopify_metafield_preferences,
+)
+from beyo_manager.services.commands.shopify.delete_shopify_metafield_preferences import (
+    delete_shopify_metafield_preferences,
+)
+from beyo_manager.services.commands.shopify.update_shopify_metafield_preference_sequence_order import (
+    update_shopify_metafield_preference_sequence_order,
+)
 from beyo_manager.services.commands.shopify.create_shopify_install_url import create_shopify_install_url
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.shopify.get_shopify_scope_status import get_shopify_scope_status
@@ -36,6 +45,7 @@ from beyo_manager.services.queries.shopify.list_shopify_shop_integrations import
 from beyo_manager.services.queries.shopify.lookup_shopify_customers_by_product_identity import (
     lookup_shopify_customers_by_product_identity,
 )
+from beyo_manager.services.queries.shopify.get_shopify_metafield_preferences import get_shopify_metafield_preferences
 from beyo_manager.services.run_service import run_service
 
 logger = logging.getLogger(__name__)
@@ -50,6 +60,10 @@ class ShopifyInstallUrlBody(BaseModel):
 
 class ShopifyShopIntegrationPathBody(BaseModel):
     shop_integration_id: str
+
+
+class ShopifyMetafieldPreferencesDeleteBody(BaseModel):
+    client_ids: list[str] = Field(min_length=1)
 
 
 class ShopifyProductIdentityCustomerLookupBody(BaseModel):
@@ -80,6 +94,22 @@ class ShopifyProductSyncItemBody(BaseModel):
 
 class ShopifyProcessProductsBody(BaseModel):
     items: list[ShopifyProductSyncItemBody]
+
+
+class ShopifyMetafieldPreferenceSelectionBody(BaseModel):
+    client_id: str | None = None
+    shop_integration_id: str
+    shopify_metafield_definition_id: str
+    sequence_order: int = Field(ge=0)
+
+
+class ShopifyMetafieldPreferencesCreateBody(BaseModel):
+    item_category_id: str
+    preferences: list[ShopifyMetafieldPreferenceSelectionBody] = Field(min_length=1)
+
+
+class ShopifyMetafieldPreferenceSequenceOrderUpdateBody(BaseModel):
+    sequence_order: int = Field(ge=0)
 
 
 @router.post("/install-url")
@@ -237,6 +267,79 @@ async def lookup_shopify_customers_by_product_identity_route(
     outcome = await run_service(
         lookup_shopify_customers_by_product_identity,
         ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/metafield-preferences")
+async def create_shopify_metafield_preferences_route(
+    body: ShopifyMetafieldPreferencesCreateBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        create_shopify_metafield_preferences,
+        ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/metafield-preferences")
+async def get_shopify_metafield_preferences_route(
+    request: Request,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_shopify_metafield_preferences,
+        ServiceContext(
+            identity=claims,
+            incoming_data={},
+            query_params=dict(request.query_params),
+            session=session,
+        ),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.delete("/metafield-preferences")
+async def delete_shopify_metafield_preferences_route(
+    body: ShopifyMetafieldPreferencesDeleteBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        delete_shopify_metafield_preferences,
+        ServiceContext(identity=claims, incoming_data=body.model_dump(), session=session),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/metafield-preferences/{preference_client_id}")
+async def update_shopify_metafield_preference_sequence_order_route(
+    preference_client_id: str,
+    body: ShopifyMetafieldPreferenceSequenceOrderUpdateBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        update_shopify_metafield_preference_sequence_order,
+        ServiceContext(
+            identity=claims,
+            incoming_data={
+                "client_id": preference_client_id,
+                **body.model_dump(),
+            },
+            session=session,
+        ),
     )
     if not outcome.success:
         return build_err(outcome.error)

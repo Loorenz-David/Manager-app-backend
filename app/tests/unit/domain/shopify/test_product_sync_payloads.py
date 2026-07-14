@@ -1,10 +1,14 @@
 import pytest
 
-from beyo_manager.domain.shopify.product_sync_payloads import build_normalized_product_sync_payload
+from beyo_manager.domain.shopify.product_sync_payloads import (
+    build_normalized_product_sync_payload,
+)
 
 
 @pytest.mark.unit
-def test_build_normalized_product_sync_payload_applies_defaults_and_nested_variant_shape() -> None:
+def test_build_normalized_product_sync_payload_applies_defaults_and_nested_variant_shape() -> (
+    None
+):
     payload = build_normalized_product_sync_payload(
         {
             "title": "Chair",
@@ -41,7 +45,9 @@ def test_build_normalized_product_sync_payload_applies_defaults_and_nested_varia
 
 
 @pytest.mark.unit
-def test_build_normalized_product_sync_payload_uses_article_number_fallback_for_barcode() -> None:
+def test_build_normalized_product_sync_payload_uses_article_number_fallback_for_barcode() -> (
+    None
+):
     payload = build_normalized_product_sync_payload(
         {
             "title": "Table",
@@ -54,3 +60,33 @@ def test_build_normalized_product_sync_payload_uses_article_number_fallback_for_
     assert payload["product"]["status"] == "ACTIVE"
     assert payload["variant"]["barcode"] == "ART-555"
     assert "inventoryItem" not in payload["variant"]
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_allows_per_metafield_type() -> None:
+    payload = build_normalized_product_sync_payload(
+        {
+            "title": "Table",
+            "sku": "SKU-123",
+            "metafields": {
+                "widthcm": {
+                    "type": "dimension",
+                    "value": {"value": 120, "unit": "CENTIMETERS"},
+                },
+                "origin": "warehouse-1",
+            },
+        }
+    )
+
+    assert payload["metafields"] == [
+        {
+            "key": "widthcm",
+            "type": "dimension",
+            "value": '{"value":120,"unit":"CENTIMETERS"}',
+        },
+        {
+            "key": "origin",
+            "type": "single_line_text_field",
+            "value": "warehouse-1",
+        },
+    ]
