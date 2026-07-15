@@ -36,13 +36,20 @@ def _absolutize_external_url(raw_url: str) -> str:
 
 
 def normalize_fargotex_candidate(raw: dict) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+
     name_value = raw.get("name")
     code_value = raw.get("code")
     image_value = raw.get("image")
     external_url_value = raw.get("external_url")
 
     name = name_value.strip() if isinstance(name_value, str) else ""
-    code = code_value.strip() if isinstance(code_value, str) else ""
+    code = (
+        str(code_value).strip()
+        if isinstance(code_value, (str, int, float)) and not isinstance(code_value, bool)
+        else ""
+    )
     image_raw = image_value.strip() if isinstance(image_value, str) else ""
     external_url_raw = external_url_value.strip() if isinstance(external_url_value, str) else ""
 
@@ -53,7 +60,7 @@ def normalize_fargotex_candidate(raw: dict) -> dict | None:
         )
         return None
 
-    return {
+    normalized = {
         "client_id": None,
         "name": name,
         "code": code,
@@ -67,10 +74,29 @@ def normalize_fargotex_candidate(raw: dict) -> dict | None:
         "origin": FARGOTEX_ORIGIN,
     }
 
+    for key in (
+        "variant_name",
+        "variation_id",
+        "parent_name",
+        "sku",
+        "gallery_code",
+        "gallery_position",
+    ):
+        value = raw.get(key)
+        if value is None or isinstance(value, bool):
+            continue
+        value_string = str(value).strip()
+        if value_string:
+            normalized[key] = value_string
+
+    return normalized
+
 
 def normalize_fargotex_candidates(raw_products: list[dict]) -> list[dict]:
     candidates: list[dict] = []
     for raw in raw_products:
+        if not isinstance(raw, dict):
+            continue
         candidate = normalize_fargotex_candidate(raw)
         if candidate is not None:
             candidates.append(candidate)

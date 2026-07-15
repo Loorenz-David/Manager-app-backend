@@ -38,13 +38,14 @@ async def list_upholsteries(ctx: ServiceContext) -> dict:
     )
 
     if q:
-        pattern = f"%{q}%"
-        stmt = stmt.where(
-            or_(
-                Upholstery.name.ilike(pattern),
-                Upholstery.code.ilike(pattern),
+        for term in q.split():
+            pattern = f"%{term}%"
+            stmt = stmt.where(
+                or_(
+                    Upholstery.name.ilike(pattern),
+                    Upholstery.code.ilike(pattern),
+                )
             )
-        )
 
     if favorite_raw is not None:
         favorite = str(favorite_raw).strip().lower() == "true"

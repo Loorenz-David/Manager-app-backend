@@ -12,7 +12,7 @@ from beyo_manager.domain.upholstery.serializers import (
 
 
 @pytest.mark.unit
-def test_serialize_upholstery_returns_net_available_meters():
+def test_serialize_upholstery_returns_raw_inventory_amounts():
     upholstery = SimpleNamespace(
         client_id="uph_1",
         name="Blue Velvet",
@@ -23,19 +23,24 @@ def test_serialize_upholstery_returns_net_available_meters():
     )
     inventory = SimpleNamespace(
         current_stored_amount_meters=Decimal("5.000"),
+        current_amount_in_use_meters=Decimal("2.000"),
         current_amount_in_need_meters=Decimal("1.000"),
+        current_amount_ordered_meters=Decimal("3.000"),
         inventory_condition=UpholsteryInventoryConditionEnum.AVAILABLE,
     )
 
     result = serialize_upholstery(upholstery, inventory)
 
-    assert result["current_stored_amount_meters"] == "4.000"
+    assert result["current_stored_amount_meters"] == "5.000"
+    assert result["current_amount_in_use_meters"] == "2.000"
+    assert result["current_amount_in_need_meters"] == "1.000"
+    assert result["current_amount_ordered_meters"] == "3.000"
     assert result["image_url"] == "https://cdn.example.com/uph-1.jpg"
     assert result["origin"] == "database"
 
 
 @pytest.mark.unit
-def test_serialize_upholstery_never_returns_negative_available_meters():
+def test_serialize_upholstery_handles_null_inventory_amounts():
     upholstery = SimpleNamespace(
         client_id="uph_2",
         name="White Linen",
@@ -45,14 +50,19 @@ def test_serialize_upholstery_never_returns_negative_available_meters():
         list_order=0,
     )
     inventory = SimpleNamespace(
-        current_stored_amount_meters=Decimal("1.000"),
-        current_amount_in_need_meters=Decimal("3.000"),
+        current_stored_amount_meters=None,
+        current_amount_in_use_meters=None,
+        current_amount_in_need_meters=None,
+        current_amount_ordered_meters=None,
         inventory_condition=UpholsteryInventoryConditionEnum.OUT_OF_STOCK,
     )
 
     result = serialize_upholstery(upholstery, inventory)
 
-    assert result["current_stored_amount_meters"] == "0.000"
+    assert result["current_stored_amount_meters"] is None
+    assert result["current_amount_in_use_meters"] is None
+    assert result["current_amount_in_need_meters"] is None
+    assert result["current_amount_ordered_meters"] is None
 
 
 @pytest.mark.unit

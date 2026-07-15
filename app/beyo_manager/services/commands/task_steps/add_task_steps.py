@@ -15,11 +15,15 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.services.commands.task_steps._wire_new_step_dependencies import (
     wire_batch_steps_into_dependency_graph,
 )
+from beyo_manager.services.commands.task_steps._notify_section_workers_of_new_steps import (
+    enqueue_section_workers_new_steps_notification,
+)
 from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _assign_worker_to_step_in_session,
     _resolve_worker_for_section,
 )
 from beyo_manager.services.commands.task_steps.requests import parse_add_task_steps_request
+from beyo_manager.services.commands.tasks._task_state_transitions import maybe_reopen_task_to_working
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -46,6 +50,8 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
     readiness_changed: list[TaskStep] = []
     created_steps: list[TaskStep] = []
     task: Task | None = None
+    old_task_state: TaskStateEnum | None = None
+    task_reopened = False
 
     async with maybe_begin(ctx.session):
         if provided_client_ids:
@@ -70,6 +76,7 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
         task = task_result.scalar_one_or_none()
         if task is None:
             raise NotFound("Task not found.")
+        old_task_state = task.state
 
         if task.state in TERMINAL_TASK_STATES:
             raise ConflictError("Cannot add a step to a terminal task.")
@@ -158,6 +165,13 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
 
             created_steps.append(step)
 
+        if created_steps:
+            task_reopened = maybe_reopen_task_to_working(
+                task,
+                now=now,
+                updated_by_id=ctx.user_id,
+            )
+
         readiness_changed = await wire_batch_steps_into_dependency_graph(
             session=ctx.session,
             workspace_id=ctx.workspace_id,
@@ -165,6 +179,19 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
             task_id=request.task_id,
             user_id=ctx.user_id,
         )
+
+        if task_reopened:
+            await enqueue_section_workers_new_steps_notification(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                task=task,
+                working_section_ids={step.working_section_id for step in created_steps},
+                working_section_names={
+                    section_id: section.name
+                    for section_id, section in section_map.items()
+                },
+                actor_id=ctx.user_id,
+            )
 
     if not created_steps:
         return {"step_ids": []}
@@ -183,6 +210,10 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
             ],
         ),
     ]
+    if old_task_state != task.state:
+        pending_events.append(
+            build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})
+        )
     readiness_items = [
         {
             "client_id": step.client_id,

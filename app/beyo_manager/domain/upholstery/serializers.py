@@ -1,7 +1,5 @@
 """Serialization for upholstery inventory domain objects."""
 
-from decimal import Decimal
-
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.models.tables.upholstery.upholstery_category import UpholsteryCategory
 from beyo_manager.models.tables.upholstery.upholstery_inventory import UpholsteryInventory
@@ -133,13 +131,6 @@ def serialize_upholstery(
     category: UpholsteryCategory | None = None,
     supplier_name: str | None = None,
 ) -> dict:
-    available_stored_amount = None
-    if inventory is not None and inventory.current_stored_amount_meters is not None:
-        net_available = (inventory.current_stored_amount_meters or Decimal("0")) - (
-            inventory.current_amount_in_need_meters or Decimal("0")
-        )
-        available_stored_amount = str(max(net_available, Decimal("0.000")))
-
     return {
         "client_id": row.client_id,
         "name": row.name,
@@ -149,7 +140,26 @@ def serialize_upholstery(
         "favorite": row.favorite,
         "list_order": row.list_order,
         "inventory_id": getattr(inventory, "client_id", None) if inventory is not None else None,
-        "current_stored_amount_meters": available_stored_amount,
+        "current_stored_amount_meters": (
+            str(inventory.current_stored_amount_meters)
+            if inventory is not None and inventory.current_stored_amount_meters is not None
+            else None
+        ),
+        "current_amount_in_use_meters": (
+            str(inventory.current_amount_in_use_meters)
+            if inventory is not None and inventory.current_amount_in_use_meters is not None
+            else None
+        ),
+        "current_amount_in_need_meters": (
+            str(inventory.current_amount_in_need_meters)
+            if inventory is not None and inventory.current_amount_in_need_meters is not None
+            else None
+        ),
+        "current_amount_ordered_meters": (
+            str(inventory.current_amount_ordered_meters)
+            if inventory is not None and inventory.current_amount_ordered_meters is not None
+            else None
+        ),
         "inventory_condition": inventory.inventory_condition.value if inventory is not None else None,
         "supplier_name": supplier_name,
         "upholstery_category": {

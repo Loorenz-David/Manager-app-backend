@@ -1,10 +1,29 @@
+import json
 import re
+from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 from beyo_manager.services.infra.fargotex.constants import FARGOTEX_BASE_URL
 
 _POST_ID_PATTERN = re.compile(r"\bpost-(\d+)\b")
+_GALLERY_IMAGE_CODE_PATTERN = re.compile(r"(?:^|[-_])(\d{1,3})(?=$|[-_])")
+_VOID_TAGS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
 
 
 def _collapse_whitespace(value: str) -> str:
@@ -36,6 +55,18 @@ def _extract_image_from_attrs(attrs: list[tuple[str, str | None]]) -> str:
     if srcset:
         return srcset.split(",")[0].strip().split(" ")[0]
     return ""
+
+
+def _is_fargotex_product_url(url: str) -> bool:
+    parsed = urlparse(url)
+    base = urlparse(FARGOTEX_BASE_URL)
+    path = parsed.path.rstrip("/")
+    return (
+        parsed.scheme == base.scheme
+        and parsed.netloc == base.netloc
+        and path.startswith("/produkt/")
+        and bool(path.removeprefix("/produkt/"))
+    )
 
 
 def _slug_from_url(url: str) -> str:
@@ -119,7 +150,7 @@ class _FargotexListingParser(HTMLParser):
     def _flush_card(self) -> None:
         assert self.current_card is not None
         external_url = self.current_card["external_url"]
-        if not external_url or "/produkt/" not in external_url:
+        if not _is_fargotex_product_url(external_url):
             return
 
         name = _collapse_whitespace(" ".join(self.current_card["name_parts"]))
@@ -144,7 +175,245 @@ def parse_fargotex_listing_candidates(html: str) -> list[dict]:
     return list(parser.results_by_url.values())
 
 
-def has_next_fargotex_page(html: str) -> bool:
-    if re.search(r'<a[^>]+(?:class="[^"]*(?:nextp|next page-numbers)[^"]*"|href="[^"]+")[^>]+(?:class="[^"]*(?:nextp|next page-numbers)[^"]*"|href="[^"]+")', html, re.IGNORECASE):
+class _FargotexVariationFormParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.raw_variations: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "form" or self.raw_variations:
+            return
+        class_tokens = _extract_attr(attrs, "class").split()
+        if "variations_form" not in class_tokens:
+            return
+        self.raw_variations = _extract_attr(attrs, "data-product_variations")
+
+
+def _string_value(value: object) -> str:
+    if isinstance(value, bool) or value is None:
+        return ""
+    if isinstance(value, (str, int, float)):
+        return str(value).strip()
+    return ""
+
+
+def _is_explicitly_false(value: object) -> bool:
+    if value is False:
         return True
-    return re.search(r'<link[^>]+rel="next"[^>]+href="[^"]+"', html, re.IGNORECASE) is not None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 0
+    return isinstance(value, str) and value.strip().casefold() in {
+        "false",
+        "0",
+        "no",
+        "off",
+    }
+
+
+def _resolve_variation_label(attributes: object) -> str:
+    if not isinstance(attributes, dict):
+        return ""
+
+    # Keep the source-specific lookup isolated so renamed or multi-dimensional
+    # attribute schemes can be added without changing payload parsing.
+    preferred_keys = (
+        "attribute_pa_kolory",
+        "attribute_kolory",
+        "attribute_color",
+        "attribute_colour",
+    )
+    for key in preferred_keys:
+        label = _string_value(attributes.get(key))
+        if label:
+            return _collapse_whitespace(unescape(label))
+    return ""
+
+
+def _resolve_variation_image(variation: dict) -> str:
+    image = variation.get("image")
+    if not isinstance(image, dict):
+        return ""
+    for key in ("full_src", "url", "src"):
+        value = _string_value(image.get(key))
+        if value:
+            return _absolutize_url(unescape(value))
+    return ""
+
+
+def _parse_variation_payload(raw_payload: str) -> list[dict]:
+    if not raw_payload:
+        return []
+
+    try:
+        payload = json.loads(unescape(raw_payload))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+
+    variations: list[dict] = []
+    for variation in payload:
+        if not isinstance(variation, dict):
+            continue
+        if _is_explicitly_false(variation.get("variation_is_active")):
+            continue
+        if _is_explicitly_false(variation.get("variation_is_visible")):
+            continue
+
+        variation_id = _string_value(variation.get("variation_id"))
+        attributes = variation.get("attributes")
+        variant_name = _resolve_variation_label(attributes)
+        if not variation_id or not variant_name:
+            continue
+
+        sku = _string_value(variation.get("sku"))
+        variations.append(
+            {
+                "code": variation_id,
+                "variation_id": variation_id,
+                "sku": sku,
+                "attributes": attributes if isinstance(attributes, dict) else {},
+                "variant_name": variant_name,
+                "image": _resolve_variation_image(variation),
+            }
+        )
+    return variations
+
+
+def parse_fargotex_product_variations(html: str) -> list[dict]:
+    """Parse usable WooCommerce variations from a Fargotex product page."""
+    parser = _FargotexVariationFormParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return []
+    return _parse_variation_payload(parser.raw_variations)
+
+
+def _extract_gallery_image_code(image_url: str) -> str:
+    path = urlparse(image_url).path
+    filename = path.rsplit("/", 1)[-1]
+    stem = filename.rsplit(".", 1)[0]
+    matches = _GALLERY_IMAGE_CODE_PATTERN.findall(stem)
+    return matches[-1] if matches else ""
+
+
+class _FargotexGalleryParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.wrapper_depth = 0
+        self.current_item: dict | None = None
+        self.items: list[dict] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        class_tokens = _extract_attr(attrs, "class").split()
+        is_wrapper = "woocommerce-product-gallery__wrapper" in class_tokens
+
+        if self.wrapper_depth == 0:
+            if not is_wrapper:
+                return
+            self.wrapper_depth = 1
+            return
+
+        if self.current_item is None and "woocommerce-product-gallery__image" in class_tokens:
+            self.current_item = {
+                "anchor_url": "",
+                "image_url": "",
+                "thumbnail_url": "",
+                "alt": "",
+            }
+
+        if self.current_item is not None:
+            if tag == "a" and not self.current_item["anchor_url"]:
+                self.current_item["anchor_url"] = _extract_attr(attrs, "href")
+            elif tag == "img" and not self.current_item["image_url"]:
+                self.current_item["image_url"] = _extract_attr(attrs, "data-large_image")
+                if not self.current_item["image_url"]:
+                    self.current_item["image_url"] = _extract_attr(attrs, "data-src")
+                if not self.current_item["image_url"]:
+                    self.current_item["image_url"] = _extract_attr(attrs, "src")
+                self.current_item["thumbnail_url"] = _extract_attr(attrs, "src")
+                if not self.current_item["thumbnail_url"]:
+                    self.current_item["thumbnail_url"] = _extract_attr(attrs, "data-src")
+                self.current_item["alt"] = _extract_attr(attrs, "alt")
+
+        if tag not in _VOID_TAGS:
+            self.wrapper_depth += 1
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in _VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.wrapper_depth == 0:
+            return
+
+        if self.current_item is not None and self.wrapper_depth == 2:
+            self._flush_item()
+
+        if tag not in _VOID_TAGS:
+            self.wrapper_depth -= 1
+            if self.wrapper_depth == 0:
+                self.current_item = None
+
+    def _flush_item(self) -> None:
+        if self.current_item is None:
+            return
+        item = self.current_item
+        image_url = _absolutize_url(item["anchor_url"] or item["image_url"])
+        thumbnail_url = _absolutize_url(item["thumbnail_url"])
+        position = len(self.items) + 1
+        self.items.append(
+            {
+                "position": position,
+                "image_code": _extract_gallery_image_code(image_url),
+                "image_url": image_url,
+                "thumbnail_url": thumbnail_url,
+                "alt": _collapse_whitespace(item["alt"]),
+                "is_main": position == 1,
+            }
+        )
+        self.current_item = None
+
+
+def parse_fargotex_product_gallery(html: str) -> list[dict]:
+    """Resolve ordered gallery assets without inferring variation identity."""
+    parser = _FargotexGalleryParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return []
+    return parser.items
+
+
+# Explicit alias for callers that describe the result as gallery images.
+parse_fargotex_gallery_images = parse_fargotex_product_gallery
+
+
+class _FargotexNextPageParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.found_next_page = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "a":
+            class_tokens = _extract_attr(attrs, "class").split()
+            if "next" in class_tokens or "nextp" in class_tokens:
+                self.found_next_page = True
+        elif tag == "link":
+            rel_tokens = _extract_attr(attrs, "rel").split()
+            if "next" in rel_tokens:
+                self.found_next_page = True
+
+
+def has_next_fargotex_page(html: str) -> bool:
+    parser = _FargotexNextPageParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return False
+    return parser.found_next_page

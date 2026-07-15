@@ -30,6 +30,27 @@ def maybe_advance_task_to_working(
     return True
 
 
+def maybe_reopen_task_to_working(
+    task: Task,
+    *,
+    now: datetime,
+    updated_by_id: str,
+) -> bool:
+    """Move a ready task back into active work when new work is added.
+
+    This is intentionally a separate transition from ``ASSIGNED -> WORKING``:
+    adding a new task step reopens a task that had already reached ``READY``.
+    Callers own the transaction and any domain-event dispatch.
+    """
+    if task.state != TaskStateEnum.READY:
+        return False
+
+    task.state = TaskStateEnum.WORKING
+    task.updated_at = now
+    task.updated_by_id = updated_by_id
+    return True
+
+
 async def maybe_evaluate_task_ready(
     session: AsyncSession,
     task: Task,
