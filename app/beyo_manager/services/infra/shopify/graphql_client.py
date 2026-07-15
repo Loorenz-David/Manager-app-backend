@@ -182,6 +182,21 @@ async def execute_shopify_graphql(
             reason="throttled" if throttle_error else "graphql_errors",
             status_code=response.status_code,
         )
+        if not throttle_error:
+            error_summaries = [
+                {
+                    "message": str((error or {}).get("message") or "")[:300],
+                    "code": str(((error or {}).get("extensions") or {}).get("code") or ""),
+                }
+                for error in errors
+                if isinstance(error, dict)
+            ]
+            logger.warning(
+                "shopify_graphql_diag | top_level_errors | operation=%s error_count=%s errors=%s",
+                operation_name,
+                len(errors),
+                error_summaries,
+            )
         if throttle_error:
             raise ShopifyGraphQLRetryableError(
                 "Shopify GraphQL request was throttled.",

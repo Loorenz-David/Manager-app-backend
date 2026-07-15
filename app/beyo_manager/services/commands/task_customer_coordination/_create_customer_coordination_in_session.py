@@ -4,7 +4,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
-from beyo_manager.domain.tasks.enums import TaskCustomerCoordinationStateEnum
+from beyo_manager.domain.tasks.enums import (
+    TaskCustomerCoordinationStateEnum,
+    TaskReturnSourceEnum,
+    TaskTypeEnum,
+)
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_customer_coordination import TaskCustomerCoordination
 from beyo_manager.services.commands.history._create_history_record_in_session import (
@@ -21,6 +25,14 @@ async def _create_customer_coordination_in_session(
     user_id: str,
     username_snapshot: str | None = None,
 ) -> TaskCustomerCoordination | None:
+    is_pre_order = task.task_type == TaskTypeEnum.PRE_ORDER
+    is_non_store_return = (
+        task.task_type == TaskTypeEnum.RETURN
+        and task.return_source != TaskReturnSourceEnum.STORE_RETURN
+    )
+    if not is_pre_order and not is_non_store_return:
+        return None
+
     existing = (
         await session.execute(
             select(TaskCustomerCoordination).where(

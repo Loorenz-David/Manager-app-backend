@@ -105,7 +105,7 @@ async def handle_shopify_process_products(raw: dict, task_client_id: str) -> Non
 
 
 def _success_entry(row: ShopifyProductSyncItem) -> dict:
-    return {
+    result = {
         "frontend_client_id": row.frontend_client_id,
         "shop_integration_id": row.shop_integration_id,
         "sync_item_client_id": row.client_id,
@@ -113,10 +113,13 @@ def _success_entry(row: ShopifyProductSyncItem) -> dict:
         "shopify_product_id": row.shopify_product_id,
         "shopify_variant_id": row.shopify_variant_id,
     }
+    if getattr(row, "inventory_result_json", None) is not None:
+        result["inventory"] = row.inventory_result_json
+    return result
 
 
 def _failure_entry(row: ShopifyProductSyncItem) -> dict:
-    return {
+    result = {
         "frontend_client_id": row.frontend_client_id,
         "shop_integration_id": row.shop_integration_id,
         "sync_item_client_id": row.client_id,
@@ -124,3 +127,6 @@ def _failure_entry(row: ShopifyProductSyncItem) -> dict:
         "error_code": row.error_code,
         "error_message": row.error_message,
     }
+    if getattr(row, "inventory_result_json", None) is not None:
+        result["inventory"] = row.inventory_result_json
+    return result

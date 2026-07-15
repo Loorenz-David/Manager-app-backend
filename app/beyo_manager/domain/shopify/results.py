@@ -154,3 +154,18 @@ class ShopifyMetafieldDefinitionResult:
     type: str | None
     validations: list[dict] | None
     reference_options: dict | None
+
+
+@dataclass(frozen=True)
+class ShopifyLocationResult:
+    location_id: str
+    name: str
+    is_active: bool
+
+
+@dataclass(frozen=True)
+class ShopifyLocationsShopResult:
+    shop_integration_id: str
+    shop_domain: str
+    status: str
+    locations: list[ShopifyLocationResult]

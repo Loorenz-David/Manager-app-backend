@@ -90,3 +90,37 @@ def test_build_normalized_product_sync_payload_allows_per_metafield_type() -> No
             "value": "warehouse-1",
         },
     ]
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_routes_inventory_to_one_shop() -> None:
+    item = {
+        "title": "Table",
+        "sku": "SKU-123",
+        "inventory_adjustments": [
+            {
+                "shop_integration_id": "shpint_1",
+                "location_id": "gid://shopify/Location/1",
+                "quantity_to_add": 2,
+            },
+            {
+                "shop_integration_id": "shpint_2",
+                "location_id": "gid://shopify/Location/2",
+                "quantity_to_add": 4,
+            },
+        ],
+    }
+
+    first = build_normalized_product_sync_payload(item, shop_integration_id="shpint_1")
+    second = build_normalized_product_sync_payload(item, shop_integration_id="shpint_2")
+
+    assert first["inventory"] == {
+        "adjustments": [
+            {"location_id": "gid://shopify/Location/1", "quantity_to_add": 2}
+        ]
+    }
+    assert second["inventory"] == {
+        "adjustments": [
+            {"location_id": "gid://shopify/Location/2", "quantity_to_add": 4}
+        ]
+    }

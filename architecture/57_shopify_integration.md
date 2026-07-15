@@ -223,6 +223,14 @@ A `ShopifyGraphQLError` from any single topic's create/delete call is caught per
 
 ---
 
+## Product-sync inventory increments
+
+Product sync accepts optional, shop-tagged positive inventory adjustments. The command normalizes them into one payload per target shop, and the Shopify worker applies product/variant changes before inventory changes and metafields. Inventory changes use Shopify's additive `inventoryAdjustQuantities` operation and never set or decrement stock.
+
+The `shopify_inventory_adjustments` ledger is the durable idempotency boundary. Its unique key is `(shop_integration_id, frontend_client_id, shopify_location_id)`; applied rows are skipped on resubmission, while pending rows use a baseline re-query before an adjustment is retried. Per-location outcomes are stored on `shopify_product_sync_items.inventory_result_json`, and an inventory failure leaves the sync item `FAILED` with an inventory-specific error code.
+
+The locations query is workspace-scoped and reads live Shopify locations, including inactive locations. Inventory execution validates location ownership again at worker time. `read_locations` and `write_inventory` are required for inventory-enabled syncs; product-only syncs remain unaffected when those scopes are missing.
+
 ## Worker & queue wiring
 
 - Queue: `queue:shopify` — dedicated, shared by all four Shopify task types (`services/infra/execution/task_router.py`'s `QUEUE_MAP`). Do not add a Shopify task type to any other queue, and do not route a non-Shopify task type onto `queue:shopify`.

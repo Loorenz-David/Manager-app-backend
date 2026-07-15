@@ -12,7 +12,11 @@ _WEIGHT_UNIT_MAP = {
 }
 
 
-def build_normalized_product_sync_payload(item: Mapping[str, object]) -> dict:
+def build_normalized_product_sync_payload(
+    item: Mapping[str, object],
+    *,
+    shop_integration_id: str | None = None,
+) -> dict:
     barcode = _clean_str(item.get("item_article_number")) or _clean_str(
         item.get("article_number")
     )
@@ -58,11 +62,30 @@ def build_normalized_product_sync_payload(item: Mapping[str, object]) -> dict:
             }
         )
 
-    return {
+    payload = {
         "product": _drop_none(product),
         "variant": _drop_none(variant),
         "metafields": metafields,
     }
+
+    adjustments = []
+    for adjustment in item.get("inventory_adjustments") or []:
+        if not isinstance(adjustment, Mapping):
+            continue
+        if shop_integration_id is not None and adjustment.get("shop_integration_id") != shop_integration_id:
+            continue
+        quantity = adjustment.get("quantity_to_add")
+        location_id = _clean_str(adjustment.get("location_id"))
+        if isinstance(quantity, int) and quantity > 0 and location_id is not None:
+            adjustments.append(
+                {
+                    "location_id": location_id,
+                    "quantity_to_add": quantity,
+                }
+            )
+    if adjustments:
+        payload["inventory"] = {"adjustments": adjustments}
+    return payload
 
 
 def _normalize_status(value: object) -> str:

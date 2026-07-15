@@ -105,7 +105,13 @@ class Settings(BaseSettings):
     # Shopify
     shopify_client_id: str | None = Field(default=None, alias="SHOPIFY_CLIENT_ID")
     shopify_client_secret: str | None = Field(default=None, alias="SHOPIFY_CLIENT_SECRET")
-    shopify_app_scopes: str = Field(default="", alias="SHOPIFY_APP_SCOPES")
+    shopify_app_scopes: str = Field(
+        default=(
+            "read_products,write_products,read_orders,write_orders,read_customers,write_customers,"
+            "read_all_orders,read_metaobject_definitions,read_metaobjects,read_locations,write_inventory"
+        ),
+        alias="SHOPIFY_APP_SCOPES",
+    )
     shopify_redirect_uri: str | None = Field(default=None, alias="SHOPIFY_REDIRECT_URI")
     shopify_oauth_redirect_url: str | None = Field(default=None, alias="SHOPIFY_OAUTH_REDIRECT_URL")
     shopify_api_version: str = Field(default="2026-01", alias="SHOPIFY_API_VERSION")

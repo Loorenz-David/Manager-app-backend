@@ -65,6 +65,8 @@ async def route_list_upholstery_categories(
     offset: int = Query(0, ge=0),
     q: str | None = Query(None),
     favorite: bool | None = Query(None),
+    upholstery_favorite: bool | None = Query(None),
+    in_stock: bool | None = Query(None),
 ):
     ctx = ServiceContext(
         incoming_data={},
@@ -73,6 +75,8 @@ async def route_list_upholstery_categories(
             "offset": offset,
             "q": q,
             "favorite": favorite,
+            "upholstery_favorite": upholstery_favorite,
+            "in_stock": in_stock,
         },
         identity=claims,
         session=session,

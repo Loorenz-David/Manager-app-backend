@@ -21,6 +21,9 @@ query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
           id
           status
         }
+        inventoryItem {
+          id
+        }
       }
     }
   }
@@ -71,6 +74,7 @@ mutation BulkUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput
       id
       barcode
       inventoryItem {
+        id
         sku
       }
     }
@@ -162,17 +166,20 @@ async def create_shopify_product(
     default_variant = ((default_variant_edges[0] or {}).get("node") or {}) if default_variant_edges else {}
     variant_id = _required_id(default_variant.get("id"), "Shopify default variant id missing after create.")
 
-    updated_variant_id = await _bulk_update_variant(
+    updated_variant_id, updated_variant_inventory_item_id = await _bulk_update_variant(
         shop_domain=shop_domain,
         access_token_encrypted=access_token_encrypted,
         product_id=product_id,
         variant_payload={"id": variant_id, **normalized_payload["variant"]},
         operation_name="create_shopify_product_variant_update",
     )
-    return {
+    result = {
         "shopify_product_id": product_id,
         "shopify_variant_id": updated_variant_id,
     }
+    if updated_variant_inventory_item_id is not None:
+        result["shopify_inventory_item_id"] = updated_variant_inventory_item_id
+    return result
 
 
 async def update_shopify_product(
@@ -182,6 +189,7 @@ async def update_shopify_product(
     shopify_product_id: str,
     shopify_variant_id: str,
     normalized_payload: dict,
+    fallback_inventory_item_id: str | None = None,
 ) -> dict:
     data = await execute_shopify_graphql(
         shop_domain=shop_domain,
@@ -202,17 +210,21 @@ async def update_shopify_product(
         shop_domain=shop_domain,
     )
 
-    updated_variant_id = await _bulk_update_variant(
+    updated_variant_id, updated_variant_inventory_item_id = await _bulk_update_variant(
         shop_domain=shop_domain,
         access_token_encrypted=access_token_encrypted,
         product_id=shopify_product_id,
         variant_payload={"id": shopify_variant_id, **normalized_payload["variant"]},
         operation_name="update_shopify_product_variant_update",
     )
-    return {
+    result = {
         "shopify_product_id": shopify_product_id,
         "shopify_variant_id": updated_variant_id,
     }
+    inventory_item_id = updated_variant_inventory_item_id or fallback_inventory_item_id
+    if inventory_item_id is not None:
+        result["shopify_inventory_item_id"] = inventory_item_id
+    return result
 
 
 async def set_shopify_product_metafields(
@@ -279,7 +291,7 @@ async def _bulk_update_variant(
     product_id: str,
     variant_payload: dict,
     operation_name: str,
-) -> str:
+) -> tuple[str, str | None]:
     data = await execute_shopify_graphql(
         shop_domain=shop_domain,
         access_token_encrypted=access_token_encrypted,
@@ -297,8 +309,13 @@ async def _bulk_update_variant(
         shop_domain=shop_domain,
     )
     variants = response.get("productVariants") or []
-    updated_variant_id = _clean_str((variants[0] or {}).get("id")) if variants else None
-    return updated_variant_id or str(variant_payload["id"])
+    variant = (variants[0] or {}) if variants else {}
+    updated_variant_id = _clean_str(variant.get("id"))
+    inventory_item = variant.get("inventoryItem") or {}
+    return (
+        updated_variant_id or str(variant_payload["id"]),
+        _clean_str(inventory_item.get("id")),
+    )
 
 
 def _has_exact_variant_match(variant_nodes: list[dict], *, identity_key: str, identity_value: str) -> bool:

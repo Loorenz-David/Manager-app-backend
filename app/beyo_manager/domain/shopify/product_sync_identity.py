@@ -13,6 +13,7 @@ class ProductSyncMatchResult:
     found: bool
     shopify_product_id: str | None = None
     shopify_variant_id: str | None = None
+    shopify_inventory_item_id: str | None = None
 
 
 def select_exact_variant_match(
@@ -34,20 +35,22 @@ def select_exact_variant_match(
         variant_id = _clean_str(variant_node.get("id"))
         if product_id is None or variant_id is None:
             continue
-        exact_matches.append((product_id, variant_id))
+        inventory_item = variant_node.get("inventoryItem") or {}
+        exact_matches.append((product_id, variant_id, _clean_str(inventory_item.get("id"))))
 
     if not exact_matches:
         return ProductSyncMatchResult(found=False)
 
-    product_ids = {product_id for product_id, _variant_id in exact_matches}
+    product_ids = {product_id for product_id, _variant_id, _inventory_item_id in exact_matches}
     if len(product_ids) > 1:
         raise ShopifyProductLookupAmbiguousError()
 
-    product_id, variant_id = exact_matches[0]
+    product_id, variant_id, inventory_item_id = exact_matches[0]
     return ProductSyncMatchResult(
         found=True,
         shopify_product_id=product_id,
         shopify_variant_id=variant_id,
+        shopify_inventory_item_id=inventory_item_id,
     )
 
 

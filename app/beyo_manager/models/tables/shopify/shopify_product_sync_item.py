@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -8,6 +9,9 @@ from beyo_manager.domain.shopify.enums import ShopifyProductSyncItemStatusEnum, 
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
 from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+if TYPE_CHECKING:
+    from beyo_manager.models.tables.users.user import User
 
 
 SAEnum = configure_sa_enum_values(SAEnum)
@@ -53,6 +57,8 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
     normalized_payload_json: Mapped[dict] = mapped_column("normalized_payload", JSONB, nullable=False)
     shopify_product_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shopify_variant_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shopify_inventory_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inventory_result_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_id: Mapped[str | None] = mapped_column(

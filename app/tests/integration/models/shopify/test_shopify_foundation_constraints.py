@@ -6,12 +6,14 @@ from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationStatusEnum,
+    ShopifyInventoryAdjustmentStatusEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyWebhookPayloadFormatEnum,
     ShopifyWebhookSubscriptionStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_oauth_state import ShopifyOAuthState
 from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
+from beyo_manager.models.tables.shopify.shopify_inventory_adjustment import ShopifyInventoryAdjustment
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.models.tables.shopify.shopify_webhook_intake import ShopifyWebhookIntake
 from beyo_manager.models.tables.shopify.shopify_webhook_subscription import ShopifyWebhookSubscription
@@ -290,6 +292,42 @@ async def test_shopify_product_sync_item_enforces_foreign_keys_and_default_statu
             normalized_payload_json={"product": {"title": "Table"}, "variant": {"barcode": "BAR-2"}, "metafields": []},
             created_by_id=user.client_id,
         )
+    )
+
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+    await db_session.rollback()
+
+
+@pytest.mark.integration
+async def test_inventory_adjustment_idempotency_key_is_unique(db_session) -> None:
+    workspace, _, user, suffix = await _seed_workspace_and_user(db_session)
+    integration = _shop_integration(
+        suffix=f"{suffix}_inventory",
+        workspace_id=workspace.client_id,
+        shop_domain=f"inventory-{suffix}.myshopify.com",
+        status=ShopifyIntegrationStatusEnum.ACTIVE,
+    )
+    db_session.add(integration)
+    await db_session.flush()
+
+    common = {
+        "workspace_id": workspace.client_id,
+        "shop_integration_id": integration.client_id,
+        "frontend_client_id": "frontend_inventory_1",
+        "shopify_inventory_item_id": "gid://shopify/InventoryItem/1",
+        "shopify_location_id": "gid://shopify/Location/1",
+        "requested_delta": 2,
+        "reference_uri": "managerbeyo://inventory-adjustment/frontend_inventory_1/1",
+        "created_by_id": user.client_id,
+        "status": ShopifyInventoryAdjustmentStatusEnum.PENDING,
+    }
+    db_session.add_all(
+        [
+            ShopifyInventoryAdjustment(client_id=f"shpia_{suffix}_one", **common),
+            ShopifyInventoryAdjustment(client_id=f"shpia_{suffix}_two", **common),
+        ]
     )
 
     with pytest.raises(IntegrityError):

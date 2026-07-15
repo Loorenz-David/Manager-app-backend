@@ -60,6 +60,63 @@ Role values (JWT `role_name` claim): `admin`, `manager`, `worker`, `seller`. Eve
 
 `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SCOPES`, `SHOPIFY_REDIRECT_URI`, `SHOPIFY_API_VERSION`, `SHOPIFY_WEBHOOK_BASE_URL`, `SHOPIFY_WEBHOOK_SECRET`, `SHOPIFY_OAUTH_REDIRECT_URL`, `FIELD_ENCRYPTION_KEY` must be set on the backend for the flow to work end-to-end. None of these gate whether the routes exist — they gate whether Shopify's own APIs accept the requests the backend sends them.
 
+### Inventory additions (2026-07-15)
+
+The product process route accepts an optional tagged inventory field on each item:
+
+```json
+{
+  "inventory_adjustments": [
+    {
+      "shop_integration_id": "shpint_...",
+      "location_id": "gid://shopify/Location/123",
+      "quantity_to_add": 2
+    }
+  ]
+}
+```
+
+The shop tag is required even when the request targets multiple shops. The backend routes each adjustment to the matching shop-scoped sync item. `quantity_to_add` must be a non-negative integer; zero is dropped, negative values, malformed Location GIDs, and duplicate shop/location pairs are rejected. A stable frontend item `client_id` makes a repeat submission idempotent for the same shop/location; changing the quantity on that same item does not create a second increment.
+
+The process event may include an optional `inventory` object containing per-location `outcome` values (`applied`, `already_applied`, or `failed`) and `shopify_error_code` values.
+
+## Route 2a — List live Shopify locations
+
+`GET /api/v1/integrations/shopify/locations?shop_integration_ids=shpint_1,shpint_2`
+
+- **Auth:** JWT required. Roles: `admin`, `manager`, `seller`, `worker`.
+- **Scope:** workspace-scoped. A requested shop ID belonging to another workspace returns `404`.
+- **Behavior:** live Shopify read; inactive Shopify locations are included so the worker can validate/activate them. One shop's failure does not blank the other shops' results.
+
+**Success response `data`:**
+
+```json
+{
+  "shops": [
+    {
+      "shop_integration_id": "shpint_1",
+      "shop_domain": "warehouse.myshopify.com",
+      "status": "ok",
+      "locations": [
+        {
+          "location_id": "gid://shopify/Location/123",
+          "name": "Warehouse A",
+          "is_active": true
+        }
+      ]
+    },
+    {
+      "shop_integration_id": "shpint_2",
+      "shop_domain": "store.myshopify.com",
+      "status": "needs_reauth",
+      "locations": []
+    }
+  ]
+}
+```
+
+`status` is `ok`, `needs_reauth` when `read_locations` is missing, or `error` when the live Shopify read fails. The picker should disable inventory input for `needs_reauth` and show the existing shop reauthorization action.
+
 ---
 
 ## Route 1 — Create Shopify install URL

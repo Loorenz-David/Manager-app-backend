@@ -46,6 +46,12 @@ class ShopifyProductSyncItemStatusEnum(StrEnum):
     FAILED = "failed"
 
 
+class ShopifyInventoryAdjustmentStatusEnum(StrEnum):
+    PENDING = "pending"
+    APPLIED = "applied"
+    FAILED = "failed"
+
+
 class ShopifyIntegrationEventTypeEnum(StrEnum):
     INSTALL = "install"
     REAUTHORIZE = "reauthorize"

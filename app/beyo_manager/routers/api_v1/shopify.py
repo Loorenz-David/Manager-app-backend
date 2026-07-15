@@ -46,6 +46,7 @@ from beyo_manager.services.queries.shopify.lookup_shopify_customers_by_product_i
     lookup_shopify_customers_by_product_identity,
 )
 from beyo_manager.services.queries.shopify.get_shopify_metafield_preferences import get_shopify_metafield_preferences
+from beyo_manager.services.queries.shopify.get_shopify_locations import get_shopify_locations
 from beyo_manager.services.run_service import run_service
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,12 @@ class ShopifyProductSyncWeightBody(BaseModel):
     unit: str
 
 
+class ShopifyInventoryAdjustmentBody(BaseModel):
+    shop_integration_id: str
+    location_id: str
+    quantity_to_add: int
+
+
 class ShopifyProductSyncItemBody(BaseModel):
     client_id: str
     target_shop_integration_ids: list[str] | None = None
@@ -90,6 +97,7 @@ class ShopifyProductSyncItemBody(BaseModel):
     item_article_number: str | None = None
     article_number: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
+    inventory_adjustments: list[ShopifyInventoryAdjustmentBody] = Field(default_factory=list)
 
 
 class ShopifyProcessProductsBody(BaseModel):
@@ -296,6 +304,26 @@ async def get_shopify_metafield_preferences_route(
 ):
     outcome = await run_service(
         get_shopify_metafield_preferences,
+        ServiceContext(
+            identity=claims,
+            incoming_data={},
+            query_params=dict(request.query_params),
+            session=session,
+        ),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/locations")
+async def get_shopify_locations_route(
+    request: Request,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    outcome = await run_service(
+        get_shopify_locations,
         ServiceContext(
             identity=claims,
             incoming_data={},

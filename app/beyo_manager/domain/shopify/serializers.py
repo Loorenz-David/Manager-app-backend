@@ -11,6 +11,7 @@ from beyo_manager.domain.shopify.results import (
     ShopifyIntegrationEventHistoryRecordResult,
     ShopifyMetafieldDefinitionResult,
     ShopifyMetafieldPreferenceResult,
+    ShopifyLocationsShopResult,
     ShopifyScopeStatusResult,
     ShopifyShopIntegrationResult,
     ShopifyWebhookIntakeHistoryRecordResult,
@@ -181,6 +182,29 @@ def serialize_shopify_metafield_preferences_response(data: dict) -> dict:
                 "search_pagination": shop["search_pagination"],
             }
             for shop in data["shops"]
+        ]
+    }
+
+
+def serialize_shopify_locations_response(
+    shops: list[ShopifyLocationsShopResult],
+) -> dict:
+    return {
+        "shops": [
+            {
+                "shop_integration_id": shop.shop_integration_id,
+                "shop_domain": shop.shop_domain,
+                "status": shop.status,
+                "locations": [
+                    {
+                        "location_id": location.location_id,
+                        "name": location.name,
+                        "is_active": location.is_active,
+                    }
+                    for location in shop.locations
+                ],
+            }
+            for shop in shops
         ]
     }
 

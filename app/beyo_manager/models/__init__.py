@@ -136,6 +136,7 @@ from beyo_manager.models.tables.shopify import shopify_integration_event  # noqa
 from beyo_manager.models.tables.shopify import shopify_metafield_preference  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_oauth_state  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_product_sync_item  # noqa: F401
+from beyo_manager.models.tables.shopify import shopify_inventory_adjustment  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_shop_integration  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_webhook_intake  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_webhook_subscription  # noqa: F401
