@@ -16,12 +16,16 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligations_acknowledged import (
+    mark_step_obligations_acknowledged,
+)
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.commands.task_steps.requests import parse_batch_transition_step_state_request
 from beyo_manager.services.commands.task_steps.transition_step_state import _ALLOWED_TRANSITIONS
@@ -160,6 +164,17 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
                     "new_state": new_state.value,
                     "last_state_record": serialize_step_state_record_light(applied.new_record),
                 }
+            )
+
+        # Starting the work fulfills any reassignment: acknowledge all
+        # still-pending obligations for every step moved to WORKING (one bulk
+        # update for the whole batch).
+        if new_state == TaskStepStateEnum.WORKING:
+            await mark_step_obligations_acknowledged(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                step_ids=step_ids,
+                now=now,
             )
 
         # --- Coalesced notifications ---

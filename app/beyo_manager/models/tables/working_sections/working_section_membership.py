@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.models.base.base import Base
@@ -20,6 +20,10 @@ class WorkingSectionMembership(IdentityMixin, Base):
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    # Per-user ordering of their active sections within a workspace (lower = higher priority).
+    # Dense 0-based, maintained as an application invariant by the working-section membership
+    # commands (no DB unique constraint: row-by-row reorders would hit transient collisions).
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     assigned_by_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=False

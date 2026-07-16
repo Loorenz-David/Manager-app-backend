@@ -1,18 +1,10 @@
 from dataclasses import asdict
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
-from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.models.tables.roles.role import Role
-from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.task import Task
-from beyo_manager.models.tables.working_sections.working_section_membership import (
-    WorkingSectionMembership,
-)
-from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
@@ -21,42 +13,26 @@ async def enqueue_section_workers_new_steps_notification(
     *,
     workspace_id: str,
     task: Task,
-    working_section_ids: set[str],
+    members_by_section: dict[str, list[str]],
     working_section_names: dict[str, str],
     actor_id: str,
 ) -> bool:
-    """Enqueue one deduplicated notification for workers of newly added sections.
+    """Enqueue one deduplicated notification for members of newly added sections.
+
+    Takes the already-resolved ``members_by_section`` (see
+    ``resolve_section_worker_ids``) so the audience is queried once per
+    ``add_task_steps`` call and shared with the acknowledgment obligations —
+    never re-resolved here.
 
     This helper intentionally does not own a transaction or dispatch events. The
     caller keeps the notification task atomic with the step creation and task
     state transition.
     """
-    if not working_section_ids:
-        return False
-
-    result = await session.execute(
-        select(WorkingSectionMembership.user_id)
-        .join(
-            WorkspaceMembership,
-            WorkspaceMembership.user_id == WorkingSectionMembership.user_id,
-        )
-        .join(
-            WorkspaceRole,
-            WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id,
-        )
-        .join(Role, Role.client_id == WorkspaceRole.role_id)
-        .where(
-            WorkingSectionMembership.workspace_id == workspace_id,
-            WorkingSectionMembership.working_section_id.in_(working_section_ids),
-            WorkingSectionMembership.removed_at.is_(None),
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.is_active.is_(True),
-            WorkspaceRole.workspace_id == workspace_id,
-            Role.name == RoleNameEnum.WORKER,
-        )
-        .distinct()
-    )
-    worker_ids = set(result.scalars().all())
+    worker_ids = {
+        user_id
+        for member_ids in members_by_section.values()
+        for user_id in member_ids
+    }
     worker_ids.discard(actor_id)
     if not worker_ids:
         return False
@@ -64,7 +40,7 @@ async def enqueue_section_workers_new_steps_notification(
     section_names = sorted(
         {
             working_section_names[section_id]
-            for section_id in working_section_ids
+            for section_id in members_by_section
             if section_id in working_section_names
         }
     )

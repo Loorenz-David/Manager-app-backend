@@ -23,6 +23,7 @@ from beyo_manager.routers.api_v1 import (
     reset,
     shopify,
     shopify_webhooks,
+    task_step_acknowledgments,
     tasks,
     upholsteries,
     upholstery_categories,
@@ -31,6 +32,7 @@ from beyo_manager.routers.api_v1 import (
     upholstery_orders,
     users,
     user_working_sections,
+    worker_stats,
     working_section_memberships,
     working_sections,
 )
@@ -73,6 +75,16 @@ def register_v1_routers(app: FastAPI) -> None:
         working_section_memberships.router,
         prefix="/api/v1/working-sections",
         tags=["working-section-memberships"],
+    )
+    app.include_router(
+        worker_stats.router,
+        prefix="/api/v1/worker-stats",
+        tags=["worker-stats"],
+    )
+    app.include_router(
+        task_step_acknowledgments.router,
+        prefix="/api/v1/task-step-acknowledgments",
+        tags=["task-step-acknowledgments"],
     )
     app.include_router(upholstery_inventories.router)
     app.include_router(upholstery_orders.router)

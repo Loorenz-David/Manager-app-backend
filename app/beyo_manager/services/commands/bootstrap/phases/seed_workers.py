@@ -142,18 +142,27 @@ _WORKER_SECTION_GROUPS["Betty"] = ()
 _WORKER_SECTION_GROUPS["Stina"] = ()
 
 
-def _resolve_worker_section_names(worker_name: str) -> set[str]:
+def _resolve_worker_section_names(worker_name: str) -> list[str]:
+    """Ordered, de-duplicated section names for a worker.
+
+    Order follows the worker's group selection and each group's declaration order in
+    ``_SECTION_GROUPS`` so seeded ``sort_order`` is deterministic (a ``set`` would make
+    it depend on hash iteration order).
+    """
     selected_groups = _WORKER_SECTION_GROUPS.get(worker_name, ("all",))
-    section_names: set[str] = set()
+    ordered_names: list[str] = []
+    seen: set[str] = set()
 
     for group_name in selected_groups:
-        section_names.update(_SECTION_GROUPS.get(group_name, ()))
+        for section_name in _SECTION_GROUPS.get(group_name, ()):
+            if section_name in seen:
+                continue
+            if not _WORKING_SECTION_ASSIGNMENT_MAP.get(section_name, True):
+                continue
+            seen.add(section_name)
+            ordered_names.append(section_name)
 
-    return {
-        section_name
-        for section_name in section_names
-        if _WORKING_SECTION_ASSIGNMENT_MAP.get(section_name, True)
-    }
+    return ordered_names
 
 
 def _resolve_worker_workspace_role_id(
@@ -263,6 +272,7 @@ async def seed_workers(
     now = datetime.now(timezone.utc)
     for worker_name, worker_user_id in worker_name_to_user_id.items():
         worker_section_names = _resolve_worker_section_names(worker_name)
+        sort_order_by_name = {name: order for order, name in enumerate(worker_section_names)}
         for section_name, section_id in section_ids.items():
             existing_section_membership = await session.scalar(
                 select(WorkingSectionMembership).where(
@@ -273,13 +283,15 @@ async def seed_workers(
                 )
             )
 
-            if section_name not in worker_section_names:
+            if section_name not in sort_order_by_name:
                 if existing_section_membership is not None:
                     existing_section_membership.removed_at = now
                     await session.flush()
                 continue
 
             if existing_section_membership is not None:
+                existing_section_membership.sort_order = sort_order_by_name[section_name]
+                await session.flush()
                 continue
 
             session.add(
@@ -287,6 +299,7 @@ async def seed_workers(
                     workspace_id=workspace_id,
                     working_section_id=section_id,
                     user_id=worker_user_id,
+                    sort_order=sort_order_by_name[section_name],
                     assigned_at=now,
                     assigned_by_id=admin_user_id,
                 )

@@ -12,6 +12,9 @@ class StepInputItem(BaseModel):
     sequence_order: int | None = None
     worker_id: str | None = None
     ready_by_at: datetime | None = None
+    # Opaque free-text reason the frontend sends on a reassignment. The backend
+    # only stores it; it lands verbatim on this step's acknowledgment obligation.
+    reason: str | None = None
 
 
 class AddTaskStepsRequest(BaseModel):

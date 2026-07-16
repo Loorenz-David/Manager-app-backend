@@ -1,9 +1,10 @@
-from sqlalchemy import and_, distinct, exists, func, or_, select
+from sqlalchemy import and_, case, distinct, exists, func, or_, select
 from sqlalchemy.orm import aliased, selectinload
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum, CaseStateEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
+from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.tasks.serializers import (
@@ -28,6 +29,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
@@ -67,6 +69,8 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
         if item_major_category_snapshot_raw
         else []
     )
+    item_position = ctx.query_params.get("item_position")
+    item_zone = ctx.query_params.get("item_zone")
 
     ws_result = await ctx.session.execute(
         select(WorkingSection).where(
@@ -78,6 +82,35 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     if ws_result.scalar_one_or_none() is None:
         raise NotFound("Working section not found.")
 
+    # Reassigned steps for the requesting user: any non-deleted acknowledgment
+    # obligation on a non-terminal step in this section. These float to the top of
+    # the list (within whatever the filters below allow) and are flagged per item.
+    reassigned_result = await ctx.session.execute(
+        select(TaskStepAcknowledgment.step_id)
+        .join(TaskStep, TaskStep.client_id == TaskStepAcknowledgment.step_id)
+        .where(
+            TaskStepAcknowledgment.workspace_id == ctx.workspace_id,
+            TaskStepAcknowledgment.worker_id == ctx.user_id,
+            TaskStepAcknowledgment.is_deleted.is_(False),
+            TaskStep.workspace_id == ctx.workspace_id,
+            TaskStep.working_section_id == working_section_id,
+            TaskStep.is_deleted.is_(False),
+            TaskStep.state.notin_(TERMINAL_STEP_STATES),
+        )
+        .distinct()
+    )
+    reassigned_step_ids = {row[0] for row in reassigned_result.all()}
+
+    # Prepend a "reassigned first" sort key when the viewer has any. Composes with
+    # the record_step_state / readiness / search filters — it only reorders the
+    # rows those filters allow through.
+    order_by_clauses = []
+    if reassigned_step_ids:
+        order_by_clauses.append(
+            case((TaskStep.client_id.in_(reassigned_step_ids), 0), else_=1)
+        )
+    order_by_clauses.extend([Task.ready_by_at.asc().nullslast(), TaskStep.client_id.desc()])
+
     stmt = (
         select(TaskStep.client_id)
         .join(Task, and_(Task.client_id == TaskStep.task_id, Task.is_deleted.is_(False)))
@@ -86,7 +119,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
             TaskStep.working_section_id == working_section_id,
             TaskStep.is_deleted.is_(False),
         )
-        .order_by(Task.ready_by_at.asc().nullslast(), TaskStep.client_id.desc())
+        .order_by(*order_by_clauses)
     )
 
     if record_step_states:
@@ -117,6 +150,34 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                     TaskItem.removed_at.is_(None),
                     TaskItem.role == TaskItemRoleEnum.PRIMARY,
                     Item.item_major_category_snapshot.in_(item_major_category_snapshots),
+                )
+            )
+        )
+
+    if item_position or item_zone:
+        item_attr_conditions = []
+        if item_position:
+            item_attr_conditions.append(Item.item_position.ilike(f"{item_position}%"))
+        if item_zone:
+            item_attr_conditions.append(Item.item_zone.ilike(f"{item_zone}%"))
+        stmt = stmt.where(
+            exists(
+                select(1)
+                .select_from(TaskItem)
+                .join(
+                    Item,
+                    and_(
+                        Item.client_id == TaskItem.item_id,
+                        Item.workspace_id == ctx.workspace_id,
+                        Item.is_deleted.is_(False),
+                    ),
+                )
+                .where(
+                    TaskItem.task_id == TaskStep.task_id,
+                    TaskItem.workspace_id == ctx.workspace_id,
+                    TaskItem.removed_at.is_(None),
+                    TaskItem.role == TaskItemRoleEnum.PRIMARY,
+                    *item_attr_conditions,
                 )
             )
         )
@@ -479,6 +540,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                 "item_images": item_images_map.get(primary_item_id, []) if primary_item_id else [],
                 "cases_summary": case_summary,
                 "dependency_working_sections": dep_ws_map.get(step.client_id, []),
+                "is_reassigned": step.client_id in reassigned_step_ids,
             }
         )
 

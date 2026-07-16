@@ -156,6 +156,8 @@ async def list_working_section_steps_route(
 	offset: int = Query(0, ge=0),
 	record_step_state: str | None = Query(None),
 	readiness_statuses: str | None = Query(None),
+	item_position: str | None = Query(None),
+	item_zone: str | None = Query(None),
 ):
 	ctx = ServiceContext(
 		incoming_data={"working_section_id": working_section_id},
@@ -169,6 +171,8 @@ async def list_working_section_steps_route(
 			"offset": offset,
 			"record_step_state": record_step_state,
 			"readiness_statuses": readiness_statuses,
+			"item_position": item_position,
+			"item_zone": item_zone,
 		},
 		identity=claims,
 		session=session,

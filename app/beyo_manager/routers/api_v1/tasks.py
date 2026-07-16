@@ -246,6 +246,9 @@ class _TaskStepInputBody(BaseModel):
     worker_id: str | None = None
     sequence_order: int | None = None
     ready_by_at: datetime | None = None
+    # Opaque free-text reason the frontend sends on a reassignment; stored as-is
+    # on the worker's acknowledgment obligation for this step.
+    reason: str | None = None
 
 
 class _UpdateStepReadyByAtItemBody(BaseModel):
@@ -325,6 +328,8 @@ async def route_list_tasks(
     scheduled_from_date: str | None = Query(None),
     scheduled_to_date: str | None = Query(None),
     upholstery_requirement_states: str | None = Query(None),
+    item_position: str | None = Query(None),
+    item_zone: str | None = Query(None),
     deleted: bool = Query(False),
     order_by: str | None = Query(None),
 ):
@@ -349,6 +354,8 @@ async def route_list_tasks(
             "scheduled_from_date": scheduled_from_date,
             "scheduled_to_date": scheduled_to_date,
             "upholstery_requirement_states": upholstery_requirement_states,
+            "item_position": item_position,
+            "item_zone": item_zone,
             "deleted": deleted,
             "order_by": order_by,
         },

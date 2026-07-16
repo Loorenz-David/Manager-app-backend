@@ -8,6 +8,15 @@ from beyo_manager.services.infra.fargotex.constants import FARGOTEX_BASE_URL
 
 _POST_ID_PATTERN = re.compile(r"\bpost-(\d+)\b")
 _GALLERY_IMAGE_CODE_PATTERN = re.compile(r"(?:^|[-_])(\d{1,3})(?=$|[-_])")
+_GALLERY_SAMPLE_BEFORE_SIZE_PATTERN = re.compile(
+    r"(?<!\d)(\d{1,3})(?=(?:[-_]w)?[-_]\d{3,4}(?:[-_.]|$))",
+    re.IGNORECASE,
+)
+_GALLERY_SAMPLE_FILENAME_PATTERN = re.compile(
+    r"[a-z]+[-_]?(\d{1,3})(?:[-_]\d{1,3})?$",
+    re.IGNORECASE,
+)
+_WORDPRESS_DIMENSION_PATTERN = re.compile(r"[-_]\d{2,4}x\d{2,4}", re.IGNORECASE)
 _VOID_TAGS = {
     "area",
     "base",
@@ -295,7 +304,26 @@ def _extract_gallery_image_code(image_url: str) -> str:
     path = urlparse(image_url).path
     filename = path.rsplit("/", 1)[-1]
     stem = filename.rsplit(".", 1)[0]
-    matches = _GALLERY_IMAGE_CODE_PATTERN.findall(stem)
+
+    # Fargotex uses both `neon-01-w-1200` and `nebbia01-w-1200` naming
+    # schemes. Resolve the sample immediately before the full-size suffix
+    # before applying the separator-based fallback.
+    size_match = _GALLERY_SAMPLE_BEFORE_SIZE_PATTERN.search(stem)
+    if size_match:
+        return size_match.group(1)
+
+    # Do not mistake generated WordPress dimensions such as 100x100 or
+    # 1024x1024 for upholstery sample numbers.
+    stem_without_dimensions = _WORDPRESS_DIMENSION_PATTERN.sub("", stem)
+    filename_match = _GALLERY_SAMPLE_FILENAME_PATTERN.search(stem_without_dimensions)
+    if filename_match:
+        return filename_match.group(1)
+
+    trailing_match = re.search(r"(?<!\d)(\d{1,3})$", stem_without_dimensions)
+    if trailing_match:
+        return trailing_match.group(1)
+
+    matches = _GALLERY_IMAGE_CODE_PATTERN.findall(stem_without_dimensions)
     return matches[-1] if matches else ""
 
 
@@ -322,9 +350,18 @@ class _FargotexGalleryParser(HTMLParser):
                 "image_url": "",
                 "thumbnail_url": "",
                 "alt": "",
+                "media_id": _extract_attr(attrs, "data-image-id")
+                or _extract_attr(attrs, "data-attachment-id")
+                or _extract_attr(attrs, "data-media-id"),
             }
 
         if self.current_item is not None:
+            if not self.current_item["media_id"]:
+                self.current_item["media_id"] = (
+                    _extract_attr(attrs, "data-image-id")
+                    or _extract_attr(attrs, "data-attachment-id")
+                    or _extract_attr(attrs, "data-media-id")
+                )
             if tag == "a" and not self.current_item["anchor_url"]:
                 self.current_item["anchor_url"] = _extract_attr(attrs, "href")
             elif tag == "img" and not self.current_item["image_url"]:
@@ -372,6 +409,7 @@ class _FargotexGalleryParser(HTMLParser):
                 "image_url": image_url,
                 "thumbnail_url": thumbnail_url,
                 "alt": _collapse_whitespace(item["alt"]),
+                "media_id": _collapse_whitespace(item["media_id"]),
                 "is_main": position == 1,
             }
         )

@@ -341,6 +341,7 @@ def serialize_step_state_record_light(
         return None
     return {
         "state": record.state.value,
+        "reason": record.reason.value if record.reason else None,
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,
         "last_action_by": serialize_user_working_section_member(user) if user else None,

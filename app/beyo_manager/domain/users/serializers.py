@@ -68,6 +68,15 @@ def serialize_user_working_section_member(user: User) -> dict:
     }
 
 
+def serialize_user_worker_stat(user: User) -> dict:
+    return {
+        "client_id": user.client_id,
+        "username": user.username,
+        "profile_picture": user.profile_picture,
+        "last_online": user.last_online.isoformat() if user.last_online else None,
+    }
+
+
 def serialize_user_compact_with_role(
     user: User,
     role_client_id: str,

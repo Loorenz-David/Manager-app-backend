@@ -62,6 +62,14 @@ class StepStateRecord(IdentityMixin, Base):
     created_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    # Who the work on this record is credited to for analytics. Usually equals
+    # created_by_id (the performer), but a transition may credit another user via
+    # request.credited_user_id. Persisted so analytics backfills reconstruct the
+    # same attribution the live worker uses. Nullable: rows written before this
+    # column existed fall back to created_by_id. No DB-level FK by design — this
+    # is an approximate-analytics reference and avoiding the FK keeps the
+    # add-column migration lock-free on this high-volume table.
+    credited_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[str | None] = mapped_column(

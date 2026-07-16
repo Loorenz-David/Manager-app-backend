@@ -60,6 +60,7 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
         # Issues rule: applies regardless of recorded_time_marked_wrong
         new_state = TaskStepStateEnum(payload.new_state)
         if new_state == TaskStepStateEnum.COMPLETED:
+            await _apply_step_completed(session, payload, credited_user_display_name, task_step)
             await _apply_issues_at_completion(session, payload, credited_user_display_name, task_step)
 
         if task_step is not None:
@@ -111,7 +112,7 @@ async def _apply_working_close(
     payload: StepTransitionPayload,
     interval_seconds: int,
     worker_display_name: str,
-    task_step: TaskStep | None,
+    task_step: TaskStep | None = None,
 ) -> None:
     """Apply increments for a closed WORKING record."""
     cost_minor = await _compute_cost_minor(session, payload.credited_user_id, payload.workspace_id, interval_seconds)
@@ -145,7 +146,7 @@ async def _apply_paused_close(
     payload: StepTransitionPayload,
     interval_seconds: int,
     worker_display_name: str,
-    task_step: TaskStep | None,
+    task_step: TaskStep | None = None,
 ) -> None:
     """Apply increments for a closed PAUSED record."""
     cost_minor = await _compute_cost_minor(session, payload.credited_user_id, payload.workspace_id, interval_seconds)
@@ -247,6 +248,41 @@ async def _apply_issues_at_completion(
     if task_step is not None:
         task_step.total_issues_count += total_count
         task_step.total_issues_resolved_count += resolved_count
+
+
+async def _apply_step_completed(
+    session: AsyncSession,
+    payload: StepTransitionPayload,
+    worker_display_name: str,
+    task_step: TaskStep | None,
+) -> None:
+    """Increment completion counters on the UTC date the step completed."""
+    work_date = datetime.fromisoformat(payload.exited_at).date()
+
+    if payload.credited_user_id:
+        await _increment_user_daily(
+            session, payload, work_date, worker_display_name, completed_count=1
+        )
+        await _increment_user_lifetime(
+            session, payload, worker_display_name, completed_count=1
+        )
+        await _increment_user_section_daily(
+            session, payload, work_date, worker_display_name, completed_count=1
+        )
+
+    await _increment_section_daily(session, payload, work_date, completed_count=1)
+    if task_step is not None:
+        task_step.total_completed_count += 1
+    logger.info(
+        "step_completed_metrics_increment | workspace_id=%s step_id=%s credited_user_id=%s "
+        "working_section_id=%s work_date=%s completed_count=1 task_step_found=%s",
+        payload.workspace_id,
+        payload.step_id,
+        payload.credited_user_id,
+        payload.working_section_id,
+        work_date.isoformat(),
+        task_step is not None,
+    )
 
 
 async def _compute_cost_minor(
@@ -380,6 +416,7 @@ async def _increment_user_daily(
     ended_shift_count: int = 0,
     issues_count: int = 0,
     issues_resolved_count: int = 0,
+    completed_count: int = 0,
     cost_minor: int = 0,
 ) -> None:
     """Increment UserDailyWorkStats row."""
@@ -394,6 +431,7 @@ async def _increment_user_daily(
     row.total_ended_shift_count += ended_shift_count
     row.total_issues_count += issues_count
     row.total_issues_resolved_count += issues_resolved_count
+    row.total_completed_count += completed_count
     if cost_minor:
         row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
     row.updated_at = datetime.now(timezone.utc)
@@ -412,6 +450,7 @@ async def _increment_user_lifetime(
     ended_shift_count: int = 0,
     issues_count: int = 0,
     issues_resolved_count: int = 0,
+    completed_count: int = 0,
     cost_minor: int = 0,
 ) -> None:
     """Increment UserLifetimeStats row."""
@@ -426,6 +465,7 @@ async def _increment_user_lifetime(
     row.total_ended_shift_count += ended_shift_count
     row.total_issues_count += issues_count
     row.total_issues_resolved_count += issues_resolved_count
+    row.total_completed_count += completed_count
     if cost_minor:
         row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
     row.updated_at = datetime.now(timezone.utc)
@@ -445,6 +485,7 @@ async def _increment_user_section_daily(
     ended_shift_count: int = 0,
     issues_count: int = 0,
     issues_resolved_count: int = 0,
+    completed_count: int = 0,
     cost_minor: int = 0,
 ) -> None:
     """Increment UserSectionDailyWorkStats row."""
@@ -460,6 +501,7 @@ async def _increment_user_section_daily(
     row.total_ended_shift_count += ended_shift_count
     row.total_issues_count += issues_count
     row.total_issues_resolved_count += issues_resolved_count
+    row.total_completed_count += completed_count
     if cost_minor:
         row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
     row.updated_at = datetime.now(timezone.utc)
@@ -478,6 +520,7 @@ async def _increment_section_daily(
     ended_shift_count: int = 0,
     issues_count: int = 0,
     issues_resolved_count: int = 0,
+    completed_count: int = 0,
     cost_minor: int = 0,
 ) -> None:
     """Increment WorkingSectionDailyWorkStats row."""
@@ -493,6 +536,7 @@ async def _increment_section_daily(
     row.total_ended_shift_count += ended_shift_count
     row.total_issues_count += issues_count
     row.total_issues_resolved_count += issues_resolved_count
+    row.total_completed_count += completed_count
     if cost_minor:
         row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
     row.updated_at = datetime.now(timezone.utc)

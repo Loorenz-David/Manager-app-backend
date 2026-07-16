@@ -12,6 +12,7 @@ from beyo_manager.models.tables.working_sections.working_section_membership impo
     WorkingSectionMembership,
 )
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
+from beyo_manager.services.commands.working_sections._membership_ordering import next_sort_order
 from beyo_manager.services.commands.working_sections.requests.assign_user_request import (
     AssignUserRequest,
     parse_assign_user_request,
@@ -88,13 +89,18 @@ async def assign_user_to_working_sections(ctx: ServiceContext) -> dict:
                     f"User is already assigned to working section '{section_id}'."
                 )
 
-        for section_id in request.working_section_ids:
+        # New sections are appended to the end of the user's existing order, in the
+        # order they appear in the request payload (list position = priority).
+        base_sort_order = await next_sort_order(ctx.session, ctx.workspace_id, request.user_id)
+        assigned_at = datetime.now(timezone.utc)
+        for offset, section_id in enumerate(request.working_section_ids):
             ctx.session.add(
                 WorkingSectionMembership(
                     workspace_id=ctx.workspace_id,
                     working_section_id=section_id,
                     user_id=request.user_id,
-                    assigned_at=datetime.now(timezone.utc),
+                    sort_order=base_sort_order + offset,
+                    assigned_at=assigned_at,
                     assigned_by_id=ctx.user_id,
                 )
             )

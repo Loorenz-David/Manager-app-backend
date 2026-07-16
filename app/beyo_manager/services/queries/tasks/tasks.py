@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
-from beyo_manager.domain.tasks.enums import TaskPriorityEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item,
     serialize_requirement,
@@ -101,6 +101,9 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     ready_to_date = ctx.query_params.get("ready_to_date")
     scheduled_from_date = ctx.query_params.get("scheduled_from_date")
     scheduled_to_date = ctx.query_params.get("scheduled_to_date")
+
+    item_position = ctx.query_params.get("item_position")
+    item_zone = ctx.query_params.get("item_zone")
 
     stmt = select(Task.client_id).where(Task.workspace_id == ctx.workspace_id)
     stmt = stmt.where(Task.is_deleted.is_(True) if deleted else Task.is_deleted.is_(False))
@@ -203,6 +206,30 @@ async def list_tasks(ctx: ServiceContext) -> dict:
             .distinct()
         )
         stmt = stmt.where(Task.client_id.in_(cc_subq))
+
+    if item_position or item_zone:
+        item_subq = (
+            select(TaskItem.task_id)
+            .join(
+                Item,
+                and_(
+                    Item.client_id == TaskItem.item_id,
+                    Item.workspace_id == ctx.workspace_id,
+                    Item.is_deleted.is_(False),
+                ),
+            )
+            .where(
+                TaskItem.workspace_id == ctx.workspace_id,
+                TaskItem.removed_at.is_(None),
+                TaskItem.role == TaskItemRoleEnum.PRIMARY,
+            )
+            .distinct()
+        )
+        if item_position:
+            item_subq = item_subq.where(Item.item_position.ilike(f"{item_position}%"))
+        if item_zone:
+            item_subq = item_subq.where(Item.item_zone.ilike(f"{item_zone}%"))
+        stmt = stmt.where(Task.client_id.in_(item_subq))
 
     if q:
         stmt = stmt.where(Task.client_id.in_(build_task_q_subquery(ctx.workspace_id, q)))

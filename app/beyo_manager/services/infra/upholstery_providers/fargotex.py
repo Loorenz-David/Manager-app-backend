@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import re
+import unicodedata
 from collections.abc import Sequence
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 _MAX_PAGE_CONCURRENCY = 3
 _MAX_PRODUCT_CONCURRENCY = 3
 _GALLERY_CODE_PATTERN = re.compile(r"\A\d{1,3}\Z")
+_FILENAME_WORD_PATTERN = re.compile(r"[a-z0-9]+")
 
 
 def _matches_query(candidate: dict, q: str) -> bool:
@@ -60,6 +62,90 @@ def _variation_candidate(parent: dict, variation: dict) -> dict | None:
     }
 
 
+def _fold_source_text(value: str) -> str:
+    """Case-fold and de-accent a source value while retaining separators."""
+    folded = unquote(value).casefold().replace("ł", "l")
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+
+
+def _parent_gallery_tokens(parent: dict) -> list[str]:
+    """Return stable, source-facing product tokens ordered by specificity."""
+    external_url = str(parent.get("external_url") or "")
+    source_value = ""
+    if external_url:
+        path_parts = [part for part in urlparse(external_url).path.split("/") if part]
+        if path_parts:
+            source_value = path_parts[-1]
+    if not source_value:
+        source_value = str(parent.get("name") or "")
+
+    folded = _fold_source_text(source_value)
+    words = _FILENAME_WORD_PATTERN.findall(folded)
+    compact = "".join(words)
+    # Prefer the product slug. If the slug contains a modifier, retain only
+    # its most specific component rather than accepting weak words like `new`.
+    tokens = [compact]
+    if words:
+        tokens.append(max(words, key=len))
+    return list(dict.fromkeys(token for token in tokens if len(token) >= 3))
+
+
+def resolve_fargotex_gallery_sample_code(
+    parent: dict,
+    gallery_image: dict,
+) -> tuple[str | None, str]:
+    """Resolve a numbered gallery sample only when it is tied to its parent.
+
+    The generic parser hint is intentionally not used here. A number is valid
+    only when it occurs immediately after the matched product's source-facing
+    name/slug, which rejects image dimensions and unrelated gallery assets.
+    """
+    if not isinstance(parent, dict) or not isinstance(gallery_image, dict):
+        return None, "invalid_input"
+
+    image_url = str(gallery_image.get("image_url") or "").strip()
+    source_path = unquote(urlparse(image_url).path)
+    filename = source_path.rsplit("/", 1)[-1]
+    stem = filename.rsplit(".", 1)[0]
+    if not stem:
+        return None, "missing_filename"
+
+    parent_tokens = _parent_gallery_tokens(parent)
+    if not parent_tokens:
+        return None, "missing_parent_token"
+
+    folded_stem = _fold_source_text(stem)
+    resolved_codes: set[str] = set()
+    for parent_token in parent_tokens:
+        search_start = 0
+        while True:
+            token_position = folded_stem.find(parent_token, search_start)
+            if token_position < 0:
+                break
+            search_start = token_position + len(parent_token)
+
+            # Prefixes such as `921nebbia05` are valid, but do not accept a
+            # product token embedded in a larger alphabetic filename word.
+            if token_position > 0 and folded_stem[token_position - 1].isalpha():
+                continue
+
+            suffix = folded_stem[token_position + len(parent_token) :]
+            code_match = re.match(r"[-_]?(\d{1,3})(?=$|[-_])", suffix)
+            if code_match:
+                resolved_codes.add(code_match.group(1))
+
+    if not resolved_codes:
+        return None, "no_parent_associated_code"
+    if len(resolved_codes) > 1:
+        return None, "ambiguous_parent_associated_codes"
+
+    return resolved_codes.pop(), "parent_filename"
+
+
 def build_fargotex_gallery_candidates(
     parent: dict,
     gallery_images: list[dict],
@@ -75,6 +161,7 @@ def build_fargotex_gallery_candidates(
 
     candidates: list[dict] = []
     seen_gallery_codes: set[str] = set()
+    seen_media_ids: set[str] = set()
 
     for index, gallery_image in enumerate(gallery_images):
         if not isinstance(gallery_image, dict):
@@ -90,15 +177,25 @@ def build_fargotex_gallery_candidates(
         if gallery_image.get("is_main") is True or position == "1":
             continue
 
-        gallery_code = str(gallery_image.get("image_code") or "").strip()
         image_url = str(gallery_image.get("image_url") or "").strip()
         parsed_image_url = urlparse(image_url)
+        gallery_code, resolution_reason = resolve_fargotex_gallery_sample_code(
+            parent,
+            gallery_image,
+        )
         if (
-            not _GALLERY_CODE_PATTERN.fullmatch(gallery_code)
+            gallery_code is None
+            or not _GALLERY_CODE_PATTERN.fullmatch(gallery_code)
             or parsed_image_url.scheme not in {"http", "https"}
             or not parsed_image_url.netloc
             or not parsed_image_url.path
         ):
+            logger.debug(
+                "Fargotex gallery item skipped parent=%s position=%s reason=%s",
+                parent_name,
+                position,
+                resolution_reason,
+            )
             continue
 
         if gallery_code in seen_gallery_codes:
@@ -108,7 +205,19 @@ def build_fargotex_gallery_candidates(
                 gallery_code,
             )
             continue
+
+        media_id = str(gallery_image.get("media_id") or "").strip()
+        if media_id and media_id in seen_media_ids:
+            logger.warning(
+                "Duplicate Fargotex gallery source skipped parent=%s media_id=%s",
+                parent_name,
+                media_id,
+            )
+            continue
+
         seen_gallery_codes.add(gallery_code)
+        if media_id:
+            seen_media_ids.add(media_id)
 
         candidates.append(
             {

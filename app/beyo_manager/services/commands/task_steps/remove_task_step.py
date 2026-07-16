@@ -10,6 +10,7 @@ from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.commands.task_steps.requests import (
@@ -19,7 +20,7 @@ from beyo_manager.services.commands.task_steps.requests import (
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
-from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.build_event import build_user_event, build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
@@ -83,7 +84,7 @@ async def _remove_task_steps_in_session(
     ctx: ServiceContext,
     task_id: str,
     step_ids: list[str],
-) -> tuple[Task, TaskStateEnum, list[tuple[TaskStep, object]], list[TaskStep]]:
+) -> tuple[Task, TaskStateEnum, list[tuple[TaskStep, object]], list[TaskStep], dict[str, list[str]]]:
     now = datetime.now(timezone.utc)
     requested_step_ids = set(step_ids)
 
@@ -145,6 +146,25 @@ async def _remove_task_steps_in_session(
     )
     for record in open_record_result.scalars().all():
         record.exited_at = now
+
+    # Tear down any reassignment acknowledgment obligations tied to these steps.
+    # A worker with a still-pending one needs a refetch signal because the item
+    # is vanishing from their pending queue.
+    ack_result = await ctx.session.execute(
+        select(TaskStepAcknowledgment).where(
+            TaskStepAcknowledgment.workspace_id == ctx.workspace_id,
+            TaskStepAcknowledgment.step_id.in_(requested_step_ids),
+            TaskStepAcknowledgment.is_deleted.is_(False),
+        )
+    )
+    pending_ack_removed_by_worker: dict[str, list[str]] = {}
+    for ack in ack_result.scalars().all():
+        ack.is_deleted = True
+        ack.deleted_at = now
+        ack.deleted_by_id = ctx.user_id
+        ack.updated_at = now
+        if ack.acknowledged_at is None:
+            pending_ack_removed_by_worker.setdefault(ack.worker_id, []).append(ack.step_id)
 
     edge_result = await ctx.session.execute(
         select(TaskStepDependency).where(
@@ -215,7 +235,7 @@ async def _remove_task_steps_in_session(
         )
 
     await ctx.session.flush()
-    return task, old_task_state, readiness_changes, steps_to_remove
+    return task, old_task_state, readiness_changes, steps_to_remove, pending_ack_removed_by_worker
 
 
 async def _dispatch_remove_step_events(
@@ -225,6 +245,7 @@ async def _dispatch_remove_step_events(
     old_task_state: TaskStateEnum,
     readiness_changes: list[tuple[TaskStep, object]],
     removed_steps: list[TaskStep],
+    pending_ack_removed_by_worker: dict[str, list[str]],
 ) -> None:
     pending_events: list = [
         build_workspace_event(task, "task:updated"),
@@ -260,6 +281,17 @@ async def _dispatch_remove_step_events(
         pending_events.append(
             build_workspace_event(task, "task:state-changed", extra={"new_state": task.state.value})
         )
+    # Per-worker refetch signal: each worker who lost a *pending* obligation gets a
+    # private event so the frontend can refetch its pending-acknowledgments query.
+    for worker_id, step_ids in pending_ack_removed_by_worker.items():
+        pending_events.append(
+            build_user_event(
+                worker_id,
+                "task:step-acknowledgment-removed",
+                client_id=task.client_id,
+                extra={"task_id": task.client_id, "step_ids": sorted(step_ids)},
+            )
+        )
     await event_bus.dispatch(pending_events)
 
 
@@ -267,7 +299,13 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
     request = parse_remove_task_step_request(ctx.incoming_data)
 
     async with maybe_begin(ctx.session):
-        task, old_task_state, readiness_changes, removed_steps = await _remove_task_steps_in_session(
+        (
+            task,
+            old_task_state,
+            readiness_changes,
+            removed_steps,
+            pending_ack_removed_by_worker,
+        ) = await _remove_task_steps_in_session(
             ctx=ctx,
             task_id=request.task_id,
             step_ids=[request.step_id],
@@ -279,6 +317,7 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
         old_task_state=old_task_state,
         readiness_changes=readiness_changes,
         removed_steps=removed_steps,
+        pending_ack_removed_by_worker=pending_ack_removed_by_worker,
     )
     return {"step_id": request.step_id}
 
@@ -288,7 +327,13 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
     step_ids = _dedupe_step_ids(request.step_ids)
 
     async with maybe_begin(ctx.session):
-        task, old_task_state, readiness_changes, removed_steps = await _remove_task_steps_in_session(
+        (
+            task,
+            old_task_state,
+            readiness_changes,
+            removed_steps,
+            pending_ack_removed_by_worker,
+        ) = await _remove_task_steps_in_session(
             ctx=ctx,
             task_id=request.task_id,
             step_ids=step_ids,
@@ -300,5 +345,6 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
         old_task_state=old_task_state,
         readiness_changes=readiness_changes,
         removed_steps=removed_steps,
+        pending_ack_removed_by_worker=pending_ack_removed_by_worker,
     )
     return {"step_ids": step_ids}

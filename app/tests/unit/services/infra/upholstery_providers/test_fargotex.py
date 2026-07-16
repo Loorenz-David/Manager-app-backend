@@ -5,6 +5,7 @@ import pytest
 from beyo_manager.services.infra.upholstery_providers.fargotex import (
     FargotexExternalUpholsteryProvider,
     build_fargotex_gallery_candidates,
+    resolve_fargotex_gallery_sample_code,
 )
 
 
@@ -414,12 +415,14 @@ def test_build_fargotex_gallery_candidates_filters_main_non_numbered_and_duplica
             "position": 2,
             "image_code": "01",
             "image_url": "https://fargotex.pl/uploads/neon-01-w-1200.webp",
+            "media_id": "10",
             "is_main": False,
         },
         {
             "position": 3,
             "image_code": "02",
             "image_url": "https://fargotex.pl/uploads/neon-02-w-1200.webp",
+            "media_id": "11",
             "is_main": False,
         },
         {
@@ -432,6 +435,13 @@ def test_build_fargotex_gallery_candidates_filters_main_non_numbered_and_duplica
             "position": 5,
             "image_code": "01",
             "image_url": "https://fargotex.pl/uploads/neon-01-alt.webp",
+            "is_main": False,
+        },
+        {
+            "position": 6,
+            "image_code": "03",
+            "image_url": "https://fargotex.pl/uploads/neon-03-w-1200.webp",
+            "media_id": "10",
             "is_main": False,
         },
     ]
@@ -448,26 +458,95 @@ def test_build_fargotex_gallery_candidates_filters_main_non_numbered_and_duplica
 
 @pytest.mark.unit
 def test_build_fargotex_gallery_candidates_keep_same_sample_code_separate_by_parent() -> None:
-    gallery = [
-        {
-            "position": 2,
-            "image_code": "01",
-            "image_url": "https://fargotex.pl/uploads/sample-01.webp",
-            "is_main": False,
-        }
-    ]
-
     first = build_fargotex_gallery_candidates(
         {"name": "Neon", "code": "53035"},
-        gallery,
+        [
+            {
+                "position": 2,
+                "image_url": "https://fargotex.pl/uploads/neon-01.webp",
+                "is_main": False,
+            }
+        ],
     )
     second = build_fargotex_gallery_candidates(
         {"name": "Noma", "code": "55379"},
-        gallery,
+        [
+            {
+                "position": 2,
+                "image_url": "https://fargotex.pl/uploads/noma-01.webp",
+                "is_main": False,
+            }
+        ],
     )
 
     assert first[0]["code"] == "53035-01"
     assert second[0]["code"] == "55379-01"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("parent", "image_url", "expected_code", "expected_reason"),
+    [
+        (
+            {"name": "Neon", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/neon-01-w-1200.webp",
+            "01",
+            "parent_filename",
+        ),
+        (
+            {"name": "Neon", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/49neon-03-w-1200.webp",
+            "03",
+            "parent_filename",
+        ),
+        (
+            {"name": "Nebbia", "external_url": "https://fargotex.pl/produkt/nebbia/"},
+            "https://fargotex.pl/uploads/921nebbia05-w-1200.jpg",
+            "05",
+            "parent_filename",
+        ),
+        (
+            {"name": "Tulia New", "external_url": "https://fargotex.pl/produkt/tulia/"},
+            "https://fargotex.pl/uploads/Tulia02_2.webp",
+            "02",
+            "parent_filename",
+        ),
+        (
+            {"name": "Neon", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/neon-100x100.webp",
+            None,
+            "no_parent_associated_code",
+        ),
+        (
+            {"name": "Neon", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/room-01.webp",
+            None,
+            "no_parent_associated_code",
+        ),
+        (
+            {"name": "Neon New", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/new-01.webp",
+            None,
+            "no_parent_associated_code",
+        ),
+        (
+            {"name": "Neon", "external_url": "https://fargotex.pl/produkt/neon/"},
+            "https://fargotex.pl/uploads/neon-01-neon-02.webp",
+            None,
+            "ambiguous_parent_associated_codes",
+        ),
+    ],
+)
+def test_resolve_fargotex_gallery_sample_code_requires_unambiguous_parent_association(
+    parent: dict,
+    image_url: str,
+    expected_code: str | None,
+    expected_reason: str,
+) -> None:
+    code, reason = resolve_fargotex_gallery_sample_code(parent, {"image_url": image_url})
+
+    assert code == expected_code
+    assert reason == expected_reason
 
 
 @pytest.mark.unit

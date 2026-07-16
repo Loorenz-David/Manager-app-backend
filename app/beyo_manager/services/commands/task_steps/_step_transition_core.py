@@ -116,6 +116,8 @@ async def _apply_step_transition(
                 entered_at=now,
                 exited_at=None,
                 created_by_id=ctx.user_id,
+                # Auto-pause is credited to the performer (matches the payload below).
+                credited_user_id=ctx.user_id,
             )
             ctx.session.add(auto_pause_record)
             await ctx.session.flush()
@@ -173,6 +175,7 @@ async def _apply_step_transition(
         entered_at=now,
         exited_at=None,
         created_by_id=ctx.user_id,
+        credited_user_id=credited_user_id,
     )
     ctx.session.add(new_record)
     await ctx.session.flush()  # assign new_record.client_id

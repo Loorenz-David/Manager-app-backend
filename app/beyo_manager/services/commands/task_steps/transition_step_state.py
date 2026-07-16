@@ -29,6 +29,9 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligations_acknowledged import (
+    mark_step_obligations_acknowledged,
+)
 from beyo_manager.services.commands.task_steps._cascade_completion import cascade_step_completion
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
@@ -334,6 +337,14 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         # 7. Task state side effects
         if request.new_state == TaskStepStateEnum.WORKING:
             maybe_advance_task_to_working(task, now=now, updated_by_id=ctx.user_id)
+            # Starting the work fulfills any reassignment: acknowledge all
+            # still-pending obligations for this step.
+            await mark_step_obligations_acknowledged(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                step_ids=[step.client_id],
+                now=now,
+            )
 
         if request.new_state in TERMINAL_STEP_STATES:
             await maybe_evaluate_task_ready(

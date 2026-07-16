@@ -143,11 +143,13 @@ async def register_user(ctx: ServiceContext) -> dict:
                 if section_id not in found_ids:
                     raise NotFound(f"Working section '{section_id}' not found.")
 
-            for section_id in request.working_section_ids:
+            # New user: sort_order follows the request list position (0-based).
+            for sort_order, section_id in enumerate(request.working_section_ids):
                 section_membership = WorkingSectionMembership(
                     workspace_id=ctx.workspace_id,
                     working_section_id=section_id,
                     user_id=user.client_id,
+                    sort_order=sort_order,
                     assigned_at=now,
                     assigned_by_id=ctx.user_id,
                 )

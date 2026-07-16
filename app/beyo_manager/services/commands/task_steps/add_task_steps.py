@@ -11,12 +11,19 @@ from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.task_steps._wire_new_step_dependencies import (
     wire_batch_steps_into_dependency_graph,
 )
 from beyo_manager.services.commands.task_steps._notify_section_workers_of_new_steps import (
     enqueue_section_workers_new_steps_notification,
+)
+from beyo_manager.services.commands.task_steps._detect_section_reassignments import (
+    detect_reassigned_section_ids,
+)
+from beyo_manager.services.commands.task_steps._resolve_section_workers import (
+    resolve_section_worker_ids,
 )
 from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _assign_worker_to_step_in_session,
@@ -28,7 +35,7 @@ from beyo_manager.services.commands.utils.client_id import validate_provided_cli
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
-from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.events.build_event import build_user_event, build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
@@ -49,6 +56,11 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
 
     readiness_changed: list[TaskStep] = []
     created_steps: list[TaskStep] = []
+    reason_by_step_id: dict[str, str | None] = {}
+    # worker_id -> step_ids they now have a *pending* acknowledgment for (excludes
+    # the actor, whose own reassigned steps are auto-acknowledged). Drives the
+    # per-worker socket refetch signal dispatched after commit.
+    pending_ack_step_ids_by_worker: dict[str, list[str]] = {}
     task: Task | None = None
     old_task_state: TaskStateEnum | None = None
     task_reopened = False
@@ -164,6 +176,7 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 )
 
             created_steps.append(step)
+            reason_by_step_id[step.client_id] = step_input.reason
 
         if created_steps:
             task_reopened = maybe_reopen_task_to_working(
@@ -171,6 +184,55 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 now=now,
                 updated_by_id=ctx.user_id,
             )
+
+        # Determine which sections count as a reassignment:
+        #  - reopened READY task: every newly added step is reassigned work.
+        #  - otherwise: a section that now holds more than one step in the task
+        #    (already had work and just got more) is a reassignment too.
+        # Each reassigned step becomes an acknowledgment obligation for every
+        # active member of its working section; the actor's own row is
+        # pre-acknowledged.
+        created_section_ids = {step.working_section_id for step in created_steps}
+        reassignment_section_ids: set[str] = set()
+        if created_steps:
+            if task_reopened:
+                reassignment_section_ids = created_section_ids
+            else:
+                reassignment_section_ids = await detect_reassigned_section_ids(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    task_id=request.task_id,
+                    candidate_section_ids=created_section_ids,
+                )
+
+        members_by_section: dict[str, list[str]] = {}
+        if reassignment_section_ids:
+            members_by_section = await resolve_section_worker_ids(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                working_section_ids=reassignment_section_ids,
+            )
+            for step in created_steps:
+                if step.working_section_id not in reassignment_section_ids:
+                    continue
+                for member_id in members_by_section.get(step.working_section_id, []):
+                    is_actor = member_id == ctx.user_id
+                    ctx.session.add(
+                        TaskStepAcknowledgment(
+                            workspace_id=ctx.workspace_id,
+                            step_id=step.client_id,
+                            task_id=request.task_id,
+                            worker_id=member_id,
+                            reason=reason_by_step_id.get(step.client_id),
+                            acknowledged_at=(now if is_actor else None),
+                            created_at=now,
+                            created_by_id=ctx.user_id,
+                        )
+                    )
+                    if not is_actor:
+                        pending_ack_step_ids_by_worker.setdefault(
+                            member_id, []
+                        ).append(step.client_id)
 
         readiness_changed = await wire_batch_steps_into_dependency_graph(
             session=ctx.session,
@@ -180,12 +242,15 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
             user_id=ctx.user_id,
         )
 
-        if task_reopened:
+        if members_by_section:
+            # Same audience for every reassignment (reopen or a section that got
+            # a second step). Reuse the audience already resolved for the
+            # acknowledgment obligations — the notification never re-queries it.
             await enqueue_section_workers_new_steps_notification(
                 ctx.session,
                 workspace_id=ctx.workspace_id,
                 task=task,
-                working_section_ids={step.working_section_id for step in created_steps},
+                members_by_section=members_by_section,
                 working_section_names={
                     section_id: section.name
                     for section_id, section in section_map.items()
@@ -227,6 +292,18 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 event_name="task:step-readiness-changed",
                 workspace_id=ctx.workspace_id,
                 items=readiness_items,
+            )
+        )
+    # Per-worker refetch signal: each reassigned worker gets a private event so the
+    # frontend can refetch its pending-acknowledgments query. Targeted (not a
+    # workspace broadcast) since only the involved workers care.
+    for worker_id, step_ids in pending_ack_step_ids_by_worker.items():
+        pending_events.append(
+            build_user_event(
+                worker_id,
+                "task:step-acknowledgment-created",
+                client_id=request.task_id,
+                extra={"task_id": request.task_id, "step_ids": sorted(step_ids)},
             )
         )
     await event_bus.dispatch(pending_events)

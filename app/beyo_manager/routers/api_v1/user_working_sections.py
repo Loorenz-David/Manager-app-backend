@@ -9,6 +9,9 @@ from beyo_manager.routers.utils.roles import ADMIN, MANAGER
 from beyo_manager.services.commands.working_sections.assign_user_to_working_sections import (
     assign_user_to_working_sections,
 )
+from beyo_manager.services.commands.working_sections.set_user_working_sections_order import (
+    set_user_working_sections_order,
+)
 from beyo_manager.services.commands.working_sections.unassign_user_from_working_sections import (
     unassign_user_from_working_sections,
 )
@@ -26,6 +29,10 @@ class UnassignSectionsBody(BaseModel):
     working_section_ids: list[str]
 
 
+class ReorderSectionsBody(BaseModel):
+    ordered_working_section_ids: list[str]
+
+
 @router.post("/{user_id}/working-sections")
 async def assign_working_sections_route(
     user_id: str,
@@ -39,6 +46,27 @@ async def assign_working_sections_route(
         session=session,
     )
     outcome = await run_service(assign_user_to_working_sections, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.patch("/{user_id}/working-sections/order")
+async def reorder_working_sections_route(
+    user_id: str,
+    body: ReorderSectionsBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={
+            "user_id": user_id,
+            "ordered_working_section_ids": body.ordered_working_section_ids,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(set_user_working_sections_order, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

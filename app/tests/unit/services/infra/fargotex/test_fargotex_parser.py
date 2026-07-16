@@ -194,7 +194,7 @@ def test_parse_fargotex_product_variations_returns_empty_for_unsupported_pages(
 def test_parse_fargotex_product_gallery_resolves_order_and_optional_fields() -> None:
     html = """
     <div class="woocommerce-product-gallery__wrapper">
-      <div class="woocommerce-product-gallery__image">
+      <div class="woocommerce-product-gallery__image" data-image-id="1001">
         <a href="/uploads/neon-parent.webp">
           <img data-large_image="/uploads/ignored-large.webp" src="/uploads/neon-parent-100x100.webp" alt="Neon" />
         </a>
@@ -208,23 +208,32 @@ def test_parse_fargotex_product_gallery_resolves_order_and_optional_fields() -> 
       <div class="woocommerce-product-gallery__image">
         <img src="/uploads/neon-100x100.webp" />
       </div>
+      <div class="woocommerce-product-gallery__image">
+        <img src="/uploads/nebbia01-w-1200.jpg" />
+      </div>
+      <div class="woocommerce-product-gallery__image">
+        <img src="/uploads/921nebbia05-w-1200.jpg" />
+      </div>
       <div class="woocommerce-product-gallery__image"></div>
     </div>
     """
 
     result = parse_fargotex_product_gallery(html)
 
-    assert [item["position"] for item in result] == [1, 2, 3, 4, 5]
-    assert [item["is_main"] for item in result] == [True, False, False, False, False]
-    assert [item["image_code"] for item in result] == ["", "01", "03", "", ""]
+    assert [item["position"] for item in result] == [1, 2, 3, 4, 5, 6, 7]
+    assert [item["is_main"] for item in result] == [True, False, False, False, False, False, False]
+    assert [item["image_code"] for item in result] == ["", "01", "03", "", "01", "05", ""]
     assert [item["image_url"] for item in result] == [
         "https://fargotex.pl/uploads/neon-parent.webp",
         "https://fargotex.pl/uploads/neon-01-w-1200.webp",
         "https://fargotex.pl/uploads/49neon-03-w-1200.webp",
         "https://fargotex.pl/uploads/neon-100x100.webp",
+        "https://fargotex.pl/uploads/nebbia01-w-1200.jpg",
+        "https://fargotex.pl/uploads/921nebbia05-w-1200.jpg",
         "",
     ]
     assert result[1]["thumbnail_url"] == "https://fargotex.pl/uploads/neon-01-w-100x100.webp"
+    assert result[0]["media_id"] == "1001"
     assert result[0]["alt"] == "Neon"
     assert result[-1]["alt"] == ""
 
@@ -232,6 +241,26 @@ def test_parse_fargotex_product_gallery_resolves_order_and_optional_fields() -> 
 @pytest.mark.unit
 def test_parse_fargotex_product_gallery_is_empty_without_wrapper() -> None:
     assert parse_fargotex_product_gallery("<div class='product'></div>") == []
+
+
+@pytest.mark.unit
+def test_parse_fargotex_product_gallery_preserves_tulia_code_before_filename_suffix() -> None:
+    html = """
+    <div class="woocommerce-product-gallery__wrapper">
+      <div class="woocommerce-product-gallery__image">
+        <img src="/uploads/tulia-nowa-1.webp" />
+      </div>
+      <div class="woocommerce-product-gallery__image">
+        <img src="/uploads/Tulia02_2.webp" />
+      </div>
+    </div>
+    """
+
+    result = parse_fargotex_product_gallery(html)
+
+    assert result[0]["is_main"] is True
+    assert result[0]["image_code"] == "1"
+    assert result[1]["image_code"] == "02"
 
 
 @pytest.mark.unit

@@ -152,7 +152,13 @@ async def list_users(ctx: ServiceContext) -> dict:
             WorkingSection.workspace_id == ctx.workspace_id,
             WorkingSection.is_deleted.is_(False),
         )
-        .order_by(WorkingSection.order_list.asc().nulls_last(), WorkingSection.name.asc())
+        # Each user's sections follow their personal ordering (sort_order); grouping
+        # below is per-user, so ordering by (user_id, sort_order) keeps each list ordered.
+        .order_by(
+            WorkingSectionMembership.user_id,
+            WorkingSectionMembership.sort_order.asc(),
+            WorkingSection.name.asc(),
+        )
     )
     sections_by_user: dict[str, list[dict]] = {uid: [] for uid in user_ids}
     for sec_row in sections_result.all():

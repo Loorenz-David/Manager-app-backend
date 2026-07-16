@@ -12,6 +12,9 @@ class AggregateMetricsCountsMixin:
     total_working_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_pause_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_ended_shift_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_completed_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
 
 class AggregateMetricsTotalsMixin:
