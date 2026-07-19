@@ -28,6 +28,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.RECURRING_SEND_REPORT:      "queue:reports",
     TaskType.RECURRING_REMINDER:         "queue:notifications",
     TaskType.RECURRING_PIN_TASK:         "queue:tasks",
+    TaskType.AUTO_CLOCK_OUT_OPEN_SHIFTS: "queue:tasks",
     TaskType.RECORD_VIEW_START:          "queue:presence",
     TaskType.RECORD_VIEW_END:            "queue:presence",
     TaskType.PROCESS_STEP_TRANSITION:    "queue:analytics",

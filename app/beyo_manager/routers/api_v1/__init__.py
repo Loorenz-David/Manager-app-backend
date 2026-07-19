@@ -33,6 +33,7 @@ from beyo_manager.routers.api_v1 import (
     users,
     user_working_sections,
     worker_stats,
+    worker_shifts,
     working_section_memberships,
     working_sections,
 )
@@ -80,6 +81,11 @@ def register_v1_routers(app: FastAPI) -> None:
         worker_stats.router,
         prefix="/api/v1/worker-stats",
         tags=["worker-stats"],
+    )
+    app.include_router(
+        worker_shifts.router,
+        prefix="/api/v1/worker-shifts",
+        tags=["worker-shifts"],
     )
     app.include_router(
         task_step_acknowledgments.router,

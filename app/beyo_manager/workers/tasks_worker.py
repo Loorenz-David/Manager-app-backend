@@ -16,6 +16,9 @@ from beyo_manager.services.tasks.emails.handle_send_email_messages import (
 from beyo_manager.services.tasks.task_steps.finalize_pending_step_completion import (
     handle_finalize_pending_step_completion,
 )
+from beyo_manager.services.tasks.users.auto_clock_out_open_shifts import (
+    handle_auto_clock_out_open_shifts,
+)
 
 HANDLER_MAP = {
     TaskType.DELAYED_STEP_COMPLETION: handle_finalize_pending_step_completion,
@@ -23,6 +26,7 @@ HANDLER_MAP = {
     TaskType.EMAIL_SYNC_TARGETED: handle_sync_email_threads_targeted,
     TaskType.SEND_EMAIL_MESSAGES: handle_send_email_messages,
     TaskType.LOCATION_TRACKER_PUSH_LOCATIONS: handle_push_item_locations,
+    TaskType.AUTO_CLOCK_OUT_OPEN_SHIFTS: handle_auto_clock_out_open_shifts,
 }
 
 
