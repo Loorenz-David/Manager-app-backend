@@ -20,7 +20,6 @@ from datetime import datetime
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.aggregate_metrics import increment_step_time_metrics
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
@@ -127,9 +126,7 @@ async def _apply_step_transition(
             conflicting_step.updated_at = now
             conflicting_step.updated_by_id = ctx.user_id
 
-            if not conflicting_record.recorded_time_marked_wrong:
-                auto_pause_interval = max(0, int((now - conflicting_closing_entered_at).total_seconds()))
-                increment_step_time_metrics(conflicting_step, TaskStepStateEnum.WORKING, auto_pause_interval)
+            # Time totals recomputed async by the analytics worker (see process_step_transition).
 
             await create_instant_task(
                 session=ctx.session,
@@ -193,9 +190,8 @@ async def _apply_step_transition(
     step.updated_at = now
     step.updated_by_id = ctx.user_id
 
-    if not closing_record.recorded_time_marked_wrong:
-        interval_seconds = max(0, int((now - closing_entered_at).total_seconds()))
-        increment_step_time_metrics(step, closing_state, interval_seconds)
+    # Step time totals (TaskStep.total_*_seconds) are recomputed concurrency-averaged
+    # by the analytics worker (PROCESS_STEP_TRANSITION) — see process_step_transition.
 
     if new_state in TERMINAL_STEP_STATES:
         step.closed_at = now

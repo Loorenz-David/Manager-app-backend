@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -26,6 +27,9 @@ from beyo_manager.models.base.sa_enum import configure_sa_enum_values
 
 
 SAEnum = configure_sa_enum_values(SAEnum)
+
+if TYPE_CHECKING:
+    from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 
 
 class TaskStep(
@@ -67,6 +71,15 @@ class TaskStep(
     total_dependencies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completed_dependencies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recorded_time_marked_wrong: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    inaccurate_working_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    inaccurate_pause_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    inaccurate_ended_shift_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     taken_from_average: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     working_section_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     allows_batch_working: Mapped[bool] = mapped_column(

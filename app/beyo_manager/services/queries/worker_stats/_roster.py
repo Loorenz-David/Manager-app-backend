@@ -1,0 +1,102 @@
+from datetime import date, datetime, timezone
+
+from sqlalchemy import func, select
+
+from beyo_manager.domain.roles.enums import RoleNameEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.roles.role import Role
+from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
+from beyo_manager.services.context import ServiceContext
+
+_MAX_LIMIT = 200
+_DEFAULT_LIMIT = 50
+
+# Public shared API of this module (imported by the sibling worker-stats services).
+TIME_STATES = (
+    TaskStepStateEnum.WORKING,
+    TaskStepStateEnum.PAUSED,
+    TaskStepStateEnum.ENDED_SHIFT,
+)
+
+
+# Upper bound on a requested range span, to keep aggregate reads bounded.
+_MAX_RANGE_DAYS = 366
+
+
+def _parse_iso_date(raw: str, field: str) -> date:
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValidationError(f"{field} must be a valid ISO date in YYYY-MM-DD format.") from exc
+
+
+def resolve_work_date(raw_work_date: str | None) -> date:
+    if not raw_work_date:
+        return datetime.now(timezone.utc).date()
+    return _parse_iso_date(raw_work_date, "work_date")
+
+
+def resolve_date_range(query_params: dict) -> tuple[date, date]:
+    """Inclusive ``[date_from, date_to]`` from query params; both default to UTC today.
+
+    Raises ``ValidationError`` on unparseable dates, an inverted range, or a span wider
+    than ``_MAX_RANGE_DAYS``.
+    """
+    today = datetime.now(timezone.utc).date()
+    raw_from = query_params.get("date_from")
+    raw_to = query_params.get("date_to")
+    date_from = _parse_iso_date(raw_from, "date_from") if raw_from else today
+    date_to = _parse_iso_date(raw_to, "date_to") if raw_to else today
+    if date_to < date_from:
+        raise ValidationError("date_to must be on or after date_from.")
+    if (date_to - date_from).days + 1 > _MAX_RANGE_DAYS:
+        raise ValidationError(f"date range cannot exceed {_MAX_RANGE_DAYS} days.")
+    return date_from, date_to
+
+
+def _worker_role_filter():
+    # Specializations remain workers at the base workspace-role level.
+    return Role.name == RoleNameEnum.WORKER.value
+
+
+def _worker_membership_query(ctx: ServiceContext, columns):
+    return (
+        select(*columns)
+        .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
+        .join(WorkspaceRole, WorkspaceRole.client_id == WorkspaceMembership.workspace_role_id)
+        .join(Role, Role.client_id == WorkspaceRole.role_id)
+        .where(
+            WorkspaceMembership.workspace_id == ctx.workspace_id,
+            WorkspaceMembership.is_active.is_(True),
+            _worker_role_filter(),
+        )
+    )
+
+
+async def load_worker_page(ctx: ServiceContext) -> tuple[list[User], dict]:
+    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
+    offset = int(ctx.query_params.get("offset", 0))
+
+    total_result = await ctx.session.execute(
+        _worker_membership_query(ctx, [func.count(User.client_id.distinct())])
+    )
+    total = total_result.scalar() or 0
+
+    workers_result = await ctx.session.execute(
+        _worker_membership_query(ctx, [User])
+        .order_by(User.username.asc())
+        .offset(offset)
+        .limit(limit + 1)
+    )
+    workers = workers_result.scalars().all()
+    has_more = len(workers) > limit
+
+    return workers[:limit], {
+        "has_more": has_more,
+        "limit": limit,
+        "offset": offset,
+        "total": total,
+    }

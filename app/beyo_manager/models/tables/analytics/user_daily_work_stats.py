@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from beyo_manager.models.base.aggregate_metrics import (
     AggregateMetricsCostMixin,
     AggregateMetricsCountsMixin,
+    AggregateMetricsInaccurateTimeMixin,
     AggregateMetricsTimeMixin,
     AggregateMetricsTotalsMixin,
 )
@@ -17,6 +18,7 @@ class UserDailyWorkStats(
     IdentityMixin,
     AggregateMetricsTimeMixin,
     AggregateMetricsCountsMixin,
+    AggregateMetricsInaccurateTimeMixin,
     AggregateMetricsTotalsMixin,
     AggregateMetricsCostMixin,
     Base,

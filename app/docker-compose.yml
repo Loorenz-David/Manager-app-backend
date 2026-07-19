@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -13,7 +13,9 @@ services:
       timeout: 5s
       retries: 20
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # postgres:18+ stores data in a major-version subdir; mount at /var/lib/postgresql
+      # (not /var/lib/postgresql/data) or the container refuses to start.
+      - postgres_data:/var/lib/postgresql
 
   redis:
     image: redis:7

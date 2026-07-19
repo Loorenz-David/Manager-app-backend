@@ -170,7 +170,7 @@ Full serialization of every field (`jsonc` — comments annotate type / nullabil
 
 ## Reading the payload
 
-- **`contribution`** — this worker's **settled** time/completions on that step **for that day**. This is the field to display per step. It excludes any currently-running interval.
+- **`contribution`** — this worker's **settled** time/completions on that step **for that day**. This is the field to display per step. It excludes any currently-running interval. **(2026-07-18) Batch time is concurrency-averaged**: for batchable sections, seconds are divided by how many steps ran concurrently, so a batch of N steps splits the real time (each ~1/N). `completed_count` is unaffected. `totals` = Σ of the averaged per-step `contribution`s.
 - **Step lifetime totals vs `contribution`** — the item also carries `total_working_seconds`, `total_completed_count`, etc. from the step serializer. Those are the step's **all-time totals across all workers** — *not* today's per-worker figures. For "what this worker did today," use **`contribution`**, not the `total_*` fields.
 - **`active_record`** — the currently-open (running) interval for that worker on that step, `{state, entered_at}`, or `null`. Running time is **not** in `contribution`/`totals`. To show it live: `running = now − active_record.entered_at`, and **add it to the metric matching `active_record.state`** (`working` → working, `paused` → pause, `ended_shift` → ended-shift) — display-only. Completed steps have `active_record: null`.
 - **`last_activity_at`** / **`last_completed_at`** — timestamps for display ("last worked / completed at"); `last_completed_at` is `null` if not completed that day.

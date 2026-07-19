@@ -4,9 +4,7 @@ import pytest
 
 from beyo_manager.domain.analytics.serializers import serialize_user_daily_work_stats
 from beyo_manager.errors.validation import ValidationError
-from beyo_manager.services.queries.worker_stats.list_workers_last_interacted_step import (
-    _resolve_work_date,
-)
+from beyo_manager.services.queries.worker_stats._roster import resolve_work_date
 
 
 def test_daily_stats_serializer_returns_zero_filled_shape():
@@ -28,12 +26,12 @@ def test_work_date_defaults_to_utc_date_when_missing(monkeypatch):
             return date(2026, 7, 15)
 
     monkeypatch.setattr(
-        "beyo_manager.services.queries.worker_stats.list_workers_last_interacted_step.datetime",
+        "beyo_manager.services.queries.worker_stats._roster.datetime",
         FixedDateTime,
     )
-    assert _resolve_work_date(None) == date(2026, 7, 15)
+    assert resolve_work_date(None) == date(2026, 7, 15)
 
 
 def test_invalid_work_date_raises_validation_error():
     with pytest.raises(ValidationError):
-        _resolve_work_date("not-a-date")
+        resolve_work_date("not-a-date")

@@ -8,6 +8,21 @@ class AggregateMetricsTimeMixin:
     total_ended_shift_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class AggregateMetricsInaccurateTimeMixin:
+    inaccurate_working_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    inaccurate_pause_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    inaccurate_ended_shift_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    inaccurate_step_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
+
 class AggregateMetricsCountsMixin:
     total_working_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_pause_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

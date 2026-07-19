@@ -34,6 +34,10 @@ from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDepend
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.utils.upholstery_grouping import (
+    build_primary_item_upholstery_group_columns,
+    load_upholstery_group_inventories,
+)
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
@@ -52,6 +56,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     q = ctx.query_params.get("q")
     task_types = _split_csv(ctx.query_params.get("task_types"))
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
+    group_by_upholstery = str(ctx.query_params.get("group_by_upholstery", "false")).lower() == "true"
     record_step_state_raw = ctx.query_params.get("record_step_state")
     record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
     readiness_statuses_raw = ctx.query_params.get("readiness_statuses")
@@ -104,7 +109,20 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     # Prepend a "reassigned first" sort key when the viewer has any. Composes with
     # the record_step_state / readiness / search filters — it only reorders the
     # rows those filters allow through.
+    # Grouping outranks the reassigned-first key: a reassigned step floating
+    # above all groups would render under the wrong group header, so it only
+    # floats to the top of its own upholstery group.
+    upholstery_group_key = None
+    upholstery_group_image_url = None
+    upholstery_group_upholstery_id = None
+    if group_by_upholstery:
+        upholstery_group_key, upholstery_group_image_url, upholstery_group_upholstery_id = (
+            build_primary_item_upholstery_group_columns(ctx.workspace_id, TaskStep.task_id)
+        )
+
     order_by_clauses = []
+    if upholstery_group_key is not None:
+        order_by_clauses.append(upholstery_group_key.asc().nullslast())
     if reassigned_step_ids:
         order_by_clauses.append(
             case((TaskStep.client_id.in_(reassigned_step_ids), 0), else_=1)
@@ -157,9 +175,9 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     if item_position or item_zone:
         item_attr_conditions = []
         if item_position:
-            item_attr_conditions.append(Item.item_position.ilike(f"{item_position}%"))
+            item_attr_conditions.append(Item.item_position.ilike(item_position))
         if item_zone:
-            item_attr_conditions.append(Item.item_zone.ilike(f"{item_zone}%"))
+            item_attr_conditions.append(Item.item_zone.ilike(item_zone))
         stmt = stmt.where(
             exists(
                 select(1)
@@ -248,10 +266,27 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
         stmt = stmt.where(TaskStep.client_id.in_(q_stmt))
 
+    if upholstery_group_key is not None:
+        stmt = stmt.add_columns(
+            upholstery_group_key.label("upholstery_group_key"),
+            upholstery_group_image_url.label("upholstery_group_image_url"),
+            upholstery_group_upholstery_id.label("upholstery_group_upholstery_id"),
+        )
+
     stmt = stmt.offset(offset).limit(limit + 1)
 
     ids_result = await ctx.session.execute(stmt)
-    step_ids = [row[0] for row in ids_result.all()]
+    id_rows = ids_result.all()
+    step_ids = [row[0] for row in id_rows]
+    group_key_by_step_id = (
+        {row[0]: row[1] for row in id_rows} if upholstery_group_key is not None else {}
+    )
+    group_image_by_step_id = (
+        {row[0]: row[2] for row in id_rows} if upholstery_group_key is not None else {}
+    )
+    group_uph_id_by_step_id = (
+        {row[0]: row[3] for row in id_rows} if upholstery_group_key is not None else {}
+    )
 
     has_more = len(step_ids) > limit
     page_ids = step_ids[:limit]
@@ -277,6 +312,12 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     )
     steps = steps_result.scalars().all()
     step_map = {step.client_id: step for step in steps}
+
+    group_inventory_by_uph_id = await load_upholstery_group_inventories(
+        ctx.session,
+        ctx.workspace_id,
+        list({v for v in group_uph_id_by_step_id.values() if v}),
+    )
 
     task_ids = list({step.task_id for step in steps})
     empty_case_summary = {
@@ -541,6 +582,12 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
                 "cases_summary": case_summary,
                 "dependency_working_sections": dep_ws_map.get(step.client_id, []),
                 "is_reassigned": step.client_id in reassigned_step_ids,
+                "upholstery_group_key": group_key_by_step_id.get(step_id),
+                "upholstery_group_image_url": group_image_by_step_id.get(step_id),
+                "upholstery_group_upholstery_id": group_uph_id_by_step_id.get(step_id),
+                "upholstery_group_inventory": group_inventory_by_uph_id.get(
+                    group_uph_id_by_step_id.get(step_id)
+                ),
             }
         )
 

@@ -1,22 +1,32 @@
-"""Manager drill-down: the per-task-step breakdown behind a worker's daily totals.
+"""Manager drill-down: the per-task-step breakdown behind a worker's totals.
 
-Answers "where did today's worked/paused/ended-shift/completed totals come from" by
-aggregating that worker's `StepStateRecord`s per step for one UTC day, with the same
-attribution and bucketing rules the analytics worker uses (so the settled figures
-reconcile with the maintained `user_daily_work_stats`). The currently-open interval is
-surfaced separately as `active_record` and excluded from the settled totals.
+Answers "where did the worked/paused/ended-shift/completed totals come from" by
+aggregating that worker's `StepStateRecord`s per step over an inclusive UTC date range
+(`date_from`..`date_to`, both defaulting to today), with the same attribution and
+bucketing rules the analytics worker uses (so the settled figures reconcile with the
+summed `user_daily_work_stats`). The currently-open interval is surfaced separately as
+`active_record` and excluded from the settled totals.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from collections import defaultdict
+from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import and_, extract, func, select
+from sqlalchemy import and_, func, select
 
 from beyo_manager.domain.analytics.serializers import (
-    build_running_totals,
+    build_running_totals_averaged,
+    serialize_estimated_fill_by_strategy,
     serialize_step_contribution,
-    serialize_user_daily_work_stats_full,
+    serialize_time_quality,
+    serialize_user_range_work_stats_full,
+)
+from beyo_manager.domain.analytics.estimation import (
+    estimate_fill,
+    iqr_trimmed_mean,
+    median as sample_median,
+    resolve as resolve_time_strategy,
 )
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.serializers import (
@@ -28,167 +38,58 @@ from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.analytics.user_daily_work_stats import UserDailyWorkStats
+from beyo_manager.models.tables.analytics.user_section_daily_work_stats import UserSectionDailyWorkStats
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.analytics.averaged_time import compute_record_contributions
+from beyo_manager.services.queries.analytics.estimation_sample import (
+    ESTIMATION_MIN_SAMPLE,
+    ESTIMATION_MIN_TRUSTED_STEPS,
+    estimation_window,
+    load_trusted_step_duration_sample,
+)
 from beyo_manager.services.queries.tasks.step_light_bundle import load_step_light_bundle
+from beyo_manager.services.queries.worker_stats._roster import resolve_date_range
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 _SORT_BY = frozenset({"contribution", "working", "paused", "completed", "last_activity"})
 _ORDER = frozenset({"asc", "desc"})
 _TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED, TaskStepStateEnum.ENDED_SHIFT)
-
-
-def _resolve_work_date(raw: str | None) -> date:
-    if not raw:
-        return datetime.now(timezone.utc).date()
-    try:
-        return date.fromisoformat(raw)
-    except ValueError as exc:
-        raise ValidationError("work_date must be a valid ISO date in YYYY-MM-DD format.") from exc
+# States that can represent work by the credited user. Everything else (notably
+# PENDING) is a lifecycle marker, not labor — see `_credited` below.
+_WORK_STATES = _TIME_STATES + (TaskStepStateEnum.COMPLETED,)
 
 
 def _credited(user_id):
+    """Attribute a record to a worker.
+
+    `credited_user_id` is the explicit "whose work is this" field; it is only set
+    on transition records (`_step_transition_core`). Step-creation records are
+    written as PENDING with `created_by_id` set and `credited_user_id` left NULL
+    on purpose — creating a task is not working on it. The COALESCE fallback is
+    still required because ~97% of time-bearing records predate that field, so
+    callers MUST additionally restrict to `_WORK_STATES`; otherwise the fallback
+    silently reads "created by" as "worked by" and pulls in every sibling step
+    the creator never touched (including steps assigned to other workers).
+    """
     return func.coalesce(StepStateRecord.credited_user_id, StepStateRecord.created_by_id) == user_id
-
-
-def _time_sum(state: TaskStepStateEnum):
-    seconds = func.greatest(0, extract("epoch", StepStateRecord.exited_at - StepStateRecord.entered_at))
-    return func.coalesce(
-        func.sum(seconds).filter(
-            StepStateRecord.state == state,
-            StepStateRecord.exited_at.isnot(None),
-            StepStateRecord.recorded_time_marked_wrong.is_(False),
-        ),
-        0,
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# >>> TEMP MOCK BREAKDOWN — REMOVE BEFORE PRODUCTION <<<
-# Frontend testing scaffold. When the target worker has NO real step records for the
-# day (empty breakdown), return a fabricated set so the UI can be built/tested. Self-
-# disables the moment real records exist (only the empty case is replaced). To remove:
-# delete this block and the `if not agg_rows:` short-circuit inside the service.
-# Grep "TEMP MOCK BREAKDOWN" to find every touch.
-_MOCK_IMG = (
-    "data:image/svg+xml;utf8,"
-    "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='3'/>"
-)
-
-
-def _mock_daily_step_breakdown(user: dict, work_date: date, sort_by: str, order: str,
-                               limit: int, offset: int) -> dict:  # TEMP MOCK BREAKDOWN
-    day = work_date.isoformat()
-
-    def _iso(hour: int, minute: int = 0) -> str:
-        return f"{day}T{hour:02d}:{minute:02d}:00+00:00"
-
-    def _item(sid, *, state, working, pause, ended, completed, active_state,
-              completed_at, activity_at) -> dict:
-        short = sid[-6:]
-        return {
-            "client_id": sid, "task_id": f"tsk_{short}", "state": state,
-            "readiness_status": "ready", "sequence_order": 1,
-            "working_section_id": "wsec_mock", "assigned_worker_id": user["client_id"],
-            "total_dependencies": 0, "completed_dependencies": 0,
-            "working_section_name_snapshot": "Assembly (mock)",
-            "assigned_worker_display_name_snapshot": user["username"],
-            "created_at": _iso(8), "closed_at": None, "ready_by_at": None,
-            "total_working_seconds": working, "total_pause_seconds": pause,
-            "total_ended_shift_seconds": ended, "total_working_count": 1,
-            "total_pause_count": 1 if pause else 0, "total_ended_shift_count": 0,
-            "total_issues_count": 0, "total_issues_resolved_count": 0, "total_cost_minor": None,
-            "task": {
-                "client_id": f"tsk_{short}", "task_type": "internal", "priority": "normal",
-                "state": "assigned", "return_source": None, "item_location": None,
-                "ready_by_at": None, "scheduled_start_at": None, "scheduled_end_at": None,
-                "return_method": None,
-            },
-            "item": {
-                "client_id": f"itm_{short}", "article_number": f"ART-{short}",
-                "sku": f"SKU-{short}", "state": "in_progress", "item_category_id": None,
-                "quantity": 1, "item_position": None, "item_zone": None,
-                "upholstery_requirement": [],
-            },
-            "item_images": [{
-                "client_id": f"img_{short}", "image_url": _MOCK_IMG,
-                "width_px": 4, "height_px": 3, "file_size_bytes": 100,
-            }],
-            "contribution": {
-                "working_seconds": working, "pause_seconds": pause,
-                "ended_shift_seconds": ended, "completed_count": completed,
-            },
-            "active_record": {"state": active_state, "entered_at": activity_at} if active_state else None,
-            "last_activity_at": activity_at,
-            "last_completed_at": completed_at,
-        }
-
-    items = [
-        _item("tsp_mock_working", state="working", working=1800, pause=300, ended=0,
-              completed=0, active_state="working", completed_at=None, activity_at=_iso(11)),
-        _item("tsp_mock_completed", state="completed", working=3600, pause=600, ended=0,
-              completed=1, active_state=None, completed_at=_iso(10, 10), activity_at=_iso(10, 10)),
-        _item("tsp_mock_paused", state="paused", working=600, pause=1500, ended=0,
-              completed=0, active_state="paused", completed_at=None, activity_at=_iso(9, 30)),
-        _item("tsp_mock_done_early", state="completed", working=2400, pause=200, ended=0,
-              completed=1, active_state=None, completed_at=_iso(8, 45), activity_at=_iso(8, 45)),
-    ]
-
-    totals = {
-        "working_seconds": sum(i["contribution"]["working_seconds"] for i in items),
-        "pause_seconds": sum(i["contribution"]["pause_seconds"] for i in items),
-        "ended_shift_seconds": sum(i["contribution"]["ended_shift_seconds"] for i in items),
-        "completed_count": sum(i["contribution"]["completed_count"] for i in items),
-    }
-    daily_stats = {
-        "work_date": day,
-        "total_working_seconds": totals["working_seconds"],
-        "total_pause_seconds": totals["pause_seconds"],
-        "total_ended_shift_seconds": totals["ended_shift_seconds"],
-        "total_completed_count": totals["completed_count"],
-    }
-
-    display = [i for i in items if i["last_completed_at"] is not None] if sort_by == "completed" else list(items)
-    reverse = order == "desc"
-    if sort_by == "contribution":
-        display.sort(key=lambda i: (i["active_record"] is not None,
-                                    i["contribution"]["working_seconds"],
-                                    i["contribution"]["completed_count"]), reverse=True)
-    elif sort_by == "working":
-        display.sort(key=lambda i: i["contribution"]["working_seconds"], reverse=reverse)
-    elif sort_by == "paused":
-        display.sort(key=lambda i: i["contribution"]["pause_seconds"], reverse=reverse)
-    elif sort_by == "completed":
-        display.sort(key=lambda i: i["last_completed_at"], reverse=reverse)
-    else:
-        display.sort(key=lambda i: i["last_activity_at"], reverse=reverse)
-
-    has_more = offset + limit < len(display)
-    mock_now = datetime.now(timezone.utc)
-    running = build_running_totals(
-        [("working", mock_now - timedelta(minutes=30)), ("paused", mock_now - timedelta(hours=2))],
-        mock_now,
-    )
-    return {
-        "user": user, "work_date": day, "totals": totals, "daily_stats": daily_stats,
-        "running": running,
-        "steps": {
-            "items": display[offset:offset + limit],
-            "limit": limit, "offset": offset, "has_more": has_more,
-        },
-    }
-# >>> END TEMP MOCK BREAKDOWN <<<
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
     user_id = ctx.incoming_data.get("user_id")
-    work_date = _resolve_work_date(ctx.query_params.get("work_date"))
+    date_from, date_to = resolve_date_range(ctx.query_params)
+    try:
+        time_strategy = resolve_time_strategy(ctx.query_params.get("time_strategy", "median"))
+    except ValueError as exc:
+        raise ValidationError("time_strategy must be one of mean, median, or iqr.") from exc
+    only_inaccurate = str(ctx.query_params.get("only_inaccurate", "false")).lower() in {
+        "1", "true", "yes"
+    }
     sort_by = ctx.query_params.get("sort_by") or "contribution"
     order = ctx.query_params.get("order") or "desc"
     if sort_by not in _SORT_BY:
@@ -216,19 +117,25 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
     if user is None:
         raise NotFound("Worker not found in this workspace.")
 
-    day_start = datetime.combine(work_date, time.min, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    # Inclusive range → half-open UTC window [range_start, range_end).
+    range_start = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+    range_end = datetime.combine(date_to, time.min, tzinfo=timezone.utc) + timedelta(days=1)
 
-    # One aggregation over the worker's records that day, grouped by step. exited_at is
+    # One aggregation over the worker's records in the range, grouped by step. exited_at is
     # NOT filtered in WHERE (the closed-only rule lives in the metric FILTERs), so the
     # result includes open-only steps and a last_activity_at for every touched step.
+    # State IS filtered to `_WORK_STATES`: a step must have been worked or completed by
+    # this user to appear. Without it, PENDING creation records credit the task's creator
+    # for every sibling step (see `_credited`), which surfaced steps with zero time that
+    # the user never worked. Dropping them cannot change any total — the per-step seconds
+    # come from `compute_record_contributions`, which already filters to `_TIME_STATES`,
+    # and `completed_count` here only counts COMPLETED records.
     agg_rows = (
         await ctx.session.execute(
             select(
                 StepStateRecord.step_id.label("step_id"),
-                _time_sum(TaskStepStateEnum.WORKING).label("working_seconds"),
-                _time_sum(TaskStepStateEnum.PAUSED).label("pause_seconds"),
-                _time_sum(TaskStepStateEnum.ENDED_SHIFT).label("ended_shift_seconds"),
+                TaskStep.working_section_id.label("working_section_id"),
+                TaskStep.recorded_time_marked_wrong.label("is_time_inaccurate"),
                 func.count(StepStateRecord.client_id)
                 .filter(StepStateRecord.state == TaskStepStateEnum.COMPLETED)
                 .label("completed_count"),
@@ -256,20 +163,18 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
             .where(
                 StepStateRecord.workspace_id == ctx.workspace_id,
                 _credited(user_id),
-                StepStateRecord.entered_at >= day_start,
-                StepStateRecord.entered_at < day_end,
+                StepStateRecord.is_deleted.is_(False),
+                StepStateRecord.state.in_(_WORK_STATES),
+                StepStateRecord.entered_at >= range_start,
+                StepStateRecord.entered_at < range_end,
             )
-            .group_by(StepStateRecord.step_id)
+            .group_by(
+                StepStateRecord.step_id,
+                TaskStep.working_section_id,
+                TaskStep.recorded_time_marked_wrong,
+            )
         )
     ).all()
-
-    # >>> TEMP MOCK BREAKDOWN: no real records for this worker/day -> fabricate for
-    # the frontend. Self-disables once real records exist. Remove with the mock block.
-    if not agg_rows:
-        return _mock_daily_step_breakdown(
-            serialize_user_worker_stat(user), work_date, sort_by, order, limit, offset
-        )
-    # >>> END TEMP MOCK BREAKDOWN <<<
 
     # Currently-open interval per step (≤1 each; unique active index). Running time only —
     # never folded into the settled contribution/totals.
@@ -287,12 +192,13 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
             .where(
                 StepStateRecord.workspace_id == ctx.workspace_id,
                 _credited(user_id),
+                StepStateRecord.is_deleted.is_(False),
                 StepStateRecord.exited_at.is_(None),
                 # Time-bearing states only: a COMPLETED record is also exited_at NULL
                 # (terminal) but is a finished step, not a running interval.
                 StepStateRecord.state.in_(_TIME_STATES),
-                StepStateRecord.entered_at >= day_start,
-                StepStateRecord.entered_at < day_end,
+                StepStateRecord.entered_at >= range_start,
+                StepStateRecord.entered_at < range_end,
             )
         )
     ).all()
@@ -301,38 +207,199 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
         for row in open_rows
     }
 
-    # Live "running" add-on (today only): running time of the open intervals we just
-    # loaded, summed per state. Kept out of the settled `totals`; the client shows
-    # totals + running and ticks it locally. Zeros for past days.
     now = datetime.now(timezone.utc)
-    running = build_running_totals(
-        [(row.state.value, row.entered_at) for row in open_rows] if work_date == now.date() else [],
+
+    # Concurrency-averaged per-record settled/running seconds (batch time divided by real overlap).
+    contributions = await compute_record_contributions(
+        ctx.session, ctx.workspace_id, user_id, range_start - timedelta(days=1), range_end + timedelta(days=1), now
+    )
+
+    # Live "running" add-on: open intervals' averaged running seconds per state — only when
+    # the range includes today (a live interval only exists "now").
+    running = build_running_totals_averaged(
+        [(c.state, c.seconds) for c in contributions if c.is_open] if date_from <= now.date() <= date_to else [],
+        now,
+    )
+    avg_seconds: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"working": 0.0, "paused": 0.0, "ended_shift": 0.0}
+    )
+    for c in contributions:
+        if c.is_open or c.step_is_deleted or not (date_from <= c.entered_at.date() <= date_to):
+            continue
+        avg_seconds[c.step_id][c.state] += c.seconds
+
+    wasted_seconds: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"working": 0.0, "paused": 0.0, "ended_shift": 0.0}
+    )
+    inaccurate_records_by_step: dict[str, list[dict]] = defaultdict(list)
+    inaccurate_step_ids: set[str] = set()
+    for contribution in contributions:
+        if (
+            contribution.is_open
+            or contribution.step_is_deleted
+            or not (date_from <= contribution.entered_at.date() <= date_to)
+        ):
+            continue
+        if contribution.marked_wrong:
+            inaccurate_step_ids.add(contribution.step_id)
+            wasted_seconds[contribution.step_id][contribution.state] += contribution.wasted_seconds
+            inaccurate_records_by_step[contribution.step_id].append(
+                {
+                    "record_id": contribution.record_id,
+                    "state": contribution.state,
+                    "entered_at": contribution.entered_at.isoformat(),
+                    "exited_at": contribution.exited_at.isoformat() if contribution.exited_at else None,
+                    "wasted_seconds": float(contribution.wasted_seconds),
+                }
+            )
+
+    def _avg(step_id: str, state: str) -> int:
+        return int(round(avg_seconds.get(step_id, {}).get(state, 0.0)))
+
+    section_rows = (
+        await ctx.session.execute(
+            select(
+                UserSectionDailyWorkStats.working_section_id,
+                func.coalesce(func.sum(UserSectionDailyWorkStats.total_working_seconds), 0).label("working"),
+                func.coalesce(func.sum(UserSectionDailyWorkStats.total_pause_seconds), 0).label("pause"),
+                func.coalesce(func.sum(UserSectionDailyWorkStats.total_ended_shift_seconds), 0).label("ended"),
+                func.coalesce(func.sum(UserSectionDailyWorkStats.total_completed_count), 0).label("completed"),
+                func.coalesce(func.sum(UserSectionDailyWorkStats.inaccurate_step_count), 0).label("inaccurate_steps"),
+            )
+            .where(
+                UserSectionDailyWorkStats.workspace_id == ctx.workspace_id,
+                UserSectionDailyWorkStats.user_id == user_id,
+                UserSectionDailyWorkStats.work_date >= date_from,
+                UserSectionDailyWorkStats.work_date <= date_to,
+            )
+            .group_by(UserSectionDailyWorkStats.working_section_id)
+        )
+    ).all()
+    section_stats = {row.working_section_id: row for row in section_rows}
+
+    # Always load the sample: the breakdown returns all three strategies per step for
+    # side-by-side comparison, so median/iqr must be real regardless of `time_strategy`
+    # (which only selects the top-level usable total). One query for a single worker.
+    window_start, window_end = estimation_window(date_to)
+    samples = await load_trusted_step_duration_sample(
+        ctx.session,
+        ctx.workspace_id,
+        user_id,
+        window_start,
+        window_end,
         now,
     )
 
+    def _mean_per_step(section_id: str, state: str) -> float:
+        section = section_stats.get(section_id)
+        if section is None:
+            return 0.0
+        field = {"working": "working", "paused": "pause", "ended_shift": "ended"}[state]
+        trusted = int(getattr(section, field))
+        denominator = int(section.completed) - int(section.inaccurate_steps)
+        # Too few trusted completed steps in the section → estimate is noise; suppress.
+        return trusted / denominator if denominator >= ESTIMATION_MIN_TRUSTED_STEPS else 0.0
+
+    def _estimated_for_step(section_id: str, state: str) -> dict[str, float]:
+        fallback = _mean_per_step(section_id, state)
+        sample = samples.get((section_id, state), [])
+        values = {
+            "mean": fallback,
+            "median": fallback,
+            "iqr": fallback,
+        }
+        if len(sample) >= ESTIMATION_MIN_SAMPLE:
+            values["median"] = sample_median(sample)
+            values["iqr"] = iqr_trimmed_mean(sample)
+        return {
+            strategy: estimate_fill(1, value)
+            for strategy, value in values.items()
+        }
+
+    estimated_by_step: dict[str, dict[str, dict[str, float]]] = {}
+    estimated_totals: dict[str, dict[str, float]] = {
+        "mean": {"working": 0.0, "paused": 0.0, "ended_shift": 0.0},
+        "median": {"working": 0.0, "paused": 0.0, "ended_shift": 0.0},
+        "iqr": {"working": 0.0, "paused": 0.0, "ended_shift": 0.0},
+    }
+    for row in agg_rows:
+        if not bool(row.is_time_inaccurate) or row.step_id not in inaccurate_step_ids:
+            continue
+        estimated_by_step[row.step_id] = {
+            state: _estimated_for_step(row.working_section_id, state)
+            for state in ("working", "paused", "ended_shift")
+        }
+        for state, state_values in estimated_by_step[row.step_id].items():
+            for strategy, value in state_values.items():
+                estimated_totals[strategy][state] += value
+
     # Settled totals — full day, over every step, independent of sort/filter/pagination.
     totals = serialize_step_contribution(
-        working_seconds=int(sum(int(r.working_seconds) for r in agg_rows)),
-        pause_seconds=int(sum(int(r.pause_seconds) for r in agg_rows)),
-        ended_shift_seconds=int(sum(int(r.ended_shift_seconds) for r in agg_rows)),
+        working_seconds=sum(_avg(r.step_id, "working") for r in agg_rows),
+        pause_seconds=sum(_avg(r.step_id, "paused") for r in agg_rows),
+        ended_shift_seconds=sum(_avg(r.step_id, "ended_shift") for r in agg_rows),
         completed_count=int(sum(int(r.completed_count) for r in agg_rows)),
     )
+    wasted = serialize_step_contribution(
+        working_seconds=sum(int(round(wasted_seconds[r.step_id]["working"])) for r in agg_rows),
+        pause_seconds=sum(int(round(wasted_seconds[r.step_id]["paused"])) for r in agg_rows),
+        ended_shift_seconds=sum(int(round(wasted_seconds[r.step_id]["ended_shift"])) for r in agg_rows),
+    )
+    estimated = {
+        strategy: serialize_step_contribution(
+            working_seconds=int(round(values["working"])),
+            pause_seconds=int(round(values["paused"])),
+            ended_shift_seconds=int(round(values["ended_shift"])),
+        )
+        for strategy, values in estimated_totals.items()
+    }
+    selected_estimated = estimated[time_strategy.value]
+    usable = serialize_step_contribution(
+        working_seconds=totals["working_seconds"] + selected_estimated["working_seconds"],
+        pause_seconds=totals["pause_seconds"] + selected_estimated["pause_seconds"],
+        ended_shift_seconds=totals["ended_shift_seconds"] + selected_estimated["ended_shift_seconds"],
+        completed_count=totals["completed_count"],
+    )
 
-    # Display set + ordering. `completed` is a filter intention (only completed steps).
+    # Display set + ordering.
+    #
+    # `working` / `paused` / `completed` are *filter* intentions, not just sorts: each one
+    # answers "where did THIS total come from", so a step with nothing to contribute to that
+    # metric must not be listed (it would render as a 0h 0m card padding the list).
+    # `contribution` / `last_activity` stay unfiltered — they are "everything touched" views.
+    #
+    # A step qualifies for a time intention when it holds settled time in that state, OR is
+    # live in it right now (open interval — zero settled but actively accruing), OR — for
+    # `working` only — is flagged inaccurate: those carry 0 trusted seconds by definition,
+    # and their time lives in `wasted` / `estimated_fill_by_strategy`, so excluding them
+    # would hide exactly the steps the estimation UI exists to surface.
+    def _keeps(row, state: str) -> bool:
+        if _avg(row.step_id, state) > 0:
+            return True
+        if active_record_by_step.get(row.step_id, {}).get("state") == state:
+            return True
+        return state == "working" and bool(row.is_time_inaccurate)
+
     display = list(agg_rows)
+    if only_inaccurate:
+        display = [r for r in display if bool(r.is_time_inaccurate)]
     if sort_by == "completed":
         display = [r for r in display if r.last_completed_at is not None]
+    elif sort_by == "working":
+        display = [r for r in display if _keeps(r, "working")]
+    elif sort_by == "paused":
+        display = [r for r in display if _keeps(r, "paused")]
 
     reverse = order == "desc"
     display.sort(key=lambda r: r.step_id)  # stable final tie-break
     if sort_by == "contribution":
         display.sort(key=lambda r: int(r.completed_count), reverse=True)
-        display.sort(key=lambda r: int(r.working_seconds), reverse=True)
+        display.sort(key=lambda r: _avg(r.step_id, "working"), reverse=True)
         display.sort(key=lambda r: r.step_id in active_record_by_step, reverse=True)
     elif sort_by == "working":
-        display.sort(key=lambda r: int(r.working_seconds), reverse=reverse)
+        display.sort(key=lambda r: _avg(r.step_id, "working"), reverse=reverse)
     elif sort_by == "paused":
-        display.sort(key=lambda r: int(r.pause_seconds), reverse=reverse)
+        display.sort(key=lambda r: _avg(r.step_id, "paused"), reverse=reverse)
     elif sort_by == "completed":
         display.sort(key=lambda r: r.last_completed_at, reverse=reverse)
     else:  # last_activity
@@ -353,6 +420,17 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
         primary_item_id = bundle.task_to_primary_item_id.get(step.task_id)
         item = bundle.items_by_id.get(primary_item_id) if primary_item_id else None
         item_reqs = bundle.requirements_by_item.get(primary_item_id, []) if primary_item_id else []
+        step_estimates = estimated_by_step.get(
+            row.step_id,
+            {
+                state: {"mean": 0.0, "median": 0.0, "iqr": 0.0}
+                for state in ("working", "paused", "ended_shift")
+            },
+        )
+        step_wasted = wasted_seconds.get(
+            row.step_id,
+            {"working": 0.0, "paused": 0.0, "ended_shift": 0.0},
+        )
         items.append(
             {
                 **serialize_step(step),
@@ -360,11 +438,22 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
                 "item": serialize_item_worker_light(item, item_reqs, bundle.upholstery_by_id),
                 "item_images": bundle.images_by_item.get(primary_item_id, []) if primary_item_id else [],
                 "contribution": serialize_step_contribution(
-                    working_seconds=int(row.working_seconds),
-                    pause_seconds=int(row.pause_seconds),
-                    ended_shift_seconds=int(row.ended_shift_seconds),
+                    working_seconds=_avg(row.step_id, "working"),
+                    pause_seconds=_avg(row.step_id, "paused"),
+                    ended_shift_seconds=_avg(row.step_id, "ended_shift"),
                     completed_count=int(row.completed_count),
                 ),
+                "is_time_inaccurate": bool(row.is_time_inaccurate),
+                "wasted": serialize_step_contribution(
+                    working_seconds=int(round(step_wasted["working"])),
+                    pause_seconds=int(round(step_wasted["paused"])),
+                    ended_shift_seconds=int(round(step_wasted["ended_shift"])),
+                ),
+                "estimated_fill_by_strategy": {
+                    state: serialize_estimated_fill_by_strategy(**values)
+                    for state, values in step_estimates.items()
+                },
+                "inaccurate_records": inaccurate_records_by_step.get(row.step_id, []),
                 "active_record": active_record_by_step.get(row.step_id),
                 "last_activity_at": row.last_activity_at.isoformat() if row.last_activity_at else None,
                 "last_completed_at": row.last_completed_at.isoformat() if row.last_completed_at else None,
@@ -374,29 +463,75 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
     daily_row = (
         await ctx.session.execute(
             select(
-                UserDailyWorkStats.total_working_seconds,
-                UserDailyWorkStats.total_pause_seconds,
-                UserDailyWorkStats.total_ended_shift_seconds,
-                UserDailyWorkStats.total_completed_count,
+                func.coalesce(func.sum(UserDailyWorkStats.total_working_seconds), 0).label("working"),
+                func.coalesce(func.sum(UserDailyWorkStats.total_pause_seconds), 0).label("pause"),
+                func.coalesce(func.sum(UserDailyWorkStats.total_ended_shift_seconds), 0).label("ended_shift"),
+                func.coalesce(func.sum(UserDailyWorkStats.total_completed_count), 0).label("completed"),
+                func.coalesce(func.sum(UserDailyWorkStats.inaccurate_working_seconds), 0).label("inaccurate_working"),
+                func.coalesce(func.sum(UserDailyWorkStats.inaccurate_pause_seconds), 0).label("inaccurate_pause"),
+                func.coalesce(func.sum(UserDailyWorkStats.inaccurate_step_count), 0).label("inaccurate_steps"),
             ).where(
                 UserDailyWorkStats.workspace_id == ctx.workspace_id,
                 UserDailyWorkStats.user_id == user_id,
-                UserDailyWorkStats.work_date == work_date,
+                UserDailyWorkStats.work_date >= date_from,
+                UserDailyWorkStats.work_date <= date_to,
             )
         )
-    ).one_or_none()
-    daily_stats = serialize_user_daily_work_stats_full(
-        work_date,
-        total_working_seconds=daily_row.total_working_seconds if daily_row else 0,
-        total_pause_seconds=daily_row.total_pause_seconds if daily_row else 0,
-        total_ended_shift_seconds=daily_row.total_ended_shift_seconds if daily_row else 0,
-        total_completed_count=daily_row.total_completed_count if daily_row else 0,
+    ).one()
+    # Per-state confidence backing the SELECTED strategy's fill: view-range trusted-completed
+    # count for mean; lookback sample size (or fallback view-range count) per flagged section
+    # for median/iqr — mirrors the roster so the frontend's confidence gate is consistent.
+    if time_strategy.value == "mean":
+        daily_working_n = daily_pause_n = max(0, int(daily_row.completed) - int(daily_row.inaccurate_steps))
+    else:
+        daily_working_n = daily_pause_n = 0
+        for sec_id, srow in section_stats.items():
+            s_steps = int(srow.inaccurate_steps)
+            if s_steps == 0:
+                continue
+            view_n = max(0, int(srow.completed) - s_steps)
+            w_s = samples.get((sec_id, "working"), [])
+            p_s = samples.get((sec_id, "paused"), [])
+            daily_working_n += len(w_s) if len(w_s) >= ESTIMATION_MIN_SAMPLE else view_n
+            daily_pause_n += len(p_s) if len(p_s) >= ESTIMATION_MIN_SAMPLE else view_n
+
+    daily_quality = {
+        "strategy": time_strategy.value,
+        "working": serialize_time_quality(
+            int(daily_row.working),
+            int(daily_row.inaccurate_working),
+            int(daily_row.inaccurate_steps),
+            float(selected_estimated["working_seconds"]),
+            daily_working_n,
+        ),
+        "paused": serialize_time_quality(
+            int(daily_row.pause),
+            int(daily_row.inaccurate_pause),
+            int(daily_row.inaccurate_steps),
+            float(selected_estimated["pause_seconds"]),
+            daily_pause_n,
+        ),
+    }
+    daily_stats = serialize_user_range_work_stats_full(
+        date_from,
+        date_to,
+        total_working_seconds=int(daily_row.working),
+        total_pause_seconds=int(daily_row.pause),
+        total_ended_shift_seconds=int(daily_row.ended_shift),
+        total_completed_count=int(daily_row.completed),
+        time_quality=daily_quality,
     )
 
     return {
         "user": serialize_user_worker_stat(user),
-        "work_date": work_date.isoformat(),
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
         "totals": totals,
+        "usable": usable,
+        "wasted": wasted,
+        "estimated": estimated,
+        "inaccurate_step_count": len(inaccurate_step_ids),
+        "time_strategy": time_strategy.value,
         "daily_stats": daily_stats,
         "running": running,
         "steps": {

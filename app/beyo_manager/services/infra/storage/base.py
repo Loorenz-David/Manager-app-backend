@@ -8,6 +8,14 @@ class StorageClient(ABC):
     @abstractmethod
     def generate_presigned_get_url(self, key: str, expires_in: int) -> str: ...
 
+    def presigned_get_remaining_seconds(self, key: str, expires_in: int) -> int:
+        """Actual remaining validity of the URL `generate_presigned_get_url` returns now.
+
+        Backends that stabilise URLs by backdating the signature (S3) return less than the
+        full TTL and override this. Backends whose URLs do not expire return the TTL.
+        """
+        return expires_in
+
     @abstractmethod
     def head_object(self, key: str) -> dict | None:
         """Return object metadata or None when the object does not exist."""

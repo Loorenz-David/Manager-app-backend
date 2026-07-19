@@ -7,6 +7,16 @@
 - Owner agent: `claude-opus-4-8`
 - Affects: `GET /api/v1/worker-stats/last-interacted-steps` and `GET /api/v1/worker-stats/{user_id}/daily-steps`
 
+## ⚠️ Update 2026-07-18 — batch time is now concurrency-averaged
+
+Time for **batchable** working sections is now split by real concurrency: when a worker runs N steps at once, each moment is divided by N. This changes how `running` ticks:
+
+- **Worker-level total** (`daily_stats/totals + running`) advances at **real time** — i.e. `+1s per real second` per state while that state has any open interval — **not** `open_count × elapsed`. (The batch's per-step shares sum to real time.) So to tick a worker's live total: `+= (open_count > 0 ? 1 : 0) × elapsed` per state.
+- `running.working_seconds` / `pause_seconds` / `ended_shift_seconds` are already the **averaged** running seconds at `as_of`; `*_open_count` still tells you how many steps are open (useful for per-step display).
+- The **breakdown** endpoint's per-step `active_record` still ticks at `1/k` per step (a batch step accrues its fraction). Summed across the batch, they equal the worker-level real rate.
+
+The field shapes are unchanged; only the numbers (averaged) and the tick rule (real-time, not `open_count×`) changed. Everything else below still holds.
+
 ## What changed & why
 
 The daily totals we return (`daily_stats` on the list endpoint, `totals` on the breakdown) are **settled** figures — the analytics pipeline only books an interval's time when that interval **closes**. So while a worker is *currently* working or paused, that in-progress time is **not** in those totals yet. In particular, a worker can have **several** steps sitting in open PAUSE at once (each time they switch tasks, the previous one is auto-paused and stays open), and none of that pause time is counted until they return to it.

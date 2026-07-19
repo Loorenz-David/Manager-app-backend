@@ -29,6 +29,10 @@ from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.utils.task_search import build_task_q_subquery
+from beyo_manager.services.queries.utils.upholstery_grouping import (
+    build_primary_item_upholstery_group_columns,
+    load_upholstery_group_inventories,
+)
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
@@ -84,6 +88,7 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
     deleted = bool(ctx.query_params.get("deleted", False))
+    group_by_upholstery = bool(ctx.query_params.get("group_by_upholstery", False))
 
     working_section_ids = _split_csv(ctx.query_params.get("working_section_ids"))
     task_states = _split_csv(ctx.query_params.get("task_states"))
@@ -226,19 +231,46 @@ async def list_tasks(ctx: ServiceContext) -> dict:
             .distinct()
         )
         if item_position:
-            item_subq = item_subq.where(Item.item_position.ilike(f"{item_position}%"))
+            item_subq = item_subq.where(Item.item_position.ilike(item_position))
         if item_zone:
-            item_subq = item_subq.where(Item.item_zone.ilike(f"{item_zone}%"))
+            item_subq = item_subq.where(Item.item_zone.ilike(item_zone))
         stmt = stmt.where(Task.client_id.in_(item_subq))
 
     if q:
         stmt = stmt.where(Task.client_id.in_(build_task_q_subquery(ctx.workspace_id, q)))
 
-    stmt = stmt.order_by(*_build_order_by(ctx.query_params.get("order_by")))
+    upholstery_group_key = None
+    upholstery_group_image_url = None
+    upholstery_group_upholstery_id = None
+    if group_by_upholstery:
+        upholstery_group_key, upholstery_group_image_url, upholstery_group_upholstery_id = (
+            build_primary_item_upholstery_group_columns(ctx.workspace_id, Task.client_id)
+        )
+        stmt = stmt.add_columns(
+            upholstery_group_key.label("upholstery_group_key"),
+            upholstery_group_image_url.label("upholstery_group_image_url"),
+            upholstery_group_upholstery_id.label("upholstery_group_upholstery_id"),
+        )
+
+    order_by_clauses = _build_order_by(ctx.query_params.get("order_by"))
+    if upholstery_group_key is not None:
+        order_by_clauses = [upholstery_group_key.asc().nulls_last(), *order_by_clauses]
+
+    stmt = stmt.order_by(*order_by_clauses)
     stmt = stmt.offset(offset).limit(limit + 1)
 
     result = await ctx.session.execute(stmt)
-    task_ids = [row[0] for row in result.all()]
+    id_rows = result.all()
+    task_ids = [row[0] for row in id_rows]
+    group_key_by_task_id = (
+        {row[0]: row[1] for row in id_rows} if upholstery_group_key is not None else {}
+    )
+    group_image_by_task_id = (
+        {row[0]: row[2] for row in id_rows} if upholstery_group_key is not None else {}
+    )
+    group_uph_id_by_task_id = (
+        {row[0]: row[3] for row in id_rows} if upholstery_group_key is not None else {}
+    )
 
     has_more = len(task_ids) > limit
     page_ids = task_ids[:limit]
@@ -260,6 +292,12 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     )
     tasks = tasks_result.scalars().all()
     task_map = {task.client_id: task for task in tasks}
+
+    group_inventory_by_uph_id = await load_upholstery_group_inventories(
+        ctx.session,
+        ctx.workspace_id,
+        list({v for v in group_uph_id_by_task_id.values() if v}),
+    )
 
     post_handling_map: dict[str, list[TaskPostHandling]] = {}
     if post_handling_states:
@@ -346,6 +384,12 @@ async def list_tasks(ctx: ServiceContext) -> dict:
                 ),
                 "primary_item": serialize_item(primary_item),
                 "item_images": item_images_map.get(primary_item_id, []),
+                "upholstery_group_key": group_key_by_task_id.get(task_id),
+                "upholstery_group_image_url": group_image_by_task_id.get(task_id),
+                "upholstery_group_upholstery_id": group_uph_id_by_task_id.get(task_id),
+                "upholstery_group_inventory": group_inventory_by_uph_id.get(
+                    group_uph_id_by_task_id.get(task_id)
+                ),
             }
         )
 

@@ -8,7 +8,6 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.aggregate_metrics import increment_step_time_metrics
 from beyo_manager.domain.schedulers.enums import (
     DelayedSchedulerTypeEnum,
     SchedulerOriginSourceEnum,
@@ -258,9 +257,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
 
                 auto_paused_step = conflicting_step
 
-                if not conflicting_record.recorded_time_marked_wrong:
-                    auto_pause_interval = max(0, int((now - conflicting_closing_entered_at).total_seconds()))
-                    increment_step_time_metrics(conflicting_step, TaskStepStateEnum.WORKING, auto_pause_interval)
+                # Time totals recomputed async by the analytics worker (see process_step_transition).
 
                 await create_instant_task(
                     session=ctx.session,
@@ -326,9 +323,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         step.updated_at = now
         step.updated_by_id = ctx.user_id
 
-        if not closing_record.recorded_time_marked_wrong:
-            interval_seconds = max(0, int((now - closing_entered_at).total_seconds()))
-            increment_step_time_metrics(step, closing_state, interval_seconds)
+        # Step time totals recomputed concurrency-averaged by the analytics worker
+        # (PROCESS_STEP_TRANSITION) — see process_step_transition.
 
         # If entering a terminal state, set closed_at
         if request.new_state in TERMINAL_STEP_STATES:

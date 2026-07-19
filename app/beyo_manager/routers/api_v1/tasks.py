@@ -331,6 +331,7 @@ async def route_list_tasks(
     item_position: str | None = Query(None),
     item_zone: str | None = Query(None),
     deleted: bool = Query(False),
+    group_by_upholstery: bool = Query(False),
     order_by: str | None = Query(None),
 ):
     ctx = ServiceContext(
@@ -357,6 +358,7 @@ async def route_list_tasks(
             "item_position": item_position,
             "item_zone": item_zone,
             "deleted": deleted,
+            "group_by_upholstery": group_by_upholstery,
             "order_by": order_by,
         },
         identity=claims,
