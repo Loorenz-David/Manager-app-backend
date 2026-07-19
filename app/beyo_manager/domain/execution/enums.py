@@ -33,6 +33,7 @@ class TaskType(enum.Enum):
     RECURRING_SEND_REPORT = "recurring_send_report"
     RECURRING_REMINDER    = "recurring_reminder"
     RECURRING_PIN_TASK    = "recurring_pin_task"
+    AUTO_CLOCK_OUT_OPEN_SHIFTS = "auto_clock_out_open_shifts"
 
     # Presence view-record tasks (enqueued by socket connect/disconnect handlers)
     RECORD_VIEW_START = "record_view_start"

@@ -26,6 +26,7 @@ RECURRING_TYPE_TO_TASK_TYPE: dict[RecurringSchedulerTypeEnum, TaskType] = {
     RecurringSchedulerTypeEnum.SEND_REPORT: TaskType.RECURRING_SEND_REPORT,
     RecurringSchedulerTypeEnum.REMINDER:    TaskType.RECURRING_REMINDER,
     RecurringSchedulerTypeEnum.PIN_TASK:    TaskType.RECURRING_PIN_TASK,
+    RecurringSchedulerTypeEnum.AUTO_CLOCK_OUT_OPEN_SHIFTS: TaskType.AUTO_CLOCK_OUT_OPEN_SHIFTS,
 }
 
 INTERVAL_UNIT_TO_SECONDS: dict[RecurringSchedulerIntervalValueEnum, int] = {

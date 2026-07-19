@@ -13,6 +13,7 @@ class RecurringSchedulerTypeEnum(enum.Enum):
     SEND_REPORT = "send_report"
     REMINDER    = "reminder"
     PIN_TASK    = "pin_task"
+    AUTO_CLOCK_OUT_OPEN_SHIFTS = "auto_clock_out_open_shifts"
 
 
 class RecurringSchedulerIntervalValueEnum(enum.Enum):

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.domain.users.enums import UserShiftStateEnum
@@ -29,6 +29,13 @@ class UserShiftStateRecord(IdentityMixin, Base):
     exited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     changed_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    manually_recorded: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
 
     __table_args__ = (
