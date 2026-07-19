@@ -26,6 +26,9 @@ from beyo_manager.services.queries.analytics.reconcile_user_time import (
     apply_reconcile_deltas,
     reconcile_user_day_time,
 )
+from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
+    reconcile_worker_shift_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,14 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
             logger.info(
                 "step_time_recomputed | workspace_id=%s user_id=%s step_id=%s work_date=%s closing_state=%s",
                 payload.workspace_id, payload.credited_user_id, payload.step_id, work_date, closing_state.value,
+            )
+
+        if payload.credited_user_id:
+            await reconcile_worker_shift_state(
+                session,
+                payload.workspace_id,
+                payload.credited_user_id,
+                now,
             )
 
         # Issues rule: applies regardless of recorded_time_marked_wrong
