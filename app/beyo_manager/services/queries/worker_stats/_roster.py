@@ -1,12 +1,15 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.context import ServiceContext
@@ -100,3 +103,42 @@ async def load_worker_page(ctx: ServiceContext) -> tuple[list[User], dict]:
         "offset": offset,
         "total": total,
     }
+
+
+async def count_completed_steps(
+    session: AsyncSession,
+    workspace_id: str,
+    user_ids: list[str],
+    window_start: datetime,
+    window_end: datetime,
+) -> dict[str, int]:
+    """Per-worker count of steps completed in ``[window_start, window_end)``.
+
+    Counts ``COMPLETED`` ``StepStateRecord`` rows credited to each worker
+    (``COALESCE(credited_user_id, created_by_id)``), joined to a live step. Read from the
+    raw records so it matches the linear-timeline view rather than the maintained aggregate.
+    """
+    if not user_ids:
+        return {}
+    credited = func.coalesce(StepStateRecord.credited_user_id, StepStateRecord.created_by_id)
+    rows = await session.execute(
+        select(credited.label("user_id"), func.count(StepStateRecord.client_id).label("completed"))
+        .join(
+            TaskStep,
+            and_(
+                TaskStep.client_id == StepStateRecord.step_id,
+                TaskStep.workspace_id == workspace_id,
+                TaskStep.is_deleted.is_(False),
+            ),
+        )
+        .where(
+            StepStateRecord.workspace_id == workspace_id,
+            StepStateRecord.is_deleted.is_(False),
+            credited.in_(user_ids),
+            StepStateRecord.state == TaskStepStateEnum.COMPLETED,
+            StepStateRecord.entered_at >= window_start,
+            StepStateRecord.entered_at < window_end,
+        )
+        .group_by(credited)
+    )
+    return {row.user_id: int(row.completed) for row in rows.all()}

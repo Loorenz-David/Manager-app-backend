@@ -9,9 +9,15 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.worker_stats.get_worker_daily_step_breakdown import (
     get_worker_daily_step_breakdown,
 )
+from beyo_manager.services.queries.worker_stats.get_worker_linear_timeline_breakdown import (
+    get_worker_linear_timeline_breakdown,
+)
 from beyo_manager.services.queries.worker_stats.list_workers_insights import list_workers_insights
 from beyo_manager.services.queries.worker_stats.list_workers_last_interacted_step import (
     list_workers_last_interacted_step,
+)
+from beyo_manager.services.queries.worker_stats.list_workers_linear_timeline import (
+    list_workers_linear_timeline,
 )
 from beyo_manager.services.queries.worker_stats.list_workers_totals import list_workers_totals
 from beyo_manager.services.run_service import run_service
@@ -71,6 +77,32 @@ async def get_workers_totals_route(
     return build_ok(outcome.data)
 
 
+@router.get("/linear-timeline")
+async def get_workers_linear_timeline_route(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "limit": limit,
+            "offset": offset,
+            **({"date_from": date_from} if date_from else {}),
+            **({"date_to": date_to} if date_to else {}),
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_workers_linear_timeline, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
 @router.get("/insights")
 async def get_workers_insights_route(
     claims: dict = Depends(require_roles([ADMIN, MANAGER])),
@@ -125,6 +157,29 @@ async def get_worker_daily_step_breakdown_route(
         session=session,
     )
     outcome = await run_service(get_worker_daily_step_breakdown, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/{user_id}/linear-timeline")
+async def get_worker_linear_timeline_breakdown_route(
+    user_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    ctx = ServiceContext(
+        incoming_data={"user_id": user_id},
+        query_params={
+            **({"date_from": date_from} if date_from else {}),
+            **({"date_to": date_to} if date_to else {}),
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(get_worker_linear_timeline_breakdown, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

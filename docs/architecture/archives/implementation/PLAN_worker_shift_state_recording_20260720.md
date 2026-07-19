@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_worker_shift_state_recording_20260720`
-- Status: `approved`
-- Owner agent: `claude-fable-5`
+- Status: `archived`
+- Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-20T00:00:00Z`
-- Last updated at (UTC): `2026-07-20T00:00:00Z` (rev 4 — markers written closed + returned as zero-duration segments; single `/clock` toggle route; `manually_recorded` flag; contract additive-only)
+- Last updated at (UTC): `2026-07-20T00:00:30Z` (implementation completed, summarized, and archived)
 - Related issue/ticket: `n/a` (originates from linear-timeline live-DB validation: cross-day pause bleed)
 - Intention plan: `backend/docs/architecture/under_construction/intention/INTENTION_worker_shift_state_recording_20260720.md` (optional — design intent captured in this plan's Goal section)
 - **Supersedes:** `PLAN_linear_pause_semantics_and_stale_close_20260719.md` (classification-filter + stale-close scheduler). That plan patched the *symptoms* of a missing shift signal; this plan records the signal itself.
@@ -206,6 +206,7 @@ Prohibited pattern reads (contract already covers): another command for write-pa
 
 ## Review log
 
+- `2026-07-20` implementer: `Codex` — all 11 acceptance criteria verified; Parts A–E committed independently; final worker-shift, worker-stats, and analytics suite passed (149 tests); touched Python files Ruff-clean; Alembic head `b4074f2e26c4` applied successfully; plan summarized and archived.
 - `2026-07-20` implementer: `Codex` — implementation started against approved rev 4; contracts loaded canonical-first with app-local companions taking precedence.
 - `2026-07-20` owner: clarifications 1–3 resolved — auto-clock-in on first task start; full clock machinery in scope, hard cutover with backfill at rollout; midnight recurring-scheduler safeguard reusing the clock-out command. Plan revised accordingly (rev 2).
 - `2026-07-20` owner: added free-string `reason` on `UserShiftStateRecord` (derived pauses carry the paused step's reason; manual pauses carry worker free text) + worker self-service pause/resume routes to cure idle time. Rev 3 adds the manual-pause stickiness rule so the reconcile never reverts a worker's own pause to `IDLE`.
@@ -213,6 +214,6 @@ Prohibited pattern reads (contract already covers): another command for write-pa
 
 ## Lifecycle transition
 
-- Current state: `approved`
-- Next state: `implemented`
+- Current state: `archived`
+- Next state: `none`
 - Transition owner: `Codex`

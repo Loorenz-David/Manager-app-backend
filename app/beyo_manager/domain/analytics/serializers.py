@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 
 from beyo_manager.domain.analytics.insights.results import Insight
+from beyo_manager.domain.analytics.linear_timeline import LinearSegment, LinearTimeline
 
 _RUNNING_STATES = ("working", "paused", "ended_shift")
 
@@ -58,6 +59,72 @@ def build_running_totals_averaged(
         "pause_open_count": counts["paused"],
         "ended_shift_open_count": counts["ended_shift"],
         "as_of": now.isoformat(),
+    }
+
+
+def serialize_linear_timeline(
+    date_from: date, date_to: date, timeline: LinearTimeline, completed_count: int = 0
+) -> dict:
+    """Serialize a worker's wall-clock (single-state) totals over an inclusive range.
+
+    The state buckets are disjoint (an instant is working *or* paused *or* ended-shift
+    *or* idle, never several), so they partition the elapsed span. ``idle_seconds`` is
+    non-working time attributed to nothing (research/transition gaps, or a pause left open
+    after the worker already resumed). ``pause_by_reason`` sums back to ``pause_seconds``
+    exactly. ``completed_count`` is the number of steps the worker completed in the range
+    (counted from raw records, independent of the time buckets).
+    """
+    return {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "working_seconds": timeline.working_seconds,
+        "pause_seconds": timeline.paused_seconds,
+        "ended_shift_seconds": timeline.ended_shift_seconds,
+        "idle_seconds": timeline.idle_seconds,
+        "completed_count": completed_count,
+        "pause_by_reason": timeline.pause_by_reason,
+    }
+
+
+def serialize_linear_segment(segment: LinearSegment, steps: list[dict]) -> dict:
+    """One drawable timeline block: a typed, contiguous run plus the records behind it.
+
+    ``steps`` is the caller-composed detail, one entry per contributing state record
+    (``segment.records``) — step/task/section + item article_number/sku, plus that
+    record's own state/reason/entered_at/exited_at. Empty for idle runs. ``seconds``
+    reconciles the block width.
+    """
+    return {
+        "start": segment.start.isoformat(),
+        "end": segment.end.isoformat(),
+        "seconds": segment.seconds,
+        "state": segment.state,
+        "reason": segment.reason,
+        "is_open": segment.is_open,
+        "steps": steps,
+    }
+
+
+def serialize_recorded_shift_segment(
+    *,
+    start: datetime,
+    end: datetime,
+    state: str,
+    reason: str | None,
+    is_open: bool,
+    manually_recorded: bool,
+    steps: list[dict],
+) -> dict:
+    """Serialize one recorded shift-state interval using the delivered segment shape."""
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "seconds": int(round((end - start).total_seconds())),
+        "state": state,
+        "reason": reason,
+        "is_open": is_open,
+        "steps": steps,
+        "manually_recorded": manually_recorded,
     }
 
 

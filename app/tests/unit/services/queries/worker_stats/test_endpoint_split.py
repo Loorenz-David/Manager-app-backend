@@ -57,5 +57,7 @@ def test_worker_stats_router_registers_all_split_routes():
     paths = {route.path for route in router.routes}
     assert "/last-interacted-steps" in paths
     assert "/totals" in paths
+    assert "/linear-timeline" in paths
     assert "/insights" in paths
     assert "/{user_id}/daily-steps" in paths
+    assert "/{user_id}/linear-timeline" in paths
