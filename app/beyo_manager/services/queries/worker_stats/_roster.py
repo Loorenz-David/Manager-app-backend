@@ -61,12 +61,12 @@ def resolve_date_range(query_params: dict) -> tuple[date, date]:
     return date_from, date_to
 
 
-def _worker_role_filter():
+def _worker_role_filter(roles: tuple[RoleNameEnum, ...]):
     # Specializations remain workers at the base workspace-role level.
-    return Role.name == RoleNameEnum.WORKER.value
+    return Role.name.in_([role.value for role in roles])
 
 
-def _worker_membership_query(ctx: ServiceContext, columns):
+def _worker_membership_query(ctx: ServiceContext, columns, roles: tuple[RoleNameEnum, ...]):
     return (
         select(*columns)
         .join(WorkspaceMembership, WorkspaceMembership.user_id == User.client_id)
@@ -75,22 +75,25 @@ def _worker_membership_query(ctx: ServiceContext, columns):
         .where(
             WorkspaceMembership.workspace_id == ctx.workspace_id,
             WorkspaceMembership.is_active.is_(True),
-            _worker_role_filter(),
+            _worker_role_filter(roles),
         )
     )
 
 
-async def load_worker_page(ctx: ServiceContext) -> tuple[list[User], dict]:
+async def load_worker_page(
+    ctx: ServiceContext,
+    roles: tuple[RoleNameEnum, ...] = (RoleNameEnum.WORKER,),
+) -> tuple[list[User], dict]:
     limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
     offset = int(ctx.query_params.get("offset", 0))
 
     total_result = await ctx.session.execute(
-        _worker_membership_query(ctx, [func.count(User.client_id.distinct())])
+        _worker_membership_query(ctx, [func.count(User.client_id.distinct())], roles)
     )
     total = total_result.scalar() or 0
 
     workers_result = await ctx.session.execute(
-        _worker_membership_query(ctx, [User])
+        _worker_membership_query(ctx, [User], roles)
         .order_by(User.username.asc())
         .offset(offset)
         .limit(limit + 1)

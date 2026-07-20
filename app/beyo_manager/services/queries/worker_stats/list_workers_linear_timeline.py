@@ -10,6 +10,7 @@ from beyo_manager.domain.analytics.linear_timeline import (
     LinearTimeline,
 )
 from beyo_manager.domain.analytics.serializers import serialize_linear_timeline
+from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
@@ -108,7 +109,9 @@ async def load_recorded_shift_records(
 
 async def list_workers_linear_timeline(ctx: ServiceContext) -> dict:
     date_from, date_to = resolve_date_range(ctx.query_params)
-    workers, workers_pagination = await load_worker_page(ctx)
+    workers, workers_pagination = await load_worker_page(
+        ctx, roles=(RoleNameEnum.WORKER, RoleNameEnum.MANAGER)
+    )
     worker_ids = [user.client_id for user in workers]
 
     now = datetime.now(timezone.utc)
