@@ -89,6 +89,30 @@ def parse_time_activities(payload: dict) -> ParsedTimeActivities:
     return ParsedTimeActivities(shifts=shifts, skipped_open=skipped_open)
 
 
+def parse_open_shift_starts(payload: dict) -> dict[str, datetime]:
+    """Map ``connecteam_user_id -> earliest OPEN shift start`` (the current clock-in).
+
+    The inverse of the completed-shift parse: an in-progress shift has a ``start.timestamp``
+    but a null ``end``. Used to recover the true clock-in for *today's* still-open shifts,
+    which :func:`parse_time_activities` deliberately skips.
+    """
+    starts: dict[str, datetime] = {}
+    groups = (payload.get("data") or {}).get("timeActivitiesByUsers") or []
+    for group in groups:
+        connecteam_user_id = str(group.get("userId")) if group.get("userId") is not None else None
+        if not connecteam_user_id:
+            continue
+        for shift in group.get("shifts") or []:
+            start = (shift.get("start") or {}).get("timestamp")
+            end = (shift.get("end") or {}).get("timestamp")  # (shift.get("end") may be None)
+            if start is None or end is not None:
+                continue  # only open (still clocked-in) shifts
+            ts = _to_utc(start)
+            if connecteam_user_id not in starts or ts < starts[connecteam_user_id]:
+                starts[connecteam_user_id] = ts
+    return starts
+
+
 class ConnecteamTimeActivitiesClient:
     """Thin async HTTP client for the Time Activities endpoint."""
 
@@ -121,6 +145,24 @@ class ConnecteamTimeActivitiesClient:
 
         payload = await self._get_with_retry(url, params)
         return parse_time_activities(payload)
+
+    async def fetch_open_shift_starts(
+        self,
+        *,
+        time_clock_id: str,
+        on_date: date,
+        user_ids: list[str] | None = None,
+    ) -> dict[str, datetime]:
+        """``connecteam_user_id -> current clock-in`` for shifts still open on ``on_date``."""
+        url = self._base_url + _TIME_ACTIVITIES_PATH.format(time_clock_id=time_clock_id)
+        params: list[tuple[str, str]] = [
+            ("startDate", on_date.isoformat()),
+            ("endDate", on_date.isoformat()),
+            ("activityTypes", "shift"),
+        ]
+        params += [("userIds", uid) for uid in (user_ids or [])]
+        payload = await self._get_with_retry(url, params)
+        return parse_open_shift_starts(payload)
 
     async def list_time_clocks(self) -> dict:
         """Raw ``GET /time-clock/v1/time-clocks`` — used to discover the ``timeClockId``."""

@@ -1,6 +1,9 @@
 from datetime import date, datetime, timedelta, timezone
 
-from beyo_manager.services.infra.connecteam.time_activities_client import parse_time_activities
+from beyo_manager.services.infra.connecteam.time_activities_client import (
+    parse_open_shift_starts,
+    parse_time_activities,
+)
 from scripts.backfill.curate_shifts_from_connecteam import _split_windows
 
 
@@ -95,3 +98,41 @@ def test_dedupes_by_shift_id_and_skips_userless_or_startless():
 def test_empty_payload():
     assert parse_time_activities({}).shifts == []
     assert parse_time_activities({"data": {"timeActivitiesByUsers": []}}).shifts == []
+
+
+def test_open_shift_starts_returns_only_open_shift_clock_ins():
+    payload = {
+        "data": {
+            "timeActivitiesByUsers": [
+                {
+                    "userId": 9170357,
+                    "shifts": [
+                        # completed shift — excluded (has an end)
+                        {"id": "s1", "start": {"timestamp": 1_784_520_000},
+                         "end": {"timestamp": 1_784_523_600}},
+                        # open shift — the current clock-in
+                        {"id": "s2", "start": {"timestamp": 1_784_528_400}, "end": None},
+                    ],
+                },
+                {"userId": 42, "shifts": [{"id": "s3", "start": {"timestamp": 1_784_530_000}}]},
+            ]
+        }
+    }
+    starts = parse_open_shift_starts(payload)
+    assert set(starts) == {"9170357", "42"}  # keyed by connecteam_user_id, open shifts only
+    assert starts["9170357"] == datetime(2026, 7, 20, 6, 20, tzinfo=timezone.utc)
+
+
+def test_open_shift_starts_empty_when_no_open_shifts():
+    payload = {
+        "data": {
+            "timeActivitiesByUsers": [
+                {"userId": 1, "shifts": [
+                    {"id": "s1", "start": {"timestamp": 1_784_520_000},
+                     "end": {"timestamp": 1_784_523_600}},
+                ]},
+            ]
+        }
+    }
+    assert parse_open_shift_starts(payload) == {}
+    assert parse_open_shift_starts({}) == {}

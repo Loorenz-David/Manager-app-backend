@@ -30,21 +30,26 @@ Dry-run by default; ``--execute`` writes.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 
 import typer
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 
+from beyo_manager.config import settings
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import close_db, get_db_session, init_db
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
+from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.services.commands.users._reconstruct_shift_middle import (
     reconstruct_shift_middle,
+)
+from beyo_manager.services.infra.connecteam.time_activities_client import (
+    ConnecteamTimeActivitiesClient,
 )
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -69,8 +74,14 @@ async def heal_current_shift(
     now: datetime,
     *,
     execute: bool,
+    connecteam_start: datetime | None = None,
 ) -> str:
-    """Rebuild the worker's current (open) shift from step records. Returns an outcome tag."""
+    """Rebuild the worker's current (open) shift from step records. Returns an outcome tag.
+
+    ``connecteam_start`` is the real clock-in from the Connecteam API when available; the
+    shift then begins there (leading idle until the first task is filled in), otherwise it
+    falls back to the first task of the shift.
+    """
     # The current shift begins no earlier than the last clock-out (any date). For today's
     # workers that marker is from a previous day, so the scope is simply "today".
     latest_ended = await session.scalar(
@@ -105,10 +116,20 @@ async def heal_current_shift(
     if first_step is None:
         # No time-bearing work since the last clock-out — nothing in progress to heal.
         return "skipped_no_current_shift_activity"
+
+    # Prefer the real Connecteam clock-in; a worker cannot work before clocking in, so take
+    # the earliest of clock-in and first task (guards against a stray pre-clock-in record),
+    # then clamp to any prior clock-out.
     shift_start = first_step
+    source = "first_task"
+    if connecteam_start is not None:
+        shift_start = min(shift_start, connecteam_start)
+        source = "connecteam"
+    if latest_ended is not None and latest_ended > shift_start:
+        shift_start = latest_ended
 
     if not execute:
-        return f"would_heal shift_start={shift_start.isoformat()}"
+        return f"would_heal shift_start={shift_start.isoformat()} start_source={source}"
 
     # Normalize to exactly one started_shift marker at shift_start (create, or fix the one
     # the live auto-clock-in wrote — its clamp may have landed on a later task).
@@ -165,10 +186,55 @@ async def heal_current_shift(
     if tail is not None:
         tail.exited_at = None
         await session.flush()
-    return f"healed shift_start={shift_start.isoformat()} current={tail.state.value if tail else 'none'}"
+    return (
+        f"healed shift_start={shift_start.isoformat()} start_source={source} "
+        f"current={tail.state.value if tail else 'none'}"
+    )
 
 
-async def _run(*, dry_run: bool, workspace_id: str | None) -> None:
+async def _connecteam_clock_ins(
+    session,
+    workers,
+    *,
+    time_clock_id: str,
+    on_date: date,
+) -> dict[str, datetime]:
+    """Map candidate ``user_id -> real Connecteam clock-in`` for a shift still open today.
+
+    Only workers mapped to a ``connecteam_user_id`` (via UserWorkProfile) and with an open
+    shift in Connecteam get an entry; everyone else falls back to their first task.
+    """
+    user_ids = [row.uid for row in workers if row.uid is not None]
+    if not user_ids:
+        return {}
+    profiles = (
+        await session.execute(
+            select(UserWorkProfile.user_id, UserWorkProfile.connecteam_user_id).where(
+                UserWorkProfile.user_id.in_(user_ids),
+                UserWorkProfile.connecteam_user_id.isnot(None),
+            )
+        )
+    ).all()
+    cid_by_user = {p.user_id: str(p.connecteam_user_id) for p in profiles}
+    if not cid_by_user:
+        return {}
+    client = ConnecteamTimeActivitiesClient(
+        api_key=settings.connecteam_api_key,
+        base_url=settings.connecteam_api_base_url,
+    )
+    starts_by_cid = await client.fetch_open_shift_starts(
+        time_clock_id=time_clock_id,
+        on_date=on_date,
+        user_ids=sorted(set(cid_by_user.values())),
+    )
+    return {
+        user_id: starts_by_cid[cid]
+        for user_id, cid in cid_by_user.items()
+        if cid in starts_by_cid
+    }
+
+
+async def _run(*, dry_run: bool, workspace_id: str | None, time_clock_id: str | None) -> None:
     await init_db()
     try:
         async for session in get_db_session():
@@ -190,6 +256,26 @@ async def _run(*, dry_run: bool, workspace_id: str | None) -> None:
                 )
             ).all()
 
+            clock_ins: dict[str, datetime] = {}
+            if time_clock_id and settings.connecteam_api_key:
+                try:
+                    clock_ins = await _connecteam_clock_ins(
+                        session, workers, time_clock_id=time_clock_id, on_date=day_start.date()
+                    )
+                    typer.echo(
+                        f"heal_open_shifts_today | connecteam clock-ins resolved={len(clock_ins)}"
+                    )
+                except Exception as exc:  # noqa: BLE001 — degrade gracefully to first-task start
+                    typer.echo(
+                        f"heal_open_shifts_today | connecteam fetch failed ({exc}) "
+                        f"— falling back to first-task start"
+                    )
+            else:
+                typer.echo(
+                    "heal_open_shifts_today | connecteam disabled/not configured "
+                    "— using first-task start"
+                )
+
             typer.echo(
                 f"heal_open_shifts_today | day={day_start.date()} candidates={len(workers)} "
                 f"mode={'dry-run' if dry_run else 'execute'}"
@@ -200,7 +286,8 @@ async def _run(*, dry_run: bool, workspace_id: str | None) -> None:
                     continue
                 try:
                     outcome = await heal_current_shift(
-                        session, row.workspace_id, row.uid, day_start, now, execute=not dry_run
+                        session, row.workspace_id, row.uid, day_start, now,
+                        execute=not dry_run, connecteam_start=clock_ins.get(row.uid),
                     )
                     if not dry_run:
                         await session.commit()  # per-worker: one race can't lose the batch
@@ -222,9 +309,22 @@ async def _run(*, dry_run: bool, workspace_id: str | None) -> None:
 def main(
     dry_run: Annotated[bool, typer.Option("--dry-run/--execute")] = True,
     workspace_id: Annotated[str | None, typer.Option("--workspace-id")] = None,
+    time_clock_id: Annotated[str | None, typer.Option("--time-clock-id")] = None,
+    connecteam: Annotated[bool, typer.Option("--connecteam/--no-connecteam")] = True,
 ) -> None:
-    """Rebuild today's in-progress shifts (missing or lossy) from step records."""
-    asyncio.run(_run(dry_run=dry_run, workspace_id=workspace_id))
+    """Rebuild today's in-progress shifts (missing or lossy) from step records.
+
+    By default uses the real Connecteam clock-in as each shift's start (leading idle until
+    the first task is filled in); pass ``--no-connecteam`` to start from the first task.
+    """
+    resolved_clock = time_clock_id or settings.connecteam_time_clock_id
+    asyncio.run(
+        _run(
+            dry_run=dry_run,
+            workspace_id=workspace_id,
+            time_clock_id=resolved_clock if connecteam else None,
+        )
+    )
 
 
 if __name__ == "__main__":
