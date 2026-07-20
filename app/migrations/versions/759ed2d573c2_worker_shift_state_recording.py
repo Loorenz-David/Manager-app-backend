@@ -17,6 +17,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # NOTE: Postgres forbids USING a newly added enum value until the transaction that
+    # added it has committed. A later migration (b4074f2e26c4) inserts a row using
+    # 'auto_clock_out_open_shifts', so these ADD VALUEs must land in a transaction that
+    # commits before it runs. env.py enables `transaction_per_migration`, which commits
+    # after each migration and makes that ordering safe.
     op.execute("ALTER TYPE user_shift_state_enum ADD VALUE IF NOT EXISTS 'idle'")
     op.execute(
         "ALTER TYPE recurring_scheduler_type_enum "

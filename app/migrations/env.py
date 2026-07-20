@@ -31,7 +31,15 @@ def run_migrations_offline() -> None:
 
 
 def _do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    # transaction_per_migration=True commits after each migration instead of wrapping the
+    # whole `upgrade` in one transaction. This is required so a migration that adds a
+    # Postgres enum value commits before a later migration inserts a row using it
+    # (Postgres forbids using a new enum value within the transaction that added it).
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        transaction_per_migration=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
