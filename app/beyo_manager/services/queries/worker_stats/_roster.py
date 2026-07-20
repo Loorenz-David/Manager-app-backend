@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
@@ -11,6 +11,7 @@ from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.context import ServiceContext
 
@@ -112,15 +113,34 @@ async def count_completed_steps(
     window_start: datetime,
     window_end: datetime,
 ) -> dict[str, int]:
-    """Per-worker count of steps completed in ``[window_start, window_end)``.
+    """Per-worker count of steps completed **during a recorded shift** in
+    ``[window_start, window_end)``.
 
     Counts ``COMPLETED`` ``StepStateRecord`` rows credited to each worker
-    (``COALESCE(credited_user_id, created_by_id)``), joined to a live step. Read from the
-    raw records so it matches the linear-timeline view rather than the maintained aggregate.
+    (``COALESCE(credited_user_id, created_by_id)``), joined to a live step — but only when
+    the completion's ``entered_at`` falls inside one of the worker's recorded
+    ``UserShiftStateRecord`` intervals. This scopes the count to the same recorded-shift
+    reality as the linear-timeline buckets, so a day with no recorded shift contributes
+    zero completions (rather than the raw calendar-range total). Shift-record bounds are
+    inclusive on both ends, so a completion landing exactly on the ``ended_shift`` marker
+    (its zero-duration timestamp) still counts.
     """
     if not user_ids:
         return {}
     credited = func.coalesce(StepStateRecord.credited_user_id, StepStateRecord.created_by_id)
+    on_recorded_shift = (
+        select(UserShiftStateRecord.client_id)
+        .where(
+            UserShiftStateRecord.workspace_id == workspace_id,
+            UserShiftStateRecord.user_id == credited,
+            UserShiftStateRecord.entered_at <= StepStateRecord.entered_at,
+            or_(
+                UserShiftStateRecord.exited_at.is_(None),
+                UserShiftStateRecord.exited_at >= StepStateRecord.entered_at,
+            ),
+        )
+        .exists()
+    )
     rows = await session.execute(
         select(credited.label("user_id"), func.count(StepStateRecord.client_id).label("completed"))
         .join(
@@ -138,6 +158,7 @@ async def count_completed_steps(
             StepStateRecord.state == TaskStepStateEnum.COMPLETED,
             StepStateRecord.entered_at >= window_start,
             StepStateRecord.entered_at < window_end,
+            on_recorded_shift,
         )
         .group_by(credited)
     )

@@ -6,6 +6,7 @@ from beyo_manager.routers.api_v1 import (
     bootstrap,
     case_types,
     cases,
+    connecteam_webhooks,
     customers,
     email_connections,
     email_templates,
@@ -54,6 +55,11 @@ def register_v1_routers(app: FastAPI) -> None:
         shopify_webhooks.router,
         prefix="/api/v1/shopify",
         tags=["shopify-webhooks"],
+    )
+    app.include_router(
+        connecteam_webhooks.router,
+        prefix="/api/v1/connecteam",
+        tags=["connecteam-webhooks"],
     )
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(files.router, prefix="/api/v1/files", tags=["files"])

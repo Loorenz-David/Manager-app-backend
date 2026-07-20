@@ -357,7 +357,14 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
         }
 
     serialized_segments = []
+    # Track the current shift's start (set by each STARTED_SHIFT marker, which sorts before
+    # its shift's durationful segments) so a segment's steps[] is scoped to the same shift
+    # as its state — a step paused on a previous day/shift and still open must not appear in
+    # this shift's detail even though it overlaps in time (mirrors reconstruct_shift_middle).
+    current_shift_start: datetime | None = None
     for segment in shift_segments:
+        if segment.record.state is UserShiftStateEnum.STARTED_SHIFT:
+            current_shift_start = segment.start
         desired_step_state = _STEP_STATE_FOR_SHIFT.get(segment.record.state)
         details: list[dict] = []
         if desired_step_state is not None:
@@ -367,6 +374,7 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
                     step_record.state == desired_step_state.value
                     and step_record.entered_at < segment.end
                     and step_end > segment.start
+                    and (current_shift_start is None or step_record.entered_at >= current_shift_start)
                 ):
                     detail = record_detail(step_record)
                     if detail is not None:

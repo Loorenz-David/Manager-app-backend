@@ -61,7 +61,7 @@ Nothing else changes — both are brand-new routes; no existing shape is touched
         "pause_seconds":       1800,   // real time not-working with an active pause
         "ended_shift_seconds":    0,   // real time in ended-shift (no work, no active pause)
         "idle_seconds":         600,   // real time attributed to nothing (see below)
-        "completed_count":        3,   // steps this worker COMPLETED in the range (a count, not seconds)
+        "completed_count":        3,   // steps COMPLETED during recorded shifts in the range (count, not seconds)
         "pause_by_reason": {           // sums EXACTLY to pause_seconds
           "pause_lunch_break": 1800
         }
@@ -82,7 +82,7 @@ At every instant the worker is in **exactly one** of four disjoint buckets (they
 | `pause_seconds` | Not working **and** at least one **active** pause is open. This is your "time between working". |
 | `ended_shift_seconds` | Not working, no active pause, an ended-shift interval open. |
 | `idle_seconds` | None of the above — non-working time attributed to nothing: researching the next item, un-booked gaps, or a pause the worker walked away from after they already resumed (see capping). |
-| `completed_count` | Number of steps the worker **completed** in the range. A **count**, not a duration — it's not part of the time partition; it's counted from raw `COMPLETED` records (credited to the worker), so it can differ slightly from the aggregate-table `total_completed_count` on `/totals`. |
+| `completed_count` | Number of steps the worker **completed during their recorded shifts** in the range. A **count**, not a duration — it's not part of the time partition. It counts `COMPLETED` step records (credited to the worker) **only when the completion falls inside a recorded `UserShiftStateRecord` interval**, so it stays consistent with the shift-based time buckets: a day the worker never clocked in contributes **0** completions here (even if step data exists). This differs from `/totals`' `total_completed_count`, which is range-based off the aggregate table. |
 | `pause_by_reason` | `pause_seconds` split by reason. **Reconciles exactly** with `pause_seconds`. Keys are the reason enum values (below); pauses with no reason bucket under `"unspecified"`. Omitted reasons are simply `0`; the object only contains reasons that occurred. |
 
 ### `pause_by_reason` keys
@@ -230,7 +230,7 @@ There is **no server-side paging** on segments. **You choose the window** via `d
 
 ## Validation notes
 
-- Backend validation run: unit tests `tests/unit/domain/analytics/test_linear_timeline.py` (28) — overlap collapse, working-wins, per-reason attribution + tiebreak, cap-at-resume → idle, idle gaps, re-pause, partition invariant, window/now clamping, segment partition/merge, step-id union, hard-break split, `is_open`, segments-reconcile-with-totals, **plus** per-record true times, per-record reasons on concurrent pauses, idle-has-no-records, and open-record flag. Integration `test_list_workers_linear_timeline.py` (5, roster: incl. `completed_count` range counting) and `test_get_worker_linear_timeline_breakdown.py` (4, drill-down: ordered segments with item article/sku/section + per-record times, `ended_by` outcomes incl. `completed`/`paused`/`still_open`, `NotFound` for unknown worker, empty worker). All green; ruff clean.
+- Backend validation run: unit tests `tests/unit/domain/analytics/test_linear_timeline.py` (28) — overlap collapse, working-wins, per-reason attribution + tiebreak, cap-at-resume → idle, idle gaps, re-pause, partition invariant, window/now clamping, segment partition/merge, step-id union, hard-break split, `is_open`, segments-reconcile-with-totals, **plus** per-record true times, per-record reasons on concurrent pauses, idle-has-no-records, and open-record flag. Integration `test_list_workers_linear_timeline.py` (5, roster: incl. `completed_count` scoped to recorded shifts) and `test_get_worker_linear_timeline_breakdown.py` (4, drill-down: ordered segments with item article/sku/section + per-record times, `ended_by` outcomes incl. `completed`/`paused`/`still_open`, `NotFound` for unknown worker, empty worker). All green; ruff clean.
 - Suggested frontend validation: pull a real worker's range that includes a lunch + a resume; confirm the idle tail lands in `idle_seconds` (not pause), `sum(pause_by_reason.values()) === pause_seconds`, and the drill-down `segments` sum back to `timeline`. Click a `working` block and confirm the batch steps render, each with its own `entered_at`/`exited_at`; click a `paused` block with two items paused and confirm each record shows its own `reason`; and confirm a completed step's working record shows `ended_by: "completed"`.
 
 ## Trace links
@@ -254,8 +254,12 @@ being inferred from overlapping step records:
   listed above; the key set was already declared open.
 - Open duration segments are still clamped to `now`, and `is_open: true` keeps its
   existing live meaning.
-- `completed_count` and each segment's `steps[]` detail retain their existing
-  step-record sources and shapes.
+- `completed_count` is now **scoped to recorded shifts**: it counts `COMPLETED` step
+  records only when the completion falls inside one of the worker's recorded
+  `UserShiftStateRecord` intervals (shift bounds inclusive, so a completion at the
+  `ended_shift` instant still counts). This keeps it consistent with the shift-based
+  time buckets — a day with no recorded shift contributes 0. Same key and shape (an
+  integer); only the semantics tightened. Each segment's `steps[]` detail is unchanged.
 
 The drill-down has two additive extensions only:
 

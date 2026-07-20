@@ -228,25 +228,43 @@ async def test_roster_sums_only_recorded_on_shift_durations(db_session) -> None:
     }
 
 
-async def test_roster_keeps_completed_count_from_step_records(db_session) -> None:
+async def test_roster_completed_count_is_scoped_to_recorded_shifts(db_session) -> None:
+    # completed_count counts only completions that fall inside a recorded shift, so it
+    # stays consistent with the shift-based time buckets: a completion outside any shift
+    # (a day never clocked in) does not count.
     workspace = Workspace(name=f"shift-completed-{uuid4().hex}")
     db_session.add(workspace)
     await db_session.flush()
     worker = await _seed_worker(db_session, workspace.client_id)
     base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+    shift_start = base
+    shift_end = base + timedelta(hours=8)
+    # Recorded shift 09:00–17:00 on 2026-07-15.
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start,
+    )
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.WORKING, shift_start, shift_end,
+    )
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.ENDED_SHIFT, shift_end, shift_end,
+    )
+    # In-shift completion → counts. Boundary completion exactly at ended_shift → counts.
     await _add_step_record(
-        db_session,
-        workspace.client_id,
-        worker.client_id,
-        TaskStepStateEnum.COMPLETED,
-        base,
+        db_session, workspace.client_id, worker.client_id,
+        TaskStepStateEnum.COMPLETED, shift_start + timedelta(hours=2),
     )
     await _add_step_record(
-        db_session,
-        workspace.client_id,
-        worker.client_id,
-        TaskStepStateEnum.COMPLETED,
-        base + timedelta(days=1),
+        db_session, workspace.client_id, worker.client_id,
+        TaskStepStateEnum.COMPLETED, shift_end,
+    )
+    # Same-day completion OUTSIDE the shift (before clock-in) → must NOT count.
+    await _add_step_record(
+        db_session, workspace.client_id, worker.client_id,
+        TaskStepStateEnum.COMPLETED, shift_start - timedelta(hours=1),
     )
 
     out = await list_workers_linear_timeline(
@@ -261,9 +279,7 @@ async def test_roster_keeps_completed_count_from_step_records(db_session) -> Non
     )
 
     timeline = out["workers"][0]["timeline"]
-    assert timeline["completed_count"] == 1
-    assert timeline["working_seconds"] == 0
-    assert timeline["pause_seconds"] == 0
+    assert timeline["completed_count"] == 2  # two in-shift; the pre-shift one excluded
     assert timeline["idle_seconds"] == 0
     assert out["workers_pagination"] == {
         "has_more": False,

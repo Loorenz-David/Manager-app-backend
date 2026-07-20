@@ -119,6 +119,18 @@ class Settings(BaseSettings):
     shopify_integration_debug_logs: bool = Field(default=False, alias="SHOPIFY_INTEGRATION_DEBUG_LOGS")
     shopify_webhook_secret: str | None = Field(default=None, alias="SHOPIFY_WEBHOOK_SECRET")
 
+    # Connecteam time-activity webhook
+    connecteam_webhook_secret: str | None = Field(default=None, alias="CONNECTEAM_WEBHOOK_SECRET")
+    connecteam_webhook_enabled: bool = Field(default=True, alias="CONNECTEAM_WEBHOOK_ENABLED")
+    connecteam_webhook_dedup_ttl_seconds: int = Field(default=604800, alias="CONNECTEAM_WEBHOOK_DEDUP_TTL_SECONDS")
+
+    # Connecteam Time Clock REST API (used by the historical shift-curation script).
+    connecteam_api_key: str | None = Field(default=None, alias="CONNECTEAM_API_KEY")
+    connecteam_api_base_url: str = Field(
+        default="https://api.connecteam.com", alias="CONNECTEAM_API_BASE_URL"
+    )
+    connecteam_time_clock_id: str | None = Field(default=None, alias="CONNECTEAM_TIME_CLOCK_ID")
+
     model_config = SettingsConfigDict(
         # Load deterministic env profile selected by APP_ENV.
         # APP_ENV can be: development | testing | validation | production.
@@ -154,6 +166,10 @@ class Settings(BaseSettings):
         missing = [name for name in required if not getattr(self, name)]
         if missing:
             raise ValueError(f"Missing required settings: {', '.join(missing)}")
+        if self.connecteam_webhook_enabled and not self.connecteam_webhook_secret:
+            raise ValueError("CONNECTEAM_WEBHOOK_SECRET is required when CONNECTEAM_WEBHOOK_ENABLED=true")
+        if self.connecteam_webhook_dedup_ttl_seconds < 900:
+            raise ValueError("CONNECTEAM_WEBHOOK_DEDUP_TTL_SECONDS must be at least 900")
         return self
 
     def validate_email_idle_settings(self) -> None:

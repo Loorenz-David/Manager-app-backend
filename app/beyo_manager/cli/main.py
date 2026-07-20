@@ -10,6 +10,11 @@ from beyo_manager.operations.inspect import run_inspect
 from beyo_manager.operations.replay import run_replay
 from beyo_manager.operations.seed import run_seed
 from beyo_manager.operations.worker_control import run_worker_control
+from beyo_manager.operations.connecteam_dead_letter import (
+    list_dead_letters,
+    purge_dead_letter,
+    requeue_dead_letter,
+)
 
 cli = typer.Typer(help="Operational CLI")
 
@@ -52,6 +57,21 @@ def reset_db(confirm: bool = False, dry_run: bool = True) -> None:
 @cli.command("diagnostics")
 def diagnostics() -> None:
     run_diagnostics()
+
+
+@cli.command("connecteam-dead-letter-list")
+def connecteam_dead_letter_list(raw: bool = False) -> None:
+    list_dead_letters(raw=raw)
+
+
+@cli.command("connecteam-dead-letter-requeue")
+def connecteam_dead_letter_requeue(task_client_id: str) -> None:
+    requeue_dead_letter(task_client_id)
+
+
+@cli.command("connecteam-dead-letter-purge")
+def connecteam_dead_letter_purge(task_client_id: str, confirm: bool = False) -> None:
+    purge_dead_letter(task_client_id, confirm=confirm)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
+from beyo_manager.services.commands.users._reconstruct_shift_middle import reconstruct_shift_middle
 from beyo_manager.services.context import ServiceContext
 
 
@@ -121,6 +122,21 @@ async def clock_out_shift_for_user(
     if current is None:
         raise ConflictError("Worker is not clocked in.")
 
+    # Rebuild the shift's middle (working/in_pause/idle) deterministically from step history
+    # + manual pauses, so the closed shift is correct even if the live reconcile lagged. Run
+    # this BEFORE closing working steps (a still-open working step then clamps to clock-out),
+    # and against the shift's real start marker. It replaces `current` and all other
+    # durationful rows for the shift; the STARTED_SHIFT marker is preserved.
+    shift_start = await session.scalar(
+        select(func.max(UserShiftStateRecord.entered_at)).where(
+            UserShiftStateRecord.workspace_id == workspace_id,
+            UserShiftStateRecord.user_id == user_id,
+            UserShiftStateRecord.state == UserShiftStateEnum.STARTED_SHIFT,
+            UserShiftStateRecord.entered_at <= clock_out_at,
+        )
+    ) or current.entered_at
+    await reconstruct_shift_middle(session, workspace_id, user_id, shift_start, clock_out_at)
+
     transition_actor_id = changed_by_id or user_id
     transition_ctx = ServiceContext(
         identity={
@@ -148,7 +164,6 @@ async def clock_out_shift_for_user(
             now=clock_out_at,
         )
 
-    current.exited_at = clock_out_at
     session.add(
         UserShiftStateRecord(
             workspace_id=workspace_id,

@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from freezegun import freeze_time
 from sqlalchemy import select
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
@@ -85,7 +86,11 @@ async def _seed_step(db_session, workspace_id: str, user_id: str) -> TaskStep:
 
 
 @pytest.mark.integration
+@freeze_time("2026-07-15T12:00:00+00:00")
 async def test_totals_returns_settled_daily_stats_and_live_running(db_session):
+    # Freeze at a fixed mid-day instant: the live-running detection windows the open
+    # interval to `now`'s UTC day, so a `now - 30min` interval seeded within ~30 min of
+    # UTC midnight would otherwise fall on the previous day and be missed.
     ws = Workspace(client_id=f"ws_{uuid4().hex[:8]}", name="W")
     db_session.add(ws)
     await db_session.flush()

@@ -1,0 +1,13 @@
+{
+  "requestId": "redacted-request-id",
+  "companyId": "redacted-company-id",
+  "eventType": "clock_in",
+  "activityType": "shift",
+  "eventTimestamp": "2026-07-20T08:00:00Z",
+  "data": {
+    "userId": "redacted-connecteam-user-id",
+    "timeClockId": "redacted-time-clock-id",
+    "timeActivityId": "redacted-time-activity-id"
+  },
+  "additiveFieldFromProvider": "preserved-by-tolerant-parser"
+}

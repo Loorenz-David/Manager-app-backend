@@ -19,6 +19,9 @@ from beyo_manager.services.tasks.task_steps.finalize_pending_step_completion imp
 from beyo_manager.services.tasks.users.auto_clock_out_open_shifts import (
     handle_auto_clock_out_open_shifts,
 )
+from beyo_manager.services.tasks.connecteam.handle_connecteam_process_time_activity import (
+    handle_connecteam_process_time_activity,
+)
 
 HANDLER_MAP = {
     TaskType.DELAYED_STEP_COMPLETION: handle_finalize_pending_step_completion,
@@ -27,6 +30,7 @@ HANDLER_MAP = {
     TaskType.SEND_EMAIL_MESSAGES: handle_send_email_messages,
     TaskType.LOCATION_TRACKER_PUSH_LOCATIONS: handle_push_item_locations,
     TaskType.AUTO_CLOCK_OUT_OPEN_SHIFTS: handle_auto_clock_out_open_shifts,
+    TaskType.CONNECTEAM_PROCESS_TIME_ACTIVITY: handle_connecteam_process_time_activity,
 }
 
 

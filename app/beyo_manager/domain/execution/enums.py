@@ -55,6 +55,7 @@ class TaskType(enum.Enum):
     SHOPIFY_REMOVE_WEBHOOKS_FOR_SHOP = "shopify_remove_webhooks_for_shop"
     SHOPIFY_RECONCILE_SHOP = "shopify_reconcile_shop"
     SHOPIFY_PROCESS_PRODUCTS = "shopify_process_products"
+    CONNECTEAM_PROCESS_TIME_ACTIVITY = "connecteam_process_time_activity"
 
 
 class EventTaskOriginSourceEnum(enum.Enum):

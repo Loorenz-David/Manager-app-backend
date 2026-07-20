@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from freezegun import freeze_time
 from sqlalchemy import select
 
 from beyo_manager.domain.items.enums import ItemStateEnum
@@ -362,7 +363,11 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
     ]
 
 
+@freeze_time("2026-07-15T12:00:00+00:00")
 async def test_breakdown_keeps_live_open_behavior(db_session) -> None:
+    # Freeze time so the service's internal `datetime.now()` is a fixed mid-day instant;
+    # otherwise, when the suite runs within ~10 min of UTC midnight, `base` lands on the
+    # previous day and the open record clamps to the day boundary instead of "now".
     workspace = Workspace(name=f"timeline-live-{uuid4().hex}")
     db_session.add(workspace)
     await db_session.flush()
@@ -447,3 +452,63 @@ async def test_breakdown_empty_worker_has_no_segments(db_session) -> None:
     assert out["segments"] == []
     assert out["timeline"]["working_seconds"] == 0
     assert out["timeline"]["idle_seconds"] == 0
+
+
+async def test_segment_steps_are_scoped_to_the_shift(db_session) -> None:
+    # A step paused on a PREVIOUS day, still open and overlapping today's paused segment,
+    # must not appear in that segment's steps[] — the detail is scoped to the same shift as
+    # the segment state (mirrors the reconstruction), so no carryover leaks in.
+    workspace = Workspace(name=f"steps-scope-{uuid4().hex}")
+    db_session.add(workspace)
+    await db_session.flush()
+    worker = await _seed_worker(db_session, workspace.client_id)
+
+    async def _mk_step():
+        suffix = uuid4().hex[:8]
+        section = WorkingSection(workspace_id=workspace.client_id, name=f"sec-{suffix}")
+        task = Task(
+            workspace_id=workspace.client_id, task_scalar_id=int(suffix[:6], 16),
+            task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=worker.client_id,
+        )
+        db_session.add_all([section, task])
+        await db_session.flush()
+        step = TaskStep(
+            workspace_id=workspace.client_id, task_id=task.client_id, working_section_id=section.client_id,
+            working_section_name_snapshot=section.name, state=TaskStepStateEnum.COMPLETED,
+            created_by_id=worker.client_id,
+        )
+        db_session.add(step)
+        await db_session.flush()
+        return step
+
+    carry_step = await _mk_step()
+    inshift_step = await _mk_step()
+
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+
+    def at(mn):
+        return base + timedelta(minutes=mn)
+
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.STARTED_SHIFT, base, base)
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.IN_PAUSE, at(10), at(20), reason="pause_lunch_break")
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.ENDED_SHIFT, at(30), at(30))
+    # carryover pause from yesterday, still open into and overlapping the paused segment
+    _add_step_record(db_session, workspace.client_id, worker.client_id, carry_step.client_id,
+                     TaskStepStateEnum.PAUSED, base - timedelta(days=1), at(15),
+                     reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY)
+    # legitimate in-shift pause
+    _add_step_record(db_session, workspace.client_id, worker.client_id, inshift_step.client_id,
+                     TaskStepStateEnum.PAUSED, at(10), at(20),
+                     reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK)
+    await db_session.flush()
+
+    out = await get_worker_linear_timeline_breakdown(
+        _ctx(db_session, workspace_id=workspace.client_id, user_id=worker.client_id, work_date="2026-07-15")
+    )
+    paused = next(s for s in out["segments"] if s["state"] == "paused")
+    step_ids = {st["step_id"] for st in paused["steps"]}
+    assert inshift_step.client_id in step_ids
+    assert carry_step.client_id not in step_ids  # carryover excluded — belongs to a prior shift

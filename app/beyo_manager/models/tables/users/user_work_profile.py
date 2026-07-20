@@ -32,9 +32,15 @@ class UserWorkProfile(IdentityMixin, Base):
     updated_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
+    connecteam_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     __table_args__ = (
         UniqueConstraint("user_id", "workspace_id", name="uq_user_work_profiles_user_workspace"),
+        UniqueConstraint(
+            "workspace_id",
+            "connecteam_user_id",
+            name="uq_user_work_profiles_workspace_connecteam_user",
+        ),
         CheckConstraint(
             "salary_per_hour_before_tax IS NULL OR salary_per_hour_before_tax >= 0",
             name="ck_user_work_profiles_salary_before_tax",
