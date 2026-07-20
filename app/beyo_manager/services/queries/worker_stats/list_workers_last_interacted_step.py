@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 
 from sqlalchemy import func, select
 
+from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -21,7 +22,9 @@ async def list_workers_last_interacted_step(ctx: ServiceContext) -> dict:
     if ctx.query_params.get("work_date"):
         resolve_work_date(ctx.query_params["work_date"])
 
-    workers, workers_pagination = await load_worker_page(ctx)
+    workers, workers_pagination = await load_worker_page(
+        ctx, roles=(RoleNameEnum.WORKER, RoleNameEnum.MANAGER)
+    )
     worker_ids = [user.client_id for user in workers]
 
     step_rows_by_worker: dict[str, list] = defaultdict(list)

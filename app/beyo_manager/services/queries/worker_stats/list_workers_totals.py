@@ -14,6 +14,7 @@ from beyo_manager.domain.analytics.estimation import (
     median as sample_median,
     resolve as resolve_time_strategy,
 )
+from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.analytics.user_daily_work_stats import UserDailyWorkStats
@@ -41,7 +42,9 @@ async def list_workers_totals(ctx: ServiceContext) -> dict:
         time_strategy = resolve_time_strategy(ctx.query_params.get("time_strategy", "median"))
     except ValueError as exc:
         raise ValidationError("time_strategy must be one of mean, median, or iqr.") from exc
-    workers, workers_pagination = await load_worker_page(ctx)
+    workers, workers_pagination = await load_worker_page(
+        ctx, roles=(RoleNameEnum.WORKER, RoleNameEnum.MANAGER)
+    )
     worker_ids = [user.client_id for user in workers]
 
     stats_by_user: dict[str, object] = {}
