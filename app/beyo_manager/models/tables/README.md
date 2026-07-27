@@ -36,6 +36,7 @@
 - [recurring_schedulers](#recurring-schedulers)
 - [roles](#roles)
 - [static_costs](#static-costs)
+- [sku_templates](#sku-templates)
 - [step_state_records](#step-state-records)
 - [task_events](#task-events)
 - [task_items](#task-items)
@@ -577,6 +578,25 @@
 | deleted_at | `datetime | None` | `DateTime(timezone=True)` |
 | deleted_by_id | `str | None` | `String(64)` |
 
+## sku_templates
+
+| Column | Mapped Type | SQLAlchemy Type |
+| :--- | :--- | :--- |
+| client_id | `str` | `String(64)` |
+| workspace_id | `str` | `String(64)` |
+| task_type | `TaskTypeEnum` | `SAEnum(TaskTypeEnum, name='business_task_type_enum', create_type=False)` |
+| prefix | `str` | `String(32)` |
+| separator | `str` | `String(8)` |
+| pad_width | `int` | `Integer` (default `0`, no padding) |
+| last_scalar | `int` | `Integer` |
+| created_at | `datetime` | `DateTime(timezone=True)` |
+| created_by_id | `str | None` | `String(64)` |
+| updated_at | `datetime | None` | `DateTime(timezone=True)` |
+| updated_by_id | `str | None` | `String(64)` |
+| is_deleted | `bool` | `Boolean` |
+| deleted_at | `datetime | None` | `DateTime(timezone=True)` |
+| deleted_by_id | `str | None` | `String(64)` |
+
 ## step_state_records
 
 | Column | Mapped Type | SQLAlchemy Type |
@@ -585,7 +605,7 @@
 | workspace_id | `str` | `String(64)` |
 | step_id | `str` | `String(64)` |
 | state | `TaskStepStateEnum` | `SAEnum(TaskStepStateEnum, name='task_step_state_enum', create_type=False)` |
-| reason | `StepEventReasonEnum | None` | `SAEnum(StepEventReasonEnum, name='step_event_reason_enum', create_type=True)` |
+| pause_reason_id | `str | None` | `ForeignKey('pause_reasons.client_id', ondelete='RESTRICT')` |
 | description | `str | None` | `String(1024)` |
 | accuracy | `int | None` | `Integer` |
 | accuracy_measured_by | `StepStateRecordAccuracyMeasuredByEnum | None` | `SAEnum(StepStateRecordAccuracyMeasuredByEnum, name='step_state_record_accuracy_measured_by_enum', create_type=True)` |

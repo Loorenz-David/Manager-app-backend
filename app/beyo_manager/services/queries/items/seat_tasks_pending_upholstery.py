@@ -12,6 +12,7 @@ from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.tasks.tasks import _build_order_by
 
@@ -257,23 +258,40 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
         items_map = {item.client_id: item for item in items_result.scalars().all()}
 
     upholstery_reason_by_item_id: dict[str, str] = {}
-    upholstery_id_by_item_id: dict[str, str | None] = {}
+    item_upholstery_by_item_id: dict[str, ItemUpholstery | None] = {}
+    upholstery_image_url_by_id: dict[str, str | None] = {}
+    upholstery_name_by_id: dict[str, str | None] = {}
     if primary_item_ids:
         upholsteries_result = await ctx.session.execute(
-            select(ItemUpholstery).where(
+            select(ItemUpholstery, Upholstery.image_url, Upholstery.name)
+            .select_from(ItemUpholstery)
+            .outerjoin(
+                Upholstery,
+                and_(
+                    Upholstery.workspace_id == ctx.workspace_id,
+                    Upholstery.client_id == ItemUpholstery.upholstery_id,
+                    Upholstery.is_deleted.is_(False),
+                ),
+            )
+            .where(
                 ItemUpholstery.workspace_id == ctx.workspace_id,
                 ItemUpholstery.item_id.in_(primary_item_ids),
                 ItemUpholstery.is_deleted.is_(False),
             )
         )
         upholsteries_by_item_id: dict[str, list[ItemUpholstery]] = {}
-        for upholstery in upholsteries_result.scalars().all():
+        for upholstery, image_url, upholstery_name in upholsteries_result.all():
             upholsteries_by_item_id.setdefault(upholstery.item_id, []).append(upholstery)
+            upholstery_image_url_by_id[upholstery.client_id] = image_url
+            upholstery_name_by_id[upholstery.client_id] = upholstery_name
 
         for item_id in primary_item_ids:
             upholsteries = upholsteries_by_item_id.get(item_id, [])
             upholstery_id, reason = _resolve_pending_upholstery(upholsteries)
-            upholstery_id_by_item_id[item_id] = upholstery_id
+            item_upholstery_by_item_id[item_id] = next(
+                (upholstery for upholstery in upholsteries if upholstery.client_id == upholstery_id),
+                None,
+            )
             if reason is not None:
                 upholstery_reason_by_item_id[item_id] = reason
 
@@ -304,12 +322,28 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
             continue
         primary_item_id = task_to_primary_item_id.get(task_id)
         primary_item = items_map.get(primary_item_id)
+        item_upholstery = item_upholstery_by_item_id.get(primary_item_id)
         items_payload.append(
             {
                 "task": serialize_task(task),
                 "primary_item": serialize_item(primary_item),
                 "pending_upholstery_reason": upholstery_reason_by_item_id.get(primary_item_id),
-                "item_upholstery_id": upholstery_id_by_item_id.get(primary_item_id),
+                "item_upholstery": {
+                    "client_id": item_upholstery.client_id,
+                    "name": (
+                        item_upholstery.name
+                        if item_upholstery.name is not None
+                        else upholstery_name_by_id.get(item_upholstery.client_id)
+                    ),
+                    "image_url": upholstery_image_url_by_id.get(item_upholstery.client_id),
+                    "amount_meters": (
+                        float(item_upholstery.amount_meters)
+                        if item_upholstery.amount_meters is not None
+                        else None
+                    ),
+                }
+                if item_upholstery is not None
+                else None,
                 "item_images": item_images_map.get(primary_item_id, []),
             }
         )

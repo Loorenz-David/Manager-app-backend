@@ -6,6 +6,7 @@ from beyo_manager.domain.tasks.serializers import (
     serialize_step_latest_state_record,
 )
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
@@ -36,7 +37,7 @@ async def list_task_steps(ctx: ServiceContext) -> dict:
             TaskStep.task_id == task_id,
             TaskStep.is_deleted.is_(False),
         )
-        .options(selectinload(TaskStep.latest_state_record))
+        .options(selectinload(TaskStep.latest_state_record).selectinload(StepStateRecord.pause_reason))
         .order_by(
             TaskStep.sequence_order.asc().nullslast(),
             TaskStep.created_at.asc(),

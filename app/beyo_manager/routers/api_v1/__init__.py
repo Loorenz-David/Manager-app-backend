@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from beyo_manager.routers.api_v1 import (
+    app_update_presentations,
     audit,
     auth,
     bootstrap,
@@ -21,9 +22,11 @@ from beyo_manager.routers.api_v1 import (
     item_upholsteries,
     location_tracker,
     notifications,
+    pause_reasons,
     reset,
     shopify,
     shopify_webhooks,
+    sku_templates,
     task_step_acknowledgments,
     tasks,
     upholsteries,
@@ -68,6 +71,8 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
     app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+    app.include_router(pause_reasons.router, prefix="/api/v1/pause-reasons", tags=["pause-reasons"])
+    app.include_router(sku_templates.router)
     app.include_router(
         working_sections.router,
         prefix="/api/v1/working-sections",
@@ -129,5 +134,10 @@ def register_v1_routers(app: FastAPI) -> None:
         location_tracker.router,
         prefix="/api/v1/location-tracker",
         tags=["location-tracker"],
+    )
+    app.include_router(
+        app_update_presentations.router,
+        prefix="/api/v1/app-update-presentations",
+        tags=["app-update-presentations"],
     )
     # Add domain routers here as you build them:

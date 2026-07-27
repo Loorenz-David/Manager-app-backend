@@ -21,7 +21,7 @@ from datetime import datetime
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.models.tables.items.item import Item
@@ -38,6 +38,7 @@ from beyo_manager.services.commands.tasks._task_state_transitions import (
 )
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
+from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
 
 
 @dataclass
@@ -48,6 +49,7 @@ class StepTransitionApplied:
     step_pin_user_ids: list[str]     # step-pin notification recipients (actor excluded)
     auto_paused_item: dict | None = None  # set only if the guard auto-paused another step
     readiness_changed_items: list[dict] = field(default_factory=list)  # downstream steps whose readiness changed
+    task_became_ready: bool = False  # True if this transition flipped the whole task to READY
 
 
 async def _apply_step_transition(
@@ -57,7 +59,7 @@ async def _apply_step_transition(
     closing_record: StepStateRecord,
     *,
     new_state: TaskStepStateEnum,
-    reason: StepEventReasonEnum | None,
+    pause_reason_id: str | None,
     description: str | None,
     credited_user_id: str,
     now: datetime,
@@ -106,11 +108,16 @@ async def _apply_step_transition(
                     if identifier:
                         auto_pause_description = f"started working with {identifier}"
 
+            auto_pause_reason_id = await get_system_pause_reason_id(
+                ctx.session,
+                ctx.workspace_id,
+                "pause_other_task_priority",
+            )
             auto_pause_record = StepStateRecord(
                 workspace_id=ctx.workspace_id,
                 step_id=conflicting_step.client_id,
                 state=TaskStepStateEnum.PAUSED,
-                reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY,
+                pause_reason_id=auto_pause_reason_id,
                 description=auto_pause_description,
                 entered_at=now,
                 exited_at=None,
@@ -167,7 +174,7 @@ async def _apply_step_transition(
         workspace_id=ctx.workspace_id,
         step_id=step.client_id,
         state=new_state,
-        reason=reason,
+        pause_reason_id=pause_reason_id,
         description=description,
         entered_at=now,
         exited_at=None,
@@ -201,8 +208,9 @@ async def _apply_step_transition(
         maybe_advance_task_to_working(task, now=now, updated_by_id=ctx.user_id)
 
     readiness_changes: list = []
+    task_became_ready = False
     if new_state in TERMINAL_STEP_STATES:
-        await maybe_evaluate_task_ready(
+        task_became_ready = await maybe_evaluate_task_ready(
             ctx.session,
             task,
             workspace_id=ctx.workspace_id,
@@ -255,4 +263,5 @@ async def _apply_step_transition(
             {"client_id": dep.client_id, "new_readiness": dep.readiness_status.value}
             for dep, _ in readiness_changes
         ],
+        task_became_ready=task_became_ready,
     )

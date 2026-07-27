@@ -4,7 +4,10 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from beyo_manager.domain.items.enums import ItemUpholsteryRequirementStateEnum
+from beyo_manager.domain.items.enums import (
+    ItemUpholsteryRequirementStateEnum,
+    ItemUpholsterySourceEnum,
+)
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
@@ -32,9 +35,16 @@ _MUTABLE_STATES = {
 
 
 async def update_requirement_quantity(ctx: ServiceContext) -> dict:
-    """Set or update quantity on a mutable requirement."""
+    """Set or update quantity on a mutable requirement.
+
+    An INTERNAL item upholstery may be created with a positive quantity before
+    its catalog upholstery is selected. In that deferred state there is no
+    inventory requirement to update yet, so only the item upholstery quantity
+    is changed.
+    """
     request = parse_update_requirement_quantity_request(ctx.incoming_data)
 
+    active_req = None
     async with maybe_begin(ctx.session):
         iup_result = await ctx.session.execute(
             select(ItemUpholstery).where(
@@ -46,83 +56,104 @@ async def update_requirement_quantity(ctx: ServiceContext) -> dict:
         iup = iup_result.scalar_one_or_none()
         if iup is None:
             raise NotFound("ItemUpholstery not found.")
-        ensure_requirement_actions_are_available(iup)
 
-        req_result = await ctx.session.execute(
-            select(ItemUpholsteryRequirement).where(
-                ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
-                ItemUpholsteryRequirement.client_id == iup.active_requirement_id,
-                ItemUpholsteryRequirement.is_deleted.is_(False),
-            )
+        deferred_selection = (
+            iup.active_requirement_id is None
+            and iup.source == ItemUpholsterySourceEnum.INTERNAL
+            and iup.upholstery_id is None
         )
-        active_req = req_result.scalar_one_or_none()
-        if active_req is None:
-            raise NotFound("Active requirement not found.")
 
-        if active_req.state not in _MUTABLE_STATES:
-            raise ValidationError(
-                "Quantity can only be set on requirements in MISSING_QUANTITY, AVAILABLE, or NEEDS_ORDERING state."
-            )
-
-        iup.amount_meters = request.amount_meters
-        iup.updated_by_id = ctx.user_id
-
-        if active_req.state == ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY:
-            inv_result = await check_and_inject_need(
-                session=ctx.session,
-                workspace_id=ctx.workspace_id,
-                upholstery_id=iup.upholstery_id,
-                quantity=request.amount_meters,
-                inject=True,
-            )
-            active_req.amount_meters = request.amount_meters
-            active_req.upholstery_inventory_id = inv_result["inventory_id"]
-            active_req.state = (
-                ItemUpholsteryRequirementStateEnum.AVAILABLE
-                if inv_result["sufficient"]
-                else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
-            )
-            active_req.updated_by_id = ctx.user_id
-
+        if deferred_selection:
+            iup.amount_meters = request.amount_meters
+            iup.updated_by_id = ctx.user_id
         else:
-            if active_req.upholstery_inventory_id is None:
+            ensure_requirement_actions_are_available(iup)
+
+            req_result = await ctx.session.execute(
+                select(ItemUpholsteryRequirement).where(
+                    ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
+                    ItemUpholsteryRequirement.client_id == iup.active_requirement_id,
+                    ItemUpholsteryRequirement.is_deleted.is_(False),
+                )
+            )
+            active_req = req_result.scalar_one_or_none()
+            if active_req is None:
+                raise NotFound("Active requirement not found.")
+
+            if active_req.state not in _MUTABLE_STATES:
                 raise ValidationError(
-                    "Requirement has no linked inventory record - quantity cannot be adjusted."
+                    "Quantity can only be set on requirements in MISSING_QUANTITY, AVAILABLE, or NEEDS_ORDERING state."
                 )
 
-            old_amount = active_req.amount_meters or Decimal("0")
-            delta = request.amount_meters - old_amount
+            iup.amount_meters = request.amount_meters
+            iup.updated_by_id = ctx.user_id
 
-            if delta == Decimal("0"):
-                return {}
+            if active_req.upholstery_inventory_id is None and iup.upholstery_id is None:
+                # CUSTOMER upholstery has no workspace inventory. Quantity is
+                # still valid, but there is no inventory need to adjust.
+                active_req.amount_meters = request.amount_meters
+                active_req.state = ItemUpholsteryRequirementStateEnum.AVAILABLE
+                active_req.updated_by_id = ctx.user_id
+            elif active_req.state == ItemUpholsteryRequirementStateEnum.MISSING_QUANTITY:
+                inv_result = await check_and_inject_need(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    upholstery_id=iup.upholstery_id,
+                    quantity=request.amount_meters,
+                    inject=True,
+                )
+                active_req.amount_meters = request.amount_meters
+                active_req.upholstery_inventory_id = inv_result["inventory_id"]
+                active_req.state = (
+                    ItemUpholsteryRequirementStateEnum.AVAILABLE
+                    if inv_result["sufficient"]
+                    else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
+                )
+                active_req.updated_by_id = ctx.user_id
 
-            inv_result = await adjust_need(
-                session=ctx.session,
-                workspace_id=ctx.workspace_id,
-                upholstery_inventory_id=active_req.upholstery_inventory_id,
-                delta=delta,
-            )
+            else:
+                if active_req.upholstery_inventory_id is None:
+                    raise ValidationError(
+                        "Requirement has no linked inventory record - quantity cannot be adjusted."
+                    )
 
-            active_req.amount_meters = request.amount_meters
-            active_req.state = (
-                ItemUpholsteryRequirementStateEnum.AVAILABLE
-                if inv_result["sufficient"]
-                else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
-            )
-            active_req.updated_by_id = ctx.user_id
+                old_amount = active_req.amount_meters or Decimal("0")
+                delta = request.amount_meters - old_amount
 
-    await event_bus.dispatch([
+                if delta == Decimal("0"):
+                    return {}
+
+                inv_result = await adjust_need(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    upholstery_inventory_id=active_req.upholstery_inventory_id,
+                    delta=delta,
+                )
+
+                active_req.amount_meters = request.amount_meters
+                active_req.state = (
+                    ItemUpholsteryRequirementStateEnum.AVAILABLE
+                    if inv_result["sufficient"]
+                    else ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING
+                )
+                active_req.updated_by_id = ctx.user_id
+
+    events = [
         WorkspaceEvent(
             event_name="item:upholstery-updated",
             client_id=iup.client_id,
             workspace_id=ctx.workspace_id,
             extra={},
-        ),
-        WorkspaceEvent(
-            event_name="item:upholstery-requirement-state-changed",
-            client_id=iup.client_id,
-            workspace_id=ctx.workspace_id,
-            extra={"new_state": active_req.state.value},
-        ),
-    ])
+        )
+    ]
+    if active_req is not None:
+        events.append(
+            WorkspaceEvent(
+                event_name="item:upholstery-requirement-state-changed",
+                client_id=iup.client_id,
+                workspace_id=ctx.workspace_id,
+                extra={"new_state": active_req.state.value},
+            )
+        )
+    await event_bus.dispatch(events)
     return {}

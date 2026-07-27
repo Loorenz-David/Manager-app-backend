@@ -11,8 +11,8 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_update_message
-from beyo_manager.services.commands.task_post_handling._sync_post_handling_state_in_session import (
-    _sync_post_handling_state_in_session,
+from beyo_manager.services.commands.tasks._reconcile_task_side_effects import (
+    reconcile_task_side_effects,
 )
 from beyo_manager.services.commands.tasks.requests import parse_update_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -94,9 +94,13 @@ async def update_task(ctx: ServiceContext) -> dict:
         )
 
     async with maybe_begin(ctx.session):
-        await _sync_post_handling_state_in_session(
+        # Reconcile auxiliary instances against the (possibly changed) type/source.
+        # Handles the READY-task case where a type change now requires a
+        # post-handling / customer-coordination instance that did not exist before,
+        # and keeps an existing post-handling's state in sync.
+        await reconcile_task_side_effects(
             ctx.session,
-            task.client_id,
+            task,
             workspace_id=ctx.workspace_id,
             now=datetime.now(timezone.utc),
             user_id=ctx.user_id,

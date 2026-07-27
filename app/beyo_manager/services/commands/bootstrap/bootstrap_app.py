@@ -5,6 +5,8 @@ from beyo_manager.services.commands.bootstrap.phases.seed_admin_user import seed
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import seed_item_categories
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_type_links import seed_issue_type_links
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_types import seed_issue_types
+from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import seed_pause_reasons
+from beyo_manager.services.commands.bootstrap.phases.seed_sku_templates import seed_sku_templates
 from beyo_manager.services.commands.bootstrap.phases.seed_email_connection import seed_email_connection
 from beyo_manager.services.commands.bootstrap.phases.seed_upholsteries import delete_seeded_upholsteries
 from beyo_manager.services.commands.bootstrap.phases.seed_roles import seed_roles
@@ -22,6 +24,8 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
     async with ctx.session.begin():
         role_ids = await seed_roles(ctx.session)
         workspace_result = await seed_workspace(ctx.session, settings, role_ids)
+        pause_reason_ids = await seed_pause_reasons(ctx.session, workspace_result["workspace_id"])
+        sku_template_ids = await seed_sku_templates(ctx.session, workspace_result["workspace_id"])
         await seed_case_types(ctx.session)
         item_category_ids = await seed_item_categories(ctx.session, workspace_result["workspace_id"])
         issue_type_ids = await seed_issue_types(ctx.session, workspace_result["workspace_id"])
@@ -63,5 +67,7 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
         "admin_user_id": user_result["admin_user_id"],
         "worker_user_ids": worker_result,
         "roles_seeded": list(role_ids.keys()),
+        "pause_reasons_seeded": list(pause_reason_ids.keys()),
+        "sku_templates_seeded": list(sku_template_ids.keys()),
         "email_connection": email_connection_result,
     }

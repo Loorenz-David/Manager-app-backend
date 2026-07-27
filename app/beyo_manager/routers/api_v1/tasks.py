@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import (
     TaskFulfillmentMethodEnum,
     TaskItemLocationEnum,
@@ -267,7 +267,7 @@ class _AssignWorkerBody(BaseModel):
 class _TransitionStepBody(BaseModel):
     new_state: TaskStepStateEnum
     credited_user_id: str | None = None
-    reason: StepEventReasonEnum | None = None
+    pause_reason_id: str | None = None
     description: str | None = None
     mark_closing_record_inaccurate: bool = False
 
@@ -281,7 +281,7 @@ class _BatchTransitionItemBody(BaseModel):
 class _BatchTransitionStepBody(BaseModel):
     items: list[_BatchTransitionItemBody]
     new_state: TaskStepStateEnum
-    reason: StepEventReasonEnum | None = None
+    pause_reason_id: str | None = None
     description: str | None = None
 
 

@@ -303,7 +303,7 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
 
     steps_result = await ctx.session.execute(
         select(TaskStep)
-        .options(selectinload(TaskStep.latest_state_record))
+        .options(selectinload(TaskStep.latest_state_record).selectinload(StepStateRecord.pause_reason))
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.client_id.in_(page_ids),

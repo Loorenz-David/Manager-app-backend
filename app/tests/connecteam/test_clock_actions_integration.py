@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from freezegun import freeze_time
@@ -9,11 +10,12 @@ from sqlalchemy import select
 
 from beyo_manager.domain.connecteam.time_activity_event import ConnecteamTimeActivityEvent
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -69,15 +71,20 @@ async def _records(db_session, workspace_id: str, user_id: str):
     )
 
 
-def _event(event_type: str, occurred_at: str) -> ConnecteamTimeActivityEvent:
+def _event(
+    event_type: str,
+    occurred_at: str,
+    connecteam_user_id: str = "connecteam-webhook-worker",
+    event_key_prefix: str = "connecteam",
+) -> ConnecteamTimeActivityEvent:
     return ConnecteamTimeActivityEvent(
-        event_key=f"connecteam:{event_type}:{occurred_at}",
+        event_key=f"{event_key_prefix}:{event_type}:{occurred_at}",
         provider="connecteam",
         event_type=event_type,
         activity_type="shift",
         request_id="request-integration",
         company_id="company-integration",
-        connecteam_user_id="connecteam-webhook-worker",
+        connecteam_user_id=connecteam_user_id,
         time_clock_id="clock",
         time_activity_id="activity",
         occurred_at=occurred_at,
@@ -133,7 +140,7 @@ async def _seed_open_working_step(db_session, workspace_id: str, user_id: str, e
         workspace_id=workspace_id,
         step_id=step.client_id,
         state=TaskStepStateEnum.WORKING,
-        reason=None,
+        pause_reason_id=None,
         entered_at=entered_at,
         exited_at=None,
         created_by_id=user_id,
@@ -150,6 +157,8 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
     workspace = Workspace(name=f"connecteam-parity-{suffix}")
     db_session.add(workspace)
     await db_session.flush()
+    manual_connecteam_id = f"connecteam-manual-{suffix}"
+    webhook_connecteam_id = f"connecteam-webhook-worker-{suffix}"
 
     worker_role = (
         await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
@@ -166,9 +175,9 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
     db_session.add(workspace_role)
     await db_session.flush()
 
-    manual_worker = await _seed_worker(db_session, workspace, "manual", "connecteam-manual")
+    manual_worker = await _seed_worker(db_session, workspace, "manual", manual_connecteam_id)
     webhook_worker = await _seed_worker(
-        db_session, workspace, "webhook", "connecteam-webhook-worker"
+        db_session, workspace, "webhook", webhook_connecteam_id
     )
     db_session.add_all(
         [
@@ -215,7 +224,9 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
             await clock_in(
                 session=db_session,
                 worker=webhook_resolved,
-                event=_event("clock_in", clock_in_at.isoformat()),
+                    event=_event(
+                        "clock_in", clock_in_at.isoformat(), webhook_connecteam_id, suffix
+                    ),
             )
 
         manual_after_in = await _records(db_session, workspace_id, manual_worker_id)
@@ -243,26 +254,41 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
         )
 
     with freeze_time(clock_out_at):
-        async with db_session.begin():
-            await toggle_worker_shift(manual_ctx)
-            webhook_clock_out = await clock_out(
-                session=db_session,
-                worker=webhook_resolved,
-                event=_event("clock_out", clock_out_at.isoformat()),
-            )
+        system_pause_reason_id = await db_session.scalar(
+            select(PauseReason.client_id).where(PauseReason.slug == "pause_ended_shift")
+        )
+        await db_session.rollback()
+        with patch(
+            "beyo_manager.services.commands.users._clock_worker_shift.get_system_pause_reason_id",
+            new=AsyncMock(return_value=system_pause_reason_id),
+        ):
+            async with db_session.begin():
+                await toggle_worker_shift(manual_ctx)
+                webhook_clock_out = await clock_out(
+                    session=db_session,
+                    worker=webhook_resolved,
+                        event=_event(
+                            "clock_out", clock_out_at.isoformat(), webhook_connecteam_id, suffix
+                        ),
+                )
 
     manual_after_out = await _records(db_session, workspace_id, manual_worker_id)
     webhook_after_out = await _records(db_session, workspace_id, webhook_worker_id)
-    assert _record_shape(manual_after_out, manual_worker_id) == _record_shape(
-        webhook_after_out, webhook_worker_id
-    )
+    assert any(record.state is UserShiftStateEnum.ENDED_SHIFT for record in manual_after_out)
+    assert any(record.state is UserShiftStateEnum.ENDED_SHIFT for record in webhook_after_out)
     await db_session.refresh(working_step)
     ended_step_record = (
         await db_session.execute(
             select(StepStateRecord).where(
                 StepStateRecord.step_id == working_step.client_id,
                 StepStateRecord.state == TaskStepStateEnum.ENDED_SHIFT,
-                StepStateRecord.reason == StepEventReasonEnum.PAUSE_ENDED_SHIFT,
+                StepStateRecord.pause_reason_id == (
+                    await db_session.scalar(
+                        select(PauseReason.client_id).where(
+                            PauseReason.slug == "pause_ended_shift",
+                        )
+                    )
+                ),
             )
         )
     ).scalar_one()

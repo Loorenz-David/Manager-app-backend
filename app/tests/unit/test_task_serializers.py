@@ -19,6 +19,7 @@ def test_serialize_task_light_includes_task_schedule_fields():
         scheduled_start_at=datetime(2026, 6, 26, 9, 0, tzinfo=timezone.utc),
         scheduled_end_at=datetime(2026, 6, 26, 11, 0, tzinfo=timezone.utc),
         return_method=None,
+        assortment="three_seater",
     )
 
     result = serialize_task_light(task)
@@ -26,3 +27,4 @@ def test_serialize_task_light_includes_task_schedule_fields():
     assert result["ready_by_at"] == "2026-06-25T12:30:00+00:00"
     assert result["scheduled_start_at"] == "2026-06-26T09:00:00+00:00"
     assert result["scheduled_end_at"] == "2026-06-26T11:00:00+00:00"
+    assert result["assortment"] == "three_seater"

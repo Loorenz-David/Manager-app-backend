@@ -10,7 +10,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 from beyo_manager.domain.tasks.enums import TaskStateEnum
@@ -32,9 +32,8 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
     workspace_id = payload["workspace_id"]
     performed_by = payload["performed_by_user_id"]
     credited_user_id = payload["credited_user_id"]
-    reason_raw = payload.get("reason")
+    pause_reason_id = payload.get("pause_reason_id")
     description = payload.get("description")
-    reason = StepEventReasonEnum(reason_raw) if reason_raw else None
 
     try:
         completion_requested_at = datetime.fromisoformat(payload["completion_requested_at"])
@@ -114,7 +113,7 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                 workspace_id=workspace_id,
                 step_id=step.client_id,
                 state=TaskStepStateEnum.COMPLETED,
-                reason=reason,
+                pause_reason_id=pause_reason_id or None,
                 description=description,
                 entered_at=completion_requested_at,
                 exited_at=None,

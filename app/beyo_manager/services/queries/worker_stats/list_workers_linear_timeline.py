@@ -13,6 +13,7 @@ from beyo_manager.domain.analytics.serializers import serialize_linear_timeline
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.worker_stats._roster import (
@@ -107,6 +108,37 @@ async def load_recorded_shift_records(
     return records_by_user
 
 
+async def _load_pause_reasons_lookup(
+    ctx: ServiceContext,
+    reason_ids: set[str],
+) -> dict[str, dict[str, str | None]]:
+    """Resolve `pause_by_reason` bucket keys to display fields, matching the shape used by
+    `get_worker_linear_timeline_breakdown._load_step_timeline_records`."""
+    if not reason_ids:
+        return {}
+    rows = (
+        await ctx.session.execute(
+            select(
+                PauseReason.client_id,
+                PauseReason.name,
+                PauseReason.image_url,
+                PauseReason.pause_type,
+            ).where(
+                PauseReason.workspace_id == ctx.workspace_id,
+                PauseReason.client_id.in_(reason_ids),
+            )
+        )
+    ).all()
+    return {
+        row.client_id: {
+            "name": row.name,
+            "image_url": row.image_url,
+            "pause_type": row.pause_type.value if row.pause_type is not None else None,
+        }
+        for row in rows
+    }
+
+
 async def list_workers_linear_timeline(ctx: ServiceContext) -> dict:
     date_from, date_to = resolve_date_range(ctx.query_params)
     workers, workers_pagination = await load_worker_page(
@@ -136,12 +168,18 @@ async def list_workers_linear_timeline(ctx: ServiceContext) -> dict:
     )
 
     worker_results = []
+    all_reason_ids: set[str] = set()
     for user in workers:
         timeline = build_recorded_shift_timeline(
             records_by_user.get(user.client_id, []),
             window_start,
             window_end,
             now,
+        )
+        all_reason_ids.update(
+            reason_id
+            for reason_id in timeline.pause_by_reason
+            if reason_id != UNSPECIFIED_REASON
         )
         worker_results.append(
             {
@@ -155,7 +193,10 @@ async def list_workers_linear_timeline(ctx: ServiceContext) -> dict:
             }
         )
 
+    pause_reasons = await _load_pause_reasons_lookup(ctx, all_reason_ids)
+
     return {
         "workers": worker_results,
         "workers_pagination": workers_pagination,
+        "pause_reasons": pause_reasons,
     }

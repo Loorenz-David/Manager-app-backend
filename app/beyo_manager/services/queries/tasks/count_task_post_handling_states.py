@@ -1,6 +1,7 @@
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 
 from beyo_manager.domain.tasks.enums import TaskPostHandlingStateEnum
+from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.services.context import ServiceContext
 
@@ -16,7 +17,17 @@ async def count_task_post_handling_states(ctx: ServiceContext) -> dict:
 
     stmt = (
         select(TaskPostHandling.state, func.count(TaskPostHandling.client_id))
-        .where(TaskPostHandling.workspace_id == ctx.workspace_id)
+        .join(
+            Task,
+            and_(
+                Task.workspace_id == TaskPostHandling.workspace_id,
+                Task.client_id == TaskPostHandling.task_id,
+            ),
+        )
+        .where(
+            TaskPostHandling.workspace_id == ctx.workspace_id,
+            Task.is_deleted.is_(False),
+        )
         .group_by(TaskPostHandling.state)
     )
 

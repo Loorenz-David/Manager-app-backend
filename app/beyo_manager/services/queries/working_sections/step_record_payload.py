@@ -234,7 +234,7 @@ async def load_step_with_latest_record(ctx: ServiceContext, step_id: str) -> Tas
                 Task.is_deleted.is_(False),
             ),
         )
-        .options(selectinload(TaskStep.latest_state_record))
+        .options(selectinload(TaskStep.latest_state_record).selectinload(StepStateRecord.pause_reason))
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.client_id == step_id,

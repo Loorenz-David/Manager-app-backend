@@ -16,6 +16,17 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
 )
 
 
+def task_requires_customer_coordination(task: Task) -> bool:
+    """Whether a task's current type/source calls for a customer-coordination
+    instance. Single-sourced so create and teardown agree on applicability."""
+    is_pre_order = task.task_type == TaskTypeEnum.PRE_ORDER
+    is_non_store_return = (
+        task.task_type == TaskTypeEnum.RETURN
+        and task.return_source != TaskReturnSourceEnum.STORE_RETURN
+    )
+    return is_pre_order or is_non_store_return
+
+
 async def _create_customer_coordination_in_session(
     session: AsyncSession,
     task: Task,
@@ -25,12 +36,7 @@ async def _create_customer_coordination_in_session(
     user_id: str,
     username_snapshot: str | None = None,
 ) -> TaskCustomerCoordination | None:
-    is_pre_order = task.task_type == TaskTypeEnum.PRE_ORDER
-    is_non_store_return = (
-        task.task_type == TaskTypeEnum.RETURN
-        and task.return_source != TaskReturnSourceEnum.STORE_RETURN
-    )
-    if not is_pre_order and not is_non_store_return:
+    if not task_requires_customer_coordination(task):
         return None
 
     existing = (

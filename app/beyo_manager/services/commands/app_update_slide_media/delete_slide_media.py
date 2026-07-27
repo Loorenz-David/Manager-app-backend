@@ -1,0 +1,58 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+
+from beyo_manager.domain.app_update_presentations.serializers import (
+    serialize_presentation_full,
+)
+from beyo_manager.models.tables.app_update_presentations.slide_element import (
+    AppUpdateSlideElement,
+)
+from beyo_manager.services.commands.app_update_presentations._presentation_loading import (
+    load_presentation_for_write,
+    load_presentation_full,
+)
+from beyo_manager.services.commands.app_update_slide_media.requests import (
+    parse_delete_slide_media_request,
+)
+from beyo_manager.services.commands.app_update_slides._slide_loading import (
+    load_media_for_write,
+    load_slide_for_write,
+)
+from beyo_manager.services.commands.utils.transaction import maybe_begin
+from beyo_manager.services.context import ServiceContext
+
+
+async def delete_slide_media(ctx: ServiceContext) -> dict:
+    request = parse_delete_slide_media_request(ctx.incoming_data)
+
+    async with maybe_begin(ctx.session):
+        await load_presentation_for_write(
+            ctx.session, ctx.workspace_id, request.presentation_id
+        )
+        await load_slide_for_write(
+            ctx.session, request.presentation_id, request.slide_id
+        )
+        media = await load_media_for_write(
+            ctx.session, request.slide_id, request.media_id
+        )
+        now = datetime.now(timezone.utc)
+        media.is_deleted = True
+        media.deleted_at = now
+
+        # Cascade soft-delete to timeline elements that reference this media, so
+        # the composition never points at a removed asset.
+        element_result = await ctx.session.execute(
+            select(AppUpdateSlideElement).where(
+                AppUpdateSlideElement.media_id == media.client_id,
+                AppUpdateSlideElement.is_deleted.is_(False),
+            )
+        )
+        for element in element_result.scalars().all():
+            element.is_deleted = True
+            element.deleted_at = now
+
+    full = await load_presentation_full(
+        ctx.session, ctx.workspace_id, request.presentation_id
+    )
+    return {"presentation": serialize_presentation_full(full)}

@@ -75,7 +75,7 @@ async def reconstruct_shift_middle(
             select(
                 StepStateRecord.client_id,
                 StepStateRecord.state,
-                StepStateRecord.reason,
+                StepStateRecord.pause_reason_id,
                 StepStateRecord.entered_at,
                 StepStateRecord.exited_at,
                 StepStateRecord.step_id,
@@ -106,7 +106,7 @@ async def reconstruct_shift_middle(
         LinearInterval(
             record_id=row.client_id,
             state=row.state.value,
-            reason=row.reason.value if row.reason is not None else None,
+            reason=row.pause_reason_id,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             step_id=row.step_id,

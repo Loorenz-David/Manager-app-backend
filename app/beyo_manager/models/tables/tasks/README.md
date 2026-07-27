@@ -116,8 +116,10 @@ Before inserting a new state row, `exited_at` must be set on the current open ro
 ### Durations
 `exited_at - entered_at` gives the actual duration in that state. These intervals feed the aggregate metrics counters on `task_steps`.
 
-### `reason` field
-`StepEventReasonEnum` captures why a transition happened (e.g. `PAUSE_LUNCH_BREAK`, `WAITING_FOR_UPHOLSTERY`). Used for analytics and operational transparency.
+### `pause_reason_id` field
+`StepStateRecord.pause_reason_id` references the workspace-owned `pause_reasons` table. The
+referenced row supplies the display name, image, type, and optional description requirement for
+analytics and operational transparency.
 
 ---
 

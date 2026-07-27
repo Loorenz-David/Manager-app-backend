@@ -5,14 +5,12 @@ import pytest
 from sqlalchemy import func, select
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import (
-    StepEventReasonEnum,
-    TaskStepStateEnum,
-)
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -88,7 +86,7 @@ async def _seed_worker_day(db_session):
     return workspace, worker, step
 
 
-def _add_step_record(
+async def _add_step_record(
     db_session,
     *,
     workspace_id: str,
@@ -97,14 +95,23 @@ def _add_step_record(
     state: TaskStepStateEnum,
     entered_at: datetime,
     exited_at: datetime,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> None:
+    pause_reason_id = (
+        await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.slug == reason,
+            )
+        )
+        if reason is not None
+        else None
+    )
     db_session.add(
         StepStateRecord(
             workspace_id=workspace_id,
             step_id=step_id,
             state=state,
-            reason=reason,
+            pause_reason_id=pause_reason_id,
             entered_at=entered_at,
             exited_at=exited_at,
             created_by_id=user_id,
@@ -135,7 +142,7 @@ async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None
     workspace, worker, step = await _seed_worker_day(db_session)
     work_date = date(2026, 7, 15)
     base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace_id=workspace.client_id,
         user_id=worker.client_id,
@@ -144,7 +151,7 @@ async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None
         entered_at=base,
         exited_at=base + timedelta(minutes=20),
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace_id=workspace.client_id,
         user_id=worker.client_id,
@@ -152,9 +159,9 @@ async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None
         state=TaskStepStateEnum.PAUSED,
         entered_at=base + timedelta(minutes=20),
         exited_at=base + timedelta(minutes=30),
-        reason=StepEventReasonEnum.PAUSE_COFFEE_BREAK,
+        reason="pause_coffee_break",
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace_id=workspace.client_id,
         user_id=worker.client_id,
@@ -234,9 +241,10 @@ async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None
     assert out["timeline"]["working_seconds"] == 40 * 60
     assert out["timeline"]["pause_seconds"] == 10 * 60
     assert out["timeline"]["idle_seconds"] == 0
-    assert out["timeline"]["pause_by_reason"] == {
-        "pause_coffee_break": 10 * 60
-    }
+    pause_reason_id = await db_session.scalar(
+        select(PauseReason.client_id).where(PauseReason.slug == "pause_coffee_break")
+    )
+    assert out["timeline"]["pause_by_reason"] == {pause_reason_id: 10 * 60}
     assert [segment["state"] for segment in out["segments"]] == [
         "started_shift",
         "working",
@@ -249,7 +257,7 @@ async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None
 async def test_backfill_ended_shift_segment_terminates_day(db_session) -> None:
     workspace, worker, step = await _seed_worker_day(db_session)
     base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace_id=workspace.client_id,
         user_id=worker.client_id,
@@ -258,7 +266,7 @@ async def test_backfill_ended_shift_segment_terminates_day(db_session) -> None:
         entered_at=base,
         exited_at=base + timedelta(hours=1),
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace_id=workspace.client_id,
         user_id=worker.client_id,

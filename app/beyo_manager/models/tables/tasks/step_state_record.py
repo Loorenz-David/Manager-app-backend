@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -11,16 +12,15 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from beyo_manager.domain.task_steps.enums import (
-    StepEventReasonEnum,
-    StepStateRecordAccuracyMeasuredByEnum,
-    TaskStepStateEnum,
-)
+from beyo_manager.domain.task_steps.enums import StepStateRecordAccuracyMeasuredByEnum, TaskStepStateEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
 from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+if TYPE_CHECKING:
+    from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 
 
 SAEnum = configure_sa_enum_values(SAEnum)
@@ -39,8 +39,13 @@ class StepStateRecord(IdentityMixin, Base):
     state: Mapped[TaskStepStateEnum] = mapped_column(
         SAEnum(TaskStepStateEnum, name="task_step_state_enum", create_type=False), nullable=False, index=True
     )
-    reason: Mapped[StepEventReasonEnum | None] = mapped_column(
-        SAEnum(StepEventReasonEnum, name="step_event_reason_enum", create_type=True), nullable=True, index=True
+    pause_reason_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("pause_reasons.client_id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    pause_reason: Mapped["PauseReason | None"] = relationship(
+        "PauseReason",
+        foreign_keys=[pause_reason_id],
+        uselist=False,
     )
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     accuracy: Mapped[int | None] = mapped_column(Integer, nullable=True)

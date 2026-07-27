@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from beyo_manager.domain.images.serializers import serialize_image
+from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
 from beyo_manager.domain.users.serializers import serialize_user_compact_with_role, serialize_user_working_section_member
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.items.item import Item
@@ -171,6 +172,7 @@ def serialize_step(step: TaskStep) -> dict:
         "total_issues_count": step.total_issues_count,
         "total_issues_resolved_count": step.total_issues_resolved_count,
         "total_cost_minor": step.total_cost_minor,
+        "recorded_time_marked_wrong": step.recorded_time_marked_wrong,
     }
 
 
@@ -181,7 +183,7 @@ def serialize_step_latest_state_record(record: StepStateRecord | None) -> dict |
         "id": record.client_id,
         "step_id": record.step_id,
         "state": record.state.value,
-        "reason": record.reason.value if record.reason else None,
+        "pause_reason": serialize_pause_reason(record.pause_reason) if record.pause_reason is not None else None,
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,
         "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -329,6 +331,7 @@ def serialize_task_light(task: Task) -> dict:
         "scheduled_start_at": task.scheduled_start_at.isoformat() if task.scheduled_start_at else None,
         "scheduled_end_at": task.scheduled_end_at.isoformat() if task.scheduled_end_at else None,
         "return_method": task.return_method.value if task.return_method else None,
+        "assortment": task.assortment,
     }
 
 
@@ -341,7 +344,8 @@ def serialize_step_state_record_light(
         return None
     return {
         "state": record.state.value,
-        "reason": record.reason.value if record.reason else None,
+        "pause_reason": serialize_pause_reason(record.pause_reason) if record.pause_reason is not None else None,
+        "description": record.description,
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,
         "last_action_by": serialize_user_working_section_member(user) if user else None,

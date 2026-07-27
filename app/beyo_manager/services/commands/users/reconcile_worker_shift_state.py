@@ -174,8 +174,8 @@ async def _reconcile_once(
         current.exited_at = now
 
     reason = None
-    if target is UserShiftStateEnum.IN_PAUSE and open_paused[0].reason is not None:
-        reason = open_paused[0].reason.value
+    if target is UserShiftStateEnum.IN_PAUSE and open_paused[0].pause_reason_id is not None:
+        reason = open_paused[0].pause_reason_id
     session.add(
         UserShiftStateRecord(
             workspace_id=workspace_id,

@@ -19,16 +19,21 @@ from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
+from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligations_acknowledged import (
     mark_step_obligations_acknowledged,
 )
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.commands.task_steps.requests import parse_batch_transition_step_state_request
-from beyo_manager.services.commands.task_steps.transition_step_state import _ALLOWED_TRANSITIONS
+from beyo_manager.services.commands.task_steps.transition_step_state import (
+    _ALLOWED_TRANSITIONS,
+    _completed_the_whole_task,
+)
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -57,6 +62,20 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
 
     async with maybe_begin(ctx.session):
         now = datetime.now(timezone.utc)
+
+        pause_reason = None
+        if request.pause_reason_id is not None:
+            pause_reason = await ctx.session.scalar(
+                select(PauseReason).where(
+                    PauseReason.workspace_id == ctx.workspace_id,
+                    PauseReason.client_id == request.pause_reason_id,
+                    PauseReason.is_deleted.is_(False),
+                )
+            )
+            if pause_reason is None:
+                raise NotFound("Pause reason not found.")
+            if pause_reason.requires_description and not (request.description or "").strip():
+                raise ValidationError("A description is required for the selected pause reason.")
 
         # --- Batch-load steps, tasks, and open records (3 queries, independent of N) ---
         steps = (
@@ -146,7 +165,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
                 task,
                 closing_record,
                 new_state=new_state,
-                reason=request.reason,
+                pause_reason_id=request.pause_reason_id,
                 description=request.description,
                 credited_user_id=credited_user_id,
                 now=now,
@@ -158,11 +177,15 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
             step_pin_union.update(applied.step_pin_user_ids)
             for r in applied.readiness_changed_items:
                 readiness_by_step[r["client_id"]] = r["new_readiness"]
+            applied.new_record.pause_reason = pause_reason  # already validated above; avoids a second fetch
             result_items.append(
                 {
                     "step_id": item.step_id,
                     "new_state": new_state.value,
                     "last_state_record": serialize_step_state_record_light(applied.new_record),
+                    # True only when completing this step finished the whole task
+                    # (last open step closed → task went READY). Not from sequence_order.
+                    "was_final_step": _completed_the_whole_task(applied.task_became_ready, new_state),
                 }
             )
 

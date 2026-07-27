@@ -16,6 +16,10 @@ from beyo_manager.models.tables.audit import audit_log  # noqa: F401
 from beyo_manager.models.tables.notifications import notification  # noqa: F401
 from beyo_manager.models.tables.notifications import notification_pin  # noqa: F401
 from beyo_manager.models.tables.notifications import push_subscription  # noqa: F401
+
+# --- Pause reasons (depends on workspaces, users) ---
+from beyo_manager.models.tables.pause_reasons import pause_reason  # noqa: F401
+
 from beyo_manager.models.tables.files import pending_upload  # noqa: F401
 from beyo_manager.models.tables.content import content_mention  # noqa: F401
 from beyo_manager.models.tables.content import content_mention_link  # noqa: F401
@@ -95,6 +99,9 @@ from beyo_manager.models.tables.tasks import task  # noqa: F401
 from beyo_manager.models.tables.tasks import task_customer_coordination  # noqa: F401
 from beyo_manager.models.tables.tasks import task_post_handling  # noqa: F401
 
+# --- SKU templates (depends on workspaces and business task types) ---
+from beyo_manager.models.tables.sku_templates import sku_template  # noqa: F401
+
 # --- Task events (depends on task) ---
 from beyo_manager.models.tables.tasks import task_event  # noqa: F401
 
@@ -133,6 +140,17 @@ from beyo_manager.models.tables.emails import email_thread  # noqa: F401
 from beyo_manager.models.tables.emails import email_message  # noqa: F401
 from beyo_manager.models.tables.emails import email_thread_user_state  # noqa: F401
 from beyo_manager.models.tables.emails import email_template  # noqa: F401
+
+# --- App update presentations (depends on workspaces, users) ---
+from beyo_manager.models.tables.app_update_presentations import presentation  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_slide  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import slide_media  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import slide_element  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_app_target  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_role_target  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_workspace_target  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_user_target  # noqa: F401
+from beyo_manager.models.tables.app_update_presentations import presentation_view  # noqa: F401
 
 # --- Shopify foundation ---
 from beyo_manager.models.tables.shopify import shopify_integration_event  # noqa: F401

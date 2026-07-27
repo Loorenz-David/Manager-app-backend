@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ValidationError as PydanticValidationError, field_validator
 
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.errors.validation import ValidationError
 
 
@@ -131,7 +131,7 @@ class TransitionStepStateRequest(BaseModel):
     task_id: str
     new_state: TaskStepStateEnum
     credited_user_id: str | None = None
-    reason: StepEventReasonEnum | None = None
+    pause_reason_id: str | None = None
     description: str | None = None
     mark_closing_record_inaccurate: bool = False
 
@@ -168,7 +168,7 @@ class BatchTransitionItem(BaseModel):
 class BatchTransitionStepStateRequest(BaseModel):
     items: list[BatchTransitionItem]
     new_state: TaskStepStateEnum
-    reason: StepEventReasonEnum | None = None
+    pause_reason_id: str | None = None
     description: str | None = None
 
     @field_validator("items")

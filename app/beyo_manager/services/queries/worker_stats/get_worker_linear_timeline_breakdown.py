@@ -11,12 +11,14 @@ from beyo_manager.domain.analytics.serializers import (
     serialize_linear_timeline,
     serialize_recorded_shift_segment,
 )
+from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -65,6 +67,7 @@ class _StepTimelineRecord:
     step_id: str
     state: str
     reason: str | None
+    description: str | None
     entered_at: datetime
     exited_at: datetime | None
 
@@ -159,7 +162,7 @@ async def _load_step_timeline_records(
     user_id: str,
     window_start: datetime,
     window_end: datetime,
-) -> list[_StepTimelineRecord]:
+) -> tuple[list[_StepTimelineRecord], dict[str, dict[str, str | None]], dict[str, PauseReason]]:
     credited = func.coalesce(
         StepStateRecord.credited_user_id,
         StepStateRecord.created_by_id,
@@ -169,9 +172,13 @@ async def _load_step_timeline_records(
             StepStateRecord.client_id.label("record_id"),
             StepStateRecord.step_id,
             StepStateRecord.state,
-            StepStateRecord.reason,
+            StepStateRecord.pause_reason_id,
+            StepStateRecord.description,
             StepStateRecord.entered_at,
             StepStateRecord.exited_at,
+            PauseReason.name.label("pause_reason_name"),
+            PauseReason.image_url.label("pause_reason_image_url"),
+            PauseReason.pause_type.label("pause_reason_type"),
         )
         .join(
             TaskStep,
@@ -179,6 +186,13 @@ async def _load_step_timeline_records(
                 TaskStep.client_id == StepStateRecord.step_id,
                 TaskStep.workspace_id == ctx.workspace_id,
                 TaskStep.is_deleted.is_(False),
+            ),
+        )
+        .outerjoin(
+            PauseReason,
+            and_(
+                PauseReason.client_id == StepStateRecord.pause_reason_id,
+                PauseReason.workspace_id == ctx.workspace_id,
             ),
         )
         .where(
@@ -194,19 +208,48 @@ async def _load_step_timeline_records(
                 | (StepStateRecord.exited_at > window_start)
             ),
         )
-        .order_by(StepStateRecord.entered_at, StepStateRecord.client_id)
+        .order_by(StepStateRecord.entered_at.desc(), StepStateRecord.client_id.desc())
     )
-    return [
-        _StepTimelineRecord(
-            record_id=row.record_id,
-            step_id=row.step_id,
-            state=row.state.value,
-            reason=row.reason.value if row.reason is not None else None,
-            entered_at=row.entered_at,
-            exited_at=row.exited_at,
+    records: list[_StepTimelineRecord] = []
+    pause_reasons: dict[str, dict[str, str | None]] = {}
+    for row in rows.all():
+        if row.pause_reason_id is not None and row.pause_reason_name is not None:
+            pause_reasons[row.pause_reason_id] = {
+                "name": row.pause_reason_name,
+                "image_url": row.pause_reason_image_url,
+                "pause_type": (
+                    row.pause_reason_type.value
+                    if row.pause_reason_type is not None
+                    else None
+                ),
+            }
+        records.append(
+            _StepTimelineRecord(
+                record_id=row.record_id,
+                step_id=row.step_id,
+                state=row.state.value,
+                reason=row.pause_reason_id,
+                description=row.description,
+                entered_at=row.entered_at,
+                exited_at=row.exited_at,
+            )
         )
-        for row in rows.all()
-    ]
+
+    # Full PauseReason objects for record_detail()'s nested `pause_reason` field. Fetched
+    # separately from the trimmed columns above (which stay as-is — they back the unrelated,
+    # already-documented top-level `pause_reasons` lookup map used for segment-level bucketing).
+    pause_reason_ids = {record.reason for record in records if record.reason is not None}
+    pause_reason_objects: dict[str, PauseReason] = {}
+    if pause_reason_ids:
+        pause_reason_rows = await ctx.session.execute(
+            select(PauseReason).where(
+                PauseReason.workspace_id == ctx.workspace_id,
+                PauseReason.client_id.in_(pause_reason_ids),
+            )
+        )
+        pause_reason_objects = {pr.client_id: pr for pr in pause_reason_rows.scalars().all()}
+
+    return records, pause_reasons, pause_reason_objects
 
 
 def _build_shift_segments(
@@ -300,7 +343,7 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
     truncated = len(shift_segments) > _MAX_SEGMENTS
     shift_segments = shift_segments[:_MAX_SEGMENTS]
 
-    step_records = await _load_step_timeline_records(
+    step_records, pause_reasons, pause_reason_objects = await _load_step_timeline_records(
         ctx,
         user_id,
         window_start,
@@ -329,6 +372,7 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
         if step is None:
             return None
         item = item_by_task.get(step.task_id)
+        pause_reason = pause_reason_objects.get(record.reason) if record.reason is not None else None
         return {
             "record_id": record.record_id,
             "step_id": step.client_id,
@@ -345,7 +389,8 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
                 else None
             ),
             "state": record.state,
-            "reason": record.reason,
+            "pause_reason": serialize_pause_reason(pause_reason) if pause_reason is not None else None,
+            "description": record.description,
             "entered_at": record.entered_at.isoformat(),
             "exited_at": (
                 record.exited_at.isoformat()
@@ -385,7 +430,16 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
                 end=segment.end,
                 state=_PUBLIC_SHIFT_STATES[segment.record.state],
                 reason=(
-                    segment.record.reason
+                    # Block owner follows the most-recently-started step pause (details is
+                    # newest-first). Fall back to the worker-level pause reason when no step
+                    # pause overlaps this block or that step carries no reason of its own.
+                    # `details[0]["pause_reason"]` is the nested object now — pull its id back
+                    # out since this segment-level field stays an id (resolved via the sibling
+                    # `pause_reasons` lookup map, not embedded here).
+                    (
+                        (details[0]["pause_reason"]["client_id"] if details and details[0]["pause_reason"] else None)
+                        or segment.record.reason
+                    )
                     if segment.record.state is UserShiftStateEnum.IN_PAUSE
                     else None
                 ),
@@ -406,6 +460,7 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
             timeline,
             completed.get(user_id, 0),
         ),
+        "pause_reasons": pause_reasons,
         "segments": serialized_segments,
         "segments_truncated": truncated,
     }

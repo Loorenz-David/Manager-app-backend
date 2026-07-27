@@ -9,6 +9,7 @@ from sqlalchemy import select
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
@@ -122,9 +123,16 @@ def _patch_transition_side_effects(monkeypatch) -> None:
     async def _fake_item_label(*_args, **_kwargs):
         return None
 
+    async def _fake_system_pause_reason(session, _workspace_id, slug):
+        return await session.scalar(select(PauseReason.client_id).where(PauseReason.slug == slug))
+
     monkeypatch.setattr(
         "beyo_manager.services.commands.task_steps.transition_step_state.create_instant_task",
         _fake_create_instant_task,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.task_steps.transition_step_state.get_system_pause_reason_id",
+        _fake_system_pause_reason,
     )
     monkeypatch.setattr(
         "beyo_manager.services.commands.task_steps.transition_step_state.event_bus.dispatch",

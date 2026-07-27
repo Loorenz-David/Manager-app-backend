@@ -19,7 +19,7 @@ Columns:
 - workspace_id: FK workspaces.client_id, not null, indexed
 - step_id: FK task_steps.client_id, not null, indexed
 - state: Enum(task_step_state), not null, indexed
-- reason: Enum(step_event_reason), nullable, indexed
+- pause_reason_id: FK pause_reasons.client_id, nullable, indexed
 - description: String(1024), nullable
 - accuracy: Integer, nullable
 - accuracy_measured_by: Enum(step_state_record_accuracy_measured_by), nullable
@@ -51,13 +51,9 @@ State transition authority:
 - USER
 - AI
 
-### 2.2 step_event_reason
-- WAITING_FOR_UPHOLSTERY
-- PAUSE_LUNCH_BREAK
-- PAUSE_COFFEE_BREAK
-- PAUSE_ENDED_SHIFT
-- PAUSE_MEETING
-- PAUSE_OTHER_TASK_PRIORITY
+### 2.2 pause_reason_id
+References a workspace-owned `pause_reasons` row. The referenced row supplies the pause display
+name, image, type, and optional description requirement.
 
 ## 3) Ownership and semantics
 
@@ -115,7 +111,7 @@ No-cascade-delete rule:
 
 ## 8) Future integration notes
 
-- future accuracy scoring systems may extend reason taxonomy without changing append-only semantics.
+- future accuracy scoring systems may extend pause-reason metadata without changing append-only semantics.
 - replay/recompute may rebuild step projections from this lineage.
 
 ## 9) Risks and protections

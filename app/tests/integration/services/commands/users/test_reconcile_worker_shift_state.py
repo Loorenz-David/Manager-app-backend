@@ -5,11 +5,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
@@ -44,7 +45,7 @@ async def _seed_open_step(
     *,
     state: TaskStepStateEnum,
     entered_at: datetime,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> StepStateRecord:
     suffix = uuid4().hex
     section = WorkingSection(
@@ -75,7 +76,15 @@ async def _seed_open_step(
         workspace_id=workspace.client_id,
         step_id=step.client_id,
         state=state,
-        reason=reason,
+        pause_reason_id=(
+            await db_session.scalar(
+                select(PauseReason.client_id).where(
+                    PauseReason.slug == reason,
+                )
+            )
+            if reason is not None
+            else None
+        ),
         entered_at=entered_at,
         exited_at=None,
         created_by_id=user.client_id,
@@ -228,7 +237,7 @@ async def test_reconcile_ignores_open_pause_from_previous_shift(db_session) -> N
         user,
         state=TaskStepStateEnum.PAUSED,
         entered_at=previous_day,
-        reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK,
+        reason="pause_lunch_break",
     )
     db_session.add_all(
         [
@@ -264,7 +273,7 @@ async def test_reconcile_pause_uses_earliest_open_pause_reason(db_session) -> No
         user,
         state=TaskStepStateEnum.PAUSED,
         entered_at=shift_start + timedelta(minutes=10),
-        reason=StepEventReasonEnum.PAUSE_COFFEE_BREAK,
+        reason="pause_coffee_break",
     )
     await _seed_open_step(
         db_session,
@@ -272,7 +281,7 @@ async def test_reconcile_pause_uses_earliest_open_pause_reason(db_session) -> No
         user,
         state=TaskStepStateEnum.PAUSED,
         entered_at=shift_start + timedelta(minutes=20),
-        reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK,
+        reason="pause_lunch_break",
     )
 
     outcome = await reconcile_worker_shift_state(
@@ -289,7 +298,10 @@ async def test_reconcile_pause_uses_earliest_open_pause_reason(db_session) -> No
         )
     ).scalar_one()
     assert outcome.state is UserShiftStateEnum.IN_PAUSE
-    assert open_record.reason == StepEventReasonEnum.PAUSE_COFFEE_BREAK.value
+    pause_reason_id = await db_session.scalar(
+        select(PauseReason.client_id).where(PauseReason.slug == "pause_coffee_break")
+    )
+    assert open_record.reason == pause_reason_id
 
 
 async def test_concurrent_reconciles_create_one_open_shift_record(db_session) -> None:

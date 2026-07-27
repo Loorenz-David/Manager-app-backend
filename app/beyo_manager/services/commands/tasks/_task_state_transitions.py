@@ -7,11 +7,8 @@ from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMI
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
-from beyo_manager.services.commands.task_customer_coordination._create_customer_coordination_in_session import (
-    _create_customer_coordination_in_session,
-)
-from beyo_manager.services.commands.task_post_handling._create_post_handling_in_session import (
-    _create_post_handling_in_session,
+from beyo_manager.services.commands.tasks._reconcile_task_side_effects import (
+    reconcile_task_side_effects,
 )
 
 
@@ -79,14 +76,7 @@ async def maybe_evaluate_task_ready(
     task.state = TaskStateEnum.READY
     task.updated_at = now
     task.updated_by_id = updated_by_id
-    await _create_post_handling_in_session(
-        session,
-        task,
-        workspace_id=workspace_id,
-        now=now,
-        user_id=updated_by_id,
-    )
-    await _create_customer_coordination_in_session(
+    await reconcile_task_side_effects(
         session,
         task,
         workspace_id=workspace_id,

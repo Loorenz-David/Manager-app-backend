@@ -14,7 +14,7 @@ from beyo_manager.domain.schedulers.enums import (
     SchedulerStateEnum,
 )
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.tasks.notification_labels import resolve_item_label_for_task
@@ -28,6 +28,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligations_acknowledged import (
     mark_step_obligations_acknowledged,
 )
@@ -47,6 +48,7 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
+from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
 
 
 _ALLOWED_TRANSITIONS: dict[TaskStepStateEnum, set[TaskStepStateEnum]] = {
@@ -100,6 +102,18 @@ def _should_mark_latest_record_inaccurate(
     )
 
 
+def _completed_the_whole_task(task_became_ready: bool, new_state: TaskStepStateEnum) -> bool:
+    """True when this transition finished the whole task.
+
+    Requires both that the transition flipped the task to READY (this step was the
+    last still-open one) AND that the step's terminal state was COMPLETED — a
+    SKIPPED/FAILED/CANCELLED close can also make a task READY, but that is not a
+    completion. Not derived from ``sequence_order``. Single-sourced here and reused
+    by the batch path so the two mirrored commands cannot drift.
+    """
+    return task_became_ready and new_state == TaskStepStateEnum.COMPLETED
+
+
 async def transition_step_state(ctx: ServiceContext) -> dict:
     """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox.
 
@@ -113,6 +127,9 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     request = parse_transition_step_state_request(ctx.incoming_data)
     old_task_state = None
     auto_paused_step: TaskStep | None = None
+    # True when this transition is the one that flipped the whole task to READY
+    # (i.e. it closed the last still-open step). See the response's `was_final_step`.
+    task_became_ready = False
 
     async with maybe_begin(ctx.session):
         now = datetime.now(timezone.utc)
@@ -154,6 +171,20 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             raise NotFound("Task not found.")
         old_task_state = task.state
 
+        pause_reason = None
+        if request.pause_reason_id is not None:
+            pause_reason = await ctx.session.scalar(
+                select(PauseReason).where(
+                    PauseReason.workspace_id == ctx.workspace_id,
+                    PauseReason.client_id == request.pause_reason_id,
+                    PauseReason.is_deleted.is_(False),
+                )
+            )
+            if pause_reason is None:
+                raise NotFound("Pause reason not found.")
+            if pause_reason.requires_description and not (request.description or "").strip():
+                raise ValidationError("A description is required for the selected pause reason.")
+
         # Resolve credit user early — needed for both auto-pause enforcement and outbox event.
         credited_user_id = _resolve_transition_credit_user_id(ctx, request)
         # Deduplicated: covers records created by the performer AND by the credited worker,
@@ -191,7 +222,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         #             "completion_requested_at": now.isoformat(),
         #             "performed_by_user_id": ctx.user_id,
         #             "credited_user_id": credited_user_id,
-        #             "reason": request.reason.value if request.reason else None,
+        #             "pause_reason_id": request.pause_reason_id,
         #             "description": request.description,
         #         },
         #     )
@@ -237,15 +268,22 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                         if identifier:
                             auto_pause_description = f"started working with {identifier}"
 
+                auto_pause_reason_id = await get_system_pause_reason_id(
+                    ctx.session,
+                    ctx.workspace_id,
+                    "pause_other_task_priority",
+                )
                 auto_pause_record = StepStateRecord(
                     workspace_id=ctx.workspace_id,
                     step_id=conflicting_step.client_id,
                     state=TaskStepStateEnum.PAUSED,
-                    reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY,
+                    pause_reason_id=auto_pause_reason_id,
                     description=auto_pause_description,
                     entered_at=now,
                     exited_at=None,
                     created_by_id=ctx.user_id,
+                    # Auto-pause is credited to the performer (matches the payload below).
+                    credited_user_id=ctx.user_id,
                 )
                 ctx.session.add(auto_pause_record)
                 await ctx.session.flush()
@@ -305,12 +343,13 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             workspace_id=ctx.workspace_id,
             step_id=step.client_id,
             state=request.new_state,
-            reason=request.reason,
+            pause_reason_id=request.pause_reason_id,
             description=request.description,
             entered_at=now,
             exited_at=None,
             created_by_id=ctx.user_id,
         )
+        new_record.pause_reason = pause_reason  # already validated above; avoids a second fetch
         ctx.session.add(new_record)
         await ctx.session.flush()  # assign new_record.client_id
 
@@ -343,7 +382,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             )
 
         if request.new_state in TERMINAL_STEP_STATES:
-            await maybe_evaluate_task_ready(
+            task_became_ready = await maybe_evaluate_task_ready(
                 ctx.session,
                 task,
                 workspace_id=ctx.workspace_id,
@@ -473,4 +512,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         "step_id": step.client_id,
         "new_state": request.new_state.value,
         "last_state_record": serialize_step_state_record_light(new_record),
+        # True only when completing this step was what finished the whole task
+        # (last open step closed → task went READY). Not derived from sequence_order.
+        "was_final_step": _completed_the_whole_task(task_became_ready, request.new_state),
     }

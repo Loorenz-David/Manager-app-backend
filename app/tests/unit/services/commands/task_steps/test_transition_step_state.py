@@ -5,6 +5,7 @@ import pytest
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import _apply_inaccurate_time_flag
 from beyo_manager.services.commands.task_steps.transition_step_state import (
+    _completed_the_whole_task,
     _resolve_transition_credit_user_id,
     _should_mark_latest_record_inaccurate,
 )
@@ -44,6 +45,32 @@ def test_should_not_mark_latest_record_inaccurate_for_non_completed_transition()
     )
 
     assert _should_mark_latest_record_inaccurate(request, TaskStepStateEnum.WORKING) is False
+
+
+@pytest.mark.unit
+def test_completed_the_whole_task_true_when_ready_and_completed():
+    # This step's COMPLETED close was the one that flipped the task to READY.
+    assert _completed_the_whole_task(True, TaskStepStateEnum.COMPLETED) is True
+
+
+@pytest.mark.unit
+def test_completed_the_whole_task_false_when_task_not_ready():
+    # A COMPLETED step that left other steps still open did not finish the task.
+    assert _completed_the_whole_task(False, TaskStepStateEnum.COMPLETED) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "terminal_state",
+    [
+        TaskStepStateEnum.SKIPPED,
+        TaskStepStateEnum.FAILED,
+        TaskStepStateEnum.CANCELLED,
+    ],
+)
+def test_completed_the_whole_task_false_for_non_completed_terminals(terminal_state):
+    # A non-COMPLETED terminal can still make a task READY, but it is not a completion.
+    assert _completed_the_whole_task(True, terminal_state) is False
 
 
 @pytest.mark.unit

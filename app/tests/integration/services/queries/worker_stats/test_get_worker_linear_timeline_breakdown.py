@@ -6,11 +6,9 @@ from freezegun import freeze_time
 from sqlalchemy import select
 
 from beyo_manager.domain.items.enums import ItemStateEnum
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import (
-    StepEventReasonEnum,
-    TaskStepStateEnum,
-)
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import (
     TaskItemRoleEnum,
     TaskStateEnum,
@@ -19,6 +17,7 @@ from beyo_manager.domain.tasks.enums import (
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -157,7 +156,7 @@ def _add_shift_record(
     )
 
 
-def _add_step_record(
+async def _add_step_record(
     db_session,
     workspace_id: str,
     user_id: str,
@@ -166,14 +165,37 @@ def _add_step_record(
     entered_at: datetime,
     exited_at: datetime | None,
     *,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> None:
+    pause_reason_id = None
+    if reason is not None:
+        # Scoped to this test's own workspace (PauseReason is workspace-scoped data) —
+        # find-or-create rather than assuming some other workspace's row happens to exist in
+        # whatever database this suite runs against. Keyed on (workspace_id, name) — not
+        # `slug`, which has a table-WIDE unique index (shared across every workspace) reserved
+        # for the real bootstrap-seeded rows; reusing one of those slugs here would collide
+        # with whatever workspace first claimed it in this database.
+        pause_reason_id = await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.workspace_id == workspace_id,
+                PauseReason.name == reason,
+            )
+        )
+        if pause_reason_id is None:
+            pause_reason = PauseReason(
+                workspace_id=workspace_id,
+                name=reason,
+                pause_type=PauseTypeEnum.PERSONAL,
+            )
+            db_session.add(pause_reason)
+            await db_session.flush()
+            pause_reason_id = pause_reason.client_id
     db_session.add(
         StepStateRecord(
             workspace_id=workspace_id,
             step_id=step_id,
             state=state,
-            reason=reason,
+            pause_reason_id=pause_reason_id,
             entered_at=entered_at,
             exited_at=exited_at,
             created_by_id=user_id,
@@ -238,7 +260,7 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
         ended_at,
         ended_at,
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace.client_id,
         worker.client_id,
@@ -247,7 +269,7 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
         base,
         pause_at,
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace.client_id,
         worker.client_id,
@@ -255,9 +277,9 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
         TaskStepStateEnum.PAUSED,
         pause_at,
         idle_at,
-        reason=StepEventReasonEnum.PAUSE_COFFEE_BREAK,
+        reason="pause_coffee_break",
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace.client_id,
         worker.client_id,
@@ -276,7 +298,7 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
         )
     )
 
-    assert set(out) == {"user", "timeline", "segments", "segments_truncated"}
+    assert set(out) == {"user", "timeline", "pause_reasons", "segments", "segments_truncated"}
     assert set(out["user"]) == {
         "client_id",
         "username",
@@ -327,7 +349,15 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
     assert started["seconds"] == ended["seconds"] == 0
     assert started["steps"] == ended["steps"] == idle["steps"] == []
     assert paused["manually_recorded"] is True
-    assert paused["reason"] == "cleaning station"
+    # Block owner follows the most-recently-started step pause, not the worker-level
+    # reason ("cleaning station"); the only step pause here is coffee break.
+    pause_reason_id = await db_session.scalar(
+        select(PauseReason.client_id).where(
+            PauseReason.workspace_id == workspace.client_id,
+            PauseReason.name == "pause_coffee_break",
+        )
+    )
+    assert paused["reason"] == pause_reason_id
     assert working["manually_recorded"] is False
     assert working["steps"][0]["ended_by"] == "paused"
     assert paused["steps"][0]["ended_by"] == "completed"
@@ -339,12 +369,17 @@ async def test_breakdown_preserves_contract_and_adds_recorded_markers(db_session
         "working_section_name",
         "item",
         "state",
-        "reason",
+        "pause_reason",
+        "description",
         "entered_at",
         "exited_at",
         "is_open",
         "ended_by",
     }
+    # working["steps"][0] is not itself paused (it's the WORKING step in this segment), so its
+    # own pause_reason is None; check the segment that actually is paused instead.
+    assert paused["steps"][0]["pause_reason"]["client_id"] == pause_reason_id
+    assert paused["steps"][0]["pause_reason"]["name"] == "pause_coffee_break"
     assert working["steps"][0]["item"]["article_number"] == "ART-1"
     assert out["segments_truncated"] is False
     duration_segments = [
@@ -394,7 +429,7 @@ async def test_breakdown_keeps_live_open_behavior(db_session) -> None:
         base,
         None,
     )
-    _add_step_record(
+    await _add_step_record(
         db_session,
         workspace.client_id,
         worker.client_id,
@@ -496,13 +531,13 @@ async def test_segment_steps_are_scoped_to_the_shift(db_session) -> None:
     _add_shift_record(db_session, workspace.client_id, worker.client_id,
                       UserShiftStateEnum.ENDED_SHIFT, at(30), at(30))
     # carryover pause from yesterday, still open into and overlapping the paused segment
-    _add_step_record(db_session, workspace.client_id, worker.client_id, carry_step.client_id,
+    await _add_step_record(db_session, workspace.client_id, worker.client_id, carry_step.client_id,
                      TaskStepStateEnum.PAUSED, base - timedelta(days=1), at(15),
-                     reason=StepEventReasonEnum.PAUSE_OTHER_TASK_PRIORITY)
+                     reason="pause_other_task_priority")
     # legitimate in-shift pause
-    _add_step_record(db_session, workspace.client_id, worker.client_id, inshift_step.client_id,
+    await _add_step_record(db_session, workspace.client_id, worker.client_id, inshift_step.client_id,
                      TaskStepStateEnum.PAUSED, at(10), at(20),
-                     reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK)
+                     reason="pause_lunch_break")
     await db_session.flush()
 
     out = await get_worker_linear_timeline_breakdown(

@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.errors.permissions import PermissionDenied
@@ -17,6 +17,7 @@ from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
@@ -59,20 +60,26 @@ async def _seed_user(db_session, label: str) -> User:
 
 async def _seed_workspace_worker(db_session) -> tuple[Workspace, User]:
     suffix = uuid4().hex
-    workspace = Workspace(name=f"worker-shift-{suffix}")
+    workspace = await db_session.scalar(select(Workspace).order_by(Workspace.client_id))
     worker = await _seed_user(db_session, "shift-worker")
-    db_session.add(workspace)
-    await db_session.flush()
     worker_role = (
         await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
     ).scalar_one()
-    workspace_role = WorkspaceRole(
-        workspace_id=workspace.client_id,
-        role_id=worker_role.client_id,
-        is_system=True,
+    workspace_role = await db_session.scalar(
+        select(WorkspaceRole).where(
+            WorkspaceRole.workspace_id == workspace.client_id,
+            WorkspaceRole.role_id == worker_role.client_id,
+            WorkspaceRole.specialization.is_(None),
+        )
     )
-    db_session.add(workspace_role)
-    await db_session.flush()
+    if workspace_role is None:
+        workspace_role = WorkspaceRole(
+            workspace_id=workspace.client_id,
+            role_id=worker_role.client_id,
+            is_system=True,
+        )
+        db_session.add(workspace_role)
+        await db_session.flush()
     db_session.add(
         WorkspaceMembership(
             user_id=worker.client_id,
@@ -136,16 +143,21 @@ async def _seed_open_step(
     )
     db_session.add(step)
     await db_session.flush()
-    reason = (
-        StepEventReasonEnum.PAUSE_LUNCH_BREAK
-        if state is TaskStepStateEnum.PAUSED
+    reason = "pause_lunch_break" if state is TaskStepStateEnum.PAUSED else None
+    pause_reason_id = (
+        await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.slug == reason,
+            )
+        )
+        if reason is not None
         else None
     )
     record = StepStateRecord(
         workspace_id=workspace.client_id,
         step_id=step.client_id,
         state=state,
-        reason=reason,
+        pause_reason_id=pause_reason_id,
         entered_at=entered_at,
         exited_at=None,
         created_by_id=worker.client_id,
@@ -177,7 +189,7 @@ async def _seed_step_record(
     state: TaskStepStateEnum,
     entered_at: datetime,
     exited_at: datetime | None,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> None:
     suffix = uuid4().hex
     section = WorkingSection(
@@ -196,9 +208,19 @@ async def _seed_step_record(
     )
     db_session.add(step)
     await db_session.flush()
+    pause_reason_id = (
+        await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.slug == reason,
+            )
+        )
+        if reason is not None
+        else None
+    )
     db_session.add(
         StepStateRecord(
-            workspace_id=workspace.client_id, step_id=step.client_id, state=state, reason=reason,
+            workspace_id=workspace.client_id, step_id=step.client_id, state=state,
+            pause_reason_id=pause_reason_id,
             entered_at=entered_at, exited_at=exited_at,
             created_by_id=worker.client_id, credited_user_id=worker.client_id,
         )
@@ -246,7 +268,7 @@ async def test_clock_out_reconstructs_middle_from_step_history(db_session) -> No
                             entered_at=at(5), exited_at=at(20))
     await _seed_step_record(db_session, workspace, worker, state=TaskStepStateEnum.PAUSED,
                             entered_at=at(20), exited_at=at(30),
-                            reason=StepEventReasonEnum.WAITING_FOR_UPHOLSTERY)
+                            reason="pause_lunch_break")
     await _seed_step_record(db_session, workspace, worker, state=TaskStepStateEnum.WORKING,
                             entered_at=at(30), exited_at=at(45))
 
@@ -265,7 +287,10 @@ async def test_clock_out_reconstructs_middle_from_step_history(db_session) -> No
         (UserShiftStateEnum.ENDED_SHIFT, 50, 50),
     ]
     pause = next(r for r in records if r.state is UserShiftStateEnum.IN_PAUSE)
-    assert pause.reason == "waiting_for_upholstery"
+    pause_reason_id = await db_session.scalar(
+        select(PauseReason.client_id).where(PauseReason.slug == "pause_lunch_break")
+    )
+    assert pause.reason == pause_reason_id
     assert pause.manually_recorded is False
     assert await _open_shift_record(db_session, workspace.client_id, worker.client_id) is None
 
@@ -282,7 +307,7 @@ async def test_clock_out_excludes_carryover_pause_from_previous_day(db_session) 
     await _seed_step_record(
         db_session, workspace, worker, state=TaskStepStateEnum.PAUSED,
         entered_at=base - timedelta(days=1), exited_at=base + timedelta(minutes=20),
-        reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK,
+        reason="pause_lunch_break",
     )
     # Real work starts 20 min in (a fresh working record entered during the shift).
     await _seed_step_record(

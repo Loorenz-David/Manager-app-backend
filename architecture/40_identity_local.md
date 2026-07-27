@@ -61,3 +61,17 @@
 	- `udwr`: `UserDailyWorkStats`
 	- `usdwr`: `UserSectionDailyWorkStats`
 	- `wsdws`: `WorkingSectionDailyWorkStats`
+
+- Added table prefix reservations for app update presentation models (PLAN_app_update_presentation_20260721):
+	- `aup`: `AppUpdatePresentation`
+	- `aups`: `AppUpdatePresentationSlide`
+	- `aupm`: `AppUpdateSlideMedia`
+	- `aupe`: `AppUpdateSlideElement`
+	- `aupat`: `AppUpdatePresentationAppTarget`
+	- `auprt`: `AppUpdatePresentationRoleTarget`
+	- `aupwt`: `AppUpdatePresentationWorkspaceTarget`
+	- `auput`: `AppUpdatePresentationUserTarget`
+	- `aupv`: `AppUpdatePresentationView`
+
+- Added table prefix reservation for custom pause reasons (PLAN_custom_pause_reasons_20260722):
+	- `par`: `PauseReason`

@@ -6,10 +6,11 @@ import pytest
 from sqlalchemy import select
 
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
@@ -61,7 +62,7 @@ async def _seed_post_transition_step(
     closing_state: TaskStepStateEnum,
     new_state: TaskStepStateEnum,
     transitioned_at: datetime,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> dict:
     step = TaskStep(
         workspace_id=workspace.client_id,
@@ -84,11 +85,20 @@ async def _seed_post_transition_step(
         created_by_id=worker.client_id,
         credited_user_id=worker.client_id,
     )
+    pause_reason_id = (
+        await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.slug == reason,
+            )
+        )
+        if reason is not None
+        else None
+    )
     new_record = StepStateRecord(
         workspace_id=workspace.client_id,
         step_id=step.client_id,
         state=new_state,
-        reason=reason,
+        pause_reason_id=pause_reason_id,
         entered_at=transitioned_at,
         exited_at=None,
         created_by_id=worker.client_id,
@@ -184,7 +194,7 @@ async def test_handler_last_working_to_pause_sets_shift_in_pause(db_session) -> 
         closing_state=TaskStepStateEnum.WORKING,
         new_state=TaskStepStateEnum.PAUSED,
         transitioned_at=transitioned_at,
-        reason=StepEventReasonEnum.PAUSE_COFFEE_BREAK,
+        reason="pause_coffee_break",
     )
     workspace_id = workspace.client_id
     worker_id = worker.client_id
@@ -194,7 +204,10 @@ async def test_handler_last_working_to_pause_sets_shift_in_pause(db_session) -> 
 
     records = await _load_shift_records(db_session, workspace_id, worker_id)
     assert records[-1].state is UserShiftStateEnum.IN_PAUSE
-    assert records[-1].reason == StepEventReasonEnum.PAUSE_COFFEE_BREAK.value
+    pause_reason_id = await db_session.scalar(
+        select(PauseReason.client_id).where(PauseReason.slug == "pause_coffee_break")
+    )
+    assert records[-1].reason == pause_reason_id
     assert records[-1].exited_at is None
 
 
@@ -276,7 +289,7 @@ async def test_batch_event_fanout_creates_one_shift_transition(db_session) -> No
             closing_state=TaskStepStateEnum.WORKING,
             new_state=TaskStepStateEnum.PAUSED,
             transitioned_at=transitioned_at,
-            reason=StepEventReasonEnum.PAUSE_COFFEE_BREAK,
+            reason="pause_coffee_break",
         )
         for _ in range(3)
     ]

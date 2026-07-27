@@ -5,11 +5,12 @@ import pytest
 from sqlalchemy import select
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -71,9 +72,19 @@ async def _seed_step_record(db_session, workspace, worker, *, state, entered_at,
     )
     db_session.add(step)
     await db_session.flush()
+    pause_reason_id = (
+        await db_session.scalar(
+            select(PauseReason.client_id).where(
+                PauseReason.slug == reason,
+            )
+        )
+        if reason is not None
+        else None
+    )
     db_session.add(
         StepStateRecord(
-            workspace_id=workspace.client_id, step_id=step.client_id, state=state, reason=reason,
+            workspace_id=workspace.client_id, step_id=step.client_id, state=state,
+            pause_reason_id=pause_reason_id,
             entered_at=entered_at, exited_at=exited_at,
             created_by_id=worker.client_id, credited_user_id=worker.client_id,
         )
@@ -113,7 +124,7 @@ async def test_curate_builds_full_timeline_within_real_bounds(db_session):
                             entered_at=at(10), exited_at=at(25))
     await _seed_step_record(db_session, workspace, worker, state=TaskStepStateEnum.PAUSED,
                             entered_at=at(25), exited_at=at(40),
-                            reason=StepEventReasonEnum.WAITING_FOR_UPHOLSTERY)
+                            reason="waiting_for_upholstery")
     await _seed_step_record(db_session, workspace, worker, state=TaskStepStateEnum.WORKING,
                             entered_at=at(40), exited_at=at(55))
 

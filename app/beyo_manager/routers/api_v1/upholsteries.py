@@ -96,7 +96,7 @@ class _ListOrderBody(BaseModel):
 @router.put("")
 async def route_create_upholstery(
     body: _CreateBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(incoming_data=body.model_dump(), identity=claims, session=session)

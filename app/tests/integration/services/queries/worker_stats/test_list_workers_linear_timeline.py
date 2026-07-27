@@ -4,12 +4,14 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
-from beyo_manager.domain.task_steps.enums import StepEventReasonEnum, TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -107,7 +109,7 @@ async def _add_step_record(
     entered_at: datetime,
     *,
     exited_at: datetime | None = None,
-    reason: StepEventReasonEnum | None = None,
+    reason: str | None = None,
 ) -> None:
     suffix = uuid4().hex[:8]
     section = WorkingSection(
@@ -137,7 +139,15 @@ async def _add_step_record(
             workspace_id=workspace_id,
             step_id=step.client_id,
             state=state,
-            reason=reason,
+            pause_reason_id=(
+                await db_session.scalar(
+                    select(PauseReason.client_id).where(
+                        PauseReason.slug == reason,
+                    )
+                )
+                if reason is not None
+                else None
+            ),
             entered_at=entered_at,
             exited_at=exited_at,
             created_by_id=user_id,
@@ -207,7 +217,7 @@ async def test_roster_sums_only_recorded_on_shift_durations(db_session) -> None:
         )
     )
 
-    assert set(out) == {"workers", "workers_pagination"}
+    assert set(out) == {"workers", "workers_pagination", "pause_reasons"}
     assert len(out["workers"]) == 1
     assert set(out["workers"][0]) == {"user", "timeline"}
     assert set(out["workers"][0]["user"]) == {
@@ -225,6 +235,60 @@ async def test_roster_sums_only_recorded_on_shift_durations(db_session) -> None:
         "idle_seconds": 900,
         "completed_count": 0,
         "pause_by_reason": {"custom tool cleanup": 1800},
+    }
+    # "custom tool cleanup" is a manually-recorded free-text shift pause, not a pause_reason_id,
+    # so it never resolves against the pause_reasons table.
+    assert out["pause_reasons"] == {}
+
+
+async def test_roster_resolves_pause_reason_lookup_map(db_session) -> None:
+    # UserShiftStateRecord.reason is an unconstrained string that, for step-sourced pauses,
+    # now carries an opaque pause_reason_id rather than the old readable enum value — the
+    # roster response must resolve it via a sibling lookup map, same as the per-worker
+    # breakdown endpoint, instead of leaving the frontend with a bare client_id.
+    workspace = Workspace(name=f"shift-pause-lookup-{uuid4().hex}")
+    db_session.add(workspace)
+    await db_session.flush()
+    worker = await _seed_worker(db_session, workspace.client_id)
+    pause_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name="Lunch break",
+        pause_type=PauseTypeEnum.PERSONAL,
+    )
+    db_session.add(pause_reason)
+    await db_session.flush()
+
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.STARTED_SHIFT, base, base,
+    )
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.IN_PAUSE, base, base + timedelta(minutes=30),
+        reason=pause_reason.client_id,
+    )
+    ended_at = base + timedelta(minutes=30)
+    _add_shift_record(
+        db_session, workspace.client_id, worker.client_id,
+        UserShiftStateEnum.ENDED_SHIFT, ended_at, ended_at,
+    )
+
+    out = await list_workers_linear_timeline(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            query_params={"date_from": "2026-07-15", "date_to": "2026-07-15"},
+        )
+    )
+
+    assert out["workers"][0]["timeline"]["pause_by_reason"] == {pause_reason.client_id: 1800}
+    assert out["pause_reasons"] == {
+        pause_reason.client_id: {
+            "name": "Lunch break",
+            "image_url": None,
+            "pause_type": "personal",
+        }
     }
 
 
@@ -326,7 +390,7 @@ async def test_roster_ignores_step_record_bleed_outside_shift(db_session) -> Non
         worker.client_id,
         TaskStepStateEnum.PAUSED,
         base - timedelta(weeks=3),
-        reason=StepEventReasonEnum.PAUSE_LUNCH_BREAK,
+        reason="pause_lunch_break",
     )
     await _add_step_record(
         db_session,

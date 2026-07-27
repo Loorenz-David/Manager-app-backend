@@ -4,6 +4,15 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 
 | Table/Class | CLIENT_ID_PREFIX | Example client_id |
 |-------------|------------------|-------------------|
+| AppUpdatePresentation | aup | aup_xxxxxxx |
+| AppUpdatePresentationSlide | aups | aups_xxxxxxx |
+| AppUpdateSlideMedia | aupm | aupm_xxxxxxx |
+| AppUpdateSlideElement | aupe | aupe_xxxxxxx |
+| AppUpdatePresentationAppTarget | aupat | aupat_xxxxxxx |
+| AppUpdatePresentationRoleTarget | auprt | auprt_xxxxxxx |
+| AppUpdatePresentationWorkspaceTarget | aupwt | aupwt_xxxxxxx |
+| AppUpdatePresentationUserTarget | auput | auput_xxxxxxx |
+| AppUpdatePresentationView | aupv | aupv_xxxxxxx |
 | AuditLog | aud | aud_xxxxxxx |
 | Case | ca | ca_xxxxxxx |
 | CaseConversation | ccv | ccv_xxxxxxx |
@@ -30,11 +39,13 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | ItemUpholsteryRequirement | iur | iur_xxxxxxx |
 | Notification | not | not_xxxxxxx |
 | NotificationPin | npn | npn_xxxxxxx |
+| PauseReason | par | par_xxxxxxx |
 | PendingUpload | upl | upl_xxxxxxx |
 | PushSubscription | psu | psu_xxxxxxx |
 | RecurringScheduler | rsch | rsch_xxxxxxx |
 | Role | role | role_xxxxxxx |
 | StaticCost | stc | stc_xxxxxxx |
+| SkuTemplate | skt | skt_xxxxxxx |
 | ShopifyIntegrationEvent | shpevt | shpevt_xxxxxxx |
 | ShopifyOAuthState | shpoau | shpoau_xxxxxxx |
 | ShopifyShopIntegration | shpint | shpint_xxxxxxx |

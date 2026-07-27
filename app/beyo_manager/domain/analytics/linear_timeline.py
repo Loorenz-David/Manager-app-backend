@@ -54,7 +54,7 @@ class LinearInterval:
 
     record_id: str
     state: str                    # "working" | "paused" | "ended_shift"
-    reason: str | None            # StepEventReasonEnum value; only read for paused
+    reason: str | None            # pause_reason_id; only read for paused
     entered_at: datetime
     exited_at: datetime | None    # None = still open (clamped to ``now``)
     step_id: str = ""             # owning TaskStep; only needed for the segments view

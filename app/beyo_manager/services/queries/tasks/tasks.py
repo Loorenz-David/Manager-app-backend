@@ -22,6 +22,7 @@ from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_customer_coordination import TaskCustomerCoordination
 from beyo_manager.models.tables.tasks.task_item import TaskItem
@@ -646,7 +647,7 @@ async def get_task(ctx: ServiceContext) -> dict:
 
     steps_result = await ctx.session.execute(
         select(TaskStep)
-        .options(selectinload(TaskStep.latest_state_record))
+        .options(selectinload(TaskStep.latest_state_record).selectinload(StepStateRecord.pause_reason))
         .where(
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.task_id == task.client_id,
