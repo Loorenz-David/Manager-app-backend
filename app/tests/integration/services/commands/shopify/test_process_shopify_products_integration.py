@@ -160,6 +160,10 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
         )
     ).scalars().all()
 
+    # One event per distinct target shop, so a subordinate caller can annotate its own event
+    # without re-querying by metadata. Compared as a set: the command returns them in
+    # target order, while this query has no ORDER BY.
+    assert set(result.pop("event_client_ids")) == {event.client_id for event in events}
     assert result == {
         "queued": True,
         "task_id": "task_shopify_products_1",

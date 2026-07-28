@@ -46,10 +46,22 @@ class ShopifyProductSyncItemStatusEnum(StrEnum):
     FAILED = "failed"
 
 
+class ShopifyProductSyncStageEnum(StrEnum):
+    QUEUED = "queued"
+    PRODUCT_CREATED = "product_created"
+    VARIANT_CONFIGURED = "variant_configured"
+    INVENTORY_SET = "inventory_set"
+
+
 class ShopifyInventoryAdjustmentStatusEnum(StrEnum):
     PENDING = "pending"
     APPLIED = "applied"
     FAILED = "failed"
+
+
+class ShopifyInventoryModeEnum(StrEnum):
+    ADD = "add"
+    SET = "set"
 
 
 class ShopifyIntegrationEventTypeEnum(StrEnum):
@@ -60,6 +72,7 @@ class ShopifyIntegrationEventTypeEnum(StrEnum):
     WEBHOOK_PROCESSED = "webhook_processed"
     HEALTH_CHECK = "health_check"
     PRODUCT_SYNC = "product_sync"
+    PREORDER = "preorder"
     ERROR = "error"
     DISCONNECT = "disconnect"
 

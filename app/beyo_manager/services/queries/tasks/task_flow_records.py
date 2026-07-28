@@ -1,12 +1,19 @@
-"""Query: paginated task flow records (history + step state records, merged and time-ordered)."""
+"""Query: paginated task flow records.
+
+Merges three time-ordered sources into one feed: history records, step state records, and Shopify
+integration events raised for the task (pre-order product provisioning — enqueued, then created /
+updated / failed).
+"""
 
 from sqlalchemy import and_, or_, select
 
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.history.enums import HistoryRecordEntityTypeEnum
+from beyo_manager.domain.shopify.enums import ShopifyIntegrationEventTypeEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_history_flow_record,
+    serialize_shopify_event_flow_record,
     serialize_step_flow_record,
     serialize_step_flow_record_group,
 )
@@ -16,6 +23,7 @@ from beyo_manager.models.tables.history.history_record import HistoryRecord
 from beyo_manager.models.tables.history.history_record_link import HistoryRecordLink
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.items.item_upholstery_requirement import ItemUpholsteryRequirement
+from beyo_manager.models.tables.shopify.shopify_integration_event import ShopifyIntegrationEvent
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
@@ -182,6 +190,20 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
         )
         step_state_rows = ssr_result.all()  # list[tuple[StepStateRecord, TaskStep]]
 
+    # 4b. Fetch Shopify integration events raised for this task.
+    #     Only PREORDER events carry a task reference in their metadata, and event_type is
+    #     indexed — filtering on it first keeps this off a JSONB scan of a table that also grows
+    #     with every inbound webhook. If pre-order volume ever makes this hot, the next step is a
+    #     functional index on (workspace_id, (metadata->>'task_id')).
+    shopify_event_result = await ctx.session.execute(
+        select(ShopifyIntegrationEvent).where(
+            ShopifyIntegrationEvent.workspace_id == ctx.workspace_id,
+            ShopifyIntegrationEvent.event_type == ShopifyIntegrationEventTypeEnum.PREORDER,
+            ShopifyIntegrationEvent.metadata_json["task_id"].astext == task_id,
+        )
+    )
+    shopify_event_rows = list(shopify_event_result.scalars().all())
+
     # 5. Batch-load users for all created_by_ids in a single query.
     all_user_ids: set[str] = set()
     for record, _ in history_rows:
@@ -190,6 +212,9 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
     for ssr, _ in step_state_rows:
         if ssr.created_by_id:
             all_user_ids.add(ssr.created_by_id)
+    for event in shopify_event_rows:
+        if event.created_by_id:
+            all_user_ids.add(event.created_by_id)
 
     users_map: dict[str, User] = {}
     if all_user_ids:
@@ -203,6 +228,8 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
         raw.append((record.created_at, "history", record, link))
     for ssr, step in step_state_rows:
         raw.append((ssr.created_at, "step", ssr, step))
+    for event in shopify_event_rows:
+        raw.append((event.created_at, "shopify_event", event, None))
 
     raw.sort(key=lambda x: (x[0], x[2].client_id), reverse=True)
 
@@ -217,6 +244,8 @@ async def get_task_flow_records(ctx: ServiceContext) -> dict:
     for _, source_type, a, b in paged:
         if source_type == "history":
             flow_records.append(serialize_history_flow_record(a, b, users_map))
+        elif source_type == "shopify_event":
+            flow_records.append(serialize_shopify_event_flow_record(a, users_map))
         elif source_type == "step_group":
             flow_records.append(serialize_step_flow_record_group(a, users_map))
         else:

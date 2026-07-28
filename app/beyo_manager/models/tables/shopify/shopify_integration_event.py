@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,17 @@ class ShopifyIntegrationEvent(IdentityMixin, Base):
         Index("ix_shopify_integration_events_event_type", "event_type"),
         Index("ix_shopify_integration_events_severity", "severity"),
         Index("ix_shopify_integration_events_created_at", "created_at"),
+        # Task flow-records lookup: workspace + task_id, over pre-order events only.
+        # Partial so the index tracks pre-order volume rather than webhook volume — this table
+        # gains two rows per inbound webhook delivery. Functional expression matches what
+        # `metadata_json["task_id"].astext` emits, so the planner can use it directly.
+        # Created CONCURRENTLY in migration 7a3e91c4b2d8.
+        Index(
+            "ix_shopify_integration_events_preorder_task",
+            "workspace_id",
+            text("(metadata ->> 'task_id')"),
+            postgresql_where=text("event_type = 'preorder'"),
+        ),
     )
 
     workspace_id: Mapped[str] = mapped_column(

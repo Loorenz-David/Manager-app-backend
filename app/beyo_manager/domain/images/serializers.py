@@ -7,15 +7,22 @@ def _value(value):
     return value.value if hasattr(value, "value") else value
 
 
-def _resolve_image_url(key: str) -> str:
+def _resolve_image_url(key: str, *, is_public: bool = False) -> str:
     """Return a viewable URL for a storage key.
 
-    In production this generates a presigned S3 GET URL.
-    In dev it returns the local storage server GET path.
-    If the key is already an absolute URL (legacy or Shopify), it is returned as-is.
+    If the key is already an absolute URL (legacy, Shopify or EXTERNAL provider), it is returned
+    as-is.
+
+    `is_public` images (item photos — see `Image.is_public`) resolve to a **stable, unsigned** URL:
+    it never expires, so clients can cache it indefinitely and the Shopify worker can hand Shopify
+    a link that stays valid past any retry window.
+
+    Everything else is presigned with a 24 h TTL, as before.
     """
     if key.startswith("http://") or key.startswith("https://"):
         return key
+    if is_public:
+        return get_storage_client().public_url(key)
     return get_storage_client().generate_presigned_get_url(key, _IMAGE_URL_TTL)
 
 
@@ -42,7 +49,7 @@ def serialize_annotation(annotation) -> dict:
 def serialize_image_light(image) -> dict:
     return {
         "client_id": image.client_id,
-        "image_url": _resolve_image_url(image.image_url),
+        "image_url": _resolve_image_url(image.image_url, is_public=bool(getattr(image, "is_public", False))),
         "width_px": image.width_px,
         "height_px": image.height_px,
         "file_size_bytes": image.file_size_bytes,
@@ -54,7 +61,7 @@ def serialize_image(image, *, include_events: bool = False, include_annotations:
     annotations = getattr(image, "image_annotations", []) if include_annotations else []
     serialized = {
         "client_id": image.client_id,
-        "image_url": _resolve_image_url(image.image_url),
+        "image_url": _resolve_image_url(image.image_url, is_public=bool(getattr(image, "is_public", False))),
         "storage_provider": _value(image.storage_provider),
         "source_type": _value(image.source_type),
         "source_reference": _value(image.source_reference),

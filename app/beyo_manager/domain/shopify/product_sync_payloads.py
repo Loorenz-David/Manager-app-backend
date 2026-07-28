@@ -67,6 +67,15 @@ def build_normalized_product_sync_payload(
         "variant": _drop_none(variant),
         "metafields": metafields,
     }
+    image_id = _clean_str(item.get("image_id"))
+    image_url = _clean_str(item.get("image_url"))
+    if image_id is not None:
+        payload["image"] = {"image_id": image_id}
+    elif image_url is not None:
+        payload["image"] = {"image_url": image_url}
+    image_alt_text = _clean_str(item.get("image_alt_text"))
+    if image_alt_text is not None:
+        payload["image_alt_text"] = image_alt_text
 
     adjustments = []
     for adjustment in item.get("inventory_adjustments") or []:

@@ -246,6 +246,9 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
             {"id": "gid://shopify/ProductVariant/2", "barcode": "BAR-FAILED", "sku": None, "product": {"id": "gid://shopify/Product/2"}},
         ]
 
+    async def _fake_find_product_by_operation_tag(**_kwargs):
+        return None
+
     async def _fake_create_shopify_product(**_kwargs):
         # db_session has expire_on_commit=False, so success_row's cached identity-map
         # entry never sees the handler's own (separate-session) commit without an
@@ -257,6 +260,9 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
             "shopify_variant_id": "gid://shopify/ProductVariant/created",
         }
 
+    async def _fake_configure_shopify_product_variant(**kwargs):
+        return {"shopify_variant_id": kwargs["shopify_variant_id"]}
+
     async def _fake_update_shopify_product(**_kwargs):
         raise AssertionError("Update path should not be reached in this test")
 
@@ -267,12 +273,20 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
         emitted.update(kwargs)
 
     monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_by_operation_tag",
+        _fake_find_product_by_operation_tag,
+    )
+    monkeypatch.setattr(
         "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_variant_by_identity",
         _fake_find_product_variant_by_identity,
     )
     monkeypatch.setattr(
         "beyo_manager.services.tasks.shopify._product_sync_orchestrator.create_shopify_product",
         _fake_create_shopify_product,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.configure_shopify_product_variant",
+        _fake_configure_shopify_product_variant,
     )
     monkeypatch.setattr(
         "beyo_manager.services.tasks.shopify._product_sync_orchestrator.update_shopify_product",

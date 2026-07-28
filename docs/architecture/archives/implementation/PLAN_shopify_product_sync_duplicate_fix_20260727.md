@@ -3,12 +3,13 @@
 ## Metadata
 
 - Plan ID: `PLAN_shopify_product_sync_duplicate_fix_20260727`
-- Status: `approved`
+- Status: `archived`
 - Type: **standalone bug fix** — independent of the pre-order delivery
 - Related plan: `PLAN_shopify_preorder_product_20260727.md` (rev 8 — the state-machine R-note, **R12**)
 - Depends on: nothing
 - Owner agent: `codex`
 - Created at (UTC): `2026-07-27T00:00:00Z`
+- Last updated at (UTC): `2026-07-27T21:00:00Z`
 
 ## The bug
 
@@ -44,19 +45,17 @@ Discovered while planning pre-orders; extracted here because it stands on its ow
    One hit → adopt it as the update path. Two or more → fail `ambiguous_operation_tag`.
    This is what covers the case where the `productCreate` **response itself** was lost.
 
-## Prerequisite — the safety net
+## Prerequisite — the safety net must already exist
 
-Write a characterisation test **first**, in its own commit, capturing the exact GraphQL documents
-and variables product sync emits today. This file is in live production use; the characterisation
-test is the only thing that will catch silent drift.
+`PLAN_shopify_product_sync_characterisation_net_20260727.md` must be **implemented and green**
+before this work starts. It captures the exact GraphQL documents and variables product sync emits
+today, in `app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py`.
 
-`app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py` — patch
-`execute_shopify_graphql` to record `(operation_name, query, variables)` and assert against inline
-expected values for four fixtures: create path, update path, metafields, multi-location additive
-inventory. Assert **full query strings and complete variables dicts**, not shapes.
+If that file does not exist, **stop** — do not write it inline and do not proceed without it. This
+plan modifies live production code and the snapshot is the only drift detector.
 
-**If it later fails, the change under test is wrong.** Do not edit it to match new behaviour
-beyond the two documented deltas below.
+**If it fails during this work, the change under test is wrong.** Do not edit it to match new
+behaviour beyond the two documented deltas below.
 
 ## Scope
 
@@ -65,8 +64,9 @@ beyond the two documented deltas below.
 | Path | Purpose |
 |---|---|
 | `app/beyo_manager/domain/shopify/product_sync_stages.py` | `should_run_stage` + ordering — pure |
-| `app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py` | the safety net |
 | `app/migrations/versions/<rev>_add_stage_to_shopify_product_sync_items.py` | one enum + one column |
+
+*(The characterisation test is **not** added here — it is a prerequisite delivered by its own plan.)*
 
 ### Modify
 
@@ -79,7 +79,7 @@ beyond the two documented deltas below.
 
 ## Implementation steps
 
-1. Land the characterisation test alone, green against unmodified code.
+1. Confirm the characterisation test exists and is green. If not, stop.
 2. Add the enum, the `stage` column and the migration (additive, server default, no backfill).
 3. Add `find_product_by_operation_tag` returning product id + first variant id + inventory item id;
    two or more hits → raise.
@@ -148,6 +148,6 @@ blocks the other.
 
 ## Lifecycle transition
 
-- Current state: `approved`
-- Next state: `implemented` → **human review** → `summarized` → `archived`
-- Transition owner: `codex`, then David for the gate
+- Current state: `implemented`
+- Next state: **human review** → `summarized` → `archived`
+- Transition owner: David for the human review gate

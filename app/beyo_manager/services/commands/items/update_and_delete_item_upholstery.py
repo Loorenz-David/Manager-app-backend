@@ -32,21 +32,14 @@ from beyo_manager.services.commands.items.requests import (
 from beyo_manager.services.commands.items.create_item_upholstery import (
     _create_initial_requirement_for_item_upholstery,
 )
-from beyo_manager.services.commands.upholstery._inventory_mutations import (
-    adjust_need,
-    rollback_in_use_to_stored,
+from beyo_manager.services.commands.items.cancel_upholstery_requirements import (
+    cancel_requirements_in_session,
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
-
-_DECREMENT_NEED_STATES = {
-    ItemUpholsteryRequirementStateEnum.AVAILABLE,
-    ItemUpholsteryRequirementStateEnum.NEEDS_ORDERING,
-    ItemUpholsteryRequirementStateEnum.ORDERED,
-}
 
 _SELECTION_REQUIRED_ERROR = "Upholstery must be selected before requirement actions can be performed."
 
@@ -163,26 +156,13 @@ async def update_item_upholstery(ctx: ServiceContext) -> dict:
                 if active_req.state == ItemUpholsteryRequirementStateEnum.COMPLETED:
                     raise ConflictError("Cannot swap upholstery after requirement completion.")
 
-                old_amount = active_req.amount_meters or Decimal("0")
-                if old_amount > Decimal("0") and active_req.upholstery_inventory_id is not None:
-                    if active_req.state in _DECREMENT_NEED_STATES:
-                        await adjust_need(
-                            session=ctx.session,
-                            workspace_id=ctx.workspace_id,
-                            upholstery_inventory_id=active_req.upholstery_inventory_id,
-                            delta=-old_amount,
-                        )
-                    elif active_req.state == ItemUpholsteryRequirementStateEnum.IN_USE:
-                        await rollback_in_use_to_stored(
-                            session=ctx.session,
-                            workspace_id=ctx.workspace_id,
-                            upholstery_inventory_id=active_req.upholstery_inventory_id,
-                            quantity=old_amount,
-                        )
-
-                active_req.state = ItemUpholsteryRequirementStateEnum.FAILED
-                active_req.failed_at = now
-                active_req.updated_by_id = ctx.user_id
+                await cancel_requirements_in_session(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    requirements=[active_req],
+                    actor_id=ctx.user_id,
+                    now=now,
+                )
 
                 if (
                     resolved_source != ItemUpholsterySourceEnum.CUSTOMER

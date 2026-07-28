@@ -18,9 +18,13 @@ backlog. **Do not read it** unless a decision in your plan is genuinely ambiguou
 
 ## Prerequisite
 
-The four Phase 0 gates must be recorded in the parent plan's Review log. Gate **0.2** especially —
-if an `UNLISTED` product leaks onto the storefront, this is a scope change, not a bug fix. If the
-gates are missing, stop and report.
+`app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py` must already exist
+and be green — it is the drift detector for the live files you are about to edit, delivered by
+`PROMPT_shopify_product_sync_characterisation_net.md`. If it is missing, **stop and report**; do
+not write it inline.
+
+Phase 0 is complete and does **not** block you. Its one deferred gate (storefront absence) is
+verified by a human after implementation, and is listed in this plan's acceptance criteria.
 
 ## The single most important instruction
 
@@ -90,9 +94,16 @@ Do **not** archive yet — a human runs the dev-store checklist first.
 
 ## ⚠️ Stop after implementation
 
-A human verifies on the dev store before this ships: product is `UNLISTED`, absent from the
-storefront, correct price / SKU / metafields / image, `available = 1` at the chosen location, and
-visible in Zettle.
+A human verifies on the dev store before this ships:
+
+- product is `UNLISTED`, with the correct price / SKU / metafields / image
+- `available` equals the selected quantity at the chosen location
+- visible in Zettle
+- **absent from the storefront** — deferred Phase 0 gate 0.2. Check storefront search,
+  `/collections/all`, `/sitemap_products_1.xml`, and `resourcePublications` on the product.
+  A direct `/products/<handle>` URL loading is **expected**, not a failure — that is what
+  `UNLISTED` means. A real leak is a **scope change** (two new OAuth scopes + merchant
+  reauthorization), not a bug fix.
 
 ## Report explicitly
 

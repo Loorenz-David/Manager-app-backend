@@ -3,12 +3,15 @@
 ## Metadata
 
 - Plan ID: `PLAN_shopify_preorder_phase_1_minimum_delivery_20260727`
-- Status: `approved`
+- Status: `archived`
 - Phase: **1 of 1** — this is the whole critical path
 - Parent plan: `PLAN_shopify_preorder_product_20260727.md` (rev 8 — research **R1–R13**)
-- Depends on: `PLAN_shopify_preorder_phase_0_dev_store_verification_20260727.md` (4 gates)
+- Depends on: `PLAN_shopify_product_sync_characterisation_net_20260727.md` (the drift detector —
+  this plan edits the same live files). Phase 0 is **complete and non-blocking**; its one deferred
+  gate (0.2, storefront absence) is folded into this plan's dev-store verification below.
 - Owner agent: `codex`
 - Created at (UTC): `2026-07-27T00:00:00Z`
+- Last updated at (UTC): `2026-07-27T21:00:00Z`
 - Supersedes: rev 7's phases 1, 3, 4, 5, 7, 8, 9, 10, 11
 
 ## Goal and intent
@@ -202,7 +205,9 @@ absolute. Then call the helper with `frontend_client_id = task.client_id` and `i
    `OPEN` `ExecutionTask` **in the same transaction** as the `Task`; an exception later rolls back all three.
 2. **No Shopify HTTP call during task creation** — asserted by test.
 3. Non-`PRE_ORDER` task type, or a role outside `{admin, manager, seller}`, is rejected before any write.
-4. On the dev store: the product is `UNLISTED`, absent from the storefront, has the supplied
+4. On the dev store: the product is `UNLISTED`, **absent from the storefront — this is deferred
+   Phase 0 gate 0.2, and it is the one criterion whose failure is a scope change rather than a
+   bug** (see the risk below), has the supplied
    title / SKU / price / metafields / image, and shows **`available` equal to the quantity the
    caller selected** at each chosen location.
 5. An existing SKU is reused and its price overwritten; **two distinct products sharing the SKU
@@ -241,6 +246,19 @@ absolute. Then call the helper with `frontend_client_id = task.client_id` and `i
 
 ## Risks and mitigations
 
+- Risk: **the `UNLISTED` product leaks onto the storefront** (deferred Phase 0 gate 0.2, now
+  verified here after implementation rather than before).
+  Mitigation: probability is low — the merchant's live products are all `UNLISTED` and Shopify
+  documents the status as excluded from search, collections and recommendations; the only
+  realistic leak path is a sales channel with `autoPublish: true`.
+  **If it happens, it is not a code fix.** No other `ProductStatus` works (`ACTIVE` is
+  storefront-visible; `DRAFT` is invisible to Zettle). It requires `publishableUnpublish`,
+  `read_publications` + `write_publications`, a Partner Dashboard change and a **merchant OAuth
+  reauthorization for every installed shop**. Escalate for scope approval; do not work around it.
+  Verification during the dev-store check: storefront search, `/collections/all`,
+  `/sitemap_products_1.xml`, and `resourcePublications` on the created product. **A direct
+  `/products/<handle>` URL loading is expected and is not a failure** — that is what `UNLISTED`
+  means.
 - Risk: the shared client/orchestrator changes regress live product sync.
   Mitigation: every addition is opt-in by payload; assert that a no-media, `add`-mode item emits
   the document it emits today; run the full suite.

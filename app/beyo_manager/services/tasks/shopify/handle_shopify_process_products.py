@@ -5,7 +5,14 @@ import logging
 from sqlalchemy import select
 
 from beyo_manager.domain.execution.payloads.shopify import ShopifyProcessProductsPayload
-from beyo_manager.domain.shopify.enums import ShopifyIntegrationStatusEnum, ShopifyProductSyncItemStatusEnum
+from beyo_manager.domain.shopify.enums import (
+    ShopifyIntegrationEventSeverityEnum,
+    ShopifyIntegrationEventTypeEnum,
+    ShopifyIntegrationStatusEnum,
+    ShopifyInventoryModeEnum,
+    ShopifyProductSyncItemStatusEnum,
+)
+from beyo_manager.services.commands.shopify._events import create_shopify_integration_event
 from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.services.infra.execution.db import task_db_session
@@ -15,12 +22,14 @@ from beyo_manager.sockets.worker_emitter import emit_to_workspace_room
 logger = logging.getLogger(__name__)
 
 SHOPIFY_PRODUCTS_SYNCED_EVENT = "shopify.products.synced"
+SHOPIFY_PREORDER_PROCESSED_EVENT = "shopify.preorder.processed"
 
 
 async def handle_shopify_process_products(raw: dict, task_client_id: str) -> None:
     payload = ShopifyProcessProductsPayload(**raw)
     succeeded: list[dict] = []
     failed: list[dict] = []
+    preorder_rows: list[ShopifyProductSyncItem] = []
 
     async with task_db_session() as session:
         rows = (
@@ -89,18 +98,81 @@ async def handle_shopify_process_products(raw: dict, task_client_id: str) -> Non
                 )
 
             if row.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED:
-                succeeded.append(_success_entry(row))
+                if (
+                    getattr(row, "inventory_mode", ShopifyInventoryModeEnum.ADD)
+                    == ShopifyInventoryModeEnum.SET
+                ):
+                    preorder_rows.append(row)
+                else:
+                    succeeded.append(_success_entry(row))
             else:
-                failed.append(_failure_entry(row))
+                if (
+                    getattr(row, "inventory_mode", ShopifyInventoryModeEnum.ADD)
+                    == ShopifyInventoryModeEnum.SET
+                ):
+                    preorder_rows.append(row)
+                else:
+                    failed.append(_failure_entry(row))
 
-    await emit_to_workspace_room(
-        workspace_id=payload.workspace_id,
-        event=SHOPIFY_PRODUCTS_SYNCED_EVENT,
-        payload={
-            "task_id": task_client_id,
-            "succeeded": succeeded,
-            "failed": failed,
+        # A terminal integration event per pre-order. The enqueue event alone would leave the
+        # task flow showing "queued" forever, and the integration contract
+        # (architecture/57_shopify_integration.md) requires state changes to leave an event.
+        for row in preorder_rows:
+            await _write_preorder_terminal_event(session, row=row)
+        if preorder_rows:
+            await session.commit()
+
+    if succeeded or failed:
+        await emit_to_workspace_room(
+            workspace_id=payload.workspace_id,
+            event=SHOPIFY_PRODUCTS_SYNCED_EVENT,
+            payload={
+                "task_id": task_client_id,
+                "succeeded": succeeded,
+                "failed": failed,
+            },
+        )
+    for row in preorder_rows:
+        await emit_to_workspace_room(
+            workspace_id=payload.workspace_id,
+            event=SHOPIFY_PREORDER_PROCESSED_EVENT,
+            payload=_preorder_entry(row, task_client_id=task_client_id),
+        )
+
+
+async def _write_preorder_terminal_event(session, *, row: ShopifyProductSyncItem) -> None:
+    succeeded = row.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    operation = row.requested_operation.value if row.requested_operation else None
+    if succeeded:
+        message = (
+            "Shopify pre-order product updated."
+            if operation == "update"
+            else "Shopify pre-order product created."
+        )
+    else:
+        message = f"Shopify pre-order product failed: {row.error_code or 'unknown_error'}."
+
+    await create_shopify_integration_event(
+        session,
+        workspace_id=row.workspace_id,
+        shop_integration_id=row.shop_integration_id,
+        event_type=ShopifyIntegrationEventTypeEnum.PREORDER,
+        severity=(
+            ShopifyIntegrationEventSeverityEnum.INFO
+            if succeeded
+            else ShopifyIntegrationEventSeverityEnum.ERROR
+        ),
+        message=message,
+        # IDs, codes and status only — no customer data, no tokens, no raw Shopify responses.
+        metadata_json={
+            "task_id": row.frontend_client_id,
+            "preorder_operation_id": row.client_id,
+            "status": row.status.value,
+            "requested_operation": operation,
+            "shopify_product_id": row.shopify_product_id,
+            "error_code": row.error_code,
         },
+        created_by_id=row.created_by_id,
     )
 
 
@@ -130,3 +202,27 @@ def _failure_entry(row: ShopifyProductSyncItem) -> dict:
     if getattr(row, "inventory_result_json", None) is not None:
         result["inventory"] = row.inventory_result_json
     return result
+
+
+def _preorder_entry(
+    row: ShopifyProductSyncItem,
+    *,
+    task_client_id: str,
+) -> dict:
+    return {
+        "task_id": row.frontend_client_id,
+        "shopify_task_id": task_client_id,
+        "preorder_operation_id": row.client_id,
+        "shop_integration_id": row.shop_integration_id,
+        "status": row.status.value,
+        "requested_operation": (
+            row.requested_operation.value if row.requested_operation else None
+        ),
+        "shopify_product_id": row.shopify_product_id,
+        "shopify_variant_id": row.shopify_variant_id,
+        "shopify_media_id": row.shopify_media_id,
+        "media_status": row.media_status,
+        "inventory": row.inventory_result_json,
+        "error_code": row.error_code,
+        "error_message": row.error_message,
+    }

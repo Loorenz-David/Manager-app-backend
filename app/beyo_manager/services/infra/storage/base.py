@@ -3,6 +3,10 @@ from abc import ABC, abstractmethod
 
 class StorageClient(ABC):
     @abstractmethod
+    def public_url(self, key: str) -> str:
+        """Return the stable public URL for an object key."""
+
+    @abstractmethod
     def generate_presigned_put_url(self, key: str, content_type: str, expires_in: int) -> str: ...
 
     @abstractmethod

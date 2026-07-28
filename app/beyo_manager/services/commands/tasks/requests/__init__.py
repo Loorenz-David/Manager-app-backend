@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, ValidationError as PydanticValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError as PydanticValidationError, field_validator, model_validator
 
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
 from beyo_manager.domain.tasks.enums import (
@@ -88,6 +88,115 @@ class TaskStepInput(BaseModel):
 	ready_by_at: datetime | None = None
 
 
+class ShopifyPreorderInventoryInput(BaseModel):
+	location_id: str
+	quantity: int
+
+	@field_validator("location_id", mode="before")
+	@classmethod
+	def _validate_location_id(cls, value: object) -> str:
+		import re
+
+		if not isinstance(value, str):
+			raise ValueError("location_id must be a Shopify Location GID")
+		stripped = value.strip()
+		if not re.fullmatch(r"^gid://shopify/Location/[0-9]+$", stripped):
+			raise ValueError("location_id must be a Shopify Location GID")
+		return stripped
+
+	@field_validator("quantity", mode="before")
+	@classmethod
+	def _validate_quantity(cls, value: object) -> int:
+		if isinstance(value, bool) or not isinstance(value, int):
+			raise ValueError("quantity must be an integer")
+		if value < 0:
+			raise ValueError("quantity cannot be negative")
+		if value > 1_000_000:
+			raise ValueError("quantity cannot exceed 1000000")
+		return value
+
+
+class ShopifyPreorderProductInput(BaseModel):
+	title: str
+	sku: str
+	price: str
+	description: str | None = None
+	tags: list[str] = Field(default_factory=list)
+	product_category: str | None = None
+	metafields: dict[str, object] = Field(default_factory=dict)
+	image_id: str | None = None
+	image_url: str | None = None
+	image_alt_text: str | None = None
+
+	@field_validator(
+		"title",
+		"sku",
+		"price",
+		"description",
+		"product_category",
+		"image_id",
+		"image_url",
+		"image_alt_text",
+		mode="before",
+	)
+	@classmethod
+	def _trim_text(cls, value: object) -> object:
+		if value is None or not isinstance(value, str):
+			return value
+		stripped = value.strip()
+		return stripped or None
+
+	@model_validator(mode="after")
+	def _validate_image_reference(self) -> "ShopifyPreorderProductInput":
+		from urllib.parse import urlparse
+
+		if self.image_id is not None and self.image_url is not None:
+			raise ValueError("image_id and image_url are mutually exclusive.")
+		if self.image_url is not None:
+			parsed = urlparse(self.image_url)
+			if parsed.scheme != "https" or not parsed.netloc:
+				raise ValueError("image_url must be an absolute HTTPS URL.")
+		return self
+
+	@field_validator("metafields")
+	@classmethod
+	def _reject_caller_supplied_quantity(cls, value: dict) -> dict:
+		# The backend derives `custom.quantity` from the inventory selection, so accepting it
+		# here would create a second source of truth that can silently disagree. Rejecting is
+		# louder than overwriting: a form still sending it gets told, rather than watching its
+		# value vanish.
+		from beyo_manager.domain.shopify.preorder_policy import (
+			PREORDER_QUANTITY_METAFIELD_KEY,
+		)
+
+		if PREORDER_QUANTITY_METAFIELD_KEY in value:
+			raise ValueError(
+				f"metafields.{PREORDER_QUANTITY_METAFIELD_KEY} is derived from the inventory "
+				"quantity and must not be supplied."
+			)
+		return value
+
+
+class ShopifyPreorderSectionInput(BaseModel):
+	shop_integration_id: str
+	product: ShopifyPreorderProductInput
+	inventory: list[ShopifyPreorderInventoryInput] = Field(min_length=1)
+
+	@field_validator("shop_integration_id", mode="before")
+	@classmethod
+	def _trim_shop_integration_id(cls, value: object) -> object:
+		if not isinstance(value, str):
+			return value
+		return value.strip()
+
+	@model_validator(mode="after")
+	def _reject_duplicate_locations(self) -> "ShopifyPreorderSectionInput":
+		location_ids = [entry.location_id for entry in self.inventory]
+		if len(location_ids) != len(set(location_ids)):
+			raise ValueError("duplicate_inventory_location")
+		return self
+
+
 class CreateTaskRequest(BaseModel):
 	client_id: str | None = None
 	task_type: TaskTypeEnum
@@ -116,6 +225,7 @@ class CreateTaskRequest(BaseModel):
 	item_upholstery: ItemUpholsteryInput | None = None
 	notes: list[TaskNoteInput] | None = None
 	steps: list[TaskStepInput] | None = None
+	shopify_preorder: ShopifyPreorderSectionInput | None = None
 
 
 class UpdateTaskRequest(BaseModel):

@@ -41,6 +41,18 @@ class ShopifyGraphQLNonRetryableError(ShopifyGraphQLError):
         super().__init__(message, retryable=False, error_code=error_code)
 
 
+class ShopifyGraphQLUserErrorsError(ShopifyGraphQLNonRetryableError):
+    def __init__(
+        self,
+        message: str = "Shopify GraphQL mutation returned user errors.",
+        *,
+        error_code: str = "graphql_user_errors",
+        user_errors: tuple[dict, ...] = (),
+    ) -> None:
+        super().__init__(message, error_code=error_code)
+        self.user_errors = user_errors
+
+
 class ShopifyProductLookupAmbiguousError(DomainError):
     http_status = 409
 

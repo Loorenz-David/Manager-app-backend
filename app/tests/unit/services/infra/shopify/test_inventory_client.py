@@ -93,3 +93,58 @@ async def test_inventory_mutations_keep_activation_at_zero_and_batch_positive_de
             "locationId": "gid://shopify/Location/2",
         },
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_set_inventory_quantities_uses_idempotent_absolute_available_contract(
+    monkeypatch,
+) -> None:
+    captured: dict = {}
+
+    async def fake_execute(**kwargs):
+        captured.update(kwargs)
+        return {"inventorySetQuantities": {"userErrors": []}}
+
+    monkeypatch.setattr(inventory_client, "execute_shopify_graphql", fake_execute)
+
+    await inventory_client.set_inventory_quantities(
+        shop_domain="shop.myshopify.com",
+        access_token_encrypted="encrypted-token",
+        quantities=[
+            {
+                "inventory_item_id": "gid://shopify/InventoryItem/1",
+                "location_id": "gid://shopify/Location/1",
+                "quantity": 2,
+            },
+            {
+                "inventory_item_id": "gid://shopify/InventoryItem/1",
+                "location_id": "gid://shopify/Location/2",
+                "quantity": 0,
+            },
+        ],
+        reference_document_uri="managerbeyo://preorder/shpsi_1",
+        idempotency_key="shopify-preorder:shpsi_1:inventory-set",
+    )
+
+    assert "@idempotent(key: $idempotencyKey)" in captured["query"]
+    assert "ignoreCompareQuantity" not in captured["query"]
+    assert "compareQuantity" not in captured["query"]
+    assert captured["variables"]["idempotencyKey"] == (
+        "shopify-preorder:shpsi_1:inventory-set"
+    )
+    assert captured["variables"]["input"]["name"] == "available"
+    assert captured["variables"]["input"]["quantities"] == [
+        {
+            "inventoryItemId": "gid://shopify/InventoryItem/1",
+            "locationId": "gid://shopify/Location/1",
+            "quantity": 2,
+            "changeFromQuantity": None,
+        },
+        {
+            "inventoryItemId": "gid://shopify/InventoryItem/1",
+            "locationId": "gid://shopify/Location/2",
+            "quantity": 0,
+            "changeFromQuantity": None,
+        },
+    ]

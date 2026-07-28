@@ -29,6 +29,25 @@ query GetShopLocations($first: Int!, $after: String, $includeInactive: Boolean!)
 }
 """
 
+GET_INVENTORY_SET_LOCATIONS_QUERY = """
+query GetInventorySetLocations($first: Int!, $after: String, $includeInactive: Boolean!) {
+  locations(first: $first, after: $after, includeInactive: $includeInactive) {
+    edges {
+      node {
+        id
+        name
+        isActive
+        isFulfillmentService
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+"""
+
 RESOLVE_INVENTORY_ITEM_STATE_QUERY = """
 query ResolveInventoryItemState($inventoryItemId: ID!, $locationId: ID!) {
   inventoryItem(id: $inventoryItemId) {
@@ -103,6 +122,28 @@ mutation AdjustInventoryQuantities(
 }
 """
 
+SET_INVENTORY_MUTATION = """
+mutation PreorderInventorySet($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
+  inventorySetQuantities(input: $input) @idempotent(key: $idempotencyKey) {
+    inventoryAdjustmentGroup {
+      createdAt
+      reason
+      referenceDocumentUri
+      changes {
+        name
+        delta
+        quantityAfterChange
+      }
+    }
+    userErrors {
+      code
+      field
+      message
+    }
+  }
+}
+"""
+
 
 async def fetch_shop_locations(
     *,
@@ -134,6 +175,51 @@ async def fetch_shop_locations(
                     "location_id": location_id,
                     "name": str(node.get("name") or ""),
                     "is_active": bool(node.get("isActive")),
+                }
+            )
+        page_info = connection.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            return locations
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str) or not cursor:
+            return locations
+    raise ShopifyGraphQLNonRetryableError(
+        "Shopify returned too many locations to process safely.",
+        error_code="shopify_locations_pagination_limit",
+    )
+
+
+async def fetch_inventory_set_locations(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+) -> list[dict]:
+    locations: list[dict] = []
+    cursor: str | None = None
+    for _ in range(_MAX_LOCATION_PAGES):
+        data = await execute_shopify_graphql(
+            shop_domain=shop_domain,
+            access_token_encrypted=access_token_encrypted,
+            query=GET_INVENTORY_SET_LOCATIONS_QUERY,
+            variables={
+                "first": _LOCATIONS_PAGE_SIZE,
+                "after": cursor,
+                "includeInactive": True,
+            },
+            operation_name="fetch_inventory_set_locations",
+        )
+        connection = data.get("locations") or {}
+        for edge in connection.get("edges") or []:
+            node = (edge or {}).get("node") or {}
+            location_id = node.get("id")
+            if not isinstance(location_id, str) or not location_id:
+                continue
+            locations.append(
+                {
+                    "location_id": location_id,
+                    "name": str(node.get("name") or ""),
+                    "is_active": bool(node.get("isActive")),
+                    "is_fulfillment_service": bool(node.get("isFulfillmentService")),
                 }
             )
         page_info = connection.get("pageInfo") or {}
@@ -309,6 +395,42 @@ async def adjust_inventory_quantities(
         len(response.get("userErrors") or []),
     )
     _raise_inventory_user_errors(response.get("userErrors"), "adjust_inventory_quantities")
+
+
+async def set_inventory_quantities(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    quantities: list[dict],
+    reference_document_uri: str,
+    idempotency_key: str,
+) -> dict:
+    data = await execute_shopify_graphql(
+        shop_domain=shop_domain,
+        access_token_encrypted=access_token_encrypted,
+        query=SET_INVENTORY_MUTATION,
+        variables={
+            "input": {
+                "name": "available",
+                "reason": "correction",
+                "referenceDocumentUri": reference_document_uri,
+                "quantities": [
+                    {
+                        "inventoryItemId": quantity["inventory_item_id"],
+                        "locationId": quantity["location_id"],
+                        "quantity": quantity["quantity"],
+                        "changeFromQuantity": None,
+                    }
+                    for quantity in quantities
+                ],
+            },
+            "idempotencyKey": idempotency_key,
+        },
+        operation_name="set_inventory_quantities",
+    )
+    response = data.get("inventorySetQuantities") or {}
+    _raise_inventory_user_errors(response.get("userErrors"), "set_inventory_quantities")
+    return response.get("inventoryAdjustmentGroup") or {}
 
 
 def _raise_inventory_user_errors(user_errors: list[dict] | None, operation_name: str) -> None:

@@ -23,22 +23,18 @@ The SKU is written by `productVariantsBulkUpdate`, **not** by `productCreate`
 — timeout, worker SIGKILL, network drop — the retry's exact-SKU lookup finds nothing and creates a
 **second Shopify product**. Silently: the operator sees a successful sync.
 
-## Work in two commits
+## Prerequisite — stop if it is missing
 
-**Commit 1 — the safety net, alone, no production changes.**
-`app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py`: patch
-`execute_shopify_graphql` to record `(operation_name, query, variables)` and assert against inline
-expected values for four fixtures — create path, update path, metafields, multi-location additive
-inventory. Assert **full query strings and complete variables dicts**, not shapes.
+`app/tests/unit/services/tasks/shopify/test_product_sync_characterisation.py` must already exist
+and be green. It is delivered by its own plan
+(`PLAN_shopify_product_sync_characterisation_net_20260727.md`).
 
-It must pass against **unmodified** production code. If it needs a production change to pass, the
-test is wrong — it describes reality, not the target state.
-
-**Commit 2 — the fix.** Stage machine + operation-tag reconciliation, per the plan.
+**Do not write it inline, and do not proceed without it.** You are modifying live production code
+and that snapshot is the only drift detector. If it is absent, stop and report.
 
 ## The constraint that decides whether you succeeded
 
-The characterisation test must still pass after commit 2, with **exactly two** intended deltas:
+The characterisation test must still pass afterwards, with **exactly two** intended deltas:
 
 - created products carry one extra tag,
 - a tag query runs before the SKU lookup.

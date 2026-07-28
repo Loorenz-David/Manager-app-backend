@@ -22,15 +22,22 @@ it causes silent data loss, a security regression, or an error that looks like s
    business data written exactly as supplied. (`5200 × 6 = 31200` in the merchant data is a
    coincidence of magnitude, not a rule.)
 
-4. **Two caller-supplied quantities travel in one request. Never cross them.**
+4. **There is exactly one caller-supplied quantity, and it feeds two places.**
 
-   | Input | Meaning | Destination |
-   |---|---|---|
-   | `custom.quantity` metafield | the furniture set / item composition | a **product metafield** |
-   | inventory `quantity` per location | sellable units at that till | **`inventorySetQuantities`** |
+   *(Reversed 2026-07-27. Revs 4–9 required `custom.quantity` and inventory to be **independent**,
+   on the evidence that the merchant's live products carry `custom.quantity = "6"` alongside
+   `available = 1`. That rule is withdrawn by explicit decision.)*
 
-   Inventory must never be read from, multiplied by, or influenced by the metafield. Live proof
-   they differ: `custom.quantity = "6"` on a product with `available = 1`.
+   | Written to | Value |
+   |---|---|
+   | Shopify stock, per location | that location's `inventory[].quantity` |
+   | the `custom.quantity` metafield | the **sum** across all locations |
+
+   Both derive from `inventory[].quantity` via
+   `domain/shopify/preorder_policy.build_preorder_quantity_metafield`.
+   **`metafields.quantity` is rejected at the request boundary** — a caller-supplied value would be
+   a second source of truth. Rejecting is louder than overwriting.
+
    **There is no quantity constant** — revs 4–8 wrongly modelled the target as a fixed `1`; it is
    caller input per location, written as an **absolute set** that overwrites existing stock.
    Record `before_available` per location: with an arbitrary overwrite quantity, that audit value

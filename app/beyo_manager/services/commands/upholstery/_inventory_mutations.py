@@ -353,6 +353,11 @@ async def rollback_in_use_to_stored(
     inv.current_stored_amount_meters = (
         inv.current_stored_amount_meters or Decimal("0")
     ) + quantity
+    inv.inventory_condition = evaluate_inventory_condition(
+        inv.current_stored_amount_meters,
+        inv.current_amount_in_need_meters,
+        inv.low_stock_threshold_meters,
+    )
     await session.flush()
 
 

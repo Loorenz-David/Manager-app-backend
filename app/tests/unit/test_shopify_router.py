@@ -98,8 +98,8 @@ def test_oauth_callback_route_redirects_to_safe_frontend_location(monkeypatch) -
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/reauthorize-url", {"json": {}}, {}, {"shop_integration_id": "shpint_1"}, "manager"),
         ("get", "/api/v1/integrations/shopify/scopes", {"params": {"shop_integration_id": "shpint_1"}}, {"shop_integration_id": "shpint_1"}, {}, "admin"),
         ("post", "/api/v1/integrations/shopify/customers/by-product-identity", {"json": {"sku": "SKU-123", "article_number": "BAR-123"}}, {}, {"sku": "SKU-123", "article_number": "BAR-123"}, "seller"),
-        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "metafields": {}, "target_shop_integration_ids": None}]}, "manager"),
-        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "metafields": {}, "target_shop_integration_ids": None}]}, "admin"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "manager"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "admin"),
     ],
 )
 def test_new_shopify_shared_role_routes_call_service_with_expected_context(
@@ -127,6 +127,36 @@ def test_new_shopify_shared_role_routes_call_service_with_expected_context(
     assert "access_token_encrypted" not in response.text
     assert "raw_payload" not in response.text
     assert "shopify_client_secret" not in response.text
+
+
+@pytest.mark.unit
+def test_process_products_route_preserves_image_reference(monkeypatch) -> None:
+    client, captured = _build_test_client(
+        claims={"role_name": "manager", "workspace_id": "ws_1", "user_id": "usr_1"},
+        monkeypatch=monkeypatch,
+        run_service_result=SimpleNamespace(success=True, data={"ok": True}, error=None),
+    )
+
+    response = client.post(
+        "/api/v1/integrations/shopify/products/process",
+        json={
+            "items": [
+                {
+                    "client_id": "frontend_1",
+                    "title": "Chair",
+                    "sku": "SKU-123",
+                    "image_id": "img_1",
+                    "image_alt_text": "Green chair",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    item = captured["contexts"][-1].incoming_data["items"][0]
+    assert item["image_id"] == "img_1"
+    assert item["image_url"] is None
+    assert item["image_alt_text"] == "Green chair"
 
 
 @pytest.mark.unit
@@ -205,15 +235,20 @@ def test_existing_shopify_admin_only_routes_reject_manager_before_service_logic(
 @pytest.mark.parametrize(
     "method,path,kwargs",
     [
-        ("get", "/api/v1/integrations/shopify/shops", {"params": {"limit": "2"}}),
-        ("get", "/api/v1/integrations/shopify/shops/shpint_1", {}),
+        # Deliberately excluded — these three are open to worker and seller, and are
+        # covered by test_new_shopify_shared_role_routes_call_service_with_expected_context:
+        #   GET  /shops             — sellers/workers pick a target shop when submitting a sync
+        #   GET  /shops/{id}        — same, for a single shop
+        #   POST /products/process  — sellers/workers submit product syncs and pre-orders
+        # They were widened in commit 92ec8a1 ("made the capability for creating products on
+        # shopify"); this reject-list was not updated at the time and asserted 403 until
+        # 2026-07-27. No secret is exposed — access tokens are never serialized (57_shopify_integration.md).
         ("get", "/api/v1/integrations/shopify/shops/shpint_1/webhooks/history", {"params": {"limit": "10"}}),
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/reauthorize-url", {"json": {}}),
         ("delete", "/api/v1/integrations/shopify/shops/shpint_1", {}),
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/webhooks/sync", {}),
         ("post", "/api/v1/integrations/shopify/webhooks/sync", {}),
         ("get", "/api/v1/integrations/shopify/scopes", {"params": {"shop_integration_id": "shpint_1"}}),
-        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}),
     ],
 )
 @pytest.mark.parametrize("role_name", ["worker", "seller"])
@@ -234,6 +269,42 @@ def test_new_shopify_admin_routes_reject_worker_and_seller_before_service_logic(
 
     assert response.status_code == 403
     assert captured["calls"] == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "method,path,kwargs",
+    [
+        ("get", "/api/v1/integrations/shopify/shops", {"params": {"limit": "2"}}),
+        ("get", "/api/v1/integrations/shopify/shops/shpint_1", {}),
+        (
+            "post",
+            "/api/v1/integrations/shopify/products/process",
+            {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}},
+        ),
+    ],
+)
+@pytest.mark.parametrize("role_name", ["worker", "seller"])
+def test_shop_read_and_product_sync_routes_allow_worker_and_seller(
+    method: str,
+    path: str,
+    kwargs: dict,
+    role_name: str,
+    monkeypatch,
+) -> None:
+    """Sellers and workers submit product syncs and pre-orders, so they need to read the
+    shop list and reach /products/process. Widened in 92ec8a1; this is the positive
+    counterpart to the reject-list above, which deliberately excludes these three."""
+    client, captured = _build_test_client(
+        claims={"role_name": role_name, "workspace_id": "ws_1", "user_id": "usr_1"},
+        monkeypatch=monkeypatch,
+        run_service_result=SimpleNamespace(success=True, data={"ok": True}, error=None),
+    )
+
+    response = getattr(client, method)(path, **kwargs)
+
+    assert response.status_code == 200
+    assert captured["calls"] == 1
 
 
 @pytest.mark.unit

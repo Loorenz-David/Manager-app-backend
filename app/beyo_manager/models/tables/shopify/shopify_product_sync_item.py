@@ -5,7 +5,12 @@ from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from beyo_manager.domain.shopify.enums import ShopifyProductSyncItemStatusEnum, ShopifyProductSyncOperationEnum
+from beyo_manager.domain.shopify.enums import (
+    ShopifyInventoryModeEnum,
+    ShopifyProductSyncItemStatusEnum,
+    ShopifyProductSyncOperationEnum,
+    ShopifyProductSyncStageEnum,
+)
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
 from beyo_manager.models.base.sa_enum import configure_sa_enum_values
@@ -54,10 +59,32 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
         server_default=ShopifyProductSyncItemStatusEnum.PENDING.value,
         index=True,
     )
+    stage: Mapped[ShopifyProductSyncStageEnum] = mapped_column(
+        SAEnum(
+            ShopifyProductSyncStageEnum,
+            name="shopify_product_sync_stage_enum",
+            create_type=True,
+        ),
+        nullable=False,
+        default=ShopifyProductSyncStageEnum.QUEUED,
+        server_default=ShopifyProductSyncStageEnum.QUEUED.value,
+    )
+    inventory_mode: Mapped[ShopifyInventoryModeEnum] = mapped_column(
+        SAEnum(
+            ShopifyInventoryModeEnum,
+            name="shopify_inventory_mode_enum",
+            create_type=True,
+        ),
+        nullable=False,
+        default=ShopifyInventoryModeEnum.ADD,
+        server_default=ShopifyInventoryModeEnum.ADD.value,
+    )
     normalized_payload_json: Mapped[dict] = mapped_column("normalized_payload", JSONB, nullable=False)
     shopify_product_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shopify_variant_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shopify_inventory_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shopify_media_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    media_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     inventory_result_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

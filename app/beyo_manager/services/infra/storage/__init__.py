@@ -14,6 +14,7 @@ def _current_storage_signature() -> tuple[str | None, ...]:
         settings.storage_bucket,
         settings.storage_region,
         settings.storage_endpoint_url,
+        settings.storage_public_base_url,
         settings.aws_access_key_id,
         settings.aws_secret_access_key,
         settings.local_storage_path,
@@ -33,6 +34,7 @@ def _build_storage_client() -> StorageClient:
             access_key=settings.aws_access_key_id,
             secret_key=settings.aws_secret_access_key,
             endpoint_url=settings.storage_endpoint_url or f"https://s3.{region}.amazonaws.com",
+            public_base_url=settings.storage_public_base_url,
         )
     if provider == "localstack":
         if not settings.storage_bucket:
@@ -41,8 +43,13 @@ def _build_storage_client() -> StorageClient:
             bucket=settings.storage_bucket,
             region=settings.storage_region or "us-east-1",
             endpoint_url=settings.storage_endpoint_url or "http://localhost:4566",
+            public_base_url=settings.storage_public_base_url,
         )
-    return LocalStorageClient(base_path=settings.local_storage_path, host=settings.local_storage_host)
+    return LocalStorageClient(
+        base_path=settings.local_storage_path,
+        host=settings.local_storage_host,
+        public_base_url=settings.storage_public_base_url,
+    )
 
 
 def get_storage_client() -> StorageClient:

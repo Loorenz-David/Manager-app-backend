@@ -6,10 +6,15 @@ import httpx
 import pytest
 
 from beyo_manager.errors.external_service import (
+    ShopifyGraphQLError,
     ShopifyGraphQLNonRetryableError,
     ShopifyGraphQLRetryableError,
+    ShopifyGraphQLUserErrorsError,
 )
-from beyo_manager.services.infra.shopify.graphql_client import execute_shopify_graphql
+from beyo_manager.services.infra.shopify.graphql_client import (
+    execute_shopify_graphql,
+    raise_for_graphql_user_errors,
+)
 
 
 def _mock_response(status_code: int, json_body) -> MagicMock:
@@ -240,3 +245,82 @@ async def test_execute_shopify_graphql_classifies_graphql_throttling_as_retryabl
                 query="query { shop { id } }", operation_name="shop_lookup",
             )
     assert exc_info.value.error_code == "throttled"
+
+
+@pytest.mark.unit
+def test_raise_for_graphql_user_errors_retains_only_sanitized_detail() -> None:
+    long_message = "x" * 350
+    raw_response_secret = "raw-response-secret"
+    request_variable_secret = "customer@example.com"
+
+    with pytest.raises(ShopifyGraphQLUserErrorsError) as exc_info:
+        raise_for_graphql_user_errors(
+            user_errors=[
+                {
+                    "field": ["inventoryItem", "tracked"],
+                    "message": "Inventory item cannot be updated.",
+                    "raw_response": raw_response_secret,
+                    "request_variables": {
+                        "customer_email": request_variable_secret,
+                    },
+                },
+                {
+                    "field": ["quantities", "0", "quantity"],
+                    "message": long_message,
+                    "code": "INVALID_QUANTITY",
+                    "extensions": {"unsafe": raw_response_secret},
+                },
+            ],
+            operation_name="inventory_update",
+            shop_domain="valid-shop.myshopify.com",
+        )
+
+    error = exc_info.value
+    assert isinstance(error, ShopifyGraphQLError)
+    assert isinstance(error, ShopifyGraphQLNonRetryableError)
+    assert error.retryable is False
+    assert error.error_code == "graphql_user_errors"
+    assert error.user_errors == (
+        {
+            "field": ["inventoryItem", "tracked"],
+            "message": "Inventory item cannot be updated.",
+            "code": None,
+        },
+        {
+            "field": ["quantities", "0", "quantity"],
+            "message": "x" * 300,
+            "code": "INVALID_QUANTITY",
+        },
+    )
+    assert all(
+        set(user_error) == {"field", "message", "code"}
+        for user_error in error.user_errors
+    )
+    retained_detail = repr(error.user_errors)
+    assert raw_response_secret not in retained_detail
+    assert request_variable_secret not in retained_detail
+
+
+@pytest.mark.unit
+def test_raise_for_graphql_user_errors_honors_error_code_override() -> None:
+    with pytest.raises(ShopifyGraphQLUserErrorsError) as exc_info:
+        raise_for_graphql_user_errors(
+            user_errors=[{"field": None, "message": "Rejected."}],
+            operation_name="customer_set",
+            shop_domain="valid-shop.myshopify.com",
+            error_code="customer_set_user_errors",
+        )
+
+    assert exc_info.value.error_code == "customer_set_user_errors"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("user_errors", [None, []])
+def test_raise_for_graphql_user_errors_allows_empty_values(
+    user_errors,
+) -> None:
+    raise_for_graphql_user_errors(
+        user_errors=user_errors,
+        operation_name="inventory_update",
+        shop_domain="valid-shop.myshopify.com",
+    )

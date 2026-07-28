@@ -4,13 +4,23 @@ from beyo_manager.services.infra.storage.base import StorageClient
 
 
 class LocalStorageClient(StorageClient):
-    def __init__(self, base_path: str, host: str = "http://localhost:5000"):
+    def __init__(
+        self,
+        base_path: str,
+        host: str = "http://localhost:5000",
+        public_base_url: str | None = None,
+    ):
         self._base = Path(base_path)
         self._base.mkdir(parents=True, exist_ok=True)
         self._host = host.rstrip("/")
+        self._public_base_url = public_base_url.rstrip("/") if public_base_url else None
 
     def _path(self, key: str) -> Path:
         return self._base / key
+
+    def public_url(self, key: str) -> str:
+        base = self._public_base_url or f"{self._host}/dev/storage/get"
+        return f"{base}/{key.lstrip('/')}"
 
     def generate_presigned_put_url(self, key: str, content_type: str, expires_in: int) -> str:
         return f"{self._host}/dev/storage/put/{key}"

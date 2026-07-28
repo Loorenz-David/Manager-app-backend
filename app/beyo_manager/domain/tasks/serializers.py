@@ -285,6 +285,36 @@ def serialize_history_flow_record(record: HistoryRecord, link: HistoryRecordLink
     }
 
 
+def serialize_shopify_event_flow_record(event, users_map: dict) -> dict:
+    """Map a ShopifyIntegrationEvent onto the flow-record shape.
+
+    `message` is already written for humans by the command/worker that raised the event, so it is
+    used as the description verbatim rather than rebuilt here.
+
+    `entity_client_id` is the pre-order operation (the `shpsi_` sync item) when the event carries
+    one, falling back to the event's own id — so the frontend can correlate a flow entry with the
+    `shopify.preorder.processed` socket payload, which reports the same `preorder_operation_id`.
+    """
+    metadata = event.metadata_json or {}
+    user = users_map.get(event.created_by_id) if event.created_by_id else None
+    return {
+        "type": "shopify_event",
+        "entity_type": "shopify_integration_event",
+        "entity_client_id": metadata.get("preorder_operation_id") or event.client_id,
+        "description": event.message,
+        "created_at": event.created_at.isoformat(),
+        "created_by": _serialize_flow_record_user(user, event.created_by_id),
+        # Flow-specific extras. Safe by construction: the events this reads carry IDs, a status and
+        # an error code only — never customer data, tokens or raw Shopify responses.
+        "shopify_event_type": event.event_type.value,
+        "severity": event.severity.value,
+        "shop_integration_id": event.shop_integration_id,
+        "status": metadata.get("status"),
+        "error_code": metadata.get("error_code"),
+        "shopify_product_id": metadata.get("shopify_product_id"),
+    }
+
+
 def serialize_step_flow_record(ssr: StepStateRecord, step: TaskStep, users_map: dict) -> dict:
     user = users_map.get(ssr.created_by_id) if ssr.created_by_id else None
     username = user.username if user else (ssr.created_by_id or "Unknown")

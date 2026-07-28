@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from pydantic import BaseModel, Field, ValidationError as PydanticValidationError, field_validator, model_validator
 
 from beyo_manager.errors.validation import ValidationError
@@ -76,6 +78,9 @@ class ProcessShopifyProductItemRequest(BaseModel):
     sku: str | None = None
     item_article_number: str | None = None
     article_number: str | None = None
+    image_id: str | None = None
+    image_url: str | None = None
+    image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
     inventory_adjustments: list[InventoryAdjustmentRequest] = Field(default_factory=list)
 
@@ -89,6 +94,9 @@ class ProcessShopifyProductItemRequest(BaseModel):
         "sku",
         "item_article_number",
         "article_number",
+        "image_id",
+        "image_url",
+        "image_alt_text",
         mode="before",
     )
     @classmethod
@@ -138,6 +146,12 @@ class ProcessShopifyProductItemRequest(BaseModel):
             raise ValueError("At least one of sku, item_article_number, or article_number is required.")
         if self.target_shop_integration_ids == []:
             raise ValueError("target_shop_integration_ids cannot be empty when provided.")
+        if self.image_id is not None and self.image_url is not None:
+            raise ValueError("image_id and image_url are mutually exclusive.")
+        if self.image_url is not None:
+            parsed_image_url = urlparse(self.image_url)
+            if parsed_image_url.scheme != "https" or not parsed_image_url.netloc:
+                raise ValueError("image_url must be an absolute HTTPS URL.")
         seen_locations: set[tuple[str, str]] = set()
         for adjustment in self.inventory_adjustments:
             key = (adjustment.shop_integration_id, adjustment.location_id)

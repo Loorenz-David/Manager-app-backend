@@ -1,4 +1,5 @@
 import functools
+from urllib.parse import quote
 
 from beyo_manager.services.infra.storage import stable_presign
 from beyo_manager.services.infra.storage.base import StorageClient
@@ -12,6 +13,7 @@ class S3Client(StorageClient):
         access_key: str | None = None,
         secret_key: str | None = None,
         endpoint_url: str | None = None,
+        public_base_url: str | None = None,
     ):
         import boto3
         from botocore.config import Config
@@ -19,6 +21,9 @@ class S3Client(StorageClient):
         stable_presign.register()
 
         self._bucket = bucket
+        self._public_base_url = (
+            public_base_url or f"https://{bucket}.s3.{region}.amazonaws.com"
+        ).rstrip("/")
         session = boto3.Session(
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
@@ -40,6 +45,9 @@ class S3Client(StorageClient):
         # purely a ~165us/call saving, not a correctness mechanism. bucket_start is in
         # the cache key, so entries for elapsed buckets fall out via LRU.
         self._signed_get = functools.lru_cache(maxsize=8192)(self._sign_stable_get)
+
+    def public_url(self, key: str) -> str:
+        return f"{self._public_base_url}/{quote(key.lstrip('/'), safe='/')}"
 
     def generate_presigned_put_url(self, key: str, content_type: str, expires_in: int) -> str:
         return self._client.generate_presigned_url(

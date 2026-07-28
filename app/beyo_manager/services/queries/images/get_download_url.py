@@ -11,6 +11,10 @@ async def get_download_url(ctx: ServiceContext) -> dict:
     if image is None or image.deleted_at is not None:
         raise NotFound("Image not found")
     storage = get_storage_client()
+    if image.is_public:
+        # Item photos are served unsigned and never expire, so there is nothing to count down.
+        # `expires_in: None` distinguishes "does not expire" from "expires in 0 seconds".
+        return {"download_url": storage.public_url(image.image_url), "expires_in": None}
     return {
         "download_url": storage.generate_presigned_get_url(image.image_url, _GET_TTL),
         # Stable URLs are backdated, so the returned URL has less than _GET_TTL left.

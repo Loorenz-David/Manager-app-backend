@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +30,18 @@ class Image(IdentityMixin, Base):
     source_reference: Mapped[ImageSourceReferenceEnum | None] = mapped_column(
         SAEnum(ImageSourceReferenceEnum, name="image_source_reference_enum", create_type=True),
         nullable=True,
+    )
+    # Serve this object's URL unsigned instead of presigning it.
+    #
+    # `image_url` always holds the *storage key* — deletion and head_object depend on that, so the
+    # key must never be replaced with a resolved URL. This flag only changes how the key is turned
+    # into a URL at serialization time.
+    #
+    # Set for item images: they are product photos with no expiry requirement, they end up as
+    # public Shopify product media anyway, and a stable URL means clients can cache them and the
+    # Shopify worker can hand Shopify a link that does not go stale.
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     width_px: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height_px: Mapped[int | None] = mapped_column(Integer, nullable=True)

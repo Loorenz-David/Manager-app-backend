@@ -23,6 +23,12 @@ _ENTITY_EVENT_MAP = {
     ImageLinkEntityTypeEnum.NOTE: ImageEventTypeEnum.UPLOAD_NOTE_IMAGE,
 }
 
+# Entity types whose images are served as stable unsigned URLs rather than presigned ones.
+# Item photos qualify: they carry no confidentiality expectation, they become public Shopify
+# product media for pre-orders, and a non-expiring URL is what both browser caching and the
+# Shopify media fetcher want. Case, message and note images stay presigned.
+_PUBLIC_URL_ENTITY_TYPES = frozenset({ImageLinkEntityTypeEnum.ITEM})
+
 
 def _require_non_empty_str(raw_value: object, field_name: str) -> str:
     if not isinstance(raw_value, str) or not raw_value.strip():
@@ -138,6 +144,10 @@ async def confirm_upload(ctx: ServiceContext) -> dict:
 
             image_kwargs = {
                 "image_url": upload.storage_key,
+                # Item photos are served unsigned: they never need to expire, clients can cache
+                # them, and the Shopify worker hands the URL straight to Shopify for a pre-order
+                # product. Every other entity type keeps presigned URLs.
+                "is_public": item["entity_type"] in _PUBLIC_URL_ENTITY_TYPES,
                 "storage_provider": provider,
                 "source_type": ImageSourceTypeEnum.UPLOADED,
                 "source_reference": source_ref,

@@ -9,9 +9,9 @@ import httpx
 from beyo_manager.config import settings
 from beyo_manager.domain.shopify.shop_domains import normalize_shop_domain
 from beyo_manager.errors.external_service import (
-    ShopifyGraphQLError,
     ShopifyGraphQLNonRetryableError,
     ShopifyGraphQLRetryableError,
+    ShopifyGraphQLUserErrorsError,
 )
 from beyo_manager.services.infra.crypto.field_encryption import decrypt_field
 
@@ -235,6 +235,7 @@ def raise_for_graphql_user_errors(
     user_errors: Sequence[dict] | None,
     operation_name: str,
     shop_domain: str,
+    error_code: str = "graphql_user_errors",
 ) -> None:
     if not user_errors:
         return
@@ -245,10 +246,41 @@ def raise_for_graphql_user_errors(
         normalize_shop_domain(shop_domain),
         len(user_errors),
     )
-    raise ShopifyGraphQLNonRetryableError(
+    raise ShopifyGraphQLUserErrorsError(
         "Shopify GraphQL mutation returned user errors.",
-        error_code="graphql_user_errors",
+        error_code=error_code,
+        user_errors=_normalize_graphql_user_errors(user_errors),
     )
+
+
+def _normalize_graphql_user_errors(
+    user_errors: Sequence[dict],
+) -> tuple[dict, ...]:
+    normalized: list[dict] = []
+    for entry in user_errors:
+        if not isinstance(entry, dict):
+            normalized.append({"field": None, "message": "", "code": None})
+            continue
+
+        raw_field = entry.get("field")
+        field = (
+            list(raw_field)
+            if isinstance(raw_field, list)
+            and all(isinstance(part, str) for part in raw_field)
+            else None
+        )
+        raw_message = entry.get("message")
+        message = raw_message[:300] if isinstance(raw_message, str) else ""
+        raw_code = entry.get("code")
+        code = raw_code if isinstance(raw_code, str) else None
+        normalized.append(
+            {
+                "field": field,
+                "message": message,
+                "code": code,
+            }
+        )
+    return tuple(normalized)
 
 
 def _elapsed_ms(start: float) -> int:

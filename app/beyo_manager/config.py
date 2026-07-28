@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     storage_bucket: str | None = Field(default=None, alias="STORAGE_BUCKET")
     storage_region: str | None = Field(default=None, alias="STORAGE_REGION")
     storage_endpoint_url: str | None = Field(default=None, alias="STORAGE_ENDPOINT_URL")
+    storage_public_base_url: str | None = Field(default=None, alias="STORAGE_PUBLIC_BASE_URL")
     aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str | None = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
     local_storage_path: str = Field(default="/tmp/beyo_manager-uploads", alias="LOCAL_STORAGE_PATH")

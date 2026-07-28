@@ -348,6 +348,20 @@ Before the absolute set, the worker calls the existing `resolve_inventory_item_s
 
 The caller supplies metafield values to store on the created/updated product. One of them has key `quantity`.
 
+> **⚠️ SUPERSEDED 2026-07-27 (rev 10).** The independence rule below was **reversed by explicit
+> decision**: `custom.quantity` is now **derived** from the inventory selection — the sum of
+> `inventory[].quantity` across all locations — and is **rejected** if a caller supplies it. One
+> seller-entered number drives both the till stock and the product's quantity field. See the
+> Review log entry for 2026-07-27 (rev 10) and
+> `domain/shopify/preorder_policy.build_preorder_quantity_metafield`.
+>
+> The evidence that motivated the original rule is still accurate and worth keeping: the merchant's
+> live `CustomTC3` products carry `custom.quantity = "6"` alongside `available = 1`, so the two
+> numbers **have** historically differed. That is what made independence look correct. The decision
+> to unify them is a change to what the field means going forward, not a correction of the evidence.
+>
+> Everything below is retained for that evidence and for the reasoning trail.
+
 **`custom.quantity` is metafield data, not inventory input — and this still holds in rev 9.**
 
 There are now **two** caller-supplied quantities, and conflating them is the single easiest mistake to make in this feature:
@@ -1367,9 +1381,15 @@ bucket is public, the object was fetched anonymously, and WebP is an accepted Sh
 
 - [x] **0.1 — PASS.** A newly created `UNLISTED` product **is** imported into Zettle (merchant
       confirmation, 2026-07-27). This was the load-bearing assumption of the feature.
-- [ ] **0.2 — STILL OPEN.** Does that product stay off the Online Store? **This is the only gate
-      that can change scope**: a leak needs `publishableUnpublish` + `read_publications` /
-      `write_publications` + merchant reauthorization. Five minutes on the storefront search.
+- [→] **0.2 — DEFERRED** *(David's decision, 2026-07-27)* into Phase 1's post-implementation
+      dev-store verification, where acceptance criterion 4 already requires storefront absence.
+      Rationale: low probability (all the merchant's live products are `UNLISTED`; the status is
+      documented as excluded from search, collections and recommendations), and deferring removes
+      a blocking step at no cost. **Consequence accepted:** if it fails, the required
+      `publishableUnpublish` + `read_publications` / `write_publications` + **merchant
+      reauthorization** is discovered *after* implementation. It is not a parameter change — no
+      other `ProductStatus` works, since `ACTIVE` is storefront-visible and `DRAFT` is invisible
+      to Zettle.
 - [x] **0.3 — RETIRED.** Whether Zettle syncs a *particular* location is not a backend concern:
       the frontend chooses the location and the merchant owns that operational mapping. Consistent
       with the seller-selected model (R7).
@@ -1518,20 +1538,99 @@ hardening ticket eventually needs it</summary>
     quantity it is the only record of what stock existed before a pre-order replaced it.
   - Phase 0 recorded: 0.1 PASS, 0.3 retired, 0.4 resolved, **0.2 still open** — and 0.2 is the one
     that can change scope.
+- `2026-07-27` `David`: deferred Phase 0 gate 0.2 to the post-implementation verification —
+  implement first, test after, on the grounds that product-creation parameters are cheap to
+  correct. **Phase 0 is now complete and blocks nothing.**
+- `2026-07-27` `claude-opus-5`: deferral recorded, with one correction stated: a 0.2 failure is
+  **not** a parameter change. No alternative `ProductStatus` satisfies both requirements —
+  `ACTIVE` is storefront-visible, `DRAFT` is invisible to sales channels and therefore to Zettle.
+  The fix is `publishableUnpublish` plus `read_publications` / `write_publications` plus a
+  **merchant OAuth reauthorization for every installed shop**, which is an operational step the
+  merchant performs, not something a debugging pass patches. The risk is genuinely low and the
+  deferral is reasonable; the consequence is that a reauthorization cycle, if needed, surfaces
+  after implementation. Gate 0.2 is folded into Phase 1's acceptance criterion 4 (which already
+  required storefront absence) with an explicit verification method — storefront search,
+  `/collections/all`, `/sitemap_products_1.xml`, and `resourcePublications` on the product — and
+  a note that a direct `/products/<handle>` URL loading is **expected**, not a leak.
+  Also split the characterisation net into its own plan and prompt, since it gates two
+  workstreams and "stop halfway through a plan" was a fragile instruction.
+- `2026-07-27` `claude-opus-5`: lifecycle processing per
+  `skills/cross_cutting/plan_lifecycle_orchestrator/SKILL.md`. All five implementing plans moved to
+  `archives/implementation/` with `ARCHIVE_RECORD_*` files and status set to `archived`; a missing
+  summary was written for Phase 0. Two stale duplicates — `PLAN_shopify_admin_routes_serializers_20260709.md`
+  and `PLAN_shopify_webhook_history_records_20260709.md` — were byte-identical to the copies already
+  in `archives/implementation/` and were deleted from `under_construction/` per the skill's cleanup
+  protocol 3a. **This document was deliberately not archived** — see "Why this document is not
+  archived" below. Two outcomes were classified `completed_with_validation_followups` rather than
+  `completed`, because their plans' own gates (Phase 1 dev-store verification, duplicate-fix human
+  diff review) have not been executed; recording them as complete would have overstated the state.
+- `2026-07-27` `David`: rev 10 — **the `custom.quantity` metafield should be derived from the
+  inventory quantity**, not supplied separately. Confirmed on follow-up: the **backend** derives it,
+  and for multi-location pre-orders it is the **sum** across locations.
+- `2026-07-27` `claude-opus-5`: rev 10 implemented. This **reverses** the independence rule that
+  revs 4–9 hardened (R10, R11 §6, the guardrails, the headline regression test and the frontend
+  handoff all asserted the two must never be crossed). The reversal is deliberate and is a change
+  to what the field *means*, not a correction of the evidence — the merchant's live products
+  genuinely do carry `custom.quantity = "6"` alongside `available = 1`, which is why independence
+  looked right.
+  - New `domain/shopify/preorder_policy.py` holds the derivation plus the `UNLISTED` status and the
+    metafield key/type, so the rule lives in the domain layer rather than inline in a command.
+  - `custom.quantity` = `str(sum(inventory[].quantity))`, typed `single_line_text_field` to match
+    the merchant's real definition.
+  - **A caller-supplied `metafields.quantity` is rejected at the request boundary** rather than
+    silently overwritten — a form still sending it gets a clear error instead of watching its value
+    vanish. Every other metafield key passes through untouched.
+  - R10 above is marked superseded rather than deleted; the evidence in R11 §6 is still valid and
+    still worth reading before anyone reopens this.
+  - Full suite re-run against the pristine baseline: no new failures (four apparent additions were
+    confirmed pre-existing `pause_reasons` / `worker_shift` order-dependent flakes, which fail in
+    isolation and reference nothing in this change).
 - `<YYYY-MM-DD>` `<reviewer>`: `<feedback>`
 
-## Delivery artefacts (rev 8)
+## Delivery artefacts — all child plans archived 2026-07-27
 
-| Document | Role |
-|---|---|
-| `PLAN_shopify_preorder_phase_0_dev_store_verification_20260727.md` | the four remaining dev-store gates |
-| `PLAN_shopify_preorder_phase_1_minimum_delivery_20260727.md` | **the critical path** — everything genuinely required |
-| `PLAN_shopify_product_sync_error_fidelity_20260727.md` | standalone improvement, independent of pre-orders |
-| `PLAN_shopify_product_sync_duplicate_fix_20260727.md` | standalone bug fix, independent of pre-orders |
-| **this document** | research record (R1–R13) and hardening backlog |
+Every implementing plan has been implemented, summarised and archived. Each is now at
+`backend/docs/architecture/archives/implementation/`, with an `ARCHIVE_RECORD_*` at
+`backend/docs/architecture/archives/` and a `SUMMARY_*` at
+`backend/docs/architecture/implemented_summaries/`.
+
+| Document | Role | Result |
+|---|---|---|
+| `PLAN_shopify_preorder_phase_0_dev_store_verification_20260727.md` | dev-store gates | `completed_with_validation_followups` — gate 0.2 deferred, not run |
+| `PLAN_shopify_preorder_phase_1_minimum_delivery_20260727.md` | **the critical path** | `completed_with_validation_followups` — dev-store verification outstanding |
+| `PLAN_shopify_product_sync_characterisation_net_20260727.md` | prerequisite safety net | `completed` |
+| `PLAN_shopify_product_sync_error_fidelity_20260727.md` | standalone improvement | `completed` |
+| `PLAN_shopify_product_sync_duplicate_fix_20260727.md` | standalone bug fix | `completed_with_validation_followups` — human diff-review gate not recorded |
+| **this document** | research record (R1–R13) and hardening backlog | **stays here — see below** |
+
+## Why this document is not archived
+
+It is **not an implementing plan**. Rev 8 explicitly redefined it as the research record and the
+hardening backlog, and rev 9 confirmed that shape. Two reasons it stays in
+`under_construction/implementation/`:
+
+1. **The lifecycle contract forbids moving it.** Its status is `under_construction`, and the
+   `plan_lifecycle_orchestrator` skill states that plans which are `under_construction` or
+   `approved` must not be archived. Only `archived`-status plans move.
+2. **Archiving would bury live work.** R13's three hardening buckets — the frozen-location model,
+   `is_fulfillment_service` filtering, the partial unique index, the pure policy modules,
+   definition-ID metafield resolution — are unbuilt and deliberately deferred, not abandoned.
+   R1–R13 are also where the `UNLISTED`, duplicate-SKU, `available`-vs-`on_hand`, metafield and
+   convergence evidence lives, and where the `2026-04` API-upgrade checklist sits.
+
+**To promote a backlog item**, cut a new implementation plan citing the relevant research finding,
+rather than reopening this one.
+
+## Outstanding across the delivery
+
+- **Dev-store verification of Phase 1**, which carries **deferred gate 0.2** (storefront absence).
+  A leak is a scope change — `publishableUnpublish` plus `read_publications` / `write_publications`
+  plus merchant reauthorization — not a bug fix.
+- **The duplicate-fix human diff-review gate**, and its real-endpoint latency measurement.
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved` — **blocked until the four remaining Phase 0 gates have recorded outcomes**
-- Transition owner: `<agent_name>`
+- Current state: `under_construction` — **intentional and terminal for this document's current role**
+- Next state: none pending. It becomes `archived` only when its backlog is exhausted or explicitly
+  abandoned, not when the pre-order feature ships.
+- Transition owner: `David`

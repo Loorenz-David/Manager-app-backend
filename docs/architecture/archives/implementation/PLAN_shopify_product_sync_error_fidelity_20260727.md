@@ -3,12 +3,13 @@
 ## Metadata
 
 - Plan ID: `PLAN_shopify_product_sync_error_fidelity_20260727`
-- Status: `approved`
+- Status: `archived`
 - Type: **standalone improvement** — independent of the pre-order delivery
 - Related plan: `PLAN_shopify_preorder_product_20260727.md` (rev 8, research finding **R6**)
 - Depends on: nothing
 - Owner agent: `codex`
 - Created at (UTC): `2026-07-27T00:00:00Z`
+- Last updated at (UTC): `2026-07-27T21:00:00Z`
 
 ## Why this exists on its own merits
 
@@ -114,6 +115,6 @@ The **full suite** is the real gate — this function sits on every Shopify muta
 
 ## Lifecycle transition
 
-- Current state: `approved`
-- Next state: `implemented` → `summarized` → `archived`
+- Current state: `implemented`
+- Next state: `summarized` → `archived` after the full-suite gate is green
 - Transition owner: `codex`

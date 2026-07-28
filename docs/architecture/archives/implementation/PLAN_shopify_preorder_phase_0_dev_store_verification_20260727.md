@@ -3,14 +3,14 @@
 ## Metadata
 
 - Plan ID: `PLAN_shopify_preorder_phase_0_dev_store_verification_20260727`
-- Status: `approved`
+- Status: `archived`
 - Phase: **0** — **manual, human-executed. Not a Codex task.**
 - Parent plan: `PLAN_shopify_preorder_product_20260727.md` (rev 8)
 - Depends on: nothing
 - Blocks: `PLAN_shopify_preorder_phase_1_minimum_delivery_20260727.md`
 - Owner: David
 - Created at (UTC): `2026-07-27T00:00:00Z`
-- Last updated at (UTC): `2026-07-27T00:00:00Z`
+- Last updated at (UTC): `2026-07-27T21:00:00Z`
 
 ## Goal
 
@@ -28,15 +28,27 @@ app. There is no code to write, and running them against mocks proves nothing.
 - [x] **0.1 — PASS** *(merchant confirmation, 2026-07-27)*. Zettle imports an `UNLISTED` product.
       This was the load-bearing assumption of the whole feature.
 
-- [ ] **0.2 — STILL OPEN. The only gate left, and the only one that can change scope.**
-      Does the `UNLISTED` product stay off the Online Store? Search the storefront and check
-      collections. `UNLISTED` is documented as *"active but you need a direct link… doesn't show
-      up in search, collections, or product recommendations"*, so a leak would most likely come
-      from a sales channel with `autoPublish: true`.
-      **A failure is a scope change**, not a bug fix: it needs `publishableUnpublish` plus
-      `read_publications` / `write_publications` plus **merchant reauthorization**. Stop and
-      escalate rather than working around it.
-      *Five minutes of work. Do it before the minimum delivery ships.*
+- [→] **0.2 — DEFERRED into the Phase 1 post-implementation verification** *(David's decision,
+      2026-07-27)*. Does the `UNLISTED` product stay off the Online Store?
+
+      **Rationale for deferring:** the probability is low — every product in the merchant's live
+      Shopify/Zettle workflow is already `UNLISTED` (R11), and Shopify documents the status as
+      excluded from search, collections and recommendations by definition. The only realistic leak
+      path is a sales channel with `autoPublish: true`. Phase 1's **acceptance criterion 4**
+      already requires "absent from the storefront", so the check happens during the dev-store
+      verification that gates the release regardless. Deferring costs nothing and removes a
+      blocking step.
+
+      **What the deferral does *not* buy, and must not be misread as:** a failure is **not** a
+      one-line parameter change. No other `ProductStatus` works — `ACTIVE` is storefront-visible,
+      `DRAFT` is invisible to sales channels and therefore to Zettle. The fix is
+      `publishableUnpublish`, requiring `read_publications` + `write_publications`, an env change,
+      a Shopify Partner Dashboard change, and a **merchant OAuth reauthorization for every
+      installed shop**. That is an operational step the merchant must perform, not something a
+      debugging pass patches. Escalate for scope approval rather than working around it.
+
+      **Consequence of the deferral:** the reauthorization, if needed, is discovered *after*
+      implementation rather than before. Accepted deliberately.
 
 - [x] **0.3 — RETIRED.** Whether Zettle syncs a *particular* location is not a backend concern:
       the frontend chooses the location, and the merchant owns that operational mapping. Consistent
@@ -80,10 +92,13 @@ section for whichever hardening ticket eventually needs it.
 
 ## Acceptance criteria
 
-1. ~~All four gates recorded~~ — three are done (0.1 PASS, 0.3 retired, 0.4 resolved).
-2. **Gate 0.2's outcome is recorded before the minimum delivery ships**, since a failure changes scope.
-3. A FAIL on 0.2 carries an explicit decision beside it — proceed, scope change, or re-plan — not
-   a workaround.
+1. ✅ Gates 0.1 (PASS), 0.3 (retired) and 0.4 (resolved) are recorded in the parent plan.
+2. ✅ Gate 0.2 is **deferred by explicit decision** into Phase 1's post-implementation dev-store
+   verification, with the deferral and its consequence recorded above.
+3. When 0.2 is eventually run, a FAIL carries an explicit decision beside it — scope approval or
+   re-plan — never a silent workaround.
+
+**This plan is complete.** Nothing here blocks implementation.
 
 ## Lifecycle transition
 

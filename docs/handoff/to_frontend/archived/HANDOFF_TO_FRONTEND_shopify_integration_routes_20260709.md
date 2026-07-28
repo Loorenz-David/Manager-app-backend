@@ -48,7 +48,15 @@ The frontend should read the actual payload from `data`, never from the top leve
 
 ### Roles
 
-Role values (JWT `role_name` claim): `admin`, `manager`, `worker`, `seller`. Every admin/management route below requires either `admin`+`manager`, or `admin` only — see each route.
+Role values (JWT `role_name` claim): `admin`, `manager`, `worker`, `seller`. **Check each route's own `Auth:` line** — the role set is not uniform.
+
+Corrected 2026-07-27: this paragraph previously claimed every route required `admin`+`manager` or `admin` only. That stopped being true when product creation shipped (commit `92ec8a1`), which widened several routes so sellers and workers could submit product syncs. The routes open to all four roles are:
+
+- `GET /shops` and `GET /shops/{shop_integration_id}` — pick a target shop when submitting a sync
+- `POST /products/process` — submit product syncs and pre-orders
+- `GET /locations`, `GET`/`POST`/`DELETE`/`PATCH` `/metafield-preferences`
+
+Everything else remains `admin`+`manager` or `admin` only. No route exposes a Shopify access token in any response (see `architecture/57_shopify_integration.md`, "Security model").
 
 ### Response field conventions
 

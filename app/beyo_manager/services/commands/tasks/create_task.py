@@ -7,8 +7,9 @@ from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.customers.customer import Customer
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -20,6 +21,9 @@ from beyo_manager.services.commands.customers.find_or_create_customer import fin
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
+from beyo_manager.services.commands.shopify._create_preorder_sync_item_in_session import (
+    _create_preorder_sync_item_in_session,
+)
 from beyo_manager.services.commands.task_steps._wire_new_step_dependencies import (
     wire_batch_steps_into_dependency_graph,
 )
@@ -42,11 +46,22 @@ from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
 _SELLER_ROLES = {"seller"}
+_SHOPIFY_PREORDER_ROLES = {"admin", "manager", "seller"}
 
 
 async def create_task(ctx: ServiceContext) -> dict:
     request = parse_create_task_request(ctx.incoming_data)
+    if request.shopify_preorder is not None:
+        if request.task_type != TaskTypeEnum.PRE_ORDER:
+            raise ValidationError(
+                "shopify_preorder is only valid for PRE_ORDER tasks."
+            )
+        if ctx.role_name not in _SHOPIFY_PREORDER_ROLES:
+            raise PermissionDenied(
+                "Your role cannot create Shopify pre-order products."
+            )
 
+    shopify_preorder_result: dict | None = None
     async with maybe_begin(ctx.session):
         task_kwargs: dict[str, str] = {}
         if request.client_id is not None:
@@ -144,6 +159,18 @@ async def create_task(ctx: ServiceContext) -> dict:
 
         ctx.session.add(task)
         await ctx.session.flush()
+
+        if request.shopify_preorder is not None:
+            shopify_preorder_result = await _create_preorder_sync_item_in_session(
+                ctx,
+                task_id=task.client_id,
+                preorder=request.shopify_preorder,
+                # Read from the request rather than the created item: the item is created further
+                # down, so its row does not exist yet at this point.
+                item_category_id=(
+                    request.item.item_category_id if request.item is not None else None
+                ),
+            )
 
         if request.notes:
             for note_input in request.notes:
@@ -363,4 +390,7 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
         )
     await event_bus.dispatch(pending_events)
-    return {"client_id": task.client_id, "task_scalar_id": task.task_scalar_id}
+    result = {"client_id": task.client_id, "task_scalar_id": task.task_scalar_id}
+    if shopify_preorder_result is not None:
+        result["shopify_preorder"] = shopify_preorder_result
+    return result

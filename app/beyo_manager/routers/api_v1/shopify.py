@@ -96,6 +96,9 @@ class ShopifyProductSyncItemBody(BaseModel):
     sku: str | None = None
     item_article_number: str | None = None
     article_number: str | None = None
+    image_id: str | None = None
+    image_url: str | None = None
+    image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
     inventory_adjustments: list[ShopifyInventoryAdjustmentBody] = Field(default_factory=list)
 

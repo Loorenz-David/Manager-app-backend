@@ -141,6 +141,32 @@ class _TaskNoteInputBody(BaseModel):
     users_read_list: list[str] | None = None
 
 
+class _ShopifyPreorderInventoryBody(BaseModel):
+    location_id: str
+    quantity: int
+
+
+class _ShopifyPreorderProductBody(BaseModel):
+    title: str
+    sku: str
+    price: str
+    description: str | None = None
+    tags: list[str] | None = None
+    product_category: str | None = None
+    # `quantity` is reserved — it is derived from the inventory selection and rejected by the
+    # service-layer request model if supplied.
+    metafields: dict | None = None
+    image_id: str | None = None
+    image_url: str | None = None
+    image_alt_text: str | None = None
+
+
+class _ShopifyPreorderBody(BaseModel):
+    shop_integration_id: str
+    product: _ShopifyPreorderProductBody
+    inventory: list[_ShopifyPreorderInventoryBody]
+
+
 class _CreateTaskBody(BaseModel):
     client_id: str | None = None
     task_type: TaskTypeEnum
@@ -168,6 +194,7 @@ class _CreateTaskBody(BaseModel):
     item_upholstery: _TaskItemUpholsteryBody | None = None
     notes: list[_TaskNoteInputBody] | None = None
     steps: list["_TaskStepInputBody"] | None = None
+    shopify_preorder: _ShopifyPreorderBody | None = None
 
 
 class _UpdateTaskBody(BaseModel):
