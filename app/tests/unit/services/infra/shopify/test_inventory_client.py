@@ -123,16 +123,14 @@ async def test_set_inventory_quantities_uses_idempotent_absolute_available_contr
                 "quantity": 0,
             },
         ],
-        reference_document_uri="managerbeyo://preorder/shpsi_1",
-        idempotency_key="shopify-preorder:shpsi_1:inventory-set",
+        reference_document_uri="managerbeyo://inventory-set/shpsi_1",
+        idempotency_key="shopify-inventory-set:shpsi_1",
     )
 
     assert "@idempotent(key: $idempotencyKey)" in captured["query"]
     assert "ignoreCompareQuantity" not in captured["query"]
     assert "compareQuantity" not in captured["query"]
-    assert captured["variables"]["idempotencyKey"] == (
-        "shopify-preorder:shpsi_1:inventory-set"
-    )
+    assert captured["variables"]["idempotencyKey"] == "shopify-inventory-set:shpsi_1"
     assert captured["variables"]["input"]["name"] == "available"
     assert captured["variables"]["input"]["quantities"] == [
         {

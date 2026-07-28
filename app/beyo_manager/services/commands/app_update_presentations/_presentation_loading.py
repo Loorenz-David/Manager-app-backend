@@ -28,19 +28,27 @@ async def load_presentation_for_write(
     presentation_client_id: str,
     *,
     require_draft: bool = True,
+    for_update: bool = False,
 ) -> AppUpdatePresentation:
     """Fetch a presentation scoped to the workspace and not soft-deleted.
 
     Raises NotFound for missing / deleted / wrong-workspace rows (IDOR guard).
     When ``require_draft`` is True, also asserts the presentation is a draft.
+
+    ``for_update`` takes a row lock on the presentation, serialising its slide
+    sequence space. Callers that allocate or renumber ``sequence_order`` on
+    ``app_update_presentation_slides`` must pass it — the counterpart of
+    ``load_slide_for_write(for_update=True)`` one level up. Where both locks are
+    taken, the presentation is always locked first.
     """
-    result = await session.execute(
-        select(AppUpdatePresentation).where(
-            AppUpdatePresentation.client_id == presentation_client_id,
-            AppUpdatePresentation.workspace_id == workspace_id,
-            AppUpdatePresentation.is_deleted.is_(False),
-        )
+    statement = select(AppUpdatePresentation).where(
+        AppUpdatePresentation.client_id == presentation_client_id,
+        AppUpdatePresentation.workspace_id == workspace_id,
+        AppUpdatePresentation.is_deleted.is_(False),
     )
+    if for_update:
+        statement = statement.with_for_update()
+    result = await session.execute(statement)
     presentation = result.scalar_one_or_none()
     if presentation is None:
         raise NotFound("Presentation not found.")

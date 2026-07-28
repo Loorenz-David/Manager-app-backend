@@ -125,7 +125,9 @@ def serialize_slide(slide) -> dict:
     action = None
     if slide.action_label or slide.action_route:
         action = {"label": slide.action_label, "route": slide.action_route}
-    media_items = sorted(slide.media, key=lambda m: m.sequence_order)
+    media_items = sorted(
+        (m for m in slide.media if not m.is_deleted), key=lambda m: m.sequence_order
+    )
 
     real_elements = [e for e in slide.elements if not e.is_deleted]
     if real_elements:
@@ -179,7 +181,10 @@ def serialize_view_state_full(view) -> dict:
 
 def serialize_presentation_active(presentation, view) -> dict:
     """Consumer-facing shape. Does NOT expose internal targeting rows."""
-    slides = sorted(presentation.slides, key=lambda s: s.sequence_order)
+    slides = sorted(
+        (s for s in presentation.slides if not s.is_deleted),
+        key=lambda s: s.sequence_order,
+    )
     return {
         "client_id": presentation.client_id,
         "logical_client_id": presentation.logical_client_id,
@@ -276,8 +281,17 @@ def serialize_audience(presentation) -> dict:
 
 
 def serialize_presentation_full(presentation) -> dict:
-    """Admin detail view — full slide graph plus audience targeting."""
-    slides = sorted(presentation.slides, key=lambda s: s.sequence_order)
+    """Admin detail view — full slide graph plus audience targeting.
+
+    Soft-deleted slides and media are excluded, matching
+    ``serialize_presentation_list_item``: the reorder endpoints require a list of
+    exactly the current non-deleted children, so a response that leaked deleted
+    rows produced lists the API then rejected.
+    """
+    slides = sorted(
+        (s for s in presentation.slides if not s.is_deleted),
+        key=lambda s: s.sequence_order,
+    )
     return {
         **serialize_presentation_compact(presentation),
         "slides": [serialize_slide(s) for s in slides],

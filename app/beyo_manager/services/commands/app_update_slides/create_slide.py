@@ -29,8 +29,10 @@ async def create_slide(ctx: ServiceContext) -> dict:
     validate_action_route(request.action_route)
 
     async with maybe_begin(ctx.session):
+        # Locks the presentation row for the same reason add_slide_media locks
+        # the slide: the next sequence_order is a MAX over sibling slides.
         await load_presentation_for_write(
-            ctx.session, ctx.workspace_id, request.presentation_id
+            ctx.session, ctx.workspace_id, request.presentation_id, for_update=True
         )
         sequence_order = await next_slide_sequence_order(
             ctx.session, request.presentation_id

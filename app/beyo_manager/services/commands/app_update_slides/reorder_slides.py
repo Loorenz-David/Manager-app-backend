@@ -28,7 +28,7 @@ async def reorder_slides(ctx: ServiceContext) -> dict:
 
     async with maybe_begin(ctx.session):
         await load_presentation_for_write(
-            ctx.session, ctx.workspace_id, request.presentation_id
+            ctx.session, ctx.workspace_id, request.presentation_id, for_update=True
         )
         result = await ctx.session.execute(
             select(AppUpdatePresentationSlide).where(

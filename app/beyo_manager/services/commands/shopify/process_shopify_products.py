@@ -9,6 +9,7 @@ from beyo_manager.domain.execution.payloads.shopify import ShopifyProcessProduct
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventSeverityEnum,
     ShopifyIntegrationEventTypeEnum,
+    ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
@@ -47,6 +48,7 @@ async def process_shopify_products(ctx: ServiceContext) -> dict:
                 shop_integration_id=shop.client_id,
                 frontend_client_id=item.client_id,
                 status=ShopifyProductSyncItemStatusEnum.PENDING,
+                inventory_mode=ShopifyInventoryModeEnum.SET,
                 normalized_payload_json=normalized_payload,
                 created_by_id=ctx.user_id,
             )

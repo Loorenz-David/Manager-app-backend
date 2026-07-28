@@ -47,10 +47,10 @@ async def resolve_and_normalize_sync_targets(
         if missing_ids:
             raise NotFound("Shopify shop integration not found.")
         if any(
-            adjustment.shop_integration_id not in target_ids
-            for adjustment in item.inventory_adjustments
+            inventory_quantity.shop_integration_id not in target_ids
+            for inventory_quantity in item.inventory_quantities
         ):
-            raise ValidationError("inventory_adjustment_shop_not_targeted")
+            raise ValidationError("inventory_quantity_shop_not_targeted")
         for shop_id in target_ids:
             targets.append(
                 (

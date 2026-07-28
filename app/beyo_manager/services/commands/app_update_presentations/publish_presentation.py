@@ -14,6 +14,7 @@ from beyo_manager.domain.app_update_presentations.serializers import (
     serialize_presentation_full,
 )
 from beyo_manager.services.commands.app_update_presentations._presentation_loading import (
+    load_presentation_for_write,
     load_presentation_full,
 )
 from beyo_manager.services.commands.app_update_presentations._sequencing import (
@@ -35,6 +36,16 @@ async def publish_presentation(ctx: ServiceContext) -> dict:
     pending_events: list = []
 
     async with maybe_begin(ctx.session):
+        # Publish renumbers slides and media to 1..N below, so it takes the same
+        # presentation lock every other sequence-mutating command takes. Loading
+        # the full graph separately keeps the eager-loaded read unlocked.
+        await load_presentation_for_write(
+            ctx.session,
+            ctx.workspace_id,
+            request.client_id,
+            require_draft=False,
+            for_update=True,
+        )
         presentation = await load_presentation_full(
             ctx.session, ctx.workspace_id, request.client_id
         )

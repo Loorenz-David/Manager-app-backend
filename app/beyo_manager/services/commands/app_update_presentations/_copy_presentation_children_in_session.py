@@ -41,12 +41,15 @@ async def copy_presentation_children_in_session(
     source: AppUpdatePresentation,
     target: AppUpdatePresentation,
 ) -> None:
-    for slide in source.slides:
-        if slide.is_deleted:
-            continue
+    # Renumber to a contiguous 1..N rather than inheriting the source values:
+    # a source that still carries gaps must not seed them into the new version.
+    active_slides = sorted(
+        (s for s in source.slides if not s.is_deleted), key=lambda s: s.sequence_order
+    )
+    for slide_position, slide in enumerate(active_slides, start=1):
         new_slide = AppUpdatePresentationSlide(
             presentation_id=target.client_id,
-            sequence_order=slide.sequence_order,
+            sequence_order=slide_position,
             title=slide.title,
             description=slide.description,
             layout_type=slide.layout_type,
@@ -61,16 +64,17 @@ async def copy_presentation_children_in_session(
         await session.flush()
 
         media_id_map: dict[str, str] = {}
-        for media in slide.media:
-            if media.is_deleted:
-                continue
+        active_media = sorted(
+            (m for m in slide.media if not m.is_deleted), key=lambda m: m.sequence_order
+        )
+        for media_position, media in enumerate(active_media, start=1):
             new_media_id = generate_id(AppUpdateSlideMedia.CLIENT_ID_PREFIX)
             media_id_map[media.client_id] = new_media_id
             session.add(
                 AppUpdateSlideMedia(
                     client_id=new_media_id,
                     slide_id=new_slide.client_id,
-                    sequence_order=media.sequence_order,
+                    sequence_order=media_position,
                     media_type=media.media_type,
                     storage_key=media.storage_key,
                     poster_storage_key=media.poster_storage_key,

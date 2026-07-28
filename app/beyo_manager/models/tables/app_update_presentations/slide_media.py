@@ -8,7 +8,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -63,8 +63,14 @@ class AppUpdateSlideMedia(IdentityMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "slide_id", "sequence_order", name="uq_app_update_slide_media_slide_sequence"
+        # Partial: a soft-deleted row keeps its historical sequence_order but
+        # reserves nothing, so the slot is free for the next active media.
+        Index(
+            "uix_app_update_slide_media_slide_sequence_active",
+            "slide_id",
+            "sequence_order",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
         ),
         Index("ix_app_update_slide_media_slide_sequence", "slide_id", "sequence_order"),
     )

@@ -77,7 +77,13 @@ class ShopifyProductSyncWeightBody(BaseModel):
     unit: str
 
 
-class ShopifyInventoryAdjustmentBody(BaseModel):
+class ShopifyInventoryQuantityBody(BaseModel):
+    shop_integration_id: str
+    location_id: str
+    quantity: int
+
+
+class ShopifyLegacyInventoryAdjustmentBody(BaseModel):
     shop_integration_id: str
     location_id: str
     quantity_to_add: int
@@ -100,7 +106,15 @@ class ShopifyProductSyncItemBody(BaseModel):
     image_url: str | None = None
     image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
-    inventory_adjustments: list[ShopifyInventoryAdjustmentBody] = Field(default_factory=list)
+    inventory_quantities: list[ShopifyInventoryQuantityBody] = Field(default_factory=list)
+    inventory_adjustments: list[ShopifyLegacyInventoryAdjustmentBody] = Field(
+        default_factory=list,
+        deprecated=True,
+        description=(
+            "Deprecated compatibility input. quantity_to_add is interpreted as an "
+            "absolute quantity; use inventory_quantities instead."
+        ),
+    )
 
 
 class ShopifyProcessProductsBody(BaseModel):

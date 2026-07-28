@@ -34,7 +34,7 @@ async def reorder_slide_media(ctx: ServiceContext) -> dict:
             ctx.session, ctx.workspace_id, request.presentation_id
         )
         await load_slide_for_write(
-            ctx.session, request.presentation_id, request.slide_id
+            ctx.session, request.presentation_id, request.slide_id, for_update=True
         )
         result = await ctx.session.execute(
             select(AppUpdateSlideMedia).where(

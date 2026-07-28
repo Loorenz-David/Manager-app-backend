@@ -79,11 +79,8 @@ async def _create_preorder_sync_item_in_session(
         )
     ).scalar_one()
     sync_item.inventory_mode = ShopifyInventoryModeEnum.SET
-    # `quantities`, not `adjustments`: the two modes carry different contracts under
-    # `inventory`. `adjustments` entries are additive deltas (`quantity_to_add`) consumed
-    # by the ledger; `quantities` entries are absolute targets (`quantity`) consumed by
-    # inventorySetQuantities. Distinct keys so the shape is self-describing rather than
-    # inferable only from `inventory_mode`.
+    # Ordinary product sync and pre-orders both carry absolute per-location targets
+    # under `quantities`, consumed by inventorySetQuantities.
     sync_item.normalized_payload_json = {
         **sync_item.normalized_payload_json,
         "inventory": {

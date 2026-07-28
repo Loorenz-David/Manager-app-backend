@@ -546,9 +546,7 @@ async def test_preorder_keeps_metafield_quantity_separate_from_absolute_inventor
     assert captured["price"] == "5200.00"
     assert captured["metafields"][0]["value"] == "6"
     assert captured["set"]["quantities"][0]["quantity"] == 2
-    assert captured["set"]["idempotency_key"] == (
-        "shopify-preorder:shpsi_1:inventory-set"
-    )
+    assert captured["set"]["idempotency_key"] == "shopify-inventory-set:shpsi_1"
     assert sync_item.inventory_result_json == {
         "quantities": [
             {

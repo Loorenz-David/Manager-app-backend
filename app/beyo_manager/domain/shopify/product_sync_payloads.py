@@ -77,23 +77,26 @@ def build_normalized_product_sync_payload(
     if image_alt_text is not None:
         payload["image_alt_text"] = image_alt_text
 
-    adjustments = []
-    for adjustment in item.get("inventory_adjustments") or []:
-        if not isinstance(adjustment, Mapping):
+    quantities = []
+    for inventory_quantity in item.get("inventory_quantities") or []:
+        if not isinstance(inventory_quantity, Mapping):
             continue
-        if shop_integration_id is not None and adjustment.get("shop_integration_id") != shop_integration_id:
+        if (
+            shop_integration_id is not None
+            and inventory_quantity.get("shop_integration_id") != shop_integration_id
+        ):
             continue
-        quantity = adjustment.get("quantity_to_add")
-        location_id = _clean_str(adjustment.get("location_id"))
-        if isinstance(quantity, int) and quantity > 0 and location_id is not None:
-            adjustments.append(
+        quantity = inventory_quantity.get("quantity")
+        location_id = _clean_str(inventory_quantity.get("location_id"))
+        if isinstance(quantity, int) and quantity >= 0 and location_id is not None:
+            quantities.append(
                 {
                     "location_id": location_id,
-                    "quantity_to_add": quantity,
+                    "quantity": quantity,
                 }
             )
-    if adjustments:
-        payload["inventory"] = {"adjustments": adjustments}
+    if quantities:
+        payload["inventory"] = {"quantities": quantities}
     return payload
 
 

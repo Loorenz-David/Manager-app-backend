@@ -123,7 +123,7 @@ mutation AdjustInventoryQuantities(
 """
 
 SET_INVENTORY_MUTATION = """
-mutation PreorderInventorySet($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
+mutation SetInventoryQuantities($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
   inventorySetQuantities(input: $input) @idempotent(key: $idempotencyKey) {
     inventoryAdjustmentGroup {
       createdAt

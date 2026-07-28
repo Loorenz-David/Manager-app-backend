@@ -16,6 +16,7 @@ from beyo_manager.services.commands.app_update_slide_media.requests import (
     parse_delete_slide_media_request,
 )
 from beyo_manager.services.commands.app_update_slides._slide_loading import (
+    compact_media_sequence,
     load_media_for_write,
     load_slide_for_write,
 )
@@ -31,7 +32,7 @@ async def delete_slide_media(ctx: ServiceContext) -> dict:
             ctx.session, ctx.workspace_id, request.presentation_id
         )
         await load_slide_for_write(
-            ctx.session, request.presentation_id, request.slide_id
+            ctx.session, request.presentation_id, request.slide_id, for_update=True
         )
         media = await load_media_for_write(
             ctx.session, request.slide_id, request.media_id
@@ -39,6 +40,13 @@ async def delete_slide_media(ctx: ServiceContext) -> dict:
         now = datetime.now(timezone.utc)
         media.is_deleted = True
         media.deleted_at = now
+
+        # The deleted row keeps its sequence_order as a historical value but no
+        # longer reserves the slot, so close the gap it leaves: publish and
+        # reorder both expect the active set to be a contiguous 1..N.
+        await compact_media_sequence(
+            ctx.session, request.slide_id, exclude_media_id=media.client_id
+        )
 
         # Cascade soft-delete to timeline elements that reference this media, so
         # the composition never points at a removed asset.

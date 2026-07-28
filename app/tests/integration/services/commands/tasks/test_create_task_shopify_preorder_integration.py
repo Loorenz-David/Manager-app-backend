@@ -171,8 +171,7 @@ async def test_create_task_commits_preorder_intent_atomically_without_shopify_ht
     assert metafields["quantity"]["value"] == "2"
     assert metafields["quantity"]["type"] == "single_line_text_field"
     assert metafields["notes"]["value"] == "handle with care"
-    # `quantities`, not `adjustments` — absolute targets for inventorySetQuantities,
-    # distinct from the additive `adjustments`/`quantity_to_add` the ledger consumes.
+    # Absolute targets for inventorySetQuantities, shared with ordinary product sync.
     assert sync_item.normalized_payload_json["inventory"]["quantities"] == [
         {"location_id": "gid://shopify/Location/1", "quantity": 2}
     ]

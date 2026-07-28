@@ -14,14 +14,12 @@ from types import SimpleNamespace
 import pytest
 
 from beyo_manager.domain.shopify.enums import (
-    ShopifyInventoryAdjustmentStatusEnum,
     ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyProductSyncOperationEnum,
     ShopifyProductSyncStageEnum,
 )
 from beyo_manager.services.infra.shopify import inventory_client, product_sync_client
-from beyo_manager.services.tasks.shopify import _inventory_sync
 from beyo_manager.services.tasks.shopify import _product_sync_orchestrator as orchestrator
 
 
@@ -136,14 +134,15 @@ mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
 }
 """.rstrip()
 
-GET_SHOP_LOCATIONS_QUERY = """
-query GetShopLocations($first: Int!, $after: String, $includeInactive: Boolean!) {
+GET_INVENTORY_SET_LOCATIONS_QUERY = """
+query GetInventorySetLocations($first: Int!, $after: String, $includeInactive: Boolean!) {
   locations(first: $first, after: $after, includeInactive: $includeInactive) {
     edges {
       node {
         id
         name
         isActive
+        isFulfillmentService
       }
     }
     pageInfo {
@@ -170,18 +169,23 @@ query ResolveInventoryItemState($inventoryItemId: ID!, $locationId: ID!) {
 }
 """.rstrip()
 
-ADJUST_INVENTORY_MUTATION = """
-mutation AdjustInventoryQuantities(
-  $input: InventoryAdjustQuantitiesInput!
-) {
-  inventoryAdjustQuantities(input: $input) {
+SET_INVENTORY_MUTATION = """
+mutation SetInventoryQuantities($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
+  inventorySetQuantities(input: $input) @idempotent(key: $idempotencyKey) {
     inventoryAdjustmentGroup {
+      createdAt
+      reason
       referenceDocumentUri
+      changes {
+        name
+        delta
+        quantityAfterChange
+      }
     }
     userErrors {
+      code
       field
       message
-      code
     }
   }
 }
@@ -422,7 +426,7 @@ def metafields_case() -> CharacterisationCase:
 
 
 @pytest.fixture
-def multi_location_additive_inventory_case() -> CharacterisationCase:
+def multi_location_absolute_inventory_case() -> CharacterisationCase:
     product = {
         "title": "Inventory Chair",
         "status": "UNLISTED",
@@ -440,9 +444,9 @@ def multi_location_additive_inventory_case() -> CharacterisationCase:
             "variant": variant,
             "metafields": [],
             "inventory": {
-                "adjustments": [
-                    {"location_id": location_1, "quantity_to_add": 3},
-                    {"location_id": location_2, "quantity_to_add": 2},
+                "quantities": [
+                    {"location_id": location_1, "quantity": 3},
+                    {"location_id": location_2, "quantity": 2},
                 ]
             },
         },
@@ -489,8 +493,8 @@ def multi_location_additive_inventory_case() -> CharacterisationCase:
                 },
             ),
             (
-                "fetch_shop_locations",
-                GET_SHOP_LOCATIONS_QUERY,
+                "fetch_inventory_set_locations",
+                GET_INVENTORY_SET_LOCATIONS_QUERY,
                 {
                     "first": 250,
                     "after": None,
@@ -514,29 +518,31 @@ def multi_location_additive_inventory_case() -> CharacterisationCase:
                 },
             ),
             (
-                "adjust_inventory_quantities",
-                ADJUST_INVENTORY_MUTATION,
+                "set_inventory_quantities",
+                SET_INVENTORY_MUTATION,
                 {
                     "input": {
                         "reason": "correction",
                         "name": "available",
                         "referenceDocumentUri": (
-                            "managerbeyo://inventory-adjustment/"
-                            "frontend-characterisation/501"
+                            "managerbeyo://inventory-set/shpsi_characterisation"
                         ),
-                        "changes": [
+                        "quantities": [
                             {
-                                "delta": 3,
                                 "inventoryItemId": inventory_item_id,
                                 "locationId": location_1,
+                                "quantity": 3,
+                                "changeFromQuantity": None,
                             },
                             {
-                                "delta": 2,
                                 "inventoryItemId": inventory_item_id,
                                 "locationId": location_2,
+                                "quantity": 2,
+                                "changeFromQuantity": None,
                             },
                         ],
-                    }
+                    },
+                    "idempotencyKey": "shopify-inventory-set:shpsi_characterisation",
                 },
             ),
         ],
@@ -572,11 +578,11 @@ async def test_two_metafields_emit_exact_graphql(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_multi_location_additive_inventory_emits_exact_graphql(
+async def test_multi_location_absolute_inventory_emits_exact_graphql(
     monkeypatch,
-    multi_location_additive_inventory_case: CharacterisationCase,
+    multi_location_absolute_inventory_case: CharacterisationCase,
 ) -> None:
-    await _assert_exact_graphql(monkeypatch, multi_location_additive_inventory_case)
+    await _assert_exact_graphql(monkeypatch, multi_location_absolute_inventory_case)
 
 
 async def _assert_exact_graphql(
@@ -595,28 +601,8 @@ async def _assert_exact_graphql(
         calls.append((operation_name, query.rstrip(), deepcopy(variables)))
         return _graphql_response(operation_name, variables)
 
-    ledger_number = 0
-
-    async def _claim_ledger_row(*_args, adjustment: dict, **_kwargs) -> SimpleNamespace:
-        nonlocal ledger_number
-        ledger_number += 1
-        location_suffix = adjustment["location_id"].rsplit("/", 1)[-1]
-        return SimpleNamespace(
-            client_id=f"shpia_{ledger_number}",
-            requested_delta=adjustment["quantity_to_add"],
-            status=ShopifyInventoryAdjustmentStatusEnum.PENDING,
-            baseline_available=None,
-            applied_at=None,
-            shopify_error_code=None,
-            reference_uri=(
-                "managerbeyo://inventory-adjustment/"
-                f"frontend-characterisation/{location_suffix}"
-            ),
-        )
-
     monkeypatch.setattr(product_sync_client, "execute_shopify_graphql", _record_graphql)
     monkeypatch.setattr(inventory_client, "execute_shopify_graphql", _record_graphql)
-    monkeypatch.setattr(_inventory_sync, "_claim_ledger_row", _claim_ledger_row)
 
     sync_item = SimpleNamespace(
         client_id="shpsi_characterisation",
@@ -628,7 +614,11 @@ async def _assert_exact_graphql(
         status=ShopifyProductSyncItemStatusEnum.PENDING,
         # Both are NOT NULL with server defaults on the real model, so the stand-in must
         # carry them — the orchestrator reads them directly rather than via getattr.
-        inventory_mode=ShopifyInventoryModeEnum.ADD,
+        inventory_mode=(
+            ShopifyInventoryModeEnum.SET
+            if "quantities" in case.payload.get("inventory", {})
+            else ShopifyInventoryModeEnum.ADD
+        ),
         stage=ShopifyProductSyncStageEnum.QUEUED,
         requested_operation=None,
         shopify_product_id=None,
@@ -769,7 +759,7 @@ def _graphql_response(operation_name: str, variables: dict) -> dict:
             }
         }
 
-    if operation_name == "fetch_shop_locations":
+    if operation_name == "fetch_inventory_set_locations":
         return {
             "locations": {
                 "edges": [
@@ -778,6 +768,7 @@ def _graphql_response(operation_name: str, variables: dict) -> dict:
                             "id": "gid://shopify/Location/501",
                             "name": "Stockholm",
                             "isActive": True,
+                            "isFulfillmentService": False,
                         }
                     },
                     {
@@ -785,6 +776,7 @@ def _graphql_response(operation_name: str, variables: dict) -> dict:
                             "id": "gid://shopify/Location/502",
                             "name": "Gothenburg",
                             "isActive": True,
+                            "isFulfillmentService": False,
                         }
                     },
                 ],
@@ -810,9 +802,9 @@ def _graphql_response(operation_name: str, variables: dict) -> dict:
             }
         }
 
-    if operation_name == "adjust_inventory_quantities":
+    if operation_name == "set_inventory_quantities":
         return {
-            "inventoryAdjustQuantities": {
+            "inventorySetQuantities": {
                 "inventoryAdjustmentGroup": {
                     "referenceDocumentUri": variables["input"][
                         "referenceDocumentUri"

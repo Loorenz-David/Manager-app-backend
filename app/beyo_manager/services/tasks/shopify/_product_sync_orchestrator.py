@@ -316,7 +316,7 @@ async def _sync_absolute_inventory(
     ]
     if invalid_location_ids:
         raise _inventory_error(
-            "preorder_inventory_location_invalid",
+            "inventory_location_invalid",
             "One or more Shopify locations are unavailable for inventory.",
         )
 
@@ -372,8 +372,8 @@ async def _sync_absolute_inventory(
             }
             for quantity in quantities
         ],
-        reference_document_uri=f"managerbeyo://preorder/{sync_item.client_id}",
-        idempotency_key=f"shopify-preorder:{sync_item.client_id}:inventory-set",
+        reference_document_uri=f"managerbeyo://inventory-set/{sync_item.client_id}",
+        idempotency_key=f"shopify-inventory-set:{sync_item.client_id}",
     )
     for entry in summary_entries:
         entry["outcome"] = "applied"

@@ -98,8 +98,8 @@ def test_oauth_callback_route_redirects_to_safe_frontend_location(monkeypatch) -
         ("post", "/api/v1/integrations/shopify/shops/shpint_1/reauthorize-url", {"json": {}}, {}, {"shop_integration_id": "shpint_1"}, "manager"),
         ("get", "/api/v1/integrations/shopify/scopes", {"params": {"shop_integration_id": "shpint_1"}}, {"shop_integration_id": "shpint_1"}, {}, "admin"),
         ("post", "/api/v1/integrations/shopify/customers/by-product-identity", {"json": {"sku": "SKU-123", "article_number": "BAR-123"}}, {}, {"sku": "SKU-123", "article_number": "BAR-123"}, "seller"),
-        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "manager"),
-        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "admin"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_quantities": [], "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "manager"),
+        ("post", "/api/v1/integrations/shopify/products/process", {"json": {"items": [{"client_id": "frontend_1", "title": "Chair", "sku": "SKU-123"}]}}, {}, {"items": [{"client_id": "frontend_1", "title": "Chair", "description": None, "status": None, "tags": [], "product_category": None, "price": None, "weight": None, "sku": "SKU-123", "item_article_number": None, "article_number": None, "image_id": None, "image_url": None, "image_alt_text": None, "metafields": {}, "inventory_quantities": [], "inventory_adjustments": [], "target_shop_integration_ids": None}]}, "admin"),
     ],
 )
 def test_new_shopify_shared_role_routes_call_service_with_expected_context(
@@ -157,6 +157,46 @@ def test_process_products_route_preserves_image_reference(monkeypatch) -> None:
     assert item["image_id"] == "img_1"
     assert item["image_url"] is None
     assert item["image_alt_text"] == "Green chair"
+
+
+@pytest.mark.unit
+def test_process_products_route_accepts_absolute_inventory_quantities(monkeypatch) -> None:
+    client, captured = _build_test_client(
+        claims={"role_name": "manager", "workspace_id": "ws_1", "user_id": "usr_1"},
+        monkeypatch=monkeypatch,
+        run_service_result=SimpleNamespace(success=True, data={"ok": True}, error=None),
+    )
+
+    response = client.post(
+        "/api/v1/integrations/shopify/products/process",
+        json={
+            "items": [
+                {
+                    "client_id": "frontend_1",
+                    "title": "Chair",
+                    "sku": "SKU-123",
+                    "inventory_quantities": [
+                        {
+                            "shop_integration_id": "shpint_1",
+                            "location_id": "gid://shopify/Location/1",
+                            "quantity": 0,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["contexts"][-1].incoming_data["items"][0][
+        "inventory_quantities"
+    ] == [
+        {
+            "shop_integration_id": "shpint_1",
+            "location_id": "gid://shopify/Location/1",
+            "quantity": 0,
+        }
+    ]
 
 
 @pytest.mark.unit

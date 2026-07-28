@@ -8,14 +8,14 @@ from beyo_manager.errors.validation import ValidationError
 
 _SUPPORTED_WEIGHT_UNITS = {"kg", "g", "lb", "oz"}
 _MAX_ITEMS_PER_REQUEST = 200
-_MAX_INVENTORY_INCREMENT = 1_000_000
+_MAX_INVENTORY_QUANTITY = 1_000_000
 _SHOPIFY_LOCATION_GID_PATTERN = r"^gid://shopify/Location/[0-9]+$"
 
 
-class InventoryAdjustmentRequest(BaseModel):
+class InventoryQuantityRequest(BaseModel):
     shop_integration_id: str
     location_id: str
-    quantity_to_add: int
+    quantity: int
 
     @field_validator("shop_integration_id", "location_id", mode="before")
     @classmethod
@@ -33,21 +33,27 @@ class InventoryAdjustmentRequest(BaseModel):
             raise ValueError("location_id must be a Shopify Location GID")
         return value
 
-    @field_validator("quantity_to_add", mode="before")
+    @field_validator("quantity", mode="before")
     @classmethod
     def _validate_quantity_type(cls, value: object) -> object:
         if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError("quantity_to_add must be an integer")
+            raise ValueError("quantity must be an integer")
         return value
 
-    @field_validator("quantity_to_add")
+    @field_validator("quantity")
     @classmethod
     def _validate_quantity_range(cls, value: int) -> int:
         if value < 0:
-            raise ValueError("quantity_to_add cannot be negative")
-        if value > _MAX_INVENTORY_INCREMENT:
-            raise ValueError(f"quantity_to_add cannot exceed {_MAX_INVENTORY_INCREMENT}")
+            raise ValueError("quantity cannot be negative")
+        if value > _MAX_INVENTORY_QUANTITY:
+            raise ValueError(f"quantity cannot exceed {_MAX_INVENTORY_QUANTITY}")
         return value
+
+
+class LegacyInventoryAdjustmentRequest(BaseModel):
+    shop_integration_id: str
+    location_id: str
+    quantity_to_add: int
 
 
 class WeightRequest(BaseModel):
@@ -82,7 +88,8 @@ class ProcessShopifyProductItemRequest(BaseModel):
     image_url: str | None = None
     image_alt_text: str | None = None
     metafields: dict[str, object] = Field(default_factory=dict)
-    inventory_adjustments: list[InventoryAdjustmentRequest] = Field(default_factory=list)
+    inventory_quantities: list[InventoryQuantityRequest] = Field(default_factory=list)
+    inventory_adjustments: list[LegacyInventoryAdjustmentRequest] = Field(default_factory=list)
 
     @field_validator(
         "client_id",
@@ -152,26 +159,43 @@ class ProcessShopifyProductItemRequest(BaseModel):
             parsed_image_url = urlparse(self.image_url)
             if parsed_image_url.scheme != "https" or not parsed_image_url.netloc:
                 raise ValueError("image_url must be an absolute HTTPS URL.")
+        if self.inventory_quantities and self.inventory_adjustments:
+            raise ValueError(
+                "inventory_quantities and inventory_adjustments cannot both be provided."
+            )
+        if self.inventory_adjustments:
+            try:
+                self.inventory_quantities = [
+                    InventoryQuantityRequest(
+                        shop_integration_id=entry.shop_integration_id,
+                        location_id=entry.location_id,
+                        quantity=entry.quantity_to_add,
+                    )
+                    for entry in self.inventory_adjustments
+                ]
+            except PydanticValidationError as exc:
+                raise ValueError(str(exc)) from exc
+            self.inventory_adjustments = []
+
         seen_locations: set[tuple[str, str]] = set()
-        for adjustment in self.inventory_adjustments:
-            key = (adjustment.shop_integration_id, adjustment.location_id)
+        for inventory_quantity in self.inventory_quantities:
+            key = (
+                inventory_quantity.shop_integration_id,
+                inventory_quantity.location_id,
+            )
             if key in seen_locations:
                 raise ValueError("duplicate_inventory_location")
             seen_locations.add(key)
         return self
 
-    @field_validator("inventory_adjustments", mode="before")
+    @field_validator("inventory_quantities", "inventory_adjustments", mode="before")
     @classmethod
-    def _drop_zero_inventory_adjustments(cls, value: object) -> object:
+    def _normalize_inventory_lists(cls, value: object) -> object:
         if value is None:
             return []
         if not isinstance(value, list):
-            raise ValueError("inventory_adjustments must be a list")
-        return [
-            entry
-            for entry in value
-            if not (isinstance(entry, dict) and entry.get("quantity_to_add") == 0)
-        ]
+            raise ValueError("inventory quantities must be a list")
+        return value
 
 
 class ProcessShopifyProductsRequest(BaseModel):

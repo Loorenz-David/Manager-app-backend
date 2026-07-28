@@ -41,7 +41,30 @@ def test_parse_process_shopify_products_request_rejects_invalid_weight_unit() ->
 
 
 @pytest.mark.unit
-def test_parse_process_shopify_products_request_drops_zero_inventory_adjustments() -> None:
+def test_parse_process_shopify_products_request_preserves_zero_absolute_quantity() -> None:
+    request = parse_process_shopify_products_request(
+        {
+            "items": [
+                {
+                    "client_id": "frontend_1",
+                    "title": "Chair",
+                    "sku": "SKU-1",
+                    "inventory_quantities": [
+                        {
+                            "shop_integration_id": "shpint_1",
+                            "location_id": "gid://shopify/Location/1",
+                            "quantity": 0,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    assert request.items[0].inventory_quantities[0].quantity == 0
+
+
+@pytest.mark.unit
+def test_parse_process_shopify_products_request_converts_legacy_adjustment_to_absolute_quantity() -> None:
     request = parse_process_shopify_products_request(
         {
             "items": [
@@ -53,25 +76,31 @@ def test_parse_process_shopify_products_request_drops_zero_inventory_adjustments
                         {
                             "shop_integration_id": "shpint_1",
                             "location_id": "gid://shopify/Location/1",
-                            "quantity_to_add": 0,
+                            "quantity_to_add": 7,
                         }
                     ],
                 }
             ]
         }
     )
+
     assert request.items[0].inventory_adjustments == []
+    assert request.items[0].inventory_quantities[0].model_dump() == {
+        "shop_integration_id": "shpint_1",
+        "location_id": "gid://shopify/Location/1",
+        "quantity": 7,
+    }
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "adjustment, message",
+    "inventory_quantity, message",
     [
         (
             {
                 "shop_integration_id": "shpint_1",
                 "location_id": "gid://shopify/Location/nope",
-                "quantity_to_add": 1,
+                "quantity": 1,
             },
             "location_id must be a Shopify Location GID",
         ),
@@ -79,25 +108,29 @@ def test_parse_process_shopify_products_request_drops_zero_inventory_adjustments
             {
                 "shop_integration_id": "shpint_1",
                 "location_id": "gid://shopify/Location/1",
-                "quantity_to_add": -1,
+                "quantity": -1,
             },
-            "quantity_to_add cannot be negative",
+            "quantity cannot be negative",
         ),
         (
             {
                 "shop_integration_id": "shpint_1",
                 "location_id": "gid://shopify/Location/1",
-                "quantity_to_add": 1,
+                "quantity": 1,
             },
             "duplicate_inventory_location",
         ),
     ],
 )
-def test_parse_process_shopify_products_request_rejects_invalid_inventory_adjustments(
-    adjustment: dict,
+def test_parse_process_shopify_products_request_rejects_invalid_inventory_quantities(
+    inventory_quantity: dict,
     message: str,
 ) -> None:
-    adjustments = [adjustment, adjustment] if message == "duplicate_inventory_location" else [adjustment]
+    quantities = (
+        [inventory_quantity, inventory_quantity]
+        if message == "duplicate_inventory_location"
+        else [inventory_quantity]
+    )
     with pytest.raises(ValidationError, match=message):
         parse_process_shopify_products_request(
             {
@@ -106,7 +139,7 @@ def test_parse_process_shopify_products_request_rejects_invalid_inventory_adjust
                         "client_id": "frontend_1",
                         "title": "Chair",
                         "sku": "SKU-1",
-                        "inventory_adjustments": adjustments,
+                        "inventory_quantities": quantities,
                     }
                 ]
             }

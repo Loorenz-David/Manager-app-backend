@@ -11,6 +11,7 @@ from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventTypeEnum,
     ShopifyIntegrationStatusEnum,
+    ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_integration_event import ShopifyIntegrationEvent
@@ -140,6 +141,13 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
                         "title": "Chair",
                         "sku": "SKU-123",
                         "metafields": {"origin": "warehouse"},
+                        "inventory_quantities": [
+                            {
+                                "shop_integration_id": active_one.client_id,
+                                "location_id": "gid://shopify/Location/1",
+                                "quantity": 0,
+                            }
+                        ],
                     }
                 ]
             },
@@ -173,6 +181,20 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
     assert len(rows) == 2
     assert {row.shop_integration_id for row in rows} == {active_one.client_id, active_two.client_id}
     assert all(row.status == ShopifyProductSyncItemStatusEnum.PENDING for row in rows)
+    assert all(row.inventory_mode == ShopifyInventoryModeEnum.SET for row in rows)
+    payload_by_shop = {
+        row.shop_integration_id: row.normalized_payload_json
+        for row in rows
+    }
+    assert payload_by_shop[active_one.client_id]["inventory"] == {
+        "quantities": [
+            {
+                "location_id": "gid://shopify/Location/1",
+                "quantity": 0,
+            }
+        ]
+    }
+    assert "inventory" not in payload_by_shop[active_two.client_id]
     assert len(events) == 2
     assert captured["task_type"] == TaskType.SHOPIFY_PROCESS_PRODUCTS
     assert captured["payload"]["workspace_id"] == workspace.client_id

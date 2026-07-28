@@ -150,12 +150,15 @@ async def add_slide_media(ctx: ServiceContext) -> dict:
                 ctx.workspace_id,
             )
 
+            # Locks the slide row: sequence_order is allocated from a MAX over
+            # the sibling media, so concurrent adds to the same slide must be
+            # serialised or both would compute the same next value.
             await load_slide_for_write(
-                ctx.session, request.presentation_id, request.slide_id
+                ctx.session, request.presentation_id, request.slide_id, for_update=True
             )
             _diag(
                 "db.slide_loaded",
-                "slide loaded for write | presentation_id=%s slide_id=%s",
+                "slide loaded and locked for write | presentation_id=%s slide_id=%s",
                 request.presentation_id,
                 request.slide_id,
             )
