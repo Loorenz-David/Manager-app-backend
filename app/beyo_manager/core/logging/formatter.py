@@ -24,4 +24,18 @@ class StructuredJsonFormatter(logging.Formatter):
             if value is not None:
                 payload[key] = value
 
+        # This formatter does not delegate to logging.Formatter.format(), so
+        # exc_info/stack_info would otherwise be dropped entirely and
+        # logger.exception(...) would emit a JSON line with no traceback.
+        if record.exc_info:
+            exc_type, exc_value, _ = record.exc_info
+            payload["exc_type"] = getattr(exc_type, "__name__", str(exc_type))
+            payload["exc_message"] = str(exc_value)
+            payload["traceback"] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            payload["traceback"] = record.exc_text
+
+        if record.stack_info:
+            payload["stack_info"] = self.formatStack(record.stack_info)
+
         return json.dumps(payload, ensure_ascii=True)

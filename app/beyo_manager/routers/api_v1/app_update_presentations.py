@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -80,6 +81,8 @@ from beyo_manager.services.queries.app_update_presentations.list_whats_new impor
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 _ADMIN_ROLES = [ADMIN, MANAGER]
 _CONSUMER_ROLES = [ADMIN, MANAGER, WORKER, SELLER]
@@ -482,6 +485,31 @@ async def add_slide_media_route(
         "slide_id": slide_id,
         **body.model_dump(exclude_unset=True),
     }
+    # TEMPORARY DIAGNOSTICS — remove with the tracing in add_slide_media.
+    # Identifiers and media metadata only; no auth claims beyond the actor ids.
+    logger.info(
+        "add_slide_media route | presentation_id=%s slide_id=%s workspace_id=%s "
+        "user_id=%s media_type=%s has_pending_upload=%s has_storage_key=%s "
+        "mime_type=%s width=%s height=%s duration_ms=%s body_fields=%s",
+        presentation_client_id,
+        slide_id,
+        claims.get("workspace_id"),
+        claims.get("user_id"),
+        getattr(body.media_type, "value", body.media_type),
+        body.pending_upload_client_id is not None,
+        body.storage_key is not None,
+        body.mime_type,
+        body.width,
+        body.height,
+        body.duration_ms,
+        sorted(body.model_dump(exclude_unset=True).keys()),
+        extra={
+            "event_type": "add_slide_media.route",
+            "service": "add_slide_media",
+            "path": "/{presentation_client_id}/slides/{slide_id}/media",
+            "method": "POST",
+        },
+    )
     return await _run(add_slide_media, _ctx(claims, session, incoming=incoming))
 
 
