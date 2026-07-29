@@ -41,13 +41,47 @@ Forbidden on `users`:
 ### State machine
 
 ```
-STARTED_SHIFT -> WORKING
+STARTED_SHIFT -> IDLE
+STARTED_SHIFT -> WORKING  (automatic clock-in when work starts without an open shift)
+STARTED_SHIFT -> IN_PAUSE
+
+IDLE          -> IDLE      (idempotent derivation)
+IDLE          -> WORKING
+IDLE          -> IN_PAUSE
+IDLE          -> ENDED_SHIFT
+
+WORKING       -> WORKING   (idempotent derivation)
 WORKING       -> IN_PAUSE
-IN_PAUSE      -> WORKING
+WORKING       -> IDLE
 WORKING       -> ENDED_SHIFT
+
+IN_PAUSE      -> IN_PAUSE  (idempotent derivation / reason switch)
+IN_PAUSE      -> WORKING
+IN_PAUSE      -> IDLE
+IN_PAUSE      -> ENDED_SHIFT
 ```
 
-All other transitions are illegal. **Transition enforcement is exclusively in the domain layer** — no DB triggers or ORM validators.
+While a shift is open, the live state is derived with this precedence:
+
+1. open `WORKING` step
+2. open `user_declared_state_records` row
+3. open `PAUSED` step
+4. `IDLE`
+
+Worker declarations are source history. They project into this derived table as
+`IN_PAUSE` with `reason = pause_reason_id` and `manually_recorded = true`.
+`manually_recorded` therefore means "sourced from a worker declaration"; it no
+longer means that a manual shift-pause command wrote the derived row directly.
+The legacy manual-pause endpoints are retired.
+
+Starting or resuming work closes an open declaration through reconciliation.
+Declaring a state auto-pauses open working steps under the declaration's catalog
+reason. Closing a declaration does not resume those steps. Clock-out closes any
+open declaration and deterministically rebuilds the shift timeline from step and
+declaration source records.
+
+All other transitions are illegal. **Transition enforcement is exclusively in
+the domain layer** — no DB triggers or ORM validators.
 
 ### Active row rule
 

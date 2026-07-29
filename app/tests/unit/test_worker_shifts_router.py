@@ -56,23 +56,57 @@ def test_clock_route_rejects_unrelated_role(monkeypatch) -> None:
     assert captured["calls"] == []
 
 
+@pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
 @pytest.mark.parametrize(
-    ("path", "json"),
+    ("path", "payload", "expected_command"),
     [
-        ("/api/v1/worker-shifts/pause", {"reason": "Lunch"}),
-        ("/api/v1/worker-shifts/resume", None),
+        (
+            "/api/v1/worker-shifts/declared-states",
+            {
+                "user_id": "usr_worker",
+                "pause_reason_id": "par_cleaning",
+                "description": "Cleaning section B",
+            },
+            worker_shifts_router.declare_worker_state,
+        ),
+        (
+            "/api/v1/worker-shifts/declared-states/close",
+            {"user_id": "usr_worker"},
+            worker_shifts_router.close_declared_worker_state,
+        ),
     ],
 )
-def test_pause_and_resume_are_worker_self_service(path: str, json, monkeypatch) -> None:
-    worker_client, worker_calls = _build_client(role_name="worker", monkeypatch=monkeypatch)
-    kwargs = {"json": json} if json is not None else {}
-    worker_response = worker_client.post(path, **kwargs)
+def test_declared_state_routes_allow_all_shift_roles(
+    role_name: str,
+    path: str,
+    payload: dict,
+    expected_command,
+    monkeypatch,
+) -> None:
+    client, captured = _build_client(role_name=role_name, monkeypatch=monkeypatch)
+    expected = dict(payload)
+    if role_name == "worker":
+        expected["user_id"] = None
 
-    assert worker_response.status_code == 200
-    assert len(worker_calls["calls"]) == 1
+    response = client.post(path, json=expected)
 
-    manager_client, manager_calls = _build_client(role_name="manager", monkeypatch=monkeypatch)
-    manager_response = manager_client.post(path, **kwargs)
+    assert response.status_code == 200
+    assert len(captured["calls"]) == 1
+    assert captured["calls"][0][0] is expected_command
+    assert captured["calls"][0][1].incoming_data == expected
 
-    assert manager_response.status_code == 403
-    assert manager_calls["calls"] == []
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/worker-shifts/pause",
+        "/api/v1/worker-shifts/resume",
+    ],
+)
+def test_retired_manual_pause_routes_are_not_registered(path: str, monkeypatch) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+
+    response = client.post(path, json={})
+
+    assert response.status_code == 404
+    assert captured["calls"] == []

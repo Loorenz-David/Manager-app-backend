@@ -6,8 +6,10 @@ from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
 from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
-from beyo_manager.services.commands.users.pause_worker_shift import pause_worker_shift
-from beyo_manager.services.commands.users.resume_worker_shift import resume_worker_shift
+from beyo_manager.services.commands.users.close_declared_worker_state import (
+    close_declared_worker_state,
+)
+from beyo_manager.services.commands.users.declare_worker_state import declare_worker_state
 from beyo_manager.services.commands.users.toggle_worker_shift import toggle_worker_shift
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
@@ -20,8 +22,14 @@ class WorkerClockBody(BaseModel):
     user_id: str | None = None
 
 
-class WorkerPauseBody(BaseModel):
-    reason: str
+class WorkerDeclareStateBody(BaseModel):
+    user_id: str | None = None
+    pause_reason_id: str
+    description: str | None = None
+
+
+class WorkerCloseDeclaredStateBody(BaseModel):
+    user_id: str | None = None
 
 
 @router.post("/clock")
@@ -41,10 +49,10 @@ async def toggle_worker_shift_route(
     return build_ok(outcome.data)
 
 
-@router.post("/pause")
-async def pause_worker_shift_route(
-    body: WorkerPauseBody,
-    claims: dict = Depends(require_roles([WORKER])),
+@router.post("/declared-states")
+async def declare_worker_state_route(
+    body: WorkerDeclareStateBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
@@ -52,23 +60,24 @@ async def pause_worker_shift_route(
         identity=claims,
         session=session,
     )
-    outcome = await run_service(pause_worker_shift, ctx)
+    outcome = await run_service(declare_worker_state, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)
 
 
-@router.post("/resume")
-async def resume_worker_shift_route(
-    claims: dict = Depends(require_roles([WORKER])),
+@router.post("/declared-states/close")
+async def close_declared_worker_state_route(
+    body: WorkerCloseDeclaredStateBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(
-        incoming_data={},
+        incoming_data=body.model_dump(),
         identity=claims,
         session=session,
     )
-    outcome = await run_service(resume_worker_shift, ctx)
+    outcome = await run_service(close_declared_worker_state, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

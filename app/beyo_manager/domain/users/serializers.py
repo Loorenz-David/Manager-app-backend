@@ -1,6 +1,10 @@
 from decimal import Decimal
 
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 
 
@@ -96,4 +100,20 @@ def serialize_user_compact_with_role(
             "client_id": workspace_role_client_id,
             "name": workspace_role_name,
         },
+    }
+
+
+def serialize_declared_state(
+    record: UserDeclaredStateRecord,
+    pause_reason: PauseReason,
+) -> dict:
+    return {
+        "id": record.client_id,
+        "pause_reason": {
+            "id": pause_reason.client_id,
+            "name": pause_reason.name,
+            "image_url": pause_reason.image_url,
+        },
+        "description": record.description,
+        "entered_at": record.entered_at.isoformat(),
     }

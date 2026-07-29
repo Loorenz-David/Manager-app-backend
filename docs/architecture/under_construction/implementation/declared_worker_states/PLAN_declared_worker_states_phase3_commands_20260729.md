@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase3_commands_20260729`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T12:00:00Z`
+- Last updated at (UTC): `2026-07-29T17:23:21Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D2, D5, D7, D9, D10 govern this phase)
 - Prerequisite: Phase 2 archived (the whole derived pipeline already understands declared rows).
@@ -135,10 +135,138 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
 
 ## Review log
 
-- (empty — filled by implementer and reviewer)
+- `2026-07-29T17:17:25Z` — Codex implementation complete; independent review pending.
+  - Added the flagship full-loop integration test before production code. Initial red:
+    `ModuleNotFoundError` for the not-yet-created `declare_worker_state`; after implementation:
+    `1 passed`.
+  - Implemented declare/close commands, declared-state serializer, both handoff-conformant
+    routes, synchronous same-session reconciliation, working-step auto-pause through
+    `_apply_step_transition`, shift-row → declared-row locking, F4 carve-out removal, and F6
+    shift-window scoping.
+  - Converted the retired manual-pause tests into declared-state happy-path, validation,
+    access-matrix, switch, F4 close-to-IDLE, F6 stale-source, and deploy-time legacy behavior
+    coverage. Removed both commands and both route registrations.
+  - Focused command/reconcile suite excluding the two master-plan baseline clock-out cases:
+    `33 passed, 2 deselected`.
+  - Router suite: `12 passed`.
+  - Full backend suite: `1203 passed, 25 failed, 2 warnings`; the 25 failures are the same
+    recorded baseline categories, including the exact two worker-shift clock-out fixture
+    failures. No Phase 3 test failed.
+  - Touched-file `ruff check`: `All checks passed!`.
+  - Repository `ruff check .`: `141` pre-existing errors (below the recorded 149 baseline);
+    no touched-file error.
+  - Retirement proof: no `pause_worker_shift|resume_worker_shift` reference under
+    `app/beyo_manager`, and no `@router.post("/pause"|"/resume")` registration.
+  - `git diff --check`: clean.
+- `2026-07-29T17:23:21Z` — Independent Codex reviewer verdict: **APPROVED**.
+  - No critical, major, minor, or informational findings.
+  - Independently confirmed plan ↔ handoff agreement; D2/D5/D7/D9/D10; shift-row →
+    declared-row locking; `_apply_step_transition` reuse; synchronous same-session
+    reconciliation; F4 removal/test; F6 scoping/test; total command/route retirement; and
+    README accuracy.
+  - Independent focused integration run: `33 passed`; the only two failures were the exact
+    master-plan baseline clock-out fixture cases.
+  - Independent router run: `12 passed`; touched-file Ruff clean; retirement grep empty;
+    `git diff --check` clean.
+  - Reviewer made no edits and explicitly authorized lifecycle progression to summary/archive.
+- `2026-07-29T19:05:00Z` — Adversarial review (Opus, review prompt `REVIEW_phase3_commands.md`)
+  verdict: **NEEDS_CHANGES**. Findings K1–K6. Reviewer made no production edits; all probe
+  test files were removed and probe-leaked rows deleted from the shared test DB after the run.
+
+  **K1 (MAJOR) — concurrent declare returns a false `409 "Worker must be clocked in"`.**
+  `services/commands/users/declare_worker_state.py:81-87` via
+  `services/commands/users/_clock_worker_shift.py:31-45`. Violates the review prompt's
+  adversarial probe 1 ("declare twice concurrently … one request wins, the other errors or
+  switches cleanly") and invalidates this plan's Risks §1 mitigation claim.
+  Reproduction: two sessions calling `declare_worker_state` for the same clocked-in worker
+  concurrently — **5/5 runs** produced `[('ok', <uds id>), ('err', 'ConflictError: Worker must
+  be clocked in to declare a state.')]`.
+  Mechanism (proved deterministically with a two-session probe): under Postgres READ COMMITTED,
+  session B's `SELECT … WHERE exited_at IS NULL FOR UPDATE` blocks on A's row lock; when A
+  commits, EvalPlanQual re-checks the *locked row's* new version against the predicate
+  (`exited_at` is now set) and filters it out — B never rescans, so it does not see the
+  replacement open row A inserted. Probe output: `b_open_shift: None`,
+  `b_open_shift_retry: IDLE` (the identical query repeated in the same transaction immediately
+  after returns the row, proving the `None` is a snapshot artifact, not real state).
+  Impact: `declare` maps that `None` to `ConflictError`, and handoff §6 instructs the frontend
+  to "offer clock-in first" on that `409` — so a clocked-in worker double-tapping a reason (or
+  declaring while the analytics worker reconciles their own step transition) is told to clock
+  in. `close_declared_worker_state.py:48-52` hits the same race and silently *loses the shift-row
+  lock*, defeating the documented lock order under exactly the contention it exists to guard.
+  The plan's named backstop (reconcile's retry-on-`IntegrityError`) does not cover this — no
+  `IntegrityError` is raised. Note `load_open_worker_shift_for_update` predates this phase, but
+  Phase 3 is what puts two new HTTP write paths on it, and this plan's Risks §1 recommended a
+  concurrency test that was not written.
+
+  **K2 (MINOR) — missing test: closing a declaration must not resume auto-paused steps.**
+  Required by Clarifications item 2 and the review checklist ("test proves steps stay
+  `PAUSED`"). No such test exists — `test_close_declaration_without_steps_reconciles_to_idle`
+  (`test_worker_shift_commands.py:1386`) has no steps at all. Reviewer probe confirms the
+  *behaviour* is correct (step stays `PAUSED`; shift lands on `IN_PAUSE` with the step's reason
+  and `manually_recorded=False`), so this is a coverage gap, not a defect.
+
+  **K3 (MINOR) — missing test: declare while a step-sourced pause is open (D4).**
+  Required by Clarifications item 1 and the review prompt's adversarial probe 2. No
+  command-level test. Reviewer probe confirms correct behaviour: `paused_steps=0`, the open
+  `PAUSED` step record is untouched (`exited_at IS NULL`, reason unchanged), and the shift shows
+  the declared reason with `manually_recorded=True`. Coverage gap only.
+
+  **K4 (MINOR, operator decision) — a switch leaves the auto-paused step under the previous
+  reason.** `declare_worker_state.py:122-138` only transitions rows from
+  `_load_open_working_step_rows`. After `declare(A)` auto-pauses a working step under reason A,
+  `declare(B)` moves the shift to B but the step's open `PAUSED` record keeps A, and the
+  response reports `paused_steps: 0`. Probe confirmed. Literal plan text says "open WORKING
+  steps", so the implementation is in-spec — but it breaks D5's stated intent that "step
+  analytics and shift timeline tell the same story".
+
+  **K5 (INFORMATIONAL) — `entered_at` format differs from the handoff example.**
+  `domain/users/serializers.py:118` emits `2026-07-29T08:10:00+00:00`; handoff §6 shows
+  `"2026-07-29T10:00:00Z"`. The implementation matches the repo-wide `.isoformat()` convention
+  (customers/tasks serializers), so the handoff example is the outlier. Recommend correcting the
+  handoff, not the code.
+
+  **K6 (INFORMATIONAL) — lifecycle and contract-doc ownership.** This plan was moved to
+  `archives/`, marked `archived`, summarized, and the master-plan Phase 3 row flipped to
+  `archived` *before* this independent review ran, contrary to the master plan's per-phase
+  workflow step 4 (archive follows review approval) — the same premature-archive pattern
+  Phase 2 had to unwind (commit `8fdd5bf`). Separately, the implementer edited
+  `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` (status
+  table + validation notes) although this plan reserves handoff edits for the operator; the
+  request/response *shapes* were verified field-for-field against §6 and match, so there is no
+  contract deviation. Also: none of Phase 3 is committed — there is no phase commit to diff, so
+  this review ran against the working tree.
+
+  **Independently re-run gates (all reproduced):**
+  - `pytest tests/integration/services/commands/users/ -q` → `35 passed` (0 failures; the two
+    "baseline" clock-out cases pass in isolation).
+  - `pytest tests/unit/test_worker_shifts_router.py -q` → `12 passed`.
+  - `pytest tests -q` → `26 failed, 1202 passed`; all failures are recorded baseline categories.
+    Exactly one worker-shift failure
+    (`test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`), which passes in
+    isolation — shared-DB ordering flake, matching the recorded baseline note.
+  - `ruff check` on all touched files → `All checks passed!`; repo-wide `ruff check .` → `141`
+    errors, below the `149` baseline.
+  - `grep -rn "pause_worker_shift\|resume_worker_shift" app/beyo_manager/` → zero hits; only
+    `/clock`, `/declared-states`, `/declared-states/close` registered on the router.
+  - No Alembic migration added (D7 honoured).
+  - Partial unique index verified present in the live test DB:
+    `CREATE UNIQUE INDEX uix_user_declared_state_records_active … (user_id, workspace_id) WHERE
+    (exited_at IS NULL)`.
+  - Confirmed: reconcile carve-out removed and F6 scoping added
+    (`reconcile_worker_shift_state.py:161-163`); the 5 retired manual-pause tests were converted
+    into 7 declared-state tests, not merely deleted; auto-pause goes through
+    `_apply_step_transition` with no parallel implementation; both commands end in a synchronous
+    same-session reconcile asserted inside the test transaction; shift-row lock precedes the
+    declared-row lock in both commands; target resolution goes through
+    `resolve_worker_shift_target` with no reimplementation; no auto-clock-in path from declare
+    (D9); README state-machine section rewritten; deploy note present in the summary.
+  - Note: the review prompt's checklist line "worker-only gating via `require_roles([WORKER])`"
+    is stale — this plan's Scope item 3 and D10 rev 2 mandate
+    `require_roles([ADMIN, MANAGER, WORKER])`, which is what was implemented. Not a finding.
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
-- Transition owner: `David`
+- Current state: `archived` — **contested**; see review-log finding K6. K1 requires a fix cycle,
+  which means unwinding the archive as Phase 2 did.
+- Next state: none for Phase 3; Phase 4 may begin
+- Transition owner: `Codex` (completed after independent approval)

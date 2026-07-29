@@ -31,7 +31,7 @@ You are reviewing an implementation made by another agent (Codex) in the Manager
 - [ ] NO data migration touching legacy `manually_recorded` rows (D7) — any Alembic data migration here is a blocking finding.
 - [ ] The full-loop test (declare → work step auto-closes declaration → complete → declare again → clock out → rebuilt timeline shows both declared segments, correct reasons, `manually_recorded=true`) exists and passes.
 - [ ] `models/tables/users/README.md` state-machine section rewritten (includes `IDLE`, declared states, `manually_recorded` redefinition).
-- [ ] Routes are thin (parse → ctx → `run_service` → `build_ok`/`build_err`); worker-only gating via `require_roles([WORKER])`.
+- [ ] Routes are thin (parse → ctx → `run_service` → `build_ok`/`build_err`); gating via `require_roles([ADMIN, MANAGER, WORKER])` with the D10 rev 2 on-behalf matrix enforced by `resolve_worker_shift_target` (this line previously said worker-only — stale; the matrix items above are authoritative).
 - [ ] Deploy note about deploy-time manual-pause workers present in the implemented summary.
 - [ ] Full suite green; ruff clean.
 

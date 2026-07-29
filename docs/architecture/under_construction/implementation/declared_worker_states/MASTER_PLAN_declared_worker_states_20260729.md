@@ -7,7 +7,7 @@
 - Status: `under_construction`
 - Owner: `David` (product) / `claude-fable-5` (planning) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T14:49:01Z`
+- Last updated at (UTC): `2026-07-29T17:23:21Z`
 - Related issue/ticket: `n/a` (originates from design session 2026-07-29: replace Connecteam clock interface + explainable worker states)
 - Builds on: `archives/implementation/PLAN_worker_shift_state_recording_20260720.md` (the shift-state recording machinery this feature set extends)
 
@@ -57,7 +57,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 |-------|------|----------|--------|
 | 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
 | 2 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `archived` ✅ (final commit `d952655`, APPROVED by Opus after 5 review rounds / 4 fix cycles; incl. authorized D7-deviation repair migration `c2f4a6b8d0e1`) |
-| 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `under_construction` |
+| 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `needs_changes` — Opus review: K1 (MAJOR: concurrent declare → false 409 via READ COMMITTED EvalPlanQual on the open-shift locked select), K2/K3 (plan-mandated tests absent), K4 (operator-decided: accept + pin), K5/K6 (handoff timestamp note; third premature archive — unwound again). Fix cycle via `codex_prompts/PROMPT_phase3_fixes.md`. |
 | 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `under_construction` |
 | 5 | `PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `under_construction` |
 | 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users`, clock-out `analytics: null` envelope | `under_construction` |
@@ -128,6 +128,11 @@ When all four phases are archived, set this master plan's status to `archived` a
   `implemented_summaries/SUMMARY_declared_worker_states_phase2_derivation_20260729.md`. Every
   post-round-1 finding sat at the legacy/declared seam — Phase 3 deletes that seam; its review
   must scrutinize removal completeness.
+- `2026-07-29`: **Phase 3 completed and archived** after independent review APPROVED with no
+  findings. Delivered declare/close commands and handoff-conformant routes, catalog validation,
+  on-behalf access, `_apply_step_transition` auto-pause, synchronous same-session reconcile,
+  F4/F6 obligations, and total manual pause/resume retirement. Summary:
+  `implemented_summaries/SUMMARY_declared_worker_states_phase3_commands_20260729.md`.
 
 ## Open questions
 

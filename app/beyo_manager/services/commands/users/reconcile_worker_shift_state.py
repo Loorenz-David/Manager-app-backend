@@ -158,6 +158,9 @@ async def _reconcile_once(
                 UserDeclaredStateRecord.workspace_id == workspace_id,
                 UserDeclaredStateRecord.user_id == user_id,
                 UserDeclaredStateRecord.exited_at.is_(None),
+                # F6: a declaration belongs only to the shift in which it was
+                # entered. Ignore stale/corrupt open rows from an older shift.
+                UserDeclaredStateRecord.entered_at >= shift_started_at,
             )
             .with_for_update()
         )
@@ -193,21 +196,6 @@ async def _reconcile_once(
             open_declared.client_id,
             now.isoformat(),
         )
-
-    legacy_manual_pause_is_sticky = (
-        current is not None
-        and current.state is UserShiftStateEnum.IN_PAUSE
-        and current.manually_recorded
-        and current.changed_by_id is not None
-    )
-    if legacy_manual_pause_is_sticky and target in (
-        UserShiftStateEnum.IDLE,
-        UserShiftStateEnum.IN_PAUSE,
-    ):
-        # Transitional legacy provenance rule: /pause rows have an actor, while
-        # reconcile-authored declaration projections do not. Phase 3 removes this
-        # carve-out together with /pause and /resume.
-        return ShiftReconcileOutcome(changed=False, state=current.state)
 
     reason = None
     manually_recorded = False

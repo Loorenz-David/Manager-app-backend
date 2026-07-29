@@ -16,7 +16,7 @@
 > |---|---|---|
 > | 5 | Floor sign-in / logout (§2) | ❌ not yet |
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ❌ not yet |
-> | 3 | Declared states (§6) | ❌ not yet |
+> | 3 | Declared states (§6) | ❌ not yet (implemented, in review fix cycle) |
 > | 6 | Roster `clock_in_code` exposure, `clock_in_code` management (§3) | ❌ not yet |
 > | 7 | Populated clock-out `analytics` (§5.1) | ❌ not yet — `analytics` is `null` until then |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
@@ -140,7 +140,7 @@ Response `200` (`data`):
 - Not clocked in → `{ "user_id": …, "clocked_in": false, "shift_started_at": null, "state": null, "state_entered_at": null, "pause_reason": null, "declared_state": null }`.
 - `pause_reason` is set when `state == "in_pause"`; `declared_state` is non-null only when the pause is a worker declaration (vs a task-step blocker pause, where `declared_state` is `null` but `pause_reason` still describes the step's pause reason).
 - Legacy edge: very old pauses may carry free text instead of a catalog reason → `pause_reason: null` plus additive `reason_text: "<raw>"`.
-- All timestamps UTC ISO-8601; localize client-side using the workspace `time_zone` from sign-in.
+- All timestamps UTC ISO-8601; localize client-side using the workspace `time_zone` from sign-in. **Wire format note (applies to every timestamp in this document):** the backend serializes the UTC offset as `+00:00` (e.g. `2026-07-29T09:12:00+00:00`), not `Z`. The examples here use `Z` for brevity — treat the two as equivalent; parse with any ISO-8601 parser, don't string-match the suffix.
 
 ## 5. Clock actions (kiosk step 2)
 
@@ -309,7 +309,10 @@ match → confirm → `GET /current` (must be clocked in — else offer clock-in
 
 ## Validation notes
 
-- Backend validation run: pending per phase (see status table above); each phase ships contract tests keyed to this document's shapes.
+- Backend Phase 3 validation: declared-state commands/routes are live; focused integration
+  `33 passed` (plus the two documented baseline clock-out fixture failures), router `12 passed`,
+  touched-file Ruff clean, and independent review APPROVED with no findings. Other phases remain
+  pending per the status table above.
 - Suggested frontend validation: build against a mock server generated from §2–§8; when a phase flips ✅, run the same flows against a real backend before removing the mock.
 
 ## Trace links

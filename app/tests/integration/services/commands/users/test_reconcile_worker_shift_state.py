@@ -378,6 +378,58 @@ async def test_reconcile_declared_state_is_derived_and_idempotent(db_session) ->
     ) == 1
 
 
+async def test_reconcile_ignores_open_declaration_from_before_current_shift(
+    db_session,
+) -> None:
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    db_session.add_all(
+        [
+            _shift_record(
+                workspace,
+                user,
+                UserShiftStateEnum.STARTED_SHIFT,
+                shift_start,
+                shift_start,
+            ),
+            _shift_record(
+                workspace,
+                user,
+                UserShiftStateEnum.IDLE,
+                shift_start,
+                None,
+            ),
+        ]
+    )
+    stale_declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        user,
+        entered_at=shift_start - timedelta(minutes=10),
+        reason="pause_coffee_break",
+    )
+
+    outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        shift_start + timedelta(minutes=20),
+    )
+
+    current = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert outcome.changed is False
+    assert current.state is UserShiftStateEnum.IDLE
+    assert stale_declared.exited_at is None
+
+
 async def test_reconcile_working_closes_declaration_without_resurrection(
     db_session,
 ) -> None:
