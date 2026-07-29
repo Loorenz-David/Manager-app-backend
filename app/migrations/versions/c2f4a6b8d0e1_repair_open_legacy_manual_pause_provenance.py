@@ -1,5 +1,12 @@
 """Repair open legacy manual-pause provenance.
 
+Precondition (review finding J1): this repair is sound ONLY while `user_declared_state_records`
+has no writers — at this revision, every `manually_recorded = TRUE` shift row is legacy by
+construction. From Phase 3 on, the reconcile writes declaration projections with the same flags
+(`manually_recorded = TRUE`, `changed_by_id = NULL`); a re-run then would stamp those rows too —
+inert (nothing reads `changed_by_id` for stickiness after Phase 3 removes the carve-out), but do
+not re-run this migration's body outside its original position in the chain.
+
 Revision ID: c2f4a6b8d0e1
 Revises: 595e7b840926
 Create Date: 2026-07-29 18:00:00.000000

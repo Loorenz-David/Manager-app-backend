@@ -56,7 +56,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | Phase | Plan | Delivers | Status |
 |-------|------|----------|--------|
 | 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
-| 2 | `PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `needs_changes` (round 4) — rounds 1–3 fixed & verified; remaining: I1 (medium: retroactively-laundered manual rows → operator-decided one-time provenance repair migration, authorized D7 deviation), I2 (medium: legacy-manual rebuild priority → operator-decided keep + pin). Fix cycle 4 via `codex_prompts/PROMPT_phase2_fixes_round4.md`. |
+| 2 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `archived` ✅ (final commit `d952655`, APPROVED by Opus after 5 review rounds / 4 fix cycles; incl. authorized D7-deviation repair migration `c2f4a6b8d0e1`) |
 | 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `under_construction` |
 | 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `under_construction` |
 | 5 | `PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `under_construction` |
@@ -120,11 +120,14 @@ When all four phases are archived, set this master plan's status to `archived` a
 - `2026-07-29` (rev 3): Identify endpoint dropped in favor of client-side matching against the polled roster (`GET /users?role=worker&compact=true`), with `clock_in_code` exposed in that response only to floor-scope sessions (D13 rev 3). Phase 6 + handoff §3 updated. Accepted trade-off: the whole roster + codes lives in the kiosk device's memory — same trust boundary as the device's manager token (codes are identification, not authentication, per D12).
 - `2026-07-29`: **Phase 1 completed and archived** (commit `a84610c`). Implemented by Codex, reviewed APPROVED by Opus (independent re-run of all gates + detached-worktree baseline diff proving inertness). Validation waiver recorded for the pre-existing repo baseline; baseline rule added for remaining phases. Summary: `implemented_summaries/SUMMARY_declared_worker_states_phase1_model_20260729.md`.
 - `2026-07-29` (rev 4): Phase 7 added — the clock-out `analytics` envelope is populated with the worker's day summary (timeline resume + drill-down segments + insights) composed from the existing worker-stats services via a shared seam (D14 rev 4). Final-phase lifecycle duties move from Phase 6 to Phase 7.
-- `2026-07-29`: Phase 2 implemented (derived-state precedence, declaration-aware reconcile,
-  clock-out reconstruction + clamp, lock order shift row → declared row) and in **independent
-  review fix cycles** — rounds 1–3 findings (F*, G*, H1/T1) fixed and verified; round 4 open
-  (I1/I2). The phase table row is authoritative for current status; the implementer's earlier
-  "completed and archived" note was premature and is superseded by this entry (I3).
+- `2026-07-29`: **Phase 2 completed and archived** (final commit `d952655`) after 5 independent
+  review rounds / 4 fix cycles — findings F1–F5, G1–G3, H1/H2/T1, I1/I2 all resolved and
+  reviewer-verified; APPROVED with only informational J1 (addressed via migration docstring) and
+  J2 (carried). Includes the operator-authorized D7 deviation: provenance-repair migration
+  `c2f4a6b8d0e1`. Summary:
+  `implemented_summaries/SUMMARY_declared_worker_states_phase2_derivation_20260729.md`. Every
+  post-round-1 finding sat at the legacy/declared seam — Phase 3 deletes that seam; its review
+  must scrutinize removal completeness.
 
 ## Open questions
 

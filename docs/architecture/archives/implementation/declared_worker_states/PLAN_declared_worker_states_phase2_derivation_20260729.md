@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase2_derivation_20260729`
-- Status: `implemented`
+- Status: `archived` (APPROVED by Opus after 5 review rounds, final at commit `d952655`; summarized and archived)
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
 - Last updated at (UTC): `2026-07-29T16:48:43Z`
@@ -717,8 +717,93 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
     re-review. No implemented summary, archive move, or master-table change is made
     before an `APPROVED` verdict.
 
+- `2026-07-29` — Opus, independent re-review of fix cycle 4 (`596b1d7` + `d952655`).
+  Verdict: **APPROVED**.
+
+  **Scope of this round.** `git diff fa20b5a d952655` touches no file under
+  `app/beyo_manager/` — the derivation, reconcile, reconstruction, clamp and timeline code is
+  byte-identical to `fa20b5a`, which round 4 verified against the full checklist. This round
+  therefore re-verifies the two round-4 repairs plus the whole gate set.
+
+  **I1 — fixed and verified in depth.** Migration
+  `c2f4a6b8d0e1_repair_open_legacy_manual_pause_provenance.py:19-32`.
+  - *Predicate scope, probed directly.* Seeded six candidate rows — the target
+    (open + `in_pause` + `manually_recorded` + `changed_by_id IS NULL`), a **closed** manual
+    row with a NULL actor, an open manual row that **already** has an actor, an open
+    non-manual `in_pause` row, an open `idle` row and an open `working` row (the last two with
+    the manual flag set). First run: `rowcount = 1`; re-fetched after `expire_all()`, only the
+    target was written and it received exactly `user_id`; all five decoys unchanged.
+  - *Idempotency.* Second execution → `rowcount = 0`.
+  - *Downgrade.* Explicit docstring-only no-op with the reason stated; the
+    `upgrade head` → `downgrade -1` → `upgrade head` cycle runs clean on the test DB and
+    returns to `c2f4a6b8d0e1 (head)`.
+  - *Soundness argument verified, not assumed.* `rg "UserDeclaredStateRecord"` over
+    `app/beyo_manager` + `app/scripts` finds only `SELECT`s and in-place closes
+    (`reconcile_worker_shift_state.py:156`, `_reconstruct_shift_middle.py:132`,
+    `_clock_worker_shift.py:151`) — no constructor, no INSERT anywhere in production code, so
+    every `manually_recorded = TRUE` row today is legacy by construction and the repair cannot
+    misclassify. The actor choice is also verified: `pause_worker_shift.py:41` calls
+    `resolve_worker_shift_target(ctx, None)`, and `_worker_shift_access.py:25-26` rejects any
+    non-`WORKER` caller on the self path, so `/pause` is strictly worker-self-only and
+    `user_id` **is** the original actor.
+  - *Chain linearity.* `alembic heads` → single head `c2f4a6b8d0e1`; exactly one revision
+    declares `down_revision = "595e7b840926"`. No branch.
+  - *Pin.* `test_repaired_laundered_manual_pause_remains_sticky_and_resumable` reproduces the
+    round-4 probe end-to-end (laundered row → repair → reconcile `changed=False` → row intact
+    with actor restored → `/resume` returns `idle`). Re-ran the round-4 failing probe against
+    `d952655`: it now passes.
+  - *D7 deviation recorded* in Non-goals (line 18) and Scope item 6, matching the operator's
+    authorization (provenance-only; reason/semantics freezing untouched).
+
+  **I2 — decided and pinned per the operator decision (keep the new behavior).** The
+  Reconstruction assumption (line 38) now states the rule and its rationale (legacy manual
+  priority `1` above step pauses at `0`; explicit `/pause` is declared intent, one ownership
+  rule for legacy and declared). `test_legacy_manual_pause_owns_reconstruction_after_open_step_pause`
+  asserts exactly the reviewer's probe — open step pause `09:05`, `/pause` `09:20`, clock-out
+  `09:50` → `IN_PAUSE 09:05→09:20` step reason `manually_recorded=False`, then
+  `IN_PAUSE 09:20→09:50` `"Cleaning the bench"` `manually_recorded=True` with the worker as
+  `changed_by_id`. The suites can now detect a flip in either direction.
+
+  **Independent gates.** `pytest tests/integration -q` → `17 failed, 258 passed`; failure node
+  set **byte-identical** to the pre-Phase-2 baseline `9d922cb` (`17 failed, 244 passed`).
+  `tests/unit` → `895 passed, 8 failed` (the same eight baseline nodes).
+  `tests/integration/services/commands/users/` → `30 passed, 2 failed` (the two baseline
+  clock-out cases). tasks + connecteam + worker-stats → `70 passed`. State machine + linear
+  timeline units → `82 passed`. `ruff check` on the migration and the touched test file →
+  `All checks passed!`. Test-file edit is additive-only (`121` insertions, `0` deletions) — no
+  legacy assertion was relaxed. Post-suite: `user_declared_state_records` = `0` rows, and
+  `0` open laundered manual rows remain.
+
+  **Adversarial probes re-confirmed** (round-4 results, code unchanged): declared row + open
+  working step → `WORKING` with the declaration closed at `now`, `closed_by_id = NULL`; two
+  concurrent reconciles with a declared row open → one `changed=True`, one `changed=False`,
+  one open shift record, no double-close and no `IntegrityError` escape; reconcile idempotent
+  with a declared row open.
+
+  **J1 — INFORMATIONAL (no action required).** The migration file records *what* it does but
+  not the precondition that makes it sound: it is valid only while
+  `user_declared_state_records` has no writers. From Phase 3 onward the reconcile writes
+  declaration projections as `manually_recorded = True` with `changed_by_id = NULL` by design
+  (`reconcile_worker_shift_state.py:254-256`), so a re-run then — via a
+  `downgrade`/`upgrade` cycle or a restore-and-replay — would stamp those rows with
+  `changed_by_id = user_id`. Harmless in practice: Phase 3 removes the stickiness carve-out
+  and nothing else reads that column, so the misattribution would be inert data, and the
+  harmful-and-live combination never co-exists. Noted only because the precondition currently
+  lives in the plan rather than beside the code; a one-line docstring note would keep them
+  together.
+
+  **J2 — INFORMATIONAL (carried).** Round-4's I4 stands unchanged: `compute_linear_segments`
+  takes `owner_record_id` from the first raw segment of a merged run, so owner attribution is
+  per-run rather than per-instant. Still harmless. No action.
+
+  **Verdict: APPROVED.** All acceptance criteria have concrete code + test evidence, the
+  operator decisions for I1 and I2 were implemented as written with no substitutions, and
+  deploy-neutrality is proven against the pre-Phase-2 baseline. Phase 2 may be summarized and
+  archived per the lifecycle note (preserve the `declared_worker_states/` subfolder), and the
+  master table's Phase 2 row flipped to `archived`.
+
 ## Lifecycle transition
 
-- Current state: `implemented`
+- Current state: `archived`
 - Next state: `independent re-review`
 - Transition owner: `David`
