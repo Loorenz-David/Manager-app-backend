@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase3_commands_20260729`
-- Status: `archived`
+- Status: `implemented`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T17:23:21Z`
+- Last updated at (UTC): `2026-07-29T19:22:58Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D2, D5, D7, D9, D10 govern this phase)
 - Prerequisite: Phase 2 archived (the whole derived pipeline already understands declared rows).
@@ -40,6 +40,7 @@
     9. Return `{declared_state: <serialized row + reason name>, shift_state: <outcome.state.value>, paused_steps: <count from step 6>}`.
   - **Close command flow**: parse `{user_id: str | None}` → resolve target via `resolve_worker_shift_target(ctx, request.user_id)` → load open declared row `with_for_update()` → `None` → `ConflictError("No declared state is open.")` → close (`exited_at = now`, `closed_by_id = ctx.user_id`) → synchronous reconcile (lands on `IDLE`, or `WORKING` if a step is somehow open) → return `{shift_state, closed_declared_state_id}`.
   - **Carve-out removal is safe**: after this phase nothing writes `manually_recorded=True` directly to `user_shift_state_records` (only the reconcile/reconstruction emit it, sourced from declared rows). A worker mid-manual-pause **at deploy time** keeps their open manual `IN_PAUSE` row; without the carve-out the next reconcile would flip it to `IDLE`. Accepted: one-time, cosmetic-only (clock-out rebuild still folds the manual row correctly per D7). Note it in the deploy notes of the implemented summary.
+  - **D5 switch clarification**: switching declaration A → B does not re-label a task step that declaration A already auto-paused. The open step `PAUSED` record keeps reason A because it truthfully records why that transition happened; declaration B changes the declared timeline and live shift projection only. There is no `PAUSED` → `PAUSED` step transition, and the switch response therefore reports `paused_steps: 0` unless other `WORKING` steps were newly paused.
   - Route naming `POST /declared-states` / `POST /declared-states/close` — default, veto in review.
   - Request/response shapes must match `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` (the frontend is built against it in parallel); a conflict between this plan and the handoff is an operator decision, not an implementer choice.
 
@@ -263,10 +264,45 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
   - Note: the review prompt's checklist line "worker-only gating via `require_roles([WORKER])`"
     is stale — this plan's Scope item 3 and D10 rev 2 mandate
     `require_roles([ADMIN, MANAGER, WORKER])`, which is what was implemented. Not a finding.
+- `2026-07-29T19:22:58Z` — Codex fix cycle for review findings K1–K4 complete; independent
+  re-review pending.
+  - **K1:** `load_open_worker_shift_for_update` now repeats the identical locked select exactly
+    once when the first statement returns `None`. The retry-site comment records the Postgres
+    READ COMMITTED EvalPlanQual + partial-index replacement-row mechanism. Before the helper
+    change, the two deterministic two-session tests failed **10/10**: five concurrent declares
+    returned the false clocked-out conflict, and five concurrent declare+close runs exposed a
+    `None` shift-lock result on close. After the change,
+    `test_concurrent_declares_never_report_clocked_in_worker_as_clocked_out[0-4]` and
+    `test_concurrent_close_and_declare_retain_shift_then_declared_lock_order[0-4]` pass
+    **10/10**.
+  - **K2:** no command behavior change was needed.
+    `test_close_declaration_leaves_auto_paused_step_open` pins that close leaves the task step
+    `PAUSED` and its record open, while the live shift becomes step-sourced `IN_PAUSE` with the
+    step reason and `manually_recorded=False`.
+  - **K3:** no command behavior change was needed.
+    `test_declare_overrides_live_projection_without_touching_open_step_pause` pins
+    `paused_steps: 0`, an unchanged open step record, and declared-reason precedence in the live
+    `IN_PAUSE` projection.
+  - **K4:** added the operator-decided D5 switch clarification to this plan and the single
+    delegated sentence to handoff §6.
+    `test_declare_switch_preserves_reason_on_already_paused_step` pins that switch B reports
+    `paused_steps: 0`, preserves reason A on the already-paused step record, and changes only the
+    declaration/live shift reason to B.
+  - Focused K1–K4 tests: `13 passed`; worker command/reconcile suite:
+    `46 passed, 2 failed` (both exact master-plan baseline clock-out fixture cases); router
+    suite: `12 passed`; non-baseline clock/toggle paths: `12 passed`.
+  - Full backend suite: `1216 passed, 25 failed, 2 warnings`; all 25 failures remain in the
+    documented baseline categories (prior Phase 3 review: `1202 passed, 26 failed`), with no
+    K1–K4 or shared-helper regression.
+  - Touched Python files Ruff-clean; repository Ruff remains at the documented `141` errors
+    (below the `149` baseline). Source-only retirement greps for both command names and both
+    route registrations are empty; `git diff --check` is clean.
+  - Lifecycle deliberately returned to `implemented`. No summary, archive move, or master-plan
+    phase-table change was made; those remain gated on independent re-review approval.
 
 ## Lifecycle transition
 
-- Current state: `archived` — **contested**; see review-log finding K6. K1 requires a fix cycle,
-  which means unwinding the archive as Phase 2 did.
-- Next state: none for Phase 3; Phase 4 may begin
-- Transition owner: `Codex` (completed after independent approval)
+- Current state: `implemented` — fix cycle complete; independent re-review pending.
+- Next state: `reviewed` after an independent reviewer returns `APPROVED`; only then may Phase 3
+  summary/archive/master-table work proceed.
+- Transition owner: independent reviewer, then `Codex` for post-approval lifecycle work.

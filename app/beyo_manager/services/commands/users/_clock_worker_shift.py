@@ -32,17 +32,23 @@ async def load_open_worker_shift_for_update(
     workspace_id: str,
     user_id: str,
 ) -> UserShiftStateRecord | None:
-    return (
-        await session.execute(
-            select(UserShiftStateRecord)
-            .where(
-                UserShiftStateRecord.workspace_id == workspace_id,
-                UserShiftStateRecord.user_id == user_id,
-                UserShiftStateRecord.exited_at.is_(None),
-            )
-            .with_for_update()
+    statement = (
+        select(UserShiftStateRecord)
+        .where(
+            UserShiftStateRecord.workspace_id == workspace_id,
+            UserShiftStateRecord.user_id == user_id,
+            UserShiftStateRecord.exited_at.is_(None),
         )
-    ).scalar_one_or_none()
+        .with_for_update()
+    )
+    current = (await session.execute(statement)).scalar_one_or_none()
+    if current is not None:
+        return current
+
+    # Under READ COMMITTED, EvalPlanQual can filter a row that was closed while this
+    # SELECT waited for its lock, without rescanning for the replacement open row
+    # inserted under the partial unique index. One fresh statement snapshot finds it.
+    return (await session.execute(statement)).scalar_one_or_none()
 
 
 async def clock_in_shift_for_user(

@@ -1,4 +1,6 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
+from importlib import import_module
 from uuid import uuid4
 
 import pytest
@@ -33,6 +35,7 @@ from beyo_manager.models.tables.workspaces.workspace_membership import Workspace
 from beyo_manager.services.commands.users._clock_worker_shift import (
     clock_in_shift_for_user,
     clock_out_shift_for_user,
+    load_open_worker_shift_for_update,
 )
 from beyo_manager.services.commands.users._reconstruct_shift_middle import (
     reconstruct_shift_middle,
@@ -299,6 +302,61 @@ async def _seed_pause_reason(
     db_session.add(reason)
     await db_session.flush()
     return reason
+
+
+async def _run_worker_command_in_new_session(
+    command,
+    *,
+    workspace_id: str,
+    worker_id: str,
+    incoming_data: dict,
+):
+    async for session in get_db_session():
+        return await command(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace_id,
+                    "user_id": worker_id,
+                    "role_name": RoleNameEnum.WORKER.value,
+                },
+                incoming_data=incoming_data,
+                session=session,
+            )
+        )
+    raise AssertionError("Database session generator yielded no session")
+
+
+async def _cleanup_committed_worker_command_rows(
+    db_session,
+    *,
+    workspace_id: str,
+    worker_id: str,
+    pause_reason_ids: list[str],
+) -> None:
+    await db_session.rollback()
+    await db_session.execute(
+        delete(UserDeclaredStateRecord).where(
+            UserDeclaredStateRecord.workspace_id == workspace_id,
+            UserDeclaredStateRecord.user_id == worker_id,
+        )
+    )
+    await db_session.execute(
+        delete(UserShiftStateRecord).where(
+            UserShiftStateRecord.workspace_id == workspace_id,
+            UserShiftStateRecord.user_id == worker_id,
+        )
+    )
+    await db_session.execute(
+        delete(PauseReason).where(PauseReason.client_id.in_(pause_reason_ids))
+    )
+    await db_session.execute(
+        delete(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == worker_id,
+        )
+    )
+    await db_session.execute(delete(User).where(User.client_id == worker_id))
+    await db_session.commit()
 
 
 _MARKER_RANK = {UserShiftStateEnum.STARTED_SHIFT: 0, UserShiftStateEnum.ENDED_SHIFT: 2}
@@ -1132,6 +1190,78 @@ async def test_declare_auto_pauses_working_step_and_updates_live_state(
     assert current.manually_recorded is True
 
 
+async def test_declare_overrides_live_projection_without_touching_open_step_pause(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 29, 8, tzinfo=timezone.utc)
+    declared_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        worker,
+        name="Meeting",
+    )
+    await clock_in_shift_for_user(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base,
+        worker.client_id,
+    )
+    paused_step = await _seed_open_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=base + timedelta(minutes=5),
+    )
+    paused_record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.step_id == paused_step.client_id,
+            StepStateRecord.state == TaskStepStateEnum.PAUSED,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    original_record_id = paused_record.client_id
+    original_reason_id = paused_record.pause_reason_id
+    original_entered_at = paused_record.entered_at
+    await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base + timedelta(minutes=6),
+    )
+
+    with freeze_time(base + timedelta(minutes=10)):
+        result = await declare_worker_state(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"pause_reason_id": declared_reason.client_id},
+            )
+        )
+
+    await db_session.refresh(paused_step)
+    await db_session.refresh(paused_record)
+    current = await _open_shift_record(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+    )
+
+    assert result["paused_steps"] == 0
+    assert paused_step.state is TaskStepStateEnum.PAUSED
+    assert paused_record.client_id == original_record_id
+    assert paused_record.entered_at == original_entered_at
+    assert paused_record.exited_at is None
+    assert paused_record.pause_reason_id == original_reason_id
+    assert current.state is UserShiftStateEnum.IN_PAUSE
+    assert current.reason == declared_reason.client_id
+    assert current.manually_recorded is True
+
+
 async def test_declare_validation_matrix(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     valid_reason = await _seed_pause_reason(
@@ -1383,6 +1513,305 @@ async def test_declare_switch_closes_old_and_opens_new_atomically(db_session) ->
     assert sum(row.exited_at is None for row in rows) == 1
 
 
+async def test_declare_switch_preserves_reason_on_already_paused_step(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    first_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        worker,
+        name="Cleaning",
+    )
+    second_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        worker,
+        name="Meeting",
+    )
+    base = datetime(2026, 7, 29, 8, tzinfo=timezone.utc)
+    await clock_in_shift_for_user(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base,
+        worker.client_id,
+    )
+    working_step = await _seed_open_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=base + timedelta(minutes=5),
+    )
+
+    with freeze_time(base + timedelta(minutes=10)):
+        first_result = await declare_worker_state(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"pause_reason_id": first_reason.client_id},
+            )
+        )
+    paused_record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.step_id == working_step.client_id,
+            StepStateRecord.state == TaskStepStateEnum.PAUSED,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    original_record_id = paused_record.client_id
+    original_entered_at = paused_record.entered_at
+
+    with freeze_time(base + timedelta(minutes=20)):
+        second_result = await declare_worker_state(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"pause_reason_id": second_reason.client_id},
+            )
+        )
+
+    await db_session.refresh(paused_record)
+    current = await _open_shift_record(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+    )
+
+    assert first_result["paused_steps"] == 1
+    assert second_result["paused_steps"] == 0
+    assert paused_record.client_id == original_record_id
+    assert paused_record.entered_at == original_entered_at
+    assert paused_record.exited_at is None
+    assert paused_record.pause_reason_id == first_reason.client_id
+    assert current.state is UserShiftStateEnum.IN_PAUSE
+    assert current.reason == second_reason.client_id
+    assert current.manually_recorded is True
+
+
+@pytest.mark.parametrize("run_number", range(5))
+async def test_concurrent_declares_never_report_clocked_in_worker_as_clocked_out(
+    db_session,
+    monkeypatch,
+    run_number: int,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    reasons = [
+        await _seed_pause_reason(
+            db_session,
+            workspace,
+            worker,
+            name=f"Concurrent declaration {run_number}-{index}",
+        )
+        for index in range(2)
+    ]
+    workspace_id = workspace.client_id
+    worker_id = worker.client_id
+    reason_ids = [reason.client_id for reason in reasons]
+    await clock_in_shift_for_user(
+        db_session,
+        workspace_id,
+        worker_id,
+        datetime.now(timezone.utc),
+        worker_id,
+    )
+    await db_session.commit()
+
+    first_shift_locked = asyncio.Event()
+    second_shift_select_started = asyncio.Event()
+    release_first_declare = asyncio.Event()
+    helper_call_count = 0
+    declare_module = import_module(
+        "beyo_manager.services.commands.users.declare_worker_state"
+    )
+
+    async def controlled_shift_lock(session, workspace_id, user_id):
+        nonlocal helper_call_count
+        call_index = helper_call_count
+        helper_call_count += 1
+        if call_index == 1:
+            second_shift_select_started.set()
+        shift = await load_open_worker_shift_for_update(
+            session,
+            workspace_id,
+            user_id,
+        )
+        if call_index == 0:
+            first_shift_locked.set()
+            await release_first_declare.wait()
+        return shift
+
+    monkeypatch.setattr(
+        declare_module,
+        "load_open_worker_shift_for_update",
+        controlled_shift_lock,
+    )
+
+    try:
+        first = asyncio.create_task(
+            _run_worker_command_in_new_session(
+                declare_worker_state,
+                workspace_id=workspace_id,
+                worker_id=worker_id,
+                incoming_data={"pause_reason_id": reason_ids[0]},
+            )
+        )
+        await asyncio.wait_for(first_shift_locked.wait(), timeout=5)
+        second = asyncio.create_task(
+            _run_worker_command_in_new_session(
+                declare_worker_state,
+                workspace_id=workspace_id,
+                worker_id=worker_id,
+                incoming_data={"pause_reason_id": reason_ids[1]},
+            )
+        )
+        await asyncio.wait_for(second_shift_select_started.wait(), timeout=5)
+        release_first_declare.set()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(first, second, return_exceptions=True),
+            timeout=10,
+        )
+
+        false_clocked_out = [
+            outcome
+            for outcome in outcomes
+            if isinstance(outcome, ConflictError)
+            and "Worker must be clocked in" in str(outcome)
+        ]
+        assert false_clocked_out == []
+        assert all(isinstance(outcome, dict) for outcome in outcomes)
+    finally:
+        release_first_declare.set()
+        await _cleanup_committed_worker_command_rows(
+            db_session,
+            workspace_id=workspace_id,
+            worker_id=worker_id,
+            pause_reason_ids=reason_ids,
+        )
+
+
+@pytest.mark.parametrize("run_number", range(5))
+async def test_concurrent_close_and_declare_retain_shift_then_declared_lock_order(
+    db_session,
+    monkeypatch,
+    run_number: int,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    reasons = [
+        await _seed_pause_reason(
+            db_session,
+            workspace,
+            worker,
+            name=f"Concurrent close-declare {run_number}-{index}",
+        )
+        for index in range(2)
+    ]
+    workspace_id = workspace.client_id
+    worker_id = worker.client_id
+    reason_ids = [reason.client_id for reason in reasons]
+    await clock_in_shift_for_user(
+        db_session,
+        workspace_id,
+        worker_id,
+        datetime.now(timezone.utc),
+        worker_id,
+    )
+    await declare_worker_state(
+        _ctx(
+            db_session,
+            workspace,
+            worker,
+            RoleNameEnum.WORKER.value,
+            {"pause_reason_id": reason_ids[0]},
+        )
+    )
+    await db_session.commit()
+
+    declare_shift_locked = asyncio.Event()
+    close_shift_select_started = asyncio.Event()
+    release_declare = asyncio.Event()
+    close_shift_results = []
+    declare_module = import_module(
+        "beyo_manager.services.commands.users.declare_worker_state"
+    )
+    close_module = import_module(
+        "beyo_manager.services.commands.users.close_declared_worker_state"
+    )
+
+    async def controlled_declare_shift_lock(session, workspace_id, user_id):
+        shift = await load_open_worker_shift_for_update(
+            session,
+            workspace_id,
+            user_id,
+        )
+        declare_shift_locked.set()
+        await release_declare.wait()
+        return shift
+
+    async def observed_close_shift_lock(session, workspace_id, user_id):
+        close_shift_select_started.set()
+        shift = await load_open_worker_shift_for_update(
+            session,
+            workspace_id,
+            user_id,
+        )
+        close_shift_results.append(shift)
+        return shift
+
+    monkeypatch.setattr(
+        declare_module,
+        "load_open_worker_shift_for_update",
+        controlled_declare_shift_lock,
+    )
+    monkeypatch.setattr(
+        close_module,
+        "load_open_worker_shift_for_update",
+        observed_close_shift_lock,
+    )
+
+    try:
+        declaring = asyncio.create_task(
+            _run_worker_command_in_new_session(
+                declare_worker_state,
+                workspace_id=workspace_id,
+                worker_id=worker_id,
+                incoming_data={"pause_reason_id": reason_ids[1]},
+            )
+        )
+        await asyncio.wait_for(declare_shift_locked.wait(), timeout=5)
+        closing = asyncio.create_task(
+            _run_worker_command_in_new_session(
+                close_declared_worker_state,
+                workspace_id=workspace_id,
+                worker_id=worker_id,
+                incoming_data={},
+            )
+        )
+        await asyncio.wait_for(close_shift_select_started.wait(), timeout=5)
+        release_declare.set()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(declaring, closing, return_exceptions=True),
+            timeout=10,
+        )
+
+        assert all(isinstance(outcome, dict) for outcome in outcomes)
+        assert len(close_shift_results) == 1
+        assert close_shift_results[0] is not None
+    finally:
+        release_declare.set()
+        await _cleanup_committed_worker_command_rows(
+            db_session,
+            workspace_id=workspace_id,
+            worker_id=worker_id,
+            pause_reason_ids=reason_ids,
+        )
+
+
 async def test_close_declaration_without_steps_reconciles_to_idle(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     reason = await _seed_pause_reason(
@@ -1420,6 +1849,73 @@ async def test_close_declaration_without_steps_reconciles_to_idle(db_session) ->
         await close_declared_worker_state(
             _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
         )
+
+
+async def test_close_declaration_leaves_auto_paused_step_open(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        worker,
+        name="Cleaning",
+    )
+    base = datetime(2026, 7, 29, 8, tzinfo=timezone.utc)
+    await clock_in_shift_for_user(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base,
+        worker.client_id,
+    )
+    working_step = await _seed_open_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=base + timedelta(minutes=5),
+    )
+    with freeze_time(base + timedelta(minutes=10)):
+        await declare_worker_state(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"pause_reason_id": reason.client_id},
+            )
+        )
+    paused_record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.step_id == working_step.client_id,
+            StepStateRecord.state == TaskStepStateEnum.PAUSED,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    paused_record_id = paused_record.client_id
+
+    with freeze_time(base + timedelta(minutes=20)):
+        result = await close_declared_worker_state(
+            _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+        )
+
+    await db_session.refresh(working_step)
+    await db_session.refresh(paused_record)
+    current = await _open_shift_record(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+    )
+
+    assert result["shift_state"] == UserShiftStateEnum.IN_PAUSE.value
+    assert working_step.state is TaskStepStateEnum.PAUSED
+    assert paused_record.client_id == paused_record_id
+    assert paused_record.exited_at is None
+    assert paused_record.pause_reason_id == reason.client_id
+    assert current.state is UserShiftStateEnum.IN_PAUSE
+    assert current.reason == reason.client_id
+    assert current.manually_recorded is False
 
 
 async def test_open_legacy_manual_pause_reconciles_to_idle_after_retirement(

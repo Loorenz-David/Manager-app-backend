@@ -261,6 +261,7 @@ Rules the UI must reflect:
 - Only **PERSONAL**-type catalog reasons are declarable (see §7); a BLOCKER reason → validation error.
 - If the chosen reason has `requires_description: true`, `description` is mandatory → else validation error.
 - `paused_steps` = active working steps that were auto-paused under this reason (surface it: "1 task was paused").
+- Switching declarations does not re-label already-paused task steps; `paused_steps` counts only newly-paused WORKING steps.
 - Declaring while another declaration is open **switches** (old one closes automatically) — no need to close first.
 - Unknown/foreign/deleted reason → `404`.
 
