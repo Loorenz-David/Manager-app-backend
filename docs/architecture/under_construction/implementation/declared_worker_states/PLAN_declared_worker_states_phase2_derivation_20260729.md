@@ -327,6 +327,86 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
   - Lifecycle result: implementation fixes are complete and returned to independent
     re-review. Per the fix-cycle protocol, no implemented summary, archive move, or
     master-table status change is made before an `APPROVED` verdict.
+- `2026-07-29` — Opus, independent re-review of the fix cycle (`8fdd5bf` + `aa0260a`).
+  Verdict: **NEEDS_CHANGES**.
+
+  **Round-1 findings re-verified against the fixed code (probes re-run, then removed):**
+  - **F1 — fixed.** Re-ran the original repro (step pause *and* declaration both still
+    open at clock-out, which the new
+    `test_declared_pause_owns_reconstruction_overlap_with_step_pause` does not cover — it
+    uses a closed step pause). Rebuild now yields `IN_PAUSE 09:05→09:20` step reason
+    `manually_recorded=False`, then `IN_PAUSE 09:20→09:50` declared reason
+    `manually_recorded=True`. Exactly D4.
+  - **F2 — fixed.** `is_manual` is owner-derived (`_reconstruct_shift_middle.py:207-210`),
+    no longer a `record_ids` intersection.
+  - **F3 — fixed.** After a declaration closes with a step pause open, the live record
+    switches to the step reason with `manually_recorded=False`.
+  - **F4 — dissolved as a consequence of the F3 fix** (verified: after everything closes
+    the shift lands on `IDLE`), and still pinned in the Phase 3 plan. **F6** pinned in the
+    Phase 3 plan. **F5 — fixed additively** (`test_midnight_safeguard_preserves_open_legacy_manual_pause`).
+  - Deploy-neutrality of the `linear_timeline.py` change independently confirmed:
+    `pytest tests/integration -q` → `17 failed, 252 passed`, and the failure node set is
+    **byte-identical** to a detached `git worktree` at `9d922cb` (pre-Phase-2) running the
+    same suite. Unit `895 passed, 8 failed` (same eight baseline nodes); tasks +
+    connecteam + worker-stats `70 passed`; users commands `24 passed, 2 failed` (the two
+    baseline clock-out cases); touched-file `ruff check` clean; repo-root `141`.
+    `serialize_linear_segment` builds its dict field-by-field, so the new
+    `owner_record_id` does not leak into any API contract.
+
+  **G1 — BLOCKING (regression introduced by the F3 fix). Legacy manual-pause stickiness is
+  broken for `IN_PAUSE → IN_PAUSE`, with zero declared rows, and it strands `/resume`.**
+  `services/commands/users/reconcile_worker_shift_state.py:214-225` now demands
+  `reason`/`manually_recorded` equality for *every* `IN_PAUSE` target, while the retained
+  carve-out (lines 197-204) still only guards `target is IDLE`. An open `/pause` row is
+  therefore closed and replaced by a step-sourced `IN_PAUSE` as soon as any step pause
+  opens for that worker inside the shift window (manager/batch step transition, or the
+  worker's own transitions if the analytics worker lags).
+  Probe, run on `aa0260a` and on the pre-Phase-2 baseline `9d922cb`, declared table empty:
+  worker `/pause`d at 08:05 (`reason="Cleaning the bench"`, `manually_recorded=True`),
+  step pause opens at 08:10, reconcile at 08:11 —
+  - `9d922cb`: `changed=False`; manual row still open, reason and marker intact.
+  - `aa0260a`: `changed=True`; manual row closed at 08:11; open record carries the step
+    reason with `manually_recorded=False`.
+  Consequence beyond record churn: `resume_worker_shift`
+  (`services/commands/users/resume_worker_shift.py:22-28`) requires the open record to be
+  `IN_PAUSE` **and** `manually_recorded`, so after the clobber the worker's `/resume` 409s
+  (`"A shift can only be resumed from a manual pause."`) until the step pause closes — a
+  user-facing lockout on an endpoint that is still live until Phase 3 retires it.
+  Violated clauses: checklist "Legacy manual-pause stickiness carve-out is STILL PRESENT"
+  (the line survives; the protection does not), acceptance 7, and the phase goal
+  "Behavior-neutral at deploy time".
+
+  **G2 — MEDIUM (same guard, same commit). Legacy step-sourced pause re-derivation
+  changed from sticky to re-emitting, with zero declared rows.**
+  Probe (both commits, declared table empty): two paused steps, reasons R1 (earliest) and
+  R2; the R1 step's record closes; reconcile —
+  - `9d922cb`: `changed=False`, one `IN_PAUSE` record, reason stays R1.
+  - `aa0260a`: `changed=True`, the record is closed and a second `IN_PAUSE` opens at the
+    reconcile instant with reason R2.
+  This is arguably *more* correct (it converges the live record with what the clock-out
+  rebuild produces), but the plan explicitly scoped it out — "Otherwise (step-sourced
+  pause) keep today's behavior" — and no test pins it in either direction, so the suites
+  cannot detect the change. Needs either an explicit recorded decision plus a pinning
+  test, or a guard that re-derives only when a *declared* source enters or leaves the
+  projection, leaving pure step→step reason changes on today's behavior.
+
+  **G3 — MINOR (scope, not a defect). `domain/analytics/linear_timeline.py` is outside
+  this phase's declared In-scope list**, which names four files and permits only a
+  *relational read* of this module ("File read intent"). The change is well-guarded
+  (`priority: int = 0` default, `-priority` leading the owner sort key, `owner_priority`
+  added to the merge key, new `LinearSegment` field defaulted and unserialized) and I
+  verified inertness for every other caller as recorded above — so this is a scope-record
+  gap, not a behavioral one. A shared pure-domain module changing under a deploy-neutral
+  phase should be added to the plan's Scope section, with the neutrality argument written
+  down. Related, informational: `scripts/backfill/backfill_worker_shift_state_records.py`
+  builds its own `LinearInterval` list and does not fold declared rows, so it remains a
+  second, now-divergent projection of the same timeline (harmless for historical data,
+  which predates declarations).
+
+  **Required before approval:** G1 (restore manual-pause stickiness across
+  `IN_PAUSE → IN_PAUSE` and pin it with a test asserting `/resume` still works after a
+  step pause opens under a manual pause). G2 (decide and pin, either way). G3 (record the
+  scope expansion + neutrality argument in the plan).
 
 ## Lifecycle transition
 
