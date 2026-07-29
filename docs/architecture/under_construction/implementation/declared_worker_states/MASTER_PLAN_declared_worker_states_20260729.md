@@ -56,7 +56,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | Phase | Plan | Delivers | Status |
 |-------|------|----------|--------|
 | 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
-| 2 | `PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `needs_changes` (round 3) — G1/G2/G3 fixed & verified at `d8a123a`; remaining: H1 (medium: rebuild launders `changed_by_id` provenance; heal script reopens laundered row → stickiness lost), H2 (doc/code agreement), T1 (commit the F1 both-sources-open repro as a test). Fix cycle 3 via `codex_prompts/PROMPT_phase2_fixes_round3.md`. |
+| 2 | `PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `needs_changes` (round 4) — rounds 1–3 fixed & verified; remaining: I1 (medium: retroactively-laundered manual rows → operator-decided one-time provenance repair migration, authorized D7 deviation), I2 (medium: legacy-manual rebuild priority → operator-decided keep + pin). Fix cycle 4 via `codex_prompts/PROMPT_phase2_fixes_round4.md`. |
 | 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `under_construction` |
 | 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `under_construction` |
 | 5 | `PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `under_construction` |
@@ -120,12 +120,11 @@ When all four phases are archived, set this master plan's status to `archived` a
 - `2026-07-29` (rev 3): Identify endpoint dropped in favor of client-side matching against the polled roster (`GET /users?role=worker&compact=true`), with `clock_in_code` exposed in that response only to floor-scope sessions (D13 rev 3). Phase 6 + handoff §3 updated. Accepted trade-off: the whole roster + codes lives in the kiosk device's memory — same trust boundary as the device's manager token (codes are identification, not authentication, per D12).
 - `2026-07-29`: **Phase 1 completed and archived** (commit `a84610c`). Implemented by Codex, reviewed APPROVED by Opus (independent re-run of all gates + detached-worktree baseline diff proving inertness). Validation waiver recorded for the pre-existing repo baseline; baseline rule added for remaining phases. Summary: `implemented_summaries/SUMMARY_declared_worker_states_phase1_model_20260729.md`.
 - `2026-07-29` (rev 4): Phase 7 added — the clock-out `analytics` envelope is populated with the worker's day summary (timeline resume + drill-down segments + insights) composed from the existing worker-stats services via a shared seam (D14 rev 4). Final-phase lifecycle duties move from Phase 6 to Phase 7.
-- `2026-07-29`: **Phase 2 completed and archived.** Derived-state precedence,
-  declaration-aware reconcile, clock-out reconstruction, and source clamp implemented;
-  lock order established as shift row → declared row. New/in-scope tests green; full
-  validation adds no failures or Ruff errors relative to the recorded repository
-  baseline. Summary:
-  `implemented_summaries/SUMMARY_declared_worker_states_phase2_derivation_20260729.md`.
+- `2026-07-29`: Phase 2 implemented (derived-state precedence, declaration-aware reconcile,
+  clock-out reconstruction + clamp, lock order shift row → declared row) and in **independent
+  review fix cycles** — rounds 1–3 findings (F*, G*, H1/T1) fixed and verified; round 4 open
+  (I1/I2). The phase table row is authoritative for current status; the implementer's earlier
+  "completed and archived" note was premature and is superseded by this entry (I3).
 
 ## Open questions
 

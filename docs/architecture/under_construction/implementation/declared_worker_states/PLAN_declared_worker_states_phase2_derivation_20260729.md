@@ -566,6 +566,103 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
     re-review. No implemented summary, archive move, or master-table change is made
     before an `APPROVED` verdict.
 
+- `2026-07-29` — Opus, independent re-review of fix cycle 3 (`95ca613` + `fa20b5a`).
+  Verdict: **NEEDS_CHANGES** (two findings; both narrow, neither in the declared path).
+
+  **Round-3 findings re-verified against the fixed code** (probes run on `fa20b5a` and on a
+  detached `git worktree` at the pre-Phase-2 baseline `9d922cb`, then removed):
+  - **H1 — fixed for the go-forward path.** `_reconstruct_shift_middle.py:159-180,215-230`
+    carries the legacy owner's `changed_by_id` onto the rebuilt segment, exactly the
+    resolution round 2 proposed. `test_healed_open_legacy_manual_pause_remains_sticky_and_resumable`
+    exercises `/pause` → heal body → reconcile no-op → `/resume` OK. See **I1** for the
+    residual it does not cover.
+  - **H2 — addressed.** The Reconcile assumption (line 35) now states the implemented rule
+    (actor-authored legacy row sticky against *every* non-`WORKING` projection, declared
+    included) and records that the carve-out retires with `/pause`/`/resume` in Phase 3.
+  - **T1 — committed.** `test_declared_pause_owns_reconstruction_overlap_with_open_step_pause`
+    pins the both-sources-open repro (step reason + `manually_recorded=False` for
+    `09:05→09:20`, declared reason + `manually_recorded=True` for `09:20→09:50`).
+  - **Adversarial probes (all clean).** Declared row + open WORKING step at one reconcile →
+    `WORKING`, declaration closed at `now` with `closed_by_id = NULL`. Two concurrent
+    reconciles with a declared row open → one `changed=True` / one `changed=False`, one open
+    shift record, one close, no `IntegrityError` escape (the existing retry path covers the
+    new code). Reconcile idempotency with a declared row open → no-op.
+  - **Independent gates.** `pytest tests/integration -q` → `17 failed, 256 passed`, failure
+    node set **byte-identical** to `9d922cb` (baseline `17 failed, 244 passed`);
+    `tests/unit` → `895 passed, 8 failed` (same eight baseline nodes);
+    `tests/integration/services/commands/users/` → `28 passed, 2 failed` (the two baseline
+    clock-out cases); tasks + connecteam + worker-stats → `70 passed`; unit state machine +
+    linear timeline → `82 passed`; touched-file `ruff check` → `All checks passed!`;
+    `derive_target_state` has exactly one production call site, on the new signature;
+    `user_declared_state_records` empty before and after.
+
+  **I1 — MEDIUM (regression introduced by the G1 fix; H1's fix does not reach it). The
+  `changed_by_id IS NOT NULL` provenance rule is retroactive, so a manual row laundered
+  *before* this deploy loses stickiness on the first reconcile and strands `/resume`.**
+  `reconcile_worker_shift_state.py:197-202` is new in this phase; pre-Phase-2 the carve-out
+  keyed on `manually_recorded` alone, so an open `IN_PAUSE` / `manually_recorded=True` /
+  `changed_by_id IS NULL` row was protected. Round 3 fixes the *producer*
+  (`_reconstruct_shift_middle.py:221`) but nothing repairs rows the old producer already
+  wrote — and the round-2 review established that the heal script has been run against
+  production data, so such a row can exist at deploy time (heal reopens a manual-owned tail
+  with `changed_by_id=None`; the row survives until that worker's next clock-out).
+  Probe (zero declared rows; seed an open manual row with `changed_by_id = NULL`, open a
+  step pause, reconcile):
+  - `9d922cb`: `changed=False`; open row keeps `IN_PAUSE` / `"Cleaning the bench"` /
+    `manually_recorded=True`; `/resume` returns `{"state": "idle"}`.
+  - `fa20b5a`: `changed=True`; the row is closed and replaced by a step-sourced `IN_PAUSE`
+    with `reason=None`, `manually_recorded=False`; `resume_worker_shift.py:22-28` then
+    raises `409 "A shift can only be resumed from a manual pause."`
+  Violated clause: acceptance 7 / "Behavior-neutral at deploy time", and D7's promise that
+  shifts open across the deploy keep working. Note that Phase 3's plan (line 42) pre-accepts
+  a deploy-time flip as "cosmetic-only" — that reasoning does **not** transfer here, because
+  in Phase 2 `/pause` and `/resume` are still live, so this is a user-facing lockout rather
+  than a cosmetic record change. Narrow exposure (needs a heal run and no intervening
+  clock-out), so an explicit recorded decision is an acceptable resolution: either widen the
+  carve-out to tolerate laundered rows, or record a pre-deploy data check
+  (`SELECT` open `IN_PAUSE` + `manually_recorded` + `changed_by_id IS NULL`) in the
+  implemented summary's deploy notes. Silence is not.
+
+  **I2 — MEDIUM (undecided, unpinned legacy-path behavior change). Reconstruction elevates
+  frozen legacy manual pauses above step pauses, changing the rebuilt timeline with zero
+  declared rows.** `_reconstruct_shift_middle.py:50,189` assigns
+  `_LEGACY_MANUAL_PAUSE_PRIORITY = 1` to legacy manual intervals, so they now own overlaps
+  against an *earlier* step pause; pre-Phase-2 the earliest pause owned it.
+  Probe (zero declared rows; step pause open from `09:05`, `/pause` at `09:20`, clock out
+  `09:50`):
+  - `9d922cb`: one segment — `IN_PAUSE 09:05→09:50`, reason = the **step** pause reason,
+    `manually_recorded=True`, `changed_by_id=None`.
+  - `fa20b5a`: two segments — `IN_PAUSE 09:05→09:20` step reason `manually_recorded=False`,
+    then `IN_PAUSE 09:20→09:50` `"Cleaning the bench"` `manually_recorded=True`
+    `changed_by_id=<worker>`.
+  The new output is arguably the more truthful one (it is what the F2 owner-attribution fix
+  implies), but this is a legacy-only path, it is reachable today, it changes what
+  worker-stats reports for such a day, and no test pins it in either direction — so the
+  suites cannot detect a future flip. The plan's Scope item 5 neutrality argument covers only
+  *other callers* ("only reconstruction supplies non-default priorities"); the reordering of
+  legacy-vs-step *inside* reconstruction is not recorded anywhere in the plan. Same
+  disposition round 2 required for G2: decide explicitly and pin with a test, either way.
+
+  **I3 — MINOR (lifecycle bookkeeping).** The master plan's Progress notes still carry the
+  premature entry "**Phase 2 completed and archived.**"
+  (`MASTER_PLAN_declared_worker_states_20260729.md:123-128`), citing
+  `implemented_summaries/SUMMARY_declared_worker_states_phase2_derivation_20260729.md`,
+  which does not exist. It contradicts the same file's phase table (`needs_changes` (round 3))
+  and this plan's own status (`implemented` → `independent re-review`). Residue of the
+  unwound premature archive (`8fdd5bf`); it will mislead the Phase 3 implementer.
+
+  **I4 — INFORMATIONAL.** `compute_linear_segments` takes `owner_record_id` from the *first*
+  raw segment of a merged run (`linear_timeline.py:306,321,339`), and the merge key is
+  `(state, reason, owner_priority)` — not the owner. Two adjacent legacy manual rows with an
+  identical free-text reason but different actors therefore merge into one segment carrying
+  the first actor's `changed_by_id`. Harmless in practice (the derived row's provenance is
+  only consumed by the carve-out, and both actors are legitimate), but it means
+  "owner-derived" attribution is per-run, not per-instant.
+
+  **Required before approval:** I1 (decide and record — carve-out widening *or* a documented
+  pre-deploy data check; if code changes, pin it) and I2 (decide and pin, either way).
+  I3 is a one-line doc correction. I4 needs no action.
+
 ## Lifecycle transition
 
 - Current state: `implemented`
