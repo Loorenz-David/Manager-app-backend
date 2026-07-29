@@ -456,6 +456,71 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
   - Lifecycle result: implementation fixes are complete and returned to independent
     re-review. No implemented summary, archive move, or master-table change is made
     before an `APPROVED` verdict.
+- `2026-07-29` — Opus, independent re-review of fix cycle 2 (`67296a5` + `d8a123a`).
+  Verdict: **NEEDS_CHANGES** (one finding, narrow).
+
+  **Round-2 findings re-verified against the fixed code** (probes re-run on `d8a123a` and
+  on a detached worktree at the pre-Phase-2 baseline `9d922cb`, then removed):
+  - **G1 — fixed.** `/pause` row open (`changed_by_id = user`), step pause opens, reconcile
+    → `changed=False`, manual row still open with `reason="Cleaning the bench"`. Matches
+    baseline exactly; `/resume` remains callable.
+  - **G2 — fixed.** Two paused steps, earliest closes → `changed=False`, reason stays R1.
+    Matches baseline exactly. `declared_projection_involved`
+    (`reconcile_worker_shift_state.py:220-226`) correctly narrows the re-check to
+    transitions where a declaration enters or leaves the projection.
+  - **G3 — addressed.** `linear_timeline.py` is now item 5 of the plan's In-scope list with
+    the neutrality argument, and the backfill divergence is noted in
+    `_reconstruct_shift_middle.py:16-19`.
+  - **F1–F5 spot-re-verified.** The both-sources-open clock-out repro (still not covered by
+    any committed test) rebuilds to `IN_PAUSE 09:05→09:20` step reason
+    `manually_recorded=False` + `IN_PAUSE 09:20→09:50` declared reason
+    `manually_recorded=True`.
+  - **Independent gates.** `pytest tests/integration -q` → `17 failed, 252 passed`, failure
+    node set **byte-identical** to the `9d922cb` baseline; `tests/unit` →
+    `895 passed, 8 failed` (same eight baseline nodes); users commands →
+    `26 passed, 2 failed` (the two baseline clock-out cases); touched-file `ruff check`
+    clean; repo-root `141`; `git diff --check` clean.
+
+  **H1 — MEDIUM (regression introduced by the G1/G2 fix). The `changed_by_id IS NOT NULL`
+  provenance rule is not an invariant: `reconstruct_shift_middle` launders it to `NULL`,
+  and `heal_open_shifts_today.py` then reopens the laundered row as the worker's current
+  state.**
+  `_reconstruct_shift_middle.py:212` re-emits **every** rebuilt record with
+  `changed_by_id=None`, including legacy manual segments (which it correctly marks
+  `manually_recorded=True`). `scripts/backfill/heal_open_shifts_today.py:169-188` rebuilds
+  an **open** shift over `[shift_start, now]` and then sets `tail.exited_at = None`,
+  deliberately leaving the last rebuilt segment open. If that tail is a re-emitted
+  `/pause` row, it now reads as a reconcile-authored declaration projection
+  (`manually_recorded=True`, `changed_by_id IS NULL`), so
+  `legacy_manual_pause_is_sticky` (`reconcile_worker_shift_state.py:197-202`) is `False`
+  and the next reconcile closes the worker's manual pause.
+  Probe (zero declared rows; seed an open `/pause` row, run the heal script's body, then
+  reconcile):
+  - `9d922cb`: `changed=False`; open record stays `IN_PAUSE` / `"Cleaning the bench"` /
+    `manually_recorded=True`.
+  - `d8a123a`: `changed=True`; the record is closed and the worker drops to `IDLE`, reason
+    `None`, `manually_recorded=False`.
+  Same downstream consequence as G1: `resume_worker_shift.py:22-28` requires the open
+  record to be `manually_recorded`, so `/resume` then returns
+  `409 "A shift can only be resumed from a manual pause."` The heal script is documented
+  "Deterministic and idempotent — safe to re-run" and the repository history shows it being
+  used against production data, so this is reachable operationally, not only in theory.
+  Violated clause: acceptance 7 / "Behavior-neutral at deploy time" on the legacy path.
+  Resolution is small and open to the implementer — e.g. have `reconstruct_shift_middle`
+  carry the original `changed_by_id` through for ids in `manual_ids` (it already computes
+  that set), or key the carve-out on a signal the rebuild cannot launder. Whatever is
+  chosen must be pinned by a test that runs the heal body over an open manual pause and
+  asserts the next reconcile leaves it sticky.
+
+  **H2 — INFORMATIONAL (doc/code mismatch, unreachable).** The plan's Reconcile assumption
+  (line 35) states the legacy row "remains sticky against both `IDLE` and **step-sourced**
+  `IN_PAUSE`", but the implemented carve-out has no declared-source exemption, so a legacy
+  `/pause` row also suppresses a *declared* projection entirely. Probe: legacy manual row
+  open + declaration open → `changed=False`, the open record keeps `"Legacy manual"` and
+  the declaration never reaches the live timeline. Unreachable in Phase 2 (no declaration
+  writers) and Phase 3 retires `/pause` together with the carve-out, so no fix is needed —
+  but the plan sentence and the code should be made to agree, or the exemption added, so
+  the next reader is not misled.
 
 ## Lifecycle transition
 
