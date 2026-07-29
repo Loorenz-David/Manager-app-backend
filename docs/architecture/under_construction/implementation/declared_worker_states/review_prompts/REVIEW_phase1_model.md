@@ -24,9 +24,9 @@ You are reviewing an implementation made by another agent (Codex) in the Manager
 - [ ] `uds` prefix: verified free, claimed in `client_id_prefix_map.md`.
 - [ ] `models/tables/users/README.md` documents the table incl. source-table/never-rebuilt/one-open-row/close-don't-delete rules.
 - [ ] **Inertness**: `grep -rn "UserDeclaredStateRecord\|user_declared_state_records" app/beyo_manager/` hits ONLY the model file, `models/__init__.py`, the migration, and tests. Any service/router/worker hit = blocking finding.
-- [ ] Migration downgrade drops the table cleanly; upgrade→downgrade→upgrade cycle verified.
+- [ ] Migration downgrade drops the table cleanly; upgrade→downgrade→upgrade cycle verified (on an existing-head DB; the fresh-empty-DB gate is waived — see the master plan's "Repository validation baseline" and the plan's Review-log waiver).
 - [ ] No soft-delete columns, no `state` enum column (plan explicitly excludes both).
-- [ ] Full suite green (proves nothing else changed behavior); ruff clean.
+- [ ] **No NEW test failures or ruff errors relative to the recorded baseline** (master plan "Repository validation baseline"; per-file evidence in the Phase 1 Review-log waiver). Do not block on the 22 pre-existing failures, the flaky shopify test, or the 149 baseline ruff errors — but any failure NOT in that baseline is a blocking finding.
 
 ## Verdict
 

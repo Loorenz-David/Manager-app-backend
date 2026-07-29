@@ -73,6 +73,25 @@ Dependency note: Phase 5 touches only auth and has **no dependency on Phases 1â€
 4. When the review approves: Codex (or the operator) writes the implemented summary, archives the phase plan, and updates this master table's Status column.
 5. Only then start phase N+1.
 
+### Repository validation baseline (recorded 2026-07-29, during Phase 1)
+
+The repository has pre-existing validation debt, verified against the pre-Phase-1 git state
+(evidence in the Phase 1 plan's Review log):
+
+- **22 stable failing tests** (bootstrap, items, task_steps, tasks, upholstery, working_sections,
+  audit, shopify, auth, worker_stats, routers) + at least one **non-idempotent flaky test**
+  (`test_create_uses_client_supplied_id_for_new_preference` â€” hardcoded client_id, fails on any
+  re-run against a dirty test DB).
+- **149 `ruff check .` errors** in untouched files.
+- **Fresh empty-DB `alembic upgrade head` stalls** in the historical revision graph's topological
+  sort (existing DBs at head upgrade fine).
+
+**Binding rule for every phase and every reviewer:** wherever a phase plan or review prompt says
+"full suite green" / "ruff clean", read it as **"no NEW failures or errors relative to this
+baseline, and all in-scope/new tests green; touched files ruff-clean."** Implementers must not
+absorb baseline repairs into a phase (scope discipline); reviewers must not block on baseline
+items. Repairing the baseline is separate repo-health work outside this feature set.
+
 ### Lifecycle / archiving note (overrides the skill's flat-path `mv`)
 
 Phase plans live in this subfolder for compactness. On archive, **preserve the subfolder**: move to

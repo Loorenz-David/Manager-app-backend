@@ -63,6 +63,7 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | User | usr | usr_xxxxxxx |
 | UserAppViewRecord | uavr | uavr_xxxxxxx |
 | UserDailyWorkStats | udwr | udwr_xxxxxxx |
+| UserDeclaredStateRecord | uds | uds_xxxxxxx |
 | UserHistoryRecord | uhr | uhr_xxxxxxx |
 | UserLifetimeStats | usr_stat | usr_stat_xxxxxxx |
 | UserSectionDailyWorkStats | usdwr | usdwr_xxxxxxx |

@@ -5,9 +5,10 @@
 | File | Table | Prefix | Purpose |
 |---|---|---|---|
 | `user_work_profile.py` | `user_work_profiles` | `uwp` | Per-user, per-workspace compensation profile |
+| `user_declared_state_record.py` | `user_declared_state_records` | `uds` | Source history of worker-declared non-task states |
 | `user_shift_state_record.py` | `user_shift_state_records` | `uss` | Full history of shift state transitions per user |
 
-> The `users` table itself lives at `models/tables/users/user.py` (bootstrap). These two tables extend it with operational worker data without modifying the core identity table.
+> The `users` table itself lives at `models/tables/users/user.py` (bootstrap). These tables extend it with operational worker data without modifying the core identity table.
 
 ---
 
@@ -66,6 +67,17 @@ WHERE user_id = ? AND workspace_id = ? AND exited_at IS NULL
 
 - Do not hard-delete rows. `exited_at` / `changed_by_id` track the full lifecycle.
 - All timestamps are UTC. Frontend is responsible for timezone localization.
+
+---
+
+## `user_declared_state_records` — source-history boundary rules
+
+- This is a source table for worker declarations. It is never rebuilt from the derived shift timeline.
+- At most one row may be open per `(user_id, workspace_id)`, enforced by
+  `uix_user_declared_state_records_active` where `exited_at IS NULL`.
+- Rows are closed by setting `exited_at`; they are never deleted.
+- `closed_by_id IS NULL` on a closed row means the system closed it.
+- `pause_reason_id` preserves the catalog reason that the worker declared.
 
 ---
 

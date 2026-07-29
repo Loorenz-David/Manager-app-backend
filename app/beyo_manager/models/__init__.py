@@ -43,6 +43,7 @@ from beyo_manager.models.tables.schedulers import recurring_scheduler  # noqa: F
 
 # --- User domain extensions ---
 from beyo_manager.models.tables.users import user_work_profile  # noqa: F401
+from beyo_manager.models.tables.users import user_declared_state_record  # noqa: F401
 from beyo_manager.models.tables.users import user_shift_state_record  # noqa: F401
 
 # --- Working sections ---
