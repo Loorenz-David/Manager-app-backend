@@ -115,6 +115,32 @@ async def test_optional_product_keys_are_forwarded_when_supplied(monkeypatch) ->
 
 
 @pytest.mark.unit
+async def test_section_level_metafields_are_forwarded(monkeypatch) -> None:
+    payload = _preorder_payload()
+    payload["metafields"] = {
+        "notes": "handle with care",
+        "finish": {
+            "type": "single_line_text_field",
+            "value": "oiled oak",
+        },
+    }
+    body = tasks_router._CreateTaskBody(
+        task_type="pre_order",
+        shopify_preorder=payload,
+    )
+
+    captured = await _call_route(body, monkeypatch)
+
+    assert captured["ctx"].incoming_data["shopify_preorder"]["metafields"] == {
+        "notes": "handle with care",
+        "finish": {
+            "type": "single_line_text_field",
+            "value": "oiled oak",
+        },
+    }
+
+
+@pytest.mark.unit
 async def test_multiple_inventory_locations_are_forwarded(monkeypatch) -> None:
     payload = _preorder_payload()
     payload["inventory"].append(

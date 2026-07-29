@@ -14,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 
 from beyo_manager.domain.shopify.enums import (
-    ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyProductSyncOperationEnum,
     ShopifyProductSyncStageEnum,
@@ -37,24 +36,6 @@ query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
         }
         inventoryItem {
           id
-        }
-      }
-    }
-  }
-}
-""".rstrip()
-
-FIND_PRODUCT_BY_OPERATION_TAG_QUERY = """
-query FindProductByOperationTag($searchQuery: String!, $first: Int!) {
-  products(first: $first, query: $searchQuery) {
-    nodes {
-      id
-      variants(first: 1) {
-        nodes {
-          id
-          inventoryItem {
-            id
-          }
         }
       }
     }
@@ -236,32 +217,9 @@ def create_path_case() -> CharacterisationCase:
         expected_operation=ShopifyProductSyncOperationEnum.CREATE,
         expected_calls=[
             (
-                "find_product_by_operation_tag",
-                FIND_PRODUCT_BY_OPERATION_TAG_QUERY,
-                {
-                    "searchQuery": (
-                        'tag:"managerbeyo-sync-shpsi_characterisation"'
-                    ),
-                    "first": 2,
-                },
-            ),
-            (
-                "find_product_variants_by_sku",
-                FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY,
-                {"searchQuery": 'sku:"SKU-CREATE"', "first": 10},
-            ),
-            (
                 "create_shopify_product",
                 CREATE_PRODUCT_MUTATION,
-                {
-                    "product": {
-                        **product,
-                        "tags": [
-                            *product["tags"],
-                            "managerbeyo-sync-shpsi_characterisation",
-                        ],
-                    }
-                },
+                {"product": product},
             ),
             (
                 "create_shopify_product_variant_update",
@@ -288,6 +246,7 @@ def update_path_case() -> CharacterisationCase:
         "tags": ["characterisation", "update"],
     }
     variant = {
+        "barcode": "BAR-UPDATE",
         "price": "149.00",
         "inventoryItem": {"sku": "SKU-UPDATE"},
     }
@@ -296,19 +255,9 @@ def update_path_case() -> CharacterisationCase:
         expected_operation=ShopifyProductSyncOperationEnum.UPDATE,
         expected_calls=[
             (
-                "find_product_by_operation_tag",
-                FIND_PRODUCT_BY_OPERATION_TAG_QUERY,
-                {
-                    "searchQuery": (
-                        'tag:"managerbeyo-sync-shpsi_characterisation"'
-                    ),
-                    "first": 2,
-                },
-            ),
-            (
-                "find_product_variants_by_sku",
+                "find_product_variants_by_barcode",
                 FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY,
-                {"searchQuery": 'sku:"SKU-UPDATE"', "first": 10},
+                {"searchQuery": 'barcode:"BAR-UPDATE"', "first": 10},
             ),
             (
                 "update_shopify_product",
@@ -368,31 +317,9 @@ def metafields_case() -> CharacterisationCase:
         expected_operation=ShopifyProductSyncOperationEnum.CREATE,
         expected_calls=[
             (
-                "find_product_by_operation_tag",
-                FIND_PRODUCT_BY_OPERATION_TAG_QUERY,
-                {
-                    "searchQuery": (
-                        'tag:"managerbeyo-sync-shpsi_characterisation"'
-                    ),
-                    "first": 2,
-                },
-            ),
-            (
-                "find_product_variants_by_sku",
-                FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY,
-                {"searchQuery": 'sku:"SKU-METAFIELDS"', "first": 10},
-            ),
-            (
                 "create_shopify_product",
                 CREATE_PRODUCT_MUTATION,
-                {
-                    "product": {
-                        **product,
-                        "tags": [
-                            "managerbeyo-sync-shpsi_characterisation",
-                        ],
-                    }
-                },
+                {"product": product},
             ),
             (
                 "create_shopify_product_variant_update",
@@ -453,31 +380,9 @@ def multi_location_absolute_inventory_case() -> CharacterisationCase:
         expected_operation=ShopifyProductSyncOperationEnum.CREATE,
         expected_calls=[
             (
-                "find_product_by_operation_tag",
-                FIND_PRODUCT_BY_OPERATION_TAG_QUERY,
-                {
-                    "searchQuery": (
-                        'tag:"managerbeyo-sync-shpsi_characterisation"'
-                    ),
-                    "first": 2,
-                },
-            ),
-            (
-                "find_product_variants_by_sku",
-                FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY,
-                {"searchQuery": 'sku:"SKU-INVENTORY"', "first": 10},
-            ),
-            (
                 "create_shopify_product",
                 CREATE_PRODUCT_MUTATION,
-                {
-                    "product": {
-                        **product,
-                        "tags": [
-                            "managerbeyo-sync-shpsi_characterisation",
-                        ],
-                    }
-                },
+                {"product": product},
             ),
             (
                 "create_shopify_product_variant_update",
@@ -612,13 +517,6 @@ async def _assert_exact_graphql(
         created_by_id="usr_characterisation",
         normalized_payload_json=deepcopy(case.payload),
         status=ShopifyProductSyncItemStatusEnum.PENDING,
-        # Both are NOT NULL with server defaults on the real model, so the stand-in must
-        # carry them — the orchestrator reads them directly rather than via getattr.
-        inventory_mode=(
-            ShopifyInventoryModeEnum.SET
-            if "quantities" in case.payload.get("inventory", {})
-            else ShopifyInventoryModeEnum.ADD
-        ),
         stage=ShopifyProductSyncStageEnum.QUEUED,
         requested_operation=None,
         shopify_product_id=None,
@@ -647,19 +545,16 @@ async def _assert_exact_graphql(
 
 
 def _graphql_response(operation_name: str, variables: dict) -> dict:
-    if operation_name == "find_product_by_operation_tag":
-        return {"products": {"nodes": []}}
-
-    if operation_name == "find_product_variants_by_sku":
-        if variables["searchQuery"] == 'sku:"SKU-UPDATE"':
+    if operation_name == "find_product_variants_by_barcode":
+        if variables["searchQuery"] == 'barcode:"BAR-UPDATE"':
             return {
                 "productVariants": {
                     "edges": [
                         {
                             "node": {
                                 "id": "gid://shopify/ProductVariant/201",
-                                "sku": "SKU-UPDATE",
-                                "barcode": None,
+                                "sku": "DUPLICATE-SKU",
+                                "barcode": "BAR-UPDATE",
                                 "product": {
                                     "id": "gid://shopify/Product/200",
                                     "status": "UNLISTED",

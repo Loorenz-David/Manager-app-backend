@@ -88,9 +88,9 @@ multiplied or divided by anything.
 
 > **You cannot clear a description by sending an empty one.** Omitting the field — or sending `""`
 > or `null` — makes the backend leave `descriptionHtml` out of the Shopify mutation entirely. On a
-> **new** product that means no description. On a **reused** product (same SKU already in Shopify)
-> the existing description survives untouched. To actually blank one out, someone has to edit it in
-> the Shopify admin.
+> **new** product that means no description. On a **reused** product (same task-item article number
+> already present as a Shopify barcode) the existing description survives untouched. To actually
+> blank one out, someone has to edit it in the Shopify admin.
 
 **`image_id` / `image_url`** — mutually exclusive, both optional.
 - `image_id` (preferred) — an existing `img_…` from the image upload flow. The backend resolves it
@@ -200,8 +200,12 @@ a pending state and wait for the socket event.
 
 The task and the Shopify intent are written in **one database transaction**, so a task never exists
 without its pre-order intent, and vice versa. A background worker then picks it up and talks to
-Shopify: it finds or creates the product by SKU, sets the variant's SKU and price, attaches the
-image, writes the metafields, and sets the stock at your chosen location(s).
+Shopify: it finds or creates the product by the task item's article number (written as the Shopify
+barcode), sets the variant's SKU and price, attaches the image, writes the metafields, and sets the
+stock at your chosen location(s). SKU is product data, not identity; duplicate SKUs are allowed.
+
+The backend sends `product.tags` exactly as supplied. This is where to add a `preorder` or other
+merchant-facing tag. It does not generate a `managerbeyo-sync-*` retry tag.
 
 Two consequences worth designing for:
 
@@ -210,7 +214,8 @@ Two consequences worth designing for:
 - **It is retried automatically** on transient Shopify failures. A pre-order that hasn't emitted an
   event yet may still be in flight.
 
-That is all you need. The durability, idempotency and retry mechanics are backend concerns.
+That is all you need. The durability and retry mechanics are backend concerns. If a product has no
+barcode, a retried create cannot safely recover through SKU because SKU is not unique.
 
 ---
 
@@ -262,8 +267,8 @@ That is all you need. The durability, idempotency and retry mechanics are backen
   created a real product, so don't render it as "nothing happened".
 - **`media_status`** may be `PROCESSING` on success. That's normal — Shopify transcodes images
   asynchronously and the product is usable regardless. Don't gate anything on `READY`.
-- **`requested_operation: "update"`** means an existing Shopify product with that SKU was reused and
-  its price overwritten, rather than a new one created. Worth surfacing.
+- **`requested_operation: "update"`** means an existing Shopify product with that exact barcode was
+  reused and its price overwritten, rather than a new one created. Worth surfacing.
 
 ### Correlating
 
@@ -286,10 +291,9 @@ Everything below arrives as `error_code` in the socket event unless marked as an
 | Code | Meaning | Can the seller fix it? |
 |---|---|---|
 | `preorder_inventory_location_invalid` | The chosen location is gone, inactive, or a fulfillment-service location | Yes — create a new pre-order against a valid location |
-| `ambiguous_product_match` | **Two or more Shopify products already share this SKU.** We refuse to guess which to update | No — someone must merge or re-SKU them in Shopify Admin. **Expect this in production**; the merchant's catalogue already contains duplicate SKUs |
+| `ambiguous_product_match` | Two or more Shopify variants already share this exact barcode, including variants of the same product | No — someone must make the barcode unique in Shopify Admin |
 | `product_image_unresolved` | The `image_id` doesn't exist or was deleted | Yes — re-attach the image |
 | `invalid_product_image_url` | The resolved image URL isn't an absolute `https://` URL | Yes |
-| `conflicting_identity_match` | The SKU and barcode resolve to different existing products | No — merchant data fix |
 
 **Configuration / operational — surface as "contact an admin":**
 
@@ -333,3 +337,15 @@ Nothing else here is expected to move. Build against it.
 
 Anything ambiguous in this document is a backend bug, not something to guess at — ask and it gets
 fixed here rather than diverging in two codebases.
+# 2026-07-28 inventory-contract addendum
+
+All Shopify product creation/update requests now use authoritative absolute inventory:
+`inventory_quantities[].quantity`. The legacy
+`inventory_adjustments[].quantity_to_add` request remains accepted for one release but is
+interpreted as absolute, not additive. Do not send both shapes. Selected quantity `0` must be
+preserved to clear a location; omitted locations remain unchanged.
+
+Ordinary and pre-order products share the same worker execution. Their completion events remain
+distinct because the backend now persists an explicit sync origin rather than inferring pre-orders
+from inventory behavior. For `shopify.products.synced`, canonical inventory results contain
+`quantities`; clients may accept historical `adjustments` results during the compatibility release.

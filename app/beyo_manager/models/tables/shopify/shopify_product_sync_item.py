@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from beyo_manager.domain.shopify.enums import (
     ShopifyInventoryModeEnum,
+    ShopifyProductSyncOriginEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyProductSyncOperationEnum,
     ShopifyProductSyncStageEnum,
@@ -28,6 +29,7 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
     __table_args__ = (
         Index("ix_shopify_product_sync_items_workspace_status", "workspace_id", "status"),
         Index("ix_shopify_product_sync_items_shop_integration_status", "shop_integration_id", "status"),
+        Index("ix_shopify_product_sync_items_workspace_origin", "workspace_id", "sync_origin"),
     )
 
     workspace_id: Mapped[str] = mapped_column(
@@ -69,6 +71,17 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
         default=ShopifyProductSyncStageEnum.QUEUED,
         server_default=ShopifyProductSyncStageEnum.QUEUED.value,
     )
+    # Stored as a constrained application enum over VARCHAR, rather than a native
+    # PostgreSQL enum, so future producers can be deployed without a type migration.
+    # The worker still validates the value before any Shopify mutation.
+    sync_origin: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=ShopifyProductSyncOriginEnum.STANDARD_PRODUCT_SYNC.value,
+        server_default=ShopifyProductSyncOriginEnum.STANDARD_PRODUCT_SYNC.value,
+    )
+    source_entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     inventory_mode: Mapped[ShopifyInventoryModeEnum] = mapped_column(
         SAEnum(
             ShopifyInventoryModeEnum,
@@ -76,8 +89,8 @@ class ShopifyProductSyncItem(IdentityMixin, Base):
             create_type=True,
         ),
         nullable=False,
-        default=ShopifyInventoryModeEnum.ADD,
-        server_default=ShopifyInventoryModeEnum.ADD.value,
+        default=ShopifyInventoryModeEnum.SET,
+        server_default=ShopifyInventoryModeEnum.SET.value,
     )
     normalized_payload_json: Mapped[dict] = mapped_column("normalized_payload", JSONB, nullable=False)
     shopify_product_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

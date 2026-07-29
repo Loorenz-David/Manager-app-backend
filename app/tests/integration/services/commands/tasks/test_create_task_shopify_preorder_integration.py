@@ -11,11 +11,13 @@ from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventTypeEnum,
     ShopifyIntegrationStatusEnum,
     ShopifyInventoryModeEnum,
+    ShopifyProductSyncOriginEnum,
 )
 from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.shopify.shopify_integration_event import (
     ShopifyIntegrationEvent,
@@ -81,6 +83,10 @@ async def _seed_context(db_session, *, role_name: str = "seller") -> ServiceCont
         incoming_data={
             "task_type": "pre_order",
             "title": "Pre-order chair",
+            "item": {
+                "article_number": "ARTICLE-PREORDER-1",
+                "sku": "SKU-PREORDER-1",
+            },
             "shopify_preorder": {
                 "shop_integration_id": shop.client_id,
                 "product": {
@@ -88,9 +94,9 @@ async def _seed_context(db_session, *, role_name: str = "seller") -> ServiceCont
                     "sku": "SKU-PREORDER-1",
                     "price": "5200.00",
                     # No `quantity` metafield — the backend derives it from `inventory`.
-                    "metafields": {
-                        "notes": "handle with care",
-                    },
+                },
+                "metafields": {
+                    "notes": "handle with care",
                 },
                 "inventory": [
                     {
@@ -163,7 +169,14 @@ async def test_create_task_commits_preorder_intent_atomically_without_shopify_ht
     assert result["shopify_preorder"]["preorder_operation_id"] == sync_item.client_id
     assert result["shopify_preorder"]["shopify_task_id"] == execution_task.client_id
     assert sync_item.inventory_mode == ShopifyInventoryModeEnum.SET
+    assert sync_item.sync_origin == ShopifyProductSyncOriginEnum.PREORDER_TASK.value
+    assert sync_item.source_entity_type == "task"
+    assert sync_item.source_entity_id == result["client_id"]
     assert sync_item.normalized_payload_json["product"]["status"] == "UNLISTED"
+    assert (
+        sync_item.normalized_payload_json["variant"]["barcode"]
+        == "ARTICLE-PREORDER-1"
+    )
     # `custom.quantity` is derived from the inventory selection (one location, quantity 2), not
     # taken from the caller. The fixture supplies a different metafield to prove the caller's
     # other metafields still pass through.
@@ -340,6 +353,36 @@ async def test_explicit_product_category_wins_over_the_item_category(
 
 
 @pytest.mark.integration
+async def test_preorder_uses_persisted_article_number_when_item_matches_by_sku(
+    db_session,
+    monkeypatch,
+) -> None:
+    ctx = await _seed_context(db_session)
+    existing_item = Item(
+        workspace_id=ctx.workspace_id,
+        article_number="PERSISTED-ARTICLE-1",
+        sku="SKU-PREORDER-1",
+        created_by_id=ctx.user_id,
+    )
+    db_session.add(existing_item)
+    await db_session.flush()
+    ctx.incoming_data["item"] = {"sku": "SKU-PREORDER-1"}
+    await _disable_event_dispatch(monkeypatch)
+
+    result = await create_task(ctx)
+
+    sync_item = await db_session.get(
+        ShopifyProductSyncItem,
+        result["shopify_preorder"]["preorder_operation_id"],
+    )
+    assert sync_item is not None
+    assert (
+        sync_item.normalized_payload_json["variant"]["barcode"]
+        == "PERSISTED-ARTICLE-1"
+    )
+
+
+@pytest.mark.integration
 async def test_no_item_section_leaves_product_type_unset(
     db_session,
     monkeypatch,
@@ -359,3 +402,4 @@ async def test_no_item_section_leaves_product_type_unset(
         )
     ).scalar_one()
     assert "productType" not in sync_item.normalized_payload_json["product"]
+    assert "barcode" not in sync_item.normalized_payload_json["variant"]

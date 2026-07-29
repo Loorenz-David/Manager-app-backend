@@ -24,6 +24,54 @@ def test_parse_process_shopify_products_request_rejects_missing_identity_fields(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "identity_fields",
+    [
+        {"article_number": "BAR-1"},
+        {"item_article_number": "BAR-1"},
+        {"article_number": " BAR-1 ", "item_article_number": "BAR-1"},
+        {"sku": "SKU-1"},
+    ],
+)
+def test_parse_process_shopify_products_request_accepts_supported_identity_shapes(
+    identity_fields: dict,
+) -> None:
+    request = parse_process_shopify_products_request(
+        {
+            "items": [
+                {
+                    "client_id": "frontend_1",
+                    "title": "Chair",
+                    **identity_fields,
+                }
+            ]
+        }
+    )
+
+    assert len(request.items) == 1
+
+
+@pytest.mark.unit
+def test_parse_process_shopify_products_request_rejects_conflicting_article_number_aliases() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="article_number and item_article_number must match",
+    ):
+        parse_process_shopify_products_request(
+            {
+                "items": [
+                    {
+                        "client_id": "frontend_1",
+                        "title": "Chair",
+                        "article_number": "BAR-1",
+                        "item_article_number": "BAR-2",
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.unit
 def test_parse_process_shopify_products_request_rejects_invalid_weight_unit() -> None:
     with pytest.raises(ValidationError, match="unit must be one of: g, kg, lb, oz"):
         parse_process_shopify_products_request(
@@ -93,6 +141,65 @@ def test_parse_process_shopify_products_request_converts_legacy_adjustment_to_ab
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("quantity_to_add", [True, "2", 1.5, -1, 1_000_001])
+def test_legacy_inventory_bridge_keeps_strict_quantity_validation(
+    quantity_to_add: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        parse_process_shopify_products_request(
+            {
+                "items": [
+                    {
+                        "client_id": "frontend_1",
+                        "title": "Chair",
+                        "sku": "SKU-1",
+                        "inventory_adjustments": [
+                            {
+                                "shop_integration_id": "shpint_1",
+                                "location_id": "gid://shopify/Location/1",
+                                "quantity_to_add": quantity_to_add,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.unit
+def test_parse_process_shopify_products_request_rejects_mixed_inventory_shapes() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="inventory_quantities and inventory_adjustments cannot both be provided",
+    ):
+        parse_process_shopify_products_request(
+            {
+                "items": [
+                    {
+                        "client_id": "frontend_1",
+                        "title": "Chair",
+                        "sku": "SKU-1",
+                        "inventory_quantities": [
+                            {
+                                "shop_integration_id": "shpint_1",
+                                "location_id": "gid://shopify/Location/1",
+                                "quantity": 2,
+                            }
+                        ],
+                        "inventory_adjustments": [
+                            {
+                                "shop_integration_id": "shpint_1",
+                                "location_id": "gid://shopify/Location/2",
+                                "quantity_to_add": 3,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "inventory_quantity, message",
     [
@@ -111,6 +218,14 @@ def test_parse_process_shopify_products_request_converts_legacy_adjustment_to_ab
                 "quantity": -1,
             },
             "quantity cannot be negative",
+        ),
+        (
+            {
+                "shop_integration_id": "shpint_1",
+                "location_id": "gid://shopify/Location/1",
+                "quantity": 1_000_001,
+            },
+            "quantity cannot exceed 1000000",
         ),
         (
             {

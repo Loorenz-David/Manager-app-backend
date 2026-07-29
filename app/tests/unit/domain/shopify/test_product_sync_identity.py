@@ -8,8 +8,8 @@ from beyo_manager.errors.external_service import ShopifyProductLookupAmbiguousEr
 def test_select_exact_variant_match_returns_not_found_when_no_exact_match() -> None:
     result = select_exact_variant_match(
         [{"id": "gid://shopify/ProductVariant/1", "sku": "OTHER", "barcode": "OTHER", "product": {"id": "gid://shopify/Product/1"}}],
-        identity_type="sku",
-        identity_value="SKU-1",
+        identity_type="barcode",
+        identity_value="BAR-1",
     )
 
     assert result.found is False
@@ -21,8 +21,8 @@ def test_select_exact_variant_match_returns_not_found_when_no_exact_match() -> N
 def test_select_exact_variant_match_returns_single_match() -> None:
     result = select_exact_variant_match(
         [{"id": "gid://shopify/ProductVariant/1", "sku": "SKU-1", "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/1"}}],
-        identity_type="sku",
-        identity_value="SKU-1",
+        identity_type="barcode",
+        identity_value="BAR-1",
     )
 
     assert result.found is True
@@ -31,13 +31,26 @@ def test_select_exact_variant_match_returns_single_match() -> None:
 
 
 @pytest.mark.unit
-def test_select_exact_variant_match_raises_for_ambiguous_parent_products() -> None:
-    with pytest.raises(ShopifyProductLookupAmbiguousError, match="Multiple Shopify products matched"):
+def test_select_exact_variant_match_raises_for_duplicate_barcode_across_products() -> None:
+    with pytest.raises(ShopifyProductLookupAmbiguousError, match="Multiple Shopify variants matched"):
         select_exact_variant_match(
             [
                 {"id": "gid://shopify/ProductVariant/1", "sku": "SKU-1", "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/1"}},
                 {"id": "gid://shopify/ProductVariant/2", "sku": "SKU-1", "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/2"}},
             ],
-            identity_type="sku",
-            identity_value="SKU-1",
+            identity_type="barcode",
+            identity_value="BAR-1",
+        )
+
+
+@pytest.mark.unit
+def test_select_exact_variant_match_raises_for_duplicate_barcode_within_one_product() -> None:
+    with pytest.raises(ShopifyProductLookupAmbiguousError, match="Multiple Shopify variants matched"):
+        select_exact_variant_match(
+            [
+                {"id": "gid://shopify/ProductVariant/1", "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/1"}},
+                {"id": "gid://shopify/ProductVariant/2", "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/1"}},
+            ],
+            identity_type="barcode",
+            identity_value="BAR-1",
         )

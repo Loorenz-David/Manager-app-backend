@@ -1,5 +1,15 @@
 # PLAN_shopify_preorder_product_20260727
 
+> **Revision 10 — superseding inventory/origin decision (2026-07-28).** All Shopify product-sync
+> producers now submit authoritative absolute location quantities through one shared worker and
+> `inventorySetQuantities`. `inventory_mode` remains only as a one-release compatibility column
+> and is never used to classify a workflow or select a mutation. `sync_origin` plus
+> `source_entity_type`/`source_entity_id` identify standard syncs and pre-order tasks explicitly
+> from enqueue time. The additive ledger is historical and read-only. Any older section below
+> claiming `/products/process` is additive, that `inventory_mode` identifies a pre-order, or that
+> `inventoryAdjustQuantities` remains a runtime path is superseded by this revision and by
+> `SUMMARY_shopify_absolute_inventory_and_sync_origins_20260728.md`.
+>
 > **Revision 9 — the inventory quantity is caller-supplied, not a hard-coded `1`.** Confirmed with the merchant: the frontend sends a **quantity per selected location**, exactly as the existing `inventory_adjustments` contract does, with the UI defaulting that field to `1`. The write remains an **absolute set** (overwrite), not additive. This deletes `PREORDER_INVENTORY_QUANTITY = 1` everywhere and generalises the target to caller input — while **preserving** the rule that `custom.quantity` (a product metafield) never influences stock. Those are now two distinct caller inputs and must not be conflated. Phase 0 gates 1, 3 and 4 are also resolved below; **gate 2 remains open**.
 >
 > **Revision 8 — scope cut to a minimum delivery; the image path collapsed.** Two findings: (a) the S3 bucket is **public**, so no presigning, no TTL, no `stagedUploadsCreate` fallback — `R3` is corrected and was previously **wrong**; (b) an overlap audit found that after rev 7's convergence, most of the remaining plan is **optional hardening rather than pre-order requirements**. The delivery is now **one minimum plan** (`PLAN_shopify_preorder_phase_1_minimum_delivery_20260727.md`) plus **two standalone improvement tickets** that stand on their own merits. Everything else is retained below as a **documented backlog**, not a critical path. See **R13**.

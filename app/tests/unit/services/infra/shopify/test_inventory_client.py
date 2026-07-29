@@ -43,14 +43,12 @@ async def test_fetch_shop_locations_paginates_and_includes_inactive(monkeypatch)
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_inventory_mutations_keep_activation_at_zero_and_batch_positive_deltas(monkeypatch) -> None:
+async def test_inventory_activation_starts_a_missing_level_at_zero(monkeypatch) -> None:
     calls: list[dict] = []
 
     async def fake_execute(**kwargs):
         calls.append(kwargs)
-        if kwargs["operation_name"] == "activate_inventory_at_location":
-            return {"inventoryActivate": {"userErrors": []}}
-        return {"inventoryAdjustQuantities": {"userErrors": []}}
+        return {"inventoryActivate": {"userErrors": []}}
 
     monkeypatch.setattr(inventory_client, "execute_shopify_graphql", fake_execute)
 
@@ -61,38 +59,11 @@ async def test_inventory_mutations_keep_activation_at_zero_and_batch_positive_de
         location_id="gid://shopify/Location/1",
         idempotency_key="shpia_1",
     )
-    await inventory_client.adjust_inventory_quantities(
-        shop_domain="shop.myshopify.com",
-        access_token_encrypted="encrypted-token",
-        changes=[
-            {
-                "inventory_item_id": "gid://shopify/InventoryItem/1",
-                "location_id": "gid://shopify/Location/1",
-                "quantity_to_add": 3,
-            },
-            {
-                "inventory_item_id": "gid://shopify/InventoryItem/1",
-                "location_id": "gid://shopify/Location/2",
-                "quantity_to_add": 2,
-            },
-        ],
-        reference_document_uri="managerbeyo://inventory-adjustment/shpia_1/1",
-        idempotency_key="shpia_1:shpia_2",
-    )
-
     assert calls[0]["variables"]["available"] == 0
-    assert calls[1]["variables"]["input"]["changes"] == [
-        {
-            "delta": 3,
-            "inventoryItemId": "gid://shopify/InventoryItem/1",
-            "locationId": "gid://shopify/Location/1",
-        },
-        {
-            "delta": 2,
-            "inventoryItemId": "gid://shopify/InventoryItem/1",
-            "locationId": "gid://shopify/Location/2",
-        },
-    ]
+    assert calls[0]["variables"]["idempotencyKey"] == "shpia_1"
+    assert "@idempotent(key: $idempotencyKey)" in calls[0]["query"]
+    assert not hasattr(inventory_client, "adjust_inventory_quantities")
+    assert "inventoryAdjustQuantities" not in inventory_client.SET_INVENTORY_MUTATION
 
 
 @pytest.mark.unit

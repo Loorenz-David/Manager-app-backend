@@ -65,6 +65,8 @@ def test_preorder_inventory_accepts_zero() -> None:
 def test_no_http_request_model_exposes_inventory_mode() -> None:
     assert "inventory_mode" not in ProcessShopifyProductItemRequest.model_fields
     assert "inventory_mode" not in ShopifyPreorderSectionInput.model_fields
+    assert "sync_origin" not in ProcessShopifyProductItemRequest.model_fields
+    assert "sync_origin" not in ShopifyPreorderSectionInput.model_fields
 
 
 @pytest.mark.unit
@@ -82,7 +84,56 @@ def test_caller_supplied_quantity_metafield_is_rejected() -> None:
 
 
 @pytest.mark.unit
+def test_section_level_quantity_metafield_is_rejected() -> None:
+    payload = _payload()
+    payload["shopify_preorder"]["metafields"] = {
+        "quantity": {
+            "type": "single_line_text_field",
+            "value": "6",
+        }
+    }
+
+    with pytest.raises(ValidationError, match="derived from the inventory quantity"):
+        parse_create_task_request(payload)
+
+
+@pytest.mark.unit
 def test_other_metafields_are_still_accepted() -> None:
     request = parse_create_task_request(_payload())
 
     assert request.shopify_preorder.product.metafields == {"notes": "handle with care"}
+
+
+@pytest.mark.unit
+def test_section_level_metafields_are_accepted() -> None:
+    payload = _payload()
+    payload["shopify_preorder"]["product"].pop("metafields")
+    payload["shopify_preorder"]["metafields"] = {
+        "notes": "handle with care",
+        "finish": {
+            "type": "single_line_text_field",
+            "value": "oiled oak",
+        },
+    }
+
+    request = parse_create_task_request(payload)
+
+    assert request.shopify_preorder.metafields == {
+        "notes": "handle with care",
+        "finish": {
+            "type": "single_line_text_field",
+            "value": "oiled oak",
+        },
+    }
+
+
+@pytest.mark.unit
+def test_duplicate_metafield_keys_across_section_and_product_are_rejected() -> None:
+    payload = _payload()
+    payload["shopify_preorder"]["metafields"] = {"notes": "top level"}
+
+    with pytest.raises(
+        ValidationError,
+        match="must be supplied either at the section level or under product",
+    ):
+        parse_create_task_request(payload)

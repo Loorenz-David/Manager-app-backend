@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.models.database import get_db
@@ -80,13 +80,13 @@ class ShopifyProductSyncWeightBody(BaseModel):
 class ShopifyInventoryQuantityBody(BaseModel):
     shop_integration_id: str
     location_id: str
-    quantity: int
+    quantity: StrictInt = Field(ge=0, le=1_000_000)
 
 
 class ShopifyLegacyInventoryAdjustmentBody(BaseModel):
     shop_integration_id: str
     location_id: str
-    quantity_to_add: int
+    quantity_to_add: StrictInt = Field(ge=0, le=1_000_000)
 
 
 class ShopifyProductSyncItemBody(BaseModel):

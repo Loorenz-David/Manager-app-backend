@@ -223,13 +223,54 @@ A `ShopifyGraphQLError` from any single topic's create/delete call is caught per
 
 ---
 
-## Product-sync inventory increments
+## Product-sync identity and create/update policy
 
-Product sync accepts optional, shop-tagged positive inventory adjustments. The command normalizes them into one payload per target shop, and the Shopify worker applies product/variant changes before inventory changes and metafields. Inventory changes use Shopify's additive `inventoryAdjustQuantities` operation and never set or decrement stock.
+ManagerBeyo's `article_number` is written to Shopify as the variant barcode and is the only
+catalog identity used to choose between create and update. `item_article_number` remains an
+accepted compatibility alias on the direct product-sync route; if both fields are supplied they
+must have the same trimmed value. SKU is still written to the Shopify inventory item, but duplicate
+SKUs are valid and the worker never searches by SKU.
 
-The `shopify_inventory_adjustments` ledger is the durable idempotency boundary. Its unique key is `(shop_integration_id, frontend_client_id, shopify_location_id)`; applied rows are skipped on resubmission, while pending rows use a baseline re-query before an adjustment is retried. Per-location outcomes are stored on `shopify_product_sync_items.inventory_result_json`, and an inventory failure leaves the sync item `FAILED` with an inventory-specific error code.
+For a new sync item, one exact barcode match produces an update, no match produces a create, and a
+payload without a barcode creates without an identity lookup. The worker does not add or query an
+internal retry tag. Multiple exact barcode variants are reported as `ambiguous_product_match`,
+including multiple matching variants under one product, and no Shopify mutation follows.
 
-The locations query is workspace-scoped and reads live Shopify locations, including inactive locations. Inventory execution validates location ownership again at worker time. `read_locations` and `write_inventory` are required for inventory-enabled syncs; product-only syncs remain unaffected when those scopes are missing.
+Caller-supplied product tags remain ordinary Shopify catalog data. Pre-order callers can pass them
+through `shopify_preorder.product.tags`; the worker sends them unchanged and does not add a
+ManagerBeyo-generated tag.
+
+Pre-order provisioning gets its barcode from the persisted task item's `article_number`; it does
+not duplicate that field inside `shopify_preorder.product`. A pre-order whose task item has no
+article number follows the barcode-less create behavior.
+
+## Product-sync inventory quantities
+
+Product sync accepts optional shop-tagged absolute quantities in
+`inventory_quantities[].quantity`, including zero. The command normalizes them into one payload per
+target shop, and the Shopify worker applies product/variant changes before inventory changes and
+metafields. Omitted locations are unchanged; an explicit zero clears the selected location.
+
+The worker enables tracking when necessary, activates a missing inventory level, and sends all
+selected locations in one idempotent `inventorySetQuantities(name: "available")` mutation.
+`inventoryAdjustQuantities` is never a product-sync runtime path. The sync-item ID is reused for
+the mutation's idempotency key, and per-location outcomes are stored on
+`shopify_product_sync_items.inventory_result_json` under `quantities`.
+
+The historical `shopify_inventory_adjustments` table is retained read-only for audit. For one
+compatibility release, the HTTP and persisted-payload boundaries convert
+`inventory_adjustments[].quantity_to_add` to an absolute quantity and emit structured deprecation
+telemetry; no additive mutation is executed.
+
+The locations query is workspace-scoped and reads live Shopify locations. Inventory execution
+revalidates shop ownership, active status, fulfillment-service status, duplicate locations, GID
+shape, and quantity range at worker time. `read_locations` and `write_inventory` are required for
+inventory-enabled syncs; product-only syncs remain unaffected when those scopes are missing.
+
+Inventory behavior never identifies the producing workflow. `shopify_product_sync_items` persists
+`sync_origin` plus optional source entity fields at enqueue time. Standard product syncs and
+pre-order tasks use the same Shopify execution but dispatch distinct terminal audit and socket
+events from that origin. An unknown origin fails before any Shopify mutation.
 
 ## Worker & queue wiring
 

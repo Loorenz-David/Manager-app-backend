@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, ValidationError as PydanticValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    StrictInt,
+    ValidationError as PydanticValidationError,
+    field_validator,
+    model_validator,
+)
 
 from beyo_manager.errors.validation import ValidationError
 
@@ -53,7 +60,7 @@ class InventoryQuantityRequest(BaseModel):
 class LegacyInventoryAdjustmentRequest(BaseModel):
     shop_integration_id: str
     location_id: str
-    quantity_to_add: int
+    quantity_to_add: StrictInt = Field(ge=0, le=_MAX_INVENTORY_QUANTITY)
 
 
 class WeightRequest(BaseModel):
@@ -151,6 +158,14 @@ class ProcessShopifyProductItemRequest(BaseModel):
     def _require_identity(self) -> "ProcessShopifyProductItemRequest":
         if self.sku is None and self.item_article_number is None and self.article_number is None:
             raise ValueError("At least one of sku, item_article_number, or article_number is required.")
+        if (
+            self.article_number is not None
+            and self.item_article_number is not None
+            and self.article_number != self.item_article_number
+        ):
+            raise ValueError(
+                "article_number and item_article_number must match when both are provided."
+            )
         if self.target_shop_integration_ids == []:
             raise ValueError("target_shop_integration_ids cannot be empty when provided.")
         if self.image_id is not None and self.image_url is not None:

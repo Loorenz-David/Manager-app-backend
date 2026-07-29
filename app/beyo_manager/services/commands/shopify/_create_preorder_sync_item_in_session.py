@@ -2,20 +2,18 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from beyo_manager.domain.shopify.enums import (
-    ShopifyIntegrationEventTypeEnum,
-    ShopifyInventoryModeEnum,
-)
+from beyo_manager.domain.shopify.enums import ShopifyProductSyncOriginEnum
 from beyo_manager.domain.shopify.preorder_policy import (
     PREORDER_PRODUCT_STATUS,
     PREORDER_QUANTITY_METAFIELD_KEY,
     build_preorder_quantity_metafield,
 )
 from beyo_manager.models.tables.items.item_category import ItemCategory
-from beyo_manager.models.tables.shopify.shopify_integration_event import ShopifyIntegrationEvent
-from beyo_manager.models.tables.shopify.shopify_product_sync_item import ShopifyProductSyncItem
 from beyo_manager.services.commands.shopify.process_shopify_products import (
-    process_shopify_products,
+    enqueue_shopify_product_sync,
+)
+from beyo_manager.services.commands.shopify.requests.process_shopify_products_request import (
+    parse_process_shopify_products_request,
 )
 from beyo_manager.services.commands.tasks.requests import ShopifyPreorderSectionInput
 from beyo_manager.services.context import ServiceContext
@@ -26,6 +24,7 @@ async def _create_preorder_sync_item_in_session(
     *,
     task_id: str,
     preorder: ShopifyPreorderSectionInput,
+    item_article_number: str | None = None,
     item_category_id: str | None = None,
 ) -> dict:
     product = preorder.product.model_dump(exclude_none=True)
@@ -49,65 +48,54 @@ async def _create_preorder_sync_item_in_session(
     # location, so one entered number drives both the till stock and the product's quantity field.
     # Authoritative: anything the caller sent under this key is replaced, keeping a single source
     # of truth rather than two numbers that can silently diverge.
-    metafields = {**(product.pop("metafields", None) or {})}
+    metafields = {
+        **(product.pop("metafields", None) or {}),
+        **preorder.metafields,
+    }
     metafields[PREORDER_QUANTITY_METAFIELD_KEY] = build_preorder_quantity_metafield(
         entry.quantity for entry in preorder.inventory
     )
+    product_sync_request_data = {
+        "items": [
+            {
+                "client_id": task_id,
+                "target_shop_integration_ids": [preorder.shop_integration_id],
+                "status": PREORDER_PRODUCT_STATUS,
+                **product,
+                **(
+                    {"article_number": item_article_number}
+                    if item_article_number is not None
+                    else {}
+                ),
+                "metafields": metafields,
+                "inventory_quantities": [
+                    {
+                        "shop_integration_id": preorder.shop_integration_id,
+                        "location_id": entry.location_id,
+                        "quantity": entry.quantity,
+                    }
+                    for entry in preorder.inventory
+                ],
+            }
+        ]
+    }
     product_sync_ctx = ServiceContext(
-        incoming_data={
-            "items": [
-                {
-                    "client_id": task_id,
-                    "target_shop_integration_ids": [preorder.shop_integration_id],
-                    "status": PREORDER_PRODUCT_STATUS,
-                    **product,
-                    "metafields": metafields,
-                }
-            ]
-        },
+        incoming_data=product_sync_request_data,
         identity=ctx.identity,
         session=ctx.session,
     )
-    queued = await process_shopify_products(product_sync_ctx)
-    sync_item = (
-        await ctx.session.execute(
-            select(ShopifyProductSyncItem).where(
-                ShopifyProductSyncItem.client_id
-                == queued["sync_item_client_ids"][0],
-                ShopifyProductSyncItem.workspace_id == ctx.workspace_id,
-            )
-        )
-    ).scalar_one()
-    sync_item.inventory_mode = ShopifyInventoryModeEnum.SET
-    # Ordinary product sync and pre-orders both carry absolute per-location targets
-    # under `quantities`, consumed by inventorySetQuantities.
-    sync_item.normalized_payload_json = {
-        **sync_item.normalized_payload_json,
-        "inventory": {
-            "quantities": [
-                {
-                    "location_id": entry.location_id,
-                    "quantity": entry.quantity,
-                }
-                for entry in preorder.inventory
-            ]
-        },
-    }
-
-    event = await ctx.session.get(
-        ShopifyIntegrationEvent, queued["event_client_ids"][0]
+    queued = await enqueue_shopify_product_sync(
+        product_sync_ctx,
+        request=parse_process_shopify_products_request(product_sync_request_data),
+        sync_origin=ShopifyProductSyncOriginEnum.PREORDER_TASK,
+        source_entity_type="task",
+        source_entity_id=task_id,
     )
-    event.event_type = ShopifyIntegrationEventTypeEnum.PREORDER
-    event.message = "Shopify pre-order product provisioning enqueued."
-    event.metadata_json = {
-        **(event.metadata_json or {}),
-        "task_id": task_id,
-        "preorder_operation_id": sync_item.client_id,
-    }
+    preorder_operation_id = queued["sync_item_client_ids"][0]
 
     return {
         "queued": True,
-        "preorder_operation_id": sync_item.client_id,
+        "preorder_operation_id": preorder_operation_id,
         "task_id": task_id,
         "shop_integration_id": preorder.shop_integration_id,
         "shopify_task_id": queued["task_id"],

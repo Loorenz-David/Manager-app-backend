@@ -200,6 +200,50 @@ def test_process_products_route_accepts_absolute_inventory_quantities(monkeypatc
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("quantity", [True, "2", 1.5, -1, 1_000_001])
+def test_process_products_route_rejects_non_strict_or_out_of_range_quantities(
+    quantity: object,
+    monkeypatch,
+) -> None:
+    client, captured = _build_test_client(
+        claims={
+            "role_name": "manager",
+            "workspace_id": "ws_1",
+            "user_id": "usr_1",
+        },
+        monkeypatch=monkeypatch,
+        run_service_result=SimpleNamespace(
+            success=True,
+            data={"ok": True},
+            error=None,
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/integrations/shopify/products/process",
+        json={
+            "items": [
+                {
+                    "client_id": "frontend_1",
+                    "title": "Chair",
+                    "sku": "SKU-123",
+                    "inventory_quantities": [
+                        {
+                            "shop_integration_id": "shpint_1",
+                            "location_id": "gid://shopify/Location/1",
+                            "quantity": quantity,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert captured["calls"] == 0
+
+
+@pytest.mark.unit
 def test_shopify_webhook_history_route_is_reachable_at_exact_admin_path(monkeypatch) -> None:
     client, captured = _build_test_client(
         claims={"role_name": "manager", "workspace_id": "ws_1", "user_id": "usr_1"},

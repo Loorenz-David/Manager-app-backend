@@ -83,13 +83,14 @@ ACTIVATE_INVENTORY_MUTATION = """
 mutation ActivateInventory(
   $inventoryItemId: ID!,
   $locationId: ID!,
-  $available: Int!
+  $available: Int!,
+  $idempotencyKey: String!
 ) {
   inventoryActivate(
     inventoryItemId: $inventoryItemId,
     locationId: $locationId,
     available: $available
-  ) {
+  ) @idempotent(key: $idempotencyKey) {
     inventoryLevel {
       id
       quantities(names: ["available"]) {
@@ -100,23 +101,6 @@ mutation ActivateInventory(
     userErrors {
       field
       message
-    }
-  }
-}
-"""
-
-ADJUST_INVENTORY_MUTATION = """
-mutation AdjustInventoryQuantities(
-  $input: InventoryAdjustQuantitiesInput!
-) {
-  inventoryAdjustQuantities(input: $input) {
-    inventoryAdjustmentGroup {
-      referenceDocumentUri
-    }
-    userErrors {
-      field
-      message
-      code
     }
   }
 }
@@ -328,6 +312,7 @@ async def activate_inventory_at_location(
             "inventoryItemId": inventory_item_id,
             "locationId": location_id,
             "available": 0,
+            "idempotencyKey": idempotency_key,
         },
         operation_name="activate_inventory_at_location",
     )
@@ -341,60 +326,6 @@ async def activate_inventory_at_location(
         len(response.get("userErrors") or []),
     )
     _raise_inventory_user_errors(response.get("userErrors"), "activate_inventory_at_location")
-
-
-async def adjust_inventory_quantities(
-    *,
-    shop_domain: str,
-    access_token_encrypted: str,
-    changes: list[dict],
-    reference_document_uri: str,
-    idempotency_key: str,
-) -> None:
-    adjust_quantity_name = "available"
-    logger.info(
-        "shopify_inventory_diag | adjust_request | quantity_name=%s change_count=%s changes=%s",
-        adjust_quantity_name,
-        len(changes),
-        [
-            {
-                "delta": change["quantity_to_add"],
-                "location_id": change["location_id"],
-            }
-            for change in changes
-        ],
-    )
-    data = await execute_shopify_graphql(
-        shop_domain=shop_domain,
-        access_token_encrypted=access_token_encrypted,
-        query=ADJUST_INVENTORY_MUTATION,
-        variables={
-            "input": {
-                "reason": "correction",
-                "name": adjust_quantity_name,
-                "referenceDocumentUri": reference_document_uri,
-                "changes": [
-                    {
-                        "delta": change["quantity_to_add"],
-                        "inventoryItemId": change["inventory_item_id"],
-                        "locationId": change["location_id"],
-                    }
-                    for change in changes
-                ],
-            },
-        },
-        operation_name="adjust_inventory_quantities",
-    )
-    response = data.get("inventoryAdjustQuantities") or {}
-    logger.info(
-        "shopify_inventory_diag | adjust_response | quantity_name=%s reference_uri=%s "
-        "adjustment_group_present=%s user_error_count=%s",
-        adjust_quantity_name,
-        reference_document_uri,
-        response.get("inventoryAdjustmentGroup") is not None,
-        len(response.get("userErrors") or []),
-    )
-    _raise_inventory_user_errors(response.get("userErrors"), "adjust_inventory_quantities")
 
 
 async def set_inventory_quantities(

@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import pytest
 
 from beyo_manager.domain.shopify.enums import (
-    ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyProductSyncOperationEnum,
     ShopifyProductSyncStageEnum,
@@ -13,7 +12,6 @@ from beyo_manager.domain.shopify.enums import (
 from beyo_manager.errors.external_service import (
     ShopifyGraphQLNonRetryableError,
     ShopifyGraphQLRetryableError,
-    ShopifyProductLookupAmbiguousError,
 )
 from beyo_manager.services.tasks.shopify import _product_sync_orchestrator as module
 
@@ -42,7 +40,6 @@ def _sync_item(**overrides) -> SimpleNamespace:
         shopify_media_id=None,
         media_status=None,
         inventory_result_json=None,
-        inventory_mode=ShopifyInventoryModeEnum.ADD,
         stage=ShopifyProductSyncStageEnum.QUEUED,
         error_code=None,
         error_message=None,
@@ -59,22 +56,42 @@ def _shop() -> SimpleNamespace:
     )
 
 
+@pytest.mark.unit
+def test_legacy_persisted_adjustments_are_converted_to_absolute_quantities(
+    caplog,
+) -> None:
+    quantities, converted = module._resolve_absolute_inventory_entries(
+        {
+            "adjustments": [
+                {
+                    "location_id": "gid://shopify/Location/1",
+                    "quantity_to_add": 0,
+                },
+                {
+                    "location_id": "gid://shopify/Location/2",
+                    "quantity_to_add": 2,
+                },
+            ]
+        },
+        sync_item_id="shpsi_legacy",
+    )
+
+    assert converted is True
+    assert quantities == [
+        {"location_id": "gid://shopify/Location/1", "quantity": 0},
+        {"location_id": "gid://shopify/Location/2", "quantity": 2},
+    ]
+    assert "legacy_persisted_inventory_converted" in caplog.text
+
+
 @pytest.fixture(autouse=True)
 def _default_stage_dependencies(monkeypatch):
-    async def _find_operation_tag(**_kwargs):
-        return None
-
     async def _configure_variant(**kwargs):
         return {
             "shopify_variant_id": kwargs["shopify_variant_id"],
             "shopify_inventory_item_id": "gid://shopify/InventoryItem/1",
         }
 
-    monkeypatch.setattr(
-        module,
-        "find_product_by_operation_tag",
-        _find_operation_tag,
-    )
     monkeypatch.setattr(
         module,
         "configure_shopify_product_variant",
@@ -117,87 +134,7 @@ async def test_sync_one_product_sync_item_keeps_shopify_ids_when_metafields_call
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_lost_product_create_response_retry_adopts_operation_tag_match(
-    monkeypatch,
-) -> None:
-    sync_item = _sync_item()
-    session = _FakeSession()
-    calls: list[str] = []
-
-    async def _find_operation_tag(**_kwargs):
-        calls.append("tag")
-        return {
-            "shopify_product_id": "gid://shopify/Product/orphan",
-            "shopify_variant_id": "gid://shopify/ProductVariant/orphan",
-            "shopify_inventory_item_id": "gid://shopify/InventoryItem/orphan",
-        }
-
-    async def _unexpected_find(**_kwargs):
-        raise AssertionError("SKU lookup must not run after an operation-tag match")
-
-    async def _unexpected_create(**_kwargs):
-        raise AssertionError("retry must not create a second Shopify product")
-
-    async def _update(**kwargs):
-        calls.append("update")
-        assert kwargs["operation_tag"] == "managerbeyo-sync-shpsi_1"
-        return {
-            "shopify_product_id": kwargs["shopify_product_id"],
-            "shopify_variant_id": kwargs["shopify_variant_id"],
-            "shopify_inventory_item_id": kwargs["fallback_inventory_item_id"],
-        }
-
-    async def _metafields(**_kwargs):
-        calls.append("metafields")
-
-    monkeypatch.setattr(module, "find_product_by_operation_tag", _find_operation_tag)
-    monkeypatch.setattr(module, "find_product_variant_by_identity", _unexpected_find)
-    monkeypatch.setattr(module, "create_shopify_product", _unexpected_create)
-    monkeypatch.setattr(module, "update_shopify_product", _update)
-    monkeypatch.setattr(module, "set_shopify_product_metafields", _metafields)
-
-    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
-
-    assert calls == ["tag", "update", "metafields"]
-    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
-    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.UPDATE
-    assert sync_item.shopify_product_id == "gid://shopify/Product/orphan"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_ambiguous_operation_tag_fails_without_writes(monkeypatch) -> None:
-    sync_item = _sync_item()
-    session = _FakeSession()
-
-    async def _ambiguous_tag(**_kwargs):
-        raise ShopifyProductLookupAmbiguousError(
-            "Two products share the operation tag.",
-            error_code="ambiguous_operation_tag",
-        )
-
-    async def _unexpected_write(**_kwargs):
-        raise AssertionError("no Shopify write may follow an ambiguous operation tag")
-
-    monkeypatch.setattr(module, "find_product_by_operation_tag", _ambiguous_tag)
-    monkeypatch.setattr(module, "create_shopify_product", _unexpected_write)
-    monkeypatch.setattr(module, "update_shopify_product", _unexpected_write)
-    monkeypatch.setattr(
-        module,
-        "configure_shopify_product_variant",
-        _unexpected_write,
-    )
-
-    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
-
-    assert sync_item.status == ShopifyProductSyncItemStatusEnum.FAILED
-    assert sync_item.error_code == "ambiguous_operation_tag"
-    assert sync_item.shopify_product_id is None
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_two_exact_sku_products_remain_ambiguous(monkeypatch) -> None:
+async def test_sku_only_sync_creates_without_identity_lookup(monkeypatch) -> None:
     sync_item = _sync_item(normalized_payload_json={
         "product": {"title": "Chair"},
         "variant": {"inventoryItem": {"sku": "SKU-1"}},
@@ -205,69 +142,77 @@ async def test_two_exact_sku_products_remain_ambiguous(monkeypatch) -> None:
     })
     session = _FakeSession()
 
-    async def _find(*, sku, **_kwargs):
-        assert sku == "SKU-1"
+    async def _unexpected_find(**_kwargs):
+        raise AssertionError("SKU-only sync must not perform an identity lookup")
+
+    async def _create(**_kwargs):
+        return {
+            "shopify_product_id": "gid://shopify/Product/created",
+            "shopify_variant_id": "gid://shopify/ProductVariant/created",
+        }
+
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _unexpected_find)
+    monkeypatch.setattr(module, "create_shopify_product", _create)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.CREATE
+    assert sync_item.shopify_product_id == "gid://shopify/Product/created"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_existing_sku_with_new_barcode_creates(monkeypatch) -> None:
+    sync_item = _sync_item()
+    session = _FakeSession()
+
+    async def _find(*, sku, barcode, **_kwargs):
+        assert sku is None
+        assert barcode == "BAR-1"
+        return []
+
+    async def _create(**_kwargs):
+        return {
+            "shopify_product_id": "gid://shopify/Product/created",
+            "shopify_variant_id": "gid://shopify/ProductVariant/created",
+        }
+
+    async def _set_metafields(**_kwargs):
+        return None
+
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "create_shopify_product", _create)
+    monkeypatch.setattr(
+        module,
+        "set_shopify_product_metafields",
+        _set_metafields,
+    )
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.CREATE
+    assert sync_item.shopify_product_id == "gid://shopify/Product/created"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_exact_barcode_match_updates_regardless_of_sku(monkeypatch) -> None:
+    sync_item = _sync_item()
+    session = _FakeSession()
+
+    async def _find(*, sku, barcode, **_kwargs):
+        assert sku is None
+        assert barcode == "BAR-1"
         return [
             {
                 "id": "gid://shopify/ProductVariant/1",
-                "sku": "SKU-1",
-                "product": {"id": "gid://shopify/Product/1"},
-            },
-            {
-                "id": "gid://shopify/ProductVariant/2",
-                "sku": "SKU-1",
-                "product": {"id": "gid://shopify/Product/2"},
-            },
+                "sku": "DUPLICATE-SKU",
+                "barcode": "BAR-1",
+                "product": {"id": "gid://shopify/Product/X"},
+            }
         ]
-
-    async def _unexpected_write(**_kwargs):
-        raise AssertionError("ambiguous SKU must not write to Shopify")
-
-    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
-    monkeypatch.setattr(module, "create_shopify_product", _unexpected_write)
-    monkeypatch.setattr(module, "update_shopify_product", _unexpected_write)
-
-    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
-
-    assert sync_item.status == ShopifyProductSyncItemStatusEnum.FAILED
-    assert sync_item.error_code == "ambiguous_product_match"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_sync_one_product_sync_item_fails_when_sku_and_barcode_match_different_products(monkeypatch) -> None:
-    sync_item = _sync_item()
-    session = _FakeSession()
-
-    async def _fake_find(*, sku, barcode, **_kwargs):
-        if sku is not None:
-            return [{"id": "var_1", "sku": "SKU-1", "barcode": None, "product": {"id": "gid://shopify/Product/X"}}]
-        return [{"id": "var_2", "sku": None, "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/Y"}}]
-
-    async def _unexpected_write(**_kwargs):
-        raise AssertionError("create/update must not be called when identities conflict")
-
-    monkeypatch.setattr(module, "find_product_variant_by_identity", _fake_find)
-    monkeypatch.setattr(module, "create_shopify_product", _unexpected_write)
-    monkeypatch.setattr(module, "update_shopify_product", _unexpected_write)
-
-    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
-
-    assert sync_item.status == ShopifyProductSyncItemStatusEnum.FAILED
-    assert sync_item.error_code == "conflicting_identity_match"
-    assert sync_item.shopify_product_id is None
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_sync_one_product_sync_item_updates_when_sku_and_barcode_agree_on_same_product(monkeypatch) -> None:
-    sync_item = _sync_item()
-    session = _FakeSession()
-
-    async def _fake_find(*, sku, barcode, **_kwargs):
-        if sku is not None:
-            return [{"id": "var_1", "sku": "SKU-1", "barcode": None, "product": {"id": "gid://shopify/Product/X"}}]
-        return [{"id": "var_1", "sku": None, "barcode": "BAR-1", "product": {"id": "gid://shopify/Product/X"}}]
 
     async def _fake_update(**_kwargs):
         return {
@@ -278,14 +223,49 @@ async def test_sync_one_product_sync_item_updates_when_sku_and_barcode_agree_on_
     async def _fake_set_metafields(**_kwargs):
         return None
 
-    monkeypatch.setattr(module, "find_product_variant_by_identity", _fake_find)
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
     monkeypatch.setattr(module, "update_shopify_product", _fake_update)
     monkeypatch.setattr(module, "set_shopify_product_metafields", _fake_set_metafields)
 
     await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
 
     assert sync_item.status == ShopifyProductSyncItemStatusEnum.SUCCEEDED
+    assert sync_item.requested_operation == ShopifyProductSyncOperationEnum.UPDATE
     assert sync_item.shopify_product_id == "gid://shopify/Product/X"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_duplicate_barcode_variants_fail_without_shopify_write(monkeypatch) -> None:
+    sync_item = _sync_item()
+    session = _FakeSession()
+
+    async def _find(**_kwargs):
+        return [
+            {
+                "id": "gid://shopify/ProductVariant/1",
+                "barcode": "BAR-1",
+                "product": {"id": "gid://shopify/Product/X"},
+            },
+            {
+                "id": "gid://shopify/ProductVariant/2",
+                "barcode": "BAR-1",
+                "product": {"id": "gid://shopify/Product/X"},
+            },
+        ]
+
+    async def _unexpected_write(**_kwargs):
+        raise AssertionError("ambiguous barcode must not write to Shopify")
+
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _find)
+    monkeypatch.setattr(module, "create_shopify_product", _unexpected_write)
+    monkeypatch.setattr(module, "update_shopify_product", _unexpected_write)
+
+    await module.sync_one_product_sync_item(session, sync_item=sync_item, shop=_shop())
+
+    assert sync_item.status == ShopifyProductSyncItemStatusEnum.FAILED
+    assert sync_item.error_code == "ambiguous_product_match"
+    assert sync_item.shopify_product_id is None
 
 
 @pytest.mark.unit
@@ -337,7 +317,7 @@ async def test_product_id_and_stage_are_committed_before_variant_mutation(
     [
         (
             ShopifyProductSyncStageEnum.QUEUED,
-            ["tag", "identity", "create", "variant", "metafields"],
+            ["create", "variant", "metafields"],
         ),
         (
             ShopifyProductSyncStageEnum.PRODUCT_CREATED,
@@ -394,10 +374,6 @@ async def test_resume_from_each_stage_runs_only_remaining_calls(
     )
     calls: list[str] = []
 
-    async def _tag(**_kwargs):
-        calls.append("tag")
-        return None
-
     async def _identity(**_kwargs):
         calls.append("identity")
         return []
@@ -419,7 +395,6 @@ async def test_resume_from_each_stage_runs_only_remaining_calls(
     async def _metafields(**_kwargs):
         calls.append("metafields")
 
-    monkeypatch.setattr(module, "find_product_by_operation_tag", _tag)
     monkeypatch.setattr(module, "find_product_variant_by_identity", _identity)
     monkeypatch.setattr(module, "create_shopify_product", _create)
     monkeypatch.setattr(module, "configure_shopify_product_variant", _variant)
@@ -448,7 +423,7 @@ async def test_retryable_shopify_error_propagates(monkeypatch) -> None:
             error_code="shopify_timeout",
         )
 
-    monkeypatch.setattr(module, "find_product_by_operation_tag", _retryable)
+    monkeypatch.setattr(module, "find_product_variant_by_identity", _retryable)
 
     with pytest.raises(ShopifyGraphQLRetryableError):
         await module.sync_one_product_sync_item(
@@ -467,7 +442,6 @@ async def test_preorder_keeps_metafield_quantity_separate_from_absolute_inventor
     monkeypatch,
 ) -> None:
     sync_item = _sync_item(
-        inventory_mode=ShopifyInventoryModeEnum.SET,
         normalized_payload_json={
             "product": {"title": "Chair", "status": "UNLISTED"},
             "variant": {

@@ -5,11 +5,9 @@ from beyo_manager.services.infra.shopify.graphql_client import (
     quote_shopify_search_term,
     raise_for_graphql_user_errors,
 )
-from beyo_manager.errors.external_service import ShopifyProductLookupAmbiguousError
 
 IdentityType = str
 _VARIANTS_FIRST = 10
-_OPERATION_TAG_PRODUCTS_FIRST = 2
 
 FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY = """
 query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
@@ -25,24 +23,6 @@ query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
         }
         inventoryItem {
           id
-        }
-      }
-    }
-  }
-}
-"""
-
-FIND_PRODUCT_BY_OPERATION_TAG_QUERY = """
-query FindProductByOperationTag($searchQuery: String!, $first: Int!) {
-  products(first: $first, query: $searchQuery) {
-    nodes {
-      id
-      variants(first: 1) {
-        nodes {
-          id
-          inventoryItem {
-            id
-          }
         }
       }
     }
@@ -181,13 +161,9 @@ async def find_product_variant_by_identity(
 ) -> list[dict]:
     """Search by sku, falling back to barcode only if sku finds no exact match.
 
-    Callers in this codebase always pass exactly one of sku/barcode (the other
-    None) — _product_sync_orchestrator.py does its own sku-then-barcode
-    sequencing at a higher level so it can act between the two lookups (e.g.
-    to detect a conflicting identity match). The dual-identity fallback below
-    remains a real, independently useful capability of this function — it is
-    exercised directly by its own unit test — for any future caller that wants
-    a single "resolve by either identity" call.
+    Product synchronization passes only barcode because article number is its
+    sole catalog identity. The dual-identity fallback remains available as a
+    lower-level Shopify query capability for callers with a different policy.
     """
     if sku is not None:
         sku_nodes = await _search_product_variants_by_identity(
@@ -210,61 +186,15 @@ async def find_product_variant_by_identity(
     )
 
 
-async def find_product_by_operation_tag(
-    *,
-    shop_domain: str,
-    access_token_encrypted: str,
-    operation_tag: str,
-) -> dict | None:
-    data = await execute_shopify_graphql(
-        shop_domain=shop_domain,
-        access_token_encrypted=access_token_encrypted,
-        query=FIND_PRODUCT_BY_OPERATION_TAG_QUERY,
-        variables={
-            "searchQuery": f"tag:{quote_shopify_search_term(operation_tag)}",
-            "first": _OPERATION_TAG_PRODUCTS_FIRST,
-        },
-        operation_name="find_product_by_operation_tag",
-    )
-    products = (data.get("products") or {}).get("nodes") or []
-    if len(products) > 1:
-        raise ShopifyProductLookupAmbiguousError(
-            "Multiple Shopify products matched the same product-sync operation tag.",
-            error_code="ambiguous_operation_tag",
-        )
-    if not products:
-        return None
-
-    product = products[0] or {}
-    variants = (product.get("variants") or {}).get("nodes") or []
-    variant = (variants[0] or {}) if variants else {}
-    inventory_item = variant.get("inventoryItem") or {}
-    return {
-        "shopify_product_id": _required_id(
-            product.get("id"),
-            "Shopify product id missing from operation-tag match.",
-        ),
-        "shopify_variant_id": _required_id(
-            variant.get("id"),
-            "Shopify variant id missing from operation-tag match.",
-        ),
-        "shopify_inventory_item_id": _clean_str(inventory_item.get("id")),
-    }
-
-
 async def create_shopify_product(
     *,
     shop_domain: str,
     access_token_encrypted: str,
     normalized_payload: dict,
     media: list[dict] | None = None,
-    operation_tag: str | None = None,
 ) -> dict:
     variables = {
-        "product": _product_input_with_operation_tag(
-            normalized_payload["product"],
-            operation_tag=operation_tag,
-        )
+        "product": normalized_payload["product"],
     }
     query = CREATE_PRODUCT_MUTATION
     if media:
@@ -306,15 +236,11 @@ async def update_shopify_product(
     normalized_payload: dict,
     fallback_inventory_item_id: str | None = None,
     media: list[dict] | None = None,
-    operation_tag: str | None = None,
 ) -> dict:
     variables = {
         "product": {
             "id": shopify_product_id,
-            **_product_input_with_operation_tag(
-                normalized_payload["product"],
-                operation_tag=operation_tag,
-            ),
+            **normalized_payload["product"],
         }
     }
     query = UPDATE_PRODUCT_MUTATION
@@ -477,28 +403,6 @@ def _required_id(value: object, message: str) -> str:
     if cleaned is None:
         raise ValueError(message)
     return cleaned
-
-
-def _product_input_with_operation_tag(
-    product_input: dict,
-    *,
-    operation_tag: str | None,
-) -> dict:
-    if operation_tag is None:
-        return product_input
-
-    result = dict(product_input)
-    raw_tags = product_input.get("tags")
-    if isinstance(raw_tags, list):
-        tags = list(raw_tags)
-    elif isinstance(raw_tags, str) and raw_tags.strip():
-        tags = [raw_tags]
-    else:
-        tags = []
-    if operation_tag not in tags:
-        tags.append(operation_tag)
-    result["tags"] = tags
-    return result
 
 
 def _media_result(product: dict) -> dict:

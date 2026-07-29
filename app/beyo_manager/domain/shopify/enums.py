@@ -53,6 +53,11 @@ class ShopifyProductSyncStageEnum(StrEnum):
     INVENTORY_SET = "inventory_set"
 
 
+class ShopifyProductSyncOriginEnum(StrEnum):
+    STANDARD_PRODUCT_SYNC = "standard_product_sync"
+    PREORDER_TASK = "preorder_task"
+
+
 class ShopifyInventoryAdjustmentStatusEnum(StrEnum):
     PENDING = "pending"
     APPLIED = "applied"

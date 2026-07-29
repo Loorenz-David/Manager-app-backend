@@ -181,6 +181,7 @@ class ShopifyPreorderSectionInput(BaseModel):
 	shop_integration_id: str
 	product: ShopifyPreorderProductInput
 	inventory: list[ShopifyPreorderInventoryInput] = Field(min_length=1)
+	metafields: dict[str, object] = Field(default_factory=dict)
 
 	@field_validator("shop_integration_id", mode="before")
 	@classmethod
@@ -194,7 +195,27 @@ class ShopifyPreorderSectionInput(BaseModel):
 		location_ids = [entry.location_id for entry in self.inventory]
 		if len(location_ids) != len(set(location_ids)):
 			raise ValueError("duplicate_inventory_location")
+		duplicate_metafield_keys = set(self.metafields) & set(self.product.metafields)
+		if duplicate_metafield_keys:
+			raise ValueError(
+				"shopify_preorder metafields must be supplied either at the section level "
+				"or under product, not both."
+			)
 		return self
+
+	@field_validator("metafields")
+	@classmethod
+	def _reject_section_quantity_metafield(cls, value: dict) -> dict:
+		from beyo_manager.domain.shopify.preorder_policy import (
+			PREORDER_QUANTITY_METAFIELD_KEY,
+		)
+
+		if PREORDER_QUANTITY_METAFIELD_KEY in value:
+			raise ValueError(
+				f"metafields.{PREORDER_QUANTITY_METAFIELD_KEY} is derived from the inventory "
+				"quantity and must not be supplied."
+			)
+		return value
 
 
 class CreateTaskRequest(BaseModel):

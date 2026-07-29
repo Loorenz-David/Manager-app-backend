@@ -165,6 +165,10 @@ class _ShopifyPreorderBody(BaseModel):
     shop_integration_id: str
     product: _ShopifyPreorderProductBody
     inventory: list[_ShopifyPreorderInventoryBody]
+    # Preferred location for pre-order product metafields. The nested
+    # `product.metafields` field remains accepted for compatibility.
+    # `quantity` is reserved and rejected by the service-layer request model.
+    metafields: dict | None = None
 
 
 class _CreateTaskBody(BaseModel):

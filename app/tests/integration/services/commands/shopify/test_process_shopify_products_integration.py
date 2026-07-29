@@ -12,6 +12,7 @@ from beyo_manager.domain.shopify.enums import (
     ShopifyIntegrationEventTypeEnum,
     ShopifyIntegrationStatusEnum,
     ShopifyInventoryModeEnum,
+    ShopifyProductSyncOriginEnum,
     ShopifyProductSyncItemStatusEnum,
 )
 from beyo_manager.models.tables.shopify.shopify_integration_event import ShopifyIntegrationEvent
@@ -182,6 +183,13 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
     assert {row.shop_integration_id for row in rows} == {active_one.client_id, active_two.client_id}
     assert all(row.status == ShopifyProductSyncItemStatusEnum.PENDING for row in rows)
     assert all(row.inventory_mode == ShopifyInventoryModeEnum.SET for row in rows)
+    assert all(
+        row.sync_origin
+        == ShopifyProductSyncOriginEnum.STANDARD_PRODUCT_SYNC.value
+        for row in rows
+    )
+    assert all(row.source_entity_type is None for row in rows)
+    assert all(row.source_entity_id is None for row in rows)
     payload_by_shop = {
         row.shop_integration_id: row.normalized_payload_json
         for row in rows

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import logging
+import re
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.shopify.enums import (
-    ShopifyInventoryModeEnum,
     ShopifyProductSyncItemStatusEnum,
     ShopifyProductSyncOperationEnum,
     ShopifyProductSyncStageEnum,
 )
 from beyo_manager.domain.shopify.product_sync_identity import (
-    ProductSyncMatchResult,
     select_exact_variant_match,
 )
 from beyo_manager.domain.shopify.product_sync_stages import should_run_stage
@@ -24,7 +25,6 @@ from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyS
 from beyo_manager.services.infra.shopify.product_sync_client import (
     configure_shopify_product_variant,
     create_shopify_product,
-    find_product_by_operation_tag,
     find_product_variant_by_identity,
     set_shopify_product_metafields,
     update_shopify_product,
@@ -36,11 +36,13 @@ from beyo_manager.services.infra.shopify.inventory_client import (
     resolve_inventory_item_state,
     set_inventory_quantities,
 )
-from beyo_manager.services.tasks.shopify._inventory_sync import sync_inventory_adjustments
 from beyo_manager.services.tasks.shopify._product_media_resolver import resolve_product_media
 
 
 _REQUIRED_INVENTORY_SCOPES = ("read_locations", "write_inventory")
+_SHOPIFY_LOCATION_GID = re.compile(r"^gid://shopify/Location/[0-9]+$")
+_MAX_INVENTORY_QUANTITY = 1_000_000
+logger = logging.getLogger(__name__)
 
 
 async def sync_one_product_sync_item(
@@ -51,20 +53,19 @@ async def sync_one_product_sync_item(
 ) -> None:
     payload = sync_item.normalized_payload_json or {}
     variant_payload = payload.get("variant") or {}
-    inventory_item = variant_payload.get("inventoryItem") or {}
     inventory_payload = payload.get("inventory") or {}
-    inventory_mode = sync_item.inventory_mode
-    # The two modes carry different contracts under `inventory`, under distinct keys so
-    # the shape is self-describing: `adjustments` entries are additive deltas
-    # (`quantity_to_add`) consumed by the ledger; `quantities` entries are absolute
-    # targets (`quantity`) consumed by inventorySetQuantities.
-    if inventory_mode == ShopifyInventoryModeEnum.SET:
-        inventory_entries = inventory_payload.get("quantities") or []
-    else:
-        inventory_entries = inventory_payload.get("adjustments") or []
-    sku = _clean_str(inventory_item.get("sku"))
+    inventory_entries, converted_legacy_inventory = _resolve_absolute_inventory_entries(
+        inventory_payload,
+        sync_item_id=sync_item.client_id,
+    )
+    if converted_legacy_inventory:
+        canonical_payload = {
+            **payload,
+            "inventory": {"quantities": inventory_entries},
+        }
+        sync_item.normalized_payload_json = canonical_payload
+        payload = canonical_payload
     barcode = _clean_str(variant_payload.get("barcode"))
-    operation_tag = f"managerbeyo-sync-{sync_item.client_id}"
     current_stage = ShopifyProductSyncStageEnum(
         sync_item.stage
     )
@@ -81,72 +82,18 @@ async def sync_one_product_sync_item(
             ShopifyProductSyncStageEnum.PRODUCT_CREATED,
         ):
             media = await resolve_product_media(session, normalized_payload=payload)
-            operation_match = await find_product_by_operation_tag(
-                shop_domain=shop.shop_domain,
-                access_token_encrypted=shop.access_token_encrypted,
-                operation_tag=operation_tag,
-            )
-            recovered_by_operation_tag = operation_match is not None
-            if operation_match is not None:
-                match = ProductSyncMatchResult(
-                    found=True,
-                    shopify_product_id=operation_match["shopify_product_id"],
-                    shopify_variant_id=operation_match["shopify_variant_id"],
-                    shopify_inventory_item_id=operation_match.get(
-                        "shopify_inventory_item_id"
-                    ),
+            if barcode is not None:
+                barcode_nodes = await find_product_variant_by_identity(
+                    shop_domain=shop.shop_domain,
+                    access_token_encrypted=shop.access_token_encrypted,
+                    sku=None,
+                    barcode=barcode,
                 )
-            else:
-                if sku is not None:
-                    sku_nodes = await find_product_variant_by_identity(
-                        shop_domain=shop.shop_domain,
-                        access_token_encrypted=shop.access_token_encrypted,
-                        sku=sku,
-                        barcode=None,
-                    )
-                    match = select_exact_variant_match(
-                        sku_nodes,
-                        identity_type="sku",
-                        identity_value=sku,
-                    )
-
-                if match is not None and match.found and barcode is not None:
-                    # sku already resolved a product — still verify the item's own barcode
-                    # doesn't belong to a *different* existing product before writing to it,
-                    # since Shopify does not enforce barcode uniqueness and would otherwise
-                    # silently move another product's barcode onto this one.
-                    barcode_nodes = await find_product_variant_by_identity(
-                        shop_domain=shop.shop_domain,
-                        access_token_encrypted=shop.access_token_encrypted,
-                        sku=None,
-                        barcode=barcode,
-                    )
-                    barcode_match = select_exact_variant_match(
-                        barcode_nodes,
-                        identity_type="barcode",
-                        identity_value=barcode,
-                    )
-                    if (
-                        barcode_match.found
-                        and barcode_match.shopify_product_id
-                        != match.shopify_product_id
-                    ):
-                        raise ShopifyProductLookupAmbiguousError(
-                            "sku and barcode identities resolved to different existing Shopify products.",
-                            error_code="conflicting_identity_match",
-                        )
-                elif (match is None or not match.found) and barcode is not None:
-                    barcode_nodes = await find_product_variant_by_identity(
-                        shop_domain=shop.shop_domain,
-                        access_token_encrypted=shop.access_token_encrypted,
-                        sku=None,
-                        barcode=barcode,
-                    )
-                    match = select_exact_variant_match(
-                        barcode_nodes,
-                        identity_type="barcode",
-                        identity_value=barcode,
-                    )
+                match = select_exact_variant_match(
+                    barcode_nodes,
+                    identity_type="barcode",
+                    identity_value=barcode,
+                )
 
             if match is not None and match.found:
                 sync_item.requested_operation = (
@@ -160,9 +107,6 @@ async def sync_one_product_sync_item(
                     normalized_payload=payload,
                     fallback_inventory_item_id=_match_inventory_item_id(match),
                     media=media,
-                    operation_tag=(
-                        operation_tag if recovered_by_operation_tag else None
-                    ),
                 )
             else:
                 sync_item.requested_operation = (
@@ -173,7 +117,6 @@ async def sync_one_product_sync_item(
                     access_token_encrypted=shop.access_token_encrypted,
                     normalized_payload=payload,
                     media=media,
-                    operation_tag=operation_tag,
                 )
 
             sync_item.shopify_product_id = result["shopify_product_id"]
@@ -231,22 +174,13 @@ async def sync_one_product_sync_item(
             if resolved_inventory_item_id is None and match is not None:
                 resolved_inventory_item_id = _match_inventory_item_id(match)
             sync_item.shopify_inventory_item_id = resolved_inventory_item_id
-            if inventory_mode == ShopifyInventoryModeEnum.SET:
-                await _sync_absolute_inventory(
-                    session,
-                    sync_item=sync_item,
-                    shop=shop,
-                    inventory_item_id=resolved_inventory_item_id,
-                    quantities=inventory_entries,
-                )
-            else:
-                await sync_inventory_adjustments(
-                    session,
-                    sync_item=sync_item,
-                    shop=shop,
-                    inventory_item_id=resolved_inventory_item_id,
-                    adjustments=inventory_entries,
-                )
+            await _sync_absolute_inventory(
+                session,
+                sync_item=sync_item,
+                shop=shop,
+                inventory_item_id=resolved_inventory_item_id,
+                quantities=inventory_entries,
+            )
 
         if run_inventory_stage:
             sync_item.stage = ShopifyProductSyncStageEnum.INVENTORY_SET
@@ -386,6 +320,89 @@ def _inventory_error(code: str, message: str) -> ShopifyGraphQLError:
     from beyo_manager.errors.external_service import ShopifyGraphQLNonRetryableError
 
     return ShopifyGraphQLNonRetryableError(message, error_code=code)
+
+
+def _resolve_absolute_inventory_entries(
+    inventory_payload: object,
+    *,
+    sync_item_id: str,
+) -> tuple[list[dict], bool]:
+    if not isinstance(inventory_payload, dict):
+        return [], False
+    quantities = inventory_payload.get("quantities")
+    adjustments = inventory_payload.get("adjustments")
+    if quantities and adjustments:
+        raise _inventory_error(
+            "mixed_inventory_payload",
+            "A Shopify sync item cannot contain both quantities and legacy adjustments.",
+        )
+    if quantities is not None:
+        return _validate_absolute_inventory_entries(quantities), False
+    if adjustments is None:
+        return [], False
+
+    if not isinstance(adjustments, list) or any(
+        not isinstance(entry, dict) for entry in adjustments
+    ):
+        raise _inventory_error(
+            "invalid_inventory_payload",
+            "Legacy Shopify inventory adjustments must be a list of objects.",
+        )
+    converted = _validate_absolute_inventory_entries(
+        [
+            {
+                "location_id": entry.get("location_id"),
+                # Compatibility only: this legacy field is intentionally
+                # interpreted as an absolute target, never as a delta.
+                "quantity": entry.get("quantity_to_add"),
+            }
+            for entry in adjustments
+        ]
+    )
+    logger.warning(
+        "shopify_product_sync | legacy_persisted_inventory_converted | "
+        "sync_item_id=%s quantity_count=%s semantics=absolute",
+        sync_item_id,
+        len(converted),
+    )
+    return converted, True
+
+
+def _validate_absolute_inventory_entries(entries: object) -> list[dict]:
+    if not isinstance(entries, list):
+        raise _inventory_error(
+            "invalid_inventory_payload",
+            "Shopify inventory quantities must be a list.",
+        )
+    normalized: list[dict] = []
+    seen_locations: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise _inventory_error(
+                "invalid_inventory_payload",
+                "Each Shopify inventory quantity must be an object.",
+            )
+        location_id = entry.get("location_id")
+        quantity = entry.get("quantity")
+        if (
+            not isinstance(location_id, str)
+            or _SHOPIFY_LOCATION_GID.fullmatch(location_id) is None
+            or isinstance(quantity, bool)
+            or not isinstance(quantity, int)
+            or not 0 <= quantity <= _MAX_INVENTORY_QUANTITY
+        ):
+            raise _inventory_error(
+                "invalid_inventory_payload",
+                "A Shopify inventory quantity has an invalid location or quantity.",
+            )
+        if location_id in seen_locations:
+            raise _inventory_error(
+                "duplicate_inventory_location",
+                "A Shopify inventory location was supplied more than once.",
+            )
+        seen_locations.add(location_id)
+        normalized.append({"location_id": location_id, "quantity": quantity})
+    return normalized
 
 
 def _clean_str(value: object) -> str | None:

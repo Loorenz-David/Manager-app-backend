@@ -58,7 +58,7 @@ class ShopifyProductLookupAmbiguousError(DomainError):
 
     def __init__(
         self,
-        message: str = "Multiple Shopify products matched the same identity.",
+        message: str = "Multiple Shopify variants matched the same barcode.",
         *,
         error_code: str = "ambiguous_product_match",
     ) -> None:

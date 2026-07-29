@@ -45,7 +45,7 @@ def test_build_normalized_product_sync_payload_applies_defaults_and_nested_varia
 
 
 @pytest.mark.unit
-def test_build_normalized_product_sync_payload_uses_article_number_fallback_for_barcode() -> (
+def test_build_normalized_product_sync_payload_uses_canonical_article_number_for_barcode() -> (
     None
 ):
     payload = build_normalized_product_sync_payload(
@@ -60,6 +60,31 @@ def test_build_normalized_product_sync_payload_uses_article_number_fallback_for_
     assert payload["product"]["status"] == "ACTIVE"
     assert payload["variant"]["barcode"] == "ART-555"
     assert "inventoryItem" not in payload["variant"]
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_uses_legacy_article_number_alias() -> None:
+    payload = build_normalized_product_sync_payload(
+        {
+            "title": "Table",
+            "item_article_number": "LEGACY-555",
+        }
+    )
+
+    assert payload["variant"]["barcode"] == "LEGACY-555"
+
+
+@pytest.mark.unit
+def test_build_normalized_product_sync_payload_prefers_canonical_article_number() -> None:
+    payload = build_normalized_product_sync_payload(
+        {
+            "title": "Table",
+            "article_number": "CANONICAL-555",
+            "item_article_number": "LEGACY-555",
+        }
+    )
+
+    assert payload["variant"]["barcode"] == "CANONICAL-555"
 
 
 @pytest.mark.unit

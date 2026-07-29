@@ -41,8 +41,10 @@ def select_exact_variant_match(
     if not exact_matches:
         return ProductSyncMatchResult(found=False)
 
-    product_ids = {product_id for product_id, _variant_id, _inventory_item_id in exact_matches}
-    if len(product_ids) > 1:
+    # A barcode identifies exactly one Shopify variant. Even two variants under
+    # the same parent product are ambiguous because either one could receive the
+    # subsequent variant and inventory mutations.
+    if len(exact_matches) > 1:
         raise ShopifyProductLookupAmbiguousError()
 
     product_id, variant_id, inventory_item_id = exact_matches[0]

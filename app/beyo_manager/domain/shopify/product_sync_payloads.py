@@ -17,8 +17,10 @@ def build_normalized_product_sync_payload(
     *,
     shop_integration_id: str | None = None,
 ) -> dict:
-    barcode = _clean_str(item.get("item_article_number")) or _clean_str(
-        item.get("article_number")
+    # `article_number` is ManagerBeyo's canonical name for Shopify's barcode.
+    # `item_article_number` remains a compatibility alias for older callers.
+    barcode = _clean_str(item.get("article_number")) or _clean_str(
+        item.get("item_article_number")
     )
 
     product = {

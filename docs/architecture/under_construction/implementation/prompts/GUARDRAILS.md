@@ -7,11 +7,11 @@ it causes silent data loss, a security regression, or an error that looks like s
 
 ## Absolute rules
 
-1. **`inventory_mode` must never appear in any HTTP request schema.**
-   Not in `ShopifyProcessProductsBody`, not in `ProcessShopifyProductItemRequest`, not in
-   `ShopifyPreorderSectionInput`. Only `_create_preorder_sync_item_in_session` may set `set`.
-   `/products/process` keeps additive-only inventory permanently — an inventory-mode flag on that
-   route would let a bad caller wipe real merchant stock.
+1. **Inventory behavior and sync origin are separate contracts.**
+   `inventory_mode` and `sync_origin` must never appear in an HTTP request schema. Every supplied
+   location quantity is authoritative and absolute, for both `/products/process` and pre-orders.
+   Origin is persisted internally at enqueue time and controls only audit history, socket events,
+   and workflow completion. Never infer origin from inventory fields or behavior.
 
 2. **Never send `ignoreCompareQuantity` or `compareQuantity`.**
    Both are deprecated in API `2026-01` and removed in `2026-04`. Use `changeFromQuantity: null`
@@ -75,7 +75,7 @@ it causes silent data loss, a security regression, or an error that looks like s
   Never auto-select by order, age, price, stock, status or timestamp. Multiple *variants* of the
   **same** product ID remain a single valid match.
 - **Product status is `UNLISTED`** — not `ACTIVE`, not `DRAFT`.
-- **Till readiness is `available = 1`**, never `on_hand = 1`.
+- **Till readiness is the requested absolute `available` quantity**, never an `on_hand` write.
 - **Persist Shopify IDs before the next stage's first network call.**
 
 ## Images (corrected — read this if you have older context)
@@ -100,9 +100,10 @@ The S3 bucket is **public**. Verified by anonymous fetch.
 
 ## Regression rule for the shared pipeline
 
-Pre-order rides the existing `/products/process` pipeline. Any change to
-`_product_sync_orchestrator.py` or `product_sync_client.py` must leave an ordinary
-`product_sync`-mode item emitting **byte-identical** GraphQL documents and variables to today.
+Pre-order rides the shared product-sync pipeline. Any supplied inventory quantity must use
+`inventorySetQuantities` with the sync-item idempotency key. `inventoryAdjustQuantities` and the
+historical adjustment ledger are not runtime paths. The ledger table is retained read-only for
+audit history.
 
 Where a characterisation test exists, that is the arbiter: **if it fails, your change is wrong —
 do not update it to match new behaviour without explicit human approval.**
@@ -110,9 +111,9 @@ do not update it to match new behaviour without explicit human approval.**
 ## Scope rule
 
 The existing product sync already does most of this: SKU resolve-or-create, ambiguous-SKU
-failure, variant price, `UNLISTED`, metafields in the `custom` namespace, inventory at a chosen
-location, **location ownership validation**, and **per-task replay safety via the existing
-ledger**.
+failure, variant price, `UNLISTED`, metafields in the `custom` namespace, absolute inventory at
+chosen locations, **location ownership validation**, and **per-sync replay safety via Shopify's
+idempotent mutation contract**.
 
 **If you find yourself reimplementing any of that, stop — you have gone out of scope.**
 

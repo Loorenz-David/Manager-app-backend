@@ -12,6 +12,7 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.customers.customer import Customer
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
@@ -160,18 +161,6 @@ async def create_task(ctx: ServiceContext) -> dict:
         ctx.session.add(task)
         await ctx.session.flush()
 
-        if request.shopify_preorder is not None:
-            shopify_preorder_result = await _create_preorder_sync_item_in_session(
-                ctx,
-                task_id=task.client_id,
-                preorder=request.shopify_preorder,
-                # Read from the request rather than the created item: the item is created further
-                # down, so its row does not exist yet at this point.
-                item_category_id=(
-                    request.item.item_category_id if request.item is not None else None
-                ),
-            )
-
         if request.notes:
             for note_input in request.notes:
                 await write_task_note(
@@ -185,6 +174,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                 )
 
         item_id: str | None = None
+        resolved_item: Item | None = None
         if request.item is not None:
             item_ctx = ServiceContext(
                 incoming_data=request.item.model_dump(exclude_unset=True),
@@ -193,6 +183,9 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
             item_result = await find_or_create_item(item_ctx)
             item_id = item_result["client_id"]
+            resolved_item = await ctx.session.get(Item, item_id)
+            if resolved_item is None:
+                raise NotFound("Item not found.")
 
             task_item = TaskItem(
                 workspace_id=ctx.workspace_id,
@@ -203,6 +196,19 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
             ctx.session.add(task_item)
             await ctx.session.flush()
+
+        if request.shopify_preorder is not None:
+            shopify_preorder_result = await _create_preorder_sync_item_in_session(
+                ctx,
+                task_id=task.client_id,
+                preorder=request.shopify_preorder,
+                item_article_number=(
+                    resolved_item.article_number if resolved_item is not None else None
+                ),
+                item_category_id=(
+                    resolved_item.item_category_id if resolved_item is not None else None
+                ),
+            )
 
         if request.item_upholstery is not None:
             if item_id is None:

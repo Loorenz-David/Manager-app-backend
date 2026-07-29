@@ -246,9 +246,6 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
             {"id": "gid://shopify/ProductVariant/2", "barcode": "BAR-FAILED", "sku": None, "product": {"id": "gid://shopify/Product/2"}},
         ]
 
-    async def _fake_find_product_by_operation_tag(**_kwargs):
-        return None
-
     async def _fake_create_shopify_product(**_kwargs):
         # db_session has expire_on_commit=False, so success_row's cached identity-map
         # entry never sees the handler's own (separate-session) commit without an
@@ -272,10 +269,6 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
     async def _fake_emit_to_workspace_room(**kwargs):
         emitted.update(kwargs)
 
-    monkeypatch.setattr(
-        "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_by_operation_tag",
-        _fake_find_product_by_operation_tag,
-    )
     monkeypatch.setattr(
         "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_variant_by_identity",
         _fake_find_product_variant_by_identity,
