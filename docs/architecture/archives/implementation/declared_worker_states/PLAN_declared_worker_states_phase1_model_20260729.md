@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase1_model_20260729`
-- Status: `implemented` (validation blocked; not yet summarized or archived)
-- Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
+- Status: `archived` (reviewed and APPROVED by Opus at commit `a84610c`; summarized and archived)
+- Owner agent: `claude-fable-5` (plan) → `Codex` (implementation) → `Opus` (review)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T14:04:55Z`
+- Last updated at (UTC): `2026-07-29T16:00:00Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (master plan plays the intention role; read it first — decisions D1–D10 are binding)
 
@@ -162,9 +162,60 @@ Prohibited pattern reads: other models to learn "how to write a model" → `03_m
     set** and must not be absorbed into any phase.
   - Lifecycle: proceed to reviewer; on approval, complete summary/archive/master-table
     transition as normal.
+- `2026-07-29` — reviewer (`claude-opus-5`, adversarial verification of commit `a84610c`):
+  **APPROVED — 0 blocking findings, 0 minor findings against this phase.**
+  - Scope reviewed: commit `a84610c` (working tree clean; no uncommitted drift). 9 files —
+    model, `models/__init__.py`, migration `595e7b840926`, prefix map, users README,
+    constraint tests, master plan, this plan, review prompt.
+  - **Column spec**: model matches the Assumptions block exactly — 8 declared columns +
+    `client_id` from `IdentityMixin`, correct types/nullability, all four FKs
+    `ondelete="RESTRICT"`. No extra columns, none dropped. No `state` enum column, no
+    soft-delete columns (both correctly excluded).
+  - **Migration**: `postgresql_where=sa.text('exited_at IS NULL')` present on
+    `uix_user_declared_state_records_active` in the migration itself (line 44) — not lost by
+    autogenerate. Check constraint present in both model and migration. Single Alembic head
+    confirmed (`595e7b840926`; the two apparent orphan revisions `183fb6115bd3` /
+    `3c2d4e5f6a7b` are absorbed by existing merge revisions).
+  - **Re-run validation (not trusted from the implementer's report)**, `APP_ENV=testing`:
+    - `pytest tests/integration/models/users/test_user_declared_state_record.py -q` →
+      **4 passed**.
+    - Live DB introspection of `app_test` (`\d+ user_declared_state_records`): partial unique
+      index materialized as
+      `UNIQUE, btree (user_id, workspace_id) WHERE exited_at IS NULL`; check constraint
+      `CHECK (exited_at IS NULL OR exited_at >= entered_at)`; all five RESTRICT FKs present.
+      Schema comes from Alembic (no `create_all` in `init_db`), so the tests prove the
+      *migration*, not just the model.
+    - `alembic downgrade -1` → table gone (`to_regclass` NULL) → `alembic upgrade head` →
+      table + partial index recreated. Full upgrade→downgrade→upgrade cycle verified on an
+      existing-head DB.
+    - `ruff check` on the four touched source files → **All checks passed**.
+      `ruff check .` from repo root → **149 errors**, identical to the recorded baseline
+      (the implementer's 142 is the same run from `backend/app/`; both counts reproduced).
+  - **Baseline diff (definitive, not variance-based)**: ran the full suite on a detached
+    worktree at the parent commit `091c0db` and on `a84610c` against the same DB.
+    Baseline = **25 failed / 1157 passed**; Phase 1 = **25 failed / 1161 passed**. The failure
+    lists are **identical test-for-test** (including both
+    `test_worker_shift_commands` clock-out failures, which are pre-existing and unrelated).
+    Delta = the 4 new constraint tests, all passing. **Zero new failures, zero new ruff errors.**
+  - **Inertness**: `grep -rn "UserDeclaredStateRecord\|user_declared_state_records"
+    app/beyo_manager/` hits only the model module, `client_id_prefix_map.md`, and
+    `users/README.md` (both documentation, both required by the plan). Registration in
+    `models/__init__.py:46` is by module name (`user_declared_state_record`), which is why it
+    does not appear in that grep — verified separately. **No service, router, worker, query,
+    or schema references the table.**
+  - **Prefix**: `uds` is the only `CLIENT_ID_PREFIX = "uds"` in the codebase and has no
+    duplicate in `client_id_prefix_map.md`; claimed correctly.
+  - **Docs**: `users/README.md` documents all four required rules (source table / never
+    rebuilt / one-open-row / close-don't-delete) plus `closed_by_id IS NULL` = system-closed.
+  - **Acceptance 2**: `beyo_manager.models` + `beyo_manager.asgi` import cleanly; table
+    registered in `Base.metadata` with the expected 9 columns.
+  - Out-of-scope observation (repo-health, **not** a Phase 1 finding, do not fix here):
+    `client_id_prefix_map.md` records `UserShiftStateRecord | ussr` while the model's actual
+    prefix is `uss`. Pre-existing since commit `3fcfbe5`; the Phase 1 diff only added the
+    `uds` row adjacent to it.
 
 ## Lifecycle transition
 
-- Current state: `implemented` (validation waived per Review log 2026-07-29 — ready for review)
-- Next state: `summarized` after reviewer approval
-- Transition owner: `David`
+- Current state: `archived`
+- Next state: `none`
+- Transition owner: `David` (finalized by `claude-fable-5` post-approval)

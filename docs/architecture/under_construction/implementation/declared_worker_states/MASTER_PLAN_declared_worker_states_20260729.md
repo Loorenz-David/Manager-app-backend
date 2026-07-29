@@ -55,7 +55,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 
 | Phase | Plan | Delivers | Status |
 |-------|------|----------|--------|
-| 1 | `PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `under_construction` |
+| 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
 | 2 | `PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `under_construction` |
 | 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `under_construction` |
 | 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `under_construction` |
@@ -85,6 +85,12 @@ The repository has pre-existing validation debt, verified against the pre-Phase-
 - **149 `ruff check .` errors** in untouched files.
 - **Fresh empty-DB `alembic upgrade head` stalls** in the historical revision graph's topological
   sort (existing DBs at head upgrade fine).
+- `client_id_prefix_map.md` records `ussr` for `UserShiftStateRecord` whose real prefix is `uss`
+  (pre-existing typo, found by the Phase 1 reviewer).
+- Note (Phase 1 reviewer): two of the baseline failures are in
+  `test_worker_shift_commands` (clock-out) — **this feature's own domain**. Phase 2/3
+  implementers and reviewers must treat exactly those two as baseline, and must not let any NEW
+  worker-shift failure hide behind them.
 
 **Binding rule for every phase and every reviewer:** wherever a phase plan or review prompt says
 "full suite green" / "ruff clean", read it as **"no NEW failures or errors relative to this
@@ -112,6 +118,7 @@ When all four phases are archived, set this master plan's status to `archived` a
 - `2026-07-29`: Master plan + 4 phase plans + codex/review prompts created. No implementation started.
 - `2026-07-29` (rev 2): Shop-floor device requirements added — D10 revised (on-behalf declare/close), D11–D14 added, Phases 5–6 created, Phase 3 amended to the on-behalf matrix, Phase 4's handoff deliverable re-pointed at the pre-written floor-app handoff. Frontend build starts in parallel against the handoff.
 - `2026-07-29` (rev 3): Identify endpoint dropped in favor of client-side matching against the polled roster (`GET /users?role=worker&compact=true`), with `clock_in_code` exposed in that response only to floor-scope sessions (D13 rev 3). Phase 6 + handoff §3 updated. Accepted trade-off: the whole roster + codes lives in the kiosk device's memory — same trust boundary as the device's manager token (codes are identification, not authentication, per D12).
+- `2026-07-29`: **Phase 1 completed and archived** (commit `a84610c`). Implemented by Codex, reviewed APPROVED by Opus (independent re-run of all gates + detached-worktree baseline diff proving inertness). Validation waiver recorded for the pre-existing repo baseline; baseline rule added for remaining phases. Summary: `implemented_summaries/SUMMARY_declared_worker_states_phase1_model_20260729.md`.
 - `2026-07-29` (rev 4): Phase 7 added — the clock-out `analytics` envelope is populated with the worker's day summary (timeline resume + drill-down segments + insights) composed from the existing worker-stats services via a shared seam (D14 rev 4). Final-phase lifecycle duties move from Phase 6 to Phase 7.
 
 ## Open questions
