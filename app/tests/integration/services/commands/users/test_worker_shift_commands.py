@@ -196,6 +196,7 @@ async def _seed_step_record(
     entered_at: datetime,
     exited_at: datetime | None,
     reason: str | None = None,
+    pause_reason_id: str | None = None,
 ) -> None:
     suffix = uuid4().hex
     section = WorkingSection(
@@ -214,19 +215,21 @@ async def _seed_step_record(
     )
     db_session.add(step)
     await db_session.flush()
-    pause_reason_id = (
-        await db_session.scalar(
-            select(PauseReason.client_id).where(
-                PauseReason.slug == reason,
+    resolved_pause_reason_id = pause_reason_id
+    if resolved_pause_reason_id is None:
+        resolved_pause_reason_id = (
+            await db_session.scalar(
+                select(PauseReason.client_id).where(
+                    PauseReason.slug == reason,
+                )
             )
+            if reason is not None
+            else None
         )
-        if reason is not None
-        else None
-    )
     db_session.add(
         StepStateRecord(
             workspace_id=workspace.client_id, step_id=step.client_id, state=state,
-            pause_reason_id=pause_reason_id,
+            pause_reason_id=resolved_pause_reason_id,
             entered_at=entered_at, exited_at=exited_at,
             created_by_id=worker.client_id, credited_user_id=worker.client_id,
         )
@@ -503,6 +506,68 @@ async def test_clock_out_reconstructs_declared_intervals_and_clamps_open_source(
     assert pauses[at(40)].manually_recorded is True
     assert open_declared.exited_at == at(50)
     assert open_declared.closed_by_id is None
+
+
+async def test_declared_pause_owns_reconstruction_overlap_with_step_pause(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+
+    def at(minutes: int) -> datetime:
+        return base + timedelta(minutes=minutes)
+
+    step_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"Step pause {uuid4().hex}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"step-pause-{uuid4().hex}",
+        created_by_id=worker.client_id,
+    )
+    db_session.add(step_reason)
+    await db_session.flush()
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, base, worker.client_id
+    )
+    await _seed_step_record(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=at(5),
+        exited_at=at(50),
+        pause_reason_id=step_reason.client_id,
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        worker,
+        reason="pause_lunch_break",
+        entered_at=at(20),
+        exited_at=None,
+    )
+
+    await clock_out_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, at(50), worker.client_id
+    )
+
+    records = await _ordered_shift_records(
+        db_session, workspace.client_id, worker.client_id
+    )
+    assert _minute_seq(records, base) == [
+        (UserShiftStateEnum.STARTED_SHIFT, 0, 0),
+        (UserShiftStateEnum.IDLE, 0, 5),
+        (UserShiftStateEnum.IN_PAUSE, 5, 20),
+        (UserShiftStateEnum.IN_PAUSE, 20, 50),
+        (UserShiftStateEnum.ENDED_SHIFT, 50, 50),
+    ]
+    step_pause, declared_pause = [
+        record for record in records if record.state is UserShiftStateEnum.IN_PAUSE
+    ]
+    assert step_pause.reason == step_reason.client_id
+    assert step_pause.manually_recorded is False
+    assert declared_pause.reason == declared.pause_reason_id
+    assert declared_pause.manually_recorded is True
 
 
 async def test_reconstruction_clamps_open_declared_interval_without_closing_source(
@@ -826,6 +891,79 @@ async def test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day(
                     PauseReason.client_id == declared_reason_id
                 )
             )
+        await db_session.execute(
+            delete(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace_id,
+                UserShiftStateRecord.user_id == worker_id,
+            )
+        )
+        await db_session.commit()
+
+
+@freeze_time("2026-07-15T09:00:00+00:00")
+async def test_midnight_safeguard_preserves_open_legacy_manual_pause(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    workspace_id = workspace.client_id
+    worker_id = worker.client_id
+    await db_session.execute(
+        delete(UserShiftStateRecord).where(UserShiftStateRecord.exited_at.is_(None))
+    )
+    await db_session.flush()
+    midnight = datetime.combine(
+        datetime.now(timezone.utc).date(),
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
+    pause_start = midnight - timedelta(hours=8)
+    try:
+        await clock_in_shift_for_user(
+            db_session,
+            workspace_id,
+            worker_id,
+            midnight - timedelta(hours=16),
+            worker_id,
+        )
+        current = await _open_shift_record(db_session, workspace_id, worker_id)
+        current.exited_at = pause_start
+        db_session.add(
+            UserShiftStateRecord(
+                workspace_id=workspace_id,
+                user_id=worker_id,
+                state=UserShiftStateEnum.IN_PAUSE,
+                entered_at=pause_start,
+                exited_at=None,
+                changed_by_id=worker_id,
+                reason="Late lunch",
+                manually_recorded=True,
+            )
+        )
+        await db_session.commit()
+
+        await handle_auto_clock_out_open_shifts({}, "task_midnight_legacy_pause_test")
+
+        async for session in get_db_session():
+            records = await _ordered_shift_records(session, workspace_id, worker_id)
+            manual_pause = next(
+                record
+                for record in records
+                if record.state is UserShiftStateEnum.IN_PAUSE
+            )
+            ended = next(
+                record
+                for record in records
+                if record.state is UserShiftStateEnum.ENDED_SHIFT
+            )
+            assert manual_pause.entered_at == pause_start
+            assert manual_pause.exited_at == midnight
+            assert manual_pause.reason == "Late lunch"
+            assert manual_pause.manually_recorded is True
+            assert ended.entered_at == midnight
+            assert ended.exited_at == midnight
+            assert await _open_shift_record(session, workspace_id, worker_id) is None
+    finally:
+        await db_session.rollback()
         await db_session.execute(
             delete(UserShiftStateRecord).where(
                 UserShiftStateRecord.workspace_id == workspace_id,

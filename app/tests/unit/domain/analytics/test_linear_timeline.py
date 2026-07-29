@@ -21,7 +21,16 @@ def _min(m: int) -> datetime:
     return T0 + timedelta(minutes=m)
 
 
-def _iv(rid, *, state="paused", reason=None, start=0, end=60, step=None):
+def _iv(
+    rid,
+    *,
+    state="paused",
+    reason=None,
+    start=0,
+    end=60,
+    step=None,
+    priority=0,
+):
     return LinearInterval(
         record_id=rid,
         state=state,
@@ -29,6 +38,7 @@ def _iv(rid, *, state="paused", reason=None, start=0, end=60, step=None):
         entered_at=_min(start),
         exited_at=None if end is None else _min(end),
         step_id=step or f"step_{rid}",
+        priority=priority,
     )
 
 
@@ -123,6 +133,30 @@ def test_overlapping_pauses_different_reasons_attributed_to_earliest_open():
     )
     assert out.paused_seconds == 40 * 60  # [0,40] union
     assert out.pause_by_reason == {"pause_lunch_break": 30 * 60, "pause_meeting": 10 * 60}
+
+
+def test_higher_priority_pause_owns_overlap_and_exposes_owner_record():
+    segs = _segs(
+        [
+            _iv("step", reason="step pause", start=0, end=40),
+            _iv(
+                "declared",
+                reason="declared pause",
+                start=10,
+                end=30,
+                priority=2,
+            ),
+        ]
+    )
+
+    assert [
+        (segment.start, segment.end, segment.reason, segment.owner_record_id)
+        for segment in segs
+    ] == [
+        (_min(0), _min(10), "step pause", "step"),
+        (_min(10), _min(30), "declared pause", "declared"),
+        (_min(30), _min(40), "step pause", "step"),
+    ]
 
 
 def test_missing_reason_bucketed_as_unspecified():

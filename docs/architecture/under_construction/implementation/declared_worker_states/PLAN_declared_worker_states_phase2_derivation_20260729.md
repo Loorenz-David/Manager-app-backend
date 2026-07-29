@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase2_derivation_20260729`
-- Status: `archived`
+- Status: `implemented`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T14:49:01Z`
+- Last updated at (UTC): `2026-07-29T15:19:45Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D3–D6 govern this phase)
 - Prerequisite: Phase 1 archived (`user_declared_state_records` exists).
@@ -270,8 +270,66 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
   coverage additively). F4 must be carried into the Phase 3 plan as an explicit,
   test-pinned deliverable.
 
+- `2026-07-29T15:19:45Z` — Codex (implementer), F1/F2/F3/F5 fix cycle:
+  - Re-read `domain/analytics/linear_timeline.py::_sweep` before modifying it. The
+    working-over-paused rule remains explicit and interval-order-independent: active
+    working entries are still selected before paused entries. For pause-vs-pause
+    ownership, `LinearInterval.priority` now supplies an additive higher-wins key while
+    the default `0` retains the prior earliest-`(entered_at, record_id)` rule
+    (`linear_timeline.py:54-63,202-222`). A caller audit found reconstruction, the worker
+    shift-state backfill, and timeline unit tests; all non-reconstruction callers keep the
+    default and therefore retain prior behavior.
+  - **F1 fixed:** reconstruction assigns declaration intervals priority `2`, frozen
+    legacy manual intervals priority `1`, and step intervals the default `0`
+    (`_reconstruct_shift_middle.py:43-47,148,181`). The sweep exposes its selected pause
+    owner and preserves source-class boundaries during segment merging
+    (`linear_timeline.py:96-107,285-339`). Pinned by
+    `test_higher_priority_pause_owns_overlap_and_exposes_owner_record` and
+    `test_declared_pause_owns_reconstruction_overlap_with_step_pause`.
+  - **F2 fixed:** reconstruction derives `manually_recorded` from
+    `segment.owner_record_id`, not the set of every concurrently active record
+    (`_reconstruct_shift_middle.py:207-209`). The flagship reconstruction test asserts
+    the step-owned `09:05→09:20` segment is non-manual and the declaration-owned
+    `09:20→09:50` segment carries its catalog reason and manual marker.
+  - **F3 fixed:** every derived `IN_PAUSE` no-op now requires both the reason and
+    `manually_recorded` projection to match, regardless of which source currently owns
+    the pause (`reconcile_worker_shift_state.py:214-225`). Pinned by
+    `test_reconcile_updates_pause_projection_when_source_changes`.
+  - **F5 fixed:** the declared midnight test remains intact and the separate
+    `test_midnight_safeguard_preserves_open_legacy_manual_pause` restores the open
+    `"Late lunch"` legacy row through the midnight clock-out path.
+  - Scope review: F4/F6 remain deferred and pinned in Phase 3; the legacy stickiness
+    carve-out and `/pause`/`/resume` were not changed. Reconcile remains subordinate:
+    no events and no commit. The documented cross-command lock order remains
+    **shift row → declared row**.
+  - Regression-first evidence: before the production fix, the flagship reconstruction
+    collapsed `09:05→09:50` into one step-owned segment and the source-change reconcile
+    returned `changed=False`; the restored midnight legacy case already passed. After the
+    fix, the three focused integration nodes report `3 passed`, and the timeline suite
+    reports `29 passed`.
+  - Full validation evidence:
+    - Alembic: `595e7b840926 (head)`; post-suite
+      `user_declared_state_records` count: `0`.
+    - Exhaustive derivation matrix: `53 passed`.
+    - Worker command/reconcile suites: `24 passed, 2 failed`; the two failures are the
+      exact independently proven pre-Phase-2 baseline clock-out cases
+      (`unspecified` vs `None`, and missing `pause_ended_shift`). Three new integration
+      regressions pass and no new failure was introduced.
+    - Unchanged task + Connecteam + worker-stats suites: `70 passed`; broader query/task
+      suites: `73 passed`.
+    - Full unit suite: `895 passed, 8 failed, 2 warnings` — the recorded eight baseline
+      failures plus one new passing timeline regression.
+    - Full backend suite: `1188 passed, 25 failed, 2 warnings` — the same recorded 25
+      baseline failure categories plus four new passing regression tests.
+    - Touched-file `ruff check`: `All checks passed!`; repository-root `ruff check .`:
+      `141` recorded baseline errors, with no touched-file error.
+    - `git diff --check`: clean.
+  - Lifecycle result: implementation fixes are complete and returned to independent
+    re-review. Per the fix-cycle protocol, no implemented summary, archive move, or
+    master-table status change is made before an `APPROVED` verdict.
+
 ## Lifecycle transition
 
-- Current state: `archived`
-- Next state: `none`
+- Current state: `implemented`
+- Next state: `independent re-review`
 - Transition owner: `David`

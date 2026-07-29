@@ -26,8 +26,10 @@ Beyond that cap the pause is stale: it stops counting as pause and the non-worki
 it used to cover falls through to **idle**. A genuine re-pause after resuming is a fresh
 interval and still counts.
 
-Overlapping *active* pauses with different reasons are attributed to the pause that
-**started earliest** (ties broken by ``record_id``).
+Overlapping *active* pauses with different reasons are attributed to the pause with the
+highest caller-supplied ``priority``. Equal-priority pauses retain the legacy rule: the
+pause that **started earliest** owns the overlap (ties broken by ``record_id``). The
+default priority is zero, so existing callers preserve their exact behavior.
 
 Two views share one sweep:
 
@@ -58,6 +60,7 @@ class LinearInterval:
     entered_at: datetime
     exited_at: datetime | None    # None = still open (clamped to ``now``)
     step_id: str = ""             # owning TaskStep; only needed for the segments view
+    priority: int = 0             # higher value owns overlaps between paused intervals
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,7 @@ class LinearSegment:
     step_ids: tuple[str, ...]               # their owning steps (deduped, sorted)
     records: tuple[LinearSegmentRecord, ...]  # per-record detail, ordered by entered_at
     is_open: bool                           # run reaches ``now`` via a still-open record
+    owner_record_id: str | None = None       # pause owner at the start of this merged run
 
     @property
     def seconds(self) -> int:
@@ -126,6 +130,8 @@ class _RawSegment:
     record_ids: frozenset[str]
     step_ids: frozenset[str]
     is_open: bool
+    owner_record_id: str | None
+    owner_priority: int
 
 
 def _clamp(
@@ -196,25 +202,48 @@ def _sweep(
         working = [e for e in entries if e.interval.state == "working" and e.start <= left and e.end >= right]
         if working:
             state, reason, chosen = "working", None, working
+            owner_record_id, owner_priority = None, 0
         else:
             active_pauses = [
                 e for e in entries
                 if e.interval.state == "paused" and e.start <= left and e.active_end >= right
             ]
             if active_pauses:
-                owner = min(active_pauses, key=lambda e: (e.interval.entered_at, e.interval.record_id))
+                owner = min(
+                    active_pauses,
+                    key=lambda e: (
+                        -e.interval.priority,
+                        e.interval.entered_at,
+                        e.interval.record_id,
+                    ),
+                )
                 state, reason, chosen = "paused", owner.interval.reason or UNSPECIFIED_REASON, active_pauses
+                owner_record_id = owner.interval.record_id
+                owner_priority = owner.interval.priority
             else:
                 ended = [e for e in entries if e.interval.state == "ended_shift" and e.start <= left and e.end >= right]
                 if ended:
                     state, reason, chosen = "ended_shift", None, ended
                 else:
                     state, reason, chosen = "idle", None, []
+                owner_record_id, owner_priority = None, 0
 
         record_ids = frozenset(e.interval.record_id for e in chosen)
         step_ids = frozenset(e.interval.step_id for e in chosen if e.interval.step_id)
         is_open = right == now and any(e.interval.record_id in open_ids for e in chosen)
-        raw.append(_RawSegment(left, right, state, reason, record_ids, step_ids, is_open))
+        raw.append(
+            _RawSegment(
+                left,
+                right,
+                state,
+                reason,
+                record_ids,
+                step_ids,
+                is_open,
+                owner_record_id,
+                owner_priority,
+            )
+        )
 
     return raw
 
@@ -255,9 +284,11 @@ def compute_linear_segments(
 ) -> list[LinearSegment]:
     """Ordered partition of the window as merged, typed segments (interactive-timeline view).
 
-    Consecutive raw segments with the same ``(state, reason)`` are merged into one run,
-    unioning their records/steps — except across a ``hard_breaks`` boundary (e.g. day
-    midnights), which always starts a new segment so callers can group cleanly by day.
+    Consecutive raw segments with the same ``(state, reason, owner priority)`` are merged
+    into one run, unioning their records/steps — except across a ``hard_breaks`` boundary
+    (e.g. day midnights), which always starts a new segment so callers can group cleanly
+    by day. Including owner priority preserves source-projection boundaries even when two
+    pause source classes carry the same reason.
     """
     intervals = list(intervals)
     by_id = {iv.record_id: iv for iv in intervals}
@@ -272,6 +303,7 @@ def compute_linear_segments(
             prev is not None
             and prev["state"] == seg.state
             and prev["reason"] == seg.reason
+            and prev["owner_priority"] == seg.owner_priority
             and seg.start not in breaks
         ):
             prev["end"] = seg.end
@@ -286,6 +318,8 @@ def compute_linear_segments(
                     "reason": seg.reason,
                     "record_ids": set(seg.record_ids),
                     "is_open": seg.is_open,
+                    "owner_record_id": seg.owner_record_id,
+                    "owner_priority": seg.owner_priority,
                 }
             )
 
@@ -302,6 +336,7 @@ def compute_linear_segments(
                 step_ids=tuple(sorted({r.step_id for r in records if r.step_id})),
                 records=records,
                 is_open=run["is_open"],
+                owner_record_id=run["owner_record_id"],
             )
         )
     return segments

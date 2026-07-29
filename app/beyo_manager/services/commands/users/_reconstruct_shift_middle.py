@@ -41,6 +41,10 @@ _SEGMENT_TO_SHIFT_STATE = {
     "paused": UserShiftStateEnum.IN_PAUSE,
     "idle": UserShiftStateEnum.IDLE,
 }
+# Pause ownership inside the pure linear sweep. A declaration is the primary explanation
+# channel, followed by frozen legacy manual rows; ordinary step pauses retain priority 0.
+_LEGACY_MANUAL_PAUSE_PRIORITY = 1
+_DECLARED_PAUSE_PRIORITY = 2
 
 
 def _credited():
@@ -141,6 +145,7 @@ async def reconstruct_shift_middle(
             reason=row.pause_reason_id,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
+            priority=_DECLARED_PAUSE_PRIORITY,
         )
         for row in declared_rows
     )
@@ -173,6 +178,7 @@ async def reconstruct_shift_middle(
             reason=row.reason,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
+            priority=_LEGACY_MANUAL_PAUSE_PRIORITY,
         )
         for row in manual_rows
     )
@@ -198,8 +204,9 @@ async def reconstruct_shift_middle(
             continue
         if segment.start > cursor:  # leading / inter-activity gap not the worker's break → idle
             records.append(_idle_record(workspace_id, user_id, cursor, segment.start))
-        is_manual = state is UserShiftStateEnum.IN_PAUSE and bool(
-            set(segment.record_ids) & manually_recorded_source_ids
+        is_manual = (
+            state is UserShiftStateEnum.IN_PAUSE
+            and segment.owner_record_id in manually_recorded_source_ids
         )
         records.append(
             UserShiftStateRecord(

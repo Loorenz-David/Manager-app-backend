@@ -215,7 +215,7 @@ async def _reconcile_once(
         current is not None
         and current.state is target
         and (
-            not declared_is_source
+            target is not UserShiftStateEnum.IN_PAUSE
             or (
                 current.reason == reason
                 and current.manually_recorded is manually_recorded
