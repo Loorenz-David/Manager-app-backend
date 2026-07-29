@@ -159,6 +159,116 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
     - `git diff --check` → clean.
   - Self-review findings: no blocking or minor findings. All acceptance criteria are
     covered; implementation summary and archive record written.
+- `2026-07-29` — Opus (independent adversarial review of commit `fb52e96`). Verdict:
+  **NEEDS_CHANGES**.
+
+  **Gates re-run independently** (venv `app/.venv`, `APP_ENV=testing`, `app_test` @
+  `595e7b840926`, `user_declared_state_records` empty before and after):
+  - `pytest tests/unit/domain/users/test_shift_state_machine.py -q` → `53 passed`.
+  - `pytest tests/integration/services/commands/users/ -q` → `21 passed, 2 failed`.
+    Baseline proven with a detached `git worktree` at `9d922cb` (pre-Phase-2): same suite
+    → `16 passed, 2 failed`, the *same* two clock-out cases
+    (`test_clock_out_reconstructs_middle_from_step_history`,
+    `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`, both
+    `NotFound: System pause reason 'pause_ended_shift' is not configured`). +5 tests, no
+    new failure. Deploy-neutrality claim holds.
+  - `pytest tests/integration/services/tasks/ tests/connecteam/ tests/integration/services/queries/worker_stats -q`
+    → `70 passed`. `pytest tests/integration/services/queries tests/integration/services/tasks -q`
+    → `73 passed`. `pytest tests/unit -q` → `894 passed, 8 failed` (all recorded baseline
+    categories; none shift-related).
+  - `ruff check` on all seven touched files → `All checks passed!`; repo-root
+    `ruff check .` → `141 errors` (below the recorded 149 baseline).
+  - Confirmed correct: D4 precedence in `derive_target_state` (pure, 3^3 matrix, single
+    production call site updated); shift-row→declared-row `FOR UPDATE` order with a code
+    comment in both `_reconcile_once` and `clock_out_shift_for_user`; close-on-`WORKING`
+    only with `closed_by_id = NULL` (an `IDLE` target is unreachable while a declaration
+    is open, by construction of the derivation); legacy stickiness carve-out still
+    present; reconstruction window scoping matches the manual query and the legacy manual
+    query is retained; clock-out clamps at exactly `clock_out_at` under `FOR UPDATE`
+    before reconstruction, with the midnight path asserted at `00:00`; reconcile emits no
+    events and does not commit; the `_sweep` priority finding is recorded above.
+
+  **F1 — BLOCKING. Reconstruction contradicts D4: a declaration overlapping an earlier,
+  still-open step pause is erased from the rebuilt timeline.**
+  `services/commands/users/_reconstruct_shift_middle.py:137-146` appends declared rows as
+  plain `paused` intervals; `domain/analytics/linear_timeline.py:205` then awards
+  ownership to `min(active_pauses, key=(entered_at, record_id))` — *earliest pause wins*,
+  not *declared wins*. Violates D4 ("open declared state > open PAUSED step"), the
+  precedence pinned by acceptance 4 on the live path, and the master goal "zero
+  unexplained collapse of declared time into idle".
+  Probe (run locally, then removed): clock-in 09:00; step `PAUSED` open at 09:05 with a
+  catalog reason; declaration open at 09:20 with a different reason; clock-out 09:50.
+  Rebuilt timeline = `IDLE 0→5`, `IN_PAUSE 5→50 reason=<step reason>
+  manually_recorded=True`, `ENDED_SHIFT`. The declared reason does not appear anywhere.
+  The live reconcile on the same state reports the *declared* reason (the phase's own
+  `test_reconcile_declared_state_outranks_open_paused_step`), so live and rebuilt
+  timelines disagree and the authoritative one drops the declaration. Post-Phase-3 this is
+  an ordinary flow, not race residue: a worker whose task is already paused for a blocker
+  and who then declares an activity loses the declaration at clock-out. The plan's
+  "verify, don't assume" step (Implementation plan §3) only checked working-vs-paused
+  priority; declared-vs-step-pause priority was never verified and does not match D4.
+
+  **F2 — BLOCKING (same probe). `manually_recorded = True` leaks onto step-sourced pause
+  segments.** `_reconstruct_shift_middle.py:201-203` sets `is_manual` whenever *any*
+  declared/legacy id appears in `segment.record_ids`, but `_sweep` puts every *active*
+  pause into `chosen` (`linear_timeline.py:206,214`), not just the owner. A step-owned
+  segment that merely overlaps a declaration is therefore stamped
+  `manually_recorded = True` while carrying the step's reason — directly against the
+  plan's "step-sourced pause … `manually_recorded = False`". The pre-Phase-2 code was safe
+  only because of the invariant the diff deletes from the module docstring
+  (`_reconstruct_shift_middle.py:11-15`, previously "manual and step pauses never
+  overlap"); the invariant is gone but the ownership logic was not replaced.
+
+  **F3 — MAJOR (latent until Phase 3). Asymmetric idempotency guard leaves a stale
+  declared reason and marker on the live record.**
+  `reconcile_worker_shift_state.py:214-225` re-checks `reason`/`manually_recorded` only
+  when `declared_is_source` is true. Moving *out of* a declared pause into a step-sourced
+  pause therefore short-circuits as a no-op and the open derived record keeps
+  `reason = <declared pause_reason_id>` and `manually_recorded = True`.
+  Probe: declare 09:05 → reconcile → `IN_PAUSE(reason=declared, manual=True)`; close the
+  declaration at 09:10 and open a step pause with a different reason → reconcile 09:11 →
+  record unchanged (declared reason, `manual=True`). Violates the plan's "Otherwise
+  (step-sourced pause) keep today's behavior: `reason` from the earliest open paused step,
+  `manually_recorded = False`" and the phase goal "fully correct the moment rows appear".
+
+  **F4 — MAJOR (latent until Phase 3, cross-phase landmine). The retained legacy
+  stickiness carve-out now traps records the reconcile itself authored: the shift can
+  never return to `IDLE` after a declaration closes.**
+  `reconcile_worker_shift_state.py:197-204` predicates on `current.manually_recorded`,
+  which line 242 now sets for declared-sourced pauses. Once the declaration is closed and
+  all steps end, `target = IDLE` and `open_declared is None`, so the carve-out fires and
+  the worker stays in a phantom `IN_PAUSE` for the rest of the day.
+  Probe (continuation of F3): after closing the step pause too, reconcile at 09:21 returns
+  `changed=False` and the open record is still `IN_PAUSE` with the declared reason.
+  Keeping the carve-out is mandated by this plan (removal is Phase 3), so this is not a
+  deviation from the written scope — but the plan's guard ("if an open declared row exists
+  the carve-out is irrelevant") only covers the opposite direction. Phase 3 must remove
+  the carve-out **and** pin this with a test, or the carve-out predicate must stop reusing
+  `manually_recorded` now that the reconcile writes it.
+
+  **F5 — MINOR. Non-additive test edit: open-legacy-manual-pause coverage was removed.**
+  `tests/integration/services/commands/users/test_worker_shift_commands.py:773-782`
+  replaces the previously seeded open `IN_PAUSE` / `manually_recorded=True` "Late lunch"
+  row in `test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day` with a
+  declared row instead of adding one alongside. `test_clock_out_preserves_manual_pause`
+  covers only a *closed* manual row, so no test now exercises an open legacy manual pause
+  surviving a shift close — precisely the "shift open across the deploy" case D7 promises
+  to keep working. Acceptance 6 asked for the existing test to be *extended*.
+
+  **F6 — INFORMATIONAL.** The reconcile's declared lookup
+  (`reconcile_worker_shift_state.py:154-164`) is not shift-window scoped, while
+  `_load_open_steps` is (`entered_at_or_after=shift_started_at`, line 171). A declared row
+  left open from an earlier shift would pin every later shift to `IN_PAUSE`. Not reachable
+  today (clock-out and the midnight safeguard both clamp), but D9 enforcement in Phase 3
+  is the only thing keeping it that way.
+
+  **Required before this phase can be re-approved:** F1 + F2 (make the sweep — or the
+  reconstruction's interval/ownership handling — honour D4 for declared-vs-step pauses and
+  attribute `manually_recorded` from the segment *owner*, with a regression test for
+  "declared opened after an already-open step pause"), F3 (make the idempotency guard
+  compare `reason`/`manually_recorded` unconditionally), F5 (restore the legacy open-manual
+  coverage additively). F4 must be carried into the Phase 3 plan as an explicit,
+  test-pinned deliverable.
 
 ## Lifecycle transition
 

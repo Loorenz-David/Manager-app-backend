@@ -49,6 +49,9 @@
 - [x] Does closing a declaration resume the auto-paused steps? — resolved: **no**. Steps stay paused (paused-step resumption is an explicit worker action on the task, existing flow); the shift lands back on `IN_PAUSE` (step-sourced) or `IDLE` per derivation. The declare response's `paused_steps` count lets the frontend prompt the worker.
 - [x] Free-text-only declaration (no catalog reason)? — resolved: not supported; catalog + `description` covers it (D2).
 - [x] On-behalf declare/close? — resolved 2026-07-29 (rev 2): yes, same matrix as clock actions (D10 rev 2) — required by the shop-floor device (D13).
+- [x] **Pinned from the Phase 2 review (Opus, findings F4/F6 — MUST be addressed in this phase, not assumed away):**
+  - **F4 (carve-out trap):** Phase 2's retained legacy carve-out no-ops when the current open record is `IN_PAUSE` + `manually_recorded` and target is `IDLE` — but the reconcile itself now *authors* such records from declared states. Once this phase's close command exists, a worker whose declaration is closed while no steps are open would be stuck in a phantom `IN_PAUSE`. Removing the carve-out (already in this phase's scope) dissolves the trap — but it MUST be pinned by a dedicated test: declare → close declaration (no open steps) → reconcile lands on `IDLE`, not a stale declared `IN_PAUSE`.
+  - **F6 (unscoped declared lookup):** the reconcile's open-declared lookup is not shift-window scoped (unlike `_load_open_steps`). Today unreachable only because clock-out and the safeguard clamp every open declared row. This phase must either (a) add shift-window scoping to the lookup, or (b) prove the clamp invariant holds on every path this phase adds (declare requires an open shift per D9, so no declared row can outlive its shift) and document that invariant where the lookup lives. Either way: an explicit test or assertion, not silence.
 
 ## Acceptance criteria
 
