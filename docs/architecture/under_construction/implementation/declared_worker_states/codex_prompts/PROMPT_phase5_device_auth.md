@@ -4,7 +4,7 @@ You are implementing a planned backend change in the ManagerBeyo backend (`backe
 
 ## Protocol
 
-1. Load and follow the skill `backend/skills/cross_cutting/plan_lifecycle_orchestrator/SKILL.md`. Process this work as a full plan lifecycle: implement → validate → review-log entry → implemented summary → archive.
+1. Load and follow the skill `backend/skills/cross_cutting/plan_lifecycle_orchestrator/SKILL.md`. Process this work as: implement → validate → review-log entry → STOP for independent review. Summary/archive happen ONLY after the reviewer approves (see Definition of done).
 2. Read the master plan first: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md`. Decision D11 is the spine of this phase.
 3. Your implementation plan is: `backend/docs/architecture/under_construction/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md`. Read it fully before touching code.
 4. Prerequisite check: NONE — this phase is independent of Phases 1–4 and may run at any point. Confirm no other phase is mid-flight in the master table before starting.
@@ -23,4 +23,4 @@ You are implementing a planned backend change in the ManagerBeyo backend (`backe
 
 - Every acceptance criterion verified with evidence (test output; decoded-token dump showing no `exp`; Redis TTL assertion).
 - Full validation plan green; `ruff check` clean.
-- Plan's Review log updated; plan archived per the master plan's archiving note (preserve subfolder); implemented summary written; master plan phase table updated.
+- Plan's Review log updated with your implementer entry. Then STOP: the phase now goes to an INDEPENDENT reviewer. Do NOT write the implemented summary, do NOT archive the plan, do NOT flip the master phase table, and do NOT edit the frontend handoff's liveness table — those steps happen ONLY after the reviewer returns APPROVED (this review-first gate overrides the lifecycle skill's implement->summary->archive sequence; three premature archives have already been unwound in this feature set). Report completion to the operator and wait.
