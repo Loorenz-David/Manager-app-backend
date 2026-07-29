@@ -48,6 +48,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.tasks.users.auto_clock_out_open_shifts import (
     handle_auto_clock_out_open_shifts,
 )
+from scripts.backfill.heal_open_shifts_today import heal_current_shift
 
 
 pytestmark = pytest.mark.asyncio
@@ -570,6 +571,68 @@ async def test_declared_pause_owns_reconstruction_overlap_with_step_pause(
     assert declared_pause.manually_recorded is True
 
 
+async def test_declared_pause_owns_reconstruction_overlap_with_open_step_pause(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+
+    def at(minutes: int) -> datetime:
+        return base + timedelta(minutes=minutes)
+
+    step_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"Open step pause {uuid4().hex}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"open-step-pause-{uuid4().hex}",
+        created_by_id=worker.client_id,
+    )
+    db_session.add(step_reason)
+    await db_session.flush()
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, base, worker.client_id
+    )
+    await _seed_step_record(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=at(5),
+        exited_at=None,
+        pause_reason_id=step_reason.client_id,
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        worker,
+        reason="pause_lunch_break",
+        entered_at=at(20),
+        exited_at=None,
+    )
+
+    await clock_out_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, at(50), worker.client_id
+    )
+
+    records = await _ordered_shift_records(
+        db_session, workspace.client_id, worker.client_id
+    )
+    assert _minute_seq(records, base) == [
+        (UserShiftStateEnum.STARTED_SHIFT, 0, 0),
+        (UserShiftStateEnum.IDLE, 0, 5),
+        (UserShiftStateEnum.IN_PAUSE, 5, 20),
+        (UserShiftStateEnum.IN_PAUSE, 20, 50),
+        (UserShiftStateEnum.ENDED_SHIFT, 50, 50),
+    ]
+    step_pause, declared_pause = [
+        record for record in records if record.state is UserShiftStateEnum.IN_PAUSE
+    ]
+    assert step_pause.reason == step_reason.client_id
+    assert step_pause.manually_recorded is False
+    assert declared_pause.reason == declared.pause_reason_id
+    assert declared_pause.manually_recorded is True
+
+
 async def test_reconstruction_clamps_open_declared_interval_without_closing_source(
     db_session,
 ) -> None:
@@ -828,6 +891,71 @@ async def test_legacy_manual_pause_stays_sticky_over_step_pause_and_can_resume(
     resume_result = await resume_worker_shift(
         _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
     )
+    assert resume_result["state"] == UserShiftStateEnum.IDLE.value
+
+
+async def test_healed_open_legacy_manual_pause_remains_sticky_and_resumable(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 15, 8, tzinfo=timezone.utc)
+
+    def at(minutes: int) -> datetime:
+        return base + timedelta(minutes=minutes)
+
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, base, worker.client_id
+    )
+    await _seed_step_record(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=at(5),
+        exited_at=at(10),
+    )
+    with freeze_time(at(20)):
+        await pause_worker_shift(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"reason": "Cleaning the bench"},
+            )
+        )
+
+    heal_result = await heal_current_shift(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base.replace(hour=0),
+        at(30),
+        execute=True,
+        connecteam_start=base,
+    )
+    outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        at(31),
+    )
+    still_paused = await _open_shift_record(
+        db_session, workspace.client_id, worker.client_id
+    )
+
+    assert heal_result.startswith("healed ")
+    assert outcome.changed is False
+    assert still_paused.state is UserShiftStateEnum.IN_PAUSE
+    assert still_paused.exited_at is None
+    assert still_paused.reason == "Cleaning the bench"
+    assert still_paused.manually_recorded is True
+    assert still_paused.changed_by_id == worker.client_id
+
+    with freeze_time(at(32)):
+        resume_result = await resume_worker_shift(
+            _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+        )
     assert resume_result["state"] == UserShiftStateEnum.IDLE.value
 
 

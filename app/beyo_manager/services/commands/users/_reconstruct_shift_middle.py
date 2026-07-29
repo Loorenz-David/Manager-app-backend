@@ -163,6 +163,7 @@ async def reconstruct_shift_middle(
                 UserShiftStateRecord.reason,
                 UserShiftStateRecord.entered_at,
                 UserShiftStateRecord.exited_at,
+                UserShiftStateRecord.changed_by_id,
             ).where(
                 UserShiftStateRecord.workspace_id == workspace_id,
                 UserShiftStateRecord.user_id == user_id,
@@ -174,6 +175,9 @@ async def reconstruct_shift_middle(
         )
     ).all()
     manual_ids = {row.client_id for row in manual_rows}
+    manual_changed_by_id_by_id = {
+        row.client_id: row.changed_by_id for row in manual_rows
+    }
     manually_recorded_source_ids = declared_ids | manual_ids
     intervals.extend(
         LinearInterval(
@@ -212,6 +216,9 @@ async def reconstruct_shift_middle(
             state is UserShiftStateEnum.IN_PAUSE
             and segment.owner_record_id in manually_recorded_source_ids
         )
+        # Preserve legacy /pause provenance so an open tail re-emitted by the heal script
+        # remains distinguishable from a system-authored declaration projection.
+        changed_by_id = manual_changed_by_id_by_id.get(segment.owner_record_id)
         records.append(
             UserShiftStateRecord(
                 workspace_id=workspace_id,
@@ -219,7 +226,7 @@ async def reconstruct_shift_middle(
                 state=state,
                 entered_at=segment.start,
                 exited_at=segment.end,
-                changed_by_id=None,
+                changed_by_id=changed_by_id,
                 reason=(segment.reason if state is UserShiftStateEnum.IN_PAUSE else None),
                 manually_recorded=is_manual,
             )
