@@ -6,7 +6,7 @@
 - Status: `implemented`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T15:19:45Z`
+- Last updated at (UTC): `2026-07-29T16:00:27Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D3–D6 govern this phase)
 - Prerequisite: Phase 1 archived (`user_declared_state_records` exists).
@@ -24,6 +24,7 @@
   2. `services/commands/users/reconcile_worker_shift_state.py` — load the open declared row; feed derivation; source `reason`/`manually_recorded` from it; auto-close it on transition to `WORKING` (D5).
   3. `services/commands/users/_reconstruct_shift_middle.py` — fold declared intervals into the sweep alongside (not replacing) legacy manual rows.
   4. `services/commands/users/_clock_worker_shift.py::clock_out_shift_for_user` — clamp-close the open declared record at `clock_out_at` (D6).
+  5. `domain/analytics/linear_timeline.py` — add optional pause ownership priority and owner projection for reconstruction. The field defaults to zero, preserving the existing earliest-pause rule for every non-declared caller; reconstruction, backfill, and test callers were audited, and only reconstruction supplies non-default priorities.
 - Out of scope: any writer of `user_declared_state_records` other than the clock-out clamp; router/API changes; analytics endpoints.
 - Assumptions:
   - **State machine.** New signature `derive_target_state(open_working_count: int, open_declared_count: int, open_paused_count: int) -> UserShiftStateEnum`: `≥1 working → WORKING`; else `≥1 declared → IN_PAUSE`; else `≥1 paused → IN_PAUSE`; else `IDLE`. Still pure, exhaustive, no I/O. Transition-validity helper unchanged.
@@ -31,7 +32,7 @@
     - Pass `open_declared_count` (0 or 1) into `derive_target_state`.
     - If `target is WORKING` and an open declared row exists → close it (`exited_at = now`, `closed_by_id = NULL` — system-closed). This implements "returning to a task ends the declaration" at the seam, covering every transport (API step transitions, batch, backfill) with zero changes to step commands.
     - If `target is IN_PAUSE` **sourced from the declared row** (i.e., `open_working_count == 0 and open_declared_count >= 1`) → new derived record gets `reason = declared.pause_reason_id`, `manually_recorded = True`. Otherwise (step-sourced pause) keep today's behavior: `reason` from the earliest open paused step, `manually_recorded = False`.
-    - **Keep** the legacy manual-pause stickiness carve-out (current open record `IN_PAUSE` + `manually_recorded` + target `IDLE` → no-op). `/pause` still writes such rows until Phase 3 retires it. Add one guard: if an open *declared* row exists, the carve-out is irrelevant (target is already `IN_PAUSE`).
+    - **Keep** the legacy manual-pause stickiness carve-out. Until Phase 3 retires `/pause` and `/resume`, an actor-authored manual row (`IN_PAUSE` + `manually_recorded` + `changed_by_id IS NOT NULL`) remains sticky against both `IDLE` and step-sourced `IN_PAUSE`. Reconcile-authored declaration projections have `changed_by_id IS NULL`, so declaration-involved transitions still re-check the reason and manual marker.
     - Idempotency must hold: reconcile with an open declared row and current state already declared-`IN_PAUSE` (same reason) → no-op, no duplicate rows.
   - **Reconstruction.** In `reconstruct_shift_middle`, add a query over `UserDeclaredStateRecord` with the same window scoping as the manual-rows query (`entered_at >= shift_start AND entered_at < shift_end`), mapped to `LinearInterval(state="paused", reason=row.pause_reason_id, ...)`. An open declared row (`exited_at IS NULL`) passes `exited_at=None` and is clamped to `shift_end` by the sweep, same as open working steps. Collect declared `client_id`s into the same id-set used for `manually_recorded` re-emission (union with legacy `manual_ids`) so rebuilt declared segments carry `manually_recorded = True` and their catalog `reason`. The legacy manual-rows query **stays** (D7). The module docstring must be updated: declared states are now the primary explanation channel; legacy manual rows remain folded for frozen history.
   - **Clock-out clamp.** In `clock_out_shift_for_user`, after resolving `shift_start` and **before** `reconstruct_shift_middle` runs: load the open declared row `with_for_update()`; if present, set `exited_at = clock_out_at`, `closed_by_id = NULL`. (Reconstruction would clamp the interval anyway; this closes the **source** row so the worker isn't "declared" after clock-out. Midnight safeguard inherits via its delegation to this function.)
@@ -407,6 +408,54 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
   `IN_PAUSE → IN_PAUSE` and pin it with a test asserting `/resume` still works after a
   step pause opens under a manual pause). G2 (decide and pin, either way). G3 (record the
   scope expansion + neutrality argument in the plan).
+
+- `2026-07-29T16:00:27Z` — Codex (implementer), G1/G2/G3 round-2 fix cycle:
+  - **G1 fixed:** reconcile now uses the existing writer provenance to distinguish the
+    two kinds of open manual-looking pause. Actor-authored legacy `/pause` rows
+    (`manually_recorded=True`, `changed_by_id IS NOT NULL`) remain sticky against both
+    `IDLE` and `IN_PAUSE`, while reconcile-authored declaration projections
+    (`changed_by_id IS NULL`) continue through declaration re-derivation
+    (`reconcile_worker_shift_state.py:197-210`). The code comment marks this as a
+    transitional carve-out that Phase 3 removes with `/pause` and `/resume`.
+    `test_legacy_manual_pause_stays_sticky_over_step_pause_and_can_resume` pins the full
+    user flow: the reconcile is a no-op, the original reason/marker/actor row remains
+    open, and `/resume` succeeds.
+  - **G2 fixed with baseline behavior preserved:** an `IN_PAUSE → IN_PAUSE` metadata
+    comparison now runs only when a declaration projection is entering or leaving
+    (`reconcile_worker_shift_state.py:220-239`). Pure step→step pause turnover remains a
+    no-op and keeps its first derived reason. Pinned by
+    `test_reconcile_keeps_step_pause_reason_when_earliest_step_closes`. The round-1 F3
+    regression remains green, proving a closed declaration still yields to the active
+    step reason and clears `manually_recorded`.
+  - **G3 fixed:** `domain/analytics/linear_timeline.py` is now explicit Scope item 5,
+    including the optional/default-zero deploy-neutrality argument and caller audit.
+    `_reconstruct_shift_middle.py:17-19` records that the historical backfill constructs
+    a second interval projection without declarations; it is safe for pre-declaration
+    history and must be revisited before any post-declaration rerun.
+  - Regression-first evidence: before the production change, G1 ended in
+    `ConflictError` from `/resume` after reconcile replaced the legacy row, and G2
+    returned `changed=True` with a replacement step reason. After the change, G1 + G2 +
+    the F3 guard report `3 passed`; the combined round-1/round-2 focused set reports
+    `6 passed`.
+  - Full validation evidence:
+    - Alembic: `595e7b840926 (head)`; post-suite
+      `user_declared_state_records` count: `0`.
+    - Exhaustive derivation matrix: `53 passed`.
+    - Worker command/reconcile suites: `26 passed, 2 failed`; the two failures are the
+      exact independently proven baseline clock-out cases (`unspecified` vs `None`, and
+      missing `pause_ended_shift`). The two new round-2 tests pass, with no new failure.
+    - Unchanged task + Connecteam + worker-stats suites: `70 passed`; broader query/task
+      suites: `73 passed`.
+    - Full unit suite: `895 passed, 8 failed, 2 warnings`, matching the recorded unit
+      baseline exactly.
+    - Full backend suite: `1190 passed, 25 failed, 2 warnings` — the same recorded 25
+      baseline failure nodes plus the two new passing integration regressions.
+    - Touched-file `ruff check`: `All checks passed!`; repository-root `ruff check .`:
+      the same `141` baseline errors, with no touched-file error.
+    - `git diff --check`: clean.
+  - Lifecycle result: implementation fixes are complete and returned to independent
+    re-review. No implemented summary, archive move, or master-table change is made
+    before an `APPROVED` verdict.
 
 ## Lifecycle transition
 

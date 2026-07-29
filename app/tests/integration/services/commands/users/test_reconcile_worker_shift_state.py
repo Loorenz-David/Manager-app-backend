@@ -562,6 +562,100 @@ async def test_reconcile_updates_pause_projection_when_source_changes(db_session
     assert current.manually_recorded is False
 
 
+async def test_reconcile_keeps_step_pause_reason_when_earliest_step_closes(
+    db_session,
+) -> None:
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    db_session.add_all(
+        [
+            _shift_record(
+                workspace,
+                user,
+                UserShiftStateEnum.STARTED_SHIFT,
+                shift_start,
+                shift_start,
+            ),
+            _shift_record(
+                workspace,
+                user,
+                UserShiftStateEnum.IDLE,
+                shift_start,
+                None,
+            ),
+        ]
+    )
+    first_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"First step pause {uuid4().hex}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"first-step-pause-{uuid4().hex}",
+        created_by_id=user.client_id,
+    )
+    second_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"Second step pause {uuid4().hex}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"second-step-pause-{uuid4().hex}",
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([first_reason, second_reason])
+    await db_session.flush()
+    first_step_pause = await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=shift_start + timedelta(minutes=5),
+        reason=first_reason.slug,
+    )
+    await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=shift_start + timedelta(minutes=10),
+        reason=second_reason.slug,
+    )
+    await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        shift_start + timedelta(minutes=11),
+    )
+    current_before = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+
+    first_step_pause.exited_at = shift_start + timedelta(minutes=12)
+    outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        shift_start + timedelta(minutes=13),
+    )
+
+    current_after = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert outcome.changed is False
+    assert current_after.client_id == current_before.client_id
+    assert current_after.reason == first_reason.client_id
+    assert current_after.manually_recorded is False
+
+
 async def test_concurrent_reconciles_create_one_open_shift_record(db_session) -> None:
     workspace, user = await _seed_worker(db_session)
     now = datetime(2026, 7, 20, 9, tzinfo=timezone.utc)

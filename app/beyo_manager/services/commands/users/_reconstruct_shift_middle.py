@@ -13,6 +13,10 @@ Declared states are the primary explanation channel and are folded into the swee
 also folded indefinitely, so historical rows survive the rebuild with their free-text
 reason. Both declaration-sourced and legacy manual segments are re-emitted with
 `manually_recorded=True`.
+
+The historical backfill script builds its own intervals without declared rows; that is
+safe for pre-declaration history and must be revisited before rerunning it over dates
+where declarations can exist.
 """
 
 from datetime import datetime

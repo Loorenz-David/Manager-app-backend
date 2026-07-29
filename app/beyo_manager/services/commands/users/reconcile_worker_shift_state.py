@@ -194,13 +194,19 @@ async def _reconcile_once(
             now.isoformat(),
         )
 
-    if (
+    legacy_manual_pause_is_sticky = (
         current is not None
         and current.state is UserShiftStateEnum.IN_PAUSE
         and current.manually_recorded
-        and target is UserShiftStateEnum.IDLE
-        and open_declared is None
+        and current.changed_by_id is not None
+    )
+    if legacy_manual_pause_is_sticky and target in (
+        UserShiftStateEnum.IDLE,
+        UserShiftStateEnum.IN_PAUSE,
     ):
+        # Transitional legacy provenance rule: /pause rows have an actor, while
+        # reconcile-authored declaration projections do not. Phase 3 removes this
+        # carve-out together with /pause and /resume.
         return ShiftReconcileOutcome(changed=False, state=current.state)
 
     reason = None
@@ -211,11 +217,19 @@ async def _reconcile_once(
     elif target is UserShiftStateEnum.IN_PAUSE and open_paused[0].pause_reason_id is not None:
         reason = open_paused[0].pause_reason_id
 
+    current_is_declared_projection = (
+        current is not None
+        and current.state is UserShiftStateEnum.IN_PAUSE
+        and current.manually_recorded
+        and current.changed_by_id is None
+    )
+    declared_projection_involved = declared_is_source or current_is_declared_projection
     if (
         current is not None
         and current.state is target
         and (
             target is not UserShiftStateEnum.IN_PAUSE
+            or not declared_projection_involved
             or (
                 current.reason == reason
                 and current.manually_recorded is manually_recorded

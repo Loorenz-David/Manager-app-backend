@@ -781,6 +781,56 @@ async def test_manual_pause_is_sticky_until_work_starts_and_resume_requires_manu
         )
 
 
+async def test_legacy_manual_pause_stays_sticky_over_step_pause_and_can_resume(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    await clock_in_worker_shift(
+        _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+    )
+    await pause_worker_shift(
+        _ctx(
+            db_session,
+            workspace,
+            worker,
+            RoleNameEnum.WORKER.value,
+            {"reason": "Cleaning the bench"},
+        )
+    )
+    manual_pause = await _open_shift_record(
+        db_session, workspace.client_id, worker.client_id
+    )
+    await _seed_open_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=datetime.now(timezone.utc),
+    )
+
+    outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        datetime.now(timezone.utc),
+    )
+    still_paused = await _open_shift_record(
+        db_session, workspace.client_id, worker.client_id
+    )
+
+    assert outcome.changed is False
+    assert still_paused.client_id == manual_pause.client_id
+    assert still_paused.exited_at is None
+    assert still_paused.reason == "Cleaning the bench"
+    assert still_paused.manually_recorded is True
+    assert still_paused.changed_by_id == worker.client_id
+
+    resume_result = await resume_worker_shift(
+        _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+    )
+    assert resume_result["state"] == UserShiftStateEnum.IDLE.value
+
+
 async def test_resume_manual_pause_opens_idle(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     await clock_in_worker_shift(
