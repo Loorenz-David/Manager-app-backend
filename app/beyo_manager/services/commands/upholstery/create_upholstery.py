@@ -15,8 +15,50 @@ from beyo_manager.models.tables.upholstery.upholstery_supplier_link import Uphol
 from beyo_manager.services.commands.upholstery.requests import parse_create_upholstery_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.upholstery._supplier_names import (
+    load_supplier_name_for_upholstery,
+)
 
 logger = logging.getLogger(__name__)
+
+
+async def _existing_upholstery_response(ctx: ServiceContext, upholstery: Upholstery) -> dict:
+    """Serialize an already-existing upholstery the way a fresh create would."""
+    inv_result = await ctx.session.execute(
+        select(UpholsteryInventory).where(
+            UpholsteryInventory.workspace_id == ctx.workspace_id,
+            UpholsteryInventory.upholstery_id == upholstery.client_id,
+            UpholsteryInventory.is_deleted.is_(False),
+        )
+    )
+    inventory = inv_result.scalar_one_or_none()
+
+    category = None
+    if upholstery.upholstery_category_id:
+        cat_result = await ctx.session.execute(
+            select(UpholsteryCategory).where(
+                UpholsteryCategory.workspace_id == ctx.workspace_id,
+                UpholsteryCategory.client_id == upholstery.upholstery_category_id,
+                UpholsteryCategory.is_deleted.is_(False),
+            )
+        )
+        category = cat_result.scalar_one_or_none()
+
+    supplier_name = await load_supplier_name_for_upholstery(
+        session=ctx.session,
+        workspace_id=ctx.workspace_id,
+        upholstery_id=upholstery.client_id,
+    )
+
+    return {
+        "upholstery": serialize_upholstery(
+            upholstery,
+            inventory,
+            category,
+            supplier_name=supplier_name,
+        ),
+        "already_existed": True,
+    }
 
 
 async def create_upholstery(ctx: ServiceContext) -> dict:
@@ -38,6 +80,12 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         if request.client_id is not None:
             dup = await ctx.session.get(Upholstery, request.client_id)
             if dup is not None:
+                if (
+                    request.reuse_existing
+                    and dup.workspace_id == ctx.workspace_id
+                    and not dup.is_deleted
+                ):
+                    return await _existing_upholstery_response(ctx, dup)
                 raise ConflictError("Provided client_id is already in use.")
             uph_kwargs["client_id"] = request.client_id
 
@@ -45,6 +93,21 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
         if request.upholstery_inventory_id is not None:
             dup_inv = await ctx.session.get(UpholsteryInventory, request.upholstery_inventory_id)
             if dup_inv is not None:
+                if (
+                    request.reuse_existing
+                    and dup_inv.workspace_id == ctx.workspace_id
+                    and not dup_inv.is_deleted
+                ):
+                    owner_result = await ctx.session.execute(
+                        select(Upholstery).where(
+                            Upholstery.workspace_id == ctx.workspace_id,
+                            Upholstery.client_id == dup_inv.upholstery_id,
+                            Upholstery.is_deleted.is_(False),
+                        )
+                    )
+                    owner = owner_result.scalar_one_or_none()
+                    if owner is not None:
+                        return await _existing_upholstery_response(ctx, owner)
                 raise ConflictError("Provided upholstery_inventory_id is already in use.")
             inv_kwargs["client_id"] = request.upholstery_inventory_id
 
@@ -55,7 +118,10 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
                 Upholstery.is_deleted.is_(False),
             )
         )
-        if name_conflict.scalar_one_or_none() is not None:
+        existing_by_name = name_conflict.scalar_one_or_none()
+        if existing_by_name is not None:
+            if request.reuse_existing:
+                return await _existing_upholstery_response(ctx, existing_by_name)
             raise ConflictError("An upholstery with this name already exists in the workspace.")
 
         if request.code is not None:
@@ -66,7 +132,10 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
                     Upholstery.is_deleted.is_(False),
                 )
             )
-            if code_conflict.scalar_one_or_none() is not None:
+            existing_by_code = code_conflict.scalar_one_or_none()
+            if existing_by_code is not None:
+                if request.reuse_existing:
+                    return await _existing_upholstery_response(ctx, existing_by_code)
                 raise ConflictError("An upholstery with this code already exists in the workspace.")
 
         resolved_category_id: str | None = None
@@ -225,5 +294,6 @@ async def create_upholstery(ctx: ServiceContext) -> dict:
             inventory,
             category,
             supplier_name=supplier_name,
-        )
+        ),
+        "already_existed": False,
     }

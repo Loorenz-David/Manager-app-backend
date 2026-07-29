@@ -218,6 +218,11 @@ class CreateUpholsteryRequest(BaseModel):
     supplier_country: str | None = None
     supplier_city: str | None = None
     supplier_street_address: str | None = None
+    # External-provider selections can target an upholstery that already exists in
+    # the workspace (external search bypasses the local dedupe). When true, a
+    # duplicate client_id/name/code returns the existing record instead of a
+    # ConflictError so the client can transparently continue with it.
+    reuse_existing: bool = False
 
     @field_validator("name", mode="before")
     @classmethod

@@ -17,6 +17,9 @@ class _ScalarResult:
     def scalar_one_or_none(self):
         return self._value
 
+    def all(self):
+        return self._value if isinstance(self._value, list) else []
+
 
 class _Begin:
     async def __aenter__(self):
@@ -149,6 +152,89 @@ async def test_create_upholstery_creates_supplier_link_and_page_link() -> None:
     assert supplier_link.preferred is True
     assert result["upholstery"]["page_link"] == "https://supplier.example/products/green-linen"
     assert result["upholstery"]["supplier_name"] == "Nevotex"
+
+
+def _existing_upholstery_stub(**overrides: Any) -> Any:
+    from types import SimpleNamespace
+
+    defaults: dict[str, Any] = {
+        "client_id": "uph_existing",
+        "workspace_id": "ws_1",
+        "name": "Blue Velvet",
+        "code": "BV-1",
+        "image_url": None,
+        "page_link": None,
+        "favorite": False,
+        "list_order": None,
+        "upholstery_category_id": None,
+        "is_deleted": False,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+@pytest.mark.unit
+async def test_create_upholstery_reuse_existing_returns_existing_on_name_conflict() -> None:
+    existing = _existing_upholstery_stub()
+    # Execute order: name-conflict lookup, existing-inventory lookup, supplier names.
+    session = _Session(execute_results=[existing, None, []])
+
+    result = await create_upholstery(
+        _ctx(session, {"name": "Blue Velvet", "reuse_existing": True})
+    )
+
+    assert result["already_existed"] is True
+    assert result["upholstery"]["client_id"] == "uph_existing"
+    assert session.added == []
+
+
+@pytest.mark.unit
+async def test_create_upholstery_reuse_existing_returns_existing_on_client_id_conflict() -> None:
+    existing = _existing_upholstery_stub()
+    session = _Session(get_results=[existing], execute_results=[None, []])
+
+    result = await create_upholstery(
+        _ctx(
+            session,
+            {
+                "client_id": "uph_01ARZ3NDEKTSV4RRFFQ69G5FAA",
+                "name": "Blue Velvet",
+                "reuse_existing": True,
+            },
+        )
+    )
+
+    assert result["already_existed"] is True
+    assert result["upholstery"]["client_id"] == "uph_existing"
+    assert session.added == []
+
+
+@pytest.mark.unit
+async def test_create_upholstery_reuse_existing_ignores_other_workspace_client_id() -> None:
+    existing = _existing_upholstery_stub(workspace_id="ws_other")
+    session = _Session(get_results=[existing])
+
+    with pytest.raises(ConflictError, match="client_id is already in use"):
+        await create_upholstery(
+            _ctx(
+                session,
+                {
+                    "client_id": "uph_01ARZ3NDEKTSV4RRFFQ69G5FAA",
+                    "name": "Blue Velvet",
+                    "reuse_existing": True,
+                },
+            )
+        )
+
+
+@pytest.mark.unit
+async def test_create_upholstery_name_conflict_still_raises_without_reuse() -> None:
+    session = _Session(execute_results=[_existing_upholstery_stub()])
+
+    with pytest.raises(ConflictError, match="name already exists"):
+        await create_upholstery(_ctx(session, {"name": "Blue Velvet"}))
+
+    assert session.added == []
 
 
 @pytest.mark.unit

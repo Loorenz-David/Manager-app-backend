@@ -70,6 +70,7 @@ class _CreateBody(BaseModel):
     supplier_country: str | None = None
     supplier_city: str | None = None
     supplier_street_address: str | None = None
+    reuse_existing: bool = False
 
 
 class _UpdateBody(BaseModel):
