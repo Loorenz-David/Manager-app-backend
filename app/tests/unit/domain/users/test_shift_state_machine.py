@@ -12,16 +12,18 @@ from beyo_manager.domain.users.shift_state_machine import (
 
 
 @pytest.mark.parametrize(
-    ("open_working_count", "open_paused_count", "expected"),
+    ("open_working_count", "open_declared_count", "open_paused_count", "expected"),
     [
-        (working_count, paused_count, expected)
-        for working_count, paused_count in itertools.product(range(3), repeat=2)
+        (working_count, declared_count, paused_count, expected)
+        for working_count, declared_count, paused_count in itertools.product(
+            range(3), repeat=3
+        )
         for expected in [
             UserShiftStateEnum.WORKING
             if working_count >= 1
             else (
                 UserShiftStateEnum.IN_PAUSE
-                if paused_count >= 1
+                if declared_count >= 1 or paused_count >= 1
                 else UserShiftStateEnum.IDLE
             )
         ]
@@ -29,16 +31,26 @@ from beyo_manager.domain.users.shift_state_machine import (
 )
 def test_derive_target_state_exhaustive(
     open_working_count: int,
+    open_declared_count: int,
     open_paused_count: int,
     expected: UserShiftStateEnum,
 ) -> None:
-    assert derive_target_state(open_working_count, open_paused_count) is expected
+    assert (
+        derive_target_state(
+            open_working_count,
+            open_declared_count,
+            open_paused_count,
+        )
+        is expected
+    )
 
 
 def test_boundary_markers_are_never_derived() -> None:
     derived = {
-        derive_target_state(working_count, paused_count)
-        for working_count, paused_count in itertools.product(range(3), repeat=2)
+        derive_target_state(working_count, declared_count, paused_count)
+        for working_count, declared_count, paused_count in itertools.product(
+            range(3), repeat=3
+        )
     }
 
     assert derived == DURATIONFUL_STATES

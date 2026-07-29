@@ -1,18 +1,18 @@
-"""Deterministically rebuild a shift's durationful states from step history.
+"""Deterministically rebuild a shift's durationful states from source history.
 
 The live reconcile (analytics worker) records `working`/`in_pause`/`idle` transitions as
 they happen — but only if it processes each event while that state is still current. If
 the worker lags or is down during a shift, intermediate states are lost. Clock-out fixes
-that: it re-derives the whole middle of the shift from the step records (the source of
-truth) plus any manual shift-pauses, so a **closed shift is always correct regardless of
+that: it re-derives the whole middle of the shift from step records and worker-declared
+state records (the source tables), so a **closed shift is always correct regardless of
 analytics-worker uptime**. The `started_shift`/`ended_shift` markers are left untouched;
 only the durationful records between them are replaced.
 
-Manual shift-pauses are folded into the same sweep as `paused` intervals, so they survive
-the rebuild (re-emitted with `manually_recorded=True` and their free-text reason) and
-correctly occupy their windows instead of collapsing to idle. A worker can only manually
-pause from `idle`, so manual and step pauses never overlap — each rebuilt pause is
-unambiguously one or the other.
+Declared states are the primary explanation channel and are folded into the sweep as
+`paused` intervals carrying their catalog reason. Frozen legacy manual shift-pauses are
+also folded indefinitely, so historical rows survive the rebuild with their free-text
+reason. Both declaration-sourced and legacy manual segments are re-emitted with
+`manually_recorded=True`.
 """
 
 from datetime import datetime
@@ -25,6 +25,9 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 
 _STEP_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED)
@@ -65,7 +68,8 @@ async def reconstruct_shift_middle(
     shift_end: datetime,
 ) -> None:
     """Replace the durationful (`working`/`in_pause`/`idle`) records of one shift with a
-    fresh reconstruction from step records + manual pauses over ``[shift_start, shift_end]``.
+    fresh reconstruction from step records + declared states + legacy manual pauses over
+    ``[shift_start, shift_end]``.
 
     Call it at clock-out (or a shift-scoped repair) **before** open working steps are closed,
     so a still-open working step clamps to ``shift_end``. Markers are preserved.
@@ -114,8 +118,35 @@ async def reconstruct_shift_middle(
         for row in step_rows
     ]
 
-    # Manual shift-pauses in the window, fed into the same sweep so they occupy their
-    # windows (as `paused`) and survive the rebuild.
+    declared_rows = (
+        await session.execute(
+            select(
+                UserDeclaredStateRecord.client_id,
+                UserDeclaredStateRecord.pause_reason_id,
+                UserDeclaredStateRecord.entered_at,
+                UserDeclaredStateRecord.exited_at,
+            ).where(
+                UserDeclaredStateRecord.workspace_id == workspace_id,
+                UserDeclaredStateRecord.user_id == user_id,
+                UserDeclaredStateRecord.entered_at >= shift_start,
+                UserDeclaredStateRecord.entered_at < shift_end,
+            )
+        )
+    ).all()
+    declared_ids = {row.client_id for row in declared_rows}
+    intervals.extend(
+        LinearInterval(
+            record_id=row.client_id,
+            state="paused",
+            reason=row.pause_reason_id,
+            entered_at=row.entered_at,
+            exited_at=row.exited_at,
+        )
+        for row in declared_rows
+    )
+
+    # Frozen legacy manual shift-pauses stay in the same sweep so historical rows
+    # continue to survive reconstruction with their free-text reasons.
     manual_rows = (
         await session.execute(
             select(
@@ -134,6 +165,7 @@ async def reconstruct_shift_middle(
         )
     ).all()
     manual_ids = {row.client_id for row in manual_rows}
+    manually_recorded_source_ids = declared_ids | manual_ids
     intervals.extend(
         LinearInterval(
             record_id=row.client_id,
@@ -166,7 +198,9 @@ async def reconstruct_shift_middle(
             continue
         if segment.start > cursor:  # leading / inter-activity gap not the worker's break → idle
             records.append(_idle_record(workspace_id, user_id, cursor, segment.start))
-        is_manual = state is UserShiftStateEnum.IN_PAUSE and bool(set(segment.record_ids) & manual_ids)
+        is_manual = state is UserShiftStateEnum.IN_PAUSE and bool(
+            set(segment.record_ids) & manually_recorded_source_ids
+        )
         records.append(
             UserShiftStateRecord(
                 workspace_id=workspace_id,

@@ -6,6 +6,7 @@ from freezegun import freeze_time
 from sqlalchemy import delete, func, select
 
 from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
@@ -21,6 +22,9 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.workspaces.workspace import Workspace
@@ -28,6 +32,9 @@ from beyo_manager.models.tables.workspaces.workspace_membership import Workspace
 from beyo_manager.services.commands.users._clock_worker_shift import (
     clock_in_shift_for_user,
     clock_out_shift_for_user,
+)
+from beyo_manager.services.commands.users._reconstruct_shift_middle import (
+    reconstruct_shift_middle,
 )
 from beyo_manager.services.commands.users.clock_in_worker_shift import clock_in_worker_shift
 from beyo_manager.services.commands.users.clock_out_worker_shift import clock_out_worker_shift
@@ -59,7 +66,6 @@ async def _seed_user(db_session, label: str) -> User:
 
 
 async def _seed_workspace_worker(db_session) -> tuple[Workspace, User]:
-    suffix = uuid4().hex
     workspace = await db_session.scalar(select(Workspace).order_by(Workspace.client_id))
     worker = await _seed_user(db_session, "shift-worker")
     worker_role = (
@@ -228,6 +234,39 @@ async def _seed_step_record(
     await db_session.flush()
 
 
+async def _seed_declared_state(
+    db_session,
+    workspace: Workspace,
+    worker: User,
+    *,
+    reason: str,
+    entered_at: datetime,
+    exited_at: datetime | None,
+) -> UserDeclaredStateRecord:
+    suffix = uuid4().hex
+    pause_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"{reason.replace('_', ' ').title()} {suffix}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"{reason}-{suffix}",
+        created_by_id=worker.client_id,
+    )
+    db_session.add(pause_reason)
+    await db_session.flush()
+    declared = UserDeclaredStateRecord(
+        workspace_id=workspace.client_id,
+        user_id=worker.client_id,
+        pause_reason_id=pause_reason.client_id,
+        entered_at=entered_at,
+        exited_at=exited_at,
+        created_by_id=worker.client_id,
+        closed_by_id=None,
+    )
+    db_session.add(declared)
+    await db_session.flush()
+    return declared
+
+
 _MARKER_RANK = {UserShiftStateEnum.STARTED_SHIFT: 0, UserShiftStateEnum.ENDED_SHIFT: 2}
 
 
@@ -380,6 +419,132 @@ async def test_clock_out_preserves_manual_pause(db_session) -> None:
     manual = next(r for r in records if r.state is UserShiftStateEnum.IN_PAUSE)
     assert manual.manually_recorded is True
     assert manual.reason == "cleaning station"
+
+
+async def test_clock_out_reconstructs_declared_intervals_and_clamps_open_source(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+
+    def at(minutes: int) -> datetime:
+        return base + timedelta(minutes=minutes)
+
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, base, worker.client_id
+    )
+    await _seed_step_record(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=at(5),
+        exited_at=at(15),
+    )
+    closed_declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        worker,
+        reason="pause_coffee_break",
+        entered_at=at(20),
+        exited_at=at(30),
+    )
+    db_session.add(
+        UserShiftStateRecord(
+            workspace_id=workspace.client_id,
+            user_id=worker.client_id,
+            state=UserShiftStateEnum.IN_PAUSE,
+            entered_at=at(32),
+            exited_at=at(35),
+            changed_by_id=worker.client_id,
+            reason="legacy meeting",
+            manually_recorded=True,
+        )
+    )
+    open_declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        worker,
+        reason="pause_lunch_break",
+        entered_at=at(40),
+        exited_at=None,
+    )
+
+    await clock_out_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, at(50), worker.client_id
+    )
+
+    await db_session.refresh(open_declared)
+    records = await _ordered_shift_records(
+        db_session, workspace.client_id, worker.client_id
+    )
+    assert _minute_seq(records, base) == [
+        (UserShiftStateEnum.STARTED_SHIFT, 0, 0),
+        (UserShiftStateEnum.IDLE, 0, 5),
+        (UserShiftStateEnum.WORKING, 5, 15),
+        (UserShiftStateEnum.IDLE, 15, 20),
+        (UserShiftStateEnum.IN_PAUSE, 20, 30),
+        (UserShiftStateEnum.IDLE, 30, 32),
+        (UserShiftStateEnum.IN_PAUSE, 32, 35),
+        (UserShiftStateEnum.IDLE, 35, 40),
+        (UserShiftStateEnum.IN_PAUSE, 40, 50),
+        (UserShiftStateEnum.ENDED_SHIFT, 50, 50),
+    ]
+    pauses = {
+        record.entered_at: record
+        for record in records
+        if record.state is UserShiftStateEnum.IN_PAUSE
+    }
+    assert pauses[at(20)].reason == closed_declared.pause_reason_id
+    assert pauses[at(20)].manually_recorded is True
+    assert pauses[at(32)].reason == "legacy meeting"
+    assert pauses[at(32)].manually_recorded is True
+    assert pauses[at(40)].reason == open_declared.pause_reason_id
+    assert pauses[at(40)].manually_recorded is True
+    assert open_declared.exited_at == at(50)
+    assert open_declared.closed_by_id is None
+
+
+async def test_reconstruction_clamps_open_declared_interval_without_closing_source(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+    shift_end = base + timedelta(minutes=30)
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, base, worker.client_id
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        worker,
+        reason="pause_coffee_break",
+        entered_at=base + timedelta(minutes=10),
+        exited_at=None,
+    )
+
+    await reconstruct_shift_middle(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base,
+        shift_end,
+    )
+
+    records = await _ordered_shift_records(
+        db_session, workspace.client_id, worker.client_id
+    )
+    assert _minute_seq(records, base) == [
+        (UserShiftStateEnum.STARTED_SHIFT, 0, 0),
+        (UserShiftStateEnum.IDLE, 0, 10),
+        (UserShiftStateEnum.IN_PAUSE, 10, 30),
+    ]
+    rebuilt_pause = next(
+        record for record in records if record.state is UserShiftStateEnum.IN_PAUSE
+    )
+    assert rebuilt_pause.reason == declared.pause_reason_id
+    assert rebuilt_pause.manually_recorded is True
+    assert declared.exited_at is None
 
 
 async def test_clock_toggle_clocks_in_then_out(db_session) -> None:
@@ -586,6 +751,10 @@ async def test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day(
     # by earlier committed runs before exercising the global scan, and (c) delete this
     # test's committed rows in a finally so it never pollutes later runs.
     workspace, worker = await _seed_workspace_worker(db_session)
+    workspace_id = workspace.client_id
+    worker_id = worker.client_id
+    declared_id: str | None = None
+    declared_reason_id: str | None = None
     # Clean slate for the global scan: drop leftover open records from prior committed runs.
     await db_session.execute(
         delete(UserShiftStateRecord).where(UserShiftStateRecord.exited_at.is_(None))
@@ -604,20 +773,16 @@ async def test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day(
             midnight - timedelta(hours=16),
             worker.client_id,
         )
-        current = await _open_shift_record(db_session, workspace.client_id, worker.client_id)
-        current.exited_at = midnight - timedelta(hours=8)
-        db_session.add(
-            UserShiftStateRecord(
-                workspace_id=workspace.client_id,
-                user_id=worker.client_id,
-                state=UserShiftStateEnum.IN_PAUSE,
-                entered_at=midnight - timedelta(hours=8),
-                exited_at=None,
-                changed_by_id=worker.client_id,
-                reason="Late lunch",
-                manually_recorded=True,
-            )
+        declared = await _seed_declared_state(
+            db_session,
+            workspace,
+            worker,
+            reason="pause_lunch_break",
+            entered_at=midnight - timedelta(hours=8),
+            exited_at=None,
         )
+        declared_id = declared.client_id
+        declared_reason_id = declared.pause_reason_id
         await db_session.commit()
 
         await handle_auto_clock_out_open_shifts({}, "task_midnight_test")
@@ -636,6 +801,11 @@ async def test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day(
             assert ended.exited_at == midnight
             assert ended.changed_by_id is None
             assert await _open_shift_record(session, workspace.client_id, worker.client_id) is None
+            closed_declared = await session.get(
+                UserDeclaredStateRecord, declared_id
+            )
+            assert closed_declared.exited_at == midnight
+            assert closed_declared.closed_by_id is None
 
         result = await clock_in_worker_shift(
             _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
@@ -643,9 +813,23 @@ async def test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day(
         assert result["action"] == "clock_in"
     finally:
         # Remove everything this test committed so the shared DB stays clean.
+        await db_session.rollback()
+        if declared_id is not None:
+            await db_session.execute(
+                delete(UserDeclaredStateRecord).where(
+                    UserDeclaredStateRecord.client_id == declared_id
+                )
+            )
+        if declared_reason_id is not None:
+            await db_session.execute(
+                delete(PauseReason).where(
+                    PauseReason.client_id == declared_reason_id
+                )
+            )
         await db_session.execute(
             delete(UserShiftStateRecord).where(
-                UserShiftStateRecord.workspace_id == workspace.client_id
+                UserShiftStateRecord.workspace_id == workspace_id,
+                UserShiftStateRecord.user_id == worker_id,
             )
         )
         await db_session.commit()

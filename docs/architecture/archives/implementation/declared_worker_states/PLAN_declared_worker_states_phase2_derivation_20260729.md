@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase2_derivation_20260729`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T12:00:00Z`
+- Last updated at (UTC): `2026-07-29T14:49:01Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D3–D6 govern this phase)
 - Prerequisite: Phase 1 archived (`user_declared_state_records` exists).
@@ -114,10 +114,54 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
 
 ## Review log
 
-- (empty — filled by implementer and reviewer)
+- `2026-07-29T14:35:47Z` — Codex (implementer), pre-implementation verification:
+  - Phase 1 prerequisite confirmed from the master phase table: archived at commit
+    `a84610c`; the `user_declared_state_records` migration is at Alembic head.
+  - Read `domain/analytics/linear_timeline.py::_sweep` relationally as required.
+    Finding: overlap priority is explicit and interval-order-independent — each raw
+    segment checks active `working` entries before active `paused` entries. When no
+    working entry is active, overlapping pauses are owned deterministically by the
+    earliest `(entered_at, record_id)`. Declared intervals can therefore be appended
+    normally; no insertion-order workaround is required for working to win.
+- `2026-07-29T14:49:01Z` — Codex (implementer), implementation + self-review:
+  - Implemented the D3–D6 read/derivation integration: pure three-count state
+    derivation; declaration-aware live reconcile; close-on-WORKING; deterministic
+    reconstruction from step + declared + legacy manual sources; and clock-out source
+    clamp inherited by the midnight safeguard.
+  - Concurrency review: both reconcile and clock-out acquire locks in the documented
+    order **shift row → declared row**. Declaration queries are workspace/user scoped
+    and use `FOR UPDATE`.
+  - Boundary review: reconcile still emits no events and performs no commit; no router,
+    `/pause`, `/resume`, legacy stickiness, Connecteam, or analytics endpoint code was
+    changed.
+  - Call-site review: `rg "derive_target_state\(" app --glob "*.py"` confirms the
+    implementation and both unit-test comprehensions use the new three-argument
+    signature; no stale two-argument call remains.
+  - Acceptance evidence:
+    - Alembic prerequisite: `595e7b840926 (head)`.
+    - `pytest tests/unit/domain/users/test_shift_state_machine.py -q` → `53 passed`.
+    - Six explicit new Phase 2 integration nodes → `6 passed`.
+    - `pytest tests/integration/services/commands/users/ -q` →
+      `21 passed, 2 failed`; failures are exactly the two Phase 1-recorded clock-out
+      baseline cases (`unspecified` reason expectation and missing
+      `pause_ended_shift` seed). No new worker-shift failure.
+    - Unchanged tasks + Connecteam + worker-stats integration suites → `70 passed`.
+    - Broader analytics suites → `70 passed, 1 failed`; the single
+      worker-stats mock-signature failure is recorded baseline debt.
+    - Full backend suite after removing one exact unreferenced fixture left by an
+      interrupted test run → `1184 passed, 25 failed, 2 warnings`; failures are the
+      established repository baseline categories and contain no Phase 2 test.
+    - Test DB post-cleanup: `declared_row_count 0`, confirming deploy-neutral legacy
+      evidence was exercised with an empty declaration table.
+    - Touched-file `ruff check` → `All checks passed!`.
+    - Repository-root `ruff check .` → `148` pre-existing errors (Phase 1 recorded
+      `149`); no touched-file error and no Phase 2 delta.
+    - `git diff --check` → clean.
+  - Self-review findings: no blocking or minor findings. All acceptance criteria are
+    covered; implementation summary and archive record written.
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `archived`
+- Next state: `none`
 - Transition owner: `David`

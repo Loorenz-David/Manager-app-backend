@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from sqlalchemy import and_, func, select
@@ -9,11 +10,17 @@ from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.commands.users._reconstruct_shift_middle import reconstruct_shift_middle
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
+
+
+logger = logging.getLogger(__name__)
 
 
 def _credited_user_id():
@@ -119,6 +126,8 @@ async def clock_out_shift_for_user(
     clock_out_at: datetime,
     changed_by_id: str | None,
 ) -> int:
+    # Cross-command lock order: shift row -> declared row. Phase 3 declaration
+    # commands must preserve this order to avoid deadlocks with clock-out/reconcile.
     current = await load_open_worker_shift_for_update(session, workspace_id, user_id)
     if current is None:
         raise ConflictError("Worker is not clocked in.")
@@ -136,6 +145,30 @@ async def clock_out_shift_for_user(
             UserShiftStateRecord.entered_at <= clock_out_at,
         )
     ) or current.entered_at
+
+    open_declared = (
+        await session.execute(
+            select(UserDeclaredStateRecord)
+            .where(
+                UserDeclaredStateRecord.workspace_id == workspace_id,
+                UserDeclaredStateRecord.user_id == user_id,
+                UserDeclaredStateRecord.exited_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if open_declared is not None:
+        open_declared.exited_at = clock_out_at
+        open_declared.closed_by_id = None
+        logger.info(
+            "worker_shift.clock_out_declared_clamp | "
+            "workspace_id=%s user_id=%s declared_record_id=%s exited_at=%s",
+            workspace_id,
+            user_id,
+            open_declared.client_id,
+            clock_out_at.isoformat(),
+        )
+
     await reconstruct_shift_middle(session, workspace_id, user_id, shift_start, clock_out_at)
 
     transition_actor_id = changed_by_id or user_id

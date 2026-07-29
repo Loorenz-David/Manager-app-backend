@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
@@ -14,6 +15,9 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.workspaces.workspace import Workspace
@@ -94,6 +98,39 @@ async def _seed_open_step(
     await db_session.flush()
     step.latest_state_record_id = record.client_id
     return record
+
+
+async def _seed_declared_state(
+    db_session,
+    workspace: Workspace,
+    user: User,
+    *,
+    entered_at: datetime,
+    reason: str,
+    exited_at: datetime | None = None,
+) -> UserDeclaredStateRecord:
+    suffix = uuid4().hex
+    pause_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"{reason.replace('_', ' ').title()} {suffix}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        slug=f"{reason}-{suffix}",
+        created_by_id=user.client_id,
+    )
+    db_session.add(pause_reason)
+    await db_session.flush()
+    declared = UserDeclaredStateRecord(
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+        pause_reason_id=pause_reason.client_id,
+        entered_at=entered_at,
+        exited_at=exited_at,
+        created_by_id=user.client_id,
+        closed_by_id=None,
+    )
+    db_session.add(declared)
+    await db_session.flush()
+    return declared
 
 
 def _shift_record(
@@ -302,6 +339,151 @@ async def test_reconcile_pause_uses_earliest_open_pause_reason(db_session) -> No
         select(PauseReason.client_id).where(PauseReason.slug == "pause_coffee_break")
     )
     assert open_record.reason == pause_reason_id
+
+
+async def test_reconcile_declared_state_is_derived_and_idempotent(db_session) -> None:
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    now = shift_start + timedelta(minutes=20)
+    db_session.add_all(
+        [
+            _shift_record(workspace, user, UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start),
+            _shift_record(workspace, user, UserShiftStateEnum.IDLE, shift_start, None),
+        ]
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        user,
+        entered_at=shift_start + timedelta(minutes=10),
+        reason="pause_coffee_break",
+    )
+
+    first = await reconcile_worker_shift_state(
+        db_session, workspace.client_id, user.client_id, now
+    )
+    second = await reconcile_worker_shift_state(
+        db_session, workspace.client_id, user.client_id, now + timedelta(minutes=1)
+    )
+
+    records = await _load_shift_records(db_session, workspace.client_id, user.client_id)
+    current = next(record for record in records if record.exited_at is None)
+    assert first.changed is True
+    assert second.changed is False
+    assert current.state is UserShiftStateEnum.IN_PAUSE
+    assert current.reason == declared.pause_reason_id
+    assert current.manually_recorded is True
+    assert sum(
+        record.state is UserShiftStateEnum.IN_PAUSE for record in records
+    ) == 1
+
+
+async def test_reconcile_working_closes_declaration_without_resurrection(
+    db_session,
+) -> None:
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    db_session.add_all(
+        [
+            _shift_record(workspace, user, UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start),
+            _shift_record(workspace, user, UserShiftStateEnum.IDLE, shift_start, None),
+        ]
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        user,
+        entered_at=shift_start + timedelta(minutes=5),
+        reason="pause_coffee_break",
+    )
+    await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        shift_start + timedelta(minutes=10),
+    )
+    working_record = await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=shift_start + timedelta(minutes=20),
+    )
+    working_at = shift_start + timedelta(minutes=21)
+
+    working_outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        working_at,
+    )
+    await db_session.refresh(declared)
+    working_record.exited_at = shift_start + timedelta(minutes=30)
+    idle_outcome = await reconcile_worker_shift_state(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        shift_start + timedelta(minutes=31),
+    )
+
+    current = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert working_outcome.state is UserShiftStateEnum.WORKING
+    assert declared.exited_at == working_at
+    assert declared.closed_by_id is None
+    assert idle_outcome.state is UserShiftStateEnum.IDLE
+    assert current.state is UserShiftStateEnum.IDLE
+
+
+async def test_reconcile_declared_state_outranks_open_paused_step(db_session) -> None:
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    now = shift_start + timedelta(minutes=30)
+    db_session.add_all(
+        [
+            _shift_record(workspace, user, UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start),
+            _shift_record(workspace, user, UserShiftStateEnum.IDLE, shift_start, None),
+        ]
+    )
+    await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=shift_start + timedelta(minutes=5),
+        reason="pause_lunch_break",
+    )
+    declared = await _seed_declared_state(
+        db_session,
+        workspace,
+        user,
+        entered_at=shift_start + timedelta(minutes=10),
+        reason="pause_coffee_break",
+    )
+
+    await reconcile_worker_shift_state(
+        db_session, workspace.client_id, user.client_id, now
+    )
+
+    current = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert current.state is UserShiftStateEnum.IN_PAUSE
+    assert current.reason == declared.pause_reason_id
+    assert current.manually_recorded is True
 
 
 async def test_concurrent_reconciles_create_one_open_shift_record(db_session) -> None:

@@ -18,10 +18,13 @@ BOUNDARY_MARKERS: frozenset[UserShiftStateEnum] = frozenset(
 
 def derive_target_state(
     open_working_count: int,
+    open_declared_count: int,
     open_paused_count: int,
 ) -> UserShiftStateEnum:
     if open_working_count >= 1:
         return UserShiftStateEnum.WORKING
+    if open_declared_count >= 1:
+        return UserShiftStateEnum.IN_PAUSE
     if open_paused_count >= 1:
         return UserShiftStateEnum.IN_PAUSE
     return UserShiftStateEnum.IDLE

@@ -14,6 +14,9 @@ from beyo_manager.domain.users.shift_state_machine import (
 )
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.users.user_declared_state_record import (
+    UserDeclaredStateRecord,
+)
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 
 
@@ -71,6 +74,8 @@ async def _reconcile_once(
     user_id: str,
     now: datetime,
 ) -> ShiftReconcileOutcome:
+    # Cross-command lock order: shift row -> declared row. Phase 3 declaration
+    # commands must preserve this order to avoid deadlocks with reconcile/clock-out.
     current = (
         await session.execute(
             select(UserShiftStateRecord)
@@ -146,6 +151,18 @@ async def _reconcile_once(
     if shift_started_at is None:
         raise RuntimeError("Open worker shift is missing its STARTED_SHIFT marker.")
 
+    open_declared = (
+        await session.execute(
+            select(UserDeclaredStateRecord)
+            .where(
+                UserDeclaredStateRecord.workspace_id == workspace_id,
+                UserDeclaredStateRecord.user_id == user_id,
+                UserDeclaredStateRecord.exited_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
     open_steps = await _load_open_steps(
         session,
         workspace_id,
@@ -155,17 +172,57 @@ async def _reconcile_once(
     )
     open_working_count = sum(record.state is TaskStepStateEnum.WORKING for record in open_steps)
     open_paused = [record for record in open_steps if record.state is TaskStepStateEnum.PAUSED]
-    target = derive_target_state(open_working_count, len(open_paused))
+    open_declared_count = int(open_declared is not None)
+    target = derive_target_state(
+        open_working_count,
+        open_declared_count,
+        len(open_paused),
+    )
+    declared_is_source = open_working_count == 0 and open_declared is not None
+
+    declared_closed = False
+    if target is UserShiftStateEnum.WORKING and open_declared is not None:
+        open_declared.exited_at = now
+        open_declared.closed_by_id = None
+        declared_closed = True
+        logger.info(
+            "worker_shift.reconcile_declared_close | "
+            "workspace_id=%s user_id=%s declared_record_id=%s exited_at=%s",
+            workspace_id,
+            user_id,
+            open_declared.client_id,
+            now.isoformat(),
+        )
 
     if (
         current is not None
         and current.state is UserShiftStateEnum.IN_PAUSE
         and current.manually_recorded
         and target is UserShiftStateEnum.IDLE
+        and open_declared is None
     ):
         return ShiftReconcileOutcome(changed=False, state=current.state)
-    if current is not None and current.state is target:
-        return ShiftReconcileOutcome(changed=False, state=current.state)
+
+    reason = None
+    manually_recorded = False
+    if declared_is_source:
+        reason = open_declared.pause_reason_id
+        manually_recorded = True
+    elif target is UserShiftStateEnum.IN_PAUSE and open_paused[0].pause_reason_id is not None:
+        reason = open_paused[0].pause_reason_id
+
+    if (
+        current is not None
+        and current.state is target
+        and (
+            not declared_is_source
+            or (
+                current.reason == reason
+                and current.manually_recorded is manually_recorded
+            )
+        )
+    ):
+        return ShiftReconcileOutcome(changed=declared_closed, state=current.state)
 
     transition_from = current.state if current is not None else UserShiftStateEnum.STARTED_SHIFT
     assert is_valid_shift_state_transition(transition_from, target)
@@ -173,9 +230,6 @@ async def _reconcile_once(
     if current is not None:
         current.exited_at = now
 
-    reason = None
-    if target is UserShiftStateEnum.IN_PAUSE and open_paused[0].pause_reason_id is not None:
-        reason = open_paused[0].pause_reason_id
     session.add(
         UserShiftStateRecord(
             workspace_id=workspace_id,
@@ -185,7 +239,7 @@ async def _reconcile_once(
             exited_at=None,
             changed_by_id=None,
             reason=reason,
-            manually_recorded=False,
+            manually_recorded=manually_recorded,
         )
     )
     logger.info(
