@@ -6,7 +6,7 @@
 - Status: `implemented`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T16:18:33Z`
+- Last updated at (UTC): `2026-07-29T16:48:43Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decisions D3–D6 govern this phase)
 - Prerequisite: Phase 1 archived (`user_declared_state_records` exists).
@@ -15,7 +15,7 @@
 
 - Goal: Teach the **entire derived-state pipeline** to read `user_declared_state_records`: the pure state machine, the live reconcile, the clock-out reconstruction, and the clock-out clamp. Behavior-neutral at deploy time (the table is still empty — Phase 3 introduces writers), but fully correct the moment rows appear.
 - Business/user intent: Guarantee no deploy window in which a declaration can be recorded but then lost or ignored by the live timeline or the clock-out rebuild.
-- Non-goals: Declare/close commands, routes, auto-pause of working steps (Phase 3). Removing the legacy manual-pause carve-out or `/pause`/`/resume` (Phase 3 — they are still the only manual writers until then). Read-endpoint changes (none needed: declared time surfaces as `IN_PAUSE` segments, per D3, which the existing endpoints already serialize).
+- Non-goals: Declare/close commands, routes, auto-pause of working steps (Phase 3). Removing the legacy manual-pause carve-out or `/pause`/`/resume` (Phase 3 — they are still the only manual writers until then). Read-endpoint changes (none needed: declared time surfaces as `IN_PAUSE` segments, per D3, which the existing endpoints already serialize). Broad migration or reinterpretation of frozen legacy `manually_recorded` reason semantics remains out of scope; the operator-authorized I1 exception repairs only `changed_by_id` on open laundered rows, preserving D7's reason/semantics intent.
 
 ## Scope
 
@@ -25,6 +25,7 @@
   3. `services/commands/users/_reconstruct_shift_middle.py` — fold declared intervals into the sweep alongside (not replacing) legacy manual rows.
   4. `services/commands/users/_clock_worker_shift.py::clock_out_shift_for_user` — clamp-close the open declared record at `clock_out_at` (D6).
   5. `domain/analytics/linear_timeline.py` — add optional pause ownership priority and owner projection for reconstruction. The field defaults to zero, preserving the existing earliest-pause rule for every non-declared caller; reconstruction, backfill, and test callers were audited, and only reconstruction supplies non-default priorities.
+  6. `migrations/versions/c2f4a6b8d0e1_repair_open_legacy_manual_pause_provenance.py` — one-time, idempotent provenance repair for open legacy manual pauses laundered by a pre-Phase-2 heal: set missing `changed_by_id` to `user_id`. This is sound before Phase 3 because declaration rows have never had a writer; downgrade is an explicit no-op because provenance restoration is irreversible and harmless.
 - Out of scope: any writer of `user_declared_state_records` other than the clock-out clamp; router/API changes; analytics endpoints.
 - Assumptions:
   - **State machine.** New signature `derive_target_state(open_working_count: int, open_declared_count: int, open_paused_count: int) -> UserShiftStateEnum`: `≥1 working → WORKING`; else `≥1 declared → IN_PAUSE`; else `≥1 paused → IN_PAUSE`; else `IDLE`. Still pure, exhaustive, no I/O. Transition-validity helper unchanged.
@@ -34,7 +35,7 @@
     - If `target is IN_PAUSE` **sourced from the declared row** (i.e., `open_working_count == 0 and open_declared_count >= 1`) → new derived record gets `reason = declared.pause_reason_id`, `manually_recorded = True`. Otherwise (step-sourced pause) keep today's behavior: `reason` from the earliest open paused step, `manually_recorded = False`.
     - **Keep** the legacy manual-pause stickiness carve-out. Until Phase 3 retires `/pause` and `/resume`, an actor-authored manual row (`IN_PAUSE` + `manually_recorded` + `changed_by_id IS NOT NULL`) remains sticky against every non-`WORKING` projection: `IDLE`, step-sourced `IN_PAUSE`, and declared-sourced `IN_PAUSE` included. Reconcile-authored declaration projections have `changed_by_id IS NULL`, so declaration-involved transitions re-check the reason and manual marker only when no legacy manual row is open.
     - Idempotency must hold: reconcile with an open declared row and current state already declared-`IN_PAUSE` (same reason) → no-op, no duplicate rows.
-  - **Reconstruction.** In `reconstruct_shift_middle`, add a query over `UserDeclaredStateRecord` with the same window scoping as the manual-rows query (`entered_at >= shift_start AND entered_at < shift_end`), mapped to `LinearInterval(state="paused", reason=row.pause_reason_id, ...)`. An open declared row (`exited_at IS NULL`) passes `exited_at=None` and is clamped to `shift_end` by the sweep, same as open working steps. Collect declared `client_id`s into the same id-set used for `manually_recorded` re-emission (union with legacy `manual_ids`) so rebuilt declared segments carry `manually_recorded = True` and their catalog `reason`. The legacy manual-rows query **stays** (D7). The module docstring must be updated: declared states are now the primary explanation channel; legacy manual rows remain folded for frozen history.
+  - **Reconstruction.** In `reconstruct_shift_middle`, add a query over `UserDeclaredStateRecord` with the same window scoping as the manual-rows query (`entered_at >= shift_start AND entered_at < shift_end`), mapped to `LinearInterval(state="paused", reason=row.pause_reason_id, ...)`. An open declared row (`exited_at IS NULL`) passes `exited_at=None` and is clamped to `shift_end` by the sweep, same as open working steps. Collect declared `client_id`s into the same id-set used for `manually_recorded` re-emission (union with legacy `manual_ids`) so rebuilt declared segments carry `manually_recorded = True` and their catalog `reason`. The legacy manual-rows query **stays** (D7). Legacy manual intervals intentionally use priority `1`, above step pauses at priority `0`: a worker's explicit `/pause` is declared intent, so it owns the rebuilt overlap from its start, matching D4's spirit and the declaration priority rule. The module docstring must be updated: declared states are now the primary explanation channel; legacy manual rows remain folded for frozen history.
   - **Clock-out clamp.** In `clock_out_shift_for_user`, after resolving `shift_start` and **before** `reconstruct_shift_middle` runs: load the open declared row `with_for_update()`; if present, set `exited_at = clock_out_at`, `closed_by_id = NULL`. (Reconstruction would clamp the interval anyway; this closes the **source** row so the worker isn't "declared" after clock-out. Midnight safeguard inherits via its delegation to this function.)
   - **Sweep semantics** (verify, don't assume): `compute_linear_segments` merges by `(state, reason)` and existing priority already resolves overlapping `working`/`paused` in favor of `working` — a relational read of `domain/analytics/linear_timeline.py::_sweep` must confirm before relying on it; if priority is interval-order-dependent, declared intervals must be inserted so that working wins (record the finding in the Review log).
 
@@ -662,6 +663,59 @@ Prohibited pattern reads: other commands/services for structure → `06_commands
   **Required before approval:** I1 (decide and record — carve-out widening *or* a documented
   pre-deploy data check; if code changes, pin it) and I2 (decide and pin, either way).
   I3 is a one-line doc correction. I4 needs no action.
+
+- `2026-07-29T16:48:43Z` — Codex (implementer), I1/I2 round-4 fix cycle:
+  - **I1 fixed per operator decision:** new Alembic revision `c2f4a6b8d0e1` repairs only
+    open `IN_PAUSE` rows with `manually_recorded = TRUE` and missing provenance by setting
+    `changed_by_id = user_id`
+    (`c2f4a6b8d0e1_repair_open_legacy_manual_pause_provenance.py:19-32`). The update is
+    idempotent and sound before Phase 3 because declared-state rows have never had a
+    writer; the documented downgrade is intentionally a no-op because restored provenance
+    cannot be inferred back to `NULL` and is harmless to retain. The Non-goals and Scope
+    sections record this operator-authorized, provenance-only exception to D7 without
+    reinterpreting frozen reasons or semantics.
+  - I1 is pinned by
+    `test_repaired_laundered_manual_pause_remains_sticky_and_resumable`: seed the exact
+    laundered open row, execute the migration repair statement, reconcile to a no-op,
+    assert the original row/reason/manual marker and restored worker actor remain intact,
+    then successfully call `/resume`.
+  - **I2 retained per operator decision:** legacy manual pause priority `1` remains above
+    step pause priority `0`. The Reconstruction assumption now records the rationale:
+    explicit worker `/pause` is declared intent, so it owns the rebuilt overlap from its
+    start, matching D4's spirit and using one ownership rule for legacy and declared
+    intent. `test_legacy_manual_pause_owns_reconstruction_after_open_step_pause` pins the
+    `09:05` open step pause + `09:20` manual pause + `09:50` clock-out split, including
+    both reasons and manual markers.
+  - Regression-first evidence: before implementation I1 failed at the missing migration
+    module while I2 passed immediately, confirming current behavior matched the operator
+    decision. After implementation both report `2 passed`; the complete round-1 through
+    round-4 regression ladder reports `10 passed`.
+  - Migration evidence:
+    - Development DB: `upgrade 595e7b840926 → c2f4a6b8d0e1`, `downgrade -1` back to
+      `595e7b840926` through the documented no-op, then a second clean/idempotent upgrade
+      to `c2f4a6b8d0e1`.
+    - Test DB upgraded cleanly from `595e7b840926` to `c2f4a6b8d0e1`.
+    - Both development and test databases report `c2f4a6b8d0e1 (head)`.
+  - Full validation evidence:
+    - Post-suite `user_declared_state_records` count: `0`.
+    - Exhaustive derivation matrix: `53 passed`.
+    - Worker command/reconcile suites: `30 passed, 2 failed`; the failures are the exact
+      independently proven baseline clock-out cases (`unspecified` vs `None`, and missing
+      `pause_ended_shift`). Both new round-4 tests pass, with no new failure.
+    - Unchanged task + Connecteam + worker-stats suites: `70 passed`; broader query/task
+      suites: `73 passed`.
+    - Full unit suite: `895 passed, 8 failed, 2 warnings`, matching the recorded unit
+      baseline exactly.
+    - Full backend suite: `1194 passed, 25 failed, 2 warnings` — the same recorded 25
+      baseline failure nodes plus the two new passing integration regressions.
+    - Touched-file `ruff check`: `All checks passed!`; repository-root `ruff check .`:
+      the same `141` baseline errors, with no touched-file error.
+    - `git diff --check`: clean.
+  - I3 was already corrected by the operator and I4 remains informational; neither was
+    changed in this cycle.
+  - Lifecycle result: implementation fixes are complete and returned to independent
+    re-review. No implemented summary, archive move, or master-table change is made
+    before an `APPROVED` verdict.
 
 ## Lifecycle transition
 
