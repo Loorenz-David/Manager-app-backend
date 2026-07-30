@@ -25,9 +25,19 @@ async def logout_user(ctx: ServiceContext) -> dict:
 
 async def _blocklist_token(claims: dict) -> None:
     jti = claims.get("jti")
-    exp = claims.get("exp")
-    if not jti or not exp:
+    if not jti:
         return
+
+    exp = claims.get("exp")
     from beyo_manager.services.infra.redis.async_client import get_async_redis
+
+    redis = get_async_redis()
+    key = f"{settings.redis_key_prefix}:auth:blocklist:{jti}"
+    if "exp" not in claims:
+        await redis.set(key, "1")
+        return
+    if not exp:
+        return
+
     ttl = max(int(exp - time.time()) + 60, 1)
-    await get_async_redis().set(f"{settings.redis_key_prefix}:auth:blocklist:{jti}", "1", ex=ttl)
+    await redis.set(key, "1", ex=ttl)

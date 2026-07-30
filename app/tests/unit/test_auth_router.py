@@ -40,6 +40,54 @@ async def test_sign_in_route_sets_scope_cookie_and_deletes_legacy_cookie(monkeyp
 
 
 @pytest.mark.unit
+async def test_floor_sign_in_route_sets_no_refresh_cookie(monkeypatch) -> None:
+    async def _fake_run_service(command, ctx):
+        return SimpleNamespace(
+            success=True,
+            data={
+                "access_token": "floor-access",
+                "user": {
+                    "user_id": "usr_1",
+                    "workspace_id": "ws_1",
+                    "role_name": "manager",
+                    "app_scope": "floor",
+                },
+                "workspace_id": "ws_1",
+            },
+            error=None,
+        )
+
+    monkeypatch.setattr(auth_router, "run_service", _fake_run_service)
+
+    response = await auth_router.sign_in_route(
+        body=auth_router.SignInBody(
+            email="manager@test.local",
+            password="Test1234!",
+            app_scope="floor",
+        ),
+        session=object(),
+        _rate=None,
+    )
+    body = json.loads(response.body)
+
+    assert not any(name == b"set-cookie" for name, _value in response.raw_headers)
+    assert body == {
+        "ok": True,
+        "warnings": [],
+        "data": {
+            "access_token": "floor-access",
+            "user": {
+                "user_id": "usr_1",
+                "workspace_id": "ws_1",
+                "role_name": "manager",
+                "app_scope": "floor",
+            },
+            "workspace_id": "ws_1",
+        },
+    }
+
+
+@pytest.mark.unit
 async def test_logout_route_reads_scope_cookie_and_deletes_scope_and_legacy(monkeypatch) -> None:
     captured = {}
 
@@ -102,5 +150,20 @@ async def test_refresh_route_returns_custom_payload_for_rejected_refresh(monkeyp
     body = json.loads(response.body)
 
     assert response.status_code == 401
+    assert body["code"] == "auth_refresh_rejected"
+    assert body["reason"] == "refresh_cookie_missing"
+
+
+@pytest.mark.unit
+async def test_refresh_route_rejects_floor_scope_without_cookie_cleanly() -> None:
+    response = await auth_router.refresh_route(
+        request=_request_with_cookies({}),
+        scope="floor",
+        session=object(),
+    )
+    body = json.loads(response.body)
+
+    assert response.status_code == 401
+    assert body["ok"] is False
     assert body["code"] == "auth_refresh_rejected"
     assert body["reason"] == "refresh_cookie_missing"

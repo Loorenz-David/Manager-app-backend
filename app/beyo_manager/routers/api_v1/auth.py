@@ -56,23 +56,24 @@ async def sign_in_route(
     if not outcome.success:
         return build_err(outcome.error)
     data = dict(outcome.data)
-    refresh_token_value = data.pop("_refresh_token")
+    refresh_token_value = data.pop("_refresh_token", None)
     json_response = build_ok(data)
-    json_response.set_cookie(
-        _scope_cookie(body.app_scope),
-        refresh_token_value,
-        httponly=True,
-        secure=settings.auth_refresh_cookie_secure,
-        samesite=settings.auth_refresh_cookie_samesite,
-        path=settings.auth_refresh_cookie_path,
-        domain=settings.auth_refresh_cookie_domain,
-        max_age=settings.auth_refresh_cookie_max_age_seconds,
-    )
-    json_response.delete_cookie(
-        _LEGACY_REFRESH_COOKIE,
-        path=settings.auth_refresh_cookie_path,
-        domain=settings.auth_refresh_cookie_domain,
-    )
+    if refresh_token_value is not None:
+        json_response.set_cookie(
+            _scope_cookie(body.app_scope),
+            refresh_token_value,
+            httponly=True,
+            secure=settings.auth_refresh_cookie_secure,
+            samesite=settings.auth_refresh_cookie_samesite,
+            path=settings.auth_refresh_cookie_path,
+            domain=settings.auth_refresh_cookie_domain,
+            max_age=settings.auth_refresh_cookie_max_age_seconds,
+        )
+        json_response.delete_cookie(
+            _LEGACY_REFRESH_COOKIE,
+            path=settings.auth_refresh_cookie_path,
+            domain=settings.auth_refresh_cookie_domain,
+        )
     return json_response
 
 

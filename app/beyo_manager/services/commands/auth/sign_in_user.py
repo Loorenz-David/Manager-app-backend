@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -17,12 +18,15 @@ from beyo_manager.models.tables.workspaces.workspace_membership import Workspace
 from beyo_manager.services.context import ServiceContext
 
 
+logger = logging.getLogger(__name__)
+
 _DEFAULT_APP_SCOPE = "manager"
 _SCOPE_ALLOWED_ROLES: dict[str, set[str]] = {
     "manager": {RoleNameEnum.MANAGER.value, RoleNameEnum.ADMIN.value},
     "worker": {RoleNameEnum.WORKER.value, RoleNameEnum.MANAGER.value},
     "seller": {RoleNameEnum.SELLER.value},
     "admin": {RoleNameEnum.ADMIN.value},
+    "floor": {RoleNameEnum.ADMIN.value, RoleNameEnum.MANAGER.value},
 }
 
 
@@ -60,10 +64,34 @@ async def sign_in_user(ctx: ServiceContext) -> dict:
     allowed_roles = _SCOPE_ALLOWED_ROLES.get(app_scope)
     if allowed_roles is None or actual_role not in allowed_roles:
         raise PermissionDenied("Invalid credentials.")
-    return build_auth_response(user, workspace=workspace, membership=membership, app_scope=app_scope)
+    response = build_auth_response(
+        user,
+        workspace=workspace,
+        membership=membership,
+        app_scope=app_scope,
+    )
+    if app_scope == "floor":
+        logger.info(
+            "auth.floor_device_sign_in | user_id=%s workspace_id=%s",
+            user.client_id,
+            workspace.client_id,
+            extra={
+                "event_type": "auth.floor_device_sign_in",
+                "service": "auth",
+                "user_id": user.client_id,
+                "workspace_id": workspace.client_id,
+            },
+        )
+    return response
 
 
-def build_auth_response(user: User, *, workspace: Workspace, membership: WorkspaceMembership, app_scope: str) -> dict:
+def build_auth_response(
+    user: User,
+    *,
+    workspace: Workspace,
+    membership: WorkspaceMembership,
+    app_scope: str,
+) -> dict:
     workspace_role = membership.workspace_role
     permission_role = workspace_role.role
     permissions = resolve_permissions_for_role(permission_role)
@@ -86,22 +114,32 @@ def build_auth_response(user: User, *, workspace: Workspace, membership: Workspa
         "backend_permissions": permissions["backend"],
         "ui": permissions["ui"],
     }
+    access_claims = {**claims, "jti": str(uuid4())}
+    if app_scope != "floor":
+        access_claims["exp"] = now + timedelta(
+            minutes=settings.jwt_access_token_expire_minutes
+        )
     access_token = jwt.encode(
-        {**claims, "jti": str(uuid4()), "exp": now + timedelta(minutes=settings.jwt_access_token_expire_minutes)},
+        access_claims,
         settings.jwt_secret_key,
         algorithm="HS256",
     )
-    refresh_token = jwt.encode(
-        {**claims, "jti": str(uuid4()), "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days)},
-        settings.jwt_secret_key,
-        algorithm="HS256",
-    )
-    return {
+    response = {
         "access_token": access_token,
-        "_refresh_token": refresh_token,
         "user": {
             **claims,
             "email": user.email,
         },
         "workspace_id": workspace.client_id,
     }
+    if app_scope != "floor":
+        response["_refresh_token"] = jwt.encode(
+            {
+                **claims,
+                "jti": str(uuid4()),
+                "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
+            },
+            settings.jwt_secret_key,
+            algorithm="HS256",
+        )
+    return response

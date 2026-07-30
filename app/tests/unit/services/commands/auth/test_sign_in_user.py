@@ -1,8 +1,11 @@
+import logging
 from types import SimpleNamespace
 
 import bcrypt
+import jwt
 import pytest
 
+from beyo_manager.config import settings
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.services.commands.auth.sign_in_user import sign_in_user
@@ -126,3 +129,87 @@ async def test_sign_in_user_preserves_custom_workspace_role_name() -> None:
 
     assert result["user"]["workspace_role_name"] == "wood_worker"
     assert result["user"]["workspace_specialization"] == "wood_worker"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("role_name", [RoleNameEnum.ADMIN, RoleNameEnum.MANAGER])
+async def test_sign_in_user_allows_floor_scope_for_device_roles(
+    role_name: RoleNameEnum,
+) -> None:
+    result = await sign_in_user(_ctx(role_name=role_name, app_scope="floor"))
+    claims = jwt.decode(
+        result["access_token"],
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+    )
+
+    assert set(result) == {"access_token", "user", "workspace_id"}
+    assert result["workspace_id"] == "ws_1"
+    assert result["user"]["user_id"] == "usr_1"
+    assert result["user"]["workspace_id"] == "ws_1"
+    assert result["user"]["role_name"] == role_name.value
+    assert result["user"]["app_scope"] == "floor"
+    assert claims["app_scope"] == "floor"
+    assert claims["jti"]
+    assert "exp" not in claims
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("role_name", [RoleNameEnum.WORKER, RoleNameEnum.SELLER])
+async def test_sign_in_user_rejects_floor_scope_for_non_device_roles_opaquely(
+    role_name: RoleNameEnum,
+) -> None:
+    with pytest.raises(PermissionDenied, match=r"^Invalid credentials\.$"):
+        await sign_in_user(_ctx(role_name=role_name, app_scope="floor"))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("app_scope", "role_name"),
+    [
+        ("manager", RoleNameEnum.MANAGER),
+        ("worker", RoleNameEnum.WORKER),
+        ("seller", RoleNameEnum.SELLER),
+        ("admin", RoleNameEnum.ADMIN),
+    ],
+)
+async def test_existing_scopes_keep_expiring_access_and_refresh_tokens(
+    app_scope: str,
+    role_name: RoleNameEnum,
+) -> None:
+    result = await sign_in_user(_ctx(role_name=role_name, app_scope=app_scope))
+
+    access_claims = jwt.decode(
+        result["access_token"],
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+    )
+    refresh_claims = jwt.decode(
+        result["_refresh_token"],
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+    )
+
+    assert access_claims["exp"]
+    assert refresh_claims["exp"]
+    assert access_claims["app_scope"] == app_scope
+    assert refresh_claims["app_scope"] == app_scope
+
+
+@pytest.mark.unit
+async def test_floor_sign_in_emits_structured_device_log(caplog) -> None:
+    with caplog.at_level(
+        logging.INFO,
+        logger="beyo_manager.services.commands.auth.sign_in_user",
+    ):
+        await sign_in_user(_ctx(role_name=RoleNameEnum.MANAGER, app_scope="floor"))
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("auth.floor_device_sign_in")
+    )
+    assert record.event_type == "auth.floor_device_sign_in"
+    assert record.service == "auth"
+    assert record.user_id == "usr_1"
+    assert record.workspace_id == "ws_1"
