@@ -15,7 +15,7 @@
 
 - Goal: A new `floor` app scope for the always-on shop-floor device: sign-in restricted to ADMIN + MANAGER, issuing a **non-expiring** access token that stays valid until explicitly revoked (logout / blocklist), with all existing scopes' behavior byte-identical.
 - Business/user intent: The shop-floor terminal must stay signed in indefinitely — no 30-minute expiry, no refresh dance — while remaining killable if a device is lost or retired.
-- Non-goals: Kiosk roster exposure / `clock_in_code` (Phase 6). Any change to existing scopes' token TTLs, refresh flow, or cookies. Device management UI/registry (a lost device is revoked via logout with its token, or by ops via the Redis blocklist — a device registry is a future feature).
+- Non-goals: Kiosk roster exposure / `clock_in_code` (Phase 6). Any change to existing scopes' token TTLs, refresh flow, or cookies. Device management UI/registry (a lost device is revoked via logout with its token, or by ops via the Redis blocklist — a device registry is a future feature). Phase 5 intentionally adds no route-level `floor` scope gates, so a floor token has its ADMIN/MANAGER API reach until Phase 6 introduces the first floor-gated surface.
 
 ## Scope
 
@@ -94,6 +94,21 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
 
 - Risk: a leaked floor token never dies on its own.
   Mitigation: accepted trade-off (D11) bounded by: ADMIN/MANAGER-only scope, opaque credential errors, sign-in rate limit, permanent-revocation logout, and ops-level Redis blocklist as last resort. The handoff instructs the frontend to store the token in secure device storage, never in URLs/logs.
+  Lost-device runbook: find the device's `auth.floor_device_sign_in` structured log by
+  workspace, user, and sign-in time; copy its `jti`; then execute
+  `SET <redis_key_prefix>:auth:blocklist:<jti> 1` with no `EX`/`PX` option and verify
+  `TTL <redis_key_prefix>:auth:blocklist:<jti>` returns `-1`.
+- Risk: JWT role and membership claims are static for the lifetime of a floor token.
+  Accepted limitation (operator decision): demoting the signing manager or deactivating their
+  membership does not invalidate an already-issued floor token. Floor devices are
+  business-owned hardware; offboarding must explicitly revoke every device token associated
+  with that account via logout or the lost-device runbook above. A per-request database role
+  re-check is intentionally out of scope.
+- Risk: pre-fix refresh cookies have no `token_type` claim.
+  Mitigation: newly issued access/refresh tokens are type-discriminated, while exp-bearing
+  type-less refresh tokens remain temporarily accepted for compatibility. Remove the legacy
+  type-less branch after `jwt_refresh_token_expire_days` has elapsed from deployment of the
+  fix-cycle commit; by then every legitimate outstanding legacy refresh cookie has expired.
 - Risk: permanent blocklist entries accumulate forever.
   Mitigation: negligible volume (one per retired device session); documented in the implemented summary.
 - Risk: some middleware assumes `exp` exists in claims.
@@ -120,10 +135,11 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
   - Decoded floor-token evidence:
     `response_keys=['access_token', 'user', 'workspace_id']`,
     `has_exp=False`, `has_jti=True`, `app_scope='floor'`.
-  - Permanent-revocation evidence:
-    `test_blocklist_token_without_exp_has_no_ttl PASSED` with explicit
-    `assert await redis.ttl(key) == -1`; the logout/reuse test clears the claims cache and
-    confirms the same token is then rejected with `401`.
+  - Permanent-revocation unit evidence:
+    `test_blocklist_token_without_exp_has_no_ttl PASSED` used `_FakeRedis` and therefore pinned
+    the no-`ex` call shape rather than proving server TTL semantics. The logout/reuse test clears
+    the claims cache and confirms the same token is then rejected with `401`; real-Redis TTL
+    coverage is added in the N5 fix cycle below.
   - Floor/auth regression focus:
     `32 passed, 1 deselected` (the deselection is the recorded pre-existing custom-workspace-role
     fixture failure). This covers manager/admin success, worker/seller opaque rejection, no
@@ -208,6 +224,49 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
     Risks section's "bounded by ADMIN/MANAGER-only scope" is literally true but reads weaker than it
     is: this is exactly a manager session that never expires. Phase 6 will need
     `require_app_scope("floor")` for the D13 `clock_in_code` exposure.
+
+- `2026-07-30T08:52:57Z` — Codex fix cycle 1 complete for review findings N1–N7;
+  independent re-review pending.
+  - **N1 fixed and pinned:** added the reviewer's blocklisted-floor-token refresh probe first.
+    It failed before production edits with `Failed: DID NOT RAISE RefreshTokenRejected`, then
+    passed after the fix. `refresh_token()` now hard-rejects `scope=floor`, rejects exp-less
+    credentials, rejects typed access tokens, requires a `jti`, checks the Redis blocklist before
+    minting, and fails closed when the blocklist is unavailable. Newly issued refresh tokens carry
+    `token_type=refresh`; newly issued and refreshed access tokens carry `token_type=access`.
+    Exp-bearing type-less legacy refresh cookies remain accepted only for the documented
+    transition window. Tests additionally pin valid-token floor rejection, revoked non-floor
+    refresh rejection, regular access-token confusion rejection, exp-less non-floor rejection,
+    legacy type-less compatibility, refreshed access typing, and blocklist failure closure.
+  - **N2 fixed and pinned:** Socket.IO connect auth now checks the shared token blocklist after JWT
+    decode and rejects both revoked tokens and blocklist infrastructure failures before
+    `manager.connect`. Tests use an exp-less floor access token and assert revoked/fail-closed
+    rejection.
+  - **N3 fixed and pinned:** floor sign-in and logout structured logs now carry the access-token
+    `jti`; both tests assert the logged value. The Risks section now contains the lost-device
+    Redis revocation runbook (`SET ...` without TTL, then verify `TTL == -1`).
+  - **N4 accepted/documented:** Risks now state that role/membership claims remain static and that
+    manager offboarding must explicitly revoke all associated business-owned floor-device tokens.
+    No live database role re-check was added.
+  - **N5 fixed:** corrected the original Review-log evidence to identify `_FakeRedis` accurately
+    and added `test_floor_logout_blocklist_has_no_ttl_in_real_redis`, which seeds a real Redis key
+    with `EX`, calls production logout, then asserts the value is overwritten and server
+    `TTL == -1`. Execution of this new integration test was blocked in this session because the
+    environment rejected local-service escalation after its usage quota was exhausted; no
+    workaround was attempted. The round-1 reviewer had independently confirmed the same real
+    Redis `SET`/`TTL == -1` semantics.
+  - **N6 fixed and pinned:** `sign_in_route` now branches explicitly. Floor performs no refresh
+    pop/cookie operation; every non-floor scope again uses
+    `data.pop("_refresh_token")`. A test asserts missing non-floor refresh data raises `KeyError`.
+  - **N7 documented:** Non-goals now state that Phase 5 intentionally adds no route-level floor
+    gates and that Phase 6 introduces the first floor-gated surface.
+  - Focused auth/socket unit regression:
+    `44 passed, 1 deselected`; the deselection is the unchanged pre-existing
+    custom-workspace-specialization fixture failure. Broader unit auth/token/socket selector:
+    `57 passed, 1` identical known failure, `894 deselected`.
+  - Touched-file `ruff check`: `All checks passed!`; `git diff --check`: clean.
+  - The planned DB/Redis integration and full-suite baseline commands could not be re-run because
+    the environment rejected the required local-service escalation after its usage quota was
+    exhausted. These remain explicit re-review gates; no green result is claimed for them here.
 
 ## Lifecycle transition
 

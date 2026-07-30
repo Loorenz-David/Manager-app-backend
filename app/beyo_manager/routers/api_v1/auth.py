@@ -56,9 +56,11 @@ async def sign_in_route(
     if not outcome.success:
         return build_err(outcome.error)
     data = dict(outcome.data)
-    refresh_token_value = data.pop("_refresh_token", None)
-    json_response = build_ok(data)
-    if refresh_token_value is not None:
+    if body.app_scope == "floor":
+        json_response = build_ok(data)
+    else:
+        refresh_token_value = data.pop("_refresh_token")
+        json_response = build_ok(data)
         json_response.set_cookie(
             _scope_cookie(body.app_scope),
             refresh_token_value,

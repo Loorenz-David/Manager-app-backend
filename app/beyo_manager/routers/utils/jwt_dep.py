@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from beyo_manager.config import settings
+from beyo_manager.services.infra.auth import is_token_blocklisted
 
 _bearer = HTTPBearer()
 
@@ -61,8 +62,6 @@ def require_app_scope(required_scope: str | list[str]):
 
 async def _is_blocklisted(jti: str) -> bool:
     try:
-        from beyo_manager.services.infra.redis.async_client import get_async_redis
-        redis = get_async_redis()
-        return await redis.exists(f"{settings.redis_key_prefix}:auth:blocklist:{jti}") == 1
+        return await is_token_blocklisted(jti)
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Auth blocklist unavailable.") from exc

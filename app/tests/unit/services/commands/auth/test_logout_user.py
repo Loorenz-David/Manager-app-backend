@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -137,3 +138,35 @@ async def test_refresh_token_logout_ttl_remains_expiring(
         await fake_redis.ttl(f"{prefix}:auth:blocklist:refresh-jti")
         == expected_refresh_ttl
     )
+
+
+@pytest.mark.unit
+async def test_floor_logout_log_contains_revoked_jti(
+    fake_redis: _FakeRedis,
+    caplog,
+) -> None:
+    ctx = ServiceContext(
+        identity={
+            "user_id": "usr_floor",
+            "workspace_id": "ws_floor",
+            "app_scope": "floor",
+            "jti": "retired-device-jti",
+        },
+        incoming_data={"refresh_token": None},
+        session=None,  # type: ignore[arg-type]
+    )
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="beyo_manager.services.commands.auth.logout_user",
+    ):
+        await logout_module.logout_user(ctx)
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("auth.floor_device_logout")
+    )
+    assert record.user_id == "usr_floor"
+    assert record.workspace_id == "ws_floor"
+    assert record.jti == "retired-device-jti"

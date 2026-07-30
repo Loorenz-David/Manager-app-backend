@@ -71,15 +71,23 @@ async def sign_in_user(ctx: ServiceContext) -> dict:
         app_scope=app_scope,
     )
     if app_scope == "floor":
+        access_claims = jwt.decode(
+            response["access_token"],
+            settings.jwt_secret_key,
+            algorithms=["HS256"],
+        )
+        jti = access_claims["jti"]
         logger.info(
-            "auth.floor_device_sign_in | user_id=%s workspace_id=%s",
+            "auth.floor_device_sign_in | user_id=%s workspace_id=%s jti=%s",
             user.client_id,
             workspace.client_id,
+            jti,
             extra={
                 "event_type": "auth.floor_device_sign_in",
                 "service": "auth",
                 "user_id": user.client_id,
                 "workspace_id": workspace.client_id,
+                "jti": jti,
             },
         )
     return response
@@ -114,7 +122,11 @@ def build_auth_response(
         "backend_permissions": permissions["backend"],
         "ui": permissions["ui"],
     }
-    access_claims = {**claims, "jti": str(uuid4())}
+    access_claims = {
+        **claims,
+        "jti": str(uuid4()),
+        "token_type": "access",
+    }
     if app_scope != "floor":
         access_claims["exp"] = now + timedelta(
             minutes=settings.jwt_access_token_expire_minutes
@@ -137,6 +149,7 @@ def build_auth_response(
             {
                 **claims,
                 "jti": str(uuid4()),
+                "token_type": "refresh",
                 "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
             },
             settings.jwt_secret_key,

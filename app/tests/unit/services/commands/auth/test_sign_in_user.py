@@ -151,6 +151,7 @@ async def test_sign_in_user_allows_floor_scope_for_device_roles(
     assert result["user"]["app_scope"] == "floor"
     assert claims["app_scope"] == "floor"
     assert claims["jti"]
+    assert claims["token_type"] == "access"
     assert "exp" not in claims
 
 
@@ -194,6 +195,8 @@ async def test_existing_scopes_keep_expiring_access_and_refresh_tokens(
     assert refresh_claims["exp"]
     assert access_claims["app_scope"] == app_scope
     assert refresh_claims["app_scope"] == app_scope
+    assert access_claims["token_type"] == "access"
+    assert refresh_claims["token_type"] == "refresh"
 
 
 @pytest.mark.unit
@@ -202,7 +205,14 @@ async def test_floor_sign_in_emits_structured_device_log(caplog) -> None:
         logging.INFO,
         logger="beyo_manager.services.commands.auth.sign_in_user",
     ):
-        await sign_in_user(_ctx(role_name=RoleNameEnum.MANAGER, app_scope="floor"))
+        result = await sign_in_user(
+            _ctx(role_name=RoleNameEnum.MANAGER, app_scope="floor")
+        )
+    claims = jwt.decode(
+        result["access_token"],
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+    )
 
     record = next(
         record
@@ -213,3 +223,4 @@ async def test_floor_sign_in_emits_structured_device_log(caplog) -> None:
     assert record.service == "auth"
     assert record.user_id == "usr_1"
     assert record.workspace_id == "ws_1"
+    assert record.jti == claims["jti"]

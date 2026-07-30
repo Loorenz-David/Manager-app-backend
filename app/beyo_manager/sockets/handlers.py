@@ -1,17 +1,20 @@
 import logging
+
 import jwt
 
 from beyo_manager.config import settings
-
-logger = logging.getLogger(__name__)
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.presence.enums import EntityType
 from beyo_manager.models.database import get_db_session
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
+from beyo_manager.services.infra.auth import is_token_blocklisted
 from beyo_manager.services.infra.presence import mark_left, mark_viewing
 from beyo_manager.services.infra.presence.user_online_key import delete_user_online, set_user_online
 from beyo_manager.sockets.connection_meta import ConnectionMeta
 from beyo_manager.sockets.manager import manager
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
@@ -22,6 +25,13 @@ async def _handle_connect(sid: str, environ: dict, auth: dict | None = None):
         claims = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
     except jwt.PyJWTError:
         return False
+    jti = claims.get("jti")
+    if jti:
+        try:
+            if await is_token_blocklisted(jti):
+                return False
+        except Exception:
+            return False
     user_id = claims.get("user_id", "")
     if not user_id:
         return False

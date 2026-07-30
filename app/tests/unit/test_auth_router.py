@@ -1,9 +1,12 @@
 import json
 from types import SimpleNamespace
 
+import jwt
 import pytest
 from starlette.requests import Request
 
+import beyo_manager.services.commands.auth.refresh_token as refresh_module
+from beyo_manager.config import settings
 from beyo_manager.errors.permissions import RefreshTokenRejected
 from beyo_manager.routers.api_v1 import auth as auth_router
 
@@ -88,6 +91,31 @@ async def test_floor_sign_in_route_sets_no_refresh_cookie(monkeypatch) -> None:
 
 
 @pytest.mark.unit
+async def test_non_floor_sign_in_route_fails_loudly_without_refresh_token(
+    monkeypatch,
+) -> None:
+    async def _fake_run_service(command, ctx):
+        return SimpleNamespace(
+            success=True,
+            data={"access_token": "access"},
+            error=None,
+        )
+
+    monkeypatch.setattr(auth_router, "run_service", _fake_run_service)
+
+    with pytest.raises(KeyError, match="_refresh_token"):
+        await auth_router.sign_in_route(
+            body=auth_router.SignInBody(
+                email="manager@test.local",
+                password="Test1234!",
+                app_scope="manager",
+            ),
+            session=object(),
+            _rate=None,
+        )
+
+
+@pytest.mark.unit
 async def test_logout_route_reads_scope_cookie_and_deletes_scope_and_legacy(monkeypatch) -> None:
     captured = {}
 
@@ -166,4 +194,44 @@ async def test_refresh_route_rejects_floor_scope_without_cookie_cleanly() -> Non
     assert response.status_code == 401
     assert body["ok"] is False
     assert body["code"] == "auth_refresh_rejected"
-    assert body["reason"] == "refresh_cookie_missing"
+    assert body["reason"] == "floor_scope_not_refreshable"
+
+
+@pytest.mark.unit
+async def test_refresh_route_rejects_blocklisted_floor_access_token_cookie(
+    monkeypatch,
+) -> None:
+    async def _is_blocklisted(jti: str) -> bool:
+        assert jti == "device-jti"
+        return True
+
+    monkeypatch.setattr(
+        refresh_module,
+        "is_token_blocklisted",
+        _is_blocklisted,
+    )
+    floor_access_token = jwt.encode(
+        {
+            "user_id": "usr_manager",
+            "workspace_id": "ws_test",
+            "app_scope": "floor",
+            "jti": "device-jti",
+            "token_type": "access",
+        },
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    response = await auth_router.refresh_route(
+        request=_request_with_cookies(
+            {"floor_refresh_token": floor_access_token}
+        ),
+        scope="floor",
+        session=object(),
+    )
+    body = json.loads(response.body)
+
+    assert response.status_code == 401
+    assert body["ok"] is False
+    assert body["reason"] == "floor_scope_not_refreshable"
+    assert "access_token" not in body

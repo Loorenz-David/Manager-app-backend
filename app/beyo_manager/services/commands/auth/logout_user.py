@@ -1,3 +1,4 @@
+import logging
 import time
 
 import jwt
@@ -6,8 +7,25 @@ from beyo_manager.config import settings
 from beyo_manager.services.context import ServiceContext
 
 
+logger = logging.getLogger(__name__)
+
+
 async def logout_user(ctx: ServiceContext) -> dict:
     await _blocklist_token(ctx.identity)
+    if ctx.identity.get("app_scope") == "floor":
+        logger.info(
+            "auth.floor_device_logout | user_id=%s workspace_id=%s jti=%s",
+            ctx.identity.get("user_id"),
+            ctx.identity.get("workspace_id"),
+            ctx.identity.get("jti"),
+            extra={
+                "event_type": "auth.floor_device_logout",
+                "service": "auth",
+                "user_id": ctx.identity.get("user_id"),
+                "workspace_id": ctx.identity.get("workspace_id"),
+                "jti": ctx.identity.get("jti"),
+            },
+        )
     raw_refresh = ctx.incoming_data.get("refresh_token")
     if raw_refresh:
         try:
