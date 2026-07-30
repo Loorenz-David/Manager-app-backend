@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase5_device_auth_20260729`
-- Status: `under_construction`
+- Status: `archived` (APPROVED at round 3, `12bbeb7`; summarized and archived)
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
 - Last updated at (UTC): `2026-07-30T09:45:00Z`
@@ -579,8 +579,85 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
 
   No archive/lifecycle flip performed; this stays `under_construction` pending reviewer approval.
 
+- `2026-07-30` — Round 3 re-review (test integrity only; N1–N7 treated as CLOSED at `b8946fe`
+  and not re-litigated). Verdict: **APPROVED**. All four verification targets confirmed by
+  executed probes on a quiet tree at `6ffe397`.
+
+  **(1) Blocklist seam patchable; production behavior unchanged.** The entire production delta of
+  `12bbeb7` is four token-level edits converting direct-symbol imports to module-attribute lookups
+  (`jwt_dep.py:9,65`; `infra/auth.py:2,6`), confirmed by `git diff --word-diff`. Function bodies,
+  call arguments, and exception paths are byte-identical; only name binding moved from import time
+  to call time. `services/infra/__init__.py` is empty, so no new import side effect or cycle is
+  introduced, and `infra/redis/__init__.py` already executed under the previous submodule import.
+  Note the seam choice is *better* than the fix the round-2 log proposed: patching
+  `async_client.get_async_redis` keeps the real `is_token_blocklisted` in the path, so the test
+  still exercises real key construction (`{prefix}:auth:blocklist:{jti}`), whereas stubbing
+  `jwt_dep.is_token_blocklisted` at its point of use would have removed that from coverage.
+
+  **(2) Revocation tests assert the REASON; mutation check reproduced independently.** Two
+  mutations were applied to `infra/auth.py:is_token_blocklisted` and reverted:
+  - forced `return False` → `test_floor_logout_permanently_revokes_subsequent_request` fails with
+    `Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>` (reproduces the
+    implementer's reported result exactly);
+  - forced `raise RuntimeError` → the same test fails with
+    `AssertionError: assert 'Auth blocklist unavailable.' == 'Token has been revoked.'`.
+
+  The second mutation is the decisive one: it is precisely the false positive that the old
+  status-only assertion admitted, and the new `detail` assertion now kills it. `"Token has been
+  revoked."` (`test_logout_user.py:102`) and `"Auth blocklist unavailable."` (`:128`) are
+  confirmed distinguishable. Working tree restored to pristine `HEAD` after each mutation.
+
+  **(3) N5 gate is deterministic.** `test_floor_logout_blocklist_has_no_ttl_in_real_redis`:
+  strictly alone → `1 passed`; module alone → `2 passed`; unit-logout module first (the
+  previously-failing order) → `8 passed`; socket suites first → `5 passed`. The
+  `fresh_async_redis_client` fixture was confirmed **load-bearing**, not incidentally green:
+  removing it from both test signatures reproduces
+  `RuntimeError: ... got Future <Future pending> attached to a different loop` and
+  `RuntimeError: Event loop is closed`. Restored after the probe. `redis_client` was verified to
+  be a genuine server (`PING True`, `redis://localhost:6379/0`, Redis 8.6.1), so R2-2's
+  real-Redis expiring-TTL claim holds.
+
+  **(4) No production defense logic changed vs `b8946fe`.** The only other production files in the
+  `b8946fe..12bbeb7` range (`domain/users/serializers.py`,
+  `services/commands/users/clock_out_worker_shift.py`) belong to phase 4's `ccdffa9`, confirmed via
+  `git log -- <paths>`; neither touches the auth surface.
+
+  **Suite reconciliation (node sets, not counts).** Codex's `321 failed / 986 passed` is confirmed
+  contamination and should be disregarded. Quiet-tree run at `6ffe397`: **27 failed / 1280 passed**
+  in 35.21s — matching the operator's measurement exactly. To isolate this commit's regression
+  impact the parent `6c33fc2` was run in a dedicated worktree: **27 failed / 1275 passed**, and a
+  sorted `diff` of the two failure-node lists is **empty — identical failure node sets**, +5 net
+  passing, zero new failures. The single auth-namespace failure
+  (`test_sign_in_user_preserves_custom_workspace_role_name`) is present in both sets and is the
+  known pre-existing specialization failure. `ruff check` on all four touched files: clean.
+  Restored-tree auth surface re-run: `45 passed`, that 1 known failure.
+
+  **New non-blocking finding:**
+
+  - **R3-1 — LOW (test integrity, pre-existing; not introduced by `12bbeb7`) — two floor-refresh
+    tests are tautological with respect to the blocklist.**
+    `tests/unit/test_auth_router.py:201` and
+    `tests/unit/services/commands/auth/test_refresh_token.py:110` are both named for blocklist
+    enforcement, but `refresh_token.py:18-21` rejects `app_scope == "floor"` with
+    `reason="floor_scope_not_refreshable"` *before* the blocklist read at `refresh_token.py:48`.
+    Proven with a call-recorder probe (not inference): the router test passes while asserting
+    `BLOCKLIST READER CALLS: []` — the stubbed reader is never invoked; the command-level twin
+    asserts only a bare `pytest.raises(RefreshTokenRejected)` with no `reason`, so any rejection
+    satisfies it. Both would pass identically if the blocklist branch were deleted.
+    **This is a naming/evidence-description defect, not a coverage hole, and not a security
+    issue:** for floor scope the real defense *is* the scope guard (separately pinned at
+    `test_refresh_token.py:147`), and the blocklist branch itself has sound discriminating coverage
+    on the non-floor path — `test_revoked_non_floor_refresh_token_is_rejected` asserts
+    `reason == "refresh_token_revoked"` (`:206`) and `test_refresh_fails_closed_when_blocklist_is_unavailable`
+    asserts `reason == "refresh_blocklist_unavailable"` (`:317`). Suggested follow-up: rename both
+    to reflect that they pin the scope guard, and add the `reason` assertion to the command-level
+    one. By contrast the N2 socket gate was probed the same way and is **sound** — a call recorder
+    confirmed `_calls == ["revoked-socket-jti"]`, so the reader is genuinely reached there.
+
+  All probe mutations were reverted; `git status` clean at `6ffe397` with no stray worktrees.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
+- Current state: `archived`
 - Next state: `approved`
 - Transition owner: `David`

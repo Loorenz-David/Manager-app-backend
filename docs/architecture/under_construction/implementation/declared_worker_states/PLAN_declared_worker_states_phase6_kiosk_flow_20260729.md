@@ -37,6 +37,13 @@
 - [x] Code format? — resolved: free string 4–16 chars (managers may use numeric PINs or short mnemonics); veto in review.
 - [x] Server-side identify endpoint vs client-side matching? — resolved (D13 rev 3): client-side against the polled roster; `clock_in_code` exposed in `GET /users` for floor-scope sessions only. Accepted trade-off recorded in the master plan rev-3 note.
 - [x] Should regular manager/worker sessions receive codes in `GET /users`? — resolved: no — floor scope only; other scopes' responses stay byte-identical.
+- [x] **Carried from the Phase 5 review (R3-1, trivial — include in this phase):** two floor-refresh
+  tests (`tests/unit/test_auth_router.py:201`, `tests/unit/services/commands/auth/test_refresh_token.py:110`)
+  have names implying blocklist coverage, but the floor-scope guard fires before the blocklist read
+  (proven: `BLOCKLIST READER CALLS: []` while passing). **Rename them to state what they actually
+  assert** (floor-scope rejection, not blocklist enforcement). Naming only — do not change assertions
+  or production code. Also relevant here because this phase introduces the first `require_app_scope`
+  usage (Phase 5 finding N7).
 
 ## Acceptance criteria
 

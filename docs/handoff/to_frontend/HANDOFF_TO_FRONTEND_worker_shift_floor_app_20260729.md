@@ -14,7 +14,7 @@
 >
 > | Backend phase | Endpoints | Live? |
 > |---|---|---|
-> | 5 | Floor sign-in / logout (§2) | ❌ not yet |
+> | 5 | Floor sign-in / logout (§2) | ✅ live (reviewed & approved) |
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ✅ live (reviewed & approved) |
 > | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
 > | 6 | Roster `clock_in_code` exposure, `clock_in_code` management (§3) | ❌ not yet |
