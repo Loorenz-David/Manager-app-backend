@@ -7,7 +7,7 @@ You are implementing a planned backend change in the ManagerBeyo backend (`backe
 1. Load and follow the skill `backend/skills/cross_cutting/plan_lifecycle_orchestrator/SKILL.md`. Process this work as: implement → validate → review-log entry → STOP for independent review. Summary/archive happen ONLY after the reviewer approves (see Definition of done).
 2. Read the master plan first: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md`. Decision D11 is the spine of this phase.
 3. Your implementation plan is: `backend/docs/architecture/under_construction/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md`. Read it fully before touching code.
-4. Prerequisite check: NONE — this phase is independent of Phases 1–4 and may run at any point. Confirm no other phase is mid-flight in the master table before starting.
+4. Prerequisite check: NONE — this phase is independent of Phases 1–4 and may run at any point, **including in parallel with another phase** (operator-sanctioned; file sets are disjoint). Parallel-run discipline: stage and edit ONLY auth-surface files and your own phase plan's Review log — never the master plan, the handoff, or any worker-shifts file.
 5. Clarification-first: ambiguity the plan does not resolve → STOP and ask. Do not invent requirements.
 6. Respect the plan's "File read intent". Two verify-first items are mandatory before coding: (a) PyJWT accepts tokens without `exp` (pin with a unit test), (b) how the logout blocklist TTL is currently derived.
 
