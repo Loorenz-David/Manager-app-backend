@@ -300,6 +300,85 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
   - Lifecycle deliberately returned to `implemented`. No summary, archive move, or master-plan
     phase-table change was made; those remain gated on independent re-review approval.
 
+- `2026-07-30T06:55:00Z` — Independent adversarial re-review (Opus, review prompt
+  `REVIEW_phase3_commands.md`, commits `4de8159` + `820e175`) verdict: **NEEDS_CHANGES** —
+  findings L1 (MINOR) and L2 (MINOR) only. No production edits made; the temporary probe test
+  file was deleted and its committed rows removed from the shared test DB (verified: probe user,
+  pause reason and declared rows all gone; `shift-worker-%` user count unchanged at 36 before and
+  after re-running the concurrency tests, proving their cleanup is complete).
+
+  **K1–K4 independently verified fixed.**
+  - K1: mutation test in a detached worktree at `820e175` with the retry removed from
+    `_clock_worker_shift.py:44-51` → `test_concurrent_declares_never_report_clocked_in_worker_as_clocked_out[0-4]`
+    and `test_concurrent_close_and_declare_retain_shift_then_declared_lock_order[0-4]` fail
+    **10/10**; with the retry restored they pass **10/10**. The tests are not vacuous and the
+    fix is the thing that makes them pass.
+  - K2/K3/K4: `test_close_declaration_leaves_auto_paused_step_open`,
+    `test_declare_overrides_live_projection_without_touching_open_step_pause` and
+    `test_declare_switch_preserves_reason_on_already_paused_step` exist and assert the pinned
+    behaviour (step stays `PAUSED` with its record open; `paused_steps: 0`; reason A preserved on
+    the already-paused step; live `IN_PAUSE` flips from declared-sourced to step-sourced with
+    `manually_recorded=False`). K4's operator decision is recorded in the plan Assumptions and in
+    handoff §6 line 264.
+
+  **L1 (MINOR) — K1's root cause survives at the second, un-retried call site.**
+  `services/commands/users/reconcile_worker_shift_state.py:79-89` re-implements the same
+  `SELECT … WHERE exited_at IS NULL FOR UPDATE` inline instead of calling
+  `load_open_worker_shift_for_update`, so the EvalPlanQual artifact is unfixed on the
+  analytics-worker path (`services/tasks/analytics/process_step_transition.py:81`).
+  Proved with a two-session probe (declare gated after acquiring the shift lock, standalone
+  `reconcile_worker_shift_state` in a second session): declare returned
+  `shift_state='in_pause'` while the concurrent reconcile returned
+  `ShiftReconcileOutcome(changed=False, state=None)` for the same clocked-in worker — the
+  "no open shift" no-op path. Impact is bounded: when open `WORKING` steps exist the reconcile
+  takes the auto-clock-in branch and self-heals through the existing `IntegrityError` retry; when
+  none exist it silently no-ops, so a live projection update (e.g. a step-blocker pause reason)
+  can be dropped until the next reconcile trigger — clock-out rebuild remains correct.
+  Violated clause: Risks §1 ("`FOR UPDATE` lock order shared with Phase 2 … the reconcile is
+  idempotent and converges"). Fix: route line 79-89 through `load_open_worker_shift_for_update`.
+  Related note: the helper retries exactly once, so sustained contention can still yield a false
+  `None`; a bounded loop (2–3 attempts) would close it.
+
+  **L2 (MINOR) — the master plan still asserts Phase 3 is archived and approved.**
+  `MASTER_PLAN_declared_worker_states_20260729.md:131-135` (added by `4de8159`) reads
+  "**Phase 3 completed and archived** after independent review APPROVED with no findings" and
+  cites `implemented_summaries/SUMMARY_declared_worker_states_phase3_commands_20260729.md`,
+  which does not exist. It directly contradicts the same file's phase table
+  (`:60`, `needs_changes`) and this plan's lifecycle block. Violated clause: master plan
+  "Per-phase workflow" step 4 — the K6 unwind was left incomplete. Fix: delete or rewrite that
+  progress note.
+
+  **Independently re-run gates.**
+  - `pytest tests/integration/services/commands/users/ -q` → `47 passed, 1 failed`; the single
+    failure is `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`
+    (`NotFound: System pause reason 'pause_ended_shift' is not configured`) — a shared-test-DB
+    seed gap: the workspace the fixtures pick (`ws_01a574c4`, first by `client_id`) has zero
+    `pause_reasons` rows.
+  - `pytest tests/unit/test_worker_shifts_router.py -q` → `12 passed`.
+  - `pytest tests -q` → `27 failed, 1214 passed`. **Baseline proof:** the identical suite run
+    from a detached worktree at `f81fb27` (pre-Phase-3) against the same database → `27 failed,
+    1192 passed` with a byte-identical FAILED list. Phase 3 therefore adds 22 passing tests and
+    **zero** new failures. (The recorded baseline's category list does not name `pause_reasons`
+    or `test_case_type_serializers`; those four failures are equally present pre-Phase-3 and are
+    environment/DB-state debt, not this phase's.)
+  - `ruff check` on all touched files → `All checks passed!`; repo-wide → `141` errors (below the
+    `149` baseline).
+  - `grep -rn "pause_worker_shift\|resume_worker_shift" app/beyo_manager/` → zero hits; the
+    router registers only `/clock`, `/declared-states`, `/declared-states/close`.
+  - No Alembic migration in either Phase 3 commit (D7 honoured).
+  - Response/request shapes re-checked field-for-field against handoff §6 (lines 237-276):
+    match, including `paused_steps`, `closed_declared_state_id` and the declared-state object.
+  - Re-confirmed: carve-out removed; F6 shift-window scoping present
+    (`reconcile_worker_shift_state.py:154-167`); auto-pause goes through `_apply_step_transition`
+    only; both commands lock the shift row before the declared row; target resolution via
+    `resolve_worker_shift_target` with no reimplementation; no auto-clock-in path from declare;
+    `models/tables/users/README.md` state-machine section rewritten incl. `IDLE`, declared
+    precedence and the `manually_recorded` redefinition; full-loop test
+    (`:384`) asserts both declared segments, their catalog reasons and `manually_recorded`.
+  - Not yet verifiable: the deploy note for deploy-time manual-pause workers lives in the
+    implemented summary, which is correctly still unwritten (lifecycle gated). It must be present
+    when the summary is authored.
+
 ## Lifecycle transition
 
 - Current state: `implemented` — fix cycle complete; independent re-review pending.

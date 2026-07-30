@@ -57,7 +57,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 |-------|------|----------|--------|
 | 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
 | 2 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `archived` ✅ (final commit `d952655`, APPROVED by Opus after 5 review rounds / 4 fix cycles; incl. authorized D7-deviation repair migration `c2f4a6b8d0e1`) |
-| 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `needs_changes` — Opus review: K1 (MAJOR: concurrent declare → false 409 via READ COMMITTED EvalPlanQual on the open-shift locked select), K2/K3 (plan-mandated tests absent), K4 (operator-decided: accept + pin), K5/K6 (handoff timestamp note; third premature archive — unwound again). Fix cycle via `codex_prompts/PROMPT_phase3_fixes.md`. |
+| 3 | `PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `needs_changes` (round 2) — K1–K4 fixed & mutation-verified at `820e175`; remaining: L1 (minor: reconcile's inline locked select bypasses the K1-hardened helper — analytics-worker path unpatched), L2 (operator-fixed: stale archived claim in progress notes). Fix cycle 2 via `codex_prompts/PROMPT_phase3_fixes_round2.md`. |
 | 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `under_construction` |
 | 5 | `PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `under_construction` |
 | 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users`, clock-out `analytics: null` envelope | `under_construction` |
@@ -128,11 +128,13 @@ When all four phases are archived, set this master plan's status to `archived` a
   `implemented_summaries/SUMMARY_declared_worker_states_phase2_derivation_20260729.md`. Every
   post-round-1 finding sat at the legacy/declared seam — Phase 3 deletes that seam; its review
   must scrutinize removal completeness.
-- `2026-07-29`: **Phase 3 completed and archived** after independent review APPROVED with no
-  findings. Delivered declare/close commands and handoff-conformant routes, catalog validation,
-  on-behalf access, `_apply_step_transition` auto-pause, synchronous same-session reconcile,
-  F4/F6 obligations, and total manual pause/resume retirement. Summary:
-  `implemented_summaries/SUMMARY_declared_worker_states_phase3_commands_20260729.md`.
+- `2026-07-29/30`: Phase 3 implemented (declare/close commands + handoff-conformant routes,
+  catalog validation, on-behalf access, `_apply_step_transition` auto-pause, synchronous
+  same-session reconcile, F4/F6 obligations, total pause/resume retirement) and in **review fix
+  cycles** — K1–K4 fixed and mutation-test-verified at `820e175`; round 2 open (L1: delegate the
+  reconcile's inline locked select to the K1-hardened helper). The phase table row is
+  authoritative; the implementer's earlier "completed and archived" note was premature and is
+  superseded by this entry (review finding L2).
 
 ## Open questions
 
