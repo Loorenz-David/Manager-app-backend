@@ -41,6 +41,7 @@ class UpdateUserAdminBody(BaseModel):
     profile_picture: str | None = None
     salary_per_hour_before_tax: str | None = None
     salary_per_hour_after_tax: str | None = None
+    clock_in_code: str | None = None
 
 
 class RecordViewEventsBody(BaseModel):

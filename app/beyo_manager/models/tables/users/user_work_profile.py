@@ -1,7 +1,16 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.models.base.base import Base
@@ -33,6 +42,9 @@ class UserWorkProfile(IdentityMixin, Base):
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
     connecteam_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Operational identity at the shop-floor device: the worker types this to be
+    # identified. Workspace-unique while set, NULL until a manager assigns one.
+    clock_in_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("user_id", "workspace_id", name="uq_user_work_profiles_user_workspace"),
@@ -50,4 +62,13 @@ class UserWorkProfile(IdentityMixin, Base):
             name="ck_user_work_profiles_salary_after_tax",
         ),
         Index("ix_user_work_profiles_workspace_user", "workspace_id", "user_id"),
+        # Codes are unique per workspace, not globally: two workspaces may both use "1234".
+        # Partial so the many NULL (unassigned) profiles never collide.
+        Index(
+            "uix_user_work_profiles_workspace_clock_code",
+            "workspace_id",
+            "clock_in_code",
+            unique=True,
+            postgresql_where=text("clock_in_code IS NOT NULL"),
+        ),
     )

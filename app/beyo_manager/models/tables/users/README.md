@@ -29,6 +29,7 @@ Forbidden on `users`:
 
 - **One row per `(user_id, workspace_id)`.** UNIQUE constraint enforced. If a user leaves and is rehired, update the existing row — do not insert a second row.
 - **Snapshot before mutating.** When salary changes, the command must snapshot the previous values before overwriting. Historical compensation truth must not be derived from the current mutable row.
+- **`clock_in_code` is exempt from the snapshot rule.** It is operational identity (what the worker types at the shop-floor device to be identified), not compensation history — there is nothing to reconstruct after a change, so it is overwritten in place. `String(16)`, nullable until a manager assigns one, validated as 4–16 characters after trimming, and unique per workspace via the partial unique index `uix_user_work_profiles_workspace_clock_code` (`WHERE clock_in_code IS NOT NULL`). Two workspaces may hold the same code. The code **identifies, it does not authenticate** — every action endpoint authorizes off the caller's token, never off a matched code.
 - **`created_by_id` is never null** for normal operations. All compensation creation must be actor-attributed.
 - **`updated_by_id` is required** on every update command (nullable only at creation time).
 - **Currency is workspace-scoped**, not stored on this table. The workspace determines the currency for compensation values stored here.

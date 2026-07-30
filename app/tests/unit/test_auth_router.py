@@ -198,9 +198,15 @@ async def test_refresh_route_rejects_floor_scope_without_cookie_cleanly() -> Non
 
 
 @pytest.mark.unit
-async def test_refresh_route_rejects_blocklisted_floor_access_token_cookie(
+async def test_refresh_route_rejects_floor_scope_cookie_before_reading_the_blocklist(
     monkeypatch,
 ) -> None:
+    """Named for what it proves: the floor-scope guard rejects first.
+
+    The blocklist stub below never gets called — `floor_scope_not_refreshable` is
+    returned before any revocation lookup (phase 5 review finding R3-1). Renamed in
+    phase 6; assertions unchanged.
+    """
     async def _is_blocklisted(jti: str) -> bool:
         assert jti == "device-jti"
         return True

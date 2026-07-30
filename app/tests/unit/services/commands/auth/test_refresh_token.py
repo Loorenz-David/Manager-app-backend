@@ -107,9 +107,16 @@ async def test_refresh_token_rejected_when_scope_mismatches_claim() -> None:
 
 
 @pytest.mark.unit
-async def test_blocklisted_floor_access_token_cannot_bypass_revocation_via_refresh(
+async def test_floor_scope_guard_rejects_floor_access_token_before_reading_the_blocklist(
     monkeypatch,
 ) -> None:
+    """Named for what it proves: the floor-scope guard rejects first.
+
+    The blocklist stub below never gets called — the scope guard raises before any
+    revocation lookup (phase 5 review finding R3-1). Renamed in phase 6; assertions
+    unchanged. Actual revocation enforcement is covered by the integration probes in
+    `tests/integration/services/commands/auth/`.
+    """
     async def _is_blocklisted(jti: str) -> bool:
         assert jti == "device-jti"
         return True

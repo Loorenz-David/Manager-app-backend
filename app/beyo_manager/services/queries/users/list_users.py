@@ -1,10 +1,13 @@
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, false, func, or_, select
 
-from beyo_manager.domain.users.serializers import serialize_user_list_item, serialize_user_working_section_member, serialize_user_compact_with_role
+from beyo_manager.domain.roles.enums import RoleNameEnum
+from beyo_manager.domain.users.serializers import serialize_user_list_item, serialize_user_compact_with_role
 from beyo_manager.domain.working_sections.serializers import serialize_working_section_compact
+from beyo_manager.domain.workspaces.enums import WorkspaceSpecializationEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.working_sections.working_section_membership import WorkingSectionMembership
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
@@ -14,11 +17,45 @@ from beyo_manager.services.queries.utils.string_filter import apply_string_filte
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 
+# The shop-floor device's app scope (see services/commands/auth/sign_in_user.py).
+# Only this scope receives worker identification fields — every other scope's
+# response must stay byte-identical (D13).
+_FLOOR_APP_SCOPE = "floor"
+
+_ROLE_NAME_VALUES = {role.value for role in RoleNameEnum}
+_SPECIALIZATION_VALUES = {spec.value for spec in WorkspaceSpecializationEnum}
+
 _ALLOWED_STRING_COLUMNS = {
     "username": User.username,
     "email": User.email,
     "phone_number": User.phone_number,
 }
+
+
+async def _load_clock_in_codes(ctx: ServiceContext, user_ids: list[str]) -> dict[str, str | None]:
+    """One batched query for the whole page — never one per user."""
+    result = await ctx.session.execute(
+        select(UserWorkProfile.user_id, UserWorkProfile.clock_in_code).where(
+            UserWorkProfile.workspace_id == ctx.workspace_id,
+            UserWorkProfile.user_id.in_(user_ids),
+        )
+    )
+    return {row.user_id: row.clock_in_code for row in result.all()}
+
+
+def _add_identification_fields(
+    items: list[dict],
+    users: list[User],
+    clock_in_codes: dict[str, str | None],
+) -> None:
+    """Additive, floor-scope-only: the code the worker types, plus the email fallback.
+
+    Applied to already-serialized items so the shared serializers — and therefore
+    every other endpoint using them — are untouched.
+    """
+    for item, user in zip(items, users, strict=True):
+        item["clock_in_code"] = clock_in_codes.get(user.client_id)
+        item["email"] = user.email
 
 
 async def list_users(ctx: ServiceContext) -> dict:
@@ -29,6 +66,7 @@ async def list_users(ctx: ServiceContext) -> dict:
     role_filter = ctx.query_params.get("role")
     sections_filter = ctx.query_params.get("working_sections")
     compact = ctx.query_params.get("compact", "false").lower() == "true"
+    is_floor_session = ctx.identity.get("app_scope") == _FLOOR_APP_SCOPE
 
     def _build_base_query(include_all_columns: bool = True):
         """Build the base query with all filters applied."""
@@ -65,12 +103,19 @@ async def list_users(ctx: ServiceContext) -> dict:
 
         if role_filter:
             role_names = [r.strip() for r in role_filter.split(",") if r.strip()]
-            q_stmt = q_stmt.where(
-                or_(
-                    Role.name.in_(role_names),
-                    WorkspaceRole.specialization.in_(role_names),
-                )
-            )
+            # `Role.name` and `WorkspaceRole.specialization` are two DISJOINT Postgres
+            # enums. Comparing either against a value that is not one of ITS OWN members
+            # is a hard DB error, so each leg is given only the names it can represent.
+            # Without this split every `?role=` value blows up on one leg or the other.
+            matched_roles = [n for n in role_names if n in _ROLE_NAME_VALUES]
+            matched_specializations = [n for n in role_names if n in _SPECIALIZATION_VALUES]
+            role_predicates = []
+            if matched_roles:
+                role_predicates.append(Role.name.in_(matched_roles))
+            if matched_specializations:
+                role_predicates.append(WorkspaceRole.specialization.in_(matched_specializations))
+            # An unrecognised role name matches nothing — it must not match everything.
+            q_stmt = q_stmt.where(or_(*role_predicates) if role_predicates else false())
 
         if sections_filter:
             section_names = [s.strip() for s in sections_filter.split(",") if s.strip()]
@@ -123,6 +168,13 @@ async def list_users(ctx: ServiceContext) -> dict:
             )
             for row in page
         ]
+        if is_floor_session:
+            page_users = [row.User for row in page]
+            _add_identification_fields(
+                users_data,
+                page_users,
+                await _load_clock_in_codes(ctx, [u.client_id for u in page_users]),
+            )
         return {
             "users": users_data,
             "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset, "total": total},
@@ -173,17 +225,26 @@ async def list_users(ctx: ServiceContext) -> dict:
             )
         )
 
+    users_data = [
+        serialize_user_list_item(
+            row.User,
+            row.role_client_id,
+            row.role_name,
+            row.workspace_role_client_id,
+            row.workspace_role_name or row.role_name,
+            sections_by_user[row.User.client_id],
+        )
+        for row in page
+    ]
+    if is_floor_session:
+        # `email` is already in this shape; the helper rewrites it to the same value.
+        _add_identification_fields(
+            users_data,
+            [row.User for row in page],
+            await _load_clock_in_codes(ctx, user_ids),
+        )
+
     return {
-        "users": [
-            serialize_user_list_item(
-                row.User,
-                row.role_client_id,
-                row.role_name,
-                row.workspace_role_client_id,
-                row.workspace_role_name or row.role_name,
-                sections_by_user[row.User.client_id],
-            )
-            for row in page
-        ],
+        "users": users_data,
         "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset, "total": total},
     }
