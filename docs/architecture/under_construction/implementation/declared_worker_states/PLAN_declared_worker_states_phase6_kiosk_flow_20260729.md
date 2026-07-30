@@ -45,6 +45,27 @@
   or production code. Also relevant here because this phase introduces the first `require_app_scope`
   usage (Phase 5 finding N7).
 
+## Operator rulings on the implementer's escalations (2026-07-30 — binding for the reviewer)
+
+- **`?role=` repair stays in-phase. ACCEPTED, not scope creep.** `GET /users?role=…` was a guaranteed
+  500 before this phase (`Role.name` and `WorkspaceRole.specialization` are disjoint Postgres enums
+  and every value was compared against both). Acceptance 3 and 6 and the handoff §3 roster call all
+  require `?role=worker` to work, so stopping at the 500 would have delivered nothing usable.
+  Disclosed behavior change: for **every** scope, `?role=` calls go from 500 → a working filter. No
+  client can have depended on a 500, and an unrecognised role now matches nothing (`false()`) rather
+  than everything — reviewer should verify that specific semantic, plus that no *serialized item
+  shape* changed for non-floor scopes.
+- **Q1 — no read-back surface for an assigned code. DEFERRED, deliberately.** Do not add
+  `clock_in_code` to `GET /users/{id}` or `serialize_user_work_profile` in this phase. Recovery for a
+  forgotten code is reassignment, which is adequate and keeps the code's exposure surface as narrow
+  as D13 intends. Additive later if the frontend needs it, handoff first. Recorded in handoff §3.
+- **`clock_in_code: ""` → 422 while `null` clears. ACCEPTED as shipped.** An empty string is almost
+  always a UI bug; failing loudly is correct, and `null` is the explicit clear.
+- **Handoff §3 example omitting `workspace_role`** — operator fixed the doc (subset note added); not
+  an implementation deviation.
+- **Broken shared `count_queries` fixture** (unused; local listener used instead) — repo-health, out
+  of scope. Record it in the master plan's baseline list if it isn't there.
+
 ## Acceptance criteria
 
 1. Migration: column + partial unique index apply/downgrade cleanly; duplicate code in one workspace → `IntegrityError` at DB level; same code across workspaces OK.

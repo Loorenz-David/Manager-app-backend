@@ -97,7 +97,8 @@ identification fields:
 }
 ```
 
-- `clock_in_code` is `null` until a manager assigns one (4–16 chars, unique per workspace). Email matching always works as the fallback.
+- The example above is a **subset** — roster items carry other pre-existing keys (e.g. `workspace_role`). Ignore unknown keys; only the ones documented here are contractual.
+- `clock_in_code` is `null` until a manager assigns one (4–16 chars, unique per workspace). Email matching always works as the fallback. There is **no read-back surface**: a manager who forgets a worker's code reassigns a new one (deliberate — see the phase 6 summary).
 - Regular manager/worker app sessions do **not** receive `clock_in_code`/`email` here — the fields exist only under a floor token.
 - Suggested TanStack setup: `refetchInterval` of 1–5 min + refetch on window focus; the roster changes rarely.
 - Matching rules: trim input; match code exactly; match email case-insensitively.

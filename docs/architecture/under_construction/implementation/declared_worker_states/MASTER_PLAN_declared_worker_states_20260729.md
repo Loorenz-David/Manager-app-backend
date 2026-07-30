@@ -60,7 +60,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | 3 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `archived` ✅ (production final at `a39ae40`, APPROVED at round-4 confirmation `8b0fd78`; K1/L1 concurrency fixes mutation-verified) |
 | 4 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `archived` ✅ (APPROVED at `ccdffa9`, polish `be47f4d`; R4–R6/R8–R10 closed; helper relocated to `services/queries/users/` per `01_architecture.md:43`; quiet-tree suite 27 failed / 1280 passed = baseline) |
 | 5 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `archived` ✅ (APPROVED at round 3, `12bbeb7`; N1 CRITICAL revocation bypass closed with 4 defense layers + 19 mock-free probes; test-integrity round closed with reviewer-rerun mutation checks) |
-| 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` (analytics envelope moved to Phase 4, ruling 2026-07-30) | `under_construction` |
+| 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` (analytics envelope moved to Phase 4, ruling 2026-07-30) | `implemented` at `b0f35b1` — awaiting independent review. Includes an in-phase repair of the pre-existing `?role=` 500 (operator-accepted) and the Phase 5 R3-1 renames; operator rulings on the implementer's escalations are in the plan. |
 | 7 | `PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics` (day timeline + segments + insights via existing worker-stats machinery), final handoff validation | `under_construction` |
 
 Dependency note: Phase 5 touches only auth and has **no dependency on Phases 1–4** — it may be implemented at any point (including first, to unblock frontend auth integration). Phase 6 requires Phases 3, 4 **and** 5. Phase 7 requires Phases 2, 4 and 6 and closes the feature set. The frontend builds in parallel against `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`, which was written **ahead of implementation** and is the authoritative API contract for all phases — implementations must conform to it; any deviation must be resolved in the handoff first (operator decision), never silently.
@@ -87,6 +87,10 @@ The repository has pre-existing validation debt, verified against the pre-Phase-
   sort (existing DBs at head upgrade fine).
 - `client_id_prefix_map.md` records `ussr` for `UserShiftStateRecord` whose real prefix is `uss`
   (pre-existing typo, found by the Phase 1 reviewer).
+- The shared `count_queries` test fixture is broken and unused (found in Phase 6; a local SQLAlchemy
+  listener was used instead for the batching assertion).
+- `GET /users?role=` was a guaranteed 500 (disjoint-enum comparison) until Phase 6 repaired it — noted
+  because it means any pre-Phase-6 "role filter" evidence in older logs is void.
 - Note (Phase 1 reviewer): two of the baseline failures are in
   `test_worker_shift_commands` (clock-out) — **this feature's own domain**. Phase 2/3
   implementers and reviewers must treat exactly those two as baseline, and must not let any NEW
