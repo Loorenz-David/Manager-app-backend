@@ -1029,6 +1029,34 @@ async def test_direct_clock_out_rejects_worker_without_open_shift(db_session) ->
         await clock_out_worker_shift(ctx)
 
 
+async def test_direct_clock_out_ignores_supplied_clock_out_at(db_session) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    await clock_in_worker_shift(
+        _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+    )
+    requested_clock_out_at = "2000-01-01T00:00:00+00:00"
+
+    with freeze_time("2026-07-30T12:00:00+00:00"):
+        await clock_out_worker_shift(
+            _ctx(
+                db_session,
+                workspace,
+                worker,
+                RoleNameEnum.WORKER.value,
+                {"clock_out_at": requested_clock_out_at},
+            )
+        )
+
+    ended_shift = await db_session.scalar(
+        select(UserShiftStateRecord).where(
+            UserShiftStateRecord.workspace_id == workspace.client_id,
+            UserShiftStateRecord.user_id == worker.client_id,
+            UserShiftStateRecord.state == UserShiftStateEnum.ENDED_SHIFT,
+        )
+    )
+    assert ended_shift.entered_at == datetime(2026, 7, 30, 12, tzinfo=timezone.utc)
+
+
 async def test_manager_can_clock_worker_on_behalf_and_worker_cannot_clock_peer(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     manager = await _seed_user(db_session, "shift-manager")

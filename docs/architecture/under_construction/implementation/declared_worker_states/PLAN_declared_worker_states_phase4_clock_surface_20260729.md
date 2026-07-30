@@ -298,3 +298,42 @@ Prohibited pattern reads: other query services for skeleton → `07`; other rout
 - Current state: `under_construction`
 - Next state: `approved`
 - Transition owner: `David`
+
+## Fix-cycle review log
+
+- `2026-07-30T09:25:40Z` — Codex fix cycle for R4-R7 complete; back to independent review.
+
+  **Changes and pinning tests**
+  - **R4:** Removed `clock_out_at` from `ClockOutWorkerShiftRequest`; the command now always
+    supplies `datetime.now(timezone.utc)` to `clock_out_shift_for_user`. The midnight safeguard
+    continues to call that helper directly and was not changed. Command-layer
+    `test_direct_clock_out_ignores_supplied_clock_out_at` pins that a raw incoming
+    `clock_out_at` cannot backdate the `ENDED_SHIFT` marker.
+  - **R5:** The current-state serializer now emits `reason_text: null` when an unresolved paused
+    reason starts with `PauseReason.CLIENT_ID_PREFIX`; non-ID legacy text remains unchanged.
+    `test_current_state_serializes_legacy_free_text_reason` pins the legacy branch and
+    `test_current_state_does_not_expose_unresolvable_pause_reason_id` pins the catalog-ID branch.
+  - **R6:** `test_current_state_uses_clock_action_access_matrix` now proves a manager targeting a
+    non-member raises `NotFound`; router test
+    `test_current_route_preserves_non_member_not_found_status` pins the resulting `GET /current`
+    `404` envelope.
+
+  **Validation and evidence hygiene**
+  - Focused R4-R6 tests → `4 passed`; full router file → `28 passed`; standalone
+    `test_get_current_worker_shift_state.py` → `8 passed`; ruff on all five touched Python files
+    → `All checks passed!`.
+  - The combined current-state/pause-reasons command reached the known
+    `test_list_pause_reasons_returns_offset_pagination_and_workspace_scope` seed collision
+    (`uq_pause_reasons_slug` / `waiting_for_upholstery`). The broader integration-query run
+    failed across unrelated query families, including tests that pass standalone; the command
+    suite likewise failed broadly with environment `PermissionError` failures. The full suite
+    reported `979 passed, 313 failed, 11 errors`; it is not a usable new-failure signal in this
+    shared test environment. No production fix outside Phase 4 scope was attempted.
+  - Phase 5's concurrent auth work remains outside this fix cycle and was not modified or staged.
+    The full-suite failure list includes
+    `tests/unit/services/commands/auth/test_sign_in_user.py::test_sign_in_user_preserves_custom_workspace_role_name`,
+    which is auth-phase; the pause-reason seed collision and the other non-auth broad-run failures
+    are baseline/environment failures, not attributed to these Phase 4 changes.
+  - Locally executed `git diff --check` completed clean. This is a local observation only; the
+    previous reviewer reported that its sandbox could not run git, so no claim is made for that
+    environment.

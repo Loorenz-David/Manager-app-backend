@@ -7,6 +7,7 @@ from sqlalchemy import select
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
+from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.roles.role import Role
@@ -312,6 +313,25 @@ async def test_current_state_serializes_legacy_free_text_reason(db_session) -> N
 
 
 @pytest.mark.integration
+async def test_current_state_does_not_expose_unresolvable_pause_reason_id(db_session) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    await _seed_open_shift(
+        db_session,
+        workspace,
+        worker,
+        state=UserShiftStateEnum.IN_PAUSE,
+        reason=f"{PauseReason.CLIENT_ID_PREFIX}_missing",
+    )
+
+    result = await get_current_worker_shift_state(
+        _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+    )
+
+    assert result["pause_reason"] is None
+    assert result["reason_text"] is None
+
+
+@pytest.mark.integration
 async def test_current_state_uses_clock_action_access_matrix(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     _, peer = await _seed_workspace_worker(db_session, "current-peer")
@@ -341,5 +361,17 @@ async def test_current_state_uses_clock_action_access_matrix(db_session) -> None
                 worker,
                 RoleNameEnum.WORKER.value,
                 requested_user_id=peer.client_id,
+            )
+        )
+
+    non_member = await _seed_user(db_session, "current-non-member")
+    with pytest.raises(NotFound):
+        await get_current_worker_shift_state(
+            _ctx(
+                db_session,
+                workspace,
+                manager,
+                RoleNameEnum.MANAGER.value,
+                requested_user_id=non_member.client_id,
             )
         )

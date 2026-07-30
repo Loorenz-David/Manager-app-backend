@@ -169,5 +169,9 @@ def serialize_current_worker_shift_state(
         ),
     }
     if is_paused and current.reason is not None and pause_reason is None:
-        data["reason_text"] = current.reason
+        data["reason_text"] = (
+            None
+            if current.reason.startswith(f"{PauseReason.CLIENT_ID_PREFIX}_")
+            else current.reason
+        )
     return data

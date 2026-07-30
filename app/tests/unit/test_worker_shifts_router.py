@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from beyo_manager.errors.permissions import PermissionDenied
+from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.api_v1 import worker_shifts as worker_shifts_router
@@ -196,6 +197,22 @@ def test_current_route_allows_shift_roles_and_forwards_user_id(
     assert captured["calls"][0][0] is worker_shifts_router.get_current_worker_shift_state
     assert captured["calls"][0][1].query_params == {"user_id": user_id}
     assert response.json()["data"] == captured["response_data"]
+
+
+def test_current_route_preserves_non_member_not_found_status(monkeypatch) -> None:
+    client, captured = _build_client(role_name="manager", monkeypatch=monkeypatch)
+    captured["response_error"] = NotFound("Worker was not found in this workspace.")
+
+    response = client.get(
+        "/api/v1/worker-shifts/current",
+        params={"user_id": "usr_non_member"},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": "Worker was not found in this workspace.",
+        "ok": False,
+    }
 
 
 @pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
