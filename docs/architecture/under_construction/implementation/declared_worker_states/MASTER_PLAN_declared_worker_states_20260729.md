@@ -89,6 +89,17 @@ The repository has pre-existing validation debt, verified against the pre-Phase-
   (pre-existing typo, found by the Phase 1 reviewer).
 - The shared `count_queries` test fixture is broken and unused (found in Phase 6; a local SQLAlchemy
   listener was used instead for the batching assertion).
+- **`pause_reasons.slug` is globally unique, not workspace-scoped** — `CREATE UNIQUE INDEX
+  uq_pause_reasons_slug ON pause_reasons (slug)`. Measured on the dev/test DB 2026-07-30: **3132
+  workspaces, exactly 1 holding `pause_ended_shift`**, because seeding any second workspace violates
+  the index. **Operational impact (not just test noise):** `clock_out_shift_for_user` calls
+  `get_system_pause_reason_id(..., "pause_ended_shift")` whenever the worker has open WORKING steps,
+  so in any workspace lacking that row a clock-out with active work **fails with 404** — the most
+  common clock-out case. This is the root cause of the recurring
+  "System pause reason 'pause_ended_shift' is not configured" baseline failure. Pre-existing and
+  out of scope for this feature set, but it must be verified in the target database before the kiosk
+  goes live, and the index should become `(workspace_id, slug)` before a second workspace is
+  onboarded. Repo-health, tracked here so it is not lost.
 - `GET /users?role=` was a guaranteed 500 (disjoint-enum comparison) until Phase 6 repaired it — noted
   because it means any pre-Phase-6 "role filter" evidence in older logs is void.
 - Note (Phase 1 reviewer): two of the baseline failures are in
