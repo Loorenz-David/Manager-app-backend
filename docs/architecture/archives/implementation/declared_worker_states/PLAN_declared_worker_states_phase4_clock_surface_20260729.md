@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase4_clock_surface_20260729`
-- Status: `under_construction`
+- Status: `archived` (APPROVED at round 2, `ccdffa9`; polish `be47f4d`; summarized and archived)
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
 - Last updated at (UTC): `2026-07-29T12:00:00Z`
@@ -295,7 +295,7 @@ Prohibited pattern reads: other query services for skeleton → `07`; other rout
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
+- Current state: `archived`
 - Next state: `approved`
 - Transition owner: `David`
 

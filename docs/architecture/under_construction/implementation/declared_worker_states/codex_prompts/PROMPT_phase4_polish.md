@@ -1,4 +1,4 @@
-# Codex prompt — Phase 4 POST-APPROVAL POLISH (R8 + R10)
+# Opus prompt — Phase 4 POST-APPROVAL POLISH (R8 + R10)
 
 Phase 4 was **APPROVED** by the independent reviewer at round 2 (implementation `20b11c7`, fixes
 `ccdffa9`). R4–R6 are closed. This is a small polish pass for the two low findings the reviewer

@@ -58,7 +58,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | 1 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase1_model_20260729.md` | `UserDeclaredStateRecord` model + migration (inert — nothing reads/writes it yet) | `archived` ✅ (commit `a84610c`, reviewed APPROVED) |
 | 2 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase2_derivation_20260729.md` | State machine + live reconcile + clock-out reconstruction read the new table (still inert — table is empty) | `archived` ✅ (final commit `d952655`, APPROVED by Opus after 5 review rounds / 4 fix cycles; incl. authorized D7-deviation repair migration `c2f4a6b8d0e1`) |
 | 3 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `archived` ✅ (production final at `a39ae40`, APPROVED at round-4 confirmation `8b0fd78`; K1/L1 concurrency fixes mutation-verified) |
-| 4 | `PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | **`approved`** ✅ (round-2 APPROVED at `ccdffa9`; R4–R6 closed, blob-identity proof on the helper extraction, suite node-set == baseline). Polish pending before archive: R8 (relocate helper to `services/queries/users/` — NOT infra, per `01_architecture.md:43`) + R10 (WARNING log on the unresolvable-reason branch) via `codex_prompts/PROMPT_phase4_polish.md`; R9 done by operator. |
+| 4 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `archived` ✅ (APPROVED at `ccdffa9`, polish `be47f4d`; R4–R6/R8–R10 closed; helper relocated to `services/queries/users/` per `01_architecture.md:43`; quiet-tree suite 27 failed / 1280 passed = baseline) |
 | 5 | `PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `needs_changes` (round 2 — **test integrity only; no production change required**) — N1–N7 security findings VERIFIED CLOSED at `b8946fe` by mock-free probing (19 probes on N1 incl. cross-scope replay; all four layers isolated with controls; N2 fail-closed). Remaining: R2-1 (revocation test passes for the wrong reason — broken fake_redis seam + `status_code`-only assertion), R2-5 (N5 gate order-fragile, green by collection accident), R2-2/3/4/6 non-blocking. Fix cycle via `codex_prompts/PROMPT_phase5_fixes_round2.md`. |
 | 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` (analytics envelope moved to Phase 4, ruling 2026-07-30) | `under_construction` |
 | 7 | `PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics` (day timeline + segments + insights via existing worker-stats machinery), final handoff validation | `under_construction` |
@@ -142,6 +142,16 @@ When all four phases are archived, set this master plan's status to `archived` a
   §6 row flipped. Deploy note in the summary: mid-manual-pause workers reconcile to `IDLE` once
   at deploy (cosmetic; rebuild correct per D7). Summary:
   `implemented_summaries/SUMMARY_declared_worker_states_phase3_commands_20260729.md`.
+
+- `2026-07-30`: **Phase 4 completed and archived** (implementation `20b11c7`, fixes `ccdffa9`,
+  polish `be47f4d`). In-app clock surface complete: `/clock-in`, `/clock-out`, `GET /current`,
+  `analytics: null` envelope, legacy `/clock` retained. R5 turned out to close a real cross-tenant
+  identifier leak; R10 makes that condition operator-visible. Reviewer corrected an operator
+  suggestion: shared access helpers belong in `services/queries/users/`, never `services/infra/`
+  (`01_architecture.md:43`). Summary:
+  `implemented_summaries/SUMMARY_declared_worker_states_phase4_clock_surface_20260729.md`.
+- `2026-07-30`: Phase 5 round-2 (test integrity) fixes committed `12bbeb7` — awaiting re-review.
+  Security findings N1–N7 already verified closed at `b8946fe`.
 
 ## Open questions
 
