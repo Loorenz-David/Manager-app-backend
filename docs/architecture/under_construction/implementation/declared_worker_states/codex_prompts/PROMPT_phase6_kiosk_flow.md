@@ -16,7 +16,7 @@ You are implementing a planned backend change in the ManagerBeyo backend (`backe
 - NO identify endpoint — matching is client-side (D13 rev 3). The backend change is: `GET /users` items gain `clock_in_code` (+ `email` if not already present) **only when the session's `app_scope == "floor"`**. For every other scope the response must be BYTE-IDENTICAL to today (fields absent, not null) — existing list_users tests must pass unmodified.
 - Code fetch for the page is ONE batched query (no N+1).
 - `clock_in_code` uniqueness is per-workspace via partial unique index; friendly `409` at the command layer.
-- Clock-out `analytics: null` must appear on BOTH `/clock-out` and the `/clock` toggle's clock-out branch; all other response keys unchanged.
+- The clock-out `analytics: null` envelope was delivered by Phase 4 (operator ruling 2026-07-30) — regression only here: Phase 4's pinning tests must remain unmodified and green.
 - All shapes must match `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` field-for-field. Conflicts → STOP and ask.
 - Write the full-loop kiosk test FIRST (plan acceptance 6): floor sign-in → roster with codes → GET /current → clock-in → declare → clock-out.
 

@@ -230,7 +230,7 @@ provisional ones).
 ```json
 { "user_id": "usr_…" }
 ```
-→ `200` `data`: `{ "action": "clock_in" | "clock_out", "user_id": "…", "transitioned_steps": n }` (gains `"analytics": null` on the clock-out branch once phase 6 lands).
+→ `200` `data`: `{ "action": "clock_in" | "clock_out", "user_id": "…", "transitioned_steps": n }` (the clock-out branch carries `"analytics": null` from phase 4 — same envelope as `/clock-out`; the clock-in branch never has the key).
 
 ## 6. Declared states
 
@@ -281,18 +281,30 @@ Rules the UI must reflect:
 
 Roles: any authenticated session. Returns the workspace's manager-editable catalog. Filter to `personal` for the declare picker (`blocker` reasons are task-step blockers, not declarable).
 
-Item shape (`data` is a list):
+Response shape (**corrected 2026-07-30** — this endpoint predates this handoff and returns a
+paginated envelope, not a bare list):
 ```json
 {
-  "client_id": "par_…",
-  "name": "Lunch break",
-  "image_url": "https://…",
-  "pause_type": "personal",
-  "description": "…",
-  "requires_description": false
+  "ok": true,
+  "warnings": [],
+  "data": {
+    "pause_reasons": [
+      {
+        "client_id": "par_…",
+        "name": "Lunch break",
+        "image_url": "https://…",
+        "pause_type": "personal",
+        "description": "…",
+        "requires_description": false
+      }
+    ],
+    "pause_reasons_pagination": { "has_more": false, "limit": 50, "offset": 0 }
+  }
 }
 ```
-(Additional admin fields may be present; ignore unknown keys. The `pause_type` query param arrives with phase 4 — until then filter client-side.)
+(Additional admin fields may be present; ignore unknown keys. `pause_type` filtering is already
+live. For the kiosk picker, pass a large `limit` or follow `has_more` — workspace catalogs are
+small, one page normally suffices.)
 
 ## 8. Response envelope & error handling (all endpoints)
 

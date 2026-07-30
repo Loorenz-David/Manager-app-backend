@@ -107,7 +107,40 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
 
 ## Review log
 
-- (empty — filled by implementer and reviewer)
+- `2026-07-30T07:51:58Z` — Codex implementation complete; independent review pending.
+  - Implemented D11 in the auth-only file set: `floor` permits ADMIN/MANAGER, access tokens
+    retain `jti` but omit `exp`, no refresh token/cookie is issued, and logout writes exp-less
+    JTIs to the existing Redis blocklist key without a TTL. Existing scope branches retain their
+    access/refresh expiry calculations, cookie behavior, and expiring blocklist TTL formula.
+  - Added the structured `auth.floor_device_sign_in` log with `user_id` and `workspace_id`.
+  - Verify-first evidence: installed PyJWT `2.10.1` decoded an exp-less token successfully; the
+    pinned `get_jwt_claims` tests cover direct decode and a protected HTTP route. The pre-change
+    logout code derived TTL as `max(int(exp - time.time()) + 60, 1)` and skipped missing `exp`;
+    the existing formula remains unchanged for exp-bearing tokens.
+  - Decoded floor-token evidence:
+    `response_keys=['access_token', 'user', 'workspace_id']`,
+    `has_exp=False`, `has_jti=True`, `app_scope='floor'`.
+  - Permanent-revocation evidence:
+    `test_blocklist_token_without_exp_has_no_ttl PASSED` with explicit
+    `assert await redis.ttl(key) == -1`; the logout/reuse test clears the claims cache and
+    confirms the same token is then rejected with `401`.
+  - Floor/auth regression focus:
+    `32 passed, 1 deselected` (the deselection is the recorded pre-existing custom-workspace-role
+    fixture failure). This covers manager/admin success, worker/seller opaque rejection, no
+    refresh response field or `Set-Cookie`, protected-route use, permanent logout, floor refresh
+    rejection, structured logging, and all four existing scopes.
+  - Plan auth selector with local PostgreSQL:
+    `63 passed, 1 failed, 1199 deselected`; the sole failure is the same pre-existing
+    `test_sign_in_user_preserves_custom_workspace_role_name` string-fixture error present at
+    clean pre-implementation HEAD.
+  - Full suite current:
+    `1238 passed, 25 failed, 2 warnings`. Detached clean-worktree comparison at `cc6a1e9`:
+    `1221 passed, 25 failed, 2 warnings`, with the exact same 25 failing test names. The 17 added
+    Phase 5 tests all pass; zero new full-suite failures.
+  - Touched-file `ruff check`: `All checks passed!`. Repository `ruff check .`: `141` existing
+    errors; detached `cc6a1e9` comparison also reports the identical `141` errors.
+  - `git diff --check`: clean. Handoff §2 response and side-effect shape confirmed; no master,
+    handoff/liveness, summary, archive, user-command, or worker-shift-router file was edited.
 
 ## Lifecycle transition
 

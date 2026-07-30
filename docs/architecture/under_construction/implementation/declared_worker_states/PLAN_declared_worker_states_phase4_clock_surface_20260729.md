@@ -21,6 +21,7 @@
 
 - In scope:
   1. Routes `POST /clock-in` and `POST /clock-out` on `routers/api_v1/worker_shifts.py`, wiring the existing unwired commands `services/commands/users/clock_in_worker_shift.py` and `clock_out_worker_shift.py`. Same role matrix as `/clock` (`require_roles([ADMIN, MANAGER, WORKER])` + `resolve_worker_shift_target` semantics). `clock_out` route body accepts optional `user_id` only — **do not expose `clock_out_at`** over HTTP (it exists for the midnight safeguard; exposing backdated clock-out to clients is an audit hole).
+  1b. *(moved here from Phase 6, operator ruling 2026-07-30)* The clock-out response — on BOTH `POST /clock-out` and the `/clock` toggle's clock-out branch — carries the reserved `"analytics": null` key (D14 envelope; Phase 7 populates it). Clock-in responses never carry the key. All pre-existing response keys unchanged (additive-only).
   2. Query service `services/queries/users/get_current_worker_shift_state.py` + route `GET /current` (query param `user_id` optional; same access rule as clock: workers omit it → self; admin/manager must pass it).
   3. Reasons listing: verify `services/queries/pause_reasons/list_pause_reasons.py` + its route support filtering by `pause_type`; if not, add an optional `pause_type` query param (additive) so the declare picker can fetch PERSONAL reasons only.
   4. Handoff validation: `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` was written **ahead of implementation** (the frontend builds against it in parallel). This phase's deliverable is conformance: implement `GET /current` and the clock routes to match it field-for-field, and record in the handoff's status line that Phases 1–4's endpoints are now live. Any needed deviation → operator decision + handoff update first.
@@ -59,7 +60,8 @@
 ## Acceptance criteria
 
 1. `POST /clock-in`: worker self-clock-in works; double clock-in → `409`; manager with `user_id` works; manager without `user_id` → `403` (existing `resolve_worker_shift_target` semantics). `POST /clock-out`: symmetric; clock-out runs the full existing pipeline (reconstruction, step closure, `ENDED_SHIFT`) — asserted via the returned `transitioned_steps` and record state.
-2. `POST /clock` still works unchanged (regression).
+2. `POST /clock` keeps all existing behavior (regression) — with exactly one additive change: its clock-out branch (and `/clock-out`) now returns `"analytics": null`; clock-in responses carry no such key (tests pin both).
+2b. Pause-reasons listing: the handoff §7 shape was corrected (2026-07-30) to the endpoint's real paginated envelope — no backend change; conformance check only.
 3. `GET /current` matrix: worker self (clocked out / idle / working / step-paused / declared) each returns the documented shape; manager with `user_id` reads another worker; worker passing `user_id` of someone else → `403`; legacy free-text pause row serializes per spec without error.
 4. Reasons listing filterable by `pause_type=personal` (pre-existing or added); response contract otherwise unchanged.
 5. Implemented `GET /current` + clock routes match `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` field-for-field (conformance asserted by contract tests keyed to the handoff's documented shapes); the handoff's status line records Phases 1–4 as live.

@@ -23,7 +23,7 @@
   1. Migration + model: `clock_in_code` on `UserWorkProfile` — `String(16)`, nullable; partial unique index `uix_user_work_profiles_workspace_clock_code` on `(workspace_id, clock_in_code)` `WHERE clock_in_code IS NOT NULL`.
   2. Code management: extend the existing work-profile admin update path (**verify-first**: locate where `salary_per_hour_*` / work-profile fields are set — expected `services/commands/users/update_user_admin.py` and/or `register_user.py` — and follow that established path) to set/clear `clock_in_code`. Validation: trimmed, 4–16 chars, workspace-unique → friendly `409` on conflict. `updated_by_id` stamped per the users-README rule.
   3. Floor-scoped code exposure in the roster: `services/queries/users/list_users.py` — when `ctx.identity["app_scope"] == "floor"`, each returned user item (compact and full modes) gains two additive fields: `"clock_in_code": <str | null>` and `"email": <str>` (email enables the email-matching path at the device; **verify-first** whether `email` is already present in the serialized shapes — if so, only `clock_in_code` is added). Codes are fetched in **one** batched query over `UserWorkProfile` for the page's user ids (no N+1). For any other `app_scope`, the response is **byte-identical to today** — the fields must be absent, not `null`.
-  4. Clock-out `analytics` envelope: `clock_out_worker_shift` command response gains `"analytics": null` (D14). Shape reserved; no computation. Applies to `/clock-out` and `/clock` (toggle, clock-out branch).
+  4. *(moved to Phase 4, operator ruling 2026-07-30)* The clock-out `"analytics": null` envelope ships with Phase 4 (the phase that makes the routes live). This phase only keeps its regression tests green.
   5. Final handoff conformance: verify the full implemented surface against `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`; mark all phases live in its status line.
 - Out of scope: analytics computation; worker app changes; Connecteam anything (D8); any new lookup/identify endpoint.
 - Assumptions:
@@ -44,7 +44,7 @@
 2. Code management: admin sets/clears a worker's code through the established update path; duplicate in workspace → friendly `409`; `updated_by_id` stamped; length/trim validation enforced.
 3. Roster exposure matrix: floor-scope session calling `GET /users?role=worker&compact=true` → every item carries `clock_in_code` (value or `null`) and `email`; full (non-compact) mode likewise; `manager`/`worker`/`admin`/`seller`-scope sessions → fields **absent** and response byte-identical to pre-phase behavior (existing list_users tests unmodified and green).
 4. Code fetch is batched (one query for the page) — no per-user query; asserted via query-count or code inspection recorded in the Review log.
-5. Clock-out response (both `/clock-out` and `/clock` toggle) carries `"analytics": null`; existing response keys unchanged (additive-only).
+5. Regression only (envelope delivered by Phase 4, ruling 2026-07-30): both clock-out routes still carry `"analytics": null`; Phase 4's pinning tests unmodified and green.
 6. Full-loop kiosk test: floor sign-in (Phase 5) → `GET /users?role=worker&compact=true` returns the worker with their code → `GET /current` (not clocked in) → `/clock-in` on-behalf → `GET /current` (idle) → declare on-behalf → `GET /current` (declared) → `/clock-out` → response has `analytics: null` and correct `transitioned_steps`.
 7. Handoff conformance: every endpoint/shape in `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` matches the implementation; status line marks all phases live.
 8. Full suite green; `ruff check` clean.
@@ -91,7 +91,7 @@ Prohibited pattern reads: other queries/commands/routers for skeleton → `07`/`
 2. Verify-first: locate the work-profile write path; extend it with `clock_in_code` (validation + friendly `409`).
 3. Verify-first: is `email` already in the list_users serialized shapes? Then extend `list_users` with the floor-scope-conditional fields (`clock_in_code`, and `email` if missing), batched code fetch, both compact and full modes.
 4. Regression guard: assert non-floor responses byte-identical (existing tests unmodified).
-5. Clock-out `analytics: null` envelope in both commands' responses.
+5. (dropped — envelope delivered by Phase 4 per ruling 2026-07-30; keep its tests green.)
 6. Tests per acceptance 1–6 (the full-loop kiosk test is the flagship — write it first).
 7. Handoff conformance pass; update status line (acceptance 7).
 
