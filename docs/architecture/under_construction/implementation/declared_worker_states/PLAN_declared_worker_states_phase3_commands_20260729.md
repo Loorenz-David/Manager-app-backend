@@ -409,6 +409,85 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
   - L2 remains operator-fixed. No master-plan, handoff, summary, archive, or lifecycle-table
     change was made.
 
+- `2026-07-30T09:30:00Z` — Independent adversarial re-review round 3 (Opus, review prompt
+  `REVIEW_phase3_commands.md`, commits `4de8159` + `820e175` + `a39ae40`) verdict:
+  **NEEDS_CHANGES** — one finding, M1 (MINOR, operator-owned doc). No production edits made; the
+  mutation experiments ran in a detached `git worktree` at `a39ae40` which was removed afterwards
+  (`git status --porcelain` empty before and after).
+
+  **L1 independently verified fixed, and the fix is load-bearing.** Two separate mutations in a
+  detached worktree, both against `test_concurrent_declare_and_reconcile_never_lose_open_shift`:
+  - Mutation A (`_clock_worker_shift.py:54` retry → `return None`, i.e. pre-K1 helper): the test
+    fails **5/5**.
+  - Mutation B (helper retry left intact; only `reconcile_worker_shift_state.py:82-86` reverted to
+    the pre-L1 inline `SELECT … FOR UPDATE`): the test fails **5/5** with exactly the reported
+    `AssertionError: assert None is UserShiftStateEnum.IN_PAUSE`, while K1's ten concurrency
+    parametrizations still pass. The delegation — not merely the retry — is what fixes L1, and the
+    new test is not vacuous.
+  - No import cycle is introduced: `reconcile_worker_shift_state` → `_clock_worker_shift` →
+    `_reconstruct_shift_middle`, and nothing in that chain imports back into reconcile.
+
+  **L2 independently verified fixed.** `MASTER_PLAN…:131-137` now records Phase 3 as implemented
+  and in review fix cycles, explicitly supersedes the premature "completed and archived" note, and
+  agrees with the phase table (`:60`, `needs_changes`). Lifecycle artifacts are consistent: the
+  phase plan is still under `under_construction/`, `archives/implementation/declared_worker_states/`
+  holds only phases 1–2, and no phase-3 summary file exists. The only surviving reference to
+  `SUMMARY_declared_worker_states_phase3_commands_20260729.md` is inside the L2 finding text
+  itself, which is correct.
+
+  **M1 (MINOR) — the handoff still tells the frontend that Phase 3 review APPROVED with no
+  findings.** `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md:313-316`
+  reads "focused integration `33 passed` … and independent review APPROVED with no findings". That
+  claim was written by the implementer at `4de8159` and is false: Phase 3 has since returned
+  NEEDS_CHANGES twice (K1–K6, then L1/L2), and the counts are stale (`33` → the suite is now
+  `52 passed, 1 baseline failed`). It contradicts the same file's own status table at `:19`
+  ("❌ not yet (implemented, in review fix cycle)") — which K6 *did* roll back — and this plan's
+  lifecycle block. Violated clauses: this plan's Assumptions ("a conflict between this plan and the
+  handoff is an operator decision, not an implementer choice") and master plan "Per-phase workflow"
+  step 4. Same class as L2, in the one file the frontend team reads as authoritative; the K6 unwind
+  covered the status table but missed this paragraph. Fix (operator): restore the pre-`4de8159`
+  wording, or state the real status — implemented, in review, not yet approved. No contract impact:
+  the request/response shapes in §6 remain correct (re-verified field-for-field below).
+
+  **K5 verified addressed** — the wire-format note at `:143` now covers "every timestamp in this
+  document", so the `Z`-vs-`+00:00` examples are no longer a trap.
+
+  **Independently re-run gates (all reproduced).**
+  - `pytest tests/integration/services/commands/users/ -q` → `52 passed, 1 failed`; the single
+    failure is the recorded shared-DB seed gap
+    (`test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`, `pause_ended_shift`
+    missing in `ws_01a574c4`). Matches the implementer's report exactly.
+  - `pytest tests/unit/test_worker_shifts_router.py -q` → `12 passed`.
+  - `pytest tests -q` → `27 failed, 1219 passed` — the same 27-item FAILED list established as the
+    pre-Phase-3 baseline in round 2, with `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`
+    the only worker-shift entry. Zero new failures.
+  - `ruff check` on all eleven Phase-3-touched `.py` files → `All checks passed!`; repo-wide `141`
+    errors (below the `149` baseline).
+  - `grep -rn "pause_worker_shift\|resume_worker_shift" app/beyo_manager/` → zero hits; the router
+    registers only `/clock`, `/declared-states`, `/declared-states/close`, and
+    `test_retired_manual_pause_routes_are_not_registered` pins `404` for both retired paths.
+  - No Alembic migration in any of the three Phase 3 commits (D7 honoured).
+  - Error→HTTP mapping confirmed at the class level: `ConflictError` 409, `NotFound` 404,
+    `ValidationError` 422, `PermissionDenied` 403 — matching the plan's validation matrix.
+  - Access matrix re-verified in `resolve_worker_shift_target` (no reimplementation in either
+    command) and covered for **both** declare and close by
+    `test_declare_and_close_on_behalf_access_matrix:1342` — manager/admin on-behalf with
+    `created_by_id`/`closed_by_id` = actor, manager/admin without `user_id` → `PermissionDenied`,
+    worker with foreign `user_id` → `PermissionDenied`, non-worker target → `NotFound`.
+  - Full-loop test (`:384`) re-read: both declared segments `(at(10), at(20))` and
+    `(at(40), at(50))`, the rebuilt minute sequence has no idle collapse, and both `IN_PAUSE` rows
+    carry `manually_recorded` with the correct catalog reasons.
+  - Response serialization is safe after commit: `expire_on_commit=False`
+    (`models/database.py:47`), so both commands' post-`maybe_begin` attribute reads cannot trigger
+    an implicit async refresh.
+  - Re-confirmed unchanged from round 2: carve-out removed; F6 shift-window scoping
+    (`reconcile_worker_shift_state.py:158-160`) plus its dedicated test; auto-pause only through
+    `_apply_step_transition`; shift-row lock before declared-row lock in both commands; no
+    auto-clock-in path from declare; `models/tables/users/README.md` state machine rewritten with
+    `IDLE`, declared precedence and the `manually_recorded` redefinition.
+  - Still not verifiable: the deploy-time manual-pause deploy note lives in the implemented
+    summary, correctly still unwritten. It remains an obligation for whoever authors it.
+
 ## Lifecycle transition
 
 - Current state: `implemented` — fix cycle complete; independent re-review pending.

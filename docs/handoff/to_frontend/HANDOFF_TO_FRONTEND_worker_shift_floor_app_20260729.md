@@ -310,10 +310,9 @@ match → confirm → `GET /current` (must be clocked in — else offer clock-in
 
 ## Validation notes
 
-- Backend Phase 3 validation: declared-state commands/routes are live; focused integration
-  `33 passed` (plus the two documented baseline clock-out fixture failures), router `12 passed`,
-  touched-file Ruff clean, and independent review APPROVED with no findings. Other phases remain
-  pending per the status table above.
+- Backend validation status: **the liveness table at the top of this document is the single
+  source of truth** — no phase is live until its row shows ✅. Per-phase validation evidence lives
+  in the phase plans' Review logs and implemented summaries, not here.
 - Suggested frontend validation: build against a mock server generated from §2–§8; when a phase flips ✅, run the same flows against a real backend before removing the mock.
 
 ## Trace links
