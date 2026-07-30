@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase3_commands_20260729`
-- Status: `implemented`
+- Status: `archived` (APPROVED by Opus at round-4 confirmation pass, `8b0fd78`; production code final at `a39ae40`; summarized and archived)
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
 - Last updated at (UTC): `2026-07-29T19:22:58Z`
@@ -488,9 +488,47 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
   - Still not verifiable: the deploy-time manual-pause deploy note lives in the implemented
     summary, correctly still unwritten. It remains an obligation for whoever authors it.
 
+- `2026-07-30T09:45:00Z` — Independent confirmation pass round 4 (Opus, review prompt
+  `REVIEW_phase3_commands.md`, commit `8b0fd78`) verdict: **APPROVED**. No findings. No edits
+  beyond this Review log entry.
+
+  **M1 verified fixed, and scoped.** The stale paragraph is gone:
+  `grep -n "APPROVED with no findings\|33 passed"` over the handoff returns nothing. It is replaced
+  by a structural rule — the liveness table is the single source of truth, per-phase evidence lives
+  in plan Review logs — which removes the whole class of drift rather than patching one sentence.
+  Scope confirmed minimal: `git diff a39ae40 HEAD -- docs/handoff/` is **exactly one hunk**, the
+  Validation-notes paragraph. Nothing else in the handoff moved; in particular the liveness table
+  (`:19`) still correctly reads "❌ not yet (implemented, in review fix cycle)" — no premature flip
+  to ✅, which would itself have been a finding. The master-plan phase-3 row moved
+  `needs_changes` → `implemented` (awaiting this pass), consistent with this plan's lifecycle block
+  and correctly **not** `archived`.
+
+  **No production code changed since `a39ae40`.** `git diff --name-only a39ae40 HEAD -- .
+  ':(exclude)*.md'` is empty and `git diff --stat a39ae40 HEAD -- app/` is empty — `8b0fd78` touches
+  three Markdown files only. The round-3 verification therefore stands in full and unmodified:
+  L1's delegation mutation-verified load-bearing (two independent mutations, 5/5 fail each), L2
+  confirmed, K1–K5 confirmed, the D2/D5/D7/D9/D10 checks, the retirement completeness greps, the
+  on-behalf matrix, the full-loop test, lock order, F4/F6, and README.
+
+  **Confirmation gate re-run** (guards against environmental drift, not code drift):
+  `pytest tests/integration/services/commands/users/ tests/unit/test_worker_shifts_router.py -q`
+  → `64 passed, 1 failed`; the single failure is the same recorded shared-DB seed gap
+  (`test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`, `pause_ended_shift`
+  missing in `ws_01a574c4`) — pre-existing, not this phase's.
+
+  **Carried obligation for the implemented summary** (the one checklist item not verifiable while
+  the summary is correctly unwritten): the deploy note about workers sitting in an open legacy
+  manual pause at deploy time — carve-out removal flips them to `IDLE` once, cosmetic only, with
+  clock-out rebuild still correct per D7. It must be present when the summary is authored.
+
+  Phase 3 is clear to proceed to summary → archive (preserving the
+  `archives/implementation/declared_worker_states/` subfolder per the master plan's lifecycle note)
+  → master-table flip to `archived` → Phase 4.
+
 ## Lifecycle transition
 
-- Current state: `implemented` — fix cycle complete; independent re-review pending.
-- Next state: `reviewed` after an independent reviewer returns `APPROVED`; only then may Phase 3
-  summary/archive/master-table work proceed.
-- Transition owner: independent reviewer, then `Codex` for post-approval lifecycle work.
+- Current state: `archived`
+- Next state: `implemented_summary` → `archived`. Summary must carry the deploy note above; archive
+  moves this plan to `backend/docs/architecture/archives/implementation/declared_worker_states/`.
+- Transition owner: `Codex` (post-approval lifecycle work), then `David` for the master-table flip
+  and Phase 4 kickoff.

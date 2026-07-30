@@ -16,7 +16,7 @@
 > |---|---|---|
 > | 5 | Floor sign-in / logout (§2) | ❌ not yet |
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ❌ not yet |
-> | 3 | Declared states (§6) | ❌ not yet (implemented, in review fix cycle) |
+> | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
 > | 6 | Roster `clock_in_code` exposure, `clock_in_code` management (§3) | ❌ not yet |
 > | 7 | Populated clock-out `analytics` (§5.1) | ❌ not yet — `analytics` is `null` until then |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
