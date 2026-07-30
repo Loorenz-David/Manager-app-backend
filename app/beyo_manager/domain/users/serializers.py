@@ -130,6 +130,18 @@ def _serialize_pause_reason_reference(pause_reason: PauseReason) -> dict:
     }
 
 
+def pause_reason_reference_is_unresolved(
+    current: UserShiftStateRecord,
+    pause_reason: PauseReason | None,
+) -> bool:
+    return (
+        current.state is UserShiftStateEnum.IN_PAUSE
+        and pause_reason is None
+        and current.reason is not None
+        and current.reason.startswith(f"{PauseReason.CLIENT_ID_PREFIX}_")
+    )
+
+
 def serialize_current_worker_shift_state(
     *,
     user_id: str,
@@ -171,7 +183,7 @@ def serialize_current_worker_shift_state(
     if is_paused and current.reason is not None and pause_reason is None:
         data["reason_text"] = (
             None
-            if current.reason.startswith(f"{PauseReason.CLIENT_ID_PREFIX}_")
+            if pause_reason_reference_is_unresolved(current, pause_reason)
             else current.reason
         )
     return data

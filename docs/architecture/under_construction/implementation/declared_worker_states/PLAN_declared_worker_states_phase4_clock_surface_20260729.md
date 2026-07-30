@@ -485,3 +485,71 @@ Prohibited pattern reads: other query services for skeleton → `07`; other rout
   **Verdict: APPROVED.** R4/R5/R6 closed and independently verified; no functional defect found at
   any severity. R8/R9/R10 are low follow-ups that do not gate the phase; R9 belongs to the operator's
   post-approval handoff edit and can ride along with the liveness-row flip.
+
+- `2026-07-30T10:20:00Z` — Post-approval polish pass (Opus 5) for **R8 + R10**. No behavior change
+  for R8; R10 adds one observability log line. R9 operator-owned (handoff untouched); R1/R7 closed.
+
+  **R8 — relocated the shared access helper**
+  - `git mv app/beyo_manager/services/worker_shift_access.py
+    app/beyo_manager/services/queries/users/worker_shift_access.py`. Git records it as a pure rename
+    (`git diff --cached -M --stat` → `services/{ => queries/users}/worker_shift_access.py | 0`,
+    `1 file changed, 0 insertions(+), 0 deletions(-)`), so the reviewer's blob-identity property is
+    preserved — `resolve_worker_shift_target`'s body is byte-identical to its pre-image.
+  - Two import sites updated, both mechanical: the writer shim
+    `services/commands/users/_worker_shift_access.py` (still re-exporting the symbol, so all five
+    writer call sites are untouched) and `services/queries/users/get_current_worker_shift_state.py`.
+    `grep -rn "services.worker_shift_access"` over `*.py` is clean; remaining hits are historical
+    prose in this plan's earlier log entries, left as written.
+  - Destination is the prompt's path, `queries/users/worker_shift_access.py`. The round-2 finding
+    text (`:459`) wrote it with a leading underscore; the non-underscore form was used because the
+    prompt specifies it and because the writer shim already owns the `_worker_shift_access.py`
+    basename — two same-named modules in one feature would be a readability trap. Placement (the
+    substance of R8) is exactly as the reviewer verified. **Operator: cosmetic, flag if you disagree.**
+  - No registration risk: `services/queries/` has no auto-discovery (`grep` for
+    `import_module`/`pkgutil`/`walk_packages` over `beyo_manager/` → no hits); every query is
+    imported explicitly by its router. Helper modules already coexist under `queries/`
+    (`queries/utils/`, `queries/items/lookup/`).
+
+  **R10 — WARNING on the unresolvable-reason branch**
+  - Log placed in the **query**, not in the serializer where the branch itself lives:
+    `01_architecture.md:43` bars `domain/` from `models/`, `services/`, and **any I/O**, so emitting
+    from `domain/users/serializers.py` would trade R8's layering fix for a fresh violation of the
+    same contract. `services/queries/` may log and does elsewhere (5 precedents, e.g.
+    `queries/items/lookup_item_by_article_number.py`).
+  - To keep the two sites from drifting, the branch predicate is now named once in the domain layer —
+    `pause_reason_reference_is_unresolved(current, pause_reason)` (`serializers.py`, pure, no I/O) —
+    and consumed by both the serializer's `reason_text` ternary and the new query-side warning.
+    Inside the serializer's existing guard (`is_paused and reason is not None and pause_reason is
+    None`) the predicate reduces to the original `startswith` check, so R5's behavior is unchanged.
+  - `get_current_worker_shift_state` logs at WARNING per `17_logging.md:23`, in the feature's
+    structured `worker_shift.*` style matching the sibling clamp at `_clock_worker_shift.py:171-179`:
+    `worker_shift.current_state_unresolved_pause_reason | workspace_id=%s user_id=%s
+    shift_record_id=%s pause_reason_id=%s` — all four fields the finding asked for, including the
+    shift record id and the unresolved `par_…` value.
+
+  **Gate evidence**
+  - New tests (written before the fix, confirmed red on the unresolvable path while both negatives
+    passed): `test_current_state_warns_on_unresolvable_pause_reason_id` asserts exactly one WARNING
+    carrying all four fields; `test_current_state_does_not_warn_for_resolved_or_legacy_reason[True]`
+    and `[False]` assert the event is absent on the resolved-id and legacy free-text paths.
+  - `test_get_current_worker_shift_state.py` → `11 passed`. Worker-shift/router/backfill set
+    (`test_worker_shift_commands.py`, `test_reconcile_worker_shift_state.py`,
+    `test_worker_shifts_router.py`, `test_backfill_worker_shift_state_records.py`) → `84 passed`,
+    `1 failed` = the documented baseline seed gap
+    `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`.
+  - **Full suite, quiet tree, `-m 'not e2e'` → `27 failed / 1279 passed`.** Per the master plan's
+    compare-node-sets-not-counts rule, the same suite was run at `HEAD` (`6c33fc2`) in a throwaway
+    `git worktree` — `27 failed / 1274 passed` — and `diff` of the two `FAILED` node lists is
+    **empty: zero new failures, identical node sets**. The `+5` passes are this pass's 3 new tests
+    plus Phase 5's uncommitted test additions, which are present in the working tree only. The 4
+    non-worker-shift failures seen in focused runs (2 × `test_pause_reasons_commands`,
+    `test_list_pause_reasons_returns_offset_pagination_and_workspace_scope`,
+    `test_serialize_case_type_entry_returns_contract_fields`) were each reproduced at `HEAD` in that
+    worktree, confirming baseline rather than regression.
+  - `ruff check` on all five touched files → **All checks passed!**. `ruff format --check` reports
+    drift on `serializers.py`, `get_current_worker_shift_state.py`, and the test file, but the same
+    files already fail that check at `HEAD` (verified in the baseline worktree) — pre-existing, and
+    the repo gate is `make lint` = `ruff check`, which passes. No new format drift introduced.
+  - Parallel-run discipline held: Phase 5's in-flight auth changes
+    (`jwt_dep.py`, `services/infra/auth.py`, two auth test files) and its plan edit were neither
+    modified nor staged; the commit stages only the four Phase 4 files and this plan.

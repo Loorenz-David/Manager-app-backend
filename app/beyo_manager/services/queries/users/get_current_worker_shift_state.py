@@ -1,17 +1,26 @@
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import aliased
 
 from beyo_manager.domain.users.enums import UserShiftStateEnum
-from beyo_manager.domain.users.serializers import serialize_current_worker_shift_state
+from beyo_manager.domain.users.serializers import (
+    pause_reason_reference_is_unresolved,
+    serialize_current_worker_shift_state,
+)
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.users.user_declared_state_record import (
     UserDeclaredStateRecord,
 )
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.worker_shift_access import resolve_worker_shift_target
+from beyo_manager.services.queries.users.worker_shift_access import (
+    resolve_worker_shift_target,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
@@ -76,6 +85,15 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
         return serialize_current_worker_shift_state(user_id=user_id, current=None)
 
     current, pause_reason, declared_record, declared_reason, started_at = row
+    if pause_reason_reference_is_unresolved(current, pause_reason):
+        logger.warning(
+            "worker_shift.current_state_unresolved_pause_reason | "
+            "workspace_id=%s user_id=%s shift_record_id=%s pause_reason_id=%s",
+            ctx.workspace_id,
+            user_id,
+            current.client_id,
+            current.reason,
+        )
     return serialize_current_worker_shift_state(
         user_id=user_id,
         current=current,

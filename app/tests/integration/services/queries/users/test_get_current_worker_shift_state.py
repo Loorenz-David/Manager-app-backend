@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -329,6 +330,76 @@ async def test_current_state_does_not_expose_unresolvable_pause_reason_id(db_ses
 
     assert result["pause_reason"] is None
     assert result["reason_text"] is None
+
+
+@pytest.mark.integration
+async def test_current_state_warns_on_unresolvable_pause_reason_id(
+    db_session,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    unresolvable_reason_id = f"{PauseReason.CLIENT_ID_PREFIX}_missing"
+    await _seed_open_shift(
+        db_session,
+        workspace,
+        worker,
+        state=UserShiftStateEnum.IN_PAUSE,
+        reason=unresolvable_reason_id,
+    )
+    shift_record_id = await db_session.scalar(
+        select(UserShiftStateRecord.client_id).where(
+            UserShiftStateRecord.workspace_id == workspace.client_id,
+            UserShiftStateRecord.user_id == worker.client_id,
+            UserShiftStateRecord.exited_at.is_(None),
+        )
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await get_current_worker_shift_state(
+            _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+        )
+
+    warnings = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "worker_shift.current_state_unresolved_pause_reason" in record.getMessage()
+    ]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert f"workspace_id={workspace.client_id}" in message
+    assert f"user_id={worker.client_id}" in message
+    assert f"shift_record_id={shift_record_id}" in message
+    assert f"pause_reason_id={unresolvable_reason_id}" in message
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("reason_is_resolvable", [True, False])
+async def test_current_state_does_not_warn_for_resolved_or_legacy_reason(
+    db_session,
+    caplog: pytest.LogCaptureFixture,
+    reason_is_resolvable: bool,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    if reason_is_resolvable:
+        pause_reason = await _seed_pause_reason(db_session, workspace, worker)
+        reason = pause_reason.client_id
+    else:
+        reason = "legacy meeting"
+    await _seed_open_shift(
+        db_session,
+        workspace,
+        worker,
+        state=UserShiftStateEnum.IN_PAUSE,
+        reason=reason,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await get_current_worker_shift_state(
+            _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+        )
+
+    assert "worker_shift.current_state_unresolved_pause_reason" not in caplog.text
 
 
 @pytest.mark.integration
