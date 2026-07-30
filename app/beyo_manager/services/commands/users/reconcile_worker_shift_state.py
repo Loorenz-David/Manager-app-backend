@@ -18,6 +18,9 @@ from beyo_manager.models.tables.users.user_declared_state_record import (
     UserDeclaredStateRecord,
 )
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
+from beyo_manager.services.commands.users._clock_worker_shift import (
+    load_open_worker_shift_for_update,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -76,17 +79,11 @@ async def _reconcile_once(
 ) -> ShiftReconcileOutcome:
     # Cross-command lock order: shift row -> declared row. Phase 3 declaration
     # commands must preserve this order to avoid deadlocks with reconcile/clock-out.
-    current = (
-        await session.execute(
-            select(UserShiftStateRecord)
-            .where(
-                UserShiftStateRecord.workspace_id == workspace_id,
-                UserShiftStateRecord.user_id == user_id,
-                UserShiftStateRecord.exited_at.is_(None),
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
+    current = await load_open_worker_shift_for_update(
+        session,
+        workspace_id,
+        user_id,
+    )
 
     auto_clocked_in = False
     shift_started_at: datetime | None = None

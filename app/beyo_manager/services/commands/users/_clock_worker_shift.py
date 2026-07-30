@@ -48,6 +48,9 @@ async def load_open_worker_shift_for_update(
     # Under READ COMMITTED, EvalPlanQual can filter a row that was closed while this
     # SELECT waited for its lock, without rescanning for the replacement open row
     # inserted under the partial unique index. One fresh statement snapshot finds it.
+    # This retry is intentionally bounded: pathological sustained contention can still
+    # produce a false None. Callers surface a retryable conflict or converge on the next
+    # trigger, and clock-out always reconstructs the correct closed timeline.
     return (await session.execute(statement)).scalar_one_or_none()
 
 

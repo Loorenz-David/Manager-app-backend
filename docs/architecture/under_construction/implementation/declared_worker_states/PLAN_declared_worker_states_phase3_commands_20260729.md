@@ -379,6 +379,36 @@ Prohibited pattern reads: other commands for write-path skeleton → `06`; other
     implemented summary, which is correctly still unwritten (lifecycle gated). It must be present
     when the summary is authored.
 
+- `2026-07-30T07:08:37Z` — Codex round-2 fix cycle for L1 complete; independent re-review
+  pending.
+  - Replaced reconcile's inline open-shift locked select with
+    `load_open_worker_shift_for_update` at the same transaction position. The lock and
+    shift-row → declared-row order are unchanged.
+  - Extended the helper's mechanism comment to record the accepted limitation: its retry is
+    bounded to one fresh statement, so pathological sustained contention can still return a false
+    `None`; callers surface a retryable conflict or converge on the next trigger, and clock-out
+    reconstruction remains authoritative.
+  - Added the deterministic two-session
+    `test_concurrent_declare_and_reconcile_never_lose_open_shift[0-4]`: a declaration holds the
+    open shift lock while a standalone reconcile issues the competing locked select for the same
+    clocked-in worker. Against the inline select the reconcile returned
+    `ShiftReconcileOutcome(changed=False, state=None)` **5/5**; after delegation it returned the
+    live `IN_PAUSE` projection **5/5**.
+  - Mutation verification: with the helper retry temporarily removed, the new reconcile-path
+    test failed **5/5** with `state=None`; after restoring the retry it passed **5/5**.
+  - Focused L1 + K1–K4 regression set: `18 passed`. Command/reconcile suite:
+    `52 passed, 1 failed`; the only failure is the exact recorded shared-DB baseline seed gap
+    (`test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`, missing
+    `pause_ended_shift` in `ws_01a574c4`). Router suite: `12 passed`.
+  - Full backend suite: `1219 passed, 27 failed, 2 warnings`; the FAILED list is the same 27-item
+    pre-Phase-3 baseline independently established in round 2. The five new reconcile-path
+    parametrizations account for the pass-count increase from `1214`; there are zero new
+    failures.
+  - Touched Python files Ruff-clean; repository Ruff remains at the documented `141` errors
+    (below the `149` baseline). Retired command source grep is empty; `git diff --check` is clean.
+  - L2 remains operator-fixed. No master-plan, handoff, summary, archive, or lifecycle-table
+    change was made.
+
 ## Lifecycle transition
 
 - Current state: `implemented` — fix cycle complete; independent re-review pending.

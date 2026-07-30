@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from freezegun import freeze_time
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
@@ -1809,6 +1809,126 @@ async def test_concurrent_close_and_declare_retain_shift_then_declared_lock_orde
             workspace_id=workspace_id,
             worker_id=worker_id,
             pause_reason_ids=reason_ids,
+        )
+
+
+@pytest.mark.parametrize("run_number", range(5))
+async def test_concurrent_declare_and_reconcile_never_lose_open_shift(
+    db_session,
+    monkeypatch,
+    run_number: int,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        worker,
+        name=f"Concurrent declare-reconcile {run_number}",
+    )
+    workspace_id = workspace.client_id
+    worker_id = worker.client_id
+    await clock_in_shift_for_user(
+        db_session,
+        workspace_id,
+        worker_id,
+        datetime.now(timezone.utc),
+        worker_id,
+    )
+    await db_session.commit()
+
+    declare_shift_locked = asyncio.Event()
+    reconcile_shift_select_started = asyncio.Event()
+    release_declare = asyncio.Event()
+    listener_registered = False
+    declare_module = import_module(
+        "beyo_manager.services.commands.users.declare_worker_state"
+    )
+
+    async def controlled_declare_shift_lock(session, workspace_id, user_id):
+        shift = await load_open_worker_shift_for_update(
+            session,
+            workspace_id,
+            user_id,
+        )
+        declare_shift_locked.set()
+        await release_declare.wait()
+        return shift
+
+    monkeypatch.setattr(
+        declare_module,
+        "load_open_worker_shift_for_update",
+        controlled_declare_shift_lock,
+    )
+
+    engine = db_session.bind.sync_engine
+
+    def observe_reconcile_shift_select(
+        _connection,
+        _cursor,
+        statement,
+        parameters,
+        _context,
+        _executemany,
+    ):
+        if (
+            "FROM user_shift_state_records" in statement
+            and "user_shift_state_records.exited_at IS NULL" in statement
+            and "FOR UPDATE" in statement
+            and worker_id in parameters
+        ):
+            reconcile_shift_select_started.set()
+
+    try:
+        declaring = asyncio.create_task(
+            _run_worker_command_in_new_session(
+                declare_worker_state,
+                workspace_id=workspace_id,
+                worker_id=worker_id,
+                incoming_data={"pause_reason_id": reason.client_id},
+            )
+        )
+        await asyncio.wait_for(declare_shift_locked.wait(), timeout=5)
+        event.listen(
+            engine,
+            "before_cursor_execute",
+            observe_reconcile_shift_select,
+        )
+        listener_registered = True
+
+        async def run_reconcile():
+            async for session in get_db_session():
+                async with session.begin():
+                    return await reconcile_worker_shift_state(
+                        session,
+                        workspace_id,
+                        worker_id,
+                        datetime.now(timezone.utc),
+                    )
+            raise AssertionError("Database session generator yielded no session")
+
+        reconciling = asyncio.create_task(run_reconcile())
+        await asyncio.wait_for(reconcile_shift_select_started.wait(), timeout=5)
+        release_declare.set()
+        declare_outcome, reconcile_outcome = await asyncio.wait_for(
+            asyncio.gather(declaring, reconciling),
+            timeout=10,
+        )
+
+        assert declare_outcome["shift_state"] == UserShiftStateEnum.IN_PAUSE.value
+        assert reconcile_outcome.state is UserShiftStateEnum.IN_PAUSE
+    finally:
+        release_declare.set()
+        if listener_registered:
+            event.remove(
+                engine,
+                "before_cursor_execute",
+                observe_reconcile_shift_select,
+            )
+        await _cleanup_committed_worker_command_rows(
+            db_session,
+            workspace_id=workspace_id,
+            worker_id=worker_id,
+            pause_reason_ids=[reason.client_id],
         )
 
 
