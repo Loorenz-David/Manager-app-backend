@@ -337,3 +337,151 @@ Prohibited pattern reads: other query services for skeleton → `07`; other rout
   - Locally executed `git diff --check` completed clean. This is a local observation only; the
     previous reviewer reported that its sandbox could not run git, so no claim is made for that
     environment.
+
+- `2026-07-30T09:54:25Z` — Independent review (Opus 5), **round 2** — **APPROVED**. R4/R5/R6 verified
+  closed; three low findings recorded for follow-up (none blocking).
+
+  **Method / environment**
+  - `git` **is** available in this environment when run from `backend/` (the repo root is
+    `backend/.git`; round 1's `fatal: not a git repository` came from invoking git one level up, at
+    `ManagerBeyo-app/`). Round 2 therefore used real diffs — `git show 20b11c7`, `git show ccdffa9`,
+    `git show <rev>:<path>` — not mtimes. Both Phase 4 commits were reviewed as commits; the working
+    tree (which also carries Phase 5 history through `49df920`) was not used as the unit of review.
+  - Files touched by the two commits, in total: `domain/users/serializers.py`,
+    `routers/api_v1/worker_shifts.py`, `services/commands/users/_worker_shift_access.py`,
+    `clock_out_worker_shift.py`, `toggle_worker_shift.py`,
+    `services/queries/users/get_current_worker_shift_state.py`,
+    `services/worker_shift_access.py`, three test files, this plan. Nothing else.
+
+  **R4 — CLOSED (verified)**
+  - `clock_out_at` is gone from the model itself, not merely dropped by the route:
+    `ClockOutWorkerShiftRequest` now has only `user_id` (`clock_out_worker_shift.py:12-13`), and the
+    command assigns `clock_out_at = datetime.now(timezone.utc)` unconditionally with no fallback
+    expression (`clock_out_worker_shift.py:25`).
+  - Sole caller confirmed by grep: `routers/api_v1/worker_shifts.py:13,86`. No task, scheduler, or
+    other command invokes the command function.
+  - `_clock_worker_shift.py` is untouched by **both** commits (`git show --stat <rev> --
+    …/_clock_worker_shift.py` → empty for each) and keeps its own `clock_out_at` parameter
+    (`_clock_worker_shift.py:135`, used at `:154,170,178,181,212,220-221`). `services/tasks/` is
+    likewise untouched by both commits; the safeguard still passes its computed `midnight` straight
+    into the helper (`auto_clock_out_open_shifts.py:52-57`). The safeguard's clock_out_at path is
+    structurally unaffected by R4.
+  - Both midnight tests green:
+    `test_midnight_safeguard_closes_previous_day_shift_and_allows_new_day` (`:2152`) and
+    `test_midnight_safeguard_preserves_open_legacy_manual_pause` (`:2246`) → `2 passed`. Neither is
+    inside any hunk of either commit (all `test_worker_shift_commands.py` hunks land in `998-1123`).
+  - The pinning test is genuinely discriminating: `test_direct_clock_out_ignores_supplied_clock_out_at`
+    feeds `{"clock_out_at": "2000-01-01T00:00:00+00:00"}` through `ctx.incoming_data` at the **command**
+    layer and asserts `ENDED_SHIFT.entered_at == 2026-07-30T12:00Z` (frozen). It would fail if the
+    field were still honoured. → `1 passed`.
+
+  **R5 — CLOSED (verified), and the fix closes a reachable case, not only a hypothetical one**
+  - `serializers.py:171-176`: `reason_text` is emitted only when the unresolved value is not
+    `par_`-shaped; id-shaped-but-unresolvable yields `pause_reason: null` **and**
+    `reason_text: null`. Prefix constructed as `f"{PauseReason.CLIENT_ID_PREFIX}_"` and
+    `CLIENT_ID_PREFIX == "par"` (`pause_reason.py:12`) → `"par_"`, correct (no double underscore).
+  - Both branches pinned: `test_current_state_serializes_legacy_free_text_reason` asserts the full
+    envelope incl. `reason_text: "legacy meeting"`;
+    `test_current_state_does_not_expose_unresolvable_pause_reason_id` asserts `pause_reason is None`
+    and `reason_text is None` (the subscript also pins that the key is *present*, not dropped).
+  - Extension of round 1's framing: the reason join is workspace-scoped
+    (`get_current_worker_shift_state.py:57-58`), so an id belonging to **another workspace** was
+    already unresolvable before any join tightening. Pre-R5 that would have shipped a foreign
+    tenant's `par_…` id to the client. R5 closes a cross-tenant identifier leak, not just a
+    future-proofing gap.
+
+  **R6 — CLOSED (verified)**
+  - Query layer: `test_current_state_uses_clock_action_access_matrix` now ends with a manager naming
+    a non-member → `pytest.raises(NotFound)`. Router layer:
+    `test_current_route_preserves_non_member_not_found_status` drives the route with a `NotFound`
+    outcome and asserts `404` plus the exact `{"error": …, "ok": false}` envelope through the real
+    `build_err`. Access matrix is now 403/403/404 + manager-on-behalf success.
+
+  **Pre-check claims — falsification attempts, results**
+  - *"Access-helper extraction is a pure move"* — **CONFIRMED, stronger than claimed.** Git blob
+    identity proves it: the new `services/worker_shift_access.py` is created with blob `d03af3c`,
+    which is exactly the pre-image blob of `services/commands/users/_worker_shift_access.py` in the
+    same commit. Byte-identical by construction, not by inspection.
+  - *"Old module re-exports; Phase 3's writer path unchanged"* — **CONFIRMED.** The shim is
+    `import` + `__all__` (`_worker_shift_access.py:1,4`), and every writer still imports through the
+    shim: `clock_in_worker_shift.py:7`, `clock_out_worker_shift.py:7`, `toggle_worker_shift.py:11`,
+    `declare_worker_state.py:27`, `close_declared_worker_state.py:14`. Only the new query service
+    imports the new path.
+  - *"Neither commit touches Connecteam, the midnight safeguard, auth, or the handoff"* —
+    **CONFIRMED** against the complete two-commit file list above. Also untouched: models,
+    migrations, pause-reasons implementation, master plan.
+  - *"analytics appears only on the clock-out branch"* — **CONFIRMED.** `clock_out_worker_shift.py:39`
+    (always) and `toggle_worker_shift.py:56-63` (guarded by `if action == "clock_out"`).
+    `clock_in_worker_shift.py` is untouched by both commits and returns `{"action", "user_id"}` only.
+  - *"GET /current has zero `with_for_update`"* — **CONFIRMED** by reading the whole query service
+    plus the runtime assertion `all(statement._for_update_arg is None …)` in
+    `test_current_state_returns_clocked_out_shape_without_write_lock`.
+  - Additional probe (not in the pre-check): the single `select(...).one_or_none()`
+    (`get_current_worker_shift_state.py:70`) could in principle raise `MultipleResultsFound` → 500 if
+    the outer joins fanned out. It cannot: both `user_shift_state_records` and
+    `user_declared_state_records` carry partial unique indexes on `(user_id, workspace_id) WHERE
+    exited_at IS NULL` (`user_shift_state_record.py:48-53`, `user_declared_state_record.py:49-55`),
+    and the two reason joins are on unique `client_id`. No 500 path. Relatedly, a stale open declared
+    row cannot survive a clock-out: the helper clamps it (`_clock_worker_shift.py:159-179`).
+  - Handoff conformance re-checked field-for-field against §4 (current-state envelope, `idle |
+    working | in_pause`, clocked-out all-null shape, `+00:00` note) and §5 (`/clock-in` →
+    `{action,user_id}`; `/clock-out` → `{action,user_id,transitioned_steps,analytics}`; toggle
+    clock-out adds the key, clock-in never has it). Conformant.
+
+  **Validation (quiet tree, no concurrent session)**
+  - `pytest tests/unit/test_worker_shifts_router.py -q` → **28 passed**.
+  - `pytest tests/integration/services/queries/users/test_get_current_worker_shift_state.py -q` →
+    **8 passed**.
+  - R4 pinning test + both midnight safeguard tests → **3 passed**.
+  - `pytest tests -q` → **27 failed, 1275 passed** — an exact match to the operator's canonical
+    baseline at `ccdffa9`, and the failure **node set** is entirely baseline families
+    (bootstrap/items/pause-reasons/shopify/task-steps/tasks/upholstery/working-sections/audit/
+    shopify-domain/auth/worker-stats/serializers/routers). Only worker-shift failure is the
+    documented seed gap `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open`; the
+    only auth failure is `test_sign_in_user_preserves_custom_workspace_role_name` (Phase 5 domain).
+    No Phase 4 test failed. Codex's `313 failed / 11 errors` is disregarded per the master plan's
+    shared-DB rule.
+  - `ruff check` on all ten touched files → **All checks passed!**. Repo-wide `ruff check .` →
+    **133 errors**, below the recorded 149/141 baselines, none in a touched file. (No ruff config
+    exists — default `E`/`F` only, so import ordering is not linted.)
+
+  **Findings (all low, none blocking)**
+  - **R8 — low (layering). S1 CONFIRMED, but its proposed remedy is wrong.**
+    `services/worker_shift_access.py` is a domain-specific module placed at the top level of
+    `services/`, which `architecture/01_architecture.md:60-78` reserves for framework primitives
+    (`context.py`, `outcome.py`, `run_service.py`; `work_context.py` is domain-agnostic and has its
+    own contract `39`). It also sidesteps the same file's domain-grouping rule (`:80-95`: every layer
+    groups by `<domain>/`). **However** S1's suggested fix — put it under `infra/` "as Phase 5's
+    equivalent helper does" — would be a *harder* violation: `01_architecture.md:43` forbids
+    `services/queries/` from importing `services/infra/` at all, so the new query service could not
+    reach it. The S1 comparison is also not apples-to-apples: Phase 5's `services/infra/auth.py` is a
+    pre-existing module it *modified* (`b8946fe`, 8 lines), not a helper it created. The
+    contract-clean placement is `services/queries/users/_worker_shift_access.py` — queries are the one
+    layer both callers may import, with precedent at `_clock_worker_shift.py:21` (a command importing
+    `services/queries/pause_reasons/get_system_pause_reason`). Cosmetic today; worth normalizing
+    before more shared shift logic accumulates.
+  - **R9 — low (doc). S2 CONFIRMED, operator-owned.** Handoff §4 (`…floor_app_20260729.md:143`)
+    documents only `pause_reason: null` + `reason_text: "<raw>"`. The new variant introduced by R5 —
+    `pause_reason: null` + `reason_text: null` — is undocumented, while the same handoff states "Any
+    contract change will be edited **here first**" (`:25`) and this plan's scope item 4 requires
+    deviations to go through the handoff first. Related nit for the same edit: `reason_text` now has
+    three-way variance (absent when the reason resolves, `null` when id-shaped-unresolvable, a string
+    for legacy text) — worth one sentence so the frontend does not read absence as a distinct state.
+    The handoff is operator-owned, so this is an operator follow-up, not a Codex defect.
+  - **R10 — low (observability). NEW.** The R5 branch is silent: when `state == IN_PAUSE` and `reason`
+    is a `par_`-shaped id that does not resolve in the workspace, the response is fully nulled
+    (`serializers.py:171-176`) with no log line anywhere in the read path. That condition is a
+    data-integrity signal — a dangling or cross-tenant reason reference — and R5 makes it invisible to
+    operators as well as clients. `architecture/17_logging.md:23` classes exactly this shape
+    (degraded-but-recoverable / non-fatal validation issue) as `WARNING`, and the sibling write path
+    already logs its analogous clamp (`_clock_worker_shift.py:171-179`, INFO). Recommend a
+    `logger.warning` carrying `workspace_id`, `user_id`, and the unresolved value.
+  - Round-1 items: **R1 CLOSED** by operator ruling (handoff liveness row is operator-owned, flipped
+    only post-approval; the stale clause was removed from plans 4/6/7) — not re-raised. R2/R3
+    unchanged (informational). **R7 resolved**: this round's suite matches the canonical baseline node
+    for node, and git was available, so the round-1 evidence discrepancy and the mtime substitution
+    are both retired.
+
+  **Verdict: APPROVED.** R4/R5/R6 closed and independently verified; no functional defect found at
+  any severity. R8/R9/R10 are low follow-ups that do not gate the phase; R9 belongs to the operator's
+  post-approval handoff edit and can ride along with the liveness-row flip.

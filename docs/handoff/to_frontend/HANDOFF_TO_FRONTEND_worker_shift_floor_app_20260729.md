@@ -140,7 +140,7 @@ Response `200` (`data`):
 - `state` ∈ `idle | working | in_pause` while clocked in.
 - Not clocked in → `{ "user_id": …, "clocked_in": false, "shift_started_at": null, "state": null, "state_entered_at": null, "pause_reason": null, "declared_state": null }`.
 - `pause_reason` is set when `state == "in_pause"`; `declared_state` is non-null only when the pause is a worker declaration (vs a task-step blocker pause, where `declared_state` is `null` but `pause_reason` still describes the step's pause reason).
-- Legacy edge: very old pauses may carry free text instead of a catalog reason → `pause_reason: null` plus additive `reason_text: "<raw>"`.
+- Legacy edge — `reason_text` has **three-way variance**, handle all three: **absent** (normal case, the reason resolved into `pause_reason`); **a string** (very old pause carrying free text instead of a catalog reason → `pause_reason: null` + `reason_text: "<raw>"`, render the text); **`null`** (the pause references a catalog reason that cannot be resolved — render a neutral "paused, reason unavailable"; the backend deliberately does not expose the raw identifier).
 - All timestamps UTC ISO-8601; localize client-side using the workspace `time_zone` from sign-in. **Wire format note (applies to every timestamp in this document):** the backend serializes the UTC offset as `+00:00` (e.g. `2026-07-29T09:12:00+00:00`), not `Z`. The examples here use `Z` for brevity — treat the two as equivalent; parse with any ISO-8601 parser, don't string-match the suffix.
 
 ## 5. Clock actions (kiosk step 2)
