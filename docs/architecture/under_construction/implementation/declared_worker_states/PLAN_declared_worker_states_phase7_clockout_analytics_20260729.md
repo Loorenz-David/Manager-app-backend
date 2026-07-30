@@ -47,6 +47,17 @@
 ## Clarifications required
 
 - [x] Compute inline vs frontend calling the three manager endpoints? — resolved: inline composite in the clock-out response (one round-trip for the kiosk; the manager endpoints remain available and unchanged).
+- [x] **Carried from the Phase 6 review (small, include in this phase — not analytics work):**
+  - **R1-1:** `update_user_admin`'s `IntegrityError → 409` race path for duplicate `clock_in_code` has
+    no committed test (the pre-check short-circuits every duplicate case), and the index-name string
+    is now duplicated in three places — a future rename would silently degrade the race to a `500`.
+    Add one assertion pinning the constant to the model's `Index` name (single source it if trivial),
+    plus a test exercising the race path itself.
+  - **Q1 operational cost (reviewer observation):** a code held by a **deactivated** worker stays
+    reserved but is un-findable (no read-back surface, by operator ruling), so the `409` is opaque.
+    Change the duplicate-code `409` message to state the code is already in use in this workspace and
+    may belong to an inactive worker — actionable without leaking identity. Message only; no logic,
+    no new endpoint.
 - [x] Sync vs async (job + poll)? — resolved: sync composition — the scope is one worker × one day, bounded by the existing `_MAX_SEGMENTS` guard; measured latency recorded in the Review log. The `analytics: null` degradation path is the pressure valve; if latency ever becomes a problem, D14's envelope lets a future release move to async without a contract break.
 
 ## Acceptance criteria

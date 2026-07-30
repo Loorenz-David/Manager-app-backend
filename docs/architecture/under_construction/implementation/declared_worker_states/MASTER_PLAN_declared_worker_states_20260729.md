@@ -60,7 +60,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | 3 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase3_commands_20260729.md` | Declare/close commands + routes, auto-pause of working steps, retirement of `/pause` + `/resume` | `archived` ✅ (production final at `a39ae40`, APPROVED at round-4 confirmation `8b0fd78`; K1/L1 concurrency fixes mutation-verified) |
 | 4 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `archived` ✅ (APPROVED at `ccdffa9`, polish `be47f4d`; R4–R6/R8–R10 closed; helper relocated to `services/queries/users/` per `01_architecture.md:43`; quiet-tree suite 27 failed / 1280 passed = baseline) |
 | 5 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `archived` ✅ (APPROVED at round 3, `12bbeb7`; N1 CRITICAL revocation bypass closed with 4 defense layers + 19 mock-free probes; test-integrity round closed with reviewer-rerun mutation checks) |
-| 6 | `PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` (analytics envelope moved to Phase 4, ruling 2026-07-30) | `implemented` at `b0f35b1` — awaiting independent review. Includes an in-phase repair of the pre-existing `?role=` 500 (operator-accepted) and the Phase 5 R3-1 renames; operator rulings on the implementer's escalations are in the plan. |
+| 6 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` | `archived` ✅ (APPROVED on the **first** round at `b0f35b1`; 37-assertion real-ASGI probe of the floor gate, 4 mutation checks, `pg_enum` label parity on the in-phase `?role=` 500 repair) |
 | 7 | `PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics` (day timeline + segments + insights via existing worker-stats machinery), final handoff validation | `under_construction` |
 
 Dependency note: Phase 5 touches only auth and has **no dependency on Phases 1–4** — it may be implemented at any point (including first, to unblock frontend auth integration). Phase 6 requires Phases 3, 4 **and** 5. Phase 7 requires Phases 2, 4 and 6 and closes the feature set. The frontend builds in parallel against `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`, which was written **ahead of implementation** and is the authoritative API contract for all phases — implementations must conform to it; any deviation must be resolved in the handoff first (operator decision), never silently.
@@ -163,6 +163,14 @@ When all four phases are archived, set this master plan's status to `archived` a
   checks landed. Residual accepted risks and R3-1 (test-naming rename) recorded in the summary:
   `implemented_summaries/SUMMARY_declared_worker_states_phase5_device_auth_20260729.md`.
 - `2026-07-30`: **Phase 6 unblocked** — Phases 3, 4 and 5 are archived.
+- `2026-07-30`: **Phase 6 completed and archived** (`b0f35b1`) — APPROVED on the first review round,
+  the only phase to do so. The kiosk is functionally complete end to end (floor sign-in → roster with
+  codes → confirm → `GET /current` → clock-in / declare / clock-out). Includes an operator-accepted
+  in-phase repair of a pre-existing `GET /users?role=` 500 (disjoint Postgres enums compared against
+  every value), verified complete by `pg_enum` label parity. Carried to Phase 7: R1-1 (pin the
+  index-name constant + cover the `IntegrityError → 409` race) and the duplicate-code `409` message.
+  Summary: `implemented_summaries/SUMMARY_declared_worker_states_phase6_kiosk_flow_20260729.md`.
+- `2026-07-30`: **Phase 7 (final) unblocked** — Phases 2, 4 and 6 are archived.
 
 ## Open questions
 

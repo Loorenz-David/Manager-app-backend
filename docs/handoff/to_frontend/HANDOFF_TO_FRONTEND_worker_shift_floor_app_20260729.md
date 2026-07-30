@@ -17,7 +17,7 @@
 > | 5 | Floor sign-in / logout (§2) | ✅ live (reviewed & approved) |
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ✅ live (reviewed & approved) |
 > | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
-> | 6 | Roster `clock_in_code` exposure, `clock_in_code` management (§3) | ❌ not yet |
+> | 6 | Roster `clock_in_code` exposure (§3) | ✅ live (reviewed & approved) |
 > | 7 | Populated clock-out `analytics` (§5.1) | ❌ not yet — `analytics` is `null` until then |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
 >
@@ -102,6 +102,10 @@ identification fields:
 - Regular manager/worker app sessions do **not** receive `clock_in_code`/`email` here — the fields exist only under a floor token.
 - Suggested TanStack setup: `refetchInterval` of 1–5 min + refetch on window focus; the roster changes rarely.
 - Matching rules: trim input; match code exactly; match email case-insensitively.
+- **Code assignment is not part of this app's surface.** Codes are set/cleared by an admin or manager
+  through the existing admin user-update endpoint (`PATCH /api/v1/users/{user_client_id}`, field
+  `clock_in_code`: 4–16 chars trimmed, workspace-unique; `null` clears, `""` is a `422`, a duplicate
+  within the workspace is a `409`). The floor app only *reads* codes via the roster above.
 
 **The cache decides *who*, never *what state*.** After the worker confirms their identity
 (photo + name), fetch `GET /current?user_id=…` (§4) fresh before rendering Clock in / Clock out /
@@ -311,7 +315,7 @@ small, one page normally suffices.)
 ## 8. Response envelope & error handling (all endpoints)
 
 - Success: `{ "ok": true, "data": …, "warnings": [] }`
-- Error: `{ "ok": false, "error": "<human-readable message>" }` with the HTTP status carrying the semantics: `401` invalid/revoked token (→ sign-in screen), `403` role/scope violation, `404` not found (incl. anti-enumeration identify misses), `409` state conflict (already clocked in, not clocked in, no open declaration, duplicate clock code), `422` validation.
+- Error: `{ "ok": false, "error": "<human-readable message>" }` with the HTTP status carrying the semantics: `401` invalid/revoked token (→ sign-in screen), `403` role/scope violation, `404` not found (unknown or non-worker target), `409` state conflict (already clocked in, not clocked in, no open declaration, duplicate clock code), `422` validation.
 - Kiosk UX rule: `409`s are **normal flow** (e.g., double-tap, stale screen) — render them as friendly state refreshes (re-fetch `GET /current`), not as failures.
 
 ## 9. Suggested kiosk flows

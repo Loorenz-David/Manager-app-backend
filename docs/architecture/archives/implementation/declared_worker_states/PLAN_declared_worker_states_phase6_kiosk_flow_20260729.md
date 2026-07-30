@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_declared_worker_states_phase6_kiosk_flow_20260729`
-- Status: `under_construction`
+- Status: `archived` (APPROVED on the first review round at `b0f35b1`; summarized and archived)
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
 - Last updated at (UTC): `2026-07-30T12:45:00Z` (implementer Review-log entry; status intentionally unchanged pending review)
@@ -255,8 +255,89 @@ separable: the filter repair touches only the `if role_filter:` block plus its t
 implemented summary written, plan not archived, master phase table not flipped, handoff liveness
 table not edited — per the review-first gate in the phase prompt.
 
+### Reviewer entry — round 1 — 2026-07-30 (Opus 5, independent)
+
+**Verdict: APPROVED** (4 non-blocking findings, all documentation/test-coverage; no production
+change required to approve).
+
+Reviewed at `eb8a8c6` (implementation `b0f35b1`, rulings `eb8a8c6`). Quiet tree throughout; the
+tree was left clean after every mutation check.
+
+**Independently re-run validation (not taken on trust)**
+
+| Check | Method | Result |
+|---|---|---|
+| Suite parity | Full suite at HEAD **and** at the baseline in a throwaway `git worktree` at `41c507e` | **27 failed / 1318 passed** vs **27 failed / 1280 passed**; `diff` of the sorted `FAILED` node sets is **empty**. +38 = exactly the new tests. Node sets compared, not counts. |
+| New suites | The 4 new files | 38 passed, and 38 passed **again** after the migration down/up cycle. |
+| `ruff` | On the 12 touched files | clean. Repo-wide is 132 errors, all pre-existing (touched files contribute none). |
+| Migration | `alembic heads` → single head `67cfba8fcb2d`; `downgrade -1` → `upgrade head` | Clean both ways. Verified in Postgres: after downgrade `column_count = 0` **and** `index_count = 0`; after upgrade the live `indexdef` is exactly `CREATE UNIQUE INDEX … (workspace_id, clock_in_code) WHERE (clock_in_code IS NOT NULL)`. |
+| Floor gate — **through the real ASGI app with real JWTs** | 37-assertion probe: `create_app()` + `httpx.ASGITransport`, tokens minted by `sign_in_user` (so `BackendPermissionMiddleware` + `require_roles` are in the path), not hand-built identity dicts | 34/34 substantive assertions pass. Exact key sets observed: **floor** compact = `client_id, username, profile_picture, role, workspace_role, clock_in_code, email`; **manager / worker / admin** compact = `client_id, profile_picture, role, username, workspace_role` — `clock_in_code` **absent**, `email` **absent**; full mode for those scopes = the 8 pre-phase keys, `clock_in_code` **absent**. Absent, not `null`, confirmed at the wire. |
+| `?role=` repair | Ran the pre-phase query in the baseline worktree | `?role=` was a `DBAPIError: InvalidTextRepresentationError` for **`worker`, `wood_worker` and `nonsense`, under both `manager` and `floor` scope** — a guaranteed 500 for every value and every scope, exactly as escalated. Post-repair: `worker` → 200 filtered, `wood_worker` → 200 (specialization leg), `worker,wood_worker` → 200 (both legs OR'd), unknown → 200 with **0 rows**. |
+| Enum-leg completeness | `pg_enum` labels vs the Python sets used for the split | `role_name_enum` = `admin, worker, manager, seller` ≡ `RoleNameEnum`; `workspace_role_specialization_enum` = `wood_worker, upholstery_worker, quality_control` ≡ `WorkspaceSpecializationEnum`. **No DB label is silently dropped by the split** — the repair is complete, not merely non-crashing. |
+| Batching (listener assertion is real) | Independent mutation: `_load_clock_in_codes` rewritten as a per-user loop | `test_floor_code_fetch_is_one_batched_query_for_the_page` **FAILED**. The local-listener assertion is load-bearing. |
+| Gate is real | Mutation: `is_floor_session = True` | non-floor matrix **FAILED**. |
+| `false()` semantics | Mutation: drop the `else false()` so no predicates ⇒ no filter | `test_unknown_role_name_matches_nothing_rather_than_everything` **FAILED**. |
+| `updated_by_id` | Mutation: drop the stamp | `test_admin_sets_then_clears_a_workers_clock_in_code` **FAILED**. |
+| No identify endpoint | `grep -ri identify` over `routers/`, plus live `POST` probes | **Zero** matches in the router tree; `/api/v1/auth/identify` and `/api/v1/worker-shifts/identify` → 404, `/api/v1/users/identify` → 405 (matched by `PATCH /{user_client_id}`, no POST). D13 rev 3 respected. |
+| Code management at the wire | PATCH probes | assign → 200 and visible to the floor roster; duplicate in workspace → **409** `{"ok":false,"error":"Clock-in code is already in use in this workspace."}` (no `IntegrityError`, no 500); clear (`null`) → floor sees `clock_in_code: null`, **no stale value**; same code in a **different** workspace → 200; `"abc"` / `""` / `"   "` / 17 chars → **422**; `"  code  "` stored trimmed; unrelated PATCH leaves the code intact; **worker-role token → 403**. |
+| Additive-only / blast radius | `git diff 41c507e HEAD` on each surface | `domain/users/serializers.py`, `clock_out_worker_shift.py`, `toggle_worker_shift.py`, `tests/unit/test_worker_shifts_router.py`, `test_worker_shift_commands.py`, and everything Connecteam (`services/tasks/connecteam/`, `services/infra/connecteam/`, `auto_clock_out_open_shifts.py`) — **all empty**. D8 held. `analytics: None` confirmed present at `clock_out_worker_shift.py:39` **and** `toggle_worker_shift.py:62`; the Phase 4 pinning test passes unmodified. |
+| Lifecycle | Docs | Master phase table row 6 = `implemented` at `b0f35b1`, awaiting review; Phase 7 `under_construction`; master plan **not** archived; phase plan still `under_construction`; handoff liveness row 6 still `❌`; no implemented summary. Baseline list carries the broken `count_queries` fixture **and** the pre-Phase-6 `?role=` 500. Correct. |
+
+Two probe assertions failed for reasons that are **not** implementation defects, recorded for
+completeness: (a) a `seller`-scope token gets **403** at `GET /users` — the route's
+`require_roles([ADMIN, MANAGER, WORKER])` excludes the seller role outright, which is *stronger*
+than the acceptance-3 requirement (the fields cannot leak through an endpoint that scope cannot
+reach); (b) `/api/v1/users/identify` returns 405 rather than 404 because the path is captured by
+`PATCH /{user_client_id}` — no such route exists.
+
+Worth stating plainly, since it bounds the phase's real disclosure: `email` was **already** in the
+full (non-compact) shape for every scope before this phase. The marginal new disclosure is therefore
+exactly `clock_in_code` (floor only) plus compact-mode `email` (floor only) — minimal, and it lands
+in `list_users` alone rather than in the shared serializers.
+
+**Findings (all non-blocking; none gate approval)**
+
+- **R1-1 — test coverage, LOW.** `update_user_admin.py:116-119` — the `IntegrityError`→409
+  translation (the real arbiter for the concurrent-assignment race) has **no committed test**. Every
+  duplicate test is short-circuited by the pre-check at lines 99-108, so from the suite's point of
+  view that branch is unreachable. Its correctness rests on the string constant
+  `_CLOCK_IN_CODE_INDEX` (`update_user_admin.py:21`) matching the index name Postgres emits — a name
+  now duplicated in **three** places (`user_work_profile.py:69`, `update_user_admin.py:21`, and the
+  model test's assertion). Rename the index in a future migration without updating the constant and
+  the race silently degrades from a friendly 409 to a 500, with nothing failing. The implementer's
+  "drop the pre-check → 10 passed" mutation proves the branch works *today* but leaves no permanent
+  guard. Cheapest fix: one assertion pinning `_CLOCK_IN_CODE_INDEX` against the model's `Index`
+  name. (Not required for approval — the shipped behaviour is correct.)
+- **R1-2 — handoff conformance gap, LOW (operator-owned).** The handoff liveness table promises
+  Phase 6 delivers "`clock_in_code` … management (§3)", but §3 documents **no management surface**:
+  no `PATCH /api/v1/users/{id}` request shape, no `clock_in_code` field, no explicit 409/422
+  semantics beyond the generic §8 list. The implementation ships that capability correctly (probed
+  above); the contract simply doesn't describe it, so the conformance walk cannot confirm "matches
+  the contract" for that row. Since doc edits are operator-owned per the 2026-07-30 ruling, this is
+  for the operator's post-approval pass — flagging it so the liveness flip isn't made against a
+  section that never described the surface.
+- **R1-3 — doc staleness, INFORMATIONAL.** Handoff §8 still lists `404` as covering
+  "anti-enumeration identify misses" — vestigial from the identify endpoint dropped in D13 rev 3.
+  No such endpoint exists (verified). Text only.
+- **R1-4 — review-log accuracy, INFORMATIONAL.** The implementer entry claims the shared
+  serializers have "~10 other consumers (tasks, shopify, notifications, working sections, cases…)".
+  Actual: `domain/tasks/serializers.py` is the **only** other module importing
+  `serialize_user_compact_with_role` / `serialize_user_list_item`, and `list_users` has exactly one
+  caller (the router). The substantive claim — serializers untouched, so no other consumer is
+  affected — is **true and verified** (empty diff). Only the count is overstated.
+
+**Observation (not a finding).** A consequence of the operator's Q1 deferral, recorded so it is a
+known operational cost rather than a surprise: because there is no read-back surface, a duplicate
+409 is opaque. A code held by a **deactivated** worker keeps its `user_work_profile` row and stays
+reserved at the DB level while that worker is absent from the roster, so a manager can hit a 409 for
+a code nobody visible holds and has no way to find out who does. Recovery is guessing another code.
+Not re-litigating the ruling.
+
+**Checklist status:** all 13 phase-checklist items and all 4 required adversarial probes verified
+green. Not re-litigated per the binding rulings: the `?role=` repair scope, and the Q1 deferral.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
+- Current state: `archived`
 - Next state: `approved`
 - Transition owner: `David`
