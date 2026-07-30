@@ -998,8 +998,10 @@ async def test_clock_toggle_clocks_in_then_out(db_session) -> None:
         )
     ).scalars().all()
     assert clock_in_result["action"] == "clock_in"
+    assert "analytics" not in clock_in_result
     assert clocked_in.state is UserShiftStateEnum.IDLE
     assert clock_out_result["action"] == "clock_out"
+    assert clock_out_result["analytics"] is None
     assert await _open_shift_record(db_session, workspace.client_id, worker.client_id) is None
     assert {marker.state for marker in markers} == {
         UserShiftStateEnum.STARTED_SHIFT,
@@ -1011,10 +1013,20 @@ async def test_clock_toggle_clocks_in_then_out(db_session) -> None:
 async def test_direct_clock_in_rejects_existing_open_shift(db_session) -> None:
     workspace, worker = await _seed_workspace_worker(db_session)
     ctx = _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
-    await clock_in_worker_shift(ctx)
+    result = await clock_in_worker_shift(ctx)
+
+    assert result == {"action": "clock_in", "user_id": worker.client_id}
 
     with pytest.raises(ConflictError):
         await clock_in_worker_shift(ctx)
+
+
+async def test_direct_clock_out_rejects_worker_without_open_shift(db_session) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    ctx = _ctx(db_session, workspace, worker, RoleNameEnum.WORKER.value)
+
+    with pytest.raises(ConflictError):
+        await clock_out_worker_shift(ctx)
 
 
 async def test_manager_can_clock_worker_on_behalf_and_worker_cannot_clock_peer(db_session) -> None:
@@ -1033,6 +1045,16 @@ async def test_manager_can_clock_worker_on_behalf_and_worker_cannot_clock_peer(d
 
     assert open_record.changed_by_id == manager.client_id
 
+    with pytest.raises(PermissionDenied):
+        await clock_out_worker_shift(
+            _ctx(
+                db_session,
+                workspace,
+                manager,
+                RoleNameEnum.MANAGER.value,
+            )
+        )
+
     peer = await _seed_user(db_session, "shift-peer")
     peer_ctx = _ctx(
         db_session,
@@ -1043,6 +1065,16 @@ async def test_manager_can_clock_worker_on_behalf_and_worker_cannot_clock_peer(d
     )
     with pytest.raises(PermissionDenied):
         await clock_in_worker_shift(peer_ctx)
+
+    clock_out_result = await clock_out_worker_shift(manager_ctx)
+    assert clock_out_result == {
+        "action": "clock_out",
+        "user_id": worker.client_id,
+        "transitioned_steps": 0,
+        "analytics": None,
+    }
+    with pytest.raises(ConflictError):
+        await clock_out_worker_shift(manager_ctx)
 
 
 async def test_clock_out_transitions_working_steps_and_leaves_paused_steps_open(
@@ -1091,6 +1123,7 @@ async def test_clock_out_transitions_working_steps_and_leaves_paused_steps_open(
         )
     )
     assert result["transitioned_steps"] == 1
+    assert result["analytics"] is None
     assert working_step.state is TaskStepStateEnum.ENDED_SHIFT
     assert paused_step.state is TaskStepStateEnum.PAUSED
     assert paused_open == 1

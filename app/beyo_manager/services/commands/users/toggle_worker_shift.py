@@ -53,8 +53,11 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
                 ctx.user_id,
             )
             action = "clock_out"
-    return {
+    result = {
         "action": action,
         "user_id": user_id,
         "transitioned_steps": transitioned_steps,
     }
+    if action == "clock_out":
+        result["analytics"] = None
+    return result

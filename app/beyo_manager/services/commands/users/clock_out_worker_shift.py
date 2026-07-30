@@ -37,4 +37,5 @@ async def clock_out_worker_shift(ctx: ServiceContext) -> dict:
         "action": "clock_out",
         "user_id": user_id,
         "transitioned_steps": transitioned_steps,
+        "analytics": None,
     }

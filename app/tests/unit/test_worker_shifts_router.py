@@ -4,6 +4,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from beyo_manager.errors.permissions import PermissionDenied
+from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.api_v1 import worker_shifts as worker_shifts_router
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
@@ -12,14 +14,23 @@ from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
 def _build_client(*, role_name: str, monkeypatch) -> tuple[TestClient, dict]:
     app = FastAPI()
     app.include_router(worker_shifts_router.router, prefix="/api/v1/worker-shifts")
-    captured = {"calls": []}
+    captured = {
+        "calls": [],
+        "response_data": {"action": "ok"},
+        "response_error": None,
+    }
 
     async def _fake_get_db():
         yield object()
 
     async def _fake_run_service(command, ctx):
         captured["calls"].append((command, ctx))
-        return SimpleNamespace(success=True, data={"action": "ok"}, error=None)
+        error = captured["response_error"]
+        return SimpleNamespace(
+            success=error is None,
+            data=captured["response_data"] if error is None else None,
+            error=error,
+        )
 
     app.dependency_overrides[get_db] = _fake_get_db
     app.dependency_overrides[get_jwt_claims] = lambda: {
@@ -54,6 +65,137 @@ def test_clock_route_rejects_unrelated_role(monkeypatch) -> None:
 
     assert response.status_code == 403
     assert captured["calls"] == []
+
+
+@pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
+@pytest.mark.parametrize(
+    ("path", "expected_command"),
+    [
+        ("/api/v1/worker-shifts/clock-in", worker_shifts_router.clock_in_worker_shift),
+        ("/api/v1/worker-shifts/clock-out", worker_shifts_router.clock_out_worker_shift),
+    ],
+)
+def test_explicit_clock_routes_allow_shift_roles_and_wire_existing_commands(
+    role_name: str,
+    path: str,
+    expected_command,
+    monkeypatch,
+) -> None:
+    client, captured = _build_client(role_name=role_name, monkeypatch=monkeypatch)
+    user_id = "usr_worker" if role_name != "worker" else None
+
+    response = client.post(path, json={"user_id": user_id})
+
+    assert response.status_code == 200
+    assert len(captured["calls"]) == 1
+    assert captured["calls"][0][0] is expected_command
+    assert captured["calls"][0][1].incoming_data == {"user_id": user_id}
+
+
+def test_clock_out_route_does_not_forward_internal_clock_out_at(monkeypatch) -> None:
+    client, captured = _build_client(role_name="manager", monkeypatch=monkeypatch)
+
+    response = client.post(
+        "/api/v1/worker-shifts/clock-out",
+        json={
+            "user_id": "usr_worker",
+            "clock_out_at": "2026-07-29T06:00:00+00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["calls"][0][1].incoming_data == {"user_id": "usr_worker"}
+
+
+@pytest.mark.parametrize(
+    ("path", "error", "expected_status"),
+    [
+        (
+            "/api/v1/worker-shifts/clock-in",
+            ConflictError("Worker is already clocked in."),
+            409,
+        ),
+        (
+            "/api/v1/worker-shifts/clock-out",
+            ConflictError("Worker is not clocked in."),
+            409,
+        ),
+        (
+            "/api/v1/worker-shifts/clock-in",
+            PermissionDenied("Managers and admins must select a worker."),
+            403,
+        ),
+        (
+            "/api/v1/worker-shifts/clock-out",
+            PermissionDenied("Managers and admins must select a worker."),
+            403,
+        ),
+    ],
+)
+def test_explicit_clock_routes_preserve_command_error_statuses(
+    path: str,
+    error,
+    expected_status: int,
+    monkeypatch,
+) -> None:
+    client, captured = _build_client(role_name="manager", monkeypatch=monkeypatch)
+    captured["response_error"] = error
+
+    response = client.post(path, json={})
+
+    assert response.status_code == expected_status
+    assert response.json() == {"error": error.message, "ok": False}
+
+
+def test_clock_routes_preserve_analytics_null_contract_by_action(monkeypatch) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+    captured["response_data"] = {"action": "clock_in", "user_id": "usr_worker"}
+
+    explicit_clock_in = client.post("/api/v1/worker-shifts/clock-in", json={})
+    toggle_clock_in = client.post("/api/v1/worker-shifts/clock", json={})
+
+    assert "analytics" not in explicit_clock_in.json()["data"]
+    assert "analytics" not in toggle_clock_in.json()["data"]
+
+    captured["response_data"] = {
+        "action": "clock_out",
+        "user_id": "usr_worker",
+        "transitioned_steps": 2,
+        "analytics": None,
+    }
+    explicit_clock_out = client.post("/api/v1/worker-shifts/clock-out", json={})
+    toggle_clock_out = client.post("/api/v1/worker-shifts/clock", json={})
+
+    assert explicit_clock_out.json()["data"] == captured["response_data"]
+    assert toggle_clock_out.json()["data"] == captured["response_data"]
+
+
+@pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
+def test_current_route_allows_shift_roles_and_forwards_user_id(
+    role_name: str,
+    monkeypatch,
+) -> None:
+    client, captured = _build_client(role_name=role_name, monkeypatch=monkeypatch)
+    user_id = "usr_worker" if role_name != "worker" else None
+    captured["response_data"] = {
+        "user_id": user_id or "usr_test",
+        "clocked_in": False,
+        "shift_started_at": None,
+        "state": None,
+        "state_entered_at": None,
+        "pause_reason": None,
+        "declared_state": None,
+    }
+
+    response = client.get(
+        "/api/v1/worker-shifts/current",
+        params={"user_id": user_id} if user_id else None,
+    )
+
+    assert response.status_code == 200
+    assert captured["calls"][0][0] is worker_shifts_router.get_current_worker_shift_state
+    assert captured["calls"][0][1].query_params == {"user_id": user_id}
+    assert response.json()["data"] == captured["response_data"]
 
 
 @pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
