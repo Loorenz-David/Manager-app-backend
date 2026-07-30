@@ -18,8 +18,7 @@
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ✅ live (reviewed & approved) |
 > | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
 > | 6 | Roster `clock_in_code` exposure (§3) | ✅ live (reviewed & approved) |
-> | 7 | Populated clock-out `analytics` (§5.1) | ❌ not yet — `analytics` is `null` until then |
-> | 8 | `analytics.completed_items` + `analytics.week` (§5.2), floor roster sections + raised page cap (§3) | ❌ not yet — keys absent until then |
+> | 7 | Populated clock-out `analytics` — timeline, completed_items, week, rate (§5.1); floor roster sections + raised page cap (§3) | ❌ not yet — `analytics` is `null` until then |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
 >
 > Mock these shapes until the phase flips to ✅. Any contract change will be edited **here first**.
@@ -174,97 +173,70 @@ All three: roles admin/manager **must** pass `user_id` (the confirmed worker); a
 
 ### 5.1 The `analytics` object (clock-out day summary)
 
-Everything is scoped to the clock-out's UTC date and reflects the **final, rebuilt** timeline (the
-backend reconstructs the whole shift at clock-out — these numbers are authoritative, not the live
-provisional ones).
+Scoped to the clock-out date and read from the **rebuilt** timeline — these are the authoritative
+numbers, not the live provisional ones. Purpose-built for this screen: it deliberately does **not**
+carry the manager app's per-segment drill-down.
 
 ```json
 {
   "date": "2026-07-29",
   "timeline": {
-    "date_from": "2026-07-29",
-    "date_to": "2026-07-29",
     "working_seconds": 21600,
     "pause_seconds": 3600,
-    "ended_shift_seconds": 0,
     "idle_seconds": 1800,
-    "completed_count": 7,
     "pause_by_reason": { "par_…": 2700, "par_…2": 900 }
   },
-  "segments": [
-    {
-      "start": "2026-07-29T06:58:00Z",
-      "end": "2026-07-29T06:58:00Z",
-      "state": "started_shift",
-      "reason": null,
-      "is_open": false,
-      "manually_recorded": false,
-      "seconds": 0,
-      "steps": []
-    },
-    {
-      "start": "2026-07-29T09:12:00Z",
-      "end": "2026-07-29T09:42:00Z",
-      "state": "paused",
-      "reason": "par_…",
-      "is_open": false,
-      "manually_recorded": true,
-      "seconds": 1800,
-      "steps": []
-    }
-  ],
-  "segments_truncated": false,
   "pause_reasons": {
     "par_…": { "name": "Lunch break", "image_url": "https://…", "pause_type": "personal" }
   },
-  "insights": [
+  "completed_items": [
     {
-      "code": "…", "polarity": "positive", "metric": "working_seconds",
-      "target_value": 21600, "baseline_value": 19800, "delta": 1800,
-      "delta_pct": 9.1, "sample_size": 12, "severity": "info"
+      "item_id": "itm_…",
+      "reference": "ART-10482",
+      "image_url": "https://…",
+      "working_section": { "client_id": "wsc_…", "name": "Assembly" },
+      "units": 4,
+      "total_seconds": 4260,
+      "issues_count": 1
     }
-  ]
+  ],
+  "completed_items_truncated": false,
+  "week": {
+    "days": [
+      { "date": "2026-07-27", "working_seconds": 21600, "pause_seconds": 3600, "idle_seconds": 1800 }
+    ],
+    "totals": { "working_seconds": 108000, "pause_seconds": 18000, "idle_seconds": 9000 }
+  },
+  "rate": {
+    "units_per_hour": 17.3,
+    "baseline_units_per_hour": 15.9,
+    "baseline_days": 5
+  }
 }
 ```
 
-- `timeline` — the day resume for tiles/donuts: the four buckets partition the shift; `pause_by_reason` sums exactly to `pause_seconds`; keys resolve via `pause_reasons`.
-- `segments` — the drawable timeline, ordered; `state` ∈ `started_shift | working | paused | idle | ended_shift` (markers have `seconds: 0`); worker-declared segments have `manually_recorded: true`; `steps` lists the task-step details behind working/paused blocks (same shape as the manager timeline endpoint — see the related handoff). `segments_truncated` is a safety cap flag (render what you got).
-- `insights` — trend cards comparing the day against the worker's recent baseline. May be `[]` (not enough history). **Freshness caveat:** insights read aggregate day-stats that are updated asynchronously — seconds after clock-out they may not yet include the very last steps of the day. `timeline`/`segments` have no such lag. Treat insights as indicative, not as the payroll number.
-- These are the same shapes as the manager endpoints (`GET /worker-stats/{user_id}/linear-timeline`, `GET /worker-stats/insights`) — components built for one render the other.
+- **`timeline`** — the day resume for tiles/donut. The three buckets partition the recorded shift;
+  `pause_by_reason` sums exactly to `pause_seconds`, keyed by pause-reason id.
+- **`pause_reasons`** — lookup map for those keys, so you can render "Lunch break" with its icon.
+- **`completed_items`** — one entry per item the worker completed that day, ordered by completion
+  time. `reference` is `article_number`, falling back to `sku`, else `null` — this system has no
+  product-name entity, so the reference *is* the label. `units` is the item's quantity.
+  `total_seconds` is the time booked against that item's steps (task-level, not this worker's share
+  alone). `image_url` / `working_section` are `null` when unavailable. `[]` when nothing was
+  completed. `completed_items_truncated` flags a defensive cap.
+- **`week`** — Monday–Sunday containing the clock-out date, **worked time only**: each day's recorded
+  shift split into working / pause / idle so the bar can be segmented. Days with no shift are present
+  with zeros. **There is no `scheduled_seconds`** — shift scheduling does not exist in this system, so
+  any "of 40h scheduled" target must be omitted or hard-coded client-side.
+- **`rate`** — units per hour today vs a baseline over the most recent days that have recorded working
+  time. `baseline_days` reports how many days actually contributed; when it is `0`,
+  `baseline_units_per_hour` is `null` (render today's rate alone).
 - Unknown extra keys may appear inside `analytics` later — ignore them (additive contract).
 
-#### 5.2 `analytics.completed_items` and `analytics.week` (backend phase 8 — not live yet)
-
-Two further additive keys inside `analytics`. Until phase 8 lands they are **absent** (not `null`) —
-treat missing as "no data" and keep the panels hidden.
-
-```json
-"completed_items": [
-  {
-    "item_id": "itm_…",
-    "reference": "ART-10482",              // article_number, falling back to sku; null if neither
-    "image_url": "https://…",              // first linked item image; null if none
-    "working_section": { "client_id": "wsc_…", "name": "Assembly" },   // where it was completed; null if unknown
-    "total_seconds": 4260,                 // total time spent completing this item
-    "issues_count": 1
-  }
-],
-"week": {
-  "days": [
-    { "date": "2026-07-27", "working_seconds": 21600, "pause_seconds": 3600, "idle_seconds": 1800 }
-  ],
-  "totals": { "working_seconds": 108000, "pause_seconds": 18000, "idle_seconds": 9000 }
-}
-```
-
-- `completed_items` — one entry per item the worker completed on the clock-out date, ordered by
-  completion time. `reference` is `article_number` when present, else `sku`, else `null` (this system
-  has no product-name entity — render the reference as the label). `total_seconds` is the time booked
-  against that item's steps, not merely this worker's share.
-- `week` — the Monday–Sunday week containing the clock-out date, **worked-time only**: each day's
-  recorded shift time split into working / pause / idle so the bar can be segmented. Days with no
-  shift are present with zeros. **There is no `scheduled_seconds`** — shift scheduling does not exist
-  in this system yet, so any "of 40h scheduled" target must be omitted or hard-coded client-side.
+**Not provided** (deliberately, so you don't build against them): a day `segments[]` drill-down with
+per-step detail, and the time-based `insights` array. The manager app's
+`GET /worker-stats/{user_id}/linear-timeline` still serves the former if a manager surface ever needs
+it; the latter cannot express unit-based comparisons, which is what this screen shows.
 
 ## 5.3 Nullability conventions (applies to every shape in this document)
 
@@ -272,9 +244,9 @@ The JSON examples above show fields populated for readability. Read them **toler
 
 - Any `*_url`, `image_url`, `profile_picture`, `description`, `reference`, or nested object
   documented as "…if none/unknown" may be `null`.
-- `analytics` itself may be `null` (degraded mode); keys documented as belonging to a later phase are
-  **absent** until that phase ships — absent and `null` must both be handled as "no data".
-- Arrays may be empty (`insights`, `steps`, `completed_items`).
+- `analytics` itself may be `null` (degraded mode) — handle absent and `null` alike as "no data".
+- Arrays may be empty (`completed_items`); `rate.baseline_units_per_hour` is `null` when
+  `baseline_days` is `0`.
 - `reason_text` is three-way: absent / string / `null` (see §4).
 - Objects may carry additional keys not documented here (e.g. roster items' `workspace_role`) — ignore
   unknown keys rather than failing validation.
