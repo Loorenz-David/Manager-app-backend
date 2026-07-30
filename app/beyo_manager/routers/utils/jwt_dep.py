@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from beyo_manager.config import settings
-from beyo_manager.services.infra.auth import is_token_blocklisted
+from beyo_manager.services.infra import auth
 
 _bearer = HTTPBearer()
 
@@ -62,6 +62,6 @@ def require_app_scope(required_scope: str | list[str]):
 
 async def _is_blocklisted(jti: str) -> bool:
     try:
-        return await is_token_blocklisted(jti)
+        return await auth.is_token_blocklisted(jti)
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Auth blocklist unavailable.") from exc

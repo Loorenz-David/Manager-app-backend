@@ -10,6 +10,7 @@ from beyo_manager.config import settings
 from beyo_manager.routers.utils import jwt_dep
 from beyo_manager.services.commands.auth import logout_user as logout_module
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra import auth as auth_module
 from beyo_manager.services.infra.redis import async_client
 
 
@@ -98,6 +99,33 @@ async def test_floor_logout_permanently_revokes_subsequent_request(
         )
 
     assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Token has been revoked."
+
+
+@pytest.mark.unit
+async def test_jwt_claims_fail_closed_when_blocklist_is_unavailable(monkeypatch) -> None:
+    async def _blocklist_unavailable(_jti: str) -> bool:
+        raise RuntimeError("redis unavailable")
+
+    monkeypatch.setattr(
+        auth_module,
+        "is_token_blocklisted",
+        _blocklist_unavailable,
+    )
+    token = jwt.encode(
+        {"jti": "unavailable-blocklist-jti"},
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    jwt_dep._claim_cache.clear()
+    with pytest.raises(HTTPException) as exc_info:
+        await jwt_dep.get_jwt_claims(
+            HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Auth blocklist unavailable."
 
 
 @pytest.mark.unit

@@ -545,6 +545,40 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
 
   No archive/lifecycle flip performed; this stays `under_construction` pending the two test fixes.
 
+- `2026-07-30` — Round 2 test-integrity fixes for R2-1, R2-5, and R2-2.
+
+  - **R2-1 fixed:** `jwt_dep` now resolves the blocklist reader through the
+    `services.infra.auth` module at call time, and `infra.auth` resolves the Redis client through
+    the `async_client` module at call time. This restores the existing `fake_redis` seam without
+    changing production behavior. The floor-logout revocation test now requires `401 "Token has
+    been revoked."`; the companion outage test requires `401 "Auth blocklist unavailable."`.
+    Before the seam fix, the new discriminating assertion failed with the unavailable detail,
+    proving the old status-only assertion was a false positive.
+  - **Mutation check:** temporarily changed `is_token_blocklisted` to always return `False` and
+    ran `pytest tests/unit/services/commands/auth/test_logout_user.py -q -k
+    permanently_revokes`; it failed with `DID NOT RAISE HTTPException`. The production reader was
+    restored immediately after the check.
+  - **R2-5 fixed:** the real-Redis TTL module now uses a function-scoped fixture that clears a
+    prior async Redis singleton before each test and closes/resets the client it creates. This
+    prevents a client created on a previous pytest event loop from being reused by the TTL gate.
+  - **R2-2 fixed:** added a real-Redis expiring-token TTL test that asserts the blocklist key was
+    written and `0 < TTL <= exp_remaining + 60`; the permanent floor-token case continues to seed
+    an expiring value and assert Redis returns `TTL == -1` after production logout.
+  - **Validation:**
+    `pytest tests/unit/services/commands/auth/test_logout_user.py -q` → `6 passed`;
+    `pytest tests/integration/services/commands/auth/test_logout_user_integration.py -q` →
+    `2 passed`; socket suites followed by that integration module → `5 passed`; normal-order
+    `pytest tests -q -k "auth or sign_in or token or logout or refresh"` → `78 passed`, `1`
+    known pre-existing custom-workspace-specialization failure, `1225 deselected`; and the auth
+    command directory → `33 passed`, the same `1` known failure. Touched-file `ruff check` passed.
+    The quiet-tree full suite was also run and reported `321 failed, 986 passed, 2 errors`; this
+    does not match the canonical `ccdffa9` baseline (`27 failed, 1275 passed`) and needs separate
+    environment/baseline triage. Its auth-namespace failure was only the known specialization test.
+  - **R2-3/R2-4/R2-6:** left unchanged. They are documented review observations requiring broader
+    policy or contract decisions, outside this test-integrity fix cycle.
+
+  No archive/lifecycle flip performed; this stays `under_construction` pending reviewer approval.
+
 ## Lifecycle transition
 
 - Current state: `under_construction`
