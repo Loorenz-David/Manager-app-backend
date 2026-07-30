@@ -6,7 +6,7 @@
 - Status: `under_construction`
 - Owner agent: `claude-fable-5` (plan) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T12:00:00Z`
+- Last updated at (UTC): `2026-07-30T09:45:00Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/implementation/declared_worker_states/MASTER_PLAN_declared_worker_states_20260729.md` (decision D11 governs this phase)
 - Prerequisite: **none** — this phase touches only auth and may run at any point (recommended early, to unblock frontend auth integration).
@@ -267,6 +267,283 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
   - The planned DB/Redis integration and full-suite baseline commands could not be re-run because
     the environment rejected the required local-service escalation after its usage quota was
     exhausted. These remain explicit re-review gates; no green result is claimed for them here.
+
+- `2026-07-30` — Independent review **round 2 (in progress)** of fix commit `b8946fe`
+  (implementation `549f480`). Appended step-by-step; earlier prior sessions were terminated by API
+  overloads. Working tree is clean; repo HEAD is `ccdffa9` (Phase 4 fix work sits on top of
+  `b8946fe`), so all round-2 judgements are made against `b8946fe`'s **diff**, not the tree.
+
+  **Step 1 — focused auth/socket unit tests at `b8946fe`.** Finding recorded:
+
+  - **R2-1 — HIGH (test integrity) — the `fake_redis` monkeypatch seam does not cover the
+    revocation half of the floor logout test, so it can pass for the wrong reason.**
+    `app/tests/unit/services/commands/auth/test_logout_user.py:35-39` patches
+    `async_client.get_async_redis`. That works for `logout_user._blocklist_token`
+    (`services/commands/auth/logout_user.py:50` imports the symbol *inside* the function, so it
+    resolves through the patched module attribute at call time). It does **not** work for the
+    read side: `b8946fe` introduced `services/infra/auth.py:2`, which binds
+    `get_async_redis` at **module import time**, and `routers/utils/jwt_dep.py:9` now imports
+    `is_token_blocklisted` from it. Consequently, in
+    `test_floor_logout_permanently_revokes_subsequent_request`
+    (`test_logout_user.py:63-100`) the write lands in the in-memory `_FakeRedis` while
+    `get_jwt_claims` reads **real** Redis. Two mutually exclusive outcomes: with Redis reachable,
+    the key is absent → `exists == 0` → no `401` → the test **fails**; with Redis unreachable, the
+    exception is swallowed by `jwt_dep._is_blocklisted` into `HTTPException(401,
+    "Auth blocklist unavailable.")` → the test **passes for the fail-closed reason, not because
+    the token was revoked**. The assertion `exc_info.value.status_code == 401` cannot distinguish
+    the two (it checks the status code only, never `detail`). Codex's reported
+    `44 passed` was produced in a session that explicitly could not start local services, which is
+    consistent with the second branch. Acceptance 3's "subsequent request with the same token →
+    `401`" therefore has no sound unit-level evidence. Same seam defect applies to any other test
+    relying on `fake_redis` to influence a read through `infra.auth`.
+
+  **Step 2 — is N5 genuinely closed? (verified by reading; the operator's
+  `pytest tests/integration/services/commands/auth -q` → `1 passed in 0.05s` was NOT re-executed).**
+  Verdict: **N5 is genuinely closed for the exp-less write path, with one residual evidence gap.**
+
+  - The seam is real, not faked. `app/tests/integration/services/commands/auth/test_logout_user_integration.py`
+    uses the `redis_client` fixture, which is `redis.from_url(settings.redis_url,
+    decode_responses=True)` (`app/tests/conftest.py:53-60`) — a real client, no stub anywhere in
+    the fixture chain (`app/tests/conftest.py` is the only conftest on that path and installs no
+    Redis double). Production writes through `get_async_redis()`
+    (`services/infra/redis/async_client.py:8-12`), also a real client on the same
+    `settings.redis_url`. The test `monkeypatch.setattr(settings, "redis_key_prefix",
+    isolated_redis_prefix)` and `_blocklist_token` reads `settings.redis_key_prefix` at call time
+    (`logout_user.py:53`), so both sides address the identical key.
+  - The assertion is non-tautological: the test **seeds** `SET key "stale" EX 60` first, then calls
+    production `logout_user`, then asserts `get(key) == "1"` **and** `ttl(key) == -1`. A no-`ex`
+    `SET` discarding a pre-existing TTL is genuine server semantics that `_FakeRedis` could not
+    have produced (and the fake is not in scope here at all). This is exactly the defect N5 named.
+  - `0.05s` is thin-looking but not disqualifying: `app/pytest.ini` has no `-m "not integration"`
+    in `addopts`, so the test is selected and run (a deselect would have printed
+    `1 deselected`, not `1 passed`), and a localhost Redis `SET`/`GET`/`TTL` round-trip is
+    sub-millisecond. Critically, `redis.from_url` connects lazily, so an absent Redis would surface
+    as a `ConnectionError` at `redis_client.set(...)` — an **error, not a pass**. A pass therefore
+    does imply a live Redis server. Nothing in the test can succeed against a dead Redis.
+  - **Residual gap (LOW, new): R2-2 — the "unchanged for expiring tokens" half of acceptance 3 /
+    the checklist's "Expiring tokens' blocklist TTL behavior unchanged — asserted against Redis"
+    is still fake-only.** The single integration test covers only the exp-less branch; the
+    exp-bearing TTL formula is asserted solely against `_FakeRedis.ttl`, which returns the `ex`
+    value it was handed (`test_logout_user.py:25-29`, `:50-60`) — i.e. it re-asserts the argument,
+    not a server TTL. One integration test in the whole gate directory is minimal coverage; a
+    second case seeding no TTL and asserting `0 < ttl <= formula` would close it.
+
+  **Step 3 — N1 exploit probe re-run + each of the four defense layers probed separately.**
+  Executed, no mocks: real Redis (`redis://localhost:6379/0`, isolated key prefix
+  `beyo_manager:r2probe:<rand>`, cleaned up), real PyJWT `2.10.1`, and the real production
+  functions — the floor token was minted by production `build_auth_response` driven by real
+  (unpersisted) `User`/`Workspace`/`WorkspaceMembership`/`WorkspaceRole`/`Role` ORM rows, revoked by
+  production `logout_user`, and every rejection came from production `refresh_token()` /
+  `jwt_dep.get_jwt_claims()` / `services.infra.auth.is_token_blocklisted()` reading real Redis.
+  **19 probes, 18 as-designed; the single non-pass is the knowingly-documented legacy window
+  (R2-3 below), not a regression.**
+
+  - **N1 is CLOSED.** The round-1 exploit is dead: floor token minted (`has_exp=False`,
+    `has_jti=True`, `token_type=access`, response keys exactly
+    `['access_token', 'user', 'workspace_id']`) → production logout → real Redis
+    `value='1'`, `TTL == -1` → protected route `401 "Token has been revoked."` (claims cache
+    cleared, so this is a genuine real-Redis read) → replayed as the `floor_refresh_token` cookie at
+    `scope=floor` → **`RefreshTokenRejected(reason='floor_scope_not_refreshable', http=401)`**, no
+    token minted. Replaying the *same* revoked token while varying the scope to bypass layer 1
+    (`manager`, `worker`, `admin`, `seller`, plus the casing/whitespace variants `FLOOR`, `Floor`,
+    `"floor "`) minted **nothing** in any case — the non-floor attempts die on layer 3
+    (`reason='refresh_token_invalid'`, exp-less). The bypass is not launderable through the scope
+    parameter.
+  - **Layer 1 (floor hard-reject) — verified independently.** A fully valid, un-revoked,
+    correctly-typed (`token_type=refresh`) floor refresh token is rejected with
+    `reason='floor_scope_not_refreshable'`; the check also fires with `refresh_token=None`, proving
+    it precedes the cookie-presence check (`refresh_token.py:17-21` before `:22-23`) and cannot be
+    probed around by omitting the cookie.
+  - **Layer 2 (blocklist check at refresh) — verified independently against real Redis.** A
+    non-floor, exp-bearing, `token_type=refresh` token whose `jti` was blocklisted by production
+    `_blocklist_token` is rejected with `reason='refresh_token_revoked'`. Discriminating, not
+    blanket: the identical token shape with a fresh un-revoked `jti` still refreshes successfully
+    and mints `token_type=access` with an `exp`. Layer 2 also still fires on the legacy type-less
+    branch (revoked legacy refresh cookie → `refresh_token_revoked`), so the transition branch is
+    not a blocklist hole.
+  - **Layer 3 (exp-less rejection) — verified independently.** A non-floor token that is correctly
+    typed `refresh` but carries no `exp` — i.e. only exp-lessness can stop it — is rejected with
+    `reason='refresh_token_invalid'`.
+  - **Layer 4 (token_type discrimination) — verified independently.** Exp-bearing
+    `token_type=access` → rejected; unknown `token_type='banana'` → rejected (the
+    `not in (None, "refresh")` allow-list is closed, not an `!= "refresh"` blacklist); and
+    `jti`-less refresh → rejected (`refresh_token.py:41-46`), so the layer-2 blocklist cannot be
+    dodged by stripping `jti`. The legacy branch (`exp` present, `token_type` absent) is accepted as
+    designed and mints a *new* `jti` plus `token_type=access`.
+  - **R2-3 — INFO (documented residual, no action required this phase).** The legacy transition
+    branch accepts any exp-bearing type-less token, so a **pre-fix access token** replayed as a
+    refresh cookie is still accepted (probe: accepted, minted a fresh access token). This is
+    inherent to the compatibility branch — a legacy access token and a legacy refresh token are
+    indistinguishable by construction — and it is strictly the *pre-existing* confusion N1 called
+    out as "bounded by TTLs". It is bounded here too, and much more tightly than the plan's Risks
+    note implies: legacy **access** tokens die after `jwt_access_token_expire_minutes` (30 min),
+    not `jwt_refresh_token_expire_days` (30 days). Floor tokens are excluded from this branch
+    entirely by layer 3. Worth one clarifying clause in the Risks sunset note; not a defect.
+
+  **Step 4 — N2, N3, N6 and the legacy transition branch.**
+
+  - **N2 — CLOSED, verified by executed probe against real Redis (6/6 as designed).**
+    `sockets/handlers.py:28-34` now blocklist-checks after JWT decode and before
+    `manager.connect`. Probe (only the non-auth collaborators `manager.connect` /
+    `set_user_online` were stubbed, and only so that reaching them is observable — the blocklist
+    path was the real `is_token_blocklisted` against real Redis): a live exp-less floor token
+    connects (`accepted=True`, `connect` called); the *same* token shape after production
+    `logout_user` (`value='1'`, `TTL == -1`) is rejected (`accepted=False`, `connect` **never**
+    called); and with the async client repointed at a closed port to force a genuine Redis
+    outage, connect is refused (`accepted=False`, `connect` never called) — fail-closed confirmed
+    against a real failure, not a raised-mock. The `QUERY_STRING` token path
+    (`handlers.py:21`) is covered by the same check (revoked token via query string → rejected),
+    so the second credential entry point is not a hole. Codex's unit tests use the correct seam
+    (`monkeypatch.setattr(handlers, "is_token_blocklisted", ...)` — patching the name at its point
+    of use), so unlike R2-1 they are sound.
+    - **R2-4 — INFO.** `handlers.py:29` guards the check with `if jti:`, so a validly signed but
+      `jti`-less token connects with no blocklist consultation (probe: `accepted=True`). This
+      exactly mirrors `jwt_dep.py:32` (`if jti and await _is_blocklisted(jti)`), is unreachable
+      without the signing secret, and every token the app issues carries a `jti` — noted for
+      symmetry only, not a Phase 5 defect.
+  - **N3 — CLOSED.** `services/commands/auth/sign_in_user.py:73-92` decodes the token it just
+    issued and logs `jti` in both the message and the `extra` payload, so the logged value is
+    *structurally* the issued token's `jti`; `logout_user.py:16-28` does the same for
+    `auth.floor_device_logout`. Pinned by assertions on the value, not just its presence:
+    `test_sign_in_user.py:205-226` asserts `record.jti == claims["jti"]` against the decoded
+    response token, and `test_logout_user.py:143-172` asserts `record.jti`. The logout log was
+    observed emitting live during the Step 3 probe
+    (`"event_type": "auth.floor_device_logout", ... jti=c8b41ff2-…`). The Risks section now carries
+    the executable lost-device runbook (`SET <prefix>:auth:blocklist:<jti>` with no `EX`, then
+    verify `TTL == -1`), which Step 1/Step 3 independently confirmed produces `TTL == -1` on a real
+    server. The ops path named in Non-goals is now genuinely operable.
+  - **N6 — CLOSED.** `routers/api_v1/auth.py:56-79` branches explicitly on
+    `body.app_scope == "floor"`: the floor arm performs no pop and no cookie work; every other
+    scope goes through `data.pop("_refresh_token")` with no default, restoring the hard `KeyError`.
+    Pinned by `test_auth_router.py::test_non_floor_sign_in_route_fails_loudly_without_refresh_token`
+    (`pytest.raises(KeyError, match="_refresh_token")`). No `pop(..., None)` remains on that path.
+  - **Legacy transition branch — CONFIRMED still working (executed).** An exp-bearing, `token_type`-less
+    refresh cookie for `scope=manager` still refreshes successfully and mints a properly typed
+    (`token_type=access`), exp-bearing access token with a **new** `jti`, so outstanding pre-fix
+    30-day cookies are not invalidated by the fix. The branch is not a bypass: a revoked legacy
+    type-less cookie is still stopped by layer 2 (`reason='refresh_token_revoked'`), and layer 3
+    still excludes exp-less (floor) tokens from it. Its one documented cost is R2-3 above.
+  - **N4 / N7 (documentation-only outcomes) — present as required.** Non-goals (line 18) states
+    Phase 5 intentionally adds no route-level `floor` gates and that Phase 6 introduces the first
+    floor-gated surface; Risks carries the static-claims / offboarding paragraph and the legacy
+    sunset note.
+
+  **Step 5 — full-suite + `ruff` regression, judged on `b8946fe`'s diff.** Run in detached clean
+  worktrees (`git worktree add`) at `b8946fe`, at its **true parent `e57aab7`**, and at `549f480`.
+  Note on baselines: `549f480` predates the Phase 4 commits (`20b11c7`, `e57aab7`), so a
+  `b8946fe` vs `549f480` delta conflates Phase 4 work; `e57aab7` is the correct isolation baseline
+  and is reported alongside. `pytest-randomly` is **not** installed, so collection order is
+  deterministic — which matters for R2-5 below.
+
+  - **Full suite — no new failures, failure sets byte-identical.**
+    `e57aab7`: `27 failed, 1259 passed`. `b8946fe`: `27 failed, 1272 passed`.
+    `549f480`: `27 failed, 1236 passed`. `diff` of the sorted `FAILED` name lists is **empty** for
+    both comparisons → the fix commit adds **13** net passing tests over its parent and introduces
+    zero new full-suite failures. The only auth-namespace failure at `b8946fe` is the known
+    pre-existing `test_sign_in_user_preserves_custom_workspace_role_name`.
+  - **`ruff` — strictly improved, zero new findings.** Repo-wide: `e57aab7` = `148` errors,
+    `549f480` = `148`, `b8946fe` = `140`. `comm` of the sorted finding lists shows **no new finding
+    introduced** and 8 removed — all `E402` in `sockets/handlers.py`, which `b8946fe` fixed by
+    moving `logger = logging.getLogger(__name__)` below the imports. None of the 13 touched files
+    carries any `ruff` finding at `b8946fe`.
+  - **R2-1 escalated to a CONFIRMED new test failure introduced by `b8946fe`** (was a
+    test-integrity concern at Step 1; now demonstrated by execution):
+    - `pytest tests/unit/services/commands/auth` at the parent `e57aab7`:
+      `1 failed, 24 passed` (the single known pre-existing failure).
+      At `b8946fe`: **`2 failed, 31 passed`** — the new failure is
+      `test_floor_logout_permanently_revokes_subsequent_request`, with
+      `Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>`.
+      Running `tests/unit/services/commands/auth/test_logout_user.py` alone reproduces it
+      (`1 failed, 4 passed`); the same file at `549f480` is `4 passed`. **Cause:** `b8946fe` moved
+      the blocklist read out of the function body into module scope
+      (`services/infra/auth.py:2` binds `get_async_redis` at import time; `jwt_dep.py:9` imports
+      `is_token_blocklisted` from it), which broke the `fake_redis` seam that patches
+      `async_client.get_async_redis`. Acceptance 5's "full auth test suite green" and acceptance 3's
+      revocation assertion both fail under this natural invocation.
+    - **Why the full suite hides it (and why that is worse, not better):** the async Redis singleton
+      (`async_client._async_client`) is bound to the event loop that created it, and `pytest-asyncio`
+      gives each test a fresh loop, so any later test touching it raises
+      `RuntimeError: got Future <Future pending> attached to a different loop` /
+      `Event loop is closed`. In whole-suite order the client is already loop-poisoned by the time
+      this test runs, so `is_token_blocklisted` raises, `jwt_dep._is_blocklisted` converts that into
+      `HTTPException(401, "Auth blocklist unavailable.")`, and the test's
+      `assert exc_info.value.status_code == 401` is satisfied **by the infrastructure failure rather
+      than by revocation**. Demonstrated directly: running the integration test first and the unit
+      test second yields `2 passed`; running the unit test alone yields `1 failed`. The assertion
+      never inspects `detail`, so it cannot tell the two apart. The test is therefore either red or
+      a false positive — never valid evidence.
+    - **Scope of the redness, stated precisely.** The plan's own Validation-plan selector,
+      `pytest tests -q -k "auth or sign_in or token or logout or refresh"`, is **green** modulo the
+      known failure at both commits (`e57aab7`: `1 failed, 63 passed`; `b8946fe`:
+      `1 failed, 76 passed`) — because the integration test is selected too and runs first,
+      poisoning the client and producing the false-positive pass. So the documented gate is *not*
+      red; the redness appears under directory- or file-scoped invocation
+      (`pytest tests/unit/services/commands/auth`, `… /test_logout_user.py`). Both outcomes are
+      failures of evidence: the documented gate is green only for the wrong reason.
+  - **R2-5 — MEDIUM (new) — the N5 integration gate is order-fragile and currently green only by
+    collection accident.** The same loop-bound singleton breaks
+    `test_floor_logout_blocklist_has_no_ttl_in_real_redis` as soon as **any** earlier test in the
+    session has used the async Redis client: alone it is `1 passed in 0.03s`, but preceded by one
+    unit test that touches the client it fails with
+    `RuntimeError: ... attached to a different loop`. It passes in the full suite only because
+    `tests/integration/...` sorts before `tests/unit/...` and it happens to be the first
+    async-Redis user in the session. The next integration test that touches Redis and sorts ahead of
+    it will turn this gate red with an error unrelated to what it asserts. This is a defect in the
+    gate's durability, not in the production behavior it verifies (which Step 1/Step 3 confirmed
+    independently against a real server).
+  - **R2-6 — INFO (altitude).** `routers/api_v1/auth.py:57` branches on the *request* field
+    `body.app_scope == "floor"`, duplicating the floor condition the command already owns
+    (`sign_in_user.py:130`/`:147`). It is correct today because both read the same value, but the
+    floor arm never pops `_refresh_token`, so if the command ever issued one for floor the token
+    would be serialized into the JSON body. N6's alternative — an explicit contract flag returned by
+    the command — keeps the decision in one place.
+
+  **Step 6 — consolidated round-2 verdict: `NEEDS_CHANGES` (test/evidence integrity only; no
+  production-code change required).**
+
+  Round-1's security findings are genuinely closed, each re-verified by executed, mock-free probes
+  against real Redis rather than by reading the fix:
+
+  | Finding | Round-1 severity | Round-2 status | Evidence |
+  | --- | --- | --- | --- |
+  | N1 revocation bypass via `/auth/refresh` | CRITICAL | **CLOSED** | 19-probe run; exploit rejected, all four layers verified in isolation, not launderable via any scope string |
+  | N2 socket auth ignores blocklist | HIGH | **CLOSED** | 6-probe run; revoked → refused, real Redis outage → fail-closed, query-string path covered |
+  | N3 `jti` never logged | MEDIUM | **CLOSED** | `jti` logged at sign-in and logout, pinned by value-equality assertions; runbook in Risks, `TTL == -1` confirmed on a real server |
+  | N4 static role claims | MEDIUM | **ACCEPTED/DOCUMENTED** | Risks paragraph present, per operator decision |
+  | N5 fake-Redis TTL evidence | LOW | **CLOSED (behavior)** | real-Redis integration test seeds `EX 60`, asserts overwrite + `TTL == -1`; but see R2-5 |
+  | N6 silent `pop(..., None)` | LOW | **CLOSED** | explicit branch; `KeyError` restored and pinned |
+  | N7 `require_app_scope` unused | INFO | **DOCUMENTED** | Non-goals sentence present |
+
+  Regression posture is clean: identical 27-failure set at `b8946fe`, its parent `e57aab7`, and
+  `549f480`; +13 net passing tests; `ruff` strictly improved (140 vs 148) with zero new findings.
+
+  **Blocking for round 2 (both are test-only):**
+
+  - **R2-1 — MEDIUM — `test_floor_logout_permanently_revokes_subsequent_request` is red under
+    file/directory-scoped invocation and a false positive otherwise.** `b8946fe` broke the
+    `fake_redis` seam by moving the blocklist read to a module-level import; the test now either
+    fails outright or passes because Redis errored (fail-closed), never because the token was
+    revoked. Acceptance 3's revocation half — the guarantee D11's entire risk model rests on — has
+    no sound automated evidence. Fix: patch the symbol at its point of use
+    (`jwt_dep.is_token_blocklisted` or `infra.auth.get_async_redis`) instead of
+    `async_client.get_async_redis`, and assert `detail == "Token has been revoked."` so a
+    fail-closed `401` can never satisfy the test.
+  - **R2-5 — MEDIUM — the N5 integration gate is order-fragile.** The loop-bound
+    `async_client._async_client` singleton makes
+    `test_floor_logout_blocklist_has_no_ttl_in_real_redis` fail with
+    `RuntimeError: ... attached to a different loop` whenever an earlier test in the session touched
+    the async client; it is green today only because it happens to be the first such user in
+    collection order. Fix: reset `async_client._async_client = None` in a fixture (and ideally
+    session-wide for async-Redis users) so the client is created on the running loop.
+
+  **Non-blocking, recorded for follow-up:** R2-2 (LOW — expiring-token blocklist TTL still
+  fake-only; add a real-Redis case asserting `0 < ttl <= formula`), R2-3 (INFO — clarify in the
+  Risks sunset note that legacy *access* tokens replayed as refresh cookies are bounded by
+  `jwt_access_token_expire_minutes`, not `jwt_refresh_token_expire_days`), R2-4 (INFO — `if jti:`
+  guard skips the socket blocklist check, mirroring `jwt_dep`), R2-6 (INFO — router duplicates the
+  floor condition the command owns).
+
+  No archive/lifecycle flip performed; this stays `under_construction` pending the two test fixes.
 
 ## Lifecycle transition
 
