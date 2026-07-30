@@ -62,6 +62,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | 5 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `archived` ✅ (APPROVED at round 3, `12bbeb7`; N1 CRITICAL revocation bypass closed with 4 defense layers + 19 mock-free probes; test-integrity round closed with reviewer-rerun mutation checks) |
 | 6 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` | `archived` ✅ (APPROVED on the **first** round at `b0f35b1`; 37-assertion real-ASGI probe of the floor gate, 4 mutation checks, `pg_enum` label parity on the in-phase `?role=` 500 repair) |
 | 7 | `PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics` (day timeline + segments + insights via existing worker-stats machinery), final handoff validation | `under_construction` |
+| 8 | `PLAN_declared_worker_states_phase8_kiosk_analytics_extras_20260730.md` | `analytics.completed_items` + `analytics.week`, floor roster sections, roster page cap (answers the frontend requirements doc) | `under_construction` — requires Phase 7 |
 
 Dependency note: Phase 5 touches only auth and has **no dependency on Phases 1–4** — it may be implemented at any point (including first, to unblock frontend auth integration). Phase 6 requires Phases 3, 4 **and** 5. Phase 7 requires Phases 2, 4 and 6 and closes the feature set. The frontend builds in parallel against `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`, which was written **ahead of implementation** and is the authoritative API contract for all phases — implementations must conform to it; any deviation must be resolved in the handoff first (operator decision), never silently.
 
@@ -170,7 +171,15 @@ When all four phases are archived, set this master plan's status to `archived` a
   every value), verified complete by `pg_enum` label parity. Carried to Phase 7: R1-1 (pin the
   index-name constant + cover the `IntegrityError → 409` race) and the duplicate-code `409` message.
   Summary: `implemented_summaries/SUMMARY_declared_worker_states_phase6_kiosk_flow_20260729.md`.
-- `2026-07-30`: **Phase 7 (final) unblocked** — Phases 2, 4 and 6 are archived.
+- `2026-07-30`: **Phase 7 unblocked** — Phases 2, 4 and 6 are archived.
+- `2026-07-30`: **Phase 8 added** from `docs/handoff/from_frontend/BACKEND_REQUIREMENTS_clock_kiosk_20260729.md`
+  (the frontend built its kiosk UI ahead of the contract, behind null-defaulting adapters). Audit of
+  the seven requests: `week` bars, station/line, and roster scale were already reachable from existing
+  tables; `completed_items` needed only composition (no product entity exists — items are labelled by
+  `article_number` → `sku` per operator ruling); **scheduled shifts and floor announcements do not
+  exist as concepts** and are excluded — scheduling explicitly skipped by the operator, announcements
+  deferred to a separate feature set; badge numbers deferred (no data). Handoff §5.2 (new keys) and
+  §5.3 (nullability conventions, requested by the frontend) added.
 
 ## Open questions
 

@@ -19,6 +19,7 @@
 > | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
 > | 6 | Roster `clock_in_code` exposure (§3) | ✅ live (reviewed & approved) |
 > | 7 | Populated clock-out `analytics` (§5.1) | ❌ not yet — `analytics` is `null` until then |
+> | 8 | `analytics.completed_items` + `analytics.week` (§5.2), floor roster sections + raised page cap (§3) | ❌ not yet — keys absent until then |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
 >
 > Mock these shapes until the phase flips to ✅. Any contract change will be edited **here first**.
@@ -231,6 +232,52 @@ provisional ones).
 - `insights` — trend cards comparing the day against the worker's recent baseline. May be `[]` (not enough history). **Freshness caveat:** insights read aggregate day-stats that are updated asynchronously — seconds after clock-out they may not yet include the very last steps of the day. `timeline`/`segments` have no such lag. Treat insights as indicative, not as the payroll number.
 - These are the same shapes as the manager endpoints (`GET /worker-stats/{user_id}/linear-timeline`, `GET /worker-stats/insights`) — components built for one render the other.
 - Unknown extra keys may appear inside `analytics` later — ignore them (additive contract).
+
+#### 5.2 `analytics.completed_items` and `analytics.week` (backend phase 8 — not live yet)
+
+Two further additive keys inside `analytics`. Until phase 8 lands they are **absent** (not `null`) —
+treat missing as "no data" and keep the panels hidden.
+
+```json
+"completed_items": [
+  {
+    "item_id": "itm_…",
+    "reference": "ART-10482",              // article_number, falling back to sku; null if neither
+    "image_url": "https://…",              // first linked item image; null if none
+    "working_section": { "client_id": "wsc_…", "name": "Assembly" },   // where it was completed; null if unknown
+    "total_seconds": 4260,                 // total time spent completing this item
+    "issues_count": 1
+  }
+],
+"week": {
+  "days": [
+    { "date": "2026-07-27", "working_seconds": 21600, "pause_seconds": 3600, "idle_seconds": 1800 }
+  ],
+  "totals": { "working_seconds": 108000, "pause_seconds": 18000, "idle_seconds": 9000 }
+}
+```
+
+- `completed_items` — one entry per item the worker completed on the clock-out date, ordered by
+  completion time. `reference` is `article_number` when present, else `sku`, else `null` (this system
+  has no product-name entity — render the reference as the label). `total_seconds` is the time booked
+  against that item's steps, not merely this worker's share.
+- `week` — the Monday–Sunday week containing the clock-out date, **worked-time only**: each day's
+  recorded shift time split into working / pause / idle so the bar can be segmented. Days with no
+  shift are present with zeros. **There is no `scheduled_seconds`** — shift scheduling does not exist
+  in this system yet, so any "of 40h scheduled" target must be omitted or hard-coded client-side.
+
+## 5.3 Nullability conventions (applies to every shape in this document)
+
+The JSON examples above show fields populated for readability. Read them **tolerantly**:
+
+- Any `*_url`, `image_url`, `profile_picture`, `description`, `reference`, or nested object
+  documented as "…if none/unknown" may be `null`.
+- `analytics` itself may be `null` (degraded mode); keys documented as belonging to a later phase are
+  **absent** until that phase ships — absent and `null` must both be handled as "no data".
+- Arrays may be empty (`insights`, `steps`, `completed_items`).
+- `reason_text` is three-way: absent / string / `null` (see §4).
+- Objects may carry additional keys not documented here (e.g. roster items' `workspace_role`) — ignore
+  unknown keys rather than failing validation.
 
 ### `POST /api/v1/worker-shifts/clock` *(legacy toggle — prefer the explicit routes)*
 ```json
