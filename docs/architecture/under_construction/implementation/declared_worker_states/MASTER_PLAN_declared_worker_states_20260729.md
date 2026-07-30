@@ -92,6 +92,13 @@ The repository has pre-existing validation debt, verified against the pre-Phase-
   implementers and reviewers must treat exactly those two as baseline, and must not let any NEW
   worker-shift failure hide behind them.
 
+**Canonical measurement (operator, 2026-07-30 at commit `ccdffa9`, quiet tree — no concurrent
+sessions): `27 failed / 1275 passed`.** Counts drift between runs (22–28) because the test DB and
+Redis are SHARED: a suite run while another session executes probes will report wildly inflated
+failures (one Codex run reported 313 failed / 11 errors; re-run on a quiet tree: 27). **Never
+accept or report a full-suite number taken while another session is active** — re-run it quiet
+before drawing conclusions. Compare failure NODE SETS, not counts.
+
 **Binding rule for every phase and every reviewer:** wherever a phase plan or review prompt says
 "full suite green" / "ruff clean", read it as **"no NEW failures or errors relative to this
 baseline, and all in-scope/new tests green; touched files ruff-clean."** Implementers must not
