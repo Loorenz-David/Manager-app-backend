@@ -65,6 +65,7 @@ Response `200`:
 - Allowed roles for `app_scope="floor"`: **admin, manager**. Anything else → `403` `"Invalid credentials."` (message is intentionally opaque).
 - **No refresh token / no cookie** is issued for this scope. Store `access_token` in secure device storage; send as `Authorization: Bearer <token>` on every call. Never put it in URLs or logs.
 - The token never expires. Revocation = `POST /api/v1/auth/logout` (with the token) — permanent, takes effect within ≤60s server-side. A `401` on any call means the device was revoked → return to sign-in screen.
+- **Operational note (offboarding):** demoting or deactivating a manager does NOT invalidate floor tokens already issued to their account — claims are static. Always log the device out (or have ops revoke its `jti`) as part of any manager offboarding/demotion.
 - Sign-in is rate-limited (10/min per IP).
 
 ## 3. Worker identification (kiosk step 1) — client-side matching

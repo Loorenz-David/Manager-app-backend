@@ -142,6 +142,73 @@ Prohibited pattern reads: other commands/routers for structure → `06`/`09`.
   - `git diff --check`: clean. Handoff §2 response and side-effect shape confirmed; no master,
     handoff/liveness, summary, archive, user-command, or worker-shift-router file was edited.
 
+- `2026-07-30` — Independent review round 1 (Opus, adversarial) of commit `549f480`: **NEEDS_CHANGES**.
+  Uncommitted Phase-4 work in the tree was excluded; all gates re-run against detached clean
+  worktrees at `549f480` vs `cc6a1e9`.
+
+  **Verified green** — `_SCOPE_ALLOWED_ROLES["floor"] == {ADMIN, MANAGER}` (no WORKER/SELLER);
+  claim parity proven by probe (floor claim set == manager claim set **minus `exp`**, zero value
+  diffs outside `exp`/`jti`/`app_scope`); no refresh token and no `Set-Cookie` on floor sign-in
+  (`raw_headers` asserted); credential opacity (wrong-password and wrong-role both raise
+  `PermissionDenied("Invalid credentials.")`, `403`); PyJWT `2.10.1` missing-`exp` acceptance pinned
+  by dedicated unit tests; **no far-future-`exp` hack** anywhere (grep for large timedeltas/date
+  constants clean); response shape matches handoff §2 field-for-field; structured
+  `auth.floor_device_sign_in` log present; `ruff check` clean on all seven touched files.
+  Regression sweep: full suite at `549f480` = `27 failed, 1236 passed`; at `cc6a1e9` =
+  `27 failed, 1219 passed`; **failure sets byte-identical** (`diff` empty) → +17 new passing tests,
+  zero new failures. Auth selector: 63 passed vs 46 at baseline, same single pre-existing
+  `test_sign_in_user_preserves_custom_workspace_role_name` failure. Real-Redis check confirms
+  `SET k v` without `EX` yields `TTL == -1` and clears a pre-existing TTL.
+
+  **Findings**
+
+  - **N1 — CRITICAL — revocation is bypassable; permanent blocklisting is defeated.**
+    `services/commands/auth/refresh_token.py:11-41` performs **no blocklist check**, and
+    `routers/api_v1/auth.py:113` sources the refresh token from the client-controlled
+    `floor_refresh_token` cookie. A floor **access** token satisfies every check `refresh_token()`
+    makes (valid signature; `app_scope == "floor" == requested_scope`; no `exp` to reject). Proven
+    by executed probe: blocklist `device-jti` permanently (`ttl == -1`) → protected route returns
+    `401` → replay the *same revoked token* at `POST /auth/refresh?scope=floor` → a fresh
+    `app_scope=floor`, `role_name=manager` access token with a **new, non-blocklisted `jti`** is
+    minted and passes `get_jwt_claims`. Because the floor token never expires, this can be repeated
+    forever. Violates acceptance 3, master **D11** ("`jti` kept so the existing Redis blocklist can
+    revoke a lost/retired device"), handoff §2 ("Revocation = `POST /auth/logout` — permanent"), and
+    the Risks section's "permanent-revocation logout" mitigation. The underlying
+    access-token-accepted-as-refresh-token confusion is pre-existing for all scopes (also proven),
+    but it was bounded there by token TTLs; Phase 5 makes it **unbounded and permanent** and turns
+    it into the single point of failure of D11's entire risk model.
+  - **N2 — HIGH — socket auth never consults the blocklist.** `sockets/handlers.py:22-38` decodes
+    the token and connects with no `_is_blocklisted` call. Pre-existing, but for every other scope
+    it self-heals at token expiry; an exp-less floor token authenticates WebSocket connections
+    **forever after revocation**. Violates D11's revocation guarantee for the socket channel.
+  - **N3 — MEDIUM — the documented ops last-resort is not operable.** The Non-goals/Risks sections
+    name "ops via the Redis blocklist" as the fallback for a lost device, but the floor sign-in log
+    (`services/commands/auth/sign_in_user.py:73-83`) records only `user_id`/`workspace_id` — the
+    `jti` is never persisted or logged anywhere. With no device registry (explicit non-goal), the
+    only working revocation path is "still be holding the token and call logout", which is precisely
+    what is unavailable when a device is lost. The stated mitigation cannot be executed.
+  - **N4 — MEDIUM — role/membership changes never revoke a floor token.** Claims are static and
+    `routers/utils/jwt_dep.py:16-37` never re-reads the DB. Demoting an ADMIN/MANAGER to WORKER, or
+    deactivating their membership, leaves their floor token fully valid indefinitely. Self-heals in
+    ≤30 min for other scopes; never for floor. Not acknowledged in the plan's Risks section or the
+    handoff.
+  - **N5 — LOW — `TTL == -1` is asserted against a fake, not Redis.**
+    `tests/unit/services/commands/auth/test_logout_user.py:19-31`: `_FakeRedis.ttl` is defined as
+    `-1 if ex is None`, so `test_blocklist_token_without_exp_has_no_ttl` is tautological with
+    respect to the fake. The Review log entry above states "asserted against Redis"; it is asserted
+    against a stub. Reviewer independently confirmed the real-Redis semantics hold, so the
+    *behavior* is correct — only the evidence claim is overstated.
+  - **N6 — LOW — `data.pop("_refresh_token", None)` silently degrades.**
+    `routers/api_v1/auth.py:59-61`: a missing refresh token was previously a hard `KeyError`. Any
+    future scope that fails to issue one now returns a cookie-less session that looks successful.
+    Prefer branching on the scope explicitly, or an explicit contract flag from the command.
+  - **N7 — INFO — `require_app_scope` is used on zero routes.** `routers/utils/jwt_dep.py:51` is
+    defined but never referenced in `beyo_manager/`. The floor token is therefore a full
+    ADMIN/MANAGER credential across the **entire** API, not confined to floor/kiosk endpoints. The
+    Risks section's "bounded by ADMIN/MANAGER-only scope" is literally true but reads weaker than it
+    is: this is exactly a manager session that never expires. Phase 6 will need
+    `require_app_scope("floor")` for the D13 `clock_in_code` exposure.
+
 ## Lifecycle transition
 
 - Current state: `under_construction`
