@@ -24,7 +24,7 @@
   1b. *(moved here from Phase 6, operator ruling 2026-07-30)* The clock-out response — on BOTH `POST /clock-out` and the `/clock` toggle's clock-out branch — carries the reserved `"analytics": null` key (D14 envelope; Phase 7 populates it). Clock-in responses never carry the key. All pre-existing response keys unchanged (additive-only).
   2. Query service `services/queries/users/get_current_worker_shift_state.py` + route `GET /current` (query param `user_id` optional; same access rule as clock: workers omit it → self; admin/manager must pass it).
   3. Reasons listing: verify `services/queries/pause_reasons/list_pause_reasons.py` + its route support filtering by `pause_type`; if not, add an optional `pause_type` query param (additive) so the declare picker can fetch PERSONAL reasons only.
-  4. Handoff validation: `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` was written **ahead of implementation** (the frontend builds against it in parallel). This phase's deliverable is conformance: implement `GET /current` and the clock routes to match it field-for-field, and record in the handoff's status line that Phases 1–4's endpoints are now live. Any needed deviation → operator decision + handoff update first.
+  4. Handoff validation: `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` was written **ahead of implementation** (the frontend builds against it in parallel). This phase's deliverable is conformance: implement `GET /current` and the clock routes to match it field-for-field, Conformance evidence goes in the Review log; **(operator-owned, ruling 2026-07-30)** the handoff liveness row is flipped by the OPERATOR after the reviewer approves — an implementer must never flip it. This phase's deliverable is conformance evidence in the Review log, not the doc edit. Any needed deviation → operator decision + handoff update first.
 - Out of scope: Connecteam decommission; manager dashboards; new stats.
 - Assumptions:
   - **`GET /current` response** (serializer per `46`; all timestamps UTC ISO):
@@ -64,7 +64,7 @@
 2b. Pause-reasons listing: the handoff §7 shape was corrected (2026-07-30) to the endpoint's real paginated envelope — no backend change; conformance check only.
 3. `GET /current` matrix: worker self (clocked out / idle / working / step-paused / declared) each returns the documented shape; manager with `user_id` reads another worker; worker passing `user_id` of someone else → `403`; legacy free-text pause row serializes per spec without error.
 4. Reasons listing filterable by `pause_type=personal` (pre-existing or added); response contract otherwise unchanged.
-5. Implemented `GET /current` + clock routes match `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` field-for-field (conformance asserted by contract tests keyed to the handoff's documented shapes); the handoff's status line records Phases 1–4 as live.
+5. Implemented `GET /current` + clock routes match `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` field-for-field (conformance asserted by contract tests keyed to the handoff's documented shapes). **(operator-owned, ruling 2026-07-30)** the handoff liveness row is flipped by the OPERATOR after the reviewer approves — an implementer must never flip it. This phase's deliverable is conformance evidence in the Review log, not the doc edit.
 6. Full suite green; `ruff check` clean.
 
 ## Contracts and skills
@@ -111,7 +111,7 @@ Prohibited pattern reads: other query services for skeleton → `07`; other rout
 3. Route `GET /current`; wire in router.
 4. Verify reasons-listing filter; add `pause_type` param if absent (additive).
 5. Tests: acceptance 1–4 (router tests + query integration tests incl. the 5-state `GET /current` matrix and legacy free-text case).
-6. Conformance pass against the floor-app handoff; update its status line (acceptance 5).
+6. Conformance pass against the floor-app handoff; record evidence in the Review log (the liveness flip is the operator's post-approval step).
 7. Run validation plan.
 
 ## Risks and mitigations

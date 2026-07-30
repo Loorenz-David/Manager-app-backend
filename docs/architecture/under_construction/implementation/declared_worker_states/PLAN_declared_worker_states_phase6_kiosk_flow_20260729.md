@@ -24,7 +24,7 @@
   2. Code management: extend the existing work-profile admin update path (**verify-first**: locate where `salary_per_hour_*` / work-profile fields are set — expected `services/commands/users/update_user_admin.py` and/or `register_user.py` — and follow that established path) to set/clear `clock_in_code`. Validation: trimmed, 4–16 chars, workspace-unique → friendly `409` on conflict. `updated_by_id` stamped per the users-README rule.
   3. Floor-scoped code exposure in the roster: `services/queries/users/list_users.py` — when `ctx.identity["app_scope"] == "floor"`, each returned user item (compact and full modes) gains two additive fields: `"clock_in_code": <str | null>` and `"email": <str>` (email enables the email-matching path at the device; **verify-first** whether `email` is already present in the serialized shapes — if so, only `clock_in_code` is added). Codes are fetched in **one** batched query over `UserWorkProfile` for the page's user ids (no N+1). For any other `app_scope`, the response is **byte-identical to today** — the fields must be absent, not `null`.
   4. *(moved to Phase 4, operator ruling 2026-07-30)* The clock-out `"analytics": null` envelope ships with Phase 4 (the phase that makes the routes live). This phase only keeps its regression tests green.
-  5. Final handoff conformance: verify the full implemented surface against `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`; mark all phases live in its status line.
+  5. Final handoff conformance: verify the full implemented surface against `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` and record the evidence in the Review log. **(operator-owned, ruling 2026-07-30)** the handoff liveness row is flipped by the OPERATOR after the reviewer approves — an implementer must never flip it. This phase's deliverable is conformance evidence in the Review log, not the doc edit.
 - Out of scope: analytics computation; worker app changes; Connecteam anything (D8); any new lookup/identify endpoint.
 - Assumptions:
   - Client-side matching is UI sugar, not an authorization grant — the *action* endpoints (`/clock-in`, `/clock-out`, `/declared-states*`) perform all authorization/validation regardless of what the device matched locally.
@@ -46,7 +46,7 @@
 4. Code fetch is batched (one query for the page) — no per-user query; asserted via query-count or code inspection recorded in the Review log.
 5. Regression only (envelope delivered by Phase 4, ruling 2026-07-30): both clock-out routes still carry `"analytics": null`; Phase 4's pinning tests unmodified and green.
 6. Full-loop kiosk test: floor sign-in (Phase 5) → `GET /users?role=worker&compact=true` returns the worker with their code → `GET /current` (not clocked in) → `/clock-in` on-behalf → `GET /current` (idle) → declare on-behalf → `GET /current` (declared) → `/clock-out` → response has `analytics: null` and correct `transitioned_steps`.
-7. Handoff conformance: every endpoint/shape in `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` matches the implementation; status line marks all phases live.
+7. Handoff conformance: every endpoint/shape in `HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md` matches the implementation (evidence in the Review log). **(operator-owned, ruling 2026-07-30)** the handoff liveness row is flipped by the OPERATOR after the reviewer approves — an implementer must never flip it. This phase's deliverable is conformance evidence in the Review log, not the doc edit.
 8. Full suite green; `ruff check` clean.
 
 ## Contracts and skills
@@ -93,7 +93,7 @@ Prohibited pattern reads: other queries/commands/routers for skeleton → `07`/`
 4. Regression guard: assert non-floor responses byte-identical (existing tests unmodified).
 5. (dropped — envelope delivered by Phase 4 per ruling 2026-07-30; keep its tests green.)
 6. Tests per acceptance 1–6 (the full-loop kiosk test is the flagship — write it first).
-7. Handoff conformance pass; update status line (acceptance 7).
+7. Handoff conformance pass; record evidence in the Review log (liveness flip = operator, post-approval).
 
 ## Risks and mitigations
 

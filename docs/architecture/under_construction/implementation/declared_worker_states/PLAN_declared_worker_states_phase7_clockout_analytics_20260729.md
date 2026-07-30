@@ -59,7 +59,7 @@
 5. Analytics reflect the rebuilt shift: a shift whose live records were wrong mid-day (simulated worker lag) still produces correct post-rebuild `analytics` (test builds on Phase 2's rebuild tests).
 6. Degradation: a forced exception in the composite (monkeypatched) → clock-out still succeeds (`200`, shift closed, `analytics: null`) + structured error log asserted.
 7. Safeguard + Connecteam paths compute nothing: no analytics code reachable from `clock_out_shift_for_user` itself (code inspection recorded in Review log) and their suites unmodified/green.
-8. Full suite green; `ruff check` clean; handoff §5 status flipped.
+8. Full suite green; `ruff check` clean; handoff §5 conformance evidenced in the Review log (liveness flip = operator, post-approval).
 
 ## Contracts and skills
 
