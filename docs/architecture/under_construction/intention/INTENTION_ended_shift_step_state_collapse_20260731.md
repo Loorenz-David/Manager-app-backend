@@ -10,10 +10,9 @@
 - Related intention: `INTENTION_system_transition_reasons_20260730` — **this intention depends on
   that one's `transition_reason` column existing and being backfilled.** It is the natural
   continuation of the same argument, applied one layer up.
-- Addressed to: the session tracking
-  `MASTER_PLAN_system_transition_reasons_20260731.md`, to assess whether this belongs in that
-  phase set or as a successor set. See "Sequencing assessment" — that is the decision being asked
-  for.
+- Sequencing: **successor set** — decided 2026-07-31 by the session tracking
+  `MASTER_PLAN_system_transition_reasons_20260731.md`. See "Sequencing assessment" for the ruling
+  and its reasoning. This intention is no longer asking a question; it is awaiting its own plan.
 
 ## Goal
 
@@ -225,50 +224,64 @@ Under this change it becomes **load-bearing**. It needs a direct test, not an in
 - **Non-goal:** changing what `total_ended_shift_seconds` *means*. It keeps its definition; only
   its derivation changes.
 
-### Interaction with the phase 4 retirement question
+### Interaction with the phase 4 retirement question — RESOLVED
 
-The transition-reasons set has an unresolved issue: phase 4 soft-deletes `pause_ended_shift`, but
-`list_pause_reasons` filters `is_deleted IS false`, so the row vanishes from the worker's picker —
-and `pause-reason-transition.ts` can then never produce `ended_shift`. T6's amendment kept the
-`slug` *column* (fixing the Zod break) but did not address the *row* disappearing.
+This intention raised a live defect in the transition-reasons set: phase 4 soft-deleted
+`pause_ended_shift`, but `list_pause_reasons.py:19` filters `is_deleted IS false`, so the row would
+have vanished from the worker's picker and `pause-reason-transition.ts` could then never produce
+`ended_shift`. T6's amendment kept the `slug` *column* but did not address the *row* disappearing.
 
-**This intention dissolves that problem** rather than solving it: once no pause reason maps to a
-different state, it does not matter whether `pause_ended_shift` survives as a catalog row. If the
-operator wants a worker-visible "Ended shift" reason, it becomes an ordinary workspace-editable
-personal reason like any other.
+**Fixed at source, 2026-07-31.** Phase 4 was amended: it now retires the *machinery* — the slug
+lookup, `is_system_managed`, runtime resolution — and leaves `pause_ended_shift` as an ordinary
+worker-selectable row. The reasoning is that feature set's own thesis applied consistently: a
+catalog row is fine; a catalog row that system behaviour depends on is not.
 
-That is an argument for doing this work **close to** phase 4 — not necessarily inside it.
+**Consequence for this intention: the row survives**, which is the opposite of what this document
+originally assumed. That is *better* for this work, not worse — the pause sheet keeps its "Ended
+shift" entry throughout, so removing `TaskStepStateEnum.ENDED_SHIFT` changes only what state that
+selection produces, not whether the selection exists. There is no window in which a worker loses the
+ability to end a shift from the sheet.
 
-## Sequencing assessment (the decision being requested)
+A second consequence, recorded so this intention's implementer does not trip on it: **phase 3 no
+longer backfills rows pointing at `pause_ended_shift`.** Historically a worker's pick and a
+clock-out write are indistinguishable (same state, same `pause_reason_id`, `transition_reason` null
+on both), so backfilling would have relabelled real worker choices as system transitions. Those rows
+therefore still carry a catalog reference when this work begins.
 
-**Recommendation from the analysing session: run this as a successor set, not as a phase of
-`system_transition_reasons`.** Presented with the reasoning so the tracking session can overrule
-it on evidence this session does not have.
+## Sequencing assessment — DECIDED
 
-**Against folding it in:**
+**Ruling (2026-07-31, operator, via the session tracking the transition-reasons set): run this as a
+successor set.** The analysing session recommended exactly this and argued honestly against its own
+convenience; the ruling agrees with it.
 
-- It adds a **second irreversible enum-and-backfill migration** over `step_state_records` and
-  `task_steps`, in a set that already has one (phase 3). Two destructive migrations reaching
-  production in a single deploy — which is this set's stated delivery shape — is how history is
-  lost.
-- It is the only part of the combined work that requires a **cross-repo frontend change**. Every
-  current phase is backend-only.
-- The current set's phases 2–4 are `under_construction` with an active implement→review cycle.
-  Widening scope mid-cycle costs the review discipline the restructure was designed to buy.
+**Decisive reason.** The transition-reasons set's stated delivery shape is a **single deploy**.
+Folding this in would put a second irreversible enum-and-backfill migration over
+`step_state_records` and `task_steps` into a deploy that already carries phase 3's. Two destructive
+migrations reaching production together is how history is lost. Compounding it, this is the only
+part of the combined work that is cross-repo — every phase of the current set is backend-only, so
+folding it in would change the delivery model, not merely the scope.
 
-**For folding it in:**
+**One correction to the analysis, which strengthened the ruling.** This document worried that
+folding the work in *after* phase 4 ships might require revisiting phase 4's check constraints. It
+would not: that constraint governs `transition_reason` versus `pause_reason_id`, which removing a
+`state` enum member does not touch. The coupling between the two sets is weaker than assumed, so
+there is correspondingly less reason to rush.
 
-- It reads `transition_reason` — the exact column phases 1–3 create and backfill. The dependency
-  is real and one-directional.
-- It resolves the phase 4 retirement question by dissolving it (above), and phase 4 currently has
-  no answer to that question.
-- The timeline composers are touched by both. Doing them twice risks conflicting rewrites.
+### Constraints on the successor set
 
-**If the tracking session decides to fold it in**, the ordering constraint is hard: it must come
-**after phase 3's backfill**, because the bucketing rewrite reads `transition_reason` on
-historical rows. Sequenced before phase 3 it would read an empty column and silently zero every
-historical `ended_shift` bucket. It should also be the **last** phase, so phase 4's constraint work
-lands on the final shape of the enum rather than being redone.
+- **Implementation starts after the transition-reasons set is deployed.** The hard dependency is
+  phase 3's backfill: the bucketing rewrite reads `transition_reason` on historical rows, and run
+  before it would silently zero every historical `ended_shift` bucket.
+- **Planning may begin earlier.** Planning is parallel-safe, and doing it during phase 3 or 4 allows
+  whatever those phases learn about the data to be folded in. There is no urgency; the trace below
+  will keep.
+- **Keep it small.** Three or four phases at most — this is one enum removal, one backfill, one
+  frontend change. The transition-reasons set was drafted at eleven phases and restructured to four
+  precisely because ceremony sized for a larger feature set is expensive and buys nothing. The one
+  phase that genuinely earns an independent review is the timeline precedence rework at
+  `linear_timeline.py:241-243`, which this document already identifies as the highest-risk item.
+- **Its own deploy**, separate from the transition-reasons set, and coordinated with the frontend
+  because of W2.
 
 ## Linked implementation plans
 
@@ -278,24 +291,39 @@ lands on the final shape of the enum rather than being redone.
 
 ## Open questions
 
-- **Sequencing** — successor set, or a phase 5 of `system_transition_reasons`? Impact if
-  unresolved: the work cannot be planned; and if it is eventually folded in *after* phase 4 ships,
-  phase 4's check constraints may need revisiting.
-- **Does the timeline keep emitting `"ended_shift"` as a derived state string?** This intention
-  assumes yes (contract-preserving). If the operator would rather the timeline show it as a pause
-  with a typed reason, that is a **published frontend contract change** and needs its own handoff.
-  Impact if unresolved: the timeline rework cannot be specified.
-- **`pause_ended_shift` catalog row** — retire it (phase 4 as planned) or keep it as an ordinary
-  worker-selectable personal reason? This intention works either way; the operator picks. Impact
-  if unresolved: none for planning, but the worker's picker content differs.
+- ~~**Sequencing** — successor set, or a phase 5?~~ **Resolved 2026-07-31: successor set.** See
+  "Sequencing assessment".
+- ~~**`pause_ended_shift` catalog row** — retire it, or keep it worker-selectable?~~ **Resolved
+  2026-07-31: the row survives**, decided in the transition-reasons set rather than here. Phase 4
+  retires the machinery and leaves the row selectable. This intention originally assumed the row
+  would disappear and argued it did not matter either way; the outcome is the more convenient of
+  the two.
+- **Does the timeline keep emitting `"ended_shift"` as a derived state string?** Still open, and
+  still the one that blocks specifying the timeline rework. This document assumes **yes**
+  (contract-preserving), which the tracking session endorsed as correct: it is a *derived label*,
+  not a step state, so preserving it costs nothing and changing it would be a published frontend
+  contract change needing its own handoff. Confirm before planning.
 - **Do historical `task_steps.state = 'ended_shift'` rows need `transition_reason` on the step
-  itself?** The column lives on `step_state_records`, not `task_steps`. The step's *current* state
-  becomes `paused` with no reason attached — which matches how a normally-paused step already
-  behaves. Assumed acceptable; confirm. Impact if unresolved: the backfill's step-table half is
-  underspecified.
+  itself?** Still open. The column lives on `step_state_records`, not `task_steps`. Assumed
+  acceptable that the step's current state becomes `paused` with no reason attached — matching how a
+  normally-paused step already behaves. Confirm; impact if unresolved is that the backfill's
+  step-table half is underspecified.
+- **New — what happens to worker-chosen `pause_ended_shift` rows?** Because phase 3 deliberately
+  leaves them carrying a catalog reference, this work will meet `step_state_records` rows that are
+  `state = ended_shift` with a non-null `pause_reason_id`. Under the target semantics those become
+  `PAUSED` with the catalog reference retained — an ordinary worker pause, which is the correct
+  outcome. State it explicitly in the plan; do not let the backfill assume every `ended_shift` row
+  is a system transition.
 
 ## Progress notes
 
+- `2026-07-31`: **Sequencing decided — successor set** (see above). The assessment was accepted as
+  written, with one correction: phase 4's check constraints are not affected by removing a `state`
+  member. Two changes were made to the transition-reasons set as a direct result of this document:
+  phase 4 no longer retires `pause_ended_shift` (it would have broken the worker app's pause sheet),
+  and phase 3 no longer backfills rows pointing at it (a worker's pick and a clock-out write are
+  historically indistinguishable, so backfilling would have relabelled real worker choices). Both
+  were live defects in that set, found by this trace.
 - `2026-07-31`: Intention drafted from an operator decision taken while reviewing the worker-shift
   endpoints for the reassigned-steps frontend handoff. The chain that produced it: the phase 4
   retirement of `pause_ended_shift` was found to break the worker app's pause sheet → tracing why
@@ -305,8 +333,9 @@ lands on the final shape of the enum rather than being redone.
 
 ## Lifecycle transition
 
-- Current status: `active`
-- Next status: `achieved | superseded`
-- Transition trigger: all success criteria met, **or** absorbed into
-  `MASTER_PLAN_system_transition_reasons_20260731.md` as a phase (in which case this intention is
-  marked `superseded` and points at that plan)
+- Current status: `active` — sequencing decided, awaiting its own implementation plan
+- Next status: `achieved`
+- Transition trigger: all success criteria met. **Absorption into
+  `MASTER_PLAN_system_transition_reasons_20260731.md` is no longer a possible outcome** — that was
+  ruled out on 2026-07-31. This intention gets its own plan set, planned no earlier than convenient
+  and implemented after the transition-reasons set is deployed.
