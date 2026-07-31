@@ -1,6 +1,6 @@
 from sqlalchemy import and_, select
 
-from beyo_manager.domain.tasks.serializers import serialize_task_step_acknowledgment
+from beyo_manager.domain.task_steps.serializers import serialize_task_step_acknowledgment
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.users.user import User
