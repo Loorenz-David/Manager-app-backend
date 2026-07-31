@@ -52,24 +52,26 @@
       **One qualification** (phase 1's F2 finding still stands): the suite also runs against this
       database, so **globals carry accumulated test residue while workspace-scoped figures
       reproduce.** Scope every count; do not size the migration from a global.
-- [ ] **What member do `pause_case_created` rows map to?** It is the soft-deleted anchor row that
-      historical data points at (intention Finding 4), with 7 rows referencing it. **Decide
-      explicitly; do not fold it into another value.**
+- [x] **What member do `pause_case_created` rows map to?** *Resolved 2026-07-31 (operator):
+      **none. Leave those rows untouched.***
 
-      *Updated 2026-07-31 after phase 1.* Phase 1 deliberately did **not** add a member for it and
-      recorded its reasoning; the decision is yours, not inherited. Two things phase 1 established
-      that constrain it:
+      The value is stale and carries no real meaning — it was dropped from the live default set and
+      survives only as a soft-deleted anchor row that 7 historical rows point at. Minting a
+      vocabulary member for it would encode a dead concept into a code-owned enum that then
+      outlives the data it describes.
 
-      - **The T5 trap.** T5 says system rows are backfilled to `transition_reason` and their
-        `pause_reason_id` nulled. `pause_case_created` is **not** a system row in T5's sense — it is
-        a retired catalog entry. Nulling those 7 rows without a member to carry them would destroy
-        their label and **fail master-plan success criterion 5** (historical rows resolve to the
-        same human-visible labels after migration). Criterion 5 in this plan is where that springs.
-      - **The anchor is invisible to `list_pause_reasons`** — it was seeded already soft-deleted
-        (`deleted_at` equals `created_at`) purely as an FK target. So it cannot be picked, and
-        case-created pauses are today written with **no `pause_reason_id` at all**. Those rows have
-        neither representation, and this backfill will meet them. Decide what happens to them too;
-        they are not the same 7.
+      Leaving them costs nothing and is safer than any alternative:
+
+      - They keep resolving through the anchor to their existing label, so **success criterion 5
+        holds by construction** rather than by a migration that has to reproduce it.
+      - They carry `pause_reason_id` with `transition_reason` null, so **phase 4's mutual-exclusion
+        constraint is unaffected**.
+      - The anchor is already soft-deleted and already invisible to `list_pause_reasons`, so nothing
+        can select it and the population cannot grow.
+
+      **This is the second population phase 3 no longer touches** (after `pause_ended_shift`).
+      Scope is now a single population: rows pointing at `pause_other_task_priority`. Size the work
+      accordingly — this is a much smaller migration than this plan originally described.
 
 ## Acceptance criteria
 
@@ -86,11 +88,13 @@
    no `transition_reason`, so phase 4's constraint is unaffected. **If you can find a signal that
    distinguishes the two populations, report it — do not act on it.** That is a separate decision.
 2. Rows pointing at `pause_other_task_priority` → `OTHER_TASK_PRIORITY`, `pause_reason_id = NULL`.
-3. `pause_case_created` rows → the member decided in the clarification, recorded with reasoning.
+3. **Rows pointing at `pause_case_created` are LEFT ALONE**, per the clarification. No member is
+   added for it. Assert they are unchanged after the migration — this is a real assertion, not a
+   note: a `WHERE pause_reason_id = <anchor>` count identical before and after.
 4. **Rows pointing at a worker-chosen catalog row are untouched**: `pause_reason_id` intact,
    `transition_reason` as phase 1's `WORKER_PAUSED` ruling determined.
-5. **The migration selects by the two specific rows above — never by `is_system_managed` alone, and
-   never including `pause_ended_shift`.**
+5. **The migration selects by `pause_other_task_priority` alone — never by `is_system_managed`, and
+   never including `pause_ended_shift` or `pause_case_created`.**
    A single mislabelled row would otherwise silently widen the blast radius to real worker choices.
    This is the most important line in this plan.
 6. `user_shift_state_records.reason` holding a `par_…` id for a system row is migrated consistently
@@ -104,9 +108,9 @@
    custom_pause_reasons feature set shipped migrations whose downgrades did not restore data, and
    that fact later blocked testing entirely.
 9. **Idempotent** — running it twice changes nothing the second time.
-10. **Zero rows left pointing at `pause_other_task_priority` or `pause_case_created` afterwards.**
-    Record the query proving it — this is phase 4's entry condition. Rows pointing at
-    `pause_ended_shift` are expected to remain and are not counted.
+10. **Zero rows left pointing at `pause_other_task_priority` afterwards.** Record the query proving
+    it — this is phase 4's entry condition. Rows pointing at `pause_ended_shift` and
+    `pause_case_created` are expected to remain and are **not** counted.
 
 ## Contracts and skills
 

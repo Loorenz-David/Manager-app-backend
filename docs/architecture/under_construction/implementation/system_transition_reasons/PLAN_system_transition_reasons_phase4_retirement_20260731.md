@@ -23,7 +23,7 @@
 
 ## Scope
 
-- In scope: retiring the two system rows (`pause_other_task_priority`, `pause_case_created`); deleting `get_system_pause_reason_id`; removing
+- In scope: retiring the one system row (`pause_other_task_priority`); deleting `get_system_pause_reason_id`; removing
   `is_system_managed` and its consumers; dropping `slug` and `uq_pause_reasons_slug`; the bootstrap
   seed phase and seed migration; check constraints; final verification and close-out.
 - Out of scope: worker-choosable catalog rows and the CRUD surface, beyond removing system-row
@@ -33,8 +33,10 @@
 
 ## Clarifications required
 
-- [ ] **Soft-delete or hard-delete the two rows being retired** (`pause_other_task_priority`,
-      `pause_case_created`)? `pause_ended_shift` is no longer retired — see criterion 2. Soft-delete is safer (FK intact,
+- [ ] **Soft-delete or hard-delete `pause_other_task_priority`?** It is now the **only** row this
+      phase retires. `pause_ended_shift` stays selectable (criterion 2), and `pause_case_created` is
+      already soft-deleted and keeps 7 historical references (operator ruling 2026-07-31, phase 3
+      clarification) — **retiring it is a no-op; do not touch it.** Soft-delete is safer (FK intact,
       reversible) but leaves rows a manager could see unless filtered. Hard-delete is only possible
       because phase 3 guarantees zero references, and `ondelete="RESTRICT"` will enforce that for
       us. **Recommend soft-delete**; escalate for the ruling.
@@ -47,11 +49,13 @@
 
 ### Retirement
 
-1. **Entry condition re-verified**: zero rows reference the **two rows being retired**. Freshly run
-   and recorded. If non-zero, STOP — phase 3 is incomplete.
+1. **Entry condition re-verified**: zero rows reference `pause_other_task_priority`. Freshly run and
+   recorded. If non-zero, STOP — phase 3 is incomplete.
 
-   **References to `pause_ended_shift` are expected and legitimate** — it stays selectable, so
-   workers create new ones. Do not treat a non-zero count there as a failure, and do not "clean" it.
+   **References to `pause_ended_shift` and `pause_case_created` are expected and legitimate** — the
+   first stays selectable so workers create new ones; the second holds 7 historical rows phase 3
+   deliberately preserved. Do not treat a non-zero count on either as a failure, and do not
+   "clean" them.
 2. **`pause_ended_shift` is NOT soft-deleted. It becomes an ordinary worker-selectable pause reason**
    — `is_system_managed` cleared, left visible and editable like any other workspace row.
 
@@ -68,9 +72,13 @@
    thing a worker picks. That is the whole distinction this feature set exists to draw — a catalog
    row is fine; a catalog row that system behaviour depends on is not.
 
-   `pause_other_task_priority` and `pause_case_created` are different: no worker picks either
-   (`pause_case_created` is already soft-deleted as an FK target). Retire those two per the
+   `pause_other_task_priority` is different: no worker picks it. Retire that one per the
    clarification's ruling.
+
+   `pause_case_created` is **already** soft-deleted and stays that way, still serving as the FK
+   target for 7 historical rows phase 3 deliberately leaves in place. There is nothing to retire —
+   verify its state and move on. Hard-deleting it would violate `ondelete="RESTRICT"` and destroy
+   labels that success criterion 5 requires.
 
 3. Retired rows no longer appear in any worker-facing picker or manager-facing catalog list, and
    `pause_ended_shift` still does. **Assert against the actual endpoint response**, not the query.
