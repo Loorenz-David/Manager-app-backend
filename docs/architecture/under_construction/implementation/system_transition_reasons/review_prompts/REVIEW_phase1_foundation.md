@@ -61,10 +61,26 @@ on the deploy that is supposed to *fix* an outage.
 - [ ] **`manually_recorded`, the `changed_by_id` heuristic, and the `startswith("par_")` branch are
       all untouched** (T7 / phase 2 scope). Their modification is a finding even if the change looks
       like an improvement.
-- [ ] Full suite compared by failure **node set** against a baseline worktree, with `app/.env.testing`
-      copied into it. Reject count-only comparisons, and reject any baseline whose totals diverge
-      wildly from the recorded canonical figures — that means the worktree was misconfigured, not
-      that the tree regressed.
+- [ ] Full suite compared by failure **node set** against a baseline worktree, with **`app/.env`**
+      copied into it (copying all of `app/.env*` is safest). Reject count-only comparisons.
+      **Corrected 2026-07-31:** earlier revisions of this line said `app/.env.testing`. That file
+      defines no `JWT_SECRET_KEY`, so a worktree carrying only it cannot start — `Settings` raises
+      on import. The suite runs against `.env`, because `config.py::_resolve_env_file()` defaults
+      `APP_ENV` to `development`. Verify config parity with a small smoke run in both trees before
+      trusting any number.
+- [ ] Sanity-check the baseline against **24 failed / 1341 passed at `26d290d`** (measured
+      2026-07-31 on a correctly configured worktree), not against the older canonical
+      27 failed / 1275 passed — 66 tests have been added since that figure was recorded. A baseline
+      diverging wildly from *this* figure means the worktree was misconfigured; divergence from the
+      older one does not.
+- [ ] **Do not read a back-to-back double suite run as a regression.** The test database and Redis
+      are shared and not reset between runs, so a second consecutive full run dirties them: three
+      nodes (`test_seed_pause_reasons_is_idempotent`,
+      `test_pause_reason_crud_and_system_delete_guard`,
+      `test_create_uses_client_supplied_id_for_new_preference`) fail on any second run, including in
+      an **unmodified** baseline tree. Two of them fail through the global-unique-slug mechanism this
+      feature set exists to remove. If you see exactly these three, re-run the baseline tree a second
+      time and diff run-2 against run-2 before recording a finding.
 
 ## Adversarial probes
 

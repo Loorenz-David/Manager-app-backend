@@ -35,8 +35,23 @@
       backfill validated only against seeded test data carries materially more risk, and the
       operator should know that before it runs, not after.
 - [ ] **What member do `pause_case_created` rows map to?** It is the soft-deleted anchor row that
-      historical data points at (intention Finding 4). It has no live equivalent transition, so it
-      likely needs its own member. **Decide explicitly; do not fold it into another value.**
+      historical data points at (intention Finding 4), with 7 rows referencing it. **Decide
+      explicitly; do not fold it into another value.**
+
+      *Updated 2026-07-31 after phase 1.* Phase 1 deliberately did **not** add a member for it and
+      recorded its reasoning; the decision is yours, not inherited. Two things phase 1 established
+      that constrain it:
+
+      - **The T5 trap.** T5 says system rows are backfilled to `transition_reason` and their
+        `pause_reason_id` nulled. `pause_case_created` is **not** a system row in T5's sense — it is
+        a retired catalog entry. Nulling those 7 rows without a member to carry them would destroy
+        their label and **fail master-plan success criterion 5** (historical rows resolve to the
+        same human-visible labels after migration). Criterion 5 in this plan is where that springs.
+      - **The anchor is invisible to `list_pause_reasons`** — it was seeded already soft-deleted
+        (`deleted_at` equals `created_at`) purely as an FK target. So it cannot be picked, and
+        case-created pauses are today written with **no `pause_reason_id` at all**. Those rows have
+        neither representation, and this backfill will meet them. Decide what happens to them too;
+        they are not the same 7.
 
 ## Acceptance criteria
 

@@ -185,6 +185,250 @@ This feature set inherits the recorded baseline in
 - 149 pre-existing `ruff check .` errors in untouched files; the shared `count_queries` fixture is
   broken — use a local SQLAlchemy listener.
 
+## Phase 1 inventory (recorded 2026-07-31 by the phase 1 implementer)
+
+**Source database for every figure below:** the `.env` database
+`postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager` (operator ruling, 2026-07-31).
+This is also the database the test suite runs against — `beyo_manager/config.py::_resolve_env_file()`
+selects `.env` when `APP_ENV` is unset, and `.env.testing` cannot be used because it defines no
+`JWT_SECRET_KEY`. The RDS in `.env.production.ec2` is unreachable from the operator's machine
+(connection timeout), so **no figure here is measured against production.**
+
+### Correction to the intention's "3132 workspaces, exactly 1"
+
+That figure came from the **shared test database** `app_test` on port 5432, not from production or
+from the dev database. Measured 2026-07-31, `app_test` now holds **4118 workspaces and ZERO
+`pause_reasons` rows** — it accumulates workspaces from test runs and is not representative of
+anything. The architectural argument is untouched (a workspace without the row cannot clock out),
+but **the "3131 broken production workspaces" framing is not supported by evidence available on
+this machine.** Phase 3 must not choose its backfill strategy from that number.
+
+### Volumes (`beyo_manager` @5433) — re-measured quiescent 2026-07-31 (review round 1, F2)
+
+**Why the first measurement did not reproduce.** This database is also the suite's database, so
+every *global* count moves with every suite run: between the first inventory and the re-measurement
+(three full-suite runs later) `workspaces` went 1 → 531 and global `step_state_records` 5299 → 5400.
+The drift is **entirely rows in test workspaces**. Scoping to the one workspace that actually holds
+a catalog — `ws_01KVX0G0T7Z6NE69YVRVMFAB98`, the real dev data — every phase-3-relevant figure
+reproduces **exactly**.
+
+**All figures below are workspace-scoped and marked STABLE unless noted.** Global counts are marked
+VOLATILE and must not be used to size anything. Two consecutive quiescent samples 3s apart were
+identical.
+
+Scope predicate applied to each query below: `WHERE workspace_id = 'ws_01KVX0G0T7Z6NE69YVRVMFAB98'`.
+
+| Figure | Value | Mark | Query |
+|---|---|---|---|
+| `step_state_records` total / with `pause_reason_id` / without | 5299 / 570 / 4729 | **STABLE** (reproduced exactly) | `SELECT count(*), count(pause_reason_id), count(*) FILTER (WHERE pause_reason_id IS NULL) FROM step_state_records WHERE workspace_id='ws_01KVX0G0T7Z6NE69YVRVMFAB98';` |
+| `step_state_records` → `pause_ended_shift` | 152 | **STABLE** | `SELECT pr.slug, count(*) FROM step_state_records ssr JOIN pause_reasons pr ON pr.client_id = ssr.pause_reason_id WHERE ssr.workspace_id='ws_01KVX0G0T7Z6NE69YVRVMFAB98' GROUP BY pr.slug;` |
+| `step_state_records` → `pause_other_task_priority` | 228 | **STABLE** | *(same query)* |
+| `step_state_records` → `pause_case_created` | 7 | **STABLE** | *(same query)* |
+| *(non-system, for context)* `pause_lunch_break` / `pause_coffee_break` / `waiting_for_upholstery` / `pause_meeting` | 71 / 52 / 45 / 15 | **STABLE** | *(same query)* |
+| `user_shift_state_records.reason`: null / legacy slug string / `par_…` id | 3256 / **272** / 98 | **legacy-string count STABLE**; null VOLATILE; `par_` count corrected (the first inventory reported 100 unscoped — 2 of those rows are in test workspaces) | `SELECT CASE WHEN reason IS NULL THEN 'null' WHEN reason LIKE 'par\_%' THEN 'par_ id' ELSE 'legacy slug string' END, count(*) FROM user_shift_state_records WHERE workspace_id='ws_01KVX0G0T7Z6NE69YVRVMFAB98' GROUP BY 1;` |
+| `user_declared_state_records` total | **0** | **STABLE** | `SELECT count(*), count(pause_reason_id) FROM user_declared_state_records;` |
+| `step_state_records.description` non-null / `'started working with %'` | 157 / 113 | **STABLE** (reproduced exactly, even unscoped) | `SELECT count(*) FILTER (WHERE description IS NOT NULL), count(*) FILTER (WHERE description LIKE 'started working with %') FROM step_state_records;` |
+
+**VOLATILE — do not size anything from these:** global `workspaces` (1 → 531), global
+`step_state_records` (5299 → 5400), global `user_shift_state_records` (3620 → 3716), global
+`step_state_records → pause_ended_shift` unscoped (152 → 157) and `pause_coffee_break` unscoped
+(52 → 80). The unscoped slug join counts rows from *any* workspace pointing at the dev catalog,
+which is why it drifts while the scoped version does not.
+
+**Standing instruction for phase 3:** take every figure from this database **workspace-scoped and
+with the suite quiescent**, or the number is not evidence.
+
+### Correction to Finding 3 / "traced model facts": there is **no free text** — **STABLE**
+
+`UserShiftStateRecord.reason` is documented as holding "either a `par_…` catalog id or legacy free
+text". Measured: the 272 non-`par_` values are **legacy slug strings plus the literal
+`"unspecified"`** — there is no human-authored free text at all.
+
+```sql
+SELECT count(*) FROM user_shift_state_records
+WHERE reason IS NOT NULL AND reason NOT LIKE 'par\_%'
+  AND reason NOT IN (SELECT slug FROM pause_reasons WHERE slug IS NOT NULL)
+  AND reason <> 'unspecified';
+-- 0
+```
+
+The complete distinct set is: `pause_case_created`, `pause_coffee_break`, `pause_lunch_break`,
+`pause_meeting`, `pause_other_task_priority`, `unspecified`, `waiting_for_upholstery`.
+
+**Reproduced exactly on re-measurement (2026-07-31, quiescent): count still 0, distinct set still
+these 7, legacy-string row count still 272.** This is the figure phase 3 depends on most and it is
+STABLE both scoped and unscoped.
+**This makes phase 3's backfill materially simpler** — legacy values map slug → `transition_reason`
+directly, with no text parsing and no unmappable tail. Note `"unspecified"` is stored in 13 rows and
+collides with the published `UNSPECIFIED_REASON` bucket key.
+
+### Per-workspace distribution (`beyo_manager` @5433)
+
+Workspaces total **1**; holding any `pause_reasons` row **1**; holding each of `pause_ended_shift` /
+`pause_other_task_priority` / `pause_case_created` **1 / 1 / 1**. A single-workspace dev database
+cannot confirm or refute the 1-of-N claim — see the correction above.
+
+```sql
+SELECT (SELECT count(*) FROM workspaces),
+       (SELECT count(DISTINCT workspace_id) FROM pause_reasons),
+       (SELECT count(*) FROM pause_reasons WHERE slug='pause_ended_shift');
+```
+
+### Label-resolution strings (criterion 5 — phase 3 must reproduce these)
+
+| slug | `name` | `pause_type` | `is_system_managed` | `is_deleted` | `image_url` |
+|---|---|---|---|---|---|
+| `pause_ended_shift` | **Ended shift** | BLOCKER | true | false | `.../ws_workspace_test/pause_reasons/ended_shift.webp` |
+| `pause_other_task_priority` | **Other task priority** | BLOCKER | true | false | `.../ws_workspace_test/pause_reasons/other_task_priority.webp` |
+| `pause_case_created` | **Case created** | BLOCKER | false | **true (soft-deleted anchor)** | *(null)* |
+
+Finding 4 confirmed: `pause_case_created` is soft-deleted and still the FK target of 7
+`step_state_records`.
+
+**`image_url` is NOT reproduced by the code-owned map** — it is per-environment seed data pointing
+into a workspace-specific S3 path. `domain/transitions/labels.py` returns `image_url: None`.
+Inert in phase 1 (nothing writes the column), but **phase 3's backfill flips real rows onto this
+map and the kiosk pause icon for system transitions becomes null at that point.** Phase 3 owns
+choosing a code-owned asset or accepting the loss. Flagged, not decided.
+
+### `pause_case_created` disposition (review round 1, F4)
+
+**What the 7 rows are.** All 7 are `step_state_records` in state `paused`, entered between
+2026-06-27 and 2026-07-21, **none still open**. A further **6** `user_shift_state_records` carry the
+legacy string `'pause_case_created'` in `reason`. The catalog row itself is `is_deleted = true` and
+— importantly — **`is_system_managed = false`**.
+
+**Ruling: no enum member, and phase 3 owns the final call.** Recorded here with the evidence and a
+recommendation rather than decided unilaterally, because it changes which rows an irreversible
+migration touches.
+
+Reasoning for the recommendation: `pause_case_created` is **not a system transition**. It is a
+catalog reason a *user action* selects — the frontend looks it up by slug and sends it as
+`pause_reason_id` when a worker opens a case from a working step
+([use-task-step-detail.controller.ts:228](../../../../../../frontend/apps/workers-app/ManagerBeyo-app-workers/src/features/task_steps/controllers/use-task-step-detail.controller.ts)).
+Under the target semantics that is exactly the `pause_reason_id`-carrying case, not the
+`transition_reason` case. Giving it a member would put a worker-chosen reason into a vocabulary
+defined as system-controlled (T1/T2).
+
+**Consequence phase 3 must not miss.** T5 says historical rows are backfilled and their *system*
+`pause_reason_id` nulled. `pause_case_created` is **not** one of the two system slugs and is not
+`is_system_managed`. If phase 3 nulls these 7 rows' `pause_reason_id` without a `transition_reason`
+to carry, they lose their label and **master-plan success criterion 5 fails**. The preserved
+acceptance criterion "select by the three specific system rows, never by `is_system_managed` alone"
+cuts both ways here: selecting by the three *named* rows would wrongly include this one, and
+selecting by `is_system_managed` would wrongly exclude it from delete-protection reasoning.
+**Recommendation: phase 3 nulls only `pause_ended_shift` and `pause_other_task_priority`, and leaves
+`pause_case_created` rows pointing at the anchor**, which is what Finding 4 already requires of the
+anchor's role.
+
+**Side finding (pre-existing, not repaired here).** The anchor is soft-deleted, and
+`list_pause_reasons` filters `is_deleted IS false` — so the frontend's slug lookup returns
+`undefined` today, and a case-created pause is currently written with **no** `pause_reason_id` at
+all. That is why the row count is 7 and static rather than growing. Logged for the operator; out of
+scope for this feature set per the intention's scope boundary.
+
+### Second-workspace `IntegrityError` — **CONFIRMED by execution**
+
+Run against a disposable database `beyo_str_repro_tmp` (created and dropped for the test; never the
+shared dev/test database), driving the real `seed_pause_reasons` with `pause_reasons` created from
+the live model metadata:
+
+```
+index uq_pause_reasons_slug: CREATE UNIQUE INDEX uq_pause_reasons_slug ON public.pause_reasons USING btree (slug)
+workspace 1 seeded OK: 6 rows
+RESULT: CONFIRMED — second workspace raised IntegrityError
+  UniqueViolationError: duplicate key value violates unique constraint "uq_pause_reasons_slug"
+```
+
+Independently corroborated by the full-suite runs: on a **second consecutive** suite run,
+`test_seed_pause_reasons_is_idempotent` and `test_pause_reason_crud_and_system_delete_guard` fail
+through this same mechanism (see "Validation baseline" note below).
+
+### Out-of-repo slug-consumer audit (T6) — **CONSUMER FOUND; T6 AMENDED**
+
+The audit was extended past `grep app/` into the frontend monorepo at
+`ManagerBeyo-app/frontend/`, the published handoffs, and `Application_contracts/`. It found live
+consumers:
+
+| Consumer | What it does |
+|---|---|
+| `frontend/apps/workers-app/.../features/task_steps/lib/pause-reason-transition.ts:12` | `reason.slug === "pause_ended_shift" ? "ended_shift" : "paused"` — decides the transition target state |
+| `frontend/apps/workers-app/.../controllers/use-task-step-detail.controller.ts:228` | `reason.slug === "pause_case_created"` — resolves the pause reason id used when a case is created |
+| `frontend/packages/pause-reasons/src/types.ts:19` | `slug: z.string()` — **required, non-nullable** in the response schema. Dropping the field fails Zod validation for every pause-reasons response, breaking the picker entirely |
+| `frontend/packages/pause-reasons/src/lib/pause-reason-view-model.ts:11,14` | carries `slug` into the picker option and its `data-testid` |
+| `frontend/apps/workers-app/.../tests/playwright/.../pause-reason.spec.ts:56,90` | e2e selectors keyed on slug |
+| `docs/handoff/to_frontend/archived/HANDOFF_TO_FRONTEND_pause_reasons_step_transition_contract_20260722.md:101-116` | published ruling: *"keep that pattern — key off `slug === 'pause_ended_shift'` in the sheet"* |
+
+The first two are compiled into the shipped `dist/` bundle. T6's ruling was made "on the basis that
+none exist in this repository"; that basis does not hold.
+
+**Operator ruling 2026-07-31 (escalation answered): T6 is AMENDED — keep the `slug` column.**
+Phase 4 scopes `uq_pause_reasons_slug` to `(workspace_id, slug)` instead of dropping column and
+index, which the intention already permits as a *supporting* change. Everything else in T6 stands:
+phase 4 still retires the system rows, `is_system_managed`, and `get_system_pause_reason_id`. No
+phase 1–3 deliverable depended on `slug` dying.
+
+**Side finding (pre-existing, not repaired here):** `create_pause_reason.py:37` sets `slug=None`, and
+`serialize_pause_reason` emits it — so a workspace-created reason already serialises `"slug": null`
+against a frontend schema that requires a string. Logged as out-of-scope per the intention's scope
+boundary.
+
+### Read-path audit (model-outward from `PauseReason` / `pause_reason_id`)
+
+Derived from inbound references, not from guessing at call sites. The three runtime sites the
+intention names are present at `_clock_worker_shift.py:197`, `transition_step_state.py:271`,
+`_step_transition_core.py:111` (the intention's `:200/:274/:114` point at the same statements; line
+numbers drifted by 3).
+
+**Label-resolving paths — tolerance added in phase 1:**
+
+| # | Path | Test |
+|---|---|---|
+| R5 | `domain/users/serializers.py::pause_reason_reference_is_unresolved` | `test_transition_row_is_not_reported_unresolved`, `test_transition_row_outranks_a_dangling_catalog_id` |
+| R6 | `domain/users/serializers.py::serialize_current_worker_shift_state` | `test_transition_reason_row_resolves_to_a_pause_reason_label`, `test_catalog_reference_wins_over_transition_reason`, `test_transition_reason_wins_over_free_text_reason` |
+| R7 | `services/queries/users/get_current_worker_shift_state.py:88` (unresolved warning) | covered via R5 |
+| R8 | `worker_stats/get_worker_linear_timeline_breakdown.py::_load_step_timeline_records` | `test_breakdown_resolves_a_transition_reason_step_record` |
+| R9 | same file, `record_detail` nested `pause_reason` | same test (asserts `pause_reason: null`, no new key) |
+| R10 | same file, segment-level `reason` back-derivation | same test + `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` |
+| R11 | `worker_stats/list_workers_linear_timeline.py::_load_pause_reasons_lookup` | `test_roster_buckets_and_labels_a_transition_reason_pause`, `test_transition_reason_labels_cost_no_extra_query` |
+| R12 | same file, `build_recorded_shift_timeline` bucket key | `test_pause_bucket_key_falls_back_to_transition_reason`, `test_catalog_reason_still_wins_the_bucket_key` |
+| R13 | `worker_stats/get_worker_clock_out_analytics.py:277-284` (published kiosk contract) | `test_clock_out_analytics_resolves_transition_and_unspecified_keys` + the existing `test_pause_reasons_resolves_every_timeline_key_including_unspecified`, unmodified |
+
+**Added in review round 1 (F3) — pure-domain sweep, deliberately unchanged in phase 1:**
+
+| # | Path | Ruling |
+|---|---|---|
+| R23 | `domain/analytics/linear_timeline.py:220` — `owner.interval.reason or UNSPECIFIED_REASON` | The sweep treats `reason` as an **opaque key**; it never resolves a label. Phase 1 feeds the fallback in at the composer (R8/R12/R14), so this line needs no change and gets none. Covered indirectly by `test_pause_bucket_key_falls_back_to_transition_reason` and the existing `tests/unit/domain/analytics/test_linear_timeline.py`. |
+| R24 | `domain/analytics/linear_timeline.py:264` — `pause_by_reason[seg.reason or UNSPECIFIED_REASON]` | Same: opaque key, no resolution. |
+| — | **Phase 2 note** | Both lines are on `LinearInterval.reason`, which phase 2 rewrites when it changes what the composers put there. They are listed here because **this audit is phase 2's checklist**, and an unlisted line is one phase 2 can miss — not because phase 1 owes them a change. |
+
+**Audited, deliberately unchanged in phase 1 — each with the reason and its test:**
+
+| # | Path | Ruling |
+|---|---|---|
+| R1 | `domain/pause_reasons/serializers.py::serialize_pause_reason` | Catalog leaf. A transition reason has no catalog row. Existing `test_pause_reason_serializer_exposes_public_shape_only` unmodified and green. |
+| R2 | `domain/tasks/serializers.py:186,377` | The nested `pause_reason` is a **catalog object**. Synthesising one for a transition reason would invent contract, and criterion 17 forbids the payload gaining a field. Asserted to stay `null`. **Phase 2 decides whether step payloads need the transition surfaced.** |
+| R3/R4 | `serialize_declared_state`, `_serialize_pause_reason_reference` | Take a `PauseReason` directly; T3 gives `UserDeclaredStateRecord` no column. |
+| **R14** | `services/commands/users/_reconstruct_shift_middle.py:85-233` | **WRITER — phase 2.** It reads `pause_reason_id` into `LinearInterval.reason` and writes `reason=segment.reason` onto derived rows. Making it read `transition_reason` would write the new vocabulary into the old column. **This is the highest-risk item on this list: after phase 2 types `step_state_records`, this derivation returns `reason=NULL` and the kiosk buckets everything as `unspecified` unless phase 2 changes it.** |
+| **R15** | `services/commands/users/reconcile_worker_shift_state.py:200-203` | **WRITER — phase 2.** Same mechanism for the live derived row. |
+| R16 | `list_task_steps.py:40`, `tasks.py:650`, `list_working_section_steps.py:306`, `step_record_payload.py:237` | `selectinload` feeding R2; no label logic. |
+| R17 | `transition_step_state.py:174-186`, `transition_step_state_batch.py:66-78` | Write-path validation. Phase 2. |
+| R18 | `declare_worker_state.py:89-102` | Write-path validation. T3. |
+| R19 | `services/queries/pause_reasons/*` | Catalog CRUD; unaffected. |
+| R20 | `services/tasks/task_steps/finalize_pending_step_completion.py:35,116` | Opaque payload passthrough. |
+| R21 | `services/queries/pause_reasons/get_system_pause_reason.py` + its 3 callers | Phase 2 removes the callers; phase 4 deletes it. |
+| R22 | `services/commands/bootstrap/phases/seed_pause_reasons.py` | Seeding; phase 4. |
+| — | migrations `ad5da5b32355`, `fb10ac7fd439`, `49bd666da846`, `b58cdffb5ccc` | Historical; not re-run. |
+
+### Validation baseline note (2026-07-31)
+
+The recorded canonical figure (27 failed / 1275 passed at `ccdffa9`) no longer matches this tree —
+a clean baseline worktree at `26d290d` measures **24 failed / 1341 passed**. Compared by **node
+set**, phase 1 introduces **zero** new failures. The apparent +3 in a naive back-to-back comparison
+(`test_seed_pause_reasons_is_idempotent`, `test_pause_reason_crud_and_system_delete_guard`,
+`test_create_uses_client_supplied_id_for_new_preference`) are **shared-dirty-database artifacts**:
+a *second consecutive run of the unmodified baseline tree* reproduces the identical 27-node set.
+
 ## Success criteria (feature set as a whole)
 
 1. Clock-out succeeds in a workspace holding **zero** `pause_reasons` rows, with an open WORKING
@@ -213,6 +457,19 @@ This feature set inherits the recorded baseline in
 - Transition owner: `David`
 
 ## Progress notes
+
+- `2026-07-31`: **Phase 1 APPROVED** after one fix cycle. Two repo-health items surfaced that are
+  **out of scope for this feature set** (T8) but must not be lost:
+  - **Case-created pauses are currently written with no reason at all.** The `pause_case_created`
+    catalog row was seeded already soft-deleted (`deleted_at` equals `created_at`) purely as an FK
+    target for historical rows, so it is invisible to `list_pause_reasons` and cannot be selected.
+    Live rows created by that path therefore carry neither a `pause_reason_id` nor — after phase 1 —
+    a `transition_reason`. Phase 3's backfill will meet them, and they are **not** the same 7 rows
+    that point at the anchor. Worth attention independently of this migration.
+  - **The breakdown endpoint's `pause_reasons` map does not resolve worker-level reasons.** Its map
+    is built from step records only, so a worker-level reason with no matching step reason produces
+    an unresolvable key. Verified pre-existing by probing both trees. The kiosk clock-out endpoint
+    does guarantee full resolution; the breakdown endpoint never did.
 
 - `2026-07-31`: **Restructured from eleven phases to four** (operator call). The eleven-phase draft
   applied declared_worker_states' ceremony — which was sized for new tables, a new auth scope, new
