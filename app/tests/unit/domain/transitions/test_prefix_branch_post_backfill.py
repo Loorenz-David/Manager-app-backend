@@ -12,16 +12,20 @@ What the phase-3 backfill changes is its **input population**. The migration
 `user_shift_state_records.reason` still holds is one of:
 
 * `NULL` — with or without a `transition_reason`,
-* a `par_…` id that resolves to a catalog row in its own workspace (worker-chosen;
-  catalog rows are never hard-deleted, so the reference cannot dangle),
+* a `par_…` id that resolves to a catalog row in its own workspace (worker-chosen),
 * a legacy slug string or the literal `"unspecified"`.
 
-That complete set is measured, not assumed: the migration's zero-remaining-references
-assertion plus the rehearsal queries recorded in the phase 3 plan's Review log establish
-that no stored row carries an unresolvable `par_…` id. This module proves the other
-half: for each shape in that set, the suppression arm is not taken — so no stored row
-reaches the prefix branch's `True` case, and the branch is dead code with respect to
-real data while remaining in place as contract-mandated defence.
+That the resolving-`par_…` shape is the only id shape stored is **measured, not
+guaranteed**: `reason` is a plain `String(512)` with no foreign key, so nothing
+referential prevents a stale or foreign id in principle — only the writers do (every
+production writer validates the reason against the caller's workspace before
+persisting). The migration's zero-remaining-references assertion plus the rehearsal
+queries recorded in the phase 3 plan's Review log establish that no stored row
+carries an unresolvable `par_…` id today. This module proves the other half: for each
+shape in that measured set, the suppression arm is not taken. The branch is therefore
+**defence, not dead code** — unreached by any stored row, kept because the column's
+lack of referential integrity means the case it defends against is possible in
+principle and the published contract defines what must happen if it occurs.
 """
 
 from datetime import datetime, timezone

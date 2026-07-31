@@ -17,6 +17,36 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Convention: a table whose name ends in this suffix is MIGRATION-OWNED BOOKKEEPING —
+# created by a migration in raw SQL, read only by that migration's downgrade (or a
+# later migration's cleanup), and deliberately absent from ORM metadata because it is
+# not a domain table and must not gain a model.
+#
+# Without this filter, autogenerate sees such a table in the database but not in
+# `Base.metadata` and emits `op.drop_table(...)` for it in the next unrelated
+# revision — silently destroying the record that makes its owning migration
+# reversible (e.g. `transition_reason_backfill_journal`). Any future raw-SQL
+# bookkeeping table must use this suffix to inherit the same protection.
+_MIGRATION_BOOKKEEPING_SUFFIX = "_journal"
+
+
+def _include_object(object_, name, type_, reflected, compare_to):
+    """Keep autogenerate's hands off migration-owned bookkeeping tables.
+
+    The excluded case is exactly `reflected and compare_to is None` — a table that
+    exists in the database with no metadata counterpart, which autogenerate would
+    otherwise drop. A genuine ORM table that happened to use the suffix would have a
+    metadata counterpart and is unaffected.
+    """
+    if (
+        type_ == "table"
+        and reflected
+        and compare_to is None
+        and name.endswith(_MIGRATION_BOOKKEEPING_SUFFIX)
+    ):
+        return False
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -25,6 +55,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -39,6 +70,7 @@ def _do_run_migrations(connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         transaction_per_migration=True,
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
