@@ -33,7 +33,8 @@
 
 ## Clarifications required
 
-- [ ] **Soft-delete or hard-delete the three system rows?** Soft-delete is safer (FK intact,
+- [ ] **Soft-delete or hard-delete the two rows being retired** (`pause_other_task_priority`,
+      `pause_case_created`)? `pause_ended_shift` is no longer retired — see criterion 2. Soft-delete is safer (FK intact,
       reversible) but leaves rows a manager could see unless filtered. Hard-delete is only possible
       because phase 3 guarantees zero references, and `ondelete="RESTRICT"` will enforce that for
       us. **Recommend soft-delete**; escalate for the ruling.
@@ -48,9 +49,29 @@
 
 1. **Entry condition re-verified**: zero rows in any table reference the three system catalog rows.
    Freshly run and recorded. If non-zero, STOP — phase 3 is incomplete.
-2. The three system rows are retired per the ruling and no longer appear in any worker-facing picker
-   or manager-facing catalog list. **Assert against the actual endpoint response**, not the query.
-3. `get_system_pause_reason_id` is **deleted** (success criterion 3), with its module if nothing else
+2. **`pause_ended_shift` is NOT soft-deleted. It becomes an ordinary worker-selectable pause reason**
+   — `is_system_managed` cleared, left visible and editable like any other workspace row.
+
+   *Amended 2026-07-31, operator ruling.* The original criterion said all three system rows are
+   retired and disappear from every picker. That breaks the worker app.
+   `list_pause_reasons.py:19` filters `is_deleted.is_(False)`, so soft-deleting the row removes it
+   from the pause sheet — and the worker app currently translates that specific slug into a
+   different state machine target
+   (`frontend/apps/workers-app/.../lib/pause-reason-transition.ts:12`). Remove the row and a worker
+   can no longer end a shift from the pause sheet at all.
+
+   Retiring the **machinery** is this phase's job: the slug lookup, `is_system_managed`, and the
+   runtime resolution. Retiring the **row** is not, because the row still has a legitimate use as a
+   thing a worker picks. That is the whole distinction this feature set exists to draw — a catalog
+   row is fine; a catalog row that system behaviour depends on is not.
+
+   `pause_other_task_priority` and `pause_case_created` are different: no worker picks either
+   (`pause_case_created` is already soft-deleted as an FK target). Retire those two per the
+   clarification's ruling.
+
+3. Retired rows no longer appear in any worker-facing picker or manager-facing catalog list, and
+   `pause_ended_shift` still does. **Assert against the actual endpoint response**, not the query.
+4. `get_system_pause_reason_id` is **deleted** (success criterion 3), with its module if nothing else
    lives there, and its tests.
 4. `is_system_managed` and its consumers removed: `domain/pause_reasons/guards.py`
    (`can_delete_pause_reason`), the pause-reason serializer field, and the hardcoded `False` in

@@ -6,7 +6,7 @@
 - Status: `active`
 - Owner: David (operator) — planning to be executed by a fresh session
 - Created at (UTC): `2026-07-30T16:38:18Z`
-- Last updated at (UTC): `2026-07-30T16:38:18Z`
+- Last updated at (UTC): `2026-07-31T14:13:35Z`
 - Related intention: `INTENTION_custom_pause_reasons_20260722` (this intention corrects an
   over-reach of that one — see "Relationship to the custom pause reasons intention")
 
@@ -298,16 +298,40 @@ should never have been catalog rows at all.
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
 | `MASTER_PLAN_system_transition_reasons_20260731` | `.../under_construction/implementation/system_transition_reasons/` | `under_construction` | Goal, decisions T1–T8, four-phase table, orchestration, validation baseline |
-| `PLAN_..._phase1_foundation_20260731` | same folder | `under_construction` | Inventory + read-path audit; `TransitionReasonEnum`; nullable columns; read tolerance. Zero behaviour change. |
+| `PLAN_..._phase1_foundation_20260731` | `.../archives/implementation/system_transition_reasons/` | `archived` ✅ | Inventory + read-path audit; `TransitionReasonEnum`; nullable columns; read tolerance. Zero behaviour change. APPROVED round 2, 2026-07-31. |
 | `PLAN_..._phase2_cutover_20260731` | same folder | `under_construction` | **Ends the outage** — clock-out, both task-switch sites, derivation, serializer |
 | `PLAN_..._phase3_backfill_20260731` | same folder | `under_construction` | One-time historical backfill; label parity |
-| `PLAN_..._phase4_retirement_20260731` | same folder | `under_construction` | Retires system rows; drops `slug` + unique index; constraints; closes this intention |
+| `PLAN_..._phase4_retirement_20260731` | same folder | `under_construction` | Retires system rows; **keeps `slug`, scopes `uq_pause_reasons_slug` to `(workspace_id, slug)`** (T6 as amended by phase 1's audit — the plan file still says "drop" and needs the operator's edit); constraints; closes this intention |
 
 *(Restructured 2026-07-31 from an eleven-phase draft — see the master plan's "Phase orchestration"
 for why. The acceptance criteria were preserved; the ceremony was not.)*
 
 ## Progress notes
 
+- 2026-07-31: **Phase 1 archived (APPROVED).** Four of the seven traced findings were exercised, and
+  the phase corrected three of this document's own claims — which is the outcome the "verify and
+  extend, do not re-derive" instruction was written to produce:
+  - **Finding 2 CONFIRMED by execution** on a disposable database (not by inspection):
+    `UniqueViolationError` on `uq_pause_reasons_slug` when bootstrapping a second workspace.
+  - **The "3132 workspaces, exactly 1" measurement is not what this document says it is.** It came
+    from the shared **test** database, which is accumulated test residue (now 4118 workspaces and
+    zero `pause_reasons` rows). The architectural argument stands unchanged — a workspace without
+    the row cannot clock out — but the "3131 broken *production* workspaces" framing has no
+    supporting evidence: the production RDS is unreachable from the operator's machine and remains
+    unmeasured.
+  - **Finding 3 is imprecise: there is no free text.** All 272 non-`par_` values in
+    `UserShiftStateRecord.reason` are legacy slug strings plus the literal `"unspecified"`. The
+    field is still overloaded and the `startswith(CLIENT_ID_PREFIX)` argument for this migration is
+    untouched — but phase 3's backfill is a direct slug map with no unmappable tail.
+  - **Finding 4 confirmed in every particular**, and extended: the `pause_case_created` anchor is
+    seeded *already* soft-deleted, so `list_pause_reasons` never returns it and case-created pauses
+    are currently written with **no** `pause_reason_id`. Recorded as repo health.
+  - **Open question 3 answered — and it reverses the operator's ruling.** `slug` does **not** die.
+    Phase 1's audit found live frontend consumers, including a required non-nullable `slug` in the
+    `@beyo/pause-reasons` response schema. T6 was amended to keep the column and scope the index; see
+    the master plan. The DB work is smaller than this document anticipated, not larger.
+  - Open questions 1 (Phase 7 first) and 2 (system rows leave the catalog, T5) were already settled
+    by the master plan and are unaffected.
 - 2026-07-30: Intention filed. Tracing from `pause_reason.py` produced Findings 1–7 above; the
   1-of-3132 measurement was taken at commit `de0b3b3` and is recorded in the declared-worker-states
   master plan's "Repository validation baseline" section. No code changed. Planning deferred to a

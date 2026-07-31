@@ -6,7 +6,7 @@
 - Status: `under_construction`
 - Owner agent: `claude-opus-5` (operator: David)
 - Created at (UTC): `2026-07-31T00:00:00Z`
-- Last updated at (UTC): `2026-07-31T00:00:00Z`
+- Last updated at (UTC): `2026-07-31T14:13:35Z`
 - Intention plan: `docs/architecture/under_construction/intention/INTENTION_system_transition_reasons_20260730.md`
 
 ## Goal
@@ -77,13 +77,24 @@ Numbered `T…` to avoid collision with the declared_worker_states set's `D1–D
   soft-deleted. Ends with one representation everywhere. The alternative — permanently dual
   representation — was rejected: it preserves exactly the read-layer ambiguity this feature set
   exists to remove.
-- **T6 — `slug` and `uq_pause_reasons_slug` are removed, not scoped.** Once no runtime path resolves
-  by slug, the column and its global unique index have no consumer. Dropping them resolves the
-  second-workspace `IntegrityError` as a consequence rather than as separate work. Scoping the index
-  to `(workspace_id, slug)` is explicitly NOT the fix (intention plan, "Architectural direction").
-  **Operator confirmed 2026-07-31: drop the column, not only the index.** Phase 1's inventory step
-  must still audit for out-of-repo slug consumers (exports, reports, webhooks, frontend) and escalate if it finds
-  one — the ruling was made on the basis that none exist in this repository.
+- **T6 — `slug` is KEPT; `uq_pause_reasons_slug` is scoped to `(workspace_id, slug)`** *(amended
+  2026-07-31 by operator ruling, on phase 1's evidence — supersedes the original form below)*.
+  Phase 1's out-of-repo audit found **live consumers** of `pause_reasons.slug`, so the condition the
+  original ruling rested on does not hold. The decisive one is
+  `frontend/packages/pause-reasons/src/types.ts:19`, where `slug: z.string()` is **required and
+  non-nullable** — dropping the column would fail Zod validation on *every* pause-reasons response,
+  not merely break the ended-shift branch. Two shipped worker-app call sites and the published
+  `HANDOFF_TO_FRONTEND_pause_reasons_step_transition_contract_20260722.md` ruling also key off it.
+  Full consumer table in "Phase 1 inventory".
+
+  Scoping the index still resolves the second-workspace `IntegrityError`, and phase 4's other
+  retirement work is unchanged. Note this makes the index change a **supporting** change, which the
+  intention plan explicitly permits — it does not make it the architectural fix. The fix remains
+  moving system transitions onto `transition_reason` (T1/T2), which phases 1–3 deliver regardless.
+
+  *Original form, superseded:* "`slug` and `uq_pause_reasons_slug` are removed, not scoped… Operator
+  confirmed 2026-07-31: drop the column, not only the index." That ruling was explicitly conditional
+  on phase 1's audit finding no out-of-repo consumer; it did.
 - **T7 — `manually_recorded` subsumption is a FOLLOW-UP, not part of this set** *(demoted
   2026-07-31)*. `transition_reason` probably subsumes it, and the `changed_by_id IS NOT NULL`
   heuristic that declared_worker_states Phase 2 settled on after four fix cycles (F1/F2, G1, H1, I1)
@@ -107,10 +118,21 @@ phase edits the archived plan. Anyone reading the archived D3/D5/D14 finds them 
 the intention links.
 
 - **D3** — declared state surfaces as `IN_PAUSE` + `reason = pause_reason_id` +
-  `manually_recorded = true`. Amended: `reason` stops being a polymorphic slot; the derived row
-  carries `transition_reason` and a clean catalog reference.
-- **D5** — auto-pause carries the declared `pause_reason_id`. Amended: restated in terms of
-  `transition_reason`.
+  `manually_recorded = true`. **Amended, final form (phase 2, 2026-07-31):** the derived row
+  surfaces as `IN_PAUSE` + `reason = pause_reason_id` + `transition_reason =
+  WORKER_DECLARED_STATE` + `manually_recorded = true`. `reason` keeps the catalog reference
+  unchanged — what changes is that the row is now *typed*, so a reader learns the segment came
+  from a declaration without inferring it from `manually_recorded` or from the id's shape. This is
+  the one row in the system carrying both representations, and it is deliberate (see the
+  operator qualification in phase 1's Review log: phase 4's check constraint must be per-table or
+  exempt `WORKER_DECLARED_STATE`). `manually_recorded` is untouched (T7).
+- **D5** — auto-pause carries the declared `pause_reason_id`. **Amended, final form (phase 2,
+  2026-07-31):** an auto-pause caused by *task switching* carries `transition_reason =
+  OTHER_TASK_PRIORITY` and `pause_reason_id = NULL` — it resolves no catalog row at all, which is
+  what lets it work in a workspace with an empty catalog. An auto-pause caused by a *declaration*
+  is unchanged and still carries the declared `pause_reason_id`: the worker chose that reason, so
+  it stays a catalog reference. D5's original wording covered only the second case; the first is
+  what this feature set retyped.
 - **D14** — kiosk clock-out analytics return `pause_by_reason` keyed by reason id plus a
   `pause_reasons` label map. Amended only if the retirement changes which keys can appear; the
   published contract is preserved (see "Sequencing against Phase 7").
@@ -138,12 +160,34 @@ partial deploy. This set ships in one deploy (see "Delivery shape"), so that gua
 One more, `manually_recorded` subsumption, was cleanup that fixes nothing user-facing and is now
 deferred under T7.
 
-| # | Phase | Delivers | Independent review earns its cost because |
-|---|---|---|---|
-| 1 | **Inventory, vocabulary, schema & read tolerance** | The read-path audit and volume figures; `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`; every read path resolves both representations. **Zero behaviour change** — nothing writes the column yet. | The audit is the foundation the rest is built on, and a missed read path ships broken in phase 2. |
-| 2 | **Cutover** | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
-| 3 | **Historical backfill** | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
-| 4 | **Retirement & constraints** | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` removed; `slug` + `uq_pause_reasons_slug` dropped; check constraints added; final verification. | Drops columns and adds constraints — cheap to review, but must follow 3. |
+| # | Phase | Status | Delivers | Independent review earns its cost because |
+|---|---|---|---|---|
+| 1 | **Inventory, vocabulary, schema & read tolerance** | `archived` ✅ (APPROVED round 2, 2026-07-31; round 1 `NEEDS_CHANGES` on F1 blocking + F2–F4, all closed in one fix cycle and re-verified by execution. Node-set diff vs `26d290d` empty. **Overturned T6** — see the amendment note below.) | The read-path audit and volume figures; `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`; every read path resolves both representations. **Zero behaviour change** — nothing writes the column yet. | The audit is the foundation the rest is built on, and a missed read path ships broken in phase 2. |
+| 2 | **Cutover** | `under_construction` | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
+| 3 | **Historical backfill** | `under_construction` | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
+| 4 | **Retirement & constraints** | `under_construction` | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` removed; **`slug` kept, `uq_pause_reasons_slug` scoped to `(workspace_id, slug)`** (T6 as amended); check constraints added; final verification. | Drops/scopes constraints — cheap to review, but must follow 3. |
+
+**Phase 1 artefacts.**
+Plan: `../../../archives/implementation/system_transition_reasons/PLAN_system_transition_reasons_phase1_foundation_20260731.md` ·
+Summary: `../../../implemented_summaries/SUMMARY_system_transition_reasons_phase1_foundation_20260731.md` ·
+Archive record: `../../../archives/implementation/system_transition_reasons/ARCHIVE_RECORD_PLAN_system_transition_reasons_phase1_foundation_20260731.md`
+
+**Three things phase 1 established that later phases are bound by** (full detail in "Phase 1
+inventory"):
+
+1. **Phase 2 must rewrite R14/R15** (`_reconstruct_shift_middle`, `reconcile_worker_shift_state`).
+   They are writers of the derived table, so phase 1 correctly left them alone — but once phase 2
+   types `step_state_records`, they emit `reason=NULL` and the kiosk buckets everything as
+   `unspecified`. This is a required deliverable, not a discovery.
+2. **Phase 3 must null only `pause_ended_shift` and `pause_other_task_priority`.**
+   `pause_case_created` is `is_system_managed = false` and is a catalog reason a user action
+   selects; nulling its 7 anchored rows without a `transition_reason` to carry loses their label and
+   fails success criterion 5.
+3. ~~**Phase 3 owns the `image_url` consequence.**~~ **CLOSED by phase 2 (review round 1,
+   finding 2).** The premise was wrong: the seeded URLs are hardcoded literals identical in every
+   workspace, not workspace-specific paths. `domain/transitions/labels.py` now reproduces them, so
+   backfilled rows keep their kiosk icon and phase 3 has no asset decision to make. Detail in the
+   "Label-resolution strings" section below.
 
 **Ordering rationale.** Phase 1 is additive and observably inert, so it carries no deploy risk.
 Phase 2 ends the outage **without needing the backfill**: new rows do not require the catalog row
@@ -285,11 +329,20 @@ SELECT (SELECT count(*) FROM workspaces),
 Finding 4 confirmed: `pause_case_created` is soft-deleted and still the FK target of 7
 `step_state_records`.
 
-**`image_url` is NOT reproduced by the code-owned map** — it is per-environment seed data pointing
-into a workspace-specific S3 path. `domain/transitions/labels.py` returns `image_url: None`.
-Inert in phase 1 (nothing writes the column), but **phase 3's backfill flips real rows onto this
-map and the kiosk pause icon for system transitions becomes null at that point.** Phase 3 owns
-choosing a code-owned asset or accepting the loss. Flagged, not decided.
+~~**`image_url` is NOT reproduced by the code-owned map** — it is per-environment seed data pointing
+into a workspace-specific S3 path… Phase 3 owns choosing a code-owned asset or accepting the loss.~~
+
+**CORRECTED (phase 2, review round 1, finding 2). The URLs are reproduced, and they are not
+per-environment.** They are hardcoded literals, identical in every workspace, appearing in exactly
+two places: `seed_pause_reasons.py::_PAUSE_REASONS` and migration `49bd666da846` (lines 50–51),
+which are byte-identical to each other. Nothing about them is workspace-authored — the
+`ws_workspace_test` path segment is part of the constant, not a per-workspace substitution. Phase 1
+read the URL's *shape* as evidence of provenance and inferred wrongly.
+
+`domain/transitions/labels.py` now carries them, so a system transition resolves to the same name
+**and icon** its catalog row carried. **This closes the phase 3 consequence: there is no icon loss
+to own.** `WORKER_DECLARED_STATE` keeps `image_url: None` because no catalog row ever existed for
+it — that is reproduction, not loss.
 
 ### `pause_case_created` disposition (review round 1, F4)
 
@@ -407,7 +460,7 @@ numbers drifted by 3).
 | # | Path | Ruling |
 |---|---|---|
 | R1 | `domain/pause_reasons/serializers.py::serialize_pause_reason` | Catalog leaf. A transition reason has no catalog row. Existing `test_pause_reason_serializer_exposes_public_shape_only` unmodified and green. |
-| R2 | `domain/tasks/serializers.py:186,377` | The nested `pause_reason` is a **catalog object**. Synthesising one for a transition reason would invent contract, and criterion 17 forbids the payload gaining a field. Asserted to stay `null`. **Phase 2 decides whether step payloads need the transition surfaced.** |
+| R2 | `domain/tasks/serializers.py:186,377` | ~~The nested `pause_reason` is a **catalog object**. Synthesising one for a transition reason would invent contract… **Phase 2 decides whether step payloads need the transition surfaced.**~~ **DECIDED (phase 2, review round 1, blocking finding R2): synthesise the catalog object shape from the code-owned vocabulary.** Phase 1's reasoning was wrong on the contract question — `packages/tasks/src/types.ts` parses this field with the **full** `PauseReasonSchema`, so a transition-typed row serialising `null` blanks a label the client renders. Synthesising the same shape *preserves* the contract rather than inventing one; it is what "invisible" (clarification 3) requires. Both sites now call `serialize_step_pause_reason`. **Procedural lesson recorded: a deferred decision with no owner is how a listed path goes unhandled — "phase N decides" must name what happens if phase N does not.** |
 | R3/R4 | `serialize_declared_state`, `_serialize_pause_reason_reference` | Take a `PauseReason` directly; T3 gives `UserDeclaredStateRecord` no column. |
 | **R14** | `services/commands/users/_reconstruct_shift_middle.py:85-233` | **WRITER — phase 2.** It reads `pause_reason_id` into `LinearInterval.reason` and writes `reason=segment.reason` onto derived rows. Making it read `transition_reason` would write the new vocabulary into the old column. **This is the highest-risk item on this list: after phase 2 types `step_state_records`, this derivation returns `reason=NULL` and the kiosk buckets everything as `unspecified` unless phase 2 changes it.** |
 | **R15** | `services/commands/users/reconcile_worker_shift_state.py:200-203` | **WRITER — phase 2.** Same mechanism for the live derived row. |
@@ -457,6 +510,46 @@ a *second consecutive run of the unmodified baseline tree* reproduces the identi
 - Transition owner: `David`
 
 ## Progress notes
+
+- `2026-07-31`: **Phase 4 amended — `pause_ended_shift` is no longer retired.** Raised by
+  `INTENTION_ended_shift_step_state_collapse_20260731`, which found that
+  `list_pause_reasons.py:19` filters `is_deleted.is_(False)`, so soft-deleting the row removes it
+  from the worker's pause sheet — and the worker app maps that slug to a different state machine
+  target. Phase 4 as written would have broken a live frontend flow. Retiring the *machinery* is
+  this set's job; retiring the *row* is not, because a worker legitimately picks it. The distinction
+  is the feature set's own thesis: a catalog row is fine, a catalog row that system behaviour
+  depends on is not.
+- `2026-07-31`: **`INTENTION_ended_shift_step_state_collapse_20260731` assessed — successor set, not
+  a phase here** (operator ruling). It proposes removing `TaskStepStateEnum.ENDED_SHIFT`, which is
+  the same category error one layer up: a state encoding a reason. The dependency on
+  `transition_reason` is real, but folding it in would put a **second irreversible enum-and-backfill
+  migration** over `step_state_records` and `task_steps` into the single deploy that already carries
+  phase 3's, and would make this set cross-repo when every phase of it is backend-only. It must
+  start after phase 3's backfill, since its bucketing rewrite reads `transition_reason` on
+  historical rows. Its worry that phase 4's check constraints would need revisiting does not hold —
+  that constraint governs `transition_reason` vs `pause_reason_id`, which removing a `state` member
+  does not touch.
+
+- `2026-07-31`: **Phase 1 archived (APPROVED).** Round 1 returned `NEEDS_CHANGES` on F1 — the
+  segment-level reason read dropped a resolution guard that looked incidental
+  (`details[0]["pause_reason"]` was in fact the workspace-resolution check), which leaked a foreign
+  workspace's `par_…` id into a workspace-scoped response. Fixed structurally:
+  `bucket_key(resolved_catalog_ids)` cannot return a catalog id that did not resolve; the reviewer
+  confirmed the new guard's extension is *identical* to the deleted one, not merely equivalent in
+  the tested case. F2 (inventory figures re-measured quiescent and marked STABLE/VOLATILE), F3
+  (`linear_timeline.py:220,264` added to the audit as R23/R24) and F4 (`pause_case_created`
+  disposition) closed in the same cycle.
+
+  **T6 was amended** — see the decision above. Phase 1's slug-consumer audit was the mechanism the
+  ruling itself named for testing its own condition, and the condition failed. Keeping `slug` costs
+  this feature set nothing: no phase 1–3 deliverable depended on the drop.
+
+  Also corrected in flight: the intention's "3132 workspaces, exactly 1" was traced to the shared
+  **test** database (accumulated test residue; production remains unmeasured), and
+  `UserShiftStateRecord.reason` was shown to hold **no free text at all** — every non-`par_` value is
+  a legacy slug string or the literal `"unspecified"`, which makes phase 3's backfill a direct slug
+  map with no unmappable tail. The intention's Finding 2 was **confirmed by execution** on a
+  disposable database.
 
 - `2026-07-31`: **Phase 1 APPROVED** after one fix cycle. Two repo-health items surfaced that are
   **out of scope for this feature set** (T8) but must not be lost:
