@@ -31,9 +31,27 @@
 
 - [ ] **Batched or single-statement?** Decided by phase 1's volume report, not by preference.
       Record the figure the decision was made from.
-- [ ] **Is there a rehearsal database with production-like data?** If not, say so plainly — a
-      backfill validated only against seeded test data carries materially more risk, and the
-      operator should know that before it runs, not after.
+- [x] **Is there a rehearsal database with production-like data?** *Resolved 2026-07-31
+      (operator): **yes.*** The `.env` database
+      (`postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager`) is a dockerised exact
+      copy of the current server database, re-downloadable and replaceable on demand.
+
+      **Use it, and use the restorability.** The rehearsal protocol is a deliverable of this phase,
+      not an optional extra:
+
+      1. Restore a fresh copy and record the restore point.
+      2. Capture "before" labels through the **real read paths** for a sample of every row shape.
+      3. Run the migration.
+      4. Capture "after" labels the same way; diff them (criterion 7).
+      5. Run the zero-remaining-references query (criterion 10).
+      6. Restore again, and confirm the restored state matches the recorded restore point.
+
+      Step 6 is what makes the rest trustworthy — a rehearsal that cannot be repeated from a known
+      state is an anecdote. Record every figure with which restore it came from.
+
+      **One qualification** (phase 1's F2 finding still stands): the suite also runs against this
+      database, so **globals carry accumulated test residue while workspace-scoped figures
+      reproduce.** Scope every count; do not size the migration from a global.
 - [ ] **What member do `pause_case_created` rows map to?** It is the soft-deleted anchor row that
       historical data points at (intention Finding 4), with 7 rows referencing it. **Decide
       explicitly; do not fold it into another value.**

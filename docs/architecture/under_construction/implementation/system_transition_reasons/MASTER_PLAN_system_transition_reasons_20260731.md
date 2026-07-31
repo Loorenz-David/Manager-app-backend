@@ -275,6 +275,19 @@ selects `.env` when `APP_ENV` is unset, and `.env.testing` cannot be used becaus
 `JWT_SECRET_KEY`. The RDS in `.env.production.ec2` is unreachable from the operator's machine
 (connection timeout), so **no figure here is measured against production.**
 
+> **Corrected 2026-07-31 (operator).** The `.env` database is a **dockerised exact copy of the
+> current server database**, re-downloadable and replaceable on demand. So the figures are measured
+> against production *data* after all — with one qualification that phase 1's own F2 finding still
+> stands: the suite also runs against it, so **globals carry accumulated test residue while
+> workspace-scoped figures reproduce.** Read "not production" above as "not the live server", not
+> as "not production data".
+>
+> **This resolves phase 3's rehearsal-database clarification, and changes that phase's risk
+> profile.** The backfill can be rehearsed against real data and the database restored afterwards,
+> rather than validated only against fixtures. Phase 3 must use that: restore a fresh copy → run
+> the migration → verify label parity through the real read paths → restore again. Record the
+> restore points. A rehearsal that cannot be repeated from a known state is not a rehearsal.
+
 ### Correction to the intention's "3132 workspaces, exactly 1"
 
 That figure came from the **shared test database** `app_test` on port 5432, not from production or
