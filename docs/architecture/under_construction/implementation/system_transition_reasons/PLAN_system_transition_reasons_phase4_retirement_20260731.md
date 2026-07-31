@@ -100,6 +100,29 @@
 9. Serializer output for pause reasons no longer includes removed fields, and the change is
    **proposed** to the operator for the handoff — not written into it.
 
+### The phase 3 backfill journal — this phase owns its removal
+
+Phase 3's migration writes `transition_reason_backfill_journal`, a raw-SQL table recording exactly
+which rows it rewrote. Its own docstring calls it *"the only record that makes this migration
+reversible"*.
+
+**Added 2026-07-31**, because phase 3's deferral named an owner but no default — the same procedural
+failure that cost phase 2 two review rounds, and the reason T-decisions now require both.
+
+9a. **Verify the journal is still intact** before anything else in this phase. If it is missing,
+    phase 3's migration is no longer reversible and that is a STOP: report it rather than
+    proceeding, because the recovery options narrow sharply once phase 4's own changes land.
+
+9b. **Drop the journal, deliberately and last** — after every other criterion in this phase passes,
+    not before. Dropping it is the act that makes the backfill permanently irreversible, so it
+    belongs at the point where the feature set is otherwise complete and verified.
+
+9c. **Record the drop in the Review log** with the row count it held at the time, so the record of
+    what was rewritten survives the table itself.
+
+**Default if this phase is somehow reached without a ruling:** keep the journal. An orphaned table
+costs a few kilobytes; a missing one costs the ability to undo a migration over production data.
+
 ### Constraints
 
 10. The mutual-exclusion invariant is enforced by a check constraint: a row carrying a system
