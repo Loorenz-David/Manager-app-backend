@@ -241,10 +241,28 @@ This feature set inherits the recorded baseline in
 
 - Canonical quiet-tree measurement **27 failed / 1275 passed**; compare failure **node sets**, never
   counts; never accept a suite number taken while another session is active.
+- **Run `git` from `backend/`, not from `ManagerBeyo-app/`.** *(Diagnosed 2026-07-31, phase 2
+  round 3.)* `ManagerBeyo-app/` is **not** a repository — `backend/` and `frontend/` are two
+  separate repositories. An agent whose working directory is the parent sees `git rev-parse` fail
+  and reasonably concludes there is no repository at all. **This has silently degraded two reviews
+  in this codebase**: declared_worker_states Phase 7's reviewer skipped the baseline node-set diff
+  on that basis, and phase 2 round 3's implementer could not diff against `HEAD`. Both reports were
+  accurate about the command failing and wrong about the cause. Every prompt that asks for a
+  baseline worktree or a history check must say where to run it.
 - **A baseline git worktree needs its gitignored config copied in.** `.gitignore` excludes
-  `app/.env.*`, so a fresh worktree lacks `app/.env.testing` and will report wildly inflated
-  failures. Verify config parity with a small smoke run in both trees before trusting any full-suite
-  number. (Learned the hard way during declared_worker_states Phase 7.)
+  `app/.env*`, so a fresh worktree lacks them and cannot start — `Settings` raises on import
+  because `.env.testing` defines no `JWT_SECRET_KEY` and the suite actually reads `.env`. Copy all
+  of `app/.env*`. Verify config parity with a small smoke run in both trees before trusting any
+  full-suite number. (Learned the hard way during declared_worker_states Phase 7.)
+- **"Run-2 vs run-2" is necessary but not sufficient — some nodes latch.** *(Corrected 2026-07-31,
+  phase 2 round 3.)* The rule exists because the test DB and Redis are shared and not reset, so a
+  second consecutive run dirties them. But at least one node does not merely fail on run 2 — it
+  **stays** failed on run 3 and beyond, having accumulated state that does not clear. Round 3
+  measured 26/1396 on run 1 and 27/1395 on runs 2 and 3, the extra node being a shopify test that
+  passes in isolation and sits in untouched code. So a run-2 comparison can show a node that is
+  neither new nor caused by the change under review. **Compare like-for-like run indices, and treat
+  a node that passes in isolation and lives outside the diff as a measurement artefact** — verify
+  it, do not absorb it (T8).
 - 149 pre-existing `ruff check .` errors in untouched files; the shared `count_queries` fixture is
   broken — use a local SQLAlchemy listener.
 
