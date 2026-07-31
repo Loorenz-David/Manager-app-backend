@@ -36,7 +36,8 @@
 ### In scope
 
 1. New query service `list_reassigned_steps` — paginated list of the caller's reassigned,
-   non-terminal steps, filtered by the caller's *current* working-section membership.
+   non-terminal steps, filtered by the caller's *current* working-section membership, with a
+   free-text `q` search (D6).
 2. New query service `count_reassigned_steps` — counts only, over the same filter set.
 3. Extraction of the batch step-card payload builder currently inlined in
    `list_working_section_steps`, so both endpoints emit byte-identical step objects.
@@ -47,10 +48,13 @@
 
 ### Out of scope
 
-- Filtering/searching (`q`, `task_types`, `item_major_category`, upholstery grouping…).
-  The reassigned page is an inbox, not a browse surface. The query params exist on
-  `list_working_section_steps` because that list can hold thousands of rows; a worker's
-  pending reassignments are bounded by how many reassignments a manager made.
+- Every filter *except* `q`: `task_types`, `item_major_category`, `major_category`,
+  `item_position`, `item_zone`, `record_step_state`, `readiness_statuses`,
+  `upholstery_search`, `group_by_upholstery`. The reassigned page is an inbox, not a browse
+  surface — those params exist on `list_working_section_steps` because that list can hold
+  thousands of rows. **`q` is in scope** (operator decision, 2026-07-31) because finding one
+  known article among a worker's reassignments is the one search a small list still needs.
+  Note `upholstery_search` staying out means `q` covers article number and SKU only (D6).
 - Sockets / push. Reassignment already fires its own notification from `add_task_steps`.
 
 ### Assumptions
@@ -101,7 +105,12 @@ reverse if the frontend disagrees after reading the handoff:
    `{"reassigned_steps_count": {"total": <int>, "unacknowledged": <int>}}` over the
    identical filter set, executing **one** SQL statement and loading no ORM entities.
 5. `count.total` equals the number of items obtainable by paging the list endpoint to
-   exhaustion, for the same caller and workspace.
+   exhaustion **with no `q`**, for the same caller and workspace. With `q` present the list
+   narrows and the count deliberately does not (D7).
+5b. `q` matches case-insensitively and partially against the primary item's `article_number`
+   and `sku`, is applied via `apply_string_filter`, and is length-validated at the router
+   (`max_length=200`). A step whose task has no primary item is excluded by a non-empty `q`
+   but **present** when `q` is absent. `55_query_filters_local.md`'s completion gate passes.
 6. `list_working_section_steps` output is unchanged after the payload-builder extraction
    — proven by a characterization test written *before* the refactor.
 7. Both endpoints are workspace-scoped and caller-scoped: a user never sees another
@@ -166,6 +175,10 @@ Core (always, per `task_system/backend_contract_goal_mapping_guide.md`):
 - `backend/architecture/15_testing.md` + `50_testing_strategy.md`: trigger —
   "deterministic testing", "fixture isolation", "n+1". Governs the integration tests and
   the pre-refactor characterization test.
+- `backend/architecture/55_query_filters_local.md`: trigger — "search", "q param",
+  "ilike", "partial match". **Mandatory read before implementing D6.** It is a local-only
+  contract with a completion gate, and it *forbids* the inline-`.ilike` pattern the
+  neighbouring `list_working_section_steps` uses — see D6 for how that is reconciled.
 
 ### Local extensions loaded
 
@@ -185,7 +198,8 @@ Core (always, per `task_system/backend_contract_goal_mapping_guide.md`):
 - `11_infra_events.md`, `13_sockets.md`, `56_realtime_layer.md`: no event or socket
   emission on a read.
 - `16_background_jobs.md`, `12_infra_redis.md`, `51_worker_runtime.md`: no async work.
-- `55_query_filters_local.md`: no `q` / date / ilike filtering in scope (see Out of scope).
+- *(none additional — `55_query_filters_local.md` was excluded in the first draft and is now
+  required; see "Added from guide")*
 - `47_notifications_local.md`: the reassignment notification already fires from
   `add_task_steps`; this plan adds none.
 
@@ -291,6 +305,76 @@ reassigned page has no grouping mode, so these are emitted as `null`. The keys a
 so the frontend can reuse one TypeScript type for both surfaces (acceptance criterion #2).
 
 Likewise `is_reassigned` is present and always `true` on this endpoint.
+
+### D6 — `q` free-text search: same behaviour as the section list, contract-compliant shape
+
+**What it searches.** Behavioural parity with `list_working_section_steps`: case-insensitive
+partial match against the **primary item's** `article_number` and `sku`.
+
+```python
+_ALLOWED_STRING_COLUMNS = {
+    "article_number": Item.article_number,
+    "sku": Item.sku,
+}
+```
+
+Not searched: upholstery `name` / `code`. On the section list those are gated behind
+`upholstery_search=true`, which is out of scope here (see Scope), so `q` covers the two item
+columns only.
+
+**Shape: use `apply_string_filter`, not the neighbouring inline pattern.** This needs stating
+because the two sources disagree:
+
+- `55_query_filters_local.md` mandates
+  `services/queries/utils/string_filter.py::apply_string_filter` and its completion gate
+  declares a query **INCOMPLETE** if "inline `.ilike` calls appear in the query body instead".
+- `list_working_section_steps.py:203-267` does exactly that — a hand-built
+  `select(distinct(TaskStep.client_id))` subquery with `or_(...)` and `.ilike`.
+
+The contract wins, per the pattern-authority rule: contracts define **how to write**,
+implementation files show **what exists**. The operator asked for "the same principles as
+`list_working_section_steps`" — that is a statement about *which columns are searchable*, which
+this preserves exactly. It is not an instruction to copy a shape that predates (or diverges
+from) the contract. **Do not "fix" `list_working_section_steps` to match** — that is a separate
+change and would break the Step 1 characterization test.
+
+**Why no subquery and no `DISTINCT` are needed here.** The section list needs them because its
+`q` joins `TaskItem`/`Item` and it defends against fan-out. This query does not: the model
+guarantees at most one active primary item per task —
+
+```
+uix_task_items_primary_active  UNIQUE (workspace_id, task_id)
+                               WHERE role = 'primary' AND removed_at IS NULL
+```
+
+— so a `LEFT JOIN` on `(TaskItem.role == PRIMARY, removed_at IS NULL)` plus `Item` adds **at
+most one row per step**, exactly like the ack and membership joins already do. The joins go
+straight into the base statement, which is also what `apply_string_filter` requires ("any join
+required by a column in `allowed_columns` must be present in the base statement **before**
+`apply_string_filter` is called").
+
+Use `isouter=True` for both. An inner join would silently drop every reassigned step whose task
+has no primary item — a filter nobody asked for, and one that would apply even when `q` is
+absent.
+
+**`string_filters` is not exposed** (operator: "for now that endpoint will only have one query
+param, the `q`"). Pass `"string_filters": None` in `query_params` anyway: `apply_string_filter`
+reads `None` as "search every column in `allowed_columns`", which is the wanted behaviour, and
+the contract's gate requires both keys present in the `ServiceContext` dict. Adding the param
+later is then a router-only change.
+
+**`q` does not apply to the count endpoint** — see D7.
+
+### D7 — The count endpoint ignores `q`
+
+`GET .../reassigned-steps/count` takes no parameters at all, including `q`. It answers "how many
+reassignments do I have", which is a badge, not a search result. A count that silently narrowed
+with a search term would make the badge disagree with itself depending on what the user last
+typed.
+
+Consequence for acceptance criterion #5: the list/count agreement guarantee holds **when `q` is
+absent**. With `q` present the list is a subset and the count is deliberately not. This is
+stated in the handoff so the frontend does not treat the difference as a bug.
 
 ### D5 — Shared payload builder, extracted rather than duplicated
 
@@ -464,12 +548,56 @@ _DEFAULT_LIMIT = 50
 async def list_reassigned_steps(ctx: ServiceContext) -> dict:
 ```
 
-1. Read `limit` (clamped to `_MAX_LIMIT`), `offset`, and `unacknowledged_only` from
-   `ctx.query_params`, mirroring how `list_working_section_steps` coerces its params.
+Module-level constant, per `55_query_filters_local.md` ("`allowed_columns` is defined **per
+query** as a module-level constant"):
+
+```python
+_ALLOWED_STRING_COLUMNS = {
+    "article_number": Item.article_number,
+    "sku": Item.sku,
+}
+```
+
+1. Read `limit` (clamped to `_MAX_LIMIT`), `offset`, `unacknowledged_only`, `q`, and
+   `string_filters` from `ctx.query_params`, mirroring how `list_working_section_steps`
+   coerces its params.
 2. Select the page of ids and their ack rows in one statement:
    `select(TaskStepAcknowledgment.step_id, TaskStepAcknowledgment.client_id)` — or select
    the `TaskStepAcknowledgment` entity, which is simpler and the row count is bounded by
    `limit`. Apply Step 4's joins and clauses, order by D1, `.offset(offset).limit(limit + 1)`.
+
+   **Before** applying the ordering and pagination, add the two search joins (D6) — always,
+   not only when `q` is set, so the statement shape does not vary:
+
+   ```python
+   stmt = (
+       stmt
+       .join(
+           TaskItem,
+           and_(
+               TaskItem.task_id == TaskStep.task_id,
+               TaskItem.workspace_id == ctx.workspace_id,
+               TaskItem.role == TaskItemRoleEnum.PRIMARY,
+               TaskItem.removed_at.is_(None),
+           ),
+           isouter=True,
+       )
+       .join(
+           Item,
+           and_(
+               Item.client_id == TaskItem.item_id,
+               Item.workspace_id == ctx.workspace_id,
+               Item.is_deleted.is_(False),
+           ),
+           isouter=True,
+       )
+   )
+   stmt = apply_string_filter(stmt, q, string_filters, _ALLOWED_STRING_COLUMNS)
+   ```
+
+   `apply_string_filter` returns the statement unchanged when `q` is falsy, so the no-search
+   path costs only the two left joins — bounded to one row per step by
+   `uix_task_items_primary_active` (D6).
 3. `has_more = len(rows) > limit`; `page = rows[:limit]`; `page_ids = [a.step_id for a in page]`.
 4. Early return on empty page with `{"steps_pagination": {"items": [], "limit":…,
    "offset":…, "has_more": has_more}, "working_sections": {}}`.
@@ -524,7 +652,9 @@ with Step 4's joins and clauses (`unacknowledged_only=False`). Return:
 numbers come from one scan. `count(*)` over an empty result set returns `0`, not `NULL`,
 but keep the `or 0` guard so the contract holds regardless of dialect.
 
-Take no `limit` / `offset`. A count endpoint that paginates is a bug waiting to happen.
+Take no `limit` / `offset` — a count endpoint that paginates is a bug waiting to happen — and
+no `q` either (D7). Do not add the `TaskItem` / `Item` search joins here: with no `q` to apply
+they would be pure cost on the endpoint whose whole purpose is being cheap.
 
 ### Step 7 — Routes
 
@@ -540,6 +670,7 @@ async def list_reassigned_steps_route(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     unacknowledged_only: bool = Query(False),
+    q: str | None = Query(None, max_length=200),
 ):
     ctx = ServiceContext(
         incoming_data={},
@@ -547,6 +678,11 @@ async def list_reassigned_steps_route(
             "limit": limit,
             "offset": offset,
             "unacknowledged_only": str(unacknowledged_only).lower(),
+            "q": q,
+            # Not exposed as a route param yet (D6). Passed explicitly because
+            # 55_query_filters_local.md's completion gate requires both keys in the
+            # ServiceContext dict, and None means "search every allowed column".
+            "string_filters": None,
         },
         identity=claims,
         session=session,
@@ -607,6 +743,15 @@ Create `app/tests/integration/services/queries/task_step_acknowledgments/` (with
 | Empty result | `items == []`, `working_sections == {}`, `has_more is False` |
 | Payload parity | item key set equals the key set asserted in the Step 1 characterization test, plus `acknowledgment` |
 | Ordering | two acks with distinct `created_at` → newer first |
+| `q` matches `article_number` exactly | that step only |
+| `q` matches a **substring**, mixed case (`"302.4"`, `"sofa"` vs `SOFA-3S`) | matched — proves ILIKE `%…%`, not equality or case-sensitive |
+| `q` matches `sku` but not `article_number` | matched — proves the OR across both columns |
+| `q` matches nothing | `items == []`, `working_sections == {}`, `has_more is False` |
+| step whose task has **no primary item**, with `q` set | excluded |
+| the same step, `q` absent | **present** — proves the left joins don't filter |
+| `q` set to an upholstery name/code | **not** matched (upholstery search is out of scope, D6) |
+| `q` + pagination together | `has_more` reflects the filtered set, not the unfiltered one |
+| `q` does not widen the visible set | a step matching `q` but failing membership/terminal/workspace checks stays excluded |
 
 `test_count_reassigned_steps_integration.py`:
 
@@ -614,7 +759,8 @@ Create `app/tests/integration/services/queries/task_step_acknowledgments/` (with
 |---|---|
 | Mixed set: 2 unacknowledged + 1 acknowledged, all visible | `{"total": 3, "unacknowledged": 2}` |
 | Every exclusion case from the list table | not counted |
-| Agreement | `count.total` equals the item count from paging the list to exhaustion with `limit=1` (acceptance criterion #5) |
+| Agreement | `count.total` equals the item count from paging the list to exhaustion with `limit=1` **and no `q`** (acceptance criterion #5) |
+| `q` is ignored here | the count is identical whether or not the caller has a matching search term; `q` is not a route param on this endpoint (D7) |
 | Nothing visible | `{"total": 0, "unacknowledged": 0}` |
 
 Follow the seeding style in
@@ -871,13 +1017,15 @@ Rules for the implementing session:
 |---|---|
 | `pytest app/tests/integration/services/queries/working_sections/ -q` (after Step 2) | all pass, characterization test included, no edits to it |
 | `pytest app/tests/integration/services/queries/task_step_acknowledgments/ -q` | all pass |
-| `pytest app/tests/ -q` | no new failures vs. the pre-change baseline; capture that baseline before starting, since the parallel work may already have failures unrelated to this plan |
+| `pytest -q` **run from `backend/app/`** | no new failure nodes vs. the pre-change baseline. Capture the baseline before starting — the parallel feature set lands commits in this tree and its failures are not yours (T8). **Measured 2026-07-31 at `d70f7d8`: 26 failed / 1398 passed / 0 errors.** A figure in the hundreds, or any non-zero *error* count, means a broken environment — a baseline worktree lacks both `app/.env*` **and** `app/.venv`, and reproducing a bad number twice does not make it valid. Simplest avoidance: measure in the main tree at the base commit rather than in a worktree. |
 | App boots and OpenAPI lists both routes under the `task-step-acknowledgments` tag | `/api/v1/task-step-acknowledgments/reassigned-steps` and `.../reassigned-steps/count` present |
 | Manual: `GET .../reassigned-steps` as a worker with a seeded reassignment | 200; `steps_pagination.items[0].acknowledgment` populated; `working_sections` has the step's section |
 | Manual: `GET .../reassigned-steps/count` for the same worker | `total` equals the item count from the list call |
 | Manual: `GET /api/v1/working-sections/{id}/steps` before and after the change | responses byte-identical for the same fixture |
 | Echo SQL (or `EXPLAIN` via query logging) on a 50-item page | statement count is constant, not ~50 × N |
-| Handoff conformance: diff each documented field in the handoff §3.5/§4/§5/§6/§10 against a real response | every key, nullability, and enum value matches; evidence recorded in the Review log |
+| Handoff conformance: diff each documented field in the handoff §3.1/§3.5/§3.6/§4/§5/§6/§10 against a real response | every key, nullability, and enum value matches; `q` behaves as §3.5 documents; evidence recorded in the Review log |
+| Walk `55_query_filters_local.md`'s "Completion gate" checklist against `list_reassigned_steps` | all seven boxes clear: `apply_string_filter` used, no inline `.ilike`, no secret columns, router `max_length=200`, `string_filters` not parsed inline, both keys in `query_params`, joins present before the call |
+| `GET .../reassigned-steps?q=<201 chars>` | `422` from the router, not a database round-trip |
 | `git log --stat` for the 9 commits | no file outside this plan's working set appears; the handoff file is **not** modified |
 
 ## Review log
@@ -890,6 +1038,151 @@ Rules for the implementing session:
   discrepancy between the `TaskStepAcknowledgment.worker_id` docstring and the actual
   fan-out in `add_task_steps` — it is the reason the membership join is load-bearing
   rather than redundant.
+- `2026-07-31` `operator (David)`: **`q` added to the list endpoint** — the one filter the
+  inbox still needs. Recorded as D6/D7; `55_query_filters_local.md` moved from excluded to
+  required; acceptance criteria 5/5b, the test tables and the validation plan updated. The
+  contract-vs-`list_working_section_steps` conflict on inline `.ilike` is resolved in D6 in
+  favour of the contract, with the neighbouring file explicitly left alone.
+- `2026-07-31` `operator (David)`: the frontend handoff now also documents the **removal of
+  the `ended_shift` task-step state** (`INTENTION_ended_shift_step_state_collapse_20260731`,
+  sequenced as a successor set). **That is a handoff-only change — no deliverable in this plan
+  touches it**, and no commit here may implement any part of it. The handoff marks it as not
+  yet live and tells the frontend to tolerate `ended_shift` until it lands.
+
+- `2026-07-31` `implementer`: **Step 1 complete.** Characterization test added, passing (6 passed
+  in the working-sections module). Stopped before Step 2 so the extraction could be handed to a
+  bounded pass.
+- `2026-07-31` `reviewer`: Step 1 **accepted** with one gap closed in review — the test asserted
+  the `upholstery_group_*` keys but not their *values*, and with no upholstery seeded the two
+  parametrized runs were indistinguishable (all-null in both). An extraction that accepted the
+  three group maps and never read them would have passed. Fixed by seeding an `Upholstery` +
+  `ItemUpholstery` on the primary item and asserting the values per mode.
+
+  **The reported baseline of 334 failed / 995 passed / 38 errors was rejected as invalid.** The
+  baseline worktrees carried `app/.env*` but no `app/.venv`; the tree actually measures 26 failed
+  / 1398 passed / 0 errors. Recorded in the Validation plan above and in the
+  `system_transition_reasons` master plan's "Validation baseline" so the next session inherits the
+  correction rather than the number.
+
+- `2026-07-31` `reviewer (adversarial pass, Steps 2–5)`: **NEEDS_CHANGES.** The extraction — the
+  one high-risk item — is clean and verified. The delivery is not: it stops mid-Step-5.
+
+  **What was verified as correct** (do not re-litigate these):
+
+  - **Step 2 is a move, not a rewrite.** `sed -n '304,592p'` of the pre-commit
+    `list_working_section_steps.py` versus `steps_list_payload.py:54-342` is **byte-identical**
+    (`diff` empty). All five listed hazards survive verbatim: the `try/except Exception:
+    case_summary_by_task = {}` swallow (`steps_list_payload.py:122-123`), the first-image-rich
+    treatment including `first_image.pop("image_annotations", None)` (`:207-213`), the
+    `step_map.get(step_id)` / `continue` skip (`:301-303`), dependency ordering
+    `order_list ASC NULLS LAST, client_id ASC` (`:279-282`), and key order (`:320-341`). The
+    caller's remaining diff is import pruning plus the six-line builder call
+    (`list_working_section_steps.py:284-291`); the early-empty envelope
+    `{"steps_pagination": {"items": [], …}}` stays in the caller (`:294-302` pre-move, retained).
+  - **The characterization test is untouched by Step 2** — commit `1204916` has a two-file stat
+    and neither is the test — **and it discriminates.** Probed: dropping
+    `group_image_by_step_id` from the builder call site fails
+    `test_list_working_section_steps_payload_key_sets_are_stable[True]`. Restored after.
+  - **Visibility and scoping are correct**, proven by a throwaway probe module (14 cases, all
+    passing, deleted after the run): ack + active membership + non-terminal → visible;
+    membership `removed_at` set afterwards → **invisible** (membership is re-checked at read
+    time, `_reassigned_steps_filters.py:50-58`); each of the four `TERMINAL_STEP_STATES`
+    excluded individually; `ENDED_SHIFT` still visible; another worker's and another
+    workspace's acks both invisible. All four joins carry `workspace_id`, and the three
+    soft-delete idioms are each used on the right table (`is_deleted` on step/task/section,
+    `removed_at` on membership).
+  - **Pagination is stable.** Three acks seeded with an identical `created_at`, paged at
+    `limit=1`: no id repeated, none skipped. The `TaskStep.client_id DESC` tiebreak
+    (`list_reassigned_steps.py:62-65`) is doing the work.
+  - **`q` behaves as the handoff documents.** `apply_string_filter` used, no inline `.ilike`,
+    joins added unconditionally and before the call (`list_reassigned_steps.py:39-61`),
+    `isouter=True` on both. Probed: a task with no primary item is **returned** with no `q` and
+    **dropped** by any non-empty `q`; partial and mixed-case matches hit; an upholstery name
+    does **not** match. `uix_task_items_primary_active` still exists
+    (`models/tables/tasks/task_item.py:53`), so the absence of `DISTINCT` remains sound.
+  - **Payload parity.** The item key set is exactly the characterization test's 38 keys plus
+    `acknowledgment` — matches handoff §5.1 field-for-field. `is_reassigned` is `true`
+    throughout, the four `upholstery_group_*` keys are present and `null` (D4).
+    `working_sections` is an object keyed by `client_id` covering exactly the page's sections;
+    an empty page returns `working_sections: {}` with the full envelope.
+  - **Performance.** A SQLAlchemy `before_cursor_execute` listener measures **14 statements for
+    a 1-item page and 14 for a 10-item page** — constant, not per-step. The per-step
+    `load_step_with_latest_record` loop was **not** copied, and
+    `list_pending_step_acknowledgments` was **not** "improved" (its loop at `:71-81` is intact;
+    only the serializer import changed).
+  - `ruff check` is clean on every touched file. **No migration** belongs to this change — the
+    untracked `app/migrations/versions/97b60e06d42a_backfill_other_task_priority_transition_.py`
+    is `system_transition_reasons` phase 3 (T5), correctly attributed elsewhere.
+  - **Suite: no new failure nodes.** Measured in the main tree: **26 failed / 1409 passed / 0
+    errors**, against the recorded baseline of 26 failed / 1398 passed / 0 errors. Same failure
+    count; no failing node is in this plan's working set. Spot-checked
+    `test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task` — it
+    fails on a pre-existing `ix_roles_name` fixture-isolation collision, not on this change.
+    (Method note for the next session: `-p no:logging` disables the `caplog` fixture and
+    manufactures ~19 phantom *errors*. That is a measurement artefact — do not record it.)
+
+  **Findings.**
+
+  1. **BLOCKING — the delivery stops mid-Step-5; Steps 5–10 are not delivered.** Only commits
+     1–4 of the planned 9 exist (`a747939`, `1204916`, `241eee5`, `444fffa`). Missing entirely:
+     `count_reassigned_steps.py`, both routes on
+     `routers/api_v1/task_step_acknowledgments.py`, and
+     `tests/integration/services/queries/task_step_acknowledgments/` (the directory does not
+     exist). `services/queries/task_step_acknowledgments/list_reassigned_steps.py` is written
+     and correct but **untracked** — no commit 5.
+     Unmet: acceptance criteria **4** (count endpoint), **5** (list/count agreement — there is
+     no count to agree with), **5b** and `55_query_filters_local.md`'s completion gate boxes 3
+     and 6 (`q` length validation and both keys in `query_params` are router-layer, and the
+     router does not exist), **7** as far as roles are concerned, **8**'s route exposure, and
+     **9** (no endpoint is reachable, so no conformance evidence is possible). The two
+     invariants the plan is built around — Agreement and the `q`-absent count equality — are
+     **untestable in the current tree**. Severity: blocking.
+  2. **BLOCKING (scope) — Step 3 landed in the wrong file, and in one the parallel feature is
+     actively editing.** `241eee5` put `serialize_task_step_acknowledgment` in
+     `app/beyo_manager/domain/tasks/serializers.py:181-196`. The plan's Step 3 and its working
+     set both name `app/beyo_manager/domain/task_steps/serializers.py` — which exists, holds
+     `serialize_task_step_compact`, and was left untouched. `domain/tasks/serializers.py` is
+     outside the declared working set, and `867b8fb` (`system_transition_reasons`) added
+     `serialize_step_pause_reason` to that same file at the **immediately adjacent** line
+     (`:198`). This is precisely the collision "Commit hygiene" exists to prevent. Behaviour is
+     unaffected — the promoted body is identical to the former
+     `_serialize_acknowledgment` apart from a dropped comment and two parameters gaining
+     `= None` defaults — so this is a hygiene and merge-risk finding, not a correctness one.
+     Fix by moving the function to `domain/task_steps/serializers.py` and updating the two
+     importers (`list_pending_step_acknowledgments.py:3`, `list_reassigned_steps.py:4`).
+  3. **MEDIUM (contract, proposal only — the handoff was not modified) — §5.1 documents two
+     wrong `client_id` prefixes.** It states the step id prefix is `tstp_` and the task id
+     prefix is `task_`. The models say `tsp` (`models/tables/tasks/task_step.py:43`) and `tsk`
+     (`models/tables/tasks/task.py:35`). The wrong values also appear in the §3.6 example
+     payload (`"client_id": "tstp_9f3a1c"`, `"step_id": "tstp_9f3a1c"`) and the §9 request
+     snippets. `tsa_` (§5.2) and `wsec_` (§5.9) are correct. §5.10 already tells the frontend
+     never to prefix-match, so the blast radius is fixtures and mocks rather than logic — but
+     the frontend is building against this document now. **Operator decision:** the handoff
+     gets corrected first, then anything else. No liveness row was flipped and no byte of the
+     handoff was changed by this review.
+  4. **LOW (process) — the handoff is untracked.** The plan states it "already exists and is
+     committed"; `git log` on
+     `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731.md`
+     returns nothing — it is a `??` file. Nothing in git protects the contract the plan says is
+     authoritative. Commit it before Step 9's conformance pass.
+  5. **LOW (forward-looking, Step 7) — the planned router snippet has no lower bound on
+     `limit`.** `limit: int = Query(50, le=200)` admits a negative value, which reaches
+     `list_reassigned_steps.py:32` and becomes a negative SQL `LIMIT`. Add `ge=1`. Handoff §10
+     lists `422` for `limit > 200` and `offset < 0` but is silent on `limit < 0`; `ge=1` makes
+     the router match the documented spirit without a handoff edit.
+  6. **LOW (pre-existing idiom, not introduced here) — the user batch-load is not
+     workspace-scoped.** `list_reassigned_steps.py:81` selects users by `client_id.in_(…)`
+     only. Not a leak: the ids come from acks already scoped to `ctx.workspace_id`. It mirrors
+     `steps_list_payload.py:228` and `list_pending_step_acknowledgments.py:66`, so leave it
+     alone in this plan — noted so a future reviewer does not read it as new.
+
+  **Also:** the Review log above stops at "Step 1 complete … Stopped before Step 2", but Steps
+  2, 3 and 4 have since been committed and were never recorded. Whoever resumes should log them
+  rather than re-plan them.
+
+  Verdict: **NEEDS_CHANGES.** Steps 1–4 are sound and should not be redone — resume at Step 5
+  (commit the existing `list_reassigned_steps.py`), then Steps 6–10, and fix finding 2 before
+  the parallel feature touches `domain/tasks/serializers.py` again.
 
 ## Lifecycle transition
 
