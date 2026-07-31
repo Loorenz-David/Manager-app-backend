@@ -102,6 +102,25 @@ Numbered `T…` to avoid collision with the declared_worker_states set's `D1–D
   equivalence safely is a whole phase of work. **Recorded as deferred cleanup** — do it when
   someone next touches that code with a reason to. No phase in this set may remove
   `manually_recorded` or the heuristic; doing so is a scope violation.
+- **T9 — Commits stay clean and single-purpose.** *(Added 2026-07-31, operator instruction.)*
+  Implementation, lifecycle close-out, and planning changes are **separate commits**, even when they
+  land in the same session:
+
+  - **Implementation** — production and test files for one phase, nothing else.
+  - **Close-out** — summary, archive record, plan move, master phase-table flip, together.
+  - **Planning** — plan or prompt edits for a *different* phase.
+  - **Domain docs** (`docs/domains/`) ride with the implementation commit that made them true,
+    because they document that change. They are not a separate commit.
+
+  Never `git add -A` or `git add <broad-directory>`. Stage by explicit path. This decision exists
+  because an over-broad `git add docs/architecture/under_construction` swept phase 1's plan move and
+  master-table flip into a commit amending phase 4's scope — so phase 1's close-out is split across
+  two commits and neither is self-describing.
+
+  Parallel work is live in this repository (the reassigned-steps handoff, and a successor intention),
+  and its files sit in the same tree. A broad add will capture them. Check `git status` before every
+  commit and stage only what belongs to the change being committed.
+
 - **T8 — No phase repairs baseline debt.** The repository has documented pre-existing validation
   debt (see the declared_worker_states master plan's "Repository validation baseline"). Implementers
   must not absorb it; reviewers must not block on it.
@@ -441,7 +460,7 @@ numbers drifted by 3).
 | R6 | `domain/users/serializers.py::serialize_current_worker_shift_state` | `test_transition_reason_row_resolves_to_a_pause_reason_label`, `test_catalog_reference_wins_over_transition_reason`, `test_transition_reason_wins_over_free_text_reason` |
 | R7 | `services/queries/users/get_current_worker_shift_state.py:88` (unresolved warning) | covered via R5 |
 | R8 | `worker_stats/get_worker_linear_timeline_breakdown.py::_load_step_timeline_records` | `test_breakdown_resolves_a_transition_reason_step_record` |
-| R9 | same file, `record_detail` nested `pause_reason` | same test (asserts `pause_reason: null`, no new key) |
+| R9 | same file, `record_detail` nested `pause_reason` | ~~same test (asserts `pause_reason: null`, no new key)~~ **DECIDED (phase 2, review round 3, blocking finding F1): synthesise the catalog object shape, same as R2.** This is R2 in a third render site, and it survived round 2 because the sweep grepped `.pause_reason` while `record_detail` calls `serialize_pause_reason` on a **separately-fetched local**. `pause_reason_id = NULL` on every system transition made the field serialise `null` where a populated object used to be; the consumer is shipped (`packages/stats/.../segment-adapter.ts:113` → `record.pause_reason?.name`, same full `PauseReasonSchema` at `packages/stats/src/types.ts:304`). Test assertion reversed and proven failing-first; `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` is the unmodified control. |
 | R10 | same file, segment-level `reason` back-derivation | same test + `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` |
 | R11 | `worker_stats/list_workers_linear_timeline.py::_load_pause_reasons_lookup` | `test_roster_buckets_and_labels_a_transition_reason_pause`, `test_transition_reason_labels_cost_no_extra_query` |
 | R12 | same file, `build_recorded_shift_timeline` bucket key | `test_pause_bucket_key_falls_back_to_transition_reason`, `test_catalog_reason_still_wins_the_bucket_key` |
