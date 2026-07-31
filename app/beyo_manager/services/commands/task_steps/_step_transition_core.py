@@ -18,12 +18,15 @@ resolved step-pin recipients so the caller can dedupe across the batch.
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
+from sqlalchemy import select
+
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -38,7 +41,6 @@ from beyo_manager.services.commands.tasks._task_state_transitions import (
 )
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
-from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
 
 
 @dataclass
@@ -63,6 +65,7 @@ async def _apply_step_transition(
     description: str | None,
     credited_user_id: str,
     now: datetime,
+    transition_reason: str | None = None,
     mark_closing_record_inaccurate: bool = False,
 ) -> StepTransitionApplied:
     """Apply one already-validated step transition. Mutates ORM objects and emits the per-step
@@ -70,6 +73,10 @@ async def _apply_step_transition(
 
     Preconditions (validated by the caller): `step`/`task` exist and are workspace-scoped,
     `new_state` is a legal transition from `step.state`, and `closing_record` is the step's open record.
+
+    `transition_reason` types a system-controlled transition (`TransitionReasonEnum`) and is
+    `None` for a worker-driven one, which carries a catalog `pause_reason_id` instead. The two
+    are the caller's to pair; this core writes exactly what it is given.
     """
     effective_user_ids = list({ctx.user_id, credited_user_id})
     auto_paused_item: dict | None = None
@@ -108,16 +115,14 @@ async def _apply_step_transition(
                     if identifier:
                         auto_pause_description = f"started working with {identifier}"
 
-            auto_pause_reason_id = await get_system_pause_reason_id(
-                ctx.session,
-                ctx.workspace_id,
-                "pause_other_task_priority",
-            )
+            # System transition: typed from the code-owned vocabulary, never resolved from
+            # the workspace catalog, so this works in a workspace holding zero pause reasons.
             auto_pause_record = StepStateRecord(
                 workspace_id=ctx.workspace_id,
                 step_id=conflicting_step.client_id,
                 state=TaskStepStateEnum.PAUSED,
-                pause_reason_id=auto_pause_reason_id,
+                pause_reason_id=None,
+                transition_reason=TransitionReasonEnum.OTHER_TASK_PRIORITY.value,
                 description=auto_pause_description,
                 entered_at=now,
                 exited_at=None,
@@ -175,6 +180,7 @@ async def _apply_step_transition(
         step_id=step.client_id,
         state=new_state,
         pause_reason_id=pause_reason_id,
+        transition_reason=transition_reason,
         description=description,
         entered_at=now,
         exited_at=None,

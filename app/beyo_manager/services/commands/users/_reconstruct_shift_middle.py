@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.analytics.linear_timeline import LinearInterval, compute_linear_segments
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -88,6 +89,7 @@ async def reconstruct_shift_middle(
                 StepStateRecord.client_id,
                 StepStateRecord.state,
                 StepStateRecord.pause_reason_id,
+                StepStateRecord.transition_reason,
                 StepStateRecord.entered_at,
                 StepStateRecord.exited_at,
                 StepStateRecord.step_id,
@@ -119,6 +121,7 @@ async def reconstruct_shift_middle(
             record_id=row.client_id,
             state=row.state.value,
             reason=row.pause_reason_id,
+            transition_reason=row.transition_reason,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             step_id=row.step_id,
@@ -147,6 +150,11 @@ async def reconstruct_shift_middle(
             record_id=row.client_id,
             state="paused",
             reason=row.pause_reason_id,
+            # A declaration is the one case carrying BOTH: its catalog reference (the
+            # worker chose it) and the typed transition that says where the segment came
+            # from. `UserDeclaredStateRecord` has no `transition_reason` column of its own
+            # (T3) — being a declared row IS the transition, so it is named here.
+            transition_reason=TransitionReasonEnum.WORKER_DECLARED_STATE.value,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             priority=_DECLARED_PAUSE_PRIORITY,
@@ -161,6 +169,7 @@ async def reconstruct_shift_middle(
             select(
                 UserShiftStateRecord.client_id,
                 UserShiftStateRecord.reason,
+                UserShiftStateRecord.transition_reason,
                 UserShiftStateRecord.entered_at,
                 UserShiftStateRecord.exited_at,
                 UserShiftStateRecord.changed_by_id,
@@ -184,6 +193,10 @@ async def reconstruct_shift_middle(
             record_id=row.client_id,
             state="paused",
             reason=row.reason,
+            # Both representations are re-fed exactly as stored. The rebuild reads rows it
+            # wrote itself, so dropping this would make a second run produce different
+            # output from the first — the idempotence invariant.
+            transition_reason=row.transition_reason,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             priority=_LEGACY_MANUAL_PAUSE_PRIORITY,
@@ -228,6 +241,9 @@ async def reconstruct_shift_middle(
                 exited_at=segment.end,
                 changed_by_id=changed_by_id,
                 reason=(segment.reason if state is UserShiftStateEnum.IN_PAUSE else None),
+                transition_reason=(
+                    segment.transition_reason if state is UserShiftStateEnum.IN_PAUSE else None
+                ),
                 manually_recorded=is_manual,
             )
         )

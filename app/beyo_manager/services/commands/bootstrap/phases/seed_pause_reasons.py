@@ -13,6 +13,13 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # and intentionally keeps its own fixed snapshot of this row data. If you change the values
 # below, mirror the change into that migration's `_PAUSE_REASONS` tuple too.
 #
+# THIRD copy: domain/transitions/labels.py holds the `name` and `image_url` for the two
+# system-managed slugs (`pause_ended_shift`, `pause_other_task_priority`), because those
+# transitions no longer resolve through this catalog at runtime and still have to render
+# the same label and icon. Changing either value here without mirroring it there makes a
+# system transition render differently from the row it replaced — silently, since nothing
+# joins the two. Mirror all three.
+#
 # NOTE: `pause_case_created` is intentionally NOT in this list — it was removed as a live
 # default. It still exists historically as a soft-deleted anchor row seeded in
 # migrations/versions/fb10ac7fd439_add_pause_reason_id_to_step_state_.py, purely so real legacy

@@ -20,6 +20,7 @@ from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.tasks.notification_labels import resolve_item_label_for_task
 from beyo_manager.domain.tasks.notification_targets import resolve_task_notification_targets
 from beyo_manager.domain.tasks.serializers import serialize_step_state_record_light
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
@@ -48,7 +49,6 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
-from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
 
 
 _ALLOWED_TRANSITIONS: dict[TaskStepStateEnum, set[TaskStepStateEnum]] = {
@@ -268,16 +268,14 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                         if identifier:
                             auto_pause_description = f"started working with {identifier}"
 
-                auto_pause_reason_id = await get_system_pause_reason_id(
-                    ctx.session,
-                    ctx.workspace_id,
-                    "pause_other_task_priority",
-                )
+                # System transition: typed from the code-owned vocabulary, never resolved from
+                # the workspace catalog, so this works in a workspace holding zero pause reasons.
                 auto_pause_record = StepStateRecord(
                     workspace_id=ctx.workspace_id,
                     step_id=conflicting_step.client_id,
                     state=TaskStepStateEnum.PAUSED,
-                    pause_reason_id=auto_pause_reason_id,
+                    pause_reason_id=None,
+                    transition_reason=TransitionReasonEnum.OTHER_TASK_PRIORITY.value,
                     description=auto_pause_description,
                     entered_at=now,
                     exited_at=None,

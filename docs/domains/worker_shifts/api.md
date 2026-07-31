@@ -30,9 +30,11 @@ also be a worker in the caller's workspace.
 
 Live shift state for the UI. Query param `user_id` optional, resolved per the table above.
 
-Returns the worker's current state, when it started, and — when paused — what for. When the pause
-comes from a catalog reason the response carries the reason object; when it comes from older
-free-text data it carries `reason_text` instead.
+Returns the worker's current state, when it started, and — when paused — what for. A pause is
+described by a reason object whether the worker chose it from the catalog or the system paused them
+itself; the object's shape is the same either way, and its `id` is a catalog id in the first case
+and a transition reason in the second. Older records carrying plain text instead of either surface
+it as `reason_text`.
 
 Use this whenever you need to know what a worker is doing **now**. It is the authoritative live
 read; never infer current state from a cached list.

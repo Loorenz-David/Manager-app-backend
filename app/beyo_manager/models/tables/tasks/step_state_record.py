@@ -47,6 +47,20 @@ class StepStateRecord(IdentityMixin, Base):
         foreign_keys=[pause_reason_id],
         uselist=False,
     )
+    # Code-owned transition vocabulary (`domain.transitions.enums.TransitionReasonEnum`),
+    # stored as a constrained string rather than a native PG enum: this repo already paid
+    # to drop one (`b58cdffb5ccc` dropped `step_event_reason_enum`), and a string keeps
+    # every future member out of the migration graph.
+    #
+    # Written whenever the system itself caused the transition: clock-out closing an open
+    # working step, and the auto-pause when another task takes priority. Those rows carry
+    # `pause_reason_id = NULL` — the two are alternatives, not companions, because a
+    # system transition has no catalog row to point at and must not need one.
+    #
+    # Nullable because the other half of the vocabulary is the absence of a value: a pause
+    # a worker chose is identified by its catalog reference alone and leaves this null.
+    # Still unconstrained at the database level; the check constraint arrives with phase 4.
+    transition_reason: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     accuracy: Mapped[int | None] = mapped_column(Integer, nullable=True)
     accuracy_measured_by: Mapped[StepStateRecordAccuracyMeasuredByEnum | None] = mapped_column(

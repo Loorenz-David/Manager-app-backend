@@ -61,6 +61,12 @@ class LinearInterval:
     exited_at: datetime | None    # None = still open (clamped to ``now``)
     step_id: str = ""             # owning TaskStep; only needed for the segments view
     priority: int = 0             # higher value owns overlaps between paused intervals
+    # A system transition (`TransitionReasonEnum` value). Carried ALONGSIDE ``reason``
+    # rather than folded into it: callers that persist a segment must write the catalog
+    # reference and the typed transition to different columns, and collapsing them here
+    # would force them to recover the distinction by inspecting the string — which is the
+    # prefix-sniffing this vocabulary exists to remove.
+    transition_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +111,7 @@ class LinearSegment:
     records: tuple[LinearSegmentRecord, ...]  # per-record detail, ordered by entered_at
     is_open: bool                           # run reaches ``now`` via a still-open record
     owner_record_id: str | None = None       # pause owner at the start of this merged run
+    transition_reason: str | None = None     # owner's typed transition, if it had one
 
     @property
     def seconds(self) -> int:
@@ -132,6 +139,7 @@ class _RawSegment:
     is_open: bool
     owner_record_id: str | None
     owner_priority: int
+    transition_reason: str | None = None
 
 
 def _clamp(
@@ -200,6 +208,7 @@ def _sweep(
             continue
 
         working = [e for e in entries if e.interval.state == "working" and e.start <= left and e.end >= right]
+        transition_reason = None
         if working:
             state, reason, chosen = "working", None, working
             owner_record_id, owner_priority = None, 0
@@ -217,7 +226,15 @@ def _sweep(
                         e.interval.record_id,
                     ),
                 )
-                state, reason, chosen = "paused", owner.interval.reason or UNSPECIFIED_REASON, active_pauses
+                # UNSPECIFIED_REASON stands for "this pause explains nothing", so it may only
+                # be reached when NEITHER representation is present. A system transition
+                # carries no catalog id by design, so falling back on `reason` alone being
+                # falsy would bucket every auto-pause as unattributed.
+                reason = owner.interval.reason
+                transition_reason = owner.interval.transition_reason
+                if reason is None and transition_reason is None:
+                    reason = UNSPECIFIED_REASON
+                state, chosen = "paused", active_pauses
                 owner_record_id = owner.interval.record_id
                 owner_priority = owner.interval.priority
             else:
@@ -242,6 +259,7 @@ def _sweep(
                 is_open,
                 owner_record_id,
                 owner_priority,
+                transition_reason,
             )
         )
 
@@ -261,7 +279,9 @@ def compute_linear_timeline(
         secs = (seg.end - seg.start).total_seconds()
         seconds[seg.state] += secs
         if seg.state == "paused":
-            pause_by_reason[seg.reason or UNSPECIFIED_REASON] += secs
+            # Catalog reference first (a human chose it), then the typed transition, then
+            # the unattributed bucket. Same precedence as every other composer.
+            pause_by_reason[seg.reason or seg.transition_reason or UNSPECIFIED_REASON] += secs
 
     # Round reason buckets and derive the pause total from them so the breakdown always
     # reconciles exactly with ``paused_seconds`` (no fractional rounding drift).
@@ -284,7 +304,8 @@ def compute_linear_segments(
 ) -> list[LinearSegment]:
     """Ordered partition of the window as merged, typed segments (interactive-timeline view).
 
-    Consecutive raw segments with the same ``(state, reason, owner priority)`` are merged
+    Consecutive raw segments with the same ``(state, reason, transition reason, owner
+    priority)`` are merged
     into one run, unioning their records/steps — except across a ``hard_breaks`` boundary
     (e.g. day midnights), which always starts a new segment so callers can group cleanly
     by day. Including owner priority preserves source-projection boundaries even when two
@@ -303,6 +324,9 @@ def compute_linear_segments(
             prev is not None
             and prev["state"] == seg.state
             and prev["reason"] == seg.reason
+            # Part of the merge key, not decoration: two adjacent pauses can both carry
+            # `reason is None` and still be different transitions, which must not merge.
+            and prev["transition_reason"] == seg.transition_reason
             and prev["owner_priority"] == seg.owner_priority
             and seg.start not in breaks
         ):
@@ -316,6 +340,7 @@ def compute_linear_segments(
                     "end": seg.end,
                     "state": seg.state,
                     "reason": seg.reason,
+                    "transition_reason": seg.transition_reason,
                     "record_ids": set(seg.record_ids),
                     "is_open": seg.is_open,
                     "owner_record_id": seg.owner_record_id,
@@ -337,6 +362,7 @@ def compute_linear_segments(
                 records=records,
                 is_open=run["is_open"],
                 owner_record_id=run["owner_record_id"],
+                transition_reason=run["transition_reason"],
             )
         )
     return segments

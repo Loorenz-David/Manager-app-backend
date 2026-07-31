@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -749,3 +750,92 @@ async def test_concurrent_reconciles_create_one_open_shift_record(db_session) ->
     assert sum(outcome.changed for outcome in outcomes) == 1
     assert open_count == 1
     assert started_count == 1
+
+
+async def test_reconcile_pause_without_any_reason_leaves_both_fields_null(
+    db_session,
+) -> None:
+    """The live derivation copies both explanation channels off the owning step record.
+
+    This is the control for that copy: a step pause carrying neither a catalog reason nor
+    a transition reason must still project a row with both fields null, exactly as it did
+    when the copy was guarded on `pause_reason_id is not None`.
+    """
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    now = shift_start + timedelta(hours=1)
+    db_session.add_all(
+        [
+            _shift_record(workspace, user, UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start),
+            _shift_record(workspace, user, UserShiftStateEnum.IDLE, shift_start, None),
+        ]
+    )
+    await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=shift_start + timedelta(minutes=10),
+        reason=None,
+    )
+
+    outcome = await reconcile_worker_shift_state(
+        db_session, workspace.client_id, user.client_id, now
+    )
+
+    open_record = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert outcome.state is UserShiftStateEnum.IN_PAUSE
+    assert open_record.reason is None
+    assert open_record.transition_reason is None
+
+
+async def test_reconcile_projects_a_system_auto_pause_by_its_transition_reason(
+    db_session,
+) -> None:
+    """A system auto-pause carries no catalog id, so the live row would show an
+    unexplained pause if the derivation only copied `pause_reason_id`.
+    """
+    workspace, user = await _seed_worker(db_session)
+    shift_start = datetime(2026, 7, 20, 8, tzinfo=timezone.utc)
+    now = shift_start + timedelta(hours=1)
+    db_session.add_all(
+        [
+            _shift_record(workspace, user, UserShiftStateEnum.STARTED_SHIFT, shift_start, shift_start),
+            _shift_record(workspace, user, UserShiftStateEnum.IDLE, shift_start, None),
+        ]
+    )
+    record = await _seed_open_step(
+        db_session,
+        workspace,
+        user,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=shift_start + timedelta(minutes=10),
+        reason=None,
+    )
+    record.transition_reason = TransitionReasonEnum.OTHER_TASK_PRIORITY.value
+    await db_session.flush()
+
+    outcome = await reconcile_worker_shift_state(
+        db_session, workspace.client_id, user.client_id, now
+    )
+
+    open_record = (
+        await db_session.execute(
+            select(UserShiftStateRecord).where(
+                UserShiftStateRecord.workspace_id == workspace.client_id,
+                UserShiftStateRecord.user_id == user.client_id,
+                UserShiftStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert outcome.state is UserShiftStateEnum.IN_PAUSE
+    assert open_record.reason is None
+    assert open_record.transition_reason == TransitionReasonEnum.OTHER_TASK_PRIORITY.value

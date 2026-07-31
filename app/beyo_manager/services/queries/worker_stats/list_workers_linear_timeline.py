@@ -11,6 +11,7 @@ from beyo_manager.domain.analytics.linear_timeline import (
 )
 from beyo_manager.domain.analytics.serializers import serialize_linear_timeline
 from beyo_manager.domain.roles.enums import RoleNameEnum
+from beyo_manager.domain.transitions.labels import resolve_transition_reason_label
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
@@ -53,7 +54,18 @@ def build_recorded_shift_timeline(
         duration = (end - start).total_seconds()
         seconds[record.state] += duration
         if record.state is UserShiftStateEnum.IN_PAUSE:
-            pause_by_reason[record.reason or UNSPECIFIED_REASON] += duration
+            # `reason` (catalog id / legacy slug) still wins so existing rows bucket
+            # exactly as before; `transition_reason` carries rows the system paused
+            # itself, which hold no catalog id at all.
+            #
+            # This fallback is LOAD-BEARING, not defensive: every clock-out and every
+            # task-switch auto-pause now produces a row that reaches it. Delete the
+            # middle term and all of that time silently buckets as `unspecified`, with
+            # no error anywhere — the roster just stops explaining the largest category
+            # of pause it has.
+            pause_by_reason[
+                record.reason or record.transition_reason or UNSPECIFIED_REASON
+            ] += duration
 
     reason_seconds = {
         reason: int(round(duration))
@@ -113,9 +125,20 @@ async def _load_pause_reasons_lookup(
     reason_ids: set[str],
 ) -> dict[str, dict[str, str | None]]:
     """Resolve `pause_by_reason` bucket keys to display fields, matching the shape used by
-    `get_worker_linear_timeline_breakdown._load_step_timeline_records`."""
+    `get_worker_linear_timeline_breakdown._load_step_timeline_records`.
+
+    Keys are of two kinds. A `transition_reason` resolves from the code-owned map with no
+    database round trip at all (criterion 16 — that is the point of a code-owned
+    vocabulary); everything else is a catalog id and is looked up exactly as before.
+    """
+    transition_labels = {
+        reason_id: label
+        for reason_id in reason_ids
+        if (label := resolve_transition_reason_label(reason_id)) is not None
+    }
+    reason_ids = reason_ids - transition_labels.keys()
     if not reason_ids:
-        return {}
+        return transition_labels
     rows = (
         await ctx.session.execute(
             select(
@@ -130,12 +153,15 @@ async def _load_pause_reasons_lookup(
         )
     ).all()
     return {
-        row.client_id: {
-            "name": row.name,
-            "image_url": row.image_url,
-            "pause_type": row.pause_type.value if row.pause_type is not None else None,
-        }
-        for row in rows
+        **transition_labels,
+        **{
+            row.client_id: {
+                "name": row.name,
+                "image_url": row.image_url,
+                "pause_type": row.pause_type.value if row.pause_type is not None else None,
+            }
+            for row in rows
+        },
     }
 
 

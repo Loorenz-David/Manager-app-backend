@@ -31,6 +31,19 @@ class UserShiftStateRecord(IdentityMixin, Base):
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
     reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # See the note on `StepStateRecord.transition_reason` — same vocabulary, same reasoning.
+    #
+    # This table is derived, so nothing sets this column directly: both derivations write
+    # it, the live reconcile and the clock-out rebuild, by carrying it off whichever source
+    # row owns the segment. That is why it must be carried through the linear sweep
+    # separately from `reason` rather than collapsed into it — the two land in different
+    # columns here and nothing downstream should have to tell them apart by inspecting the
+    # string.
+    #
+    # Unlike `step_state_records`, a row here MAY carry both this and `reason`: a
+    # declaration projection records the catalog reason the worker chose *and* that the
+    # segment came from a declaration. Phase 4's check constraint must allow that.
+    transition_reason: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     manually_recorded: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

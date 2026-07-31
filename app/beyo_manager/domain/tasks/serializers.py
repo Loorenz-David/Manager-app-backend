@@ -4,6 +4,7 @@ from datetime import datetime
 
 from beyo_manager.domain.images.serializers import serialize_image
 from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
+from beyo_manager.domain.transitions.labels import resolve_transition_reason_catalog_reference
 from beyo_manager.domain.users.serializers import serialize_user_compact_with_role, serialize_user_working_section_member
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.items.item import Item
@@ -176,6 +177,29 @@ def serialize_step(step: TaskStep) -> dict:
     }
 
 
+def serialize_step_pause_reason(record: StepStateRecord) -> dict | None:
+    """The embedded pause-reason object for a step state record, from either channel.
+
+    A worker-chosen pause carries a catalog row and serializes exactly as it always has.
+    A system transition carries no catalog row — it is typed instead — so its object is
+    built from the code-owned vocabulary. Returning `None` for those would blank a label
+    the client renders (`pause_reason.name`), which is the one thing the published
+    contract must not do.
+
+    `None` only when the record explains itself neither way.
+    """
+    if record.pause_reason is not None:
+        return serialize_pause_reason(record.pause_reason)
+    # `entered_at` is NOT NULL, so one of these always exists on a persisted record. No
+    # empty-string fallback: `""` would satisfy the published `z.string()` while not being
+    # a datetime, which is a worse failure than raising here — it ships an unparseable
+    # value to a client that has no reason to distrust it.
+    return resolve_transition_reason_catalog_reference(
+        record.transition_reason,
+        created_at=(record.created_at or record.entered_at).isoformat(),
+    )
+
+
 def serialize_step_latest_state_record(record: StepStateRecord | None) -> dict | None:
     if record is None:
         return None
@@ -183,7 +207,7 @@ def serialize_step_latest_state_record(record: StepStateRecord | None) -> dict |
         "id": record.client_id,
         "step_id": record.step_id,
         "state": record.state.value,
-        "pause_reason": serialize_pause_reason(record.pause_reason) if record.pause_reason is not None else None,
+        "pause_reason": serialize_step_pause_reason(record),
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,
         "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -374,7 +398,7 @@ def serialize_step_state_record_light(
         return None
     return {
         "state": record.state.value,
-        "pause_reason": serialize_pause_reason(record.pause_reason) if record.pause_reason is not None else None,
+        "pause_reason": serialize_step_pause_reason(record),
         "description": record.description,
         "entered_at": record.entered_at.isoformat() if record.entered_at else None,
         "exited_at": record.exited_at.isoformat() if record.exited_at else None,

@@ -2,6 +2,7 @@
 
 from bisect import bisect_left
 from collections import defaultdict
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 
@@ -14,6 +15,10 @@ from beyo_manager.domain.analytics.serializers import (
 from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
+from beyo_manager.domain.transitions.labels import (
+    resolve_transition_reason_catalog_reference,
+    resolve_transition_reason_label,
+)
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.serializers import serialize_user_worker_stat
 from beyo_manager.errors.not_found import NotFound
@@ -70,10 +75,34 @@ class _StepTimelineRecord:
     description: str | None
     entered_at: datetime
     exited_at: datetime | None
+    transition_reason: str | None = None
 
     @property
     def is_open(self) -> bool:
         return self.exited_at is None
+
+    def bucket_key(self, resolved_catalog_ids: AbstractSet[str]) -> str | None:
+        """The key this record contributes to the segment-level `reason` field.
+
+        `reason` stays the catalog id alone — `record_detail`'s nested `pause_reason`
+        object and the catalog prefetch both key off it and must not see a transition
+        value.
+
+        `resolved_catalog_ids` is REQUIRED, not a convenience: `pause_reason_id` is a
+        plain FK with no workspace predicate of its own, so a step can carry an id whose
+        catalog row lives in another workspace (or was hard-deleted). The prefetch is
+        scoped to `ctx.workspace_id`, so such an id resolves to nothing. Returning it
+        anyway would leak a foreign id into a workspace-scoped response and produce a
+        key the sibling `pause_reasons` map cannot resolve. Callers therefore cannot
+        obtain a key without proving resolution first — the guard is structural rather
+        than a truthiness check on a serialized side-effect.
+
+        Returns `None` when neither representation is usable, which is the caller's
+        signal to fall through to the worker-level reason.
+        """
+        if self.reason is not None and self.reason in resolved_catalog_ids:
+            return self.reason
+        return self.transition_reason
 
 
 async def _load_record_outcomes(
@@ -175,6 +204,7 @@ async def _load_step_timeline_records(
             StepStateRecord.step_id,
             StepStateRecord.state,
             StepStateRecord.pause_reason_id,
+            StepStateRecord.transition_reason,
             StepStateRecord.description,
             StepStateRecord.entered_at,
             StepStateRecord.exited_at,
@@ -225,6 +255,11 @@ async def _load_step_timeline_records(
                     else None
                 ),
             }
+        elif row.pause_reason_id is None:
+            # Code-owned vocabulary: resolved from the in-memory map, never joined.
+            transition_label = resolve_transition_reason_label(row.transition_reason)
+            if transition_label is not None:
+                pause_reasons[row.transition_reason] = transition_label
         records.append(
             _StepTimelineRecord(
                 record_id=row.record_id,
@@ -234,6 +269,7 @@ async def _load_step_timeline_records(
                 description=row.description,
                 entered_at=row.entered_at,
                 exited_at=row.exited_at,
+                transition_reason=row.transition_reason,
             )
         )
 
@@ -369,6 +405,11 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
             return states_by_step[record.step_id][index]
         return "unknown"
 
+    # Exactly the catalog ids that resolved inside `ctx.workspace_id` — the same set
+    # `record_detail` embeds an object for. Anything outside it is unresolvable here and
+    # must not become a segment key (see `_StepTimelineRecord.bucket_key`).
+    resolved_catalog_ids = frozenset(pause_reason_objects)
+
     def record_detail(record: _StepTimelineRecord) -> dict | None:
         step = steps_by_id.get(record.step_id)
         if step is None:
@@ -391,7 +432,22 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
                 else None
             ),
             "state": record.state,
-            "pause_reason": serialize_pause_reason(pause_reason) if pause_reason is not None else None,
+            # Same two channels as every other embedded pause-reason object: a catalog row
+            # when a human chose it, otherwise the code-owned vocabulary. `null` here would
+            # blank the label the timeline calendar renders off this field, which is the
+            # one thing a system transition must not cost.
+            #
+            # `pause_reason` above is already the workspace-resolution result, so a catalog
+            # id that did not resolve in this workspace still falls through rather than
+            # being emitted — that guard is unchanged.
+            "pause_reason": (
+                serialize_pause_reason(pause_reason)
+                if pause_reason is not None
+                else resolve_transition_reason_catalog_reference(
+                    record.transition_reason,
+                    created_at=record.entered_at.isoformat(),
+                )
+            ),
             "description": record.description,
             "entered_at": record.entered_at.isoformat(),
             "exited_at": (
@@ -414,6 +470,10 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
             current_shift_start = segment.start
         desired_step_state = _STEP_STATE_FOR_SHIFT.get(segment.record.state)
         details: list[dict] = []
+        # The records behind `details`, index-aligned. `details[0]["pause_reason"]` only
+        # carries a catalog object, so a row typed by `transition_reason` would read as
+        # "no reason" there; the owner record keeps both representations.
+        detail_owners: list[_StepTimelineRecord] = []
         if desired_step_state is not None:
             for step_record in step_records:
                 step_end = step_record.exited_at or now
@@ -426,25 +486,38 @@ async def get_worker_linear_timeline_breakdown(ctx: ServiceContext) -> dict:
                     detail = record_detail(step_record)
                     if detail is not None:
                         details.append(detail)
+                        detail_owners.append(step_record)
+        # Block owner follows the most-recently-started step pause (details is
+        # newest-first). Fall back to the worker-level pause reason when no step pause
+        # overlaps this block, when that step carries no reason of its own, or when its
+        # catalog id did not resolve in this workspace. This segment-level field stays a
+        # key resolved via the sibling `pause_reasons` lookup map, not an embedded
+        # object.
+        #
+        # The step's catalog id is used ONLY when it resolved here — that is what
+        # `resolved_catalog_ids` enforces, and it is why `bucket_key` takes an argument.
+        # An id belonging to another workspace must never reach the output.
+        segment_reason = (
+            (
+                (detail_owners[0].bucket_key(resolved_catalog_ids) if detail_owners else None)
+                or segment.record.reason
+                or segment.record.transition_reason
+            )
+            if segment.record.state is UserShiftStateEnum.IN_PAUSE
+            else None
+        )
+        # Segment keys that came from the code-owned vocabulary must resolve in the
+        # sibling map too. In-memory, so it adds no round trip (criterion 16).
+        if segment_reason is not None and segment_reason not in pause_reasons:
+            transition_label = resolve_transition_reason_label(segment_reason)
+            if transition_label is not None:
+                pause_reasons[segment_reason] = transition_label
         serialized_segments.append(
             serialize_recorded_shift_segment(
                 start=segment.start,
                 end=segment.end,
                 state=_PUBLIC_SHIFT_STATES[segment.record.state],
-                reason=(
-                    # Block owner follows the most-recently-started step pause (details is
-                    # newest-first). Fall back to the worker-level pause reason when no step
-                    # pause overlaps this block or that step carries no reason of its own.
-                    # `details[0]["pause_reason"]` is the nested object now — pull its id back
-                    # out since this segment-level field stays an id (resolved via the sibling
-                    # `pause_reasons` lookup map, not embedded here).
-                    (
-                        (details[0]["pause_reason"]["client_id"] if details and details[0]["pause_reason"] else None)
-                        or segment.record.reason
-                    )
-                    if segment.record.state is UserShiftStateEnum.IN_PAUSE
-                    else None
-                ),
+                reason=segment_reason,
                 is_open=(
                     segment.record.exited_at is None
                     and segment.end == now

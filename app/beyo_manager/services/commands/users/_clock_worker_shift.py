@@ -5,6 +5,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -17,7 +18,6 @@ from beyo_manager.models.tables.users.user_shift_state_record import UserShiftSt
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.commands.users._reconstruct_shift_middle import reconstruct_shift_middle
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.queries.pause_reasons.get_system_pause_reason import get_system_pause_reason_id
 
 
 logger = logging.getLogger(__name__)
@@ -194,11 +194,6 @@ async def clock_out_shift_for_user(
         workspace_id,
         user_id,
     )
-    pause_reason_id = await get_system_pause_reason_id(
-        session,
-        workspace_id,
-        "pause_ended_shift",
-    ) if open_working_rows else None
     for closing_record, step, task in open_working_rows:
         await _apply_step_transition(
             transition_ctx,
@@ -206,7 +201,12 @@ async def clock_out_shift_for_user(
             task,
             closing_record,
             new_state=TaskStepStateEnum.ENDED_SHIFT,
-            pause_reason_id=pause_reason_id,
+            # System transition: typed from the code-owned vocabulary rather than resolved
+            # from the workspace catalog. This is the line that made clock-out fail in every
+            # workspace without a `pause_ended_shift` row. Every clock source — HTTP,
+            # Connecteam, the overnight safeguard — reaches it through this function.
+            pause_reason_id=None,
+            transition_reason=TransitionReasonEnum.SHIFT_ENDED.value,
             description=None,
             credited_user_id=user_id,
             now=clock_out_at,

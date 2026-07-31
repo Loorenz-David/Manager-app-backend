@@ -18,6 +18,37 @@ collapse into `IDLE` and a manager sees an unexplained gap.
 
 ---
 
+## Why a segment is paused
+
+`IN_PAUSE` has two explanation channels, and they answer different questions.
+
+| Channel | Carried by | Means |
+|---|---|---|
+| Catalog reason | `reason` (a `par_…` id) | A human chose this reason from the workspace catalog |
+| Transition reason | `transition_reason` | The system paused this itself, and this is which transition |
+
+The vocabulary is **code-owned** — `TransitionReasonEnum`, three members:
+
+| Member | Written when |
+|---|---|
+| `shift_ended` | Clock-out closed a step that was still being worked |
+| `other_task_priority` | The worker started another task, so this step auto-paused |
+| `worker_declared_state` | The segment projects a worker declaration |
+
+Because it is code-owned, a system transition never resolves through the catalog and therefore
+never depends on a workspace having been seeded. **Nothing in the state machine may be gated on a
+catalog row existing.** The catalog explains only what a worker picked.
+
+The two channels are mutually exclusive on `step_state_records`: a step record carries a catalog
+reason or a transition reason, never both. The derived timeline has one deliberate exception — a
+declaration-sourced segment carries `worker_declared_state` *and* the catalog reason the worker
+chose, because both facts are true and both are wanted.
+
+Readers resolve the catalog reference first when a segment has one, then the transition reason, and
+fall back to an unattributed bucket only when a pause carries neither.
+
+---
+
 ## Two derivations, not one
 
 This is the part that surprises people. The domain computes a worker's state **twice**, by two
@@ -60,6 +91,22 @@ At clock-out:
 4. The day is rebuilt from `step_state_records` and `user_declared_state_records` by the linear
    sweep.
 5. A final `ENDED_SHIFT` segment closes the day.
+
+Each rebuilt pause segment carries whichever explanation channel its source had, in the same field
+it came from: a step record's catalog reason lands in `reason`, its transition reason lands in
+`transition_reason`, and a declaration contributes both. The two are carried separately end to end
+so nothing downstream has to recover which kind of value it is holding by inspecting the string.
+
+Provenance is carried **only for legacy manual pause rows**, and that narrowness is the point.
+A rebuilt segment sourced from one of those keeps its `changed_by_id`, so a pause a person recorded
+directly does not come back out of the rebuild looking system-authored. Every other rebuilt segment
+— step-sourced and declaration-sourced alike — gets `changed_by_id = NULL`.
+
+That is not an omission. `changed_by_id IS NOT NULL` is how the live derivation recognises an
+actor-authored manual pause and holds it sticky against re-derivation. A declaration projection is
+authored by the system from a source row, not by a person acting on the timeline, so giving it an
+actor would make it sticky too and suppress the re-derivation it depends on. The declaring worker
+is not lost: the declaration row itself records who opened and closed it.
 
 **The rebuild is idempotent.** Running it twice over the same source data must produce identical
 rows. This is the invariant to protect when changing anything in the rebuild path — it is what makes

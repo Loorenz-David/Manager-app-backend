@@ -1,6 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
+from beyo_manager.domain.transitions.labels import (
+    is_transition_reason,
+    resolve_transition_reason_label,
+)
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.users.user import User
@@ -130,10 +134,35 @@ def _serialize_pause_reason_reference(pause_reason: PauseReason) -> dict:
     }
 
 
+def _serialize_transition_reason_reference(
+    transition_reason: str, label: dict[str, str | None]
+) -> dict:
+    """Same three fields as a catalog reference, so the published shape is unchanged.
+
+    `id` is the transition value itself — the same key the analytics `pause_by_reason`
+    map uses, so a client resolves both kinds of key the same way.
+    """
+    return {
+        "id": transition_reason,
+        "name": label["name"],
+        "image_url": label["image_url"],
+    }
+
+
 def pause_reason_reference_is_unresolved(
     current: UserShiftStateRecord,
     pause_reason: PauseReason | None,
 ) -> bool:
+    """A `par_…` id in `reason` that no longer joins to a catalog row.
+
+    A row typed by `transition_reason` is NOT unresolved — it resolves through the
+    code-owned map instead, which is the whole point of the vocabulary. Such a row
+    carries `reason IS NULL`, so it already falls out here; the explicit guard makes
+    that intentional rather than accidental, and keeps holding if a future row ever
+    carries both.
+    """
+    if is_transition_reason(current.transition_reason):
+        return False
     return (
         current.state is UserShiftStateEnum.IN_PAUSE
         and pause_reason is None
@@ -163,6 +192,16 @@ def serialize_current_worker_shift_state(
         }
 
     is_paused = current.state is UserShiftStateEnum.IN_PAUSE
+    # PRECEDENCE (criterion 13), asserted rather than incidental: a catalog reference
+    # wins over `transition_reason`, which wins over free-text `reason_text`. A catalog
+    # row means a human chose it, which is strictly more specific than a system-typed
+    # transition. After phase 2 the two are mutually exclusive on this table, but
+    # "shouldn't happen" is not a behaviour — this is the behaviour.
+    transition_label = (
+        resolve_transition_reason_label(current.transition_reason)
+        if is_paused and pause_reason is None
+        else None
+    )
     data = {
         "user_id": user_id,
         "clocked_in": True,
@@ -172,6 +211,10 @@ def serialize_current_worker_shift_state(
         "pause_reason": (
             _serialize_pause_reason_reference(pause_reason)
             if is_paused and pause_reason is not None
+            else _serialize_transition_reason_reference(
+                current.transition_reason, transition_label
+            )
+            if transition_label is not None
             else None
         ),
         "declared_state": (
@@ -180,7 +223,12 @@ def serialize_current_worker_shift_state(
             else None
         ),
     }
-    if is_paused and current.reason is not None and pause_reason is None:
+    if (
+        is_paused
+        and current.reason is not None
+        and pause_reason is None
+        and transition_label is None  # a typed transition outranks free text
+    ):
         data["reason_text"] = (
             None
             if pause_reason_reference_is_unresolved(current, pause_reason)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from freezegun import freeze_time
@@ -12,10 +11,10 @@ from beyo_manager.domain.connecteam.time_activity_event import ConnecteamTimeAct
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
-from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -254,23 +253,18 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
         )
 
     with freeze_time(clock_out_at):
-        system_pause_reason_id = await db_session.scalar(
-            select(PauseReason.client_id).where(PauseReason.slug == "pause_ended_shift")
-        )
-        await db_session.rollback()
-        with patch(
-            "beyo_manager.services.commands.users._clock_worker_shift.get_system_pause_reason_id",
-            new=AsyncMock(return_value=system_pause_reason_id),
-        ):
-            async with db_session.begin():
-                await toggle_worker_shift(manual_ctx)
-                webhook_clock_out = await clock_out(
-                    session=db_session,
-                    worker=webhook_resolved,
-                        event=_event(
-                            "clock_out", clock_out_at.isoformat(), webhook_connecteam_id, suffix
-                        ),
-                )
+        # No catalog resolver is patched in: the webhook handler calls
+        # `clock_out_shift_for_user` directly and inherits the typed transition, so this
+        # closes an open working step with no `pause_reasons` row involved.
+        async with db_session.begin():
+            await toggle_worker_shift(manual_ctx)
+            webhook_clock_out = await clock_out(
+                session=db_session,
+                worker=webhook_resolved,
+                event=_event(
+                    "clock_out", clock_out_at.isoformat(), webhook_connecteam_id, suffix
+                ),
+            )
 
     manual_after_out = await _records(db_session, workspace_id, manual_worker_id)
     webhook_after_out = await _records(db_session, workspace_id, webhook_worker_id)
@@ -282,16 +276,13 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
             select(StepStateRecord).where(
                 StepStateRecord.step_id == working_step.client_id,
                 StepStateRecord.state == TaskStepStateEnum.ENDED_SHIFT,
-                StepStateRecord.pause_reason_id == (
-                    await db_session.scalar(
-                        select(PauseReason.client_id).where(
-                            PauseReason.slug == "pause_ended_shift",
-                        )
-                    )
-                ),
             )
         )
     ).scalar_one()
+    # Criterion 5: the webhook path inherits the typed transition, and carries no catalog
+    # reference — the row that used to be required here does not have to exist.
+    assert ended_step_record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
+    assert ended_step_record.pause_reason_id is None
     assert webhook_clock_out.transitioned_steps == 1
     assert working_step.state is TaskStepStateEnum.ENDED_SHIFT
     assert ended_step_record.entered_at == clock_out_at

@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.domain.users.shift_state_machine import (
     derive_target_state,
@@ -195,12 +196,21 @@ async def _reconcile_once(
         )
 
     reason = None
+    transition_reason = None
     manually_recorded = False
     if declared_is_source:
         reason = open_declared.pause_reason_id
+        # A declaration carries both: the catalog row the worker chose, and the typed
+        # transition saying this segment is a declaration projection (T3 — the declared
+        # table has no column of its own).
+        transition_reason = TransitionReasonEnum.WORKER_DECLARED_STATE.value
         manually_recorded = True
-    elif target is UserShiftStateEnum.IN_PAUSE and open_paused[0].pause_reason_id is not None:
+    elif target is UserShiftStateEnum.IN_PAUSE:
+        # Both representations are copied from the owning step record. A system auto-pause
+        # carries no catalog id, so guarding this on `pause_reason_id is not None` would
+        # drop its transition and project the pause as unattributed.
         reason = open_paused[0].pause_reason_id
+        transition_reason = open_paused[0].transition_reason
 
     current_is_declared_projection = (
         current is not None
@@ -217,6 +227,7 @@ async def _reconcile_once(
             or not declared_projection_involved
             or (
                 current.reason == reason
+                and current.transition_reason == transition_reason
                 and current.manually_recorded is manually_recorded
             )
         )
@@ -238,6 +249,7 @@ async def _reconcile_once(
             exited_at=None,
             changed_by_id=None,
             reason=reason,
+            transition_reason=transition_reason,
             manually_recorded=manually_recorded,
         )
     )

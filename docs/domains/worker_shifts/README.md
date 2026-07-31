@@ -47,12 +47,24 @@ Prefix `uss` · `user_shift_state_records`
 | `entered_at` | datetime (UTC) | Segment start |
 | `exited_at` | datetime (UTC), nullable | Segment end; `NULL` means still open |
 | `changed_by_id` | prefixed ULID, nullable | Who caused the transition, when a person did |
-| `reason` | string(512), nullable | Why the worker is paused — see the caveat below |
+| `reason` | string(512), nullable | The catalog reason the worker chose — see the caveat below |
+| `transition_reason` | string(32), nullable | Which system transition produced this segment |
 | `manually_recorded` | bool | Segment originated from a worker action rather than a step transition |
 
-> **`reason` is overloaded.** It holds either a `par_…` pause-reason id or free text from older
-> records, and readers currently distinguish them by inspecting the id prefix. Treat any code that
-> reads it as fragile, and do not add a third meaning.
+A paused segment is explained through **one of two channels**, and which one tells you who decided
+it:
+
+- `reason` — a `par_…` id pointing at the workspace catalog. A human picked this.
+- `transition_reason` — a member of the code-owned vocabulary. The system decided this, and no
+  catalog row is involved.
+
+> **`reason` is overloaded; `transition_reason` is not.** Besides catalog ids, `reason` also holds
+> plain strings on older records, and readers distinguish the two by inspecting the id prefix. Treat
+> any code that reads it as fragile, and do not add a third meaning to it. `transition_reason` only
+> ever holds a vocabulary member, so it needs no such inspection.
+
+A declared state is the one segment that carries **both**: the catalog reason the worker chose, and
+`worker_declared_state` saying the segment came from a declaration rather than from a task step.
 
 ### `UserDeclaredStateRecord` — source, worker declarations
 
@@ -107,7 +119,8 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 | Domain | Relationship |
 |---|---|
 | Task steps | Reads `step_state_records` as the primary source of the timeline. Step transitions auto-pause conflicting steps, which surfaces here. |
-| Pause reasons | Reads the catalog. Declarations reference a reason by id; the reason's type decides whether a worker may pick it. |
+| Pause reasons | Reads the catalog. Declarations reference a reason by id; the reason's type decides whether a worker may pick it. A worker's own choices are the only thing this catalog explains. |
+| Transitions | Reads the code-owned `transition_reason` vocabulary and its label map. System transitions resolve there, never through the catalog, so they do not depend on a workspace having been seeded. |
 | Auth | Role and app-scope decide who may act on whose shift, and which fields a roster response exposes. |
 | Analytics / worker stats | Consumes the derived timeline for manager-facing reporting and the clock-out summary. |
 | Connecteam integration | An external clock source that writes shifts through the same close path. |
