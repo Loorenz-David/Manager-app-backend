@@ -52,26 +52,35 @@ async def test_seed_pause_reasons_is_idempotent(db_session):
     second = await seed_pause_reasons(db_session, workspace.client_id)
     second_count = await _count_for_workspace()
 
-    assert len(first) == 6
+    # Five, not six. `pause_other_task_priority` was removed from the seed: auto-pause on task
+    # switch is a system transition carrying `transition_reason = other_task_priority` with no
+    # catalog reference, so seeding a row nobody selects and nothing resolves would leave a picker
+    # entry with no meaning. `pause_ended_shift` deliberately stays — a worker picks it.
+    assert len(first) == 5
     assert first == second
-    assert first_count == second_count == 6
+    assert first_count == second_count == 5
+    assert "pause_other_task_priority" not in first
+    assert "pause_ended_shift" in first
 
-    seeded_other_priority = await db_session.scalar(
-        select(PauseReason).where(
-            PauseReason.workspace_id == workspace.client_id,
-            PauseReason.slug == "pause_other_task_priority",
+    # No seeded row is system-managed any more; the flag is inert published contract.
+    seeded_rows = (
+        await db_session.execute(
+            select(PauseReason).where(PauseReason.workspace_id == workspace.client_id)
         )
-    )
-    assert seeded_other_priority.requires_description is True
+    ).scalars().all()
+    assert all(row.is_system_managed is False for row in seeded_rows)
 
-    seeded_other_priority.requires_description = False
+    # Bootstrap still repairs a drifted field on rerun.
+    lunch = next(row for row in seeded_rows if row.slug == "pause_lunch_break")
+    original_image = lunch.image_url
+    lunch.image_url = "https://example.invalid/drifted.webp"
     await db_session.flush()
     await seed_pause_reasons(db_session, workspace.client_id)
-    assert seeded_other_priority.requires_description is True
+    assert lunch.image_url == original_image
 
 
 @pytest.mark.integration
-async def test_pause_reason_crud_and_system_delete_guard(db_session):
+async def test_pause_reason_crud_and_no_delete_guard_remains(db_session):
     workspace, ctx = await _seed_identity(db_session)
     ctx.incoming_data = {"name": "Typed blocker", "pause_type": PauseTypeEnum.BLOCKER.value}
 
@@ -87,7 +96,14 @@ async def test_pause_reason_crud_and_system_delete_guard(db_session):
     deleted = await db_session.scalar(select(PauseReason).where(PauseReason.client_id == client_id))
     assert deleted.is_deleted is True
 
+    # The system-managed delete guard is gone. It blocked deletion of rows whose behaviour the
+    # backend depended on; nothing resolves a pause reason by slug any more, so there is no row
+    # left to protect and every row here is workspace data the manager owns outright.
     seeded = await seed_pause_reasons(db_session, workspace.client_id)
-    ctx.incoming_data = {"client_id": seeded["pause_other_task_priority"]}
-    with pytest.raises(ConflictError):
-        await delete_pause_reason(ctx)
+    ctx.incoming_data = {"client_id": seeded["pause_ended_shift"]}
+    await delete_pause_reason(ctx)
+
+    formerly_protected = await db_session.scalar(
+        select(PauseReason).where(PauseReason.client_id == seeded["pause_ended_shift"])
+    )
+    assert formerly_protected.is_deleted is True

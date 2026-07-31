@@ -469,7 +469,23 @@ async def test_breakdown_never_emits_a_catalog_id_that_did_not_resolve(db_sessio
 
 
 async def test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both(db_session) -> None:
-    """Criterion 13 at the query layer — the catalog id wins the bucket key."""
+    """Criterion 13 at the query layer — the catalog id wins the bucket key.
+
+    **Amended by phase 4.** This test originally seeded a `step_state_records` row carrying *both*
+    a catalog reference and a `transition_reason`. Phase 4's CHECK constraint
+    (`ck_step_state_records_transition_xor_catalog`) makes that row unconstructible: T2 plus phase
+    1's no-`WORKER_PAUSED` ruling mean a step record carries one explanation or the other, never
+    both, and the database now enforces it.
+
+    The precedence rule is still real and still asserted — on `user_shift_state_records`, where a
+    declaration projection legitimately carries both by design, which is exactly why the constraint
+    is scoped to the source table only. The step record here now carries the catalog reference
+    alone, which is what a worker-chosen pause actually looks like.
+
+    `_StepTimelineRecord.bucket_key`'s catalog-first ordering is consequently defensive rather than
+    reachable from this table; it is asserted directly in
+    `tests/unit/domain/transitions/test_bucket_key_precedence.py`.
+    """
     workspace = Workspace(name=f"tr-breakdown-both-{uuid4().hex}")
     db_session.add(workspace)
     await db_session.flush()
@@ -490,7 +506,7 @@ async def test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both(db_s
     await _step_record(
         db_session, workspace.client_id, worker.client_id,
         TaskStepStateEnum.PAUSED, base, base + timedelta(hours=1),
-        pause_reason_id=reason.client_id, transition_reason=OTHER_TASK_PRIORITY,
+        pause_reason_id=reason.client_id,
     )
     await db_session.flush()
 

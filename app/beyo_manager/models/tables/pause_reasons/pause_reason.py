@@ -22,6 +22,16 @@ class PauseReason(IdentityMixin, Base):
     )
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     requires_description: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # `slug` and `is_system_managed` are INERT PUBLISHED CONTRACT, not behaviour.
+    #
+    # No backend path resolves a pause reason by slug any more — system transitions carry a
+    # code-owned `transition_reason` instead, so they no longer depend on a catalog row existing in
+    # a workspace. `is_system_managed` is written `False` for every row and guards nothing.
+    #
+    # Both columns survive because `frontend/packages/pause-reasons/src/types.ts` declares them
+    # required and non-nullable (`slug: z.string()`, `is_system_managed: z.boolean()`), so removing
+    # either would fail Zod validation on every pause-reasons response — not merely on a branch that
+    # reads it. Keep them, keep them serialized, and do not treat either as meaningful.
     slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_system_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -44,6 +54,9 @@ class PauseReason(IdentityMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("workspace_id", "name", name="uq_pause_reasons_workspace_name"),
-        Index("uq_pause_reasons_slug", "slug", unique=True),
+        # Scoped to the workspace. This index was GLOBALLY unique, which meant a slug could exist
+        # in exactly one workspace database-wide — so bootstrapping a second workspace raised
+        # IntegrityError, and only one workspace ever received the default catalog.
+        Index("uq_pause_reasons_slug", "workspace_id", "slug", unique=True),
         Index("ix_pause_reasons_workspace_type", "workspace_id", "pause_type"),
     )

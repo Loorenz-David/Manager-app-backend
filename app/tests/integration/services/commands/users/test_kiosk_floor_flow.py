@@ -107,23 +107,27 @@ async def _seed_member(
 
 
 async def _kiosk_workspace(db_session) -> Workspace:
-    """A workspace with its system pause reasons configured.
+    """A workspace with a populated pause-reason catalog.
 
-    Clock-out force-closing a working step resolves the system `pause_ended_shift`
-    reason, so the flow is only realistic in a workspace that actually has one.
-    Picking it here keeps the whole loop mock-free.
+    Clock-out no longer resolves `pause_ended_shift` — it writes
+    `transition_reason = shift_ended` with no catalog reference, so this flow would work in a
+    workspace with an empty catalog. The catalog is still required for the *declaration* half of
+    the loop, where the worker picks a reason, so the fixture keeps selecting a populated
+    workspace and the whole loop stays mock-free.
+
+    The `is_system_managed` filter that used to be here is gone: no row carries that flag any
+    more. Selecting on it would match nothing and take this fixture's assert with it.
     """
     workspace = await db_session.scalar(
         select(Workspace)
         .join(PauseReason, PauseReason.workspace_id == Workspace.client_id)
         .where(
             PauseReason.slug == "pause_ended_shift",
-            PauseReason.is_system_managed.is_(True),
             PauseReason.is_deleted.is_(False),
         )
         .limit(1)
     )
-    assert workspace is not None, "no workspace has the system 'pause_ended_shift' reason"
+    assert workspace is not None, "no workspace has a 'pause_ended_shift' reason"
     return workspace
 
 
