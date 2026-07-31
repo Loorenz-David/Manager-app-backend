@@ -1184,6 +1184,44 @@ Rules for the implementing session:
   (commit the existing `list_reassigned_steps.py`), then Steps 6–10, and fix finding 2 before
   the parallel feature touches `domain/tasks/serializers.py` again.
 
+- `2026-07-31` `implementer (review-fix pass)`: **findings closed; stop for re-review.**
+
+  1. Finding 1 is closed. The previously untracked list query is committed as `dccdb7a`; the
+     shared count query as `082b226`; both routes as `b29bdbe`; and service-level integration
+     coverage as `4ea8b26`, with count-query budget evidence added in `213cac7`. The focused
+     reassigned-step suite passes: **15 passed**. It covers list/count agreement by paging the
+     real list to exhaustion, stable ordering and no duplicate page ids, every terminal state,
+     every required soft-delete/membership/worker/workspace exclusion, acknowledged-row and
+     `unacknowledged_only` semantics, empty results, payload/section-map shape, `q` narrowing,
+     and list/count statement budgets. The list remains constant in page size; the count executes
+     exactly one statement.
+  2. Finding 2 is closed by `1ad796c`: `serialize_task_step_acknowledgment` was relocated to
+     `domain/task_steps/serializers.py`, both consumers import it there, and the parallel
+     transition-reason serializer surface in `domain/tasks/serializers.py` was left clear of this
+     feature.
+  3. Finding 3 is acknowledged as **operator-resolved**. The handoff prefixes were corrected by
+     the operator; this implementation did not edit the operator-owned handoff or its liveness
+     table.
+
+  **Step 9 evidence:** both reassigned-step paths are present in router OpenAPI, and an isolated
+  request with a 201-character `q` returns `422` before service execution. The `55_query_filters`
+  completion gate is clear: the list uses `apply_string_filter`; its module-level allowed columns
+  are only item article number and SKU; the router enforces `max_length=200`; it passes both `q`
+  and `string_filters` without inline parsing; there are no date parameters; and both required
+  outer joins precede filtering. Integration assertions establish handoff-compatible item parity
+  (the working-section item key set plus `acknowledgment`), null upholstery-group fields,
+  acknowledgment fields, and the page-scoped compact `working_sections` map. `ruff check` passes
+  all feature-touched source and test files. No migration was added and the handoff remains
+  unmodified.
+
+  **Suite comparison:** the recorded valid baseline is **26 failed / 1398 passed / 0 errors**.
+  The current default-plugin run from `backend/app` is **372 failed / 1042 passed / 38 errors**;
+  it is therefore an invalid node-set comparison, not evidence of a feature regression. Failures
+  span unrelated Connecteam, Shopify, worker-stats, auth, router, and analytics suites, while the
+  reassigned-step directory passes in isolation immediately afterwards (**15 passed**). No claim
+  of a clean full-suite comparison is made; this requires environment/parallel-work resolution in
+  the independent re-review.
+
 ## Lifecycle transition
 
 - Current state: `under_construction`
