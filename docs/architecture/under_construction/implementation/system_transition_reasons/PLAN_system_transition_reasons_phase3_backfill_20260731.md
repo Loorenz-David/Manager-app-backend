@@ -55,13 +55,24 @@
 
 ## Acceptance criteria
 
-1. Rows whose `pause_reason_id` points at `pause_ended_shift` → `transition_reason = SHIFT_ENDED`,
-   `pause_reason_id = NULL`.
+1. **Rows pointing at `pause_ended_shift` are LEFT ALONE.** *(Amended 2026-07-31, operator ruling.)*
+
+   Phase 4 no longer retires that row — it stays worker-selectable — so its historical references
+   need no migration at all. More importantly, they **must not** be migrated: a worker who picked
+   "Ended shift" from the pause sheet produced a row **indistinguishable** from one the clock-out
+   wrote (both `state = ended_shift`, both `pause_reason_id = par_…pause_ended_shift`, both
+   `transition_reason` null). Backfilling them wholesale would relabel real worker choices as system
+   transitions.
+
+   Leaving them costs nothing: the catalog row still exists, so they still resolve, and they carry
+   no `transition_reason`, so phase 4's constraint is unaffected. **If you can find a signal that
+   distinguishes the two populations, report it — do not act on it.** That is a separate decision.
 2. Rows pointing at `pause_other_task_priority` → `OTHER_TASK_PRIORITY`, `pause_reason_id = NULL`.
 3. `pause_case_created` rows → the member decided in the clarification, recorded with reasoning.
 4. **Rows pointing at a worker-chosen catalog row are untouched**: `pause_reason_id` intact,
    `transition_reason` as phase 1's `WORKER_PAUSED` ruling determined.
-5. **The migration selects by the three specific system rows — never by `is_system_managed` alone.**
+5. **The migration selects by the two specific rows above — never by `is_system_managed` alone, and
+   never including `pause_ended_shift`.**
    A single mislabelled row would otherwise silently widen the blast radius to real worker choices.
    This is the most important line in this plan.
 6. `user_shift_state_records.reason` holding a `par_…` id for a system row is migrated consistently
@@ -75,8 +86,9 @@
    custom_pause_reasons feature set shipped migrations whose downgrades did not restore data, and
    that fact later blocked testing entirely.
 9. **Idempotent** — running it twice changes nothing the second time.
-10. **Zero rows left pointing at a system catalog row afterwards.** Record the query proving it —
-    this is phase 4's entry condition.
+10. **Zero rows left pointing at `pause_other_task_priority` or `pause_case_created` afterwards.**
+    Record the query proving it — this is phase 4's entry condition. Rows pointing at
+    `pause_ended_shift` are expected to remain and are not counted.
 
 ## Contracts and skills
 

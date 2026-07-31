@@ -23,7 +23,7 @@
 
 ## Scope
 
-- In scope: retiring the three system rows; deleting `get_system_pause_reason_id`; removing
+- In scope: retiring the two system rows (`pause_other_task_priority`, `pause_case_created`); deleting `get_system_pause_reason_id`; removing
   `is_system_managed` and its consumers; dropping `slug` and `uq_pause_reasons_slug`; the bootstrap
   seed phase and seed migration; check constraints; final verification and close-out.
 - Out of scope: worker-choosable catalog rows and the CRUD surface, beyond removing system-row
@@ -47,8 +47,11 @@
 
 ### Retirement
 
-1. **Entry condition re-verified**: zero rows in any table reference the three system catalog rows.
-   Freshly run and recorded. If non-zero, STOP — phase 3 is incomplete.
+1. **Entry condition re-verified**: zero rows reference the **two rows being retired**. Freshly run
+   and recorded. If non-zero, STOP — phase 3 is incomplete.
+
+   **References to `pause_ended_shift` are expected and legitimate** — it stays selectable, so
+   workers create new ones. Do not treat a non-zero count there as a failure, and do not "clean" it.
 2. **`pause_ended_shift` is NOT soft-deleted. It becomes an ordinary worker-selectable pause reason**
    — `is_system_managed` cleared, left visible and editable like any other workspace row.
 
@@ -73,46 +76,46 @@
    `pause_ended_shift` still does. **Assert against the actual endpoint response**, not the query.
 4. `get_system_pause_reason_id` is **deleted** (success criterion 3), with its module if nothing else
    lives there, and its tests.
-4. `is_system_managed` and its consumers removed: `domain/pause_reasons/guards.py`
+5. `is_system_managed` and its consumers removed: `domain/pause_reasons/guards.py`
    (`can_delete_pause_reason`), the pause-reason serializer field, and the hardcoded `False` in
    `create_pause_reason.py`. **`can_delete_pause_reason` returning `not is_system_managed` is delete
    protection** — confirm nothing else depended on it, and state what replaces it (likely nothing,
    because there is nothing left to protect).
-5. `slug` and `uq_pause_reasons_slug` dropped (**T6**, operator-confirmed). Phase 1's out-of-repo
+6. `slug` and `uq_pause_reasons_slug` dropped (**T6**, operator-confirmed). Phase 1's out-of-repo
    consumer audit must have found none; **if it found one, STOP.**
-6. **Second-workspace bootstrap succeeds** — the mirror of phase 1's `IntegrityError` reproduction.
+7. **Second-workspace bootstrap succeeds** — the mirror of phase 1's `IntegrityError` reproduction.
    Create two workspaces through the ordinary path on a **disposable** database and prove it is
    gone. This is success criterion 6.
-7. The bootstrap seed phase and seed migration `49bd666da846` no longer seed system rows, and their
+8. The bootstrap seed phase and seed migration `49bd666da846` no longer seed system rows, and their
    duplicated `_PAUSE_REASONS` tuples are reconciled — both files carry comments requiring the other
    to be updated in step. Leaving them inconsistent is a finding.
-8. Serializer output for pause reasons no longer includes removed fields, and the change is
+9. Serializer output for pause reasons no longer includes removed fields, and the change is
    **proposed** to the operator for the handoff — not written into it.
 
 ### Constraints
 
-9. The mutual-exclusion invariant is enforced by a check constraint: a row carrying a system
+10. The mutual-exclusion invariant is enforced by a check constraint: a row carrying a system
    `transition_reason` must have `pause_reason_id IS NULL`. This is the database making **T2** true
    rather than trusting future writers.
-10. **Every existing row satisfies the constraint before it is added** — verified by query,
+11. **Every existing row satisfies the constraint before it is added** — verified by query,
     recorded, not assumed. Adding a constraint that fails validation against production data is the
     failure mode this criterion exists to prevent.
-11. Phase 1's `pause_reason_id` fallback in the read paths: either removed with proof no row can
+12. Phase 1's `pause_reason_id` fallback in the read paths: either removed with proof no row can
     reach it, or **kept with a comment explaining why it must stay**. Silently leaving dead code is
     a finding; so is removing a branch legacy rows still need. Phase 3's parity evidence decides
     which.
 
 ### Close-out
 
-12. All six master-plan success criteria re-verified **end-to-end and fresh** — not inherited from
+13. All six master-plan success criteria re-verified **end-to-end and fresh** — not inherited from
     the phases that first claimed them. In particular criterion 1 (clock-out in a zero-catalog
     workspace) and criterion 6 (second-workspace bootstrap) are re-run.
-13. **D3, D5 and D14** carry their final amendment state in this feature set's master plan,
+14. **D3, D5 and D14** carry their final amendment state in this feature set's master plan,
     consistent with what shipped. The declared_worker_states plan is archived — verify no phase
     edited it.
-14. The intention plan moves to `achieved`, its linked-plans table is updated to the four-phase set,
+15. The intention plan moves to `achieved`, its linked-plans table is updated to the four-phase set,
     and its open questions are answered or explicitly closed.
-15. Deferred items collected into one visible list in the master plan: T7's `manually_recorded`
+16. Deferred items collected into one visible list in the master plan: T7's `manually_recorded`
     subsumption, plus any repo-health item found but not fixed across phases 1–4 (T8).
 
 ## Contracts and skills
