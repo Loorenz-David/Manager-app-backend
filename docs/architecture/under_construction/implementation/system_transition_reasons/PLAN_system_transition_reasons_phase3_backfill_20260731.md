@@ -6,7 +6,7 @@
 - Status: `under_construction`
 - Owner agent: `claude-fable-5 (implementer)`
 - Created at (UTC): `2026-07-31T00:00:00Z`
-- Last updated at (UTC): `2026-07-31T18:20:00Z`
+- Last updated at (UTC): `2026-07-31T19:15:00Z`
 - Master plan: `.../system_transition_reasons/MASTER_PLAN_system_transition_reasons_20260731.md`
 - Intention plan: `docs/architecture/under_construction/intention/INTENTION_system_transition_reasons_20260730.md`
 
@@ -318,6 +318,187 @@
 
   **STOP** — awaiting independent review. No summary, no archive, no phase-table flip, no
   handoff edit.
+
+- `2026-07-31` `independent reviewer`: **`NEEDS_CHANGES`.** Three findings, none of them in the SQL.
+  **History access: yes** — `git rev-parse` run from `backend/`, root confirmed, full log read.
+
+  **What I verified myself, from my own restore point, not from the figures above.** I took my own
+  `pg_dump` of the local database before touching it (`reviewer_pre.dump`), captured a snapshot
+  including **per-population row-level md5 over all columns**, ran `alembic upgrade head`, and
+  diffed. The database is left exactly as I found it (`a7d21f4c8b03`, no journal, every fingerprint
+  equal to my pre-review baseline).
+
+  - **The two untouched populations are byte-identical, by my hashes, not by counts.**
+    `pause_ended_shift` 169 step rows `1cd76bf6…` and `pause_case_created` 7 step rows
+    `ae593b74…` are **absent from the before/after diff entirely** — as are the 6
+    `literal:pause_case_created` derived rows (`fb22d135…`), all four worker-chosen step
+    populations (coffee 208 / lunch 71 / meeting 15 / upholstery 45), and the `pause_reasons`
+    table itself (`8fd5ea50…`). `user_declared_state_records` appears in no DML statement in the
+    file; note its evidentiary value here is **code-read only**, since the table is empty in this
+    database and the guard over it is vacuously true.
+  - **My ended_shift figure is 169, not the 153 recorded above.** The difference is ~18
+    cross-workspace suite-residue rows in test workspaces. That *strengthens* the check rather than
+    weakening it: my hash covers the residue rows too, and they are exactly the
+    `is_system_managed = true` rows in a second workspace that the prompt asks be constructed as a
+    probe. They did not move. The `is_system_managed = true` set is `{pause_other_task_priority,
+    pause_ended_shift}` — a predicate on that flag would have swept all 169 ended_shift rows.
+    The WHERE clause selects on `pr.slug = 'pause_other_task_priority'` alone, and
+    `uq_pause_reasons_slug` is **globally unique**, so that resolves to exactly one catalog row.
+  - **Idempotent, by re-running the real `upgrade()`** — not by re-executing the statements.
+    `alembic stamp a7d21f4c8b03` then `alembic upgrade head` against already-migrated data:
+    **empty diff**, journal still 270.
+  - **`downgrade` restores byte-exactly.** Post-downgrade snapshot is **identical to my
+    pre-migration baseline**, whole-table md5s included; journal dropped.
+  - **The refusal guard is real, not decorative.** I planted a contradictory row (otp reference +
+    `transition_reason` already set) and ran the migration: it raised, left no journal, and left
+    `alembic_version` at `a7d21f4c8b03`. Transactional DDL means a failed run cannot leave a
+    partial journal behind.
+  - **Label parity re-derived independently for two shapes**, against the database rather than the
+    migration's dict. `domain/transitions/labels.py` is checked against the actual catalog rows:
+    `name`, `image_url`, `pause_type`, `requires_description`, `is_system_managed` are byte-equal
+    for both `pause_other_task_priority` and `pause_ended_shift`. The parity is *not*
+    self-referential — the migration writes only the enum string; the labels come from a separate
+    code artifact whose values I compared to the rows being retired.
+  - **Volume 270 reproduced exactly** (228 step + 42 derived; all target rows sit in one
+    workspace, so scoped and global agree here). Single statement is justified.
+  - **Legacy strings preserved** — 272 of them, my count, criterion 6 holds. **Criterion 11's
+    `LEGACY_VALUES` set is the true measured distinct set** (7 values); I re-measured it.
+  - Suite arithmetic **does** close: 10 new tests in the new unit file + 1 appended to the
+    pre-existing integration file = the 11 claimed. All 13 in those files pass; `ruff` clean.
+    (I initially read this as 13 new tests; the integration file already carried 2.)
+
+  **F1 — MEDIUM — `transition_reason_backfill_journal` is invisible to autogenerate, and the only
+  instruction to drop it lives in a document that gets archived.**
+  `migrations/versions/97b60e06d42a…py:112-123` creates the journal in raw SQL. It appears **nowhere
+  in `Base.metadata`** (zero references under `beyo_manager/`), and `migrations/env.py:18,25,40`
+  sets `target_metadata = Base.metadata` with **no `include_object`/`include_name` filter**. The
+  next `alembic revision --autogenerate` will therefore emit
+  `op.drop_table('transition_reason_backfill_journal')` — silently destroying what this migration's
+  own docstring (lines 20-24) calls *"the only record that makes this migration reversible"*, on the
+  one phase in this set that cannot otherwise be undone. Compounding it: the hand-off names an owner
+  (*"the operator"*) but **no default**, and `PLAN_…phase4_retirement_20260731.md` contains **zero
+  occurrences of "journal"** — the deferral exists only in this Review log. This is the phase-2
+  procedural lesson repeating: a deferral with an owner but no default, recorded only in the file
+  that gets frozen. *Violates criterion 8 (durability of the reversibility mechanism) and the
+  phase-2 procedural rule.* Fix is documentary and small: record the journal in phase 4's plan with
+  an explicit default for "phase 4 does not act", and protect it from autogenerate (an
+  `include_object` exclusion, or a `# noqa`-style note in phase 4's entry conditions).
+
+  **F2 — LOW — the "cannot dangle" premise behind criterion 11 is not backed by the schema on the
+  table the branch actually reads.** Both this plan (criterion 11, bullet 1) and
+  `tests/unit/domain/transitions/test_prefix_branch_post_backfill.py:16` justify deadness with
+  *"catalog rows are never hard-deleted, so a stored reference can neither be foreign nor dangle."*
+  But `pause_reason_reference_is_unresolved` reads `UserShiftStateRecord.reason`
+  (`domain/users/serializers.py:152-171`), and I enumerated `pg_constraint`: exactly **two** FKs
+  reference `pause_reasons` — `step_state_records.pause_reason_id` and
+  `user_declared_state_records.pause_reason_id`, both `ON DELETE RESTRICT`.
+  **`user_shift_state_records.reason` has no foreign key at all.** On the one table this branch
+  reads, nothing structural prevents a dangling `par_…` id; the claim rests on operational
+  convention, not the constraint it cites. (The review prompt's own "do not probe hard-delete, the
+  FK raises" instruction inherits the same error — it is true for the two FK-bearing tables and
+  false for this one.) **Bounded impact:** the branch is retained as contract-mandated defence, so
+  behaviour is safe either way. This is an accuracy defect in the discharge argument, not a data
+  defect — but it is the kind the prompt asks to be named even when the outcome looks right.
+
+  **F3 — LOW — the intention was left stale.**
+  `INTENTION_system_transition_reasons_20260730.md:320-323` still reads *"Criterion 4 — not yet …
+  **Phase 3's backfill discharges it.**"* Phase 3 has now run and reached a materially different
+  conclusion — dead in one reading only, with the branch permanently retained under a published
+  operator-owned contract. No commit touches the intention. *Mitigating:* the implementer surfaced
+  the question for ruling rather than quietly closing it, which is the right instinct.
+
+  **Ruling on criterion 4, as requested.** It closes on the *"provably dead"* arm — but only that
+  arm, and this should be written down rather than absorbed. The criterion has two clauses
+  (`INTENTION…:225-226`): (a) *"No field in the shift/step state model requires prefix-sniffing to
+  determine its meaning"*; (b) *"the `startswith(CLIENT_ID_PREFIX)` branch … is gone or provably
+  dead."* Clause (b) is satisfied, and both governing documents had already chosen that arm — the
+  master plan's binding item 2 says in terms *"After the backfill it can be shown dead — that is
+  what closes master-plan success criterion 4."* Clause (a) is **not** satisfied and is not
+  reachable under the standing rulings: `reason` still carries 272 legacy strings beside 58 `par_…`
+  ids, and `serializers.py:170` still sniffs. Record clause (a) as an explicit non-completion with
+  its blocking constraint (the published three-way `reason_text` contract), or reopen it as its own
+  item. Do not let it close by implication.
+
+  **Checked and clean:** WHERE clause selects by identity, not by flag or pattern (criterion 5);
+  zero-reference query reproduces `0|0` and I re-ran it; `user_declared_state_records` untouched;
+  `backfill_worker_shift_state_records.py` picked up (R14), all four `LinearInterval` sites carry
+  the field; phase 1's `image_url` premise correctly **not** re-derived — I confirmed the literals
+  are byte-identical in `seed_pause_reasons.py`, migration `49bd666da846` and `labels.py`, and that
+  bootstrap force-overwrites the column, so "the icon lives in code" is sound. **Domain docs
+  correctly left unchanged** — the README caveat (`worker_shifts/README.md:61-64`) remains true, and
+  I spot-checked it against code and schema: the prefix inspection still exists at
+  `serializers.py:170`, and the declared `string(32)` / `string(512)` / `not null` types match the
+  live columns. No plan references or phase numbers were introduced into the living docs.
+  **Rehearsal:** the final restore was performed — the database sits at `a7d21f4c8b03` with no
+  journal, which only the restore explains. Its step-1 deviation (local dump rather than a fresh
+  production download) is disclosed and reasonable. Note the whole-table md5s have since drifted
+  from the recorded R0 (step 5895 vs 5865, uss 4193 vs 4165) through post-restore suite residue, so
+  *"left in this verified R0 state for the reviewer"* was no longer literally true when I began —
+  immaterial, since before-vs-after within one restore is the invariant that matters and I measured
+  my own.
+
+  **On "would a mistake have been caught".** Mostly yes, and by more than one mechanism: the
+  in-migration guards raise rather than warn, and the refusal path aborts atomically — I confirmed
+  both by planting a row. One gap worth naming: `_GUARDED_COUNTS_SQL` compares **counts only**, so
+  it would not catch a guarded row being modified in place (e.g. a `transition_reason` written onto
+  an `ended_shift` row) without its catalog reference changing. The actual UPDATE predicates make
+  that unreachable in this file, so it is a robustness note, not a defect — but the guard is
+  weaker than the prose around it implies.
+
+- `2026-07-31` `implementer (claude-fable-5)`: **Round-1 fix cycle complete (F1, F2, F3).
+  STOPPED for re-review.** No SQL touched; the migration file is unchanged from the reviewed
+  commit `2f96915`.
+
+  **F1 — fixed in `app/migrations/env.py`, predicate general by convention.** Added an
+  `include_object` filter wired into both the offline and online `context.configure` calls. The
+  excluded case is exactly `type_ == "table" and reflected and compare_to is None` — a table
+  present in the database with no ORM counterpart, the only case autogenerate answers with
+  `drop_table` — scoped by the naming convention `*_journal`, now documented in `env.py` as the
+  marker for migration-owned bookkeeping tables. Any future raw-SQL bookkeeping table using the
+  suffix inherits the protection; a genuine ORM table that happened to use the suffix has a
+  metadata counterpart (`compare_to is not None`) and is unaffected. The journal deliberately
+  gains no model, per the fix brief.
+
+  **Proof, both ways, then discarded.** Against the database with the migration applied (journal
+  present): with the filter, `alembic revision --autogenerate` produced scratch revision
+  `d9293879e57e` containing **no reference to the journal and no `drop_table` at all**; with the
+  filter stashed, scratch revision `810c3d53f84d` contained
+  `op.drop_table('transition_reason_backfill_journal')` (line 21) — the exact destruction F1
+  predicted, plus a `create_table` for it in `downgrade`. Both scratch revisions were deleted;
+  `ls migrations/versions/ | grep scratch` confirms none remain; the filter was restored via
+  `git stash pop`. The database was then downgraded back to `a7d21f4c8b03` (the state the review
+  left it in). `ruff check migrations/env.py` clean.
+
+  **F2 — the discharge argument corrected at its living site.** The module docstring of
+  `tests/unit/domain/transitions/test_prefix_branch_post_backfill.py` no longer claims the
+  reference "cannot dangle": it now states that `user_shift_state_records.reason` is a plain
+  `String(512)` with **no foreign key**, that nothing referential prevents a stale or foreign id
+  in principle — only the writers' workspace validation does — that the resolving-`par_…` shape is
+  *measured, not guaranteed*, and that the branch is **defence, not dead code**. Grep confirms no
+  "cannot dangle" / "never hard-deleted" phrasing survives anywhere in the phase's files. The
+  false version in my round-0 entry above stands as history; this entry is its correction. (Noted:
+  the review prompt's "the FK raises" probe instruction carries the same error for this table —
+  operator-owned, not edited.)
+
+  **F3 — the intention now records an explicit partial completion.** New dated progress note in
+  `INTENTION_system_transition_reasons_20260730.md` (above the phase 2 entry): criterion 4 closes
+  on **clause (b) — provably dead — only**, as the reviewer ruled; clause (a) — no field requiring
+  prefix-sniffing — is recorded as **NOT satisfied and not reachable under the standing rulings**,
+  with the blocking constraint named (272 legacy strings beside 58 `par_…` ids; the suppression
+  behaviour is the published three-way `reason_text` contract) and the FK-absence fact from F2
+  carried there too, so downstream readers see met-in-part, not met.
+
+  **Validation of the fix:** `test_prefix_branch_post_backfill.py` 10/10 green; ruff clean on both
+  touched files. Suite not re-run: `env.py` executes only under alembic (autogenerate proof above
+  is its behavioural test), and the test-docstring and intention edits contain no executable
+  change.
+
+  **Commits (T9):** fix commit = `app/migrations/env.py` +
+  `app/tests/unit/domain/transitions/test_prefix_branch_post_backfill.py`; docs commit = the
+  intention note + this entry. Parallel reassigned-steps files and the operator's master-plan edit
+  verified unstaged.
+
+  **STOP** — awaiting re-review.
 
 ## Lifecycle transition
 

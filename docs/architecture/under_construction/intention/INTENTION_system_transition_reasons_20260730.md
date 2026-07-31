@@ -6,7 +6,7 @@
 - Status: `active`
 - Owner: David (operator) — planning to be executed by a fresh session
 - Created at (UTC): `2026-07-30T16:38:18Z`
-- Last updated at (UTC): `2026-07-31T14:13:35Z`
+- Last updated at (UTC): `2026-07-31T19:10:00Z`
 - Related intention: `INTENTION_custom_pause_reasons_20260722` (this intention corrects an
   over-reach of that one — see "Relationship to the custom pause reasons intention")
 
@@ -307,6 +307,26 @@ should never have been catalog rows at all.
 for why. The acceptance criteria were preserved; the ceremony was not.)*
 
 ## Progress notes
+
+- 2026-07-31: **Phase 3 implemented (in review). Criterion 4 is closed on ONE arm only — an
+  explicit partial completion, not a closure.** The criterion is disjunctive: the branch is *gone*,
+  **or** *provably dead*.
+  - **Clause (b) — provably dead — is satisfied** (reviewer-ruled, phase 3 round 1). After the
+    backfill, no stored row reaches the branch's suppression arm: every remaining `par_…` id on
+    `user_shift_state_records.reason` resolves in its own workspace, and
+    `test_prefix_branch_post_backfill.py` proves every surviving row shape renders without entering
+    it.
+  - **Clause (a) — no field requiring prefix-sniffing — is NOT satisfied, and is not reachable
+    under the standing rulings.** 272 legacy slug strings still sit beside 58 `par_…` ids in the
+    same column, and the branch's suppression behaviour is the published three-way `reason_text`
+    contract (floor-app handoff §5.3/§4), so removing the inspection would require either migrating
+    the legacy strings (refused by phase 3 criterion 6) or amending an operator-owned handoff.
+    The branch therefore **stays, as defence** — and note the defence is real, not vestigial:
+    `reason` is a plain `String(512)` with **no foreign key**, so nothing referential prevents a
+    stale id in principle; only the writers' workspace validation does.
+  - Anyone reading criterion 4 downstream: treat it as **met-in-part**. The prefix inspection still
+    exists and is still load-bearing for the published contract; what changed is that no stored
+    data reaches its suppression arm any more.
 
 - 2026-07-31: **Phase 2 archived (APPROVED, round 3). Success criteria 1, 2 and 3 are met.**
   - **Criterion 1 & 2 — met, and proved failing-first.** Clock-out with an open working step and
