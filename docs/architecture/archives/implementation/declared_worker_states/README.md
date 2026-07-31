@@ -17,7 +17,7 @@ cross-phase decisions (D1–D10), and the phase status table.
 | `PLAN_..._phase4_clock_surface_20260729.md` | `/clock-in`, `/clock-out`, `GET /current`, handoff conformance |
 | `PLAN_..._phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + revocation |
 | `PLAN_..._phase6_kiosk_flow_20260729.md` | `clock_in_code`, floor-scoped roster exposure, clock-out `analytics: null` envelope |
-| `PLAN_..._phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics`: day timeline + segments + insights |
+| `PLAN_..._phase7_clockout_analytics_20260729.md` | Populated clock-out `analytics`: day timeline, `completed_items`, `week`, `rate` (rev 2 dropped `segments[]` and `insights` — see D14) |
 | `codex_prompts/PROMPT_phase<N>_*.md` | Paste to Codex to implement phase N |
 | `review_prompts/REVIEW_phase<N>_*.md` | Paste to the review agent after Codex reports phase N done |
 

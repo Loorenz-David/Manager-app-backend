@@ -4,10 +4,10 @@
 
 - Plan ID: `MASTER_PLAN_declared_worker_states_20260729`
 - Type: **master / orchestrator** (plays the intention-plan role for this feature set; phase plans link back here)
-- Status: `under_construction`
+- Status: `archived`
 - Owner: `David` (product) / `claude-fable-5` (planning) → `Codex` (implementation)
 - Created at (UTC): `2026-07-29T12:00:00Z`
-- Last updated at (UTC): `2026-07-29T17:23:21Z`
+- Last updated at (UTC): `2026-07-31T00:00:00Z`
 - Related issue/ticket: `n/a` (originates from design session 2026-07-29: replace Connecteam clock interface + explainable worker states)
 - Builds on: `archives/implementation/PLAN_worker_shift_state_recording_20260720.md` (the shift-state recording machinery this feature set extends)
 
@@ -61,7 +61,7 @@ Phases are strictly sequential. **Phase 2 (read/derivation) intentionally lands 
 | 4 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase4_clock_surface_20260729.md` | Explicit `/clock-in` + `/clock-out` routes, `GET /current` state endpoint, reasons filter, handoff validation | `archived` ✅ (APPROVED at `ccdffa9`, polish `be47f4d`; R4–R6/R8–R10 closed; helper relocated to `services/queries/users/` per `01_architecture.md:43`; quiet-tree suite 27 failed / 1280 passed = baseline) |
 | 5 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase5_device_auth_20260729.md` | `floor` app scope + non-expiring device token + permanent revocation semantics | `archived` ✅ (APPROVED at round 3, `12bbeb7`; N1 CRITICAL revocation bypass closed with 4 defense layers + 19 mock-free probes; test-integrity round closed with reviewer-rerun mutation checks) |
 | 6 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase6_kiosk_flow_20260729.md` | `clock_in_code` on work profiles, floor-scoped code exposure in `GET /users` | `archived` ✅ (APPROVED on the **first** round at `b0f35b1`; 37-assertion real-ASGI probe of the floor gate, 4 mutation checks, `pg_enum` label parity on the in-phase `?role=` 500 repair) |
-| 7 | `PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | **(rev 2, final)** Clock-out `analytics`: day `timeline` + `pause_reasons` + `completed_items` + `week` + `rate`; floor roster sections; roster page cap; two carried Phase 6 items | `under_construction` |
+| 7 | `../../../archives/implementation/declared_worker_states/PLAN_declared_worker_states_phase7_clockout_analytics_20260729.md` | **(rev 2, final)** Clock-out `analytics`: day `timeline` + `pause_reasons` + `completed_items` + `week` + `rate`; floor roster sections; roster page cap; two carried Phase 6 items | `archived` ✅ (NEEDS_CHANGES round 1 on F1/F2/F3, APPROVED on re-review with all three reproduced as fixed under reviewer mutation; baseline-worktree failure-node diff empty at `f26ecc6`; F13 cross-endpoint fix and F14 disclosed + tested in a pre-archive fast-follow; F15 midnight-spanning fixture deferred by ruling) |
 
 Dependency note: Phase 5 touches only auth and has **no dependency on Phases 1–4** — it may be implemented at any point (including first, to unblock frontend auth integration). Phase 6 requires Phases 3, 4 **and** 5. Phase 7 requires Phases 2, 4 and 6 and closes the feature set. The frontend builds in parallel against `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_worker_shift_floor_app_20260729.md`, which was written **ahead of implementation** and is the authoritative API contract for all phases — implementations must conform to it; any deviation must be resolved in the handoff first (operator decision), never silently.
 
@@ -197,6 +197,22 @@ When all four phases are archived, set this master plan's status to `archived` a
   keeping the anti-drift property (same `build_recorded_shift_timeline` as the manager roster) at ~1
   query, and absorbs the former Phase 8 keys. Dropped: `segments`, `segments_truncated`, `insights`.
   Added: `completed_items`, `week`, `rate`. Phase 8's plan/prompts removed as superseded.
+- `2026-07-31`: **Phase 7 completed and archived — the final phase; all seven are now archived.**
+  NEEDS_CHANGES on round 1 (`claude-opus-5`) blocking on three defects worth remembering: a raised
+  roster limit placed in the query service where FastAPI's `Query(...)` validator never reaches it (so
+  the cap never actually moved), a regression test that signalled failure by raising inside code wrapped
+  in `except Exception` and therefore could not fail, and two committed tests left red by a new internal
+  key in a command's return dict. APPROVED on re-review (`claude-sonnet-5`), which reproduced all three
+  fixes under its own mutation probes and diffed sorted failure-node sets against a `git worktree` at
+  `f26ecc6` — diff empty. A pre-archive fast-follow disclosed and tested **F13**: a round-1 fix rewrote
+  `_load_step_and_primary_item`'s keying from `{item_id: task_id}` to `{task_id: item_id}`, which also
+  changed the **manager-facing linear-timeline breakdown endpoint** — a surface the plan scoped
+  read-only — where the old keying rendered `"item": null` for an item PRIMARY on two tasks. The fix is
+  correct and kept; it now has a mutation-verified test on that endpoint. **F15 deferred by ruling and
+  carried as a known gap: no fixture exercises a shift literally spanning UTC midnight**, so acceptance
+  criterion 5's midnight case is covered only transitively through `build_recorded_shift_timeline`'s own
+  suite. Summary:
+  `implemented_summaries/SUMMARY_declared_worker_states_phase7_clockout_analytics_20260729.md`.
 - `2026-07-30`: **Phase 8 originally added** from `docs/handoff/from_frontend/BACKEND_REQUIREMENTS_clock_kiosk_20260729.md`
   (the frontend built its kiosk UI ahead of the contract, behind null-defaulting adapters). Audit of
   the seven requests: `week` bars, station/line, and roster scale were already reachable from existing

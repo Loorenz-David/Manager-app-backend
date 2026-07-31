@@ -18,7 +18,7 @@
 > | 4 | `GET /current`, `POST /clock-in`, `POST /clock-out` (§4, §5) | ✅ live (reviewed & approved) |
 > | 3 | Declared states (§6) | ✅ live (reviewed & approved) |
 > | 6 | Roster `clock_in_code` exposure (§3) | ✅ live (reviewed & approved) |
-> | 7 | Populated clock-out `analytics` — timeline, completed_items, week, rate (§5.1); floor roster sections + raised page cap (§3) | ❌ not yet — `analytics` is `null` until then |
+> | 7 | Populated clock-out `analytics` — timeline, completed_items, week, rate (§5.1); floor roster sections + raised page cap (§3) | ✅ live (reviewed & approved) — `analytics` still `null` in degraded mode, always handle it |
 > | — | Pause reasons listing (§7) | ✅ live today (filter param may be added in phase 4) |
 >
 > Mock these shapes until the phase flips to ✅. Any contract change will be edited **here first**.
@@ -221,9 +221,12 @@ carry the manager app's per-segment drill-down.
 - **`completed_items`** — one entry per item the worker completed that day, ordered by completion
   time. `reference` is `article_number`, falling back to `sku`, else `null` — this system has no
   product-name entity, so the reference *is* the label. `units` is the item's quantity.
-  `total_seconds` is the time booked against that item's steps (task-level, not this worker's share
-  alone). `image_url` / `working_section` are `null` when unavailable. `[]` when nothing was
-  completed. `completed_items_truncated` flags a defensive cap.
+  `total_seconds` is **working time only** — the time booked against that item's steps while
+  actively being worked. Pause time and time the step sat idle overnight between shifts are
+  deliberately excluded, so a three-day item that took two hours of hands-on work reads as two
+  hours, not seventy-two. It is task-level, not this worker's share alone. `image_url` /
+  `working_section` are `null` when unavailable. `[]` when nothing was completed.
+  `completed_items_truncated` flags a defensive cap.
 - **`week`** — Monday–Sunday containing the clock-out date, **worked time only**: each day's recorded
   shift split into working / pause / idle so the bar can be segmented. Days with no shift are present
   with zeros. **There is no `scheduled_seconds`** — shift scheduling does not exist in this system, so
