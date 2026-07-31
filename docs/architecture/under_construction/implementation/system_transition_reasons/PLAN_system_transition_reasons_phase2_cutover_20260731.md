@@ -34,6 +34,41 @@
   operator-owned: **propose, never edit**.
 - Assumptions: phase 1 archived. Readers already tolerate `transition_reason`.
 
+## What phase 1 established (do not re-decide)
+
+- **No `WORKER_PAUSED` member.** `transition_reason` means "a system transition happened, and which
+  one". A worker-chosen pause is identified by its catalog reference alone, and leaves
+  `transition_reason` null.
+- **The vocabulary lives in `domain/transitions/`** — `enums.py` holds the enum only (it is the
+  models-importable surface); `labels.py` holds the label map and is imported by read paths only.
+- **The read-path audit (R1–R24) is in the master plan's "Phase 1 inventory".** It is **this phase's
+  checklist too** — every path you change must already be on it, and if you find yourself editing a
+  path that is not, stop and ask why the audit missed it.
+- **R23/R24 (`domain/analytics/linear_timeline.py:220,264`) are yours.** Phase 1 classified them as
+  emitting opaque keys with no resolution and listed them precisely because this phase rewrites
+  both.
+- **Mutual exclusion has one documented exception.** `transition_reason` non-null ⟺
+  `pause_reason_id` null holds for `step_state_records`. It does **not** hold for the derived
+  declared-state row, which carries `WORKER_DECLARED_STATE` *and* its catalog reference by design
+  (criterion 6 below). Phase 4's check constraint depends on this being stated, so do not
+  "correct" it.
+
+## The failure shape this phase must avoid
+
+Phase 1's single blocking finding was a guard that looked incidental and was load-bearing: a
+truthiness check on a serialized object (`details[0]["pause_reason"]`) that was in fact a
+**workspace-resolution check**. Removing it leaked another workspace's id into a workspace-scoped
+response.
+
+**This phase rewrites the very paths that guard lived in.** Before changing any conditional in the
+timeline or breakdown modules, ask what it is *actually* testing — not what it appears to test. A
+`None` check standing in for a resolution check, or a fallback chain whose first element can now be
+non-null where it previously could not, is the same bug.
+
+The fix that phase 1 landed is the pattern to follow: make the guard **structural** — pass the
+resolved set as a required argument so a caller cannot obtain a key without proving resolution —
+rather than relying on a side-effect being falsy.
+
 ## Clarifications required
 
 - [ ] **Q4** — `auto_pause_description = f"started working with {identifier}"` is written to
@@ -112,6 +147,29 @@
     evidence, and it belongs in the Review log.
 19. D3 and D5 amendments recorded in **this feature set's** master plan and in this Review log. The
     declared_worker_states plan is **archived and must not be edited**.
+
+### Domain documentation — a deliverable, not a footnote
+
+20. **`docs/domains/worker_shifts/` is updated in this change**, per the rule in its own README and
+    in `docs/README.md`: any change altering a domain's logic updates that domain's docs in the same
+    change. This phase alters three documented things, so the update is not optional:
+    - **`states.md`** — what a transition records now. Its "Two derivations" and "The rebuild"
+      sections describe what the rebuild carries; if `transition_reason` is now what identifies a
+      segment's origin, that is a change to the documented machine.
+    - **`README.md`** — the `UserShiftStateRecord.reason` entry currently carries an explicit
+      warning that the field is overloaded and readers distinguish meanings by inspecting the id
+      prefix. If this phase removes that prefix check, **the warning becomes false** and must go or
+      be rewritten.
+    - **`api.md`** — only if a request or response shape changes. If the third clarification
+      resolves to the invisible option, this file may need no edit; say so explicitly rather than
+      leaving it ambiguous.
+
+    Constraints on the edit: domain docs describe **what is true now**. No references to this plan,
+    to phases, to migrations, or to how the system used to behave. If you find yourself writing
+    "previously" or "as of phase 2", you are writing history in a living document.
+
+    Nothing about the *pending* phases 3 and 4 may appear there either — those describe a system
+    that does not exist yet. Document only what ships in this change.
 
 ## Contracts and skills
 
