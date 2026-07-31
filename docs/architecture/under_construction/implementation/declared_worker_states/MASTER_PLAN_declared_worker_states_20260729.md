@@ -98,8 +98,15 @@ The repository has pre-existing validation debt, verified against the pre-Phase-
   common clock-out case. This is the root cause of the recurring
   "System pause reason 'pause_ended_shift' is not configured" baseline failure. Pre-existing and
   out of scope for this feature set, but it must be verified in the target database before the kiosk
-  goes live, and the index should become `(workspace_id, slug)` before a second workspace is
-  onboarded. Repo-health, tracked here so it is not lost.
+  goes live. **Superseded as a repo-health item (2026-07-30) by
+  `docs/architecture/under_construction/intention/INTENTION_system_transition_reasons_20260730.md`**,
+  which rules that scoping the index to `(workspace_id, slug)` is a *supporting* change, not the fix:
+  the real defect is that a mandatory state transition resolves through a workspace-editable catalog
+  row at all. That intention plans the migration to explicit `transition_reason` semantics and names
+  **D3, D5 and D14** as the decisions it would amend. Sequencing: **Phase 7 lands first** — its
+  `pause_by_reason` contract is already published, and it then serves as a compatibility test for the
+  migration's read layer. The pre-go-live database verification above stands regardless, since the
+  migration lands later than the kiosk.
 - `GET /users?role=` was a guaranteed 500 (disjoint-enum comparison) until Phase 6 repaired it — noted
   because it means any pre-Phase-6 "role filter" evidence in older logs is void.
 - Note (Phase 1 reviewer): two of the baseline failures are in
@@ -198,6 +205,31 @@ When all four phases are archived, set this master plan's status to `archived` a
   exist as concepts** and are excluded — scheduling explicitly skipped by the operator, announcements
   deferred to a separate feature set; badge numbers deferred (no data). Handoff §5.2 (new keys) and
   §5.3 (nullability conventions, requested by the frontend) added.
+- `2026-07-30`: **`INTENTION_system_transition_reasons_20260730` filed** (`under_construction/intention/`),
+  superseding the "scope the index to `(workspace_id, slug)`" line in the validation baseline above.
+  Tracing from `pause_reason.py` found the runtime slug dependency is **two slugs across three call
+  sites** — `pause_ended_shift` in `_clock_worker_shift.py:200`, and `pause_other_task_priority` in
+  both `transition_step_state.py:274` and `_step_transition_core.py:114` — so in the 3131 workspaces
+  lacking the rows, **task switching fails too**, not only clock-out. Also found: the bootstrap phase
+  guards existence by `(workspace_id, slug)` while the index is global, so **creating a second
+  workspace should raise `IntegrityError`** (flagged verify-first; traced, not executed). The
+  intention names **D3, D5, D14** as the decisions the migration would amend, and asks whether
+  `transition_reason` subsumes `manually_recorded` — the provenance concept that cost Phase 2 four
+  fix cycles (F1/F2, G1, H1, I1) and settled on a `changed_by_id IS NOT NULL` heuristic. No code
+  changed; planning deferred to a separate session, after Phase 7.
+- `2026-07-31`: **Phase 7 operator rulings** (mid-implementation, recorded here because they deviate
+  from the phase plan text): (1) `completed_items[].total_seconds` = `TaskStep.total_working_seconds`
+  **only** — `working + pause + ended_shift` was rejected as booking blocked/overnight time as work;
+  (2) floor roster ceiling raised to 1000 (`_FLOOR_MAX_LIMIT`, floor scope only), pagination-walk
+  rejected because the kiosk matches a typed code against the full roster; (3) the `_clock_out_at`
+  private route channel sanctioned — `clock_out_shift_for_user` stays untouched, so Connecteam and
+  the midnight safeguard cannot reach analytics. Operator-found defect fixed: the route's
+  `pop("_clock_out_at", datetime.now(...))` default made the timestamp dependency silently optional
+  (deleting the producer left the suite green — the only test asserted absence from the *response*,
+  which the fallback also satisfies), fabricating a wrong-day `date`/`week` on a midnight-boundary
+  clock-out with HTTP 200 and no log. Handoff §5.1's `total_seconds` wording is now narrower than it
+  reads and is an **operator to-do after approval** — deliberately not edited mid-implementation.
+  A review-prompt addendum carrying these rulings accompanies `REVIEW_phase7_clockout_analytics.md`.
 
 ## Open questions
 
