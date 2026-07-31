@@ -13,8 +13,14 @@ from beyo_manager.services.commands.task_step_acknowledgments.mark_step_acknowle
     mark_step_acknowledgments_seen,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.task_step_acknowledgments.count_reassigned_steps import (
+    count_reassigned_steps,
+)
 from beyo_manager.services.queries.task_step_acknowledgments.list_pending_step_acknowledgments import (
     list_pending_step_acknowledgments,
+)
+from beyo_manager.services.queries.task_step_acknowledgments.list_reassigned_steps import (
+    list_reassigned_steps,
 )
 from beyo_manager.services.run_service import run_service
 
@@ -23,6 +29,45 @@ router = APIRouter()
 
 class StepAcknowledgmentActionBody(BaseModel):
     step_ids: list[str]
+
+
+@router.get("/reassigned-steps")
+async def list_reassigned_steps_route(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    unacknowledged_only: bool = Query(False),
+    q: str | None = Query(None, max_length=200),
+):
+    ctx = ServiceContext(
+        incoming_data={},
+        query_params={
+            "limit": limit,
+            "offset": offset,
+            "unacknowledged_only": str(unacknowledged_only).lower(),
+            "q": q,
+            "string_filters": None,
+        },
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(list_reassigned_steps, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.get("/reassigned-steps/count")
+async def count_reassigned_steps_route(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(incoming_data={}, query_params={}, identity=claims, session=session)
+    outcome = await run_service(count_reassigned_steps, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
 
 
 @router.get("/pending")
