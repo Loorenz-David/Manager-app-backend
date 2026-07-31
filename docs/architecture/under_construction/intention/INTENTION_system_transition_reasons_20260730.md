@@ -299,7 +299,7 @@ should never have been catalog rows at all.
 |---------|------|--------|--------|
 | `MASTER_PLAN_system_transition_reasons_20260731` | `.../under_construction/implementation/system_transition_reasons/` | `under_construction` | Goal, decisions T1–T8, four-phase table, orchestration, validation baseline |
 | `PLAN_..._phase1_foundation_20260731` | `.../archives/implementation/system_transition_reasons/` | `archived` ✅ | Inventory + read-path audit; `TransitionReasonEnum`; nullable columns; read tolerance. Zero behaviour change. APPROVED round 2, 2026-07-31. |
-| `PLAN_..._phase2_cutover_20260731` | same folder | `under_construction` | **Ends the outage** — clock-out, both task-switch sites, derivation, serializer |
+| `PLAN_..._phase2_cutover_20260731` | `.../archives/implementation/system_transition_reasons/` | `archived` ✅ | **Ends the outage** — clock-out, both task-switch sites, derivation, serializer. APPROVED round 3, 2026-07-31. |
 | `PLAN_..._phase3_backfill_20260731` | same folder | `under_construction` | One-time historical backfill; label parity |
 | `PLAN_..._phase4_retirement_20260731` | same folder | `under_construction` | Retires system rows; **keeps `slug`, scopes `uq_pause_reasons_slug` to `(workspace_id, slug)`** (T6 as amended by phase 1's audit — the plan file still says "drop" and needs the operator's edit); constraints; closes this intention |
 
@@ -307,6 +307,34 @@ should never have been catalog rows at all.
 for why. The acceptance criteria were preserved; the ceremony was not.)*
 
 ## Progress notes
+
+- 2026-07-31: **Phase 2 archived (APPROVED, round 3). Success criteria 1, 2 and 3 are met.**
+  - **Criterion 1 & 2 — met, and proved failing-first.** Clock-out with an open working step and
+    task switching both succeed in a workspace holding **zero** `pause_reasons` rows. Reverting each
+    writer reproduces the exact errors this document predicted:
+    `NotFound("System pause reason 'pause_ended_shift' is not configured.")` and its
+    `pause_other_task_priority` equivalent. The resulting records are unambiguously identifiable —
+    `transition_reason = SHIFT_ENDED` / `OTHER_TASK_PRIORITY` with `pause_reason_id = NULL`.
+  - **Criterion 3 — met in the form this phase owns.** `get_system_pause_reason_id` has zero runtime
+    callers; phase 4 deletes the function.
+  - **Criterion 4 — not yet.** The `startswith(CLIENT_ID_PREFIX)` branch is provably *alive*, not
+    dead: the operator ruled that `UserShiftStateRecord.reason` keeps holding the catalog id, so
+    pre-cutover rows still carry both `par_…` ids and legacy strings and the branch still
+    discriminates them. **Phase 3's backfill discharges it.**
+  - **Finding 1 acted on in full** — all three runtime call sites are typed. **Finding 3's
+    serializer** is the one still standing, per criterion 4 above.
+  - **Finding 4's `pause_case_created` anchor** is untouched, as required.
+  - **A correction to this document's Finding 3 lineage.** Phase 1 recorded that the seeded
+    `image_url` is workspace-specific and could not be reproduced in code. It is not: the URLs are
+    hardcoded literals identical in every workspace, in `seed_pause_reasons.py` and migration
+    `49bd666da846`. `domain/transitions/labels.py` reproduces them, so system transitions keep their
+    icon and phase 3 inherits no icon-loss decision.
+  - **Q4 answered** (open question 4): `auto_pause_description` stays on `StepStateRecord.description`
+    — it names *which item* took priority, a per-instance fact that typing the transition does not
+    make redundant.
+  - **The migration's own process lesson.** Phase 1 deferred a read-path decision to "phase 2
+    decides" without naming a fallback; the path was then skipped rather than decided, and the same
+    defect class had to be found in two separate review rounds. Recorded in the master plan.
 
 - 2026-07-31: **Phase 1 archived (APPROVED).** Four of the seven traced findings were exercised, and
   the phase corrected three of this document's own claims — which is the outcome the "verify and

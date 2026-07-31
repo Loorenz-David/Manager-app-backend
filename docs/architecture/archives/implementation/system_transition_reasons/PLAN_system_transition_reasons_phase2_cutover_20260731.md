@@ -3,10 +3,10 @@
 ## Metadata
 
 - Plan ID: `PLAN_system_transition_reasons_phase2_cutover_20260731`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-opus-5` (implementer)
 - Created at (UTC): `2026-07-31T00:00:00Z`
-- Last updated at (UTC): `2026-07-31T16:55:00Z`
+- Last updated at (UTC): `2026-07-31T17:40:00Z`
 - Master plan: `.../system_transition_reasons/MASTER_PLAN_system_transition_reasons_20260731.md`
 - Intention plan: `docs/architecture/under_construction/intention/INTENTION_system_transition_reasons_20260730.md`
 
@@ -658,8 +658,452 @@ All three resolved before implementation began; rulings and reasoning in the Rev
 
   **Verdict: `NEEDS_CHANGES`** — F1 blocking; F2/F3 to be recorded and ruled on; F4/F5 corrections.
 
+- `2026-07-31` `independent reviewer` (round 2): **NEEDS_CHANGES.** All four round-1 fixes verified
+  correct by execution. One blocking finding, and it is the same class as R2 rather than a new one:
+  the round-2 sweep concluded the `pause_reason` **object** channel has "exactly two render sites",
+  and there are **three**. The third is `record_detail` in
+  `get_worker_linear_timeline_breakdown.py` — the master plan's own audit row **R9** — and it still
+  serialises `null` for a transition-typed record, into a field a shipped frontend renders.
+
+  ### Verified independently — do not re-check
+
+  - **R2's failing-first claim holds exactly.** Reverting both sites in
+    `domain/tasks/serializers.py` to `serialize_pause_reason(record.pause_reason) if … else None`
+    fails **6 of 8** nodes in `test_step_payload_pause_reason_render.py`; the 2 that survive are the
+    two controls (`test_worker_chosen_catalog_pause_is_untouched`,
+    `test_record_explaining_itself_neither_way_still_serializes_null`). Phase 1's R9 test was **not**
+    quietly extended — the new file is new, and `test_transition_reason_read_tolerance.py:389` is
+    untouched (see F1, where that is the problem).
+  - **The six `serialize_step_*` surfaces are covered.** Re-derived from the four `selectinload`
+    sites outward and from `serialize_step_state_record_light` / `serialize_step_latest_state_record`
+    callers backward: `tasks.py:699`, `list_task_steps.py:58`, `list_working_section_steps.py:574`,
+    `step_record_payload.py:212`, and the two realtime payloads `transition_step_state.py:512`,
+    `transition_step_state_batch.py:185`. All route through the fixed serializer. No other event
+    payload embeds a pause reason.
+  - **`client_id = "shift_ended"` reaches no consumer that cares.** No frontend code reads
+    `client_id` off an embedded `pause_reason`; the only two send-backs of `pause_reason_id`
+    (`PauseReasonSheetPage.tsx:113,134`) take it from `usePauseReasonsQuery`, the catalog list, which
+    the synthesized object never enters. `created_at` likewise: nothing renders, sorts or dedupes on
+    it (`worker-daily-step-dto.ts:91` reads the *record's* `created_at`, not the reason's).
+  - **The `slug` converse is clean, but the stated justification is not the real one.**
+    `resolvePauseReasonTransition` (`pause-reason-transition.ts:12`) is fed **only** from
+    `usePauseReasonsQuery` — a step record's embedded reason never reaches it, so the cited branch is
+    not what the choice protects. The choice is nonetheless right for a different reason: the
+    published schema requires a non-nullable `slug`, and reproducing the replaced row's keeps display
+    parity. The converse is safe: selectability is gated on the catalog list endpoint, and
+    `is_system_managed` has **no frontend consumer at all**. Recorded so the next reader does not
+    inherit the wrong rationale.
+  - **Criterion 14 was a fixture defect, correctly repaired.** The load-bearing assertion is
+    `analytics["pause_reasons"][OTHER_TASK_PRIORITY]["image_url"] is not None`, which does not depend
+    on the fixture. Giving the catalog `PauseReason` an `image_url` repaired a *control* that would
+    otherwise have failed on the fixture rather than on the system. The assertion was not bent.
+  - **The three restored `image_url` assertions still detect regression.** All three
+    (`test_transition_reason_domain.py:106`, `test_reason_text_contract_conformance.py:74`,
+    `test_transition_reason_read_tolerance.py:217`) assert **full-dict equality** including the exact
+    URL; a regression to `None` fails each.
+  - **Finding 4's direction is right, and load-bearing in live code, not just an archived plan.**
+    The quote checks out in full context (`PLAN_declared_worker_states_phase2_derivation…:36`), and
+    `reconcile_worker_shift_state.py:215-219` **depends** on it:
+    `current_is_declared_projection = … and current.manually_recorded and current.changed_by_id is
+    None`. An actor on a declaration projection would make that False and suppress the re-derivation.
+    The doc was wrong; `_reconstruct_shift_middle.py` is not the defect.
+    `test_rebuild_leaves_a_declaration_projection_without_an_actor` pins the other arm; neither
+    `manually_recorded` nor the `changed_by_id` heuristic was touched (T7 clean).
+  - **Master-plan edits did not overreach.** Binding item 3 and the "Label-resolution strings" note
+    are struck through and marked `CLOSED` / `CORRECTED` with the round and finding — phase 1's text
+    is visibly superseded, not overwritten. Same for the R2 audit row. Nothing else in phase 3's
+    scope moved as a side effect of the closure. The archived declared_worker_states plan is
+    unedited (`git status` on `docs/architecture/archives/implementation/declared_worker_states/`
+    is empty).
+  - **Suite, run-1 vs run-2 on the working tree**: `26 failed / 1396 passed` both runs, **node sets
+    byte-identical**. Matches the implementer's report. `+9` passes over round 1's 1387 = the 8 new
+    render nodes plus the new declaration-projection node. Spot-checked the one failure in a
+    feature-adjacent path — `test_endpoint_split.py::test_split_services_return_disjoint_worker_shapes`
+    fails with `TypeError: empty_page() got an unexpected keyword argument 'roles'`, unrelated.
+    `ruff check` clean on all touched files.
+  - **Carried-over deferrals confirmed, not re-litigated.** Criterion 11: the
+    `startswith(f"{PauseReason.CLIENT_ID_PREFIX}_")` branch is still present at
+    `domain/users/serializers.py:170` and is alive under the "keep `reason`" ruling — discharged by
+    phase 3. `backfill_worker_shift_state_records.py` still builds `LinearInterval`s without
+    `transition_reason`; it is an offline script, not a runtime path, and phase 3 is the right owner.
+    The 5 `F401`s in `transition_step_state.py` are baseline debt (T8), unchanged.
+
+  ### F1 — BLOCKING. R9 is R2, in a third render site the sweep declared did not exist
+
+  `app/beyo_manager/services/queries/worker_stats/get_worker_linear_timeline_breakdown.py:432` ·
+  criterion 16 ("existing behaviour otherwise identical"), and the round-2 entry's own claim that
+  "the object channel has exactly two render sites".
+
+  `record_detail` renders a **full `PauseReason` object** by calling `serialize_pause_reason`
+  directly on a separately-fetched row, not via `record.pause_reason`. That is why a grep for
+  `.pause_reason` did not surface it — the review prompt's warning about "resting on one grep
+  pattern" was the right one. Re-deriving from `serialize_pause_reason`'s callers instead finds it
+  immediately; it is also listed in the master plan as **audit row R9**, "same file, `record_detail`
+  nested `pause_reason`".
+
+  The behaviour is the R2 defect verbatim. This phase sets `pause_reason_id = NULL` on every
+  `SHIFT_ENDED` and `OTHER_TASK_PRIORITY` record, so `pause_reason_objects.get(record.reason)`
+  resolves to nothing and the field serialises `null` where it previously carried a populated
+  catalog object. The consumer is
+  `frontend/packages/stats/src/lib/time-line-calendar/segment-adapter.ts:113` —
+  `reasonLabel: record.pause_reason?.name ?? null` — rendered at `TimelineEventBlock.tsx:52,112-115`,
+  `WorkerTimelineSlidePage.tsx:176-177` and `WorkerTimelineEventSheetPage.tsx:101-102`. Schema:
+  `packages/stats/src/types.ts:304`, the same full `PauseReasonSchema` that drove the R2 fix.
+
+  Two things make this worse than an oversight:
+
+  1. **The phase's own tests pin the defect in both directions.**
+     `test_transition_reason_read_tolerance.py:386-389` asserts
+     `step_details[0]["pause_reason"] is None` under the comment *"the step payload gains no field in
+     this phase"* — which is exactly the premise round 2 overturned for the other two sites. The
+     sibling `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both:496` asserts
+     `paused[0]["steps"][0]["pause_reason"]["client_id"] == reason.client_id` for a row that *does*
+     carry a catalog id. The before/after asymmetry is proven by this phase's own two tests.
+  2. **It is internally inconsistent inside one response.** This phase *did* fix the segment-level
+     `reason` key in the same payload (`bucket_key` + the `pause_reasons` map top-up), so the same
+     pause now reads "Other task priority" at the segment and blank at the step immediately below
+     it. `test_breakdown_resolves_a_transition_reason_step_record` asserts both facts, four lines
+     apart.
+
+  Required: apply the R2 decision here. `record.transition_reason` is already on
+  `_StepTimelineRecord`, and `resolve_transition_reason_catalog_reference` already exists — the fix
+  is the same one-call substitution, plus reversing the assertion at :389 and its comment. If the
+  operator instead rules the null acceptable on this surface, that must be recorded as a deliberate
+  user-visible consequence, per the same standard applied to R2.
+
+  **Class note, not a separate finding.** The remaining R-rows that phase 1 marked "no label logic"
+  or "opaque passthrough" were re-derived and are genuinely clean: R1 (catalog leaf), R3/R4 (take a
+  `PauseReason` directly; `UserDeclaredStateRecord.pause_reason_id` is `Mapped[str]`, NOT NULL),
+  R16 (`selectinload` feeding the now-fixed R2), R19–R22. R9 is the only surviving instance.
+
+  ### F2 — LOW. Round-1 F3 was reported fixed and is fixed in one of three places
+
+  The round-1 finding named `labels.py` **and** explicitly added: *"Same class:
+  `models/tables/tasks/step_state_record.py:52` and `models/tables/users/user_shift_state_record.py:36`
+  both still read 'nothing writes it in phase 1'."* Only `labels.py` was edited. Both model comments
+  are unchanged and now false:
+
+  - `app/beyo_manager/models/tables/tasks/step_state_record.py:54` — "nothing writes it in phase 1"
+  - `app/beyo_manager/models/tables/users/user_shift_state_record.py:36` — "Nothing writes it in
+    phase 1."
+
+  A third instance the round-1 review did not catch is worse than cosmetic:
+  `app/beyo_manager/services/queries/worker_stats/list_workers_linear_timeline.py:59` — *"Nothing
+  writes it yet, so this is inert today"* — sits directly above the
+  `record.reason or record.transition_reason or UNSPECIFIED_REASON` fallback that this phase made
+  live. A reader trusting that comment would delete the branch and silently re-break roster
+  bucketing.
+
+  ### F3 — LOW. The seed's drift guard now points at two of three copies
+
+  `app/beyo_manager/services/commands/bootstrap/phases/seed_pause_reasons.py:10-14` warns: *"Duplicated
+  (not imported) in migrations/versions/49bd666da846… If you change the values below, mirror the
+  change into that migration's `_PAUSE_REASONS` tuple too."* There are now **three** copies of the
+  image URLs. `labels.py` points at the other two, but the guard at the source does not point back at
+  `labels.py`, so the one-directional warning will not stop the drift it exists to stop.
+
+  ### The S3 URLs — assessed, and not a blocking finding
+
+  The prompt asked what the risk actually is. Measured rather than asserted:
+
+  - **The blast radius is at most one row per slug, database-wide.**
+    `models/tables/pause_reasons/pause_reason.py:47` declares `Index("uq_pause_reasons_slug", "slug",
+    unique=True)` — **globally** unique, not per workspace. Only one workspace in the entire database
+    can hold `pause_ended_shift`; that is the same index that causes this outage. "Identical in every
+    workspace" is therefore a claim about one row, not 3132.
+  - **The host matches production configuration.** `.env.production.ec2` sets
+    `STORAGE_BUCKET=test-bootstrap-local`, `STORAGE_REGION=eu-north-1` — the literal in `labels.py`
+    is today's production bucket, however unfortunate its name reads in shipped code.
+  - **The one falsifier in the repo is real but self-healing.** `update_pause_reason.py:43` writes
+    `image_url` (and `name`) with **no `is_system_managed` guard** —
+    `domain/pause_reasons/guards.py` guards `delete` only. So an admin *can* have changed that one
+    row. But `seed_pause_reasons.py:39-46` repairs `image_url` back to the constant on any bootstrap
+    rerun, which makes divergence transient for this field specifically — evidence the implementer's
+    claim did not use and which supports it.
+  - **The failure mode if it diverged is a stale icon, not a broken one** — the seeded asset, which
+    that workspace was served until an admin replaced it. Note the same exposure already applies to
+    `name`, which round 1 accepted under criterion 5; the round-2 `image_url` work is consistent with
+    that, not a new class.
+
+  Recorded as risk, not a finding: the residual is one editable row, one field, self-repairing, with
+  a stale-icon worst case. Hardcoding a configurable bucket/region into *runtime domain* code (rather
+  than seed data) is real debt and F3 is where it will bite — it is not worth blocking a phase that
+  ends a live outage.
+
+  ### Noted, not findings
+
+  - `serialize_step_pause_reason` falls back to `created_at=""` when both `created_at` and
+    `entered_at` are `None`. It satisfies `z.string()` and nothing reads the field, so it is inert —
+    but `""` is not a datetime, and a stricter future schema would reject it.
+  - **The tree was not quiet during this review.** Two commits landed mid-pass (`f344230`, `b0dd236`),
+    committing the master plan, both plans and the intention, and amending **phase 3 and phase 4**
+    scope. Docs only — no production or test file moved, and the suite figures above are unaffected.
+    Flagged because the phase-3 amendment (`pause_ended_shift` references now left alone) postdates
+    the round-2 entry and is the operator's own ruling, not part of what was under review here.
+
+  **Verdict: `NEEDS_CHANGES`** — F1 blocking (R9, the third render site); F2/F3 low, comment-level.
+  Everything the round-1 findings asked for was done correctly; what is missing is the generalisation
+  the R2 fix implied.
+
+- `2026-07-31` `implementer`: **Round 3 fixes applied; STOPPED for re-review.** Round 2's four fixes
+  were not reopened; criterion 11, the `backfill_worker_shift_state_records.py` carry-forward and the
+  S3-URL risk were not re-litigated.
+
+  ### F1 (blocking) — R9 was R2 in a third render site
+
+  **Fixed** at `get_worker_linear_timeline_breakdown.py:432` (`record_detail`). The nested object now
+  takes the same two channels as the other two sites: `serialize_pause_reason` when the catalog row
+  resolved, otherwise `resolve_transition_reason_catalog_reference` off `record.transition_reason`,
+  with `created_at=record.entered_at.isoformat()` — that record's own timestamp, matching what
+  `serialize_step_pause_reason` does.
+
+  **The fix did not widen.** `bucket_key`, the segment-level `reason`, and the `pause_reasons` map
+  top-up are untouched. The workspace-resolution guard is untouched and still upstream of the
+  change: `pause_reason` is already `pause_reason_objects.get(...)`, so a catalog id that did not
+  resolve in this workspace still falls through instead of being emitted. The synthesized branch is
+  reached only when that resolution produced nothing, which is the same condition that previously
+  produced `null`.
+
+  **Failing-first, proven per node:**
+
+  | Node | Before fix | After fix |
+  |---|---|---|
+  | `test_breakdown_resolves_a_transition_reason_step_record` | **FAILED** — `assert None is not None` at the reversed assertion | PASSED |
+  | `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` (control, unmodified) | PASSED | PASSED |
+
+  The assertion was written and run **before** `record_detail` was touched. The old assertion and its
+  comment (*"the step payload gains no field in this phase"*) are gone — that comment was the round-1
+  premise round 2 overturned, and leaving it green is how this survived a round. The replacement
+  asserts a populated object, its `name`, its `client_id` and a non-null `image_url`, and still
+  asserts no new top-level key on the detail: the shape is unchanged, only populated.
+
+  **Master plan audit row R9** corrected in the R2 row's format — struck through, marked decided,
+  round named, with the reason it survived (the sweep grepped `.pause_reason`; `record_detail` calls
+  `serialize_pause_reason` on a separately-fetched local).
+
+  ### The sweep, re-derived by a route that finds F1
+
+  Round 2's sweep was wrong in method, not just in result. Re-derived two ways: **every caller of
+  `serialize_pause_reason`**, and **every construction of a twelve-field pause-reason-shaped dict**
+  (probed on `requires_description` and `is_system_managed`, fields no other shape carries).
+
+  Callers of `serialize_pause_reason` — the complete list:
+
+  | file:line | Disposition |
+  |---|---|
+  | `domain/tasks/serializers.py:192` | Inside `serialize_step_pause_reason` — **fixed round 2**; both step render sites (`:207`, `:398`) delegate to it |
+  | `services/queries/worker_stats/get_worker_linear_timeline_breakdown.py:444` | `record_detail` — **fixed this round (F1)** |
+  | `services/queries/pause_reasons/list_pause_reasons.py:36` | Catalog leaf — iterates `PauseReason` rows from the catalog table; no transition can reach it |
+  | `services/queries/pause_reasons/get_pause_reason.py:19` | Catalog leaf — same |
+  | `services/commands/pause_reasons/create_pause_reason.py:47` | Returns the row just created — same |
+  | `services/commands/pause_reasons/update_pause_reason.py:53` | Returns the row just updated — same |
+
+  Twelve-field constructions: exactly two — `domain/pause_reasons/serializers.py` (the real one) and
+  `domain/transitions/labels.py` (the synthesized one). **No third hand-rolled copy exists.**
+
+  The other embedded shape is the three-field reference,
+  `domain/users/serializers.py::_serialize_pause_reason_reference` (called at `:212`), whose
+  transition counterpart `_serialize_transition_reason_reference` has existed since phase 1. Covered.
+
+  **So: three render sites across two shapes, all three now handling both channels.** The four
+  catalog-leaf endpoints are structurally unable to receive a transition — they read the catalog
+  table.
+
+  **R3/R4 confirmed independently rather than inherited:**
+  `UserDeclaredStateRecord.pause_reason_id` is `Mapped[str]` (non-optional → NOT NULL) at
+  `models/tables/users/user_declared_state_record.py:20`, so no declaration can reach those
+  serializers without a catalog row. R1, R16, R19–R22 re-checked and clean.
+
+  ### F2 (low) — three false comments, one dangerous
+
+  All three rewritten to state what is true **and why**, per the standard round 2 applied to
+  `labels.py`:
+
+  - `models/tables/tasks/step_state_record.py` — now names which transitions write it, states that
+    `pause_reason_id = NULL` accompanies them and why they are alternatives rather than companions,
+    and explains that nullable encodes "a worker chose this instead".
+  - `models/tables/users/user_shift_state_record.py` — now states that both derivations write it,
+    why it is carried separately from `reason` through the sweep, and that this table is the
+    documented exception where a row may carry both (which phase 4's constraint must allow).
+  - `services/queries/worker_stats/list_workers_linear_timeline.py` — the one that mattered. Now says
+    the fallback is **load-bearing**, that every clock-out and task-switch auto-pause reaches it, and
+    that deleting the middle term buckets all of it as `unspecified` **with no error anywhere**.
+    Stating the failure mode is what stops the next reader from "simplifying" it.
+
+  ### F3 (low) — the drift guard now names all three copies
+
+  `seed_pause_reasons.py` names `labels.py` as the third copy, says which fields it holds and for
+  which slugs, and states the failure mode: a system transition rendering differently from the row it
+  replaced, silently, because nothing joins the two.
+
+  ### Also corrected: the `slug` justification round 2 got wrong
+
+  The reviewer was right and I verified it independently rather than accepting it:
+  `resolvePauseReasonTransition` is called only from `PauseReasonSheetPage.tsx:100,129`, fed from
+  `usePauseReasonsQuery` → `pauseReasonsData.pause_reasons` — the catalog list endpoint. A step
+  record's embedded object never reaches that branch. The comment in `labels.py` claimed it did.
+  Corrected to the real reasons: the published schema's **non-nullable `slug`**, and display parity.
+  The choice itself is unchanged.
+
+  I fixed this even though the brief said "otherwise leave it", because F2's whole standard is that a
+  false comment is a defect — leaving a known-false justification in the same file I was editing for
+  F3 would contradict the finding I was closing.
+
+  ### Optional item — taken
+
+  The `created_at=""` fallback in `serialize_step_pause_reason` is **removed**. `entered_at` is
+  `nullable=False`, so one of the two always exists on a persisted record; the expression is now
+  `(record.created_at or record.entered_at).isoformat()`. Rationale recorded in the code: `""`
+  satisfies `z.string()` while not being a datetime, so it ships an unparseable value to a client
+  that has no reason to distrust it — a worse failure than raising at the boundary.
+
+  ### Validation
+
+  - Full suite: `26 failed / 1396 passed`; run-1 and run-2 node sets identical to each other **and
+    byte-identical to the round-2 set**. No deviation to explain.
+  - `ruff check` clean on all eight touched files.
+  - **One thing I could not verify:** commits `f344230` / `b0dd236` are not visible from this
+    working tree (`git rev-parse` reports no repository at or above
+    `ManagerBeyo-app/`), so I could not rebase against `HEAD` or diff what they changed. I worked
+    from the files on disk, which carry the phase-3/phase-4 amendments and T9 described in the brief.
+    Flagged rather than assumed.
+
+  **Files touched this round.** Source:
+  `services/queries/worker_stats/get_worker_linear_timeline_breakdown.py`;
+  `services/queries/worker_stats/list_workers_linear_timeline.py`;
+  `domain/transitions/labels.py`; `domain/tasks/serializers.py`;
+  `models/tables/tasks/step_state_record.py`; `models/tables/users/user_shift_state_record.py`;
+  `services/commands/bootstrap/phases/seed_pause_reasons.py`. Tests:
+  `tests/integration/services/queries/worker_stats/test_transition_reason_read_tolerance.py`. Docs:
+  the master plan (audit row R9); this plan. **No domain-doc change** — F1 restores documented
+  behaviour rather than altering it, and `docs/domains/worker_shifts/` describes the shift domain,
+  not the breakdown payload's nested shape.
+
+- `2026-07-31` `independent reviewer` (round 3): **APPROVED.** No findings. F1, F2 and F3 are fixed,
+  both out-of-brief changes are correct and did not widen, and **the sweep is settled** — re-derived
+  independently by four routes, matching the implementer's list exactly.
+
+  ### The git environment problem — root cause found, it is not a repo problem
+
+  Two prior sessions reported "no repository at or above `ManagerBeyo-app/`" and the operator
+  reported `--is-inside-work-tree` → true. **Both are correct.** `ManagerBeyo-app/` is not a
+  repository; `ManagerBeyo-app/backend/` and `ManagerBeyo-app/frontend/` are **two separate
+  repositories**. `git rev-parse` run from the session's primary working directory fails exactly as
+  reported; run from inside `backend/` it succeeds. Nothing is broken — the command was run one level
+  too high. Recorded here so the third session does not rediscover it.
+
+  This round therefore had full history access: hunk-level diffs, `git show` on the intervening
+  commits, and node-set comparison against round 2's recorded set.
+
+  ### F1 — fixed, and it did not widen
+
+  `get_worker_linear_timeline_breakdown.py:443-450`. Verified structurally, not by reading the new
+  code alone: the file's **hunk map is identical to round 2's** (`git diff -U0 … | grep '^@@'`) except
+  for the import at `:18` and one new hunk replacing the single `record_detail` line with sixteen.
+  `bucket_key` is **byte-identical** to round 2, as are the `resolved_catalog_ids` frozenset, the
+  `detail_owners` block and the `segment_reason` expression. Nothing in the neighbourhood moved.
+
+  **Failing-first, by execution.** Reverting the synthesized branch to
+  `serialize_pause_reason(pause_reason) if pause_reason is not None else None` fails **exactly one
+  node** — `test_breakdown_resolves_a_transition_reason_step_record` — with the other 43 in
+  `test_transition_reason_read_tolerance.py` + `tests/unit/domain/transitions/` green, including the
+  unmodified control at `:505`. Restored and re-confirmed green.
+
+  ### The upstream guard — probed adversarially, holds
+
+  Three throwaway probes run against the real query, then deleted (not part of the change set):
+
+  | Probe | Result |
+  |---|---|
+  | Step carrying **another workspace's** `pause_reason_id` | Foreign id and foreign row name **absent from the entire response**; nested object is `null`, not fabricated |
+  | Step whose catalog row was **soft-deleted** | No fabricated object |
+  | Step carrying **neither** channel | `null` |
+
+  Phase 1's blocking finding is not loosened. The guard is upstream by construction —
+  `pause_reason` is already `pause_reason_objects.get(...)`, which is workspace-scoped, and
+  `resolve_transition_reason_catalog_reference` returns `None` for anything outside the vocabulary,
+  so a foreign id cannot reach either branch.
+
+  **Correction to the brief's probe list:** "a reason hard-deleted since" is **not reachable**. The FK
+  is `ON DELETE RESTRICT` (`fk_step_state_records_pause_reason_id_pause_reasons`) — attempting it
+  raises `RestrictViolationError`. Soft delete is the only reachable variant and is what
+  `delete_pause_reason` does. Worth recording: this probe has been carried forward across rounds as
+  if it were reachable.
+
+  ### The sweep — settled, by four routes
+
+  Re-derived independently before reading the implementer's list, then compared. **Exact match.**
+
+  | Route | Result |
+  |---|---|
+  | Callers of `serialize_pause_reason` | **6** — 2 render (`domain/tasks/serializers.py:192`, `get_worker_linear_timeline_breakdown.py:444`), 4 catalog leaf (`get_pause_reason.py:19`, `list_pause_reasons.py:36`, `create_pause_reason.py:47`, `update_pause_reason.py:53`) |
+  | Twelve-field shape (`"is_system_managed"` / `"requires_description"` as output keys) | **2** constructions — `domain/pause_reasons/serializers.py`, `domain/transitions/labels.py`. No hand-rolled third |
+  | **Every output key** `"pause_reason":` / `"pause_reasons":` in `beyo_manager/` | **13**, all accounted for. This is the route that would have caught round 2's miss most directly, because it does not depend on how the value was obtained |
+  | Three-field reference shape | `serialize_declared_state:119` and `_serialize_pause_reason_reference:129`, both taking `PauseReason` directly; `_serialize_transition_reason_reference` is the counterpart. R3/R4 |
+
+  R3/R4 re-confirmed at the model: `UserDeclaredStateRecord.pause_reason_id` is `Mapped[str]` at
+  `user_declared_state_record.py:20`. Three render sites across two shapes, all three handling both
+  channels. **Three rounds have turned on this sweep; it is now closed.**
+
+  ### F2 / F3 — fixed, and the third comment does what was asked
+
+  All three comments now state the failure mode rather than the conclusion.
+  `list_workers_linear_timeline.py:57-64` is the one that mattered and now says the fallback is
+  load-bearing, that every clock-out and auto-pause reaches it, and that deleting the middle term
+  buckets all of it as `unspecified` **with no error anywhere**. F3's guard names `labels.py`, which
+  fields it holds, for which slugs, and what silent divergence looks like.
+
+  ### The two out-of-brief changes — both correct
+
+  - **`slug` justification.** The *choice* is unchanged: the `_TRANSITION_REASONS` map is
+    byte-identical to round 2, every value included. Only the comment block above it moved, and the
+    replacement is right — `resolvePauseReasonTransition` is fed solely from `usePauseReasonsQuery`,
+    so the frontend branch is not a consumer. Nothing else in the docstring drifted. Editing it while
+    closing F3 in the same file was the consistent call, not scope creep.
+  - **`created_at=""` removal.** The nullability claim checks out:
+    `step_state_record.py:76` — `entered_at: Mapped[datetime] = mapped_column(..., nullable=False)`.
+    Stronger than the implementer argued: both realtime construction sites set `entered_at=now`
+    explicitly (`transition_step_state.py:280,346`), so the value is present before any flush and the
+    old fallback was unreachable on every path, not merely on persisted rows. The change is confined
+    to that expression.
+
+  ### Suite — one correction to the claim, not a regression
+
+  Measured four runs. Round-3 **run-1**: `26 failed / 1396 passed`, node set **byte-identical** to
+  round 2's recorded set. Round-3 **run-2 and run-3**: `27 failed / 1395 passed`, identical to each
+  other, differing from round 2 by exactly one node —
+  `test_process_shopify_products_integration.py::test_process_shopify_products_fans_out_to_all_active_workspace_shops_and_enqueues_one_task`.
+
+  Not attributable to this change: it **passes in isolation**, shopify is untouched by the change set
+  (`git status` has no shopify path), and it appeared between run-1 and run-2 of this session. It is
+  the shared-DB/Redis accumulation the plan's own validation note documents — but it now **latches**
+  rather than clearing, which the "run-2 vs run-2" rule does not account for. So the implementer's
+  "byte-identical" is right for run-1 and overstated for run-2; the difference is measurement
+  artefact, not regression. Flagged because a later round comparing run-2 sets could read this node
+  as new.
+
+  `ruff check` clean on all eight touched files, verified individually.
+
+  ### Noted, not findings
+
+  - `bucket_key`'s docstring still reads "`record_detail`'s nested `pause_reason` object … must not
+    see a transition value". Strictly true — it constrains what `reason` may hold, and that
+    constraint still binds — but now misparseable, since that object *does* carry a transition
+    through a different door. Not raised as a finding: the sentence is literally correct and this
+    round already closed three comment defects.
+  - The R9 correction landed in commit `b86cb0e`, whose subject is T9 — the decision that commits
+    stay single-purpose. Operator's commit, outside this review's scope; noted only because T9 exists
+    to prevent exactly that shape.
+
+  **Verdict: `APPROVED`.** Phase 2 is complete: the outage fix, its failing-first evidence, all three
+  render sites, the derivation invariants, the docs, and the sweep. Criterion 11 remains open by
+  design and disclosed, discharged by phase 3.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `archived`
+- Next state: `none` (terminal)
 - Transition owner: `David`
+- Approved at (UTC): `2026-07-31T17:40:00Z` — independent review, round 3.
+- Summary: `backend/docs/architecture/implemented_summaries/SUMMARY_system_transition_reasons_phase2_cutover_20260731.md`
+- Archive record: `backend/docs/architecture/archives/implementation/system_transition_reasons/ARCHIVE_RECORD_PLAN_system_transition_reasons_phase2_cutover_20260731.md`

@@ -182,7 +182,7 @@ deferred under T7.
 | # | Phase | Status | Delivers | Independent review earns its cost because |
 |---|---|---|---|---|
 | 1 | **Inventory, vocabulary, schema & read tolerance** | `archived` ✅ (APPROVED round 2, 2026-07-31; round 1 `NEEDS_CHANGES` on F1 blocking + F2–F4, all closed in one fix cycle and re-verified by execution. Node-set diff vs `26d290d` empty. **Overturned T6** — see the amendment note below.) | The read-path audit and volume figures; `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`; every read path resolves both representations. **Zero behaviour change** — nothing writes the column yet. | The audit is the foundation the rest is built on, and a missed read path ships broken in phase 2. |
-| 2 | **Cutover** | `under_construction` | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
+| 2 | **Cutover** | `archived` ✅ (APPROVED round 3, 2026-07-31; rounds 1 and 2 `NEEDS_CHANGES` — both raised the **same** defect class, a serializer emitting `null` where the explanation moved from the catalog to the vocabulary, in two different render sites. Node set unchanged across all three rounds. **Closed phase-3 binding item 3** — see the `image_url` correction below. Criterion 11 recorded as a deliberate non-completion, discharged by phase 3.) | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
 | 3 | **Historical backfill** | `under_construction` | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
 | 4 | **Retirement & constraints** | `under_construction` | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` removed; **`slug` kept, `uq_pause_reasons_slug` scoped to `(workspace_id, slug)`** (T6 as amended); check constraints added; final verification. | Drops/scopes constraints — cheap to review, but must follow 3. |
 
@@ -190,6 +190,31 @@ deferred under T7.
 Plan: `../../../archives/implementation/system_transition_reasons/PLAN_system_transition_reasons_phase1_foundation_20260731.md` ·
 Summary: `../../../implemented_summaries/SUMMARY_system_transition_reasons_phase1_foundation_20260731.md` ·
 Archive record: `../../../archives/implementation/system_transition_reasons/ARCHIVE_RECORD_PLAN_system_transition_reasons_phase1_foundation_20260731.md`
+
+**Phase 2 artefacts.**
+Plan: `../../../archives/implementation/system_transition_reasons/PLAN_system_transition_reasons_phase2_cutover_20260731.md` ·
+Summary: `../../../implemented_summaries/SUMMARY_system_transition_reasons_phase2_cutover_20260731.md` ·
+Archive record: `../../../archives/implementation/system_transition_reasons/ARCHIVE_RECORD_PLAN_system_transition_reasons_phase2_cutover_20260731.md`
+
+**Three things phase 2 established that phase 3 is bound by:**
+
+1. **Phase 3 no longer owns an `image_url` consequence** — binding item 3 above is struck. The
+   seeded URLs are hardcoded literals identical in every workspace, and `domain/transitions/labels.py`
+   now reproduces them, so backfilled rows keep their kiosk icon.
+2. **Phase 3 discharges criterion 11.** The `startswith(CLIENT_ID_PREFIX)` branch in
+   `domain/users/serializers.py` is provably *alive* while pre-cutover rows carry both `par_…` ids
+   and legacy strings in `reason`. After the backfill it can be shown dead — that is what closes
+   master-plan success criterion 4.
+3. **Phase 3 should pick up `app/scripts/backfill/backfill_worker_shift_state_records.py`**, which
+   builds `LinearInterval`s without `transition_reason` — the same R14 mechanism, in a module phase
+   2's scope list did not name. Flagged rather than folded in, per the intention's scope boundary.
+
+**The procedural lesson phase 2 paid for twice.** Phase 1's audit closed row R2 with "phase 2 decides
+whether step payloads need the transition surfaced". No decision was recorded, so the path was
+skipped rather than decided, and the resulting defect was found in round 1 — then found *again* in
+round 2, in a third render site the round-1 sweep had missed because it grepped for the wrong thing.
+**A deferred decision must name what happens if the named phase does not take it**, and a sweep must
+be re-derived by a route that could find what the previous route missed.
 
 **Three things phase 1 established that later phases are bound by** (full detail in "Phase 1
 inventory"):
@@ -560,6 +585,39 @@ a *second consecutive run of the unmodified baseline tree* reproduces the identi
 - Transition owner: `David`
 
 ## Progress notes
+
+- `2026-07-31`: **Phase 2 archived (APPROVED, round 3). The outage is ended.** Clock-out and both
+  task-switch sites no longer resolve a catalog row, so both work in a workspace with an empty
+  catalog — proved failing-first by reverting each writer and reproducing the exact `NotFound` the
+  intention described. The change is in `clock_out_shift_for_user` itself, so Connecteam and the
+  overnight safeguard inherit it; the Connecteam test's catalog-resolver patch was deleted rather
+  than kept working.
+
+  **Rounds 1 and 2 both raised the same defect class** — a serializer emitting `null` for a record
+  whose explanation moved from the catalog to the vocabulary — in two different render sites. The
+  second survived round 1 because that sweep grepped `.pause_reason` while
+  `get_worker_linear_timeline_breakdown.py` calls `serialize_pause_reason` on a separately-fetched
+  local. Re-deriving by *caller* plus *twelve-field-shape construction* enumerated the surface
+  exhaustively: three render sites across two shapes, four catalog-leaf endpoints structurally unable
+  to receive a transition. Audit rows **R2 and R9 are both now marked decided**.
+
+  **Two phase 1 inputs were overturned.** `image_url` is not per-environment — the seeded URLs are
+  hardcoded literals identical in every workspace — so `labels.py` reproduces them and **phase 3's
+  icon-loss consequence is closed, not inherited**. And the documented `NameError` in
+  `_step_transition_core.py` was still present and fired *before* the catalog lookup, proving no test
+  had ever reached that auto-pause branch.
+
+  **Documentation caught a real divergence**, which is criterion 20 working as intended: `states.md`
+  claimed the rebuild preserves `changed_by_id` generally, while the code preserves it only for
+  legacy manual rows. Investigated rather than patched — the archived declared_worker_states plan
+  makes `changed_by_id IS NULL` on declaration projections load-bearing, so **the code was right and
+  the doc wrong**, and the doc now says why the narrowness matters.
+
+  **Criterion 11 is an open, recorded non-completion** — the prefix branch is provably alive while
+  legacy rows exist, and phase 3's backfill discharges it. Also carried to phase 3:
+  `backfill_worker_shift_state_records.py`. Accepted risk: hardcoded S3 URLs now sit in runtime
+  domain code (one row per slug, self-repairing on bootstrap, worst case a stale icon) — and
+  **production remains unmeasured**, so that rests on repository evidence alone.
 
 - `2026-07-31`: **Phase 4 amended — `pause_ended_shift` is no longer retired.** Raised by
   `INTENTION_ended_shift_step_state_collapse_20260731`, which found that
