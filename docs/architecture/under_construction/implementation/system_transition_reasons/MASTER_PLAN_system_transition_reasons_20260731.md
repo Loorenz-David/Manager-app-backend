@@ -279,6 +279,30 @@ This feature set inherits the recorded baseline in
   because `.env.testing` defines no `JWT_SECRET_KEY` and the suite actually reads `.env`. Copy all
   of `app/.env*`. Verify config parity with a small smoke run in both trees before trusting any
   full-suite number. (Learned the hard way during declared_worker_states Phase 7.)
+- **A baseline worktree also lacks `app/.venv` — and that failure looks like a code regression.**
+  *(Diagnosed 2026-07-31, reassigned-steps Step 1.)* `.venv` is gitignored too, so a fresh worktree
+  has the config but no interpreter environment. The session that hit this reported **334 failed /
+  995 passed / 38 errors** as its baseline; the same tree measured **26 failed / 1398 passed / 0
+  errors** when run properly. It had copied `app/.env*` correctly — the documented instruction was
+  followed and the number was still junk.
+  - **The tell is the error count.** Test *failures* are the tree's real state; collection *errors*
+    in the dozens mean the environment cannot import the package. A healthy run here has **zero**
+    errors.
+  - **Reproducibility does not validate a baseline.** That session ran it twice and got the same
+    number, which is exactly what a broken environment does.
+  - **Sanity anchor:** two consecutive measurements by unrelated sessions on 2026-07-31 put this
+    tree at 26/1396 (phase 2 round 3, run 1) and 26/1398 (reassigned-steps, run 1). Anything in the
+    hundreds is a broken environment, not the code. Stop and fix the environment before comparing
+    anything.
+  - Simplest avoidance: skip the worktree. Check the base commit out in the main tree, measure,
+    and come back — the main tree already has both `.env*` and `.venv`.
+  - Run pytest from `backend/app/` (where `pytest.ini` lives). From the repo root it fails to
+    import `beyo_manager`, which is a third way to produce a meaningless number.
+  - **Do not pass `-p no:logging`.** *(Diagnosed 2026-07-31, reassigned-steps review.)* Disabling
+    the logging plugin kills the `caplog` fixture and manufactures ~19 phantom *errors* in tests
+    that request it. The reviewer hit this, caught it, and re-measured — the same broken-environment
+    tell applies: a non-zero error count means the measurement is wrong, not the code. Run the suite
+    with default plugins.
 - **"Run-2 vs run-2" is necessary but not sufficient — some nodes latch.** *(Corrected 2026-07-31,
   phase 2 round 3.)* The rule exists because the test DB and Redis are shared and not reset, so a
   second consecutive run dirties them. But at least one node does not merely fail on run 2 — it
