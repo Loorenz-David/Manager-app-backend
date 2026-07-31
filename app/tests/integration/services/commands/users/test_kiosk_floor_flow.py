@@ -332,6 +332,7 @@ async def test_kiosk_full_loop_from_floor_sign_in_to_clock_out(db_session) -> No
         "user_id": worker.client_id,
         "transitioned_steps": 0,
         "analytics": None,
+        "_clock_out_at": clock_out_result["_clock_out_at"],
     }
 
     closed = await get_current_worker_shift_state(_current_ctx(db_session, claims, worker))

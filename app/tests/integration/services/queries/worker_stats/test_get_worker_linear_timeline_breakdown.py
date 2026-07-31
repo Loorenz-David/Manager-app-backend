@@ -489,6 +489,99 @@ async def test_breakdown_empty_worker_has_no_segments(db_session) -> None:
     assert out["timeline"]["idle_seconds"] == 0
 
 
+async def test_step_details_resolve_the_primary_item_of_each_task(db_session) -> None:
+    # `_load_step_and_primary_item` keys its intermediate map by task_id, not item_id. An item
+    # that is PRIMARY on two tasks used to collapse both rows into a single entry, leaving one
+    # task with no item at all (`"item": None`) in this endpoint's step details. Both tasks must
+    # resolve to the shared item, and a third task must still resolve to its own.
+    workspace = Workspace(name=f"shared-primary-item-{uuid4().hex}")
+    db_session.add(workspace)
+    await db_session.flush()
+    worker = await _seed_worker(db_session, workspace.client_id)
+
+    async def _mk_task_with_primary(item: Item) -> TaskStep:
+        suffix = uuid4().hex[:8]
+        section = WorkingSection(workspace_id=workspace.client_id, name=f"sec-{suffix}")
+        task = Task(
+            workspace_id=workspace.client_id,
+            task_scalar_id=int(suffix[:6], 16),
+            task_type=TaskTypeEnum.INTERNAL,
+            state=TaskStateEnum.ASSIGNED,
+            created_by_id=worker.client_id,
+        )
+        db_session.add_all([section, task])
+        await db_session.flush()
+        db_session.add(
+            TaskItem(
+                workspace_id=workspace.client_id,
+                task_id=task.client_id,
+                item_id=item.client_id,
+                role=TaskItemRoleEnum.PRIMARY,
+            )
+        )
+        step = TaskStep(
+            workspace_id=workspace.client_id,
+            task_id=task.client_id,
+            working_section_id=section.client_id,
+            working_section_name_snapshot=section.name,
+            state=TaskStepStateEnum.COMPLETED,
+            created_by_id=worker.client_id,
+        )
+        db_session.add(step)
+        await db_session.flush()
+        return step
+
+    shared_item = Item(
+        workspace_id=workspace.client_id,
+        article_number=f"SHARED-{uuid4().hex[:6]}",
+        sku=f"SHARED-SKU-{uuid4().hex[:6]}",
+        state=ItemStateEnum.PENDING,
+        quantity=1,
+    )
+    own_item = Item(
+        workspace_id=workspace.client_id,
+        article_number=f"OWN-{uuid4().hex[:6]}",
+        sku=f"OWN-SKU-{uuid4().hex[:6]}",
+        state=ItemStateEnum.PENDING,
+        quantity=1,
+    )
+    db_session.add_all([shared_item, own_item])
+    await db_session.flush()
+
+    step_a = await _mk_task_with_primary(shared_item)
+    step_b = await _mk_task_with_primary(shared_item)
+    step_c = await _mk_task_with_primary(own_item)
+
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+    ended_at = base + timedelta(minutes=30)
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.STARTED_SHIFT, base, base)
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.WORKING, base, ended_at)
+    _add_shift_record(db_session, workspace.client_id, worker.client_id,
+                      UserShiftStateEnum.ENDED_SHIFT, ended_at, ended_at)
+    for step in (step_a, step_b, step_c):
+        await _add_step_record(db_session, workspace.client_id, worker.client_id,
+                               step.client_id, TaskStepStateEnum.WORKING, base, ended_at)
+    await db_session.flush()
+
+    out = await get_worker_linear_timeline_breakdown(
+        _ctx(db_session, workspace_id=workspace.client_id, user_id=worker.client_id,
+             work_date="2026-07-15")
+    )
+
+    working = next(s for s in out["segments"] if s["state"] == "working")
+    details = {detail["step_id"]: detail for detail in working["steps"]}
+    assert set(details) == {step_a.client_id, step_b.client_id, step_c.client_id}
+    # Both tasks carrying the shared item keep it — neither is dropped to None.
+    assert details[step_a.client_id]["item"] is not None
+    assert details[step_b.client_id]["item"] is not None
+    assert details[step_a.client_id]["item"]["client_id"] == shared_item.client_id
+    assert details[step_b.client_id]["item"]["client_id"] == shared_item.client_id
+    assert details[step_c.client_id]["item"]["client_id"] == own_item.client_id
+    assert details[step_a.client_id]["task_id"] != details[step_b.client_id]["task_id"]
+
+
 async def test_segment_steps_are_scoped_to_the_shift(db_session) -> None:
     # A step paused on a PREVIOUS day, still open and overlapping today's paused segment,
     # must not appear in that segment's steps[] — the detail is scoped to the same shift as

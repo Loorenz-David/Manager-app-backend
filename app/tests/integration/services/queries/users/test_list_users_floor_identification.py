@@ -12,11 +12,16 @@ serialized modes.
 
 from uuid import uuid4
 
+import jwt
 import pytest
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, event as sa_event, select
 
+from beyo_manager import create_app
+from beyo_manager.config import settings
 from beyo_manager.domain.roles.enums import RoleNameEnum
+from beyo_manager.models.database import get_db
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
@@ -43,6 +48,7 @@ _FULL_KEYS = {
     "working_sections",
 }
 _IDENTIFICATION_KEYS = {"clock_in_code", "email"}
+_FLOOR_COMPACT_KEYS = _COMPACT_KEYS | _IDENTIFICATION_KEYS | {"working_sections"}
 
 _NON_FLOOR_SCOPES = ["manager", "worker", "admin", "seller", None]
 
@@ -126,6 +132,7 @@ class _Roster:
         app_scope: str | None,
         compact: bool,
         role: str | None = RoleNameEnum.WORKER.value,
+        limit: int = 50,
     ) -> ServiceContext:
         identity = {
             "workspace_id": self.workspace_id,
@@ -143,7 +150,7 @@ class _Roster:
                 "string_filters": "username",
                 "role": role,
                 "working_sections": None,
-                "limit": "50",
+                "limit": str(limit),
                 "offset": "0",
                 "compact": str(compact),
             },
@@ -155,8 +162,11 @@ class _Roster:
         app_scope: str | None,
         compact: bool,
         role: str | None = RoleNameEnum.WORKER.value,
+        limit: int = 50,
     ) -> dict[str, dict]:
-        result = await list_users(self.ctx(app_scope=app_scope, compact=compact, role=role))
+        result = await list_users(
+            self.ctx(app_scope=app_scope, compact=compact, role=role, limit=limit)
+        )
         return {item["client_id"]: item for item in result["users"]}
 
 
@@ -214,13 +224,15 @@ async def test_floor_session_receives_clock_in_code_and_email(roster, compact: b
 
     items = await roster.items(app_scope="floor", compact=compact)
 
-    expected_keys = (_COMPACT_KEYS if compact else _FULL_KEYS) | _IDENTIFICATION_KEYS
+    expected_keys = _FLOOR_COMPACT_KEYS if compact else _FULL_KEYS | _IDENTIFICATION_KEYS
     for user_id in (with_code, without_code, without_profile):
         assert set(items[user_id]) == expected_keys
         assert items[user_id]["email"] == roster.emails[user_id]
     assert items[with_code]["clock_in_code"] == code
     assert items[without_code]["clock_in_code"] is None
     assert items[without_profile]["clock_in_code"] is None
+    if compact:
+        assert all(items[user_id]["working_sections"] == [] for user_id in items)
 
 
 @pytest.mark.parametrize("app_scope", _NON_FLOOR_SCOPES)
@@ -240,10 +252,11 @@ async def test_non_floor_scopes_never_receive_identification_fields(
     assert "clock_in_code" not in item
     if compact:
         assert "email" not in item
+        assert "working_sections" not in item
 
 
 @pytest.mark.parametrize("compact", [True, False])
-async def test_floor_response_is_the_non_floor_response_plus_exactly_two_fields(
+async def test_floor_response_adds_only_floor_compact_fields(
     roster,
     compact: bool,
 ) -> None:
@@ -253,7 +266,8 @@ async def test_floor_response_is_the_non_floor_response_plus_exactly_two_fields(
     floor_item = (await roster.items(app_scope="floor", compact=compact))[user_id]
     manager_item = (await roster.items(app_scope="manager", compact=compact))[user_id]
 
-    stripped = {k: v for k, v in floor_item.items() if k not in _IDENTIFICATION_KEYS}
+    floor_only_keys = _IDENTIFICATION_KEYS | ({"working_sections"} if compact else set())
+    stripped = {key: value for key, value in floor_item.items() if key not in floor_only_keys}
     if not compact:
         # `email` is part of the pre-phase full shape; put it back before comparing.
         stripped["email"] = floor_item["email"]
@@ -291,6 +305,75 @@ async def test_pagination_envelope_is_unchanged_under_floor_scope(roster) -> Non
 
     assert set(result) == {"users", "users_pagination"}
     assert set(result["users_pagination"]) == {"has_more", "limit", "offset", "total"}
+
+
+async def test_floor_roster_reaches_more_than_200_workers_in_one_page(roster) -> None:
+    for _ in range(201):
+        await roster.seed_worker(clock_in_code=None)
+
+    items = await roster.items(app_scope="floor", compact=True, limit=1000)
+
+    assert set(items) == set(roster.user_ids)
+
+
+async def test_floor_roster_accepts_the_1000_row_ceiling(roster) -> None:
+    await roster.seed_worker(clock_in_code=None)
+
+    result = await list_users(roster.ctx(app_scope="floor", compact=True, limit=1000))
+
+    assert result["users_pagination"]["limit"] == 1000
+
+
+async def test_users_route_allows_floor_1000_but_rejects_non_floor_201(roster, db_session) -> None:
+    for _ in range(200):
+        await roster.seed_worker(clock_in_code=None)
+
+    async def _db_override():
+        yield db_session
+
+    def _token(app_scope: str) -> str:
+        return jwt.encode(
+            {
+                "workspace_id": roster.workspace_id,
+                "user_id": roster.user_ids[0],
+                "role_name": RoleNameEnum.MANAGER.value,
+                "app_scope": app_scope,
+                "nonce": uuid4().hex,
+            },
+            settings.jwt_secret_key,
+            algorithm="HS256",
+        )
+
+    app = create_app()
+    app.dependency_overrides[get_db] = _db_override
+    transport = ASGITransport(app=app)
+    common_params = {
+        "q": roster.label,
+        "string_filters": "username",
+        "role": RoleNameEnum.WORKER.value,
+        "compact": "true",
+    }
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            floor_response = await client.get(
+                "/api/v1/users",
+                params={**common_params, "limit": 1000},
+                headers={"Authorization": f"Bearer {_token('floor')}"},
+            )
+            manager_response = await client.get(
+                "/api/v1/users",
+                params={**common_params, "limit": 201},
+                headers={"Authorization": f"Bearer {_token('manager')}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert floor_response.status_code == 200
+    floor_users = floor_response.json()["data"]["users"]
+    assert len(floor_users) == 200
+    assert "working_sections" in floor_users[0]
+    assert manager_response.status_code == 422
+    assert manager_response.json()["detail"] == "limit must be less than or equal to 200"
 
 
 # ── `?role=` filter repair ───────────────────────────────────────────────────

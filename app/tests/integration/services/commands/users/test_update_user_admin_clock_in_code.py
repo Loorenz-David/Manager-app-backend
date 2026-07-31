@@ -15,13 +15,17 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
-from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
+from beyo_manager.models.tables.users.user_work_profile import (
+    CLOCK_IN_CODE_INDEX_NAME,
+    UserWorkProfile,
+)
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.commands.users.update_user_admin import update_user_admin
@@ -229,7 +233,9 @@ async def test_duplicate_clock_in_code_in_workspace_is_a_friendly_conflict(
         )
 
     assert exc_info.value.http_status == 409
-    assert exc_info.value.message == "Clock-in code is already in use in this workspace."
+    assert exc_info.value.message == (
+        "Clock-in code is already in use in this workspace and may belong to an inactive worker."
+    )
     # The losing worker keeps no code at all — the conflict rolled back.
     assert (await admin_fixture.work_profile(other_id)).clock_in_code is None
 
@@ -244,6 +250,39 @@ async def test_reassigning_a_workers_own_code_is_not_a_conflict(admin_fixture) -
 
     profile = await admin_fixture.work_profile(worker_id)
     assert profile.clock_in_code == code
+
+
+async def test_clock_in_code_index_constant_matches_the_model_index() -> None:
+    assert CLOCK_IN_CODE_INDEX_NAME in {
+        index.name for index in UserWorkProfile.__table__.indexes
+    }
+
+
+async def test_clock_in_code_assignment_translates_the_post_precheck_race(
+    admin_fixture,
+    monkeypatch,
+) -> None:
+    worker_id = await admin_fixture.seed_worker(with_work_profile=True)
+    code = uuid4().hex[:8]
+
+    async def _lose_race_at_flush(*_args, **_kwargs) -> None:
+        raise IntegrityError(
+            "UPDATE user_work_profiles",
+            {},
+            Exception(f'duplicate key violates index "{CLOCK_IN_CODE_INDEX_NAME}"'),
+        )
+
+    monkeypatch.setattr(admin_fixture._db_session, "flush", _lose_race_at_flush)
+
+    with pytest.raises(ConflictError) as exc_info:
+        await update_user_admin(
+            admin_fixture.ctx({"user_client_id": worker_id, "clock_in_code": code})
+        )
+
+    assert exc_info.value.http_status == 409
+    assert exc_info.value.message == (
+        "Clock-in code is already in use in this workspace and may belong to an inactive worker."
+    )
 
 
 @pytest.mark.parametrize("code", ["abc", "   x   ", "", "x" * 17])

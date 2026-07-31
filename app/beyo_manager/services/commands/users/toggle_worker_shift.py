@@ -25,6 +25,11 @@ def parse_toggle_worker_shift_request(data: dict) -> ToggleWorkerShiftRequest:
 
 
 async def toggle_worker_shift(ctx: ServiceContext) -> dict:
+    """Toggle the target shift, returning route-internal ``_clock_out_at`` on clock-out.
+
+    Direct callers receive the timestamp as part of the command contract. HTTP routes
+    must pop it before serialization; it is intentionally not a client response field.
+    """
     request = parse_toggle_worker_shift_request(ctx.incoming_data)
     now = datetime.now(timezone.utc)
     async with maybe_begin(ctx.session):
@@ -60,4 +65,5 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
     }
     if action == "clock_out":
         result["analytics"] = None
+        result["_clock_out_at"] = now
     return result

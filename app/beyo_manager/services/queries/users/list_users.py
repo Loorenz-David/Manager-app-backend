@@ -15,6 +15,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.utils.string_filter import apply_string_filter
 
 _MAX_LIMIT = 200
+_FLOOR_MAX_LIMIT = 1000
 _DEFAULT_LIMIT = 50
 
 # The shop-floor device's app scope (see services/commands/auth/sign_in_user.py).
@@ -43,6 +44,50 @@ async def _load_clock_in_codes(ctx: ServiceContext, user_ids: list[str]) -> dict
     return {row.user_id: row.clock_in_code for row in result.all()}
 
 
+async def _load_working_sections(ctx: ServiceContext, user_ids: list[str]) -> dict[str, list[dict]]:
+    """Load each listed user's working sections in one query."""
+    sections_result = await ctx.session.execute(
+        select(
+            WorkingSectionMembership.user_id,
+            WorkingSection.client_id,
+            WorkingSection.name,
+            WorkingSection.image,
+            WorkingSection.order_list,
+            WorkingSection.allows_batch_working,
+            WorkingSection.allows_shopify_product_modifications,
+        )
+        .join(
+            WorkingSection,
+            WorkingSection.client_id == WorkingSectionMembership.working_section_id,
+        )
+        .where(
+            WorkingSectionMembership.user_id.in_(user_ids),
+            WorkingSectionMembership.workspace_id == ctx.workspace_id,
+            WorkingSectionMembership.removed_at.is_(None),
+            WorkingSection.workspace_id == ctx.workspace_id,
+            WorkingSection.is_deleted.is_(False),
+        )
+        .order_by(
+            WorkingSectionMembership.user_id,
+            WorkingSectionMembership.sort_order.asc(),
+            WorkingSection.name.asc(),
+        )
+    )
+    sections_by_user: dict[str, list[dict]] = {user_id: [] for user_id in user_ids}
+    for section in sections_result.all():
+        sections_by_user[section.user_id].append(
+            serialize_working_section_compact(
+                section.client_id,
+                section.name,
+                section.image,
+                section.order_list,
+                section.allows_batch_working,
+                section.allows_shopify_product_modifications,
+            )
+        )
+    return sections_by_user
+
+
 def _add_identification_fields(
     items: list[dict],
     users: list[User],
@@ -58,15 +103,25 @@ def _add_identification_fields(
         item["email"] = user.email
 
 
+def _add_working_sections(
+    items: list[dict],
+    users: list[User],
+    sections_by_user: dict[str, list[dict]],
+) -> None:
+    for item, user in zip(items, users, strict=True):
+        item["working_sections"] = sections_by_user[user.client_id]
+
+
 async def list_users(ctx: ServiceContext) -> dict:
-    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
+    is_floor_session = ctx.identity.get("app_scope") == _FLOOR_APP_SCOPE
+    max_limit = _FLOOR_MAX_LIMIT if is_floor_session else _MAX_LIMIT
+    limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), max_limit)
     offset = int(ctx.query_params.get("offset", 0))
     q = ctx.query_params.get("q")
     string_filters = ctx.query_params.get("string_filters")
     role_filter = ctx.query_params.get("role")
     sections_filter = ctx.query_params.get("working_sections")
     compact = ctx.query_params.get("compact", "false").lower() == "true"
-    is_floor_session = ctx.identity.get("app_scope") == _FLOOR_APP_SCOPE
 
     def _build_base_query(include_all_columns: bool = True):
         """Build the base query with all filters applied."""
@@ -156,7 +211,8 @@ async def list_users(ctx: ServiceContext) -> dict:
             "users_pagination": {"has_more": False, "limit": limit, "offset": offset, "total": total},
         }
 
-    # In compact mode, we don't need to fetch working sections
+    # Compact items gain sections only for the floor kiosk; full responses retain their
+    # existing working-sections behavior for every app scope.
     if compact:
         users_data = [
             serialize_user_compact_with_role(
@@ -175,6 +231,11 @@ async def list_users(ctx: ServiceContext) -> dict:
                 page_users,
                 await _load_clock_in_codes(ctx, [u.client_id for u in page_users]),
             )
+            _add_working_sections(
+                users_data,
+                page_users,
+                await _load_working_sections(ctx, [u.client_id for u in page_users]),
+            )
         return {
             "users": users_data,
             "users_pagination": {"has_more": has_more, "limit": limit, "offset": offset, "total": total},
@@ -183,47 +244,7 @@ async def list_users(ctx: ServiceContext) -> dict:
     # Full mode: fetch working sections for each user
     user_ids = [row.User.client_id for row in page]
 
-    sections_result = await ctx.session.execute(
-        select(
-            WorkingSectionMembership.user_id,
-            WorkingSection.client_id,
-            WorkingSection.name,
-            WorkingSection.image,
-            WorkingSection.order_list,
-            WorkingSection.allows_batch_working,
-            WorkingSection.allows_shopify_product_modifications,
-        )
-        .join(
-            WorkingSection,
-            WorkingSection.client_id == WorkingSectionMembership.working_section_id,
-        )
-        .where(
-            WorkingSectionMembership.user_id.in_(user_ids),
-            WorkingSectionMembership.workspace_id == ctx.workspace_id,
-            WorkingSectionMembership.removed_at.is_(None),
-            WorkingSection.workspace_id == ctx.workspace_id,
-            WorkingSection.is_deleted.is_(False),
-        )
-        # Each user's sections follow their personal ordering (sort_order); grouping
-        # below is per-user, so ordering by (user_id, sort_order) keeps each list ordered.
-        .order_by(
-            WorkingSectionMembership.user_id,
-            WorkingSectionMembership.sort_order.asc(),
-            WorkingSection.name.asc(),
-        )
-    )
-    sections_by_user: dict[str, list[dict]] = {uid: [] for uid in user_ids}
-    for sec_row in sections_result.all():
-        sections_by_user[sec_row.user_id].append(
-            serialize_working_section_compact(
-                sec_row.client_id,
-                sec_row.name,
-                sec_row.image,
-                sec_row.order_list,
-                sec_row.allows_batch_working,
-                sec_row.allows_shopify_product_modifications,
-            )
-        )
+    sections_by_user = await _load_working_sections(ctx, user_ids)
 
     users_data = [
         serialize_user_list_item(

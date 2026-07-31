@@ -21,6 +21,12 @@ def parse_clock_out_worker_shift_request(data: dict) -> ClockOutWorkerShiftReque
 
 
 async def clock_out_worker_shift(ctx: ServiceContext) -> dict:
+    """Close the target shift and return its internal clock-out timestamp.
+
+    ``_clock_out_at`` is part of this command's direct-caller contract. HTTP routes
+    must consume and remove it before serializing the response; the underscore marks
+    it as route-internal rather than client-visible.
+    """
     request = parse_clock_out_worker_shift_request(ctx.incoming_data)
     clock_out_at = datetime.now(timezone.utc)
     async with maybe_begin(ctx.session):
@@ -37,4 +43,5 @@ async def clock_out_worker_shift(ctx: ServiceContext) -> dict:
         "user_id": user_id,
         "transitioned_steps": transitioned_steps,
         "analytics": None,
+        "_clock_out_at": clock_out_at,
     }

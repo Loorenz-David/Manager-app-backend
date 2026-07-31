@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,23 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.users.get_current_worker_shift_state import (
     get_current_worker_shift_state,
 )
+from beyo_manager.services.queries.worker_stats.get_worker_clock_out_analytics import (
+    get_worker_clock_out_analytics,
+)
 from beyo_manager.services.run_service import run_service
+
+
+logger = logging.getLogger(__name__)
+
+_ANALYTICS_REQUIRED_KEYS = {
+    "date",
+    "timeline",
+    "pause_reasons",
+    "completed_items",
+    "completed_items_truncated",
+    "week",
+    "rate",
+}
 
 
 router = APIRouter()
@@ -35,6 +53,12 @@ class WorkerDeclareStateBody(BaseModel):
 
 class WorkerCloseDeclaredStateBody(BaseModel):
     user_id: str | None = None
+
+
+def _require_complete_analytics(analytics: object) -> dict:
+    if not isinstance(analytics, dict) or not _ANALYTICS_REQUIRED_KEYS <= analytics.keys():
+        raise ValueError("Clock-out analytics composer returned an incomplete payload.")
+    return analytics
 
 
 @router.get("/current")
@@ -86,6 +110,22 @@ async def clock_out_worker_shift_route(
     outcome = await run_service(clock_out_worker_shift, ctx)
     if not outcome.success:
         return build_err(outcome.error)
+    if outcome.data.get("action") == "clock_out":
+        try:
+            clock_out_at = outcome.data.pop("_clock_out_at")
+            outcome.data["analytics"] = _require_complete_analytics(
+                await get_worker_clock_out_analytics(
+                    ctx,
+                    outcome.data["user_id"],
+                    clock_out_at,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "worker_shift.clock_out_analytics_failed worker_id=%s workspace_id=%s",
+                outcome.data.get("user_id"),
+                ctx.workspace_id,
+            )
     return build_ok(outcome.data)
 
 
@@ -103,6 +143,22 @@ async def toggle_worker_shift_route(
     outcome = await run_service(toggle_worker_shift, ctx)
     if not outcome.success:
         return build_err(outcome.error)
+    if outcome.data["action"] == "clock_out":
+        try:
+            clock_out_at = outcome.data.pop("_clock_out_at")
+            outcome.data["analytics"] = _require_complete_analytics(
+                await get_worker_clock_out_analytics(
+                    ctx,
+                    outcome.data["user_id"],
+                    clock_out_at,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "worker_shift.clock_out_analytics_failed worker_id=%s workspace_id=%s",
+                outcome.data.get("user_id"),
+                ctx.workspace_id,
+            )
     return build_ok(outcome.data)
 
 

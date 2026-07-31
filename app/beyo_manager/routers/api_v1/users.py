@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,12 +172,14 @@ async def list_users_route(
     string_filters: str | None = Query(None),
     role: str | None = Query(None),
     working_sections: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     compact: bool = Query(False),
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
     session: AsyncSession = Depends(get_db),
 ):
+    if claims.get("app_scope") != "floor" and limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be less than or equal to 200")
     ctx = ServiceContext(
         incoming_data={},
         identity=claims,

@@ -1100,6 +1100,7 @@ async def test_manager_can_clock_worker_on_behalf_and_worker_cannot_clock_peer(d
         "user_id": worker.client_id,
         "transitioned_steps": 0,
         "analytics": None,
+        "_clock_out_at": clock_out_result["_clock_out_at"],
     }
     with pytest.raises(ConflictError):
         await clock_out_worker_shift(manager_ctx)

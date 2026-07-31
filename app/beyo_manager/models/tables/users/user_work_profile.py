@@ -17,6 +17,9 @@ from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
 
 
+CLOCK_IN_CODE_INDEX_NAME = "uix_user_work_profiles_workspace_clock_code"
+
+
 class UserWorkProfile(IdentityMixin, Base):
     CLIENT_ID_PREFIX = "uwp"
     __tablename__ = "user_work_profiles"
@@ -65,7 +68,7 @@ class UserWorkProfile(IdentityMixin, Base):
         # Codes are unique per workspace, not globally: two workspaces may both use "1234".
         # Partial so the many NULL (unassigned) profiles never collide.
         Index(
-            "uix_user_work_profiles_workspace_clock_code",
+            CLOCK_IN_CODE_INDEX_NAME,
             "workspace_id",
             "clock_in_code",
             unique=True,

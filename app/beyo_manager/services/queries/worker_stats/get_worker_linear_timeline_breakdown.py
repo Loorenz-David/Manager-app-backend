@@ -138,20 +138,22 @@ async def _load_step_and_primary_item(
                 )
             )
         ).all()
-        item_to_task = {row.item_id: row.task_id for row in task_items}
-        if item_to_task:
+        item_by_task_id = {row.task_id: row.item_id for row in task_items}
+        if item_by_task_id:
             items = (
                 await ctx.session.execute(
                     select(Item).where(
                         Item.workspace_id == ctx.workspace_id,
-                        Item.client_id.in_(list(item_to_task)),
+                        Item.client_id.in_(list(item_by_task_id.values())),
                         Item.is_deleted.is_(False),
                     )
                 )
             ).scalars().all()
+            items_by_id = {item.client_id: item for item in items}
             item_by_task = {
-                item_to_task[item.client_id]: item
-                for item in items
+                task_id: items_by_id[item_id]
+                for task_id, item_id in item_by_task_id.items()
+                if item_id in items_by_id
             }
 
     return steps_by_id, item_by_task

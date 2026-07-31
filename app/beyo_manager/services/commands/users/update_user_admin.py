@@ -5,7 +5,10 @@ from beyo_manager.domain.users.serializers import serialize_user_profile
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.users.user import User
-from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
+from beyo_manager.models.tables.users.user_work_profile import (
+    CLOCK_IN_CODE_INDEX_NAME,
+    UserWorkProfile,
+)
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.commands.users.requests.update_user_admin_request import (
     parse_update_user_admin_request,
@@ -18,8 +21,9 @@ _WORK_PROFILE_FIELDS = (
     "salary_per_hour_after_tax",
     "clock_in_code",
 )
-_CLOCK_IN_CODE_INDEX = "uix_user_work_profiles_workspace_clock_code"
-_CLOCK_IN_CODE_TAKEN = "Clock-in code is already in use in this workspace."
+_CLOCK_IN_CODE_TAKEN = (
+    "Clock-in code is already in use in this workspace and may belong to an inactive worker."
+)
 
 
 async def update_user_admin(ctx: ServiceContext) -> dict:
@@ -114,6 +118,6 @@ async def _assign_clock_in_code(
         # command and translate its error into the same friendly 409.
         await ctx.session.flush()
     except IntegrityError as exc:
-        if _CLOCK_IN_CODE_INDEX in str(exc.orig):
+        if CLOCK_IN_CODE_INDEX_NAME in str(exc.orig):
             raise ConflictError(_CLOCK_IN_CODE_TAKEN) from exc
         raise

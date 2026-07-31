@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -169,6 +170,120 @@ def test_clock_routes_preserve_analytics_null_contract_by_action(monkeypatch) ->
 
     assert explicit_clock_out.json()["data"] == captured["response_data"]
     assert toggle_clock_out.json()["data"] == captured["response_data"]
+
+
+@pytest.mark.parametrize("path", ["/api/v1/worker-shifts/clock-out", "/api/v1/worker-shifts/clock"])
+def test_clock_out_routes_compose_analytics_after_the_command(path: str, monkeypatch) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+    captured["response_data"] = {
+        "action": "clock_out",
+        "user_id": "usr_target",
+        "transitioned_steps": 2,
+        "analytics": None,
+        "_clock_out_at": datetime(2026, 7, 30, 12, tzinfo=timezone.utc),
+    }
+    expected_analytics = {
+        "date": "2026-07-30",
+        "timeline": {},
+        "pause_reasons": {},
+        "completed_items": [],
+        "completed_items_truncated": False,
+        "week": {},
+        "rate": {},
+    }
+    calls = []
+
+    async def _analytics(ctx, user_id, clock_out_at):
+        calls.append((ctx, user_id, clock_out_at))
+        return expected_analytics
+
+    monkeypatch.setattr(worker_shifts_router, "get_worker_clock_out_analytics", _analytics)
+
+    response = client.post(path, json={})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["analytics"] == expected_analytics
+    assert "_clock_out_at" not in response.json()["data"]
+    assert calls[0][1:] == ("usr_target", datetime(2026, 7, 30, 12, tzinfo=timezone.utc))
+
+
+@pytest.mark.parametrize("path", ["/api/v1/worker-shifts/clock-out", "/api/v1/worker-shifts/clock"])
+def test_clock_out_routes_degrade_to_null_when_analytics_fails(path: str, monkeypatch, caplog) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+    captured["response_data"] = {
+        "action": "clock_out",
+        "user_id": "usr_target",
+        "transitioned_steps": 0,
+        "analytics": None,
+    }
+
+    async def _broken_analytics(*_args):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(worker_shifts_router, "get_worker_clock_out_analytics", _broken_analytics)
+
+    response = client.post(path, json={})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["analytics"] is None
+    assert "worker_shift.clock_out_analytics_failed" in caplog.text
+
+
+@pytest.mark.parametrize("path", ["/api/v1/worker-shifts/clock-out", "/api/v1/worker-shifts/clock"])
+def test_clock_out_routes_degrade_to_null_when_analytics_is_partial(
+    path: str,
+    monkeypatch,
+    caplog,
+) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+    captured["response_data"] = {
+        "action": "clock_out",
+        "user_id": "usr_target",
+        "transitioned_steps": 0,
+        "analytics": None,
+        "_clock_out_at": datetime(2026, 7, 30, 12, tzinfo=timezone.utc),
+    }
+
+    async def _partial_analytics(*_args):
+        return {"date": "2026-07-30"}
+
+    monkeypatch.setattr(worker_shifts_router, "get_worker_clock_out_analytics", _partial_analytics)
+
+    response = client.post(path, json={})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["analytics"] is None
+    assert "worker_shift.clock_out_analytics_failed" in caplog.text
+
+
+@pytest.mark.parametrize("path", ["/api/v1/worker-shifts/clock-out", "/api/v1/worker-shifts/clock"])
+def test_clock_out_routes_degrade_to_null_when_command_omits_clock_out_at(
+    path: str,
+    monkeypatch,
+    caplog,
+) -> None:
+    client, captured = _build_client(role_name="worker", monkeypatch=monkeypatch)
+    captured["response_data"] = {
+        "action": "clock_out",
+        "user_id": "usr_target",
+        "transitioned_steps": 0,
+        "analytics": None,
+    }
+
+    composer_calls = []
+
+    async def _analytics(*args):
+        composer_calls.append(args)
+        return {}
+
+    monkeypatch.setattr(worker_shifts_router, "get_worker_clock_out_analytics", _analytics)
+
+    response = client.post(path, json={})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["analytics"] is None
+    assert composer_calls == []
+    assert "worker_shift.clock_out_analytics_failed" in caplog.text
 
 
 @pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
