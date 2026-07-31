@@ -88,9 +88,51 @@ elif closing_record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value:
 Every published field keeps its name **and its meaning** ("time a step sat idle because the shift
 ended"). This is what makes the change contract-neutral — see "Published surface" below.
 
-Note this *sharpens* the semantics rather than blurring them: only the system clock-out
-force-close lands in the `ended_shift` bucket. A worker manually choosing a reason becomes an
-ordinary pause, bucketed by `pause_by_reason` like any other. That matches the operator's framing.
+> ### ⚠ The "sharpening" claim above is WRONG, and this is a blocking design question
+>
+> *Added 2026-07-31 by the transition-reasons tracking session, verified against
+> `aggregate_metrics.py:17-25`.*
+>
+> An earlier revision of this section claimed the re-key *sharpens* semantics: "only the system
+> clock-out force-close lands in the `ended_shift` bucket; a worker manually choosing a reason
+> becomes an ordinary pause." That reasoning holds for a lunch break. It does **not** hold for a
+> reason whose entire meaning is *"I am going home now"*, and as written it reintroduces the exact
+> corruption this document says must be prevented.
+>
+> **Today:** a worker picks "Ended shift" → `pause-reason-transition.ts` maps it to
+> `new_state: ended_shift` → the step closes into `ENDED_SHIFT` → the overnight gap lands in
+> `total_ended_shift_seconds`. Quarantined, correctly.
+>
+> **Under this intention as written:** the same pick produces `state: paused` +
+> `pause_reason_id`, and bucketing keys on `transition_reason == SHIFT_ENDED` — **null** for a
+> worker's pick. Those ~15 hours land in `total_pause_seconds`. Clock-out does not rescue it:
+> it force-closes `WORKING` steps, not `PAUSED` ones, so the step genuinely sits open overnight.
+>
+> That is verbatim the failure named four paragraphs above: *"if that lands in
+> `total_pause_seconds`, every pause-ratio and productivity metric is corrupted."*
+>
+> **Two resolutions. This is a product decision and belongs to the operator.**
+>
+> 1. **Remove "Ended shift" from the worker's pause sheet** as part of this set, when
+>    `pause-reason-transition.ts` is deleted. The worker clocks out instead; clock-out force-closes
+>    the step with `SHIFT_ENDED`; one path, one bucket, no ambiguity. **Recommended** — it is
+>    consistent with this document's own thesis, and it dissolves the duplicate-display problem
+>    below at the same time.
+> 2. **Keep it selectable and bucket on either signal** — `transition_reason == SHIFT_ENDED` *or*
+>    `pause_reason_id` pointing at that row. Preserves the metric, but puts a catalog dependency
+>    back inside a metric, which is the thing the parent feature set exists to remove.
+>
+> **Related, and resolved by option 1:** after phase 4 keeps `pause_ended_shift` selectable, a
+> worker-picked and a system-written ended shift render with the **same name and the same icon**,
+> distinguishable only by `client_id` (`par_…` versus `shift_ended`). Under option 2 they would
+> also sit in different time buckets while looking identical — a reporting inconsistency a manager
+> could see and not be able to explain.
+>
+> **Consequence for the parent set:** phase 4's amendment keeping `pause_ended_shift` selectable is
+> correct **now** — removing it today would break the pause sheet, which has no other way to
+> produce the state. But that justification is **interim**. Once this set deletes
+> `pause-reason-transition.ts`, the row's reason for existing goes with it, and under option 1 the
+> row should be retired here rather than in phase 4.
 
 ## Traced evidence (2026-07-31 — verify, do not re-derive)
 
@@ -203,6 +245,10 @@ Under this change it becomes **load-bearing**. It needs a direct test, not an in
    shift_ended`, `pause_reason_id = NULL`.
 3. `total_ended_shift_seconds` / `total_ended_shift_count` hold the **same values** for an
    equivalent scenario before and after — proven by a characterization test written first.
+   **This criterion is currently unmeetable as the document is specified** — see the boxed warning
+   in "Architectural direction". The characterization test must cover **both** an
+   operator-initiated clock-out **and** a worker-picked ended-shift pause left open overnight; the
+   second is the one that regresses.
 4. A worker selecting any pause reason (including one named "ended shift") produces `state =
    paused` with that `pause_reason_id`, and the frontend sends no `new_state` other than `paused`.
 5. The linear timeline still distinguishes "paused while present" from "off shift" for both new
@@ -308,6 +354,12 @@ there is correspondingly less reason to rush.
   acceptable that the step's current state becomes `paused` with no reason attached — matching how a
   normally-paused step already behaves. Confirm; impact if unresolved is that the backfill's
   step-table half is underspecified.
+- **BLOCKING — does "Ended shift" stay in the worker's pause sheet?** See the boxed warning in
+  "Architectural direction". As specified, this set moves a worker-picked ended-shift pause from
+  `total_ended_shift_seconds` into `total_pause_seconds`, corrupting the pause ratio the metric
+  exists to protect. Option 1 (remove it from the sheet, worker clocks out instead) is recommended
+  and also resolves the identical-rendering problem. **Impact if unresolved: the bucketing rework
+  cannot be specified, and success criterion 3 — same values before and after — cannot be met.**
 - **New — what happens to worker-chosen `pause_ended_shift` rows?** Because phase 3 deliberately
   leaves them carrying a catalog reference, this work will meet `step_state_records` rows that are
   `state = ended_shift` with a non-null `pause_reason_id`. Under the target semantics those become
@@ -317,6 +369,13 @@ there is correspondingly less reason to rush.
 
 ## Progress notes
 
+- `2026-07-31`: **Bucketing regression found** by the transition-reasons tracking session, verified
+  against `aggregate_metrics.py:17-25`. This document's "sharpening" claim was wrong: re-keying the
+  `ended_shift` bucket onto `transition_reason` alone moves a worker-picked ended-shift pause into
+  `total_pause_seconds`, which is the corruption the document itself says must be prevented.
+  Recorded as a blocking design question with two resolutions; the recommended one removes "Ended
+  shift" from the worker's pause sheet as part of this set. Found while assessing whether the phase
+  2 round-3 fix prompt carried unstated assumptions — it did not; this did.
 - `2026-07-31`: **Sequencing decided — successor set** (see above). The assessment was accepted as
   written, with one correction: phase 4's check constraints are not affected by removing a `state`
   member. Two changes were made to the transition-reasons set as a direct result of this document:
