@@ -18,6 +18,7 @@ from beyo_manager.models.tables.tasks.task_customer_coordination import TaskCust
 from beyo_manager.models.tables.tasks.task_note import TaskNote
 from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.users.user import User
 
 
@@ -174,6 +175,25 @@ def serialize_step(step: TaskStep) -> dict:
         "total_issues_resolved_count": step.total_issues_resolved_count,
         "total_cost_minor": step.total_cost_minor,
         "recorded_time_marked_wrong": step.recorded_time_marked_wrong,
+    }
+
+
+def serialize_task_step_acknowledgment(
+    ack: TaskStepAcknowledgment,
+    *,
+    worker: User | None = None,
+    created_by: User | None = None,
+) -> dict:
+    return {
+        "client_id": ack.client_id,
+        "step_id": ack.step_id,
+        "task_id": ack.task_id,
+        "reason": ack.reason,
+        "worker": serialize_user_working_section_member(worker) if worker else None,
+        "created_by": serialize_user_working_section_member(created_by) if created_by else None,
+        "first_seen_at": ack.first_seen_at.isoformat() if ack.first_seen_at else None,
+        "acknowledged_at": ack.acknowledged_at.isoformat() if ack.acknowledged_at else None,
+        "created_at": ack.created_at.isoformat(),
     }
 
 

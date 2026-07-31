@@ -1,6 +1,6 @@
 from sqlalchemy import and_, select
 
-from beyo_manager.domain.users.serializers import serialize_user_working_section_member
+from beyo_manager.domain.tasks.serializers import serialize_task_step_acknowledgment
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.users.user import User
@@ -12,26 +12,6 @@ from beyo_manager.services.queries.working_sections.step_record_payload import (
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
-
-
-def _serialize_acknowledgment(
-    ack: TaskStepAcknowledgment,
-    *,
-    worker: User | None,
-    created_by: User | None,
-) -> dict:
-    return {
-        "client_id": ack.client_id,
-        "step_id": ack.step_id,
-        "task_id": ack.task_id,
-        # Free-text reassignment note; the frontend truncates it via the notes system.
-        "reason": ack.reason,
-        "worker": serialize_user_working_section_member(worker) if worker else None,
-        "created_by": serialize_user_working_section_member(created_by) if created_by else None,
-        "first_seen_at": ack.first_seen_at.isoformat() if ack.first_seen_at else None,
-        "acknowledged_at": ack.acknowledged_at.isoformat() if ack.acknowledged_at else None,
-        "created_at": ack.created_at.isoformat(),
-    }
 
 
 async def list_pending_step_acknowledgments(ctx: ServiceContext) -> dict:
@@ -93,7 +73,7 @@ async def list_pending_step_acknowledgments(ctx: ServiceContext) -> dict:
         if step is None:
             continue
         payload = await build_step_record_payload(ctx, step)
-        payload["acknowledgment"] = _serialize_acknowledgment(
+        payload["acknowledgment"] = serialize_task_step_acknowledgment(
             ack,
             worker=users_map.get(ack.worker_id),
             created_by=users_map.get(ack.created_by_id) if ack.created_by_id else None,
