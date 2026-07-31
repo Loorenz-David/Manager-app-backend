@@ -1222,6 +1222,21 @@ Rules for the implementing session:
   of a clean full-suite comparison is made; this requires environment/parallel-work resolution in
   the independent re-review.
 
+- `2026-07-31` `operator session`: **The deferred suite comparison is resolved — the feature is
+  clean.** The implementer's 372/1042/38 carries the documented broken-environment signature (the
+  identical **38-error** count as the rejected round-1 baseline; see the transition-reasons master
+  plan's "Validation baseline"), so it was re-measured in the main tree at `f512eb1`, from
+  `backend/app`, default plugins:
+
+  - Run 1: **26 failed / 1424 passed / 0 errors** — the +26 passed vs the 26/1398 baseline is the
+    feature's new tests.
+  - Run 2: the identical 26-node failure set (compared as node sets, not counts).
+  - **Zero acknowledgment- or reassigned-related nodes** among the 26; all are the pre-existing
+    baseline set.
+
+  The re-review can treat the full-suite criterion as met and should verify against these figures,
+  not re-open the 372 number.
+
 ## Lifecycle transition
 
 - Current state: `under_construction`
