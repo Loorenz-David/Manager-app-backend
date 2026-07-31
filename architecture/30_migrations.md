@@ -230,6 +230,37 @@ def downgrade():
 
 ---
 
+## Migration-owned bookkeeping tables — name them `*_journal`
+
+A migration sometimes needs a table of its own: a journal recording which rows it rewrote, so the
+change can be undone. Such a table is created with raw SQL and has **no ORM model**, by design.
+
+That is exactly the shape `alembic revision --autogenerate` answers with `op.drop_table` — a table
+present in the database and absent from `Base.metadata`. The drop lands as a plausible-looking line
+inside an unrelated migration, and takes the reversibility of the original change with it. Nobody
+reviewing that revision has any reason to question it.
+
+**Name any such table with a `_journal` suffix.** `migrations/env.py` carries an `include_object`
+filter, wired into both the offline and online paths, that skips reflected tables matching that
+suffix when they have no metadata counterpart. The suffix is a **reserved marker**, not a
+convention of taste:
+
+```python
+op.execute("CREATE TABLE IF NOT EXISTS <slug>_backfill_journal (...)")   # protected
+op.execute("CREATE TABLE IF NOT EXISTS <slug>_backfill_log (...)")       # NOT protected
+```
+
+Two consequences worth knowing:
+
+- **No ORM table may use the suffix.** The filter cannot distinguish a migration-owned table from a
+  model someone intentionally deleted — both reflect with no metadata counterpart. Safety rests
+  entirely on the suffix being reserved.
+- **A journal is not permanent.** Whichever later change makes the original migration permanently
+  irreversible should drop it deliberately, last, and record the row count it held — so what was
+  rewritten survives the table itself.
+
+---
+
 ## Dangerous operations checklist
 
 Before running any of these, get explicit team confirmation:
