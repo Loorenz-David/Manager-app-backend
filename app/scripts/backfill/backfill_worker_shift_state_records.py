@@ -63,6 +63,7 @@ async def _load_day_intervals(
             StepStateRecord.client_id,
             StepStateRecord.state,
             StepStateRecord.pause_reason_id,
+            StepStateRecord.transition_reason,
             StepStateRecord.entered_at,
             StepStateRecord.exited_at,
             StepStateRecord.step_id,
@@ -92,6 +93,10 @@ async def _load_day_intervals(
             record_id=row.client_id,
             state=row.state.value,
             reason=row.pause_reason_id,
+            # Same mechanism as `_reconstruct_shift_middle`: both explanation channels
+            # are carried separately end to end, so a system-typed step record rebuilds
+            # into a segment that still says which transition produced it.
+            transition_reason=row.transition_reason,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             step_id=row.step_id,
@@ -136,6 +141,11 @@ def _records_from_segments(
                 exited_at=segment.end,
                 changed_by_id=None,
                 reason=(segment.reason if state is UserShiftStateEnum.IN_PAUSE else None),
+                transition_reason=(
+                    segment.transition_reason
+                    if state is UserShiftStateEnum.IN_PAUSE
+                    else None
+                ),
                 manually_recorded=False,
             )
         )

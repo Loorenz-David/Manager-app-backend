@@ -96,6 +96,7 @@ async def _add_step_record(
     entered_at: datetime,
     exited_at: datetime,
     reason: str | None = None,
+    transition_reason: str | None = None,
 ) -> None:
     pause_reason_id = (
         await db_session.scalar(
@@ -112,6 +113,7 @@ async def _add_step_record(
             step_id=step_id,
             state=state,
             pause_reason_id=pause_reason_id,
+            transition_reason=transition_reason,
             entered_at=entered_at,
             exited_at=exited_at,
             created_by_id=user_id,
@@ -303,3 +305,67 @@ async def test_backfill_ended_shift_segment_terminates_day(db_session) -> None:
     )
     assert ended.entered_at == base + timedelta(hours=1)
     assert ended.exited_at == ended.entered_at
+
+
+async def test_backfill_carries_transition_reason_onto_rebuilt_rows(db_session) -> None:
+    """R14 mechanism parity with `_reconstruct_shift_middle`: a system-typed step pause
+    must rebuild into a segment that still says which transition produced it. Before the
+    fix the script dropped `transition_reason`, so a rebuilt day bucketed that time as
+    `unspecified` and the pause lost its label."""
+    workspace, worker, step = await _seed_worker_day(db_session)
+    work_date = date(2026, 7, 15)
+    base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
+    await _add_step_record(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=worker.client_id,
+        step_id=step.client_id,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=base,
+        exited_at=base + timedelta(minutes=20),
+    )
+    await _add_step_record(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=worker.client_id,
+        step_id=step.client_id,
+        state=TaskStepStateEnum.PAUSED,
+        entered_at=base + timedelta(minutes=20),
+        exited_at=base + timedelta(minutes=40),
+        transition_reason="other_task_priority",
+    )
+    await db_session.flush()
+
+    await backfill_worker_shift_day(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=worker.client_id,
+        work_date=work_date,
+        now=datetime(2026, 7, 20, tzinfo=timezone.utc),
+        execute=True,
+    )
+
+    records = await _shift_records(db_session, workspace.client_id, worker.client_id)
+    paused = [r for r in records if r.state is UserShiftStateEnum.IN_PAUSE]
+    assert [r.transition_reason for r in paused] == ["other_task_priority"]
+    assert all(r.reason is None for r in paused)
+    working = [r for r in records if r.state is UserShiftStateEnum.WORKING]
+    assert all(r.transition_reason is None for r in working)
+
+    out = await get_worker_linear_timeline_breakdown(
+        ServiceContext(
+            identity={
+                "workspace_id": workspace.client_id,
+                "user_id": "usr_manager",
+                "role_name": "manager",
+            },
+            incoming_data={"user_id": worker.client_id},
+            query_params={
+                "date_from": work_date.isoformat(),
+                "date_to": work_date.isoformat(),
+            },
+            session=db_session,
+        )
+    )
+    assert out["timeline"]["pause_by_reason"] == {"other_task_priority": 20 * 60}
+    assert out["pause_reasons"]["other_task_priority"]["name"] == "Other task priority"
