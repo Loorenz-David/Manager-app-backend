@@ -64,9 +64,14 @@ Numbered `T…` to avoid collision with the declared_worker_states set's `D1–D
   `pause_reason_id` is `NOT NULL`, so the column would be constant for every row. The declared-state
   semantics are carried by the table identity and surfaced during derivation. If a phase finds a
   concrete case this breaks, escalate rather than adding the column silently.
-- **T4 — Readers tolerate both representations before any writer changes.** No phase may cut a
-  writer over until every read path resolving a pause reason has shipped `transition_reason`-first
-  resolution with a `pause_reason_id` fallback.
+- **T4 — Readers tolerate both representations before any writer changes** *(relaxed
+  2026-07-31)*. Originally this forced read tolerance into its own phase ahead of every writer
+  cutover. That protects against a **partial deploy** — a window where new-format rows exist and
+  readers discard them. The operator is shipping this set in one deploy, so that window does not
+  exist, and the separation bought three extra review cycles for nothing. **Revised rule:** readers
+  and writers may ship in the same phase, provided the readers are implemented and tested *first
+  within it* and they reach production in the same deploy. If the delivery plan ever changes to
+  incremental deploys, this reverts to the strict form.
 - **T5 — Retire, do not leave inert** (operator ruling, 2026-07-31). Historical rows are backfilled
   to `transition_reason`, their system `pause_reason_id` nulled, and the system catalog rows then
   soft-deleted. Ends with one representation everywhere. The alternative — permanently dual
@@ -76,13 +81,16 @@ Numbered `T…` to avoid collision with the declared_worker_states set's `D1–D
   by slug, the column and its global unique index have no consumer. Dropping them resolves the
   second-workspace `IntegrityError` as a consequence rather than as separate work. Scoping the index
   to `(workspace_id, slug)` is explicitly NOT the fix (intention plan, "Architectural direction").
-  **Operator confirmed 2026-07-31: drop the column, not only the index.** Phase 0 must still audit
-  for out-of-repo slug consumers (exports, reports, webhooks, frontend) and escalate if it finds
+  **Operator confirmed 2026-07-31: drop the column, not only the index.** Phase 1's inventory step
+  must still audit for out-of-repo slug consumers (exports, reports, webhooks, frontend) and escalate if it finds
   one — the ruling was made on the basis that none exist in this repository.
-- **T7 — `transition_reason` subsumes `manually_recorded`** unless a phase proves otherwise. Phase 2
-  of declared_worker_states spent four fix cycles (F1/F2, G1, H1, I1) on provenance discrimination
-  and settled on a `changed_by_id IS NOT NULL` heuristic. A typed transition field makes that
-  heuristic unnecessary. The phase that acts on this must prove the removal is safe, not assume it.
+- **T7 — `manually_recorded` subsumption is a FOLLOW-UP, not part of this set** *(demoted
+  2026-07-31)*. `transition_reason` probably subsumes it, and the `changed_by_id IS NOT NULL`
+  heuristic that declared_worker_states Phase 2 settled on after four fix cycles (F1/F2, G1, H1, I1)
+  probably becomes unnecessary. But removing it fixes nothing user-facing, and proving the
+  equivalence safely is a whole phase of work. **Recorded as deferred cleanup** — do it when
+  someone next touches that code with a reason to. No phase in this set may remove
+  `manually_recorded` or the heuristic; doing so is a scope violation.
 - **T8 — No phase repairs baseline debt.** The repository has documented pre-existing validation
   debt (see the declared_worker_states master plan's "Repository validation baseline"). Implementers
   must not absorb it; reviewers must not block on it.
@@ -119,31 +127,38 @@ handoff update, and the handoff is operator-owned — phases propose, they do no
 
 ## Phase orchestration
 
-| # | Phase | Delivers | Deployable alone |
+**Restructured 2026-07-31 from eleven phases to four.** The original set applied the ceremony of the
+declared_worker_states feature set — which built new tables, a new auth scope, new endpoints, and a
+kiosk flow — to a migration that adds a column, teaches readers to read it, flips three call sites,
+backfills, and deletes the leftovers. Eleven phases meant eleven implement→review→fix cycles, at
+roughly seven exchanges each before a single defect. That cost was not justified by the risk.
+
+Three of the removed phases existed only to satisfy the strict form of T4, which guards against a
+partial deploy. This set ships in one deploy (see "Delivery shape"), so that guard bought nothing.
+One more, `manually_recorded` subsumption, was cleanup that fixes nothing user-facing and is now
+deferred under T7.
+
+| # | Phase | Delivers | Independent review earns its cost because |
 |---|---|---|---|
-| 0 | Inventory & verification | Row volumes, read-path audit, confirmed second-workspace `IntegrityError`. **No code.** | n/a — gate |
-| 1 | Vocabulary & additive schema | `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`. Nothing reads or writes it. | yes (zero behaviour change) |
-| 2 | Read tolerance | Every pause-reason read path resolves `transition_reason` first, falls back to `pause_reason_id`. Still no writers. | yes (zero behaviour change) |
-| 3 | **Clock-out cutover** | `_clock_worker_shift.py` writes `SHIFT_ENDED` + `NULL`; the `get_system_pause_reason_id` call is removed. **This is the phase that ends the 3131-workspace outage.** | yes |
-| 4 | Task-switch cutover | Both `pause_other_task_priority` sites write `OTHER_TASK_PRIORITY` + `NULL`. | yes |
-| 5 | Derivation cutover | The clock-out rebuild writes `transition_reason` on derived rows; `reason` stops being polymorphic. Amends D3/D5. | yes |
-| 6 | `manually_recorded` subsumption | Per T7: prove and remove the `changed_by_id` provenance heuristic. | yes |
-| 7 | Serializer & contract cutover | Remove the `startswith("par_")` branch; propose handoff changes to the operator. | yes |
-| 8 | Historical backfill | One-time migration: set `transition_reason` on historical rows, null their system `pause_reason_id`. | yes |
-| 9 | Catalog retirement | Soft-delete system rows; delete `get_system_pause_reason_id`; remove `is_system_managed` consumers; drop `slug` + `uq_pause_reasons_slug`. Fixes the bootstrap `IntegrityError`. | yes |
-| 10 | Constraints & cleanup | `NOT NULL` / check constraints now that backfill is complete; bootstrap seed phase cleanup. | yes |
+| 1 | **Inventory, vocabulary, schema & read tolerance** | The read-path audit and volume figures; `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`; every read path resolves both representations. **Zero behaviour change** — nothing writes the column yet. | The audit is the foundation the rest is built on, and a missed read path ships broken in phase 2. |
+| 2 | **Cutover** | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
+| 3 | **Historical backfill** | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
+| 4 | **Retirement & constraints** | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` removed; `slug` + `uq_pause_reasons_slug` dropped; check constraints added; final verification. | Drops columns and adds constraints — cheap to review, but must follow 3. |
 
-**Ordering rationale.** T4 forces read tolerance (2) ahead of every writer cutover (3–5). The
-outage fix lands at phase 3 — as early as it safely can — rather than being held behind the
-backfill. Retirement (9) must follow the backfill (8), and constraints (10) must follow retirement,
-because a `NOT NULL` constraint cannot be added while un-backfilled rows exist.
+**Ordering rationale.** Phase 1 is additive and observably inert, so it carries no deploy risk.
+Phase 2 ends the outage **without needing the backfill**: new rows do not require the catalog row
+that is missing, so the 3131 broken workspaces work the moment it ships. Phases 3 and 4 are cleanup
+that removes the second representation — valuable, but not what unblocks anyone.
 
-**Delivery shape.** Operator ruling 2026-07-31: phases 0–10 run as **one continuous set**, begun
-immediately after declared_worker_states Phase 7 archives. An earlier proposal to stop after phase 4
-(outage fixed, cleanup deferred to a later release) was rejected — the operator is running this set
-straight through, so no phase needs to leave the system in a coherent half-migrated state as a
-deliberate resting point. Each phase must still be independently deployable (T-series discipline),
-but none is designed as a terminus.
+**What was preserved from the eleven-phase draft.** The acceptance criteria, which were the real
+output: the zero-catalog tests, the label-parity requirement, "select by the three specific system
+rows, never by `is_system_managed` alone", the mutation proofs, and the escalation triggers. They
+live in fewer, larger plans, unchanged in substance.
+
+**Delivery shape.** Phases 1–4 run as one continuous set, begun immediately after
+declared_worker_states Phase 7 archives, and reach production in a single deploy. Each phase must
+still be independently deployable, but none is designed as a resting point. If this changes to
+incremental deploys, T4 reverts to its strict form and phase 1 must split.
 
 ### Per-phase workflow (operator: David)
 
@@ -199,13 +214,23 @@ This feature set inherits the recorded baseline in
 
 ## Progress notes
 
+- `2026-07-31`: **Restructured from eleven phases to four** (operator call). The eleven-phase draft
+  applied declared_worker_states' ceremony — which was sized for new tables, a new auth scope, new
+  endpoints and a kiosk flow — to a migration that adds a column, teaches readers, flips three call
+  sites, backfills, and deletes leftovers. At ~7 exchanges per implement→review→fix cycle, eleven
+  phases cost ~77 exchanges before a single defect. Three of the removed phases existed only to
+  satisfy the strict form of T4, which guards against a partial deploy that this delivery shape does
+  not have; a fourth (`manually_recorded` subsumption) was cleanup fixing nothing user-facing and is
+  now deferred under T7. **The acceptance criteria were preserved verbatim in substance** — they were
+  the real output; only the phase boundaries changed. The eleven phase-plan files and the phase 0
+  prompts were deleted rather than left alongside the new set.
 - `2026-07-31`: **All eleven phase plans written** (phase0 … phase10, this folder). Operator
   resolved the remaining open inputs: T6 confirmed as *drop the column, not only the index*
   (conditional on phase 0's out-of-repo consumer audit finding nothing); delivery runs 0–10 as one
   continuous set with no deliberate stopping point; `pause_ended_shift` confirmed present in the
   production workspace, which this feature set supersedes anyway; `clock_in_code` assignment handled
   manually by the operator; PERSONAL pause reasons already seeded in local and server databases.
-  Still to write: implementer prompts and review prompts per phase.
+  (Superseded by the restructure above.)
 - `2026-07-31`: Master plan drafted. Model layer traced: the intention's Finding 4 was corrected
   (`step_state_records.reason` was dropped by `b58cdffb5ccc`; what survives is the soft-deleted
   `pause_case_created` anchor row that history points at via FK). Operator ruled **T5 retire** over

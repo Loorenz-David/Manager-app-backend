@@ -1,0 +1,167 @@
+# PLAN_system_transition_reasons_phase4_retirement_20260731
+
+## Metadata
+
+- Plan ID: `PLAN_system_transition_reasons_phase4_retirement_20260731`
+- Status: `under_construction`
+- Owner agent: `<implementer>`
+- Created at (UTC): `2026-07-31T00:00:00Z`
+- Last updated at (UTC): `2026-07-31T00:00:00Z`
+- Master plan: `.../system_transition_reasons/MASTER_PLAN_system_transition_reasons_20260731.md`
+- Intention plan: `docs/architecture/under_construction/intention/INTENTION_system_transition_reasons_20260730.md`
+
+## Goal and intent
+
+- Goal: retire the system catalog rows and everything that existed to serve them — the slug lookup,
+  `slug` itself, its global unique index, `is_system_managed` — then make the new invariants
+  enforceable by the database and close the feature set out.
+- Business/user intent: `pause_reasons` becomes what it was always meant to be, a catalog of things
+  a worker chooses. Dropping `uq_pause_reasons_slug` also **fixes the second-workspace
+  `IntegrityError`** (success criterion 6) as a consequence of the design rather than as a patch.
+  Constraints are where the guarantee stops depending on every future writer remembering.
+- Non-goals: any behavioural change; `manually_recorded` (T7 — deferred).
+
+## Scope
+
+- In scope: retiring the three system rows; deleting `get_system_pause_reason_id`; removing
+  `is_system_managed` and its consumers; dropping `slug` and `uq_pause_reasons_slug`; the bootstrap
+  seed phase and seed migration; check constraints; final verification and close-out.
+- Out of scope: worker-choosable catalog rows and the CRUD surface, beyond removing system-row
+  special-casing.
+- Assumptions: phases 1–3 archived. **Entry condition: phase 3's zero-remaining-references query
+  returns zero. Re-run it — do not trust the recorded result.**
+
+## Clarifications required
+
+- [ ] **Soft-delete or hard-delete the three system rows?** Soft-delete is safer (FK intact,
+      reversible) but leaves rows a manager could see unless filtered. Hard-delete is only possible
+      because phase 3 guarantees zero references, and `ondelete="RESTRICT"` will enforce that for
+      us. **Recommend soft-delete**; escalate for the ruling.
+- [ ] **Does `transition_reason` become `NOT NULL`**, or does null remain meaningful for
+      worker-chosen pauses? Resolve from **phase 1's recorded `WORKER_PAUSED` ruling**, not by
+      re-deciding it. If null is meaningful, the constraint is a check
+      (`transition_reason IS NOT NULL OR pause_reason_id IS NOT NULL`) rather than `NOT NULL`.
+
+## Acceptance criteria
+
+### Retirement
+
+1. **Entry condition re-verified**: zero rows in any table reference the three system catalog rows.
+   Freshly run and recorded. If non-zero, STOP — phase 3 is incomplete.
+2. The three system rows are retired per the ruling and no longer appear in any worker-facing picker
+   or manager-facing catalog list. **Assert against the actual endpoint response**, not the query.
+3. `get_system_pause_reason_id` is **deleted** (success criterion 3), with its module if nothing else
+   lives there, and its tests.
+4. `is_system_managed` and its consumers removed: `domain/pause_reasons/guards.py`
+   (`can_delete_pause_reason`), the pause-reason serializer field, and the hardcoded `False` in
+   `create_pause_reason.py`. **`can_delete_pause_reason` returning `not is_system_managed` is delete
+   protection** — confirm nothing else depended on it, and state what replaces it (likely nothing,
+   because there is nothing left to protect).
+5. `slug` and `uq_pause_reasons_slug` dropped (**T6**, operator-confirmed). Phase 1's out-of-repo
+   consumer audit must have found none; **if it found one, STOP.**
+6. **Second-workspace bootstrap succeeds** — the mirror of phase 1's `IntegrityError` reproduction.
+   Create two workspaces through the ordinary path on a **disposable** database and prove it is
+   gone. This is success criterion 6.
+7. The bootstrap seed phase and seed migration `49bd666da846` no longer seed system rows, and their
+   duplicated `_PAUSE_REASONS` tuples are reconciled — both files carry comments requiring the other
+   to be updated in step. Leaving them inconsistent is a finding.
+8. Serializer output for pause reasons no longer includes removed fields, and the change is
+   **proposed** to the operator for the handoff — not written into it.
+
+### Constraints
+
+9. The mutual-exclusion invariant is enforced by a check constraint: a row carrying a system
+   `transition_reason` must have `pause_reason_id IS NULL`. This is the database making **T2** true
+   rather than trusting future writers.
+10. **Every existing row satisfies the constraint before it is added** — verified by query,
+    recorded, not assumed. Adding a constraint that fails validation against production data is the
+    failure mode this criterion exists to prevent.
+11. Phase 1's `pause_reason_id` fallback in the read paths: either removed with proof no row can
+    reach it, or **kept with a comment explaining why it must stay**. Silently leaving dead code is
+    a finding; so is removing a branch legacy rows still need. Phase 3's parity evidence decides
+    which.
+
+### Close-out
+
+12. All six master-plan success criteria re-verified **end-to-end and fresh** — not inherited from
+    the phases that first claimed them. In particular criterion 1 (clock-out in a zero-catalog
+    workspace) and criterion 6 (second-workspace bootstrap) are re-run.
+13. **D3, D5 and D14** carry their final amendment state in this feature set's master plan,
+    consistent with what shipped. The declared_worker_states plan is archived — verify no phase
+    edited it.
+14. The intention plan moves to `achieved`, its linked-plans table is updated to the four-phase set,
+    and its open questions are answered or explicitly closed.
+15. Deferred items collected into one visible list in the master plan: T7's `manually_recorded`
+    subsumption, plus any repo-health item found but not fixed across phases 1–4 (T8).
+
+## Contracts and skills
+
+### Contracts loaded
+
+- `backend/architecture/04_migrations.md`, `03_models.md`, `46_serialization.md`
+- `backend/architecture/23_documentation.md`: close-out discipline.
+
+### File read intent — pattern vs. relational
+
+- Permitted (relational): `pause_reason.py`; `guards.py`; `create_pause_reason.py`; the pause-reason
+  serializer; `seed_pause_reasons.py`; migrations `49bd666da846` / `fb10ac7fd439`; every Review log
+  from phases 1–3, to **verify** criteria rather than trust them.
+- Prohibited (pattern): style reads.
+
+### Skill selection
+
+- Primary skill: `backend/skills/cross_cutting/plan_lifecycle_orchestrator/SKILL.md`
+
+## Implementation plan
+
+1. Re-run phase 3's zero-references query. If non-zero, STOP.
+2. Escalate both clarifications.
+3. Retire the rows; assert absence from pickers and catalog listings via real endpoint responses.
+4. Delete `get_system_pause_reason_id` and its tests; remove `is_system_managed` and each consumer.
+5. Drop `slug` and `uq_pause_reasons_slug`; reconcile the seed phase and seed migration.
+6. Two-workspace bootstrap test on a disposable database.
+7. Verify constraint compliance by query, then add the constraint migration.
+8. Decide phase 1's fallback: remove with proof, or keep with a comment.
+9. Re-verify all six success criteria fresh; finalise D3/D5/D14; move the intention to `achieved`;
+   collect deferred items.
+10. Review log entry; handoff proposal, not edit. STOP for final review.
+
+## Risks and mitigations
+
+- Risk: an out-of-repo consumer of `slug` breaks silently after the column is gone.
+  Mitigation: criterion 5 depends on phase 1's audit; the operator's T6 ruling was explicitly
+  conditional on it finding nothing.
+- Risk: removing `is_system_managed` removes delete protection something else quietly relied on.
+  Mitigation: criterion 4 requires confirming what depended on it before removal.
+- Risk: the constraint fails validation against production data mid-deploy.
+  Mitigation: criterion 10 requires proving compliance by query first.
+- Risk: the fallback is removed while legacy rows still need it, breaking historical labels.
+  Mitigation: criterion 11 ties the decision to phase 3's parity evidence.
+- Risk: success criteria are marked met by citing earlier phases' claims.
+  Mitigation: criterion 12 requires fresh re-verification.
+- Risk: the seed phase and seed migration drift, so a fresh database and an upgraded one end up with
+  different catalogs.
+  Mitigation: criterion 7 requires reconciling both.
+
+## Validation plan
+
+- Zero-references query returns zero, freshly run.
+- Two-workspace bootstrap succeeds on a disposable database.
+- `grep -rn "get_system_pause_reason_id\|is_system_managed\|slug" app/beyo_manager` returns nothing
+  in the pause-reasons domain.
+- Fresh-database `alembic upgrade head` produces a catalog with no system rows.
+- Pre-constraint compliance query returns zero violating rows; the constraint rejects a deliberately
+  invalid insert.
+- All six success criteria re-verified fresh, with evidence.
+- Full suite: no new failure nodes vs. baseline (node sets, not counts).
+- `ruff check` clean on touched files.
+
+## Review log
+
+- `<date>` `<reviewer>`: `<feedback>`
+
+## Lifecycle transition
+
+- Current state: `under_construction`
+- Next state: `approved`
+- Transition owner: `David`

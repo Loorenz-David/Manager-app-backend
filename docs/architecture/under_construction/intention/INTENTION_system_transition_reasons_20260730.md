@@ -297,18 +297,14 @@ should never have been catalog rows at all.
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| `MASTER_PLAN_system_transition_reasons_20260731` | `.../under_construction/implementation/system_transition_reasons/` | `under_construction` | Goal, decisions T1–T8, the 11-phase table, orchestration, validation baseline |
-| `PLAN_..._phase0_inventory_20260731` | same folder | `under_construction` | Volumes, read-path audit, `IntegrityError` reproduction, slug-consumer audit. No code. |
-| `PLAN_..._phase1_vocabulary_schema_20260731` | same folder | `under_construction` | `TransitionReasonEnum`; nullable columns. Additive only. |
-| `PLAN_..._phase2_read_tolerance_20260731` | same folder | `under_construction` | Every read path resolves both representations (T4 gate) |
-| `PLAN_..._phase3_clockout_cutover_20260731` | same folder | `under_construction` | **Ends the clock-out outage** |
-| `PLAN_..._phase4_taskswitch_cutover_20260731` | same folder | `under_construction` | **Ends the task-switch outage**; zero slug callers |
-| `PLAN_..._phase5_derivation_cutover_20260731` | same folder | `under_construction` | Rebuild carries `transition_reason`; amends D3/D5 |
-| `PLAN_..._phase6_manually_recorded_20260731` | same folder | `under_construction` | T7 equivalence analysis; heuristic removal |
-| `PLAN_..._phase7_serializer_contract_20260731` | same folder | `under_construction` | Removes the `startswith("par_")` branch |
-| `PLAN_..._phase8_historical_backfill_20260731` | same folder | `under_construction` | One-time backfill; label parity |
-| `PLAN_..._phase9_catalog_retirement_20260731` | same folder | `under_construction` | Retires system rows; drops `slug` + unique index |
-| `PLAN_..._phase10_constraints_cleanup_20260731` | same folder | `under_construction` | Constraints; final verification; closes this intention |
+| `MASTER_PLAN_system_transition_reasons_20260731` | `.../under_construction/implementation/system_transition_reasons/` | `under_construction` | Goal, decisions T1–T8, four-phase table, orchestration, validation baseline |
+| `PLAN_..._phase1_foundation_20260731` | same folder | `under_construction` | Inventory + read-path audit; `TransitionReasonEnum`; nullable columns; read tolerance. Zero behaviour change. |
+| `PLAN_..._phase2_cutover_20260731` | same folder | `under_construction` | **Ends the outage** — clock-out, both task-switch sites, derivation, serializer |
+| `PLAN_..._phase3_backfill_20260731` | same folder | `under_construction` | One-time historical backfill; label parity |
+| `PLAN_..._phase4_retirement_20260731` | same folder | `under_construction` | Retires system rows; drops `slug` + unique index; constraints; closes this intention |
+
+*(Restructured 2026-07-31 from an eleven-phase draft — see the master plan's "Phase orchestration"
+for why. The acceptance criteria were preserved; the ceremony was not.)*
 
 ## Progress notes
 
