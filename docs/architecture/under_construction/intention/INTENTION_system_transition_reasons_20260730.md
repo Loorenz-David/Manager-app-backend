@@ -121,16 +121,23 @@ if is_paused and current.reason is not None and pause_reason is None:
 (absent / string / null). A field whose type is decided by sniffing an id prefix is the clearest
 single argument for this migration. Include this serializer in the tracing entry points.
 
-### Finding 4 — a **third** legacy representation exists: `pause_case_created`
+### Finding 4 — `pause_case_created` survives as a soft-deleted anchor row that history points at
 
-`pause_case_created` was dropped from the live default set but survives as a **soft-deleted anchor
-row** seeded by migration `fb10ac7fd439`, purely so that historical
-`step_state_records.reason = 'pause_case_created'` rows still backfill correctly. Both
+**Corrected 2026-07-31.** An earlier revision of this finding said the legacy free-text value "still
+exists on `step_state_records`". It does not: migration `b58cdffb5ccc` executed
+`op.drop_column('step_state_records', 'reason')` along with the `step_event_reason_enum` type, so
+that table has no `reason` column at all today — only `pause_reason_id` (FK) and `description`.
+
+What actually survives is the **soft-deleted `pause_case_created` catalog row** seeded by migration
+`fb10ac7fd439`. Historical `step_state_records` rows were backfilled to point at it via
+`pause_reason_id`, which is an FK with `ondelete="RESTRICT"`. So the anchor is a **live FK target
+carrying label resolution for historical data**, not dead weight. Both
 [seed_pause_reasons.py:16-20](app/beyo_manager/services/commands/bootstrap/phases/seed_pause_reasons.py#L16-L20)
 and the migration carry explicit warnings not to change one without reconciling the other.
 
-Any historical-data migration in this plan must not corrupt that anchor. This is a hard constraint on
-§6 of the analysis, not a footnote.
+This makes the anchor *more* relevant to the plan, not less: it is the concrete case proving that
+"delete the system rows" is not available as a strategy while history references them. It is a hard
+constraint on §6, and it is directly governed by Open question 2.
 
 ### Finding 5 — `pause_type` is doing double duty
 
@@ -290,7 +297,18 @@ should never have been catalog rows at all.
 
 | Plan ID | Path | Status | Covers |
 |---------|------|--------|--------|
-| _(none yet)_ | — | — | To be produced by the planning session per "Instructions for the planning session" |
+| `MASTER_PLAN_system_transition_reasons_20260731` | `.../under_construction/implementation/system_transition_reasons/` | `under_construction` | Goal, decisions T1–T8, the 11-phase table, orchestration, validation baseline |
+| `PLAN_..._phase0_inventory_20260731` | same folder | `under_construction` | Volumes, read-path audit, `IntegrityError` reproduction, slug-consumer audit. No code. |
+| `PLAN_..._phase1_vocabulary_schema_20260731` | same folder | `under_construction` | `TransitionReasonEnum`; nullable columns. Additive only. |
+| `PLAN_..._phase2_read_tolerance_20260731` | same folder | `under_construction` | Every read path resolves both representations (T4 gate) |
+| `PLAN_..._phase3_clockout_cutover_20260731` | same folder | `under_construction` | **Ends the clock-out outage** |
+| `PLAN_..._phase4_taskswitch_cutover_20260731` | same folder | `under_construction` | **Ends the task-switch outage**; zero slug callers |
+| `PLAN_..._phase5_derivation_cutover_20260731` | same folder | `under_construction` | Rebuild carries `transition_reason`; amends D3/D5 |
+| `PLAN_..._phase6_manually_recorded_20260731` | same folder | `under_construction` | T7 equivalence analysis; heuristic removal |
+| `PLAN_..._phase7_serializer_contract_20260731` | same folder | `under_construction` | Removes the `startswith("par_")` branch |
+| `PLAN_..._phase8_historical_backfill_20260731` | same folder | `under_construction` | One-time backfill; label parity |
+| `PLAN_..._phase9_catalog_retirement_20260731` | same folder | `under_construction` | Retires system rows; drops `slug` + unique index |
+| `PLAN_..._phase10_constraints_cleanup_20260731` | same folder | `under_construction` | Constraints; final verification; closes this intention |
 
 ## Progress notes
 
