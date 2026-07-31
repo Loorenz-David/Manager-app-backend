@@ -109,7 +109,8 @@ async def test_reassigned_list_and_count_agree_and_include_acknowledged_rows(db_
         await db_session.flush()
         db_session.add_all([WorkingSectionMembership(client_id=f"wsme_{suffix}", workspace_id=workspace.client_id, working_section_id=section.client_id, user_id=worker.client_id, assigned_at=now, assigned_by_id=worker.client_id), TaskStepAcknowledgment(client_id=f"tsa_{suffix}", workspace_id=workspace.client_id, step_id=step.client_id, task_id=task.client_id, worker_id=worker.client_id, created_by_id=worker.client_id, created_at=now, acknowledged_at=now if index else None), StepStateRecord(workspace_id=workspace.client_id, step_id=step.client_id, state=TaskStepStateEnum.PENDING, entered_at=now, created_at=now, created_by_id=worker.client_id)])
     await db_session.flush()
-    seen = set(); offset = 0
+    seen = set()
+    offset = 0
     while True:
         page = await list_reassigned_steps(_ctx(db_session, workspace.client_id, worker.client_id, limit=1, offset=offset, q=None, string_filters=None, unacknowledged_only="false"))
         ids = {item["client_id"] for item in page["steps_pagination"]["items"]}
@@ -273,7 +274,9 @@ async def test_reassigned_count_is_q_independent_and_list_statement_count_is_bou
     await list_reassigned_steps(_list_ctx(db_session, workspace, worker))
     assert len(executed_statements) == one_item_statement_count
 
+    del executed_statements[:]
     count_without_q = await count_reassigned_steps(_ctx(db_session, workspace.client_id, worker.client_id))
+    assert len(executed_statements) == 1
     count_with_q = await count_reassigned_steps(
         _ctx(db_session, workspace.client_id, worker.client_id, q="no-match")
     )
