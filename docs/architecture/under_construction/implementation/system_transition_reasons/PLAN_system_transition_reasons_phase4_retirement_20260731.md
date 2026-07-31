@@ -231,7 +231,90 @@ costs a few kilobytes; a missing one costs the ability to undo a migration over 
 
 ## Review log
 
-- `<date>` `<reviewer>`: `<feedback>`
+- `2026-07-31` `implementer (claude-opus-5, ALSO the operator — see the independence note below)`:
+  **Implemented and validated. STOPPED for independent review.**
+
+  ### Independence — read this first
+  I wrote this plan, both prompts, ruled on both clarifications, and implemented it. The usual
+  separation between "what should be built" and "what was built" is **absent**. The review prompt
+  says so and asks for more scepticism, not less. Two of the four cross-phase findings in this set
+  came from exactly that separation.
+
+  ### Both clarifications, ruled
+  - **Soft-delete** `pause_other_task_priority`. Zero rows reference it after phase 3, so
+    hard-delete was available; soft is reversible and nothing depends on the difference.
+  - **No `NOT NULL`.** Phase 1 ruled out a `WORKER_PAUSED` member, so null is meaningful for a
+    worker-chosen pause. The constraint is a CHECK, and it is scoped to `step_state_records` only.
+
+  ### The finding that changed the phase — T6 extended to `is_system_managed`
+  Criterion 5 said to remove `is_system_managed` and its consumers including the serializer field.
+  `frontend/packages/pause-reasons/src/types.ts:18` declares `is_system_managed: z.boolean()` —
+  **required and non-nullable, two lines above the `slug` declaration that forced T6's amendment.**
+  Removing it fails Zod on every pause-reasons response. Phase 1's audit escalated `slug` and
+  missed its neighbour; phase 2's reviewer noted "no frontend consumer", true of code branches and
+  false of the schema — the distinction that made `slug` blocking.
+  Ruled identically: **behaviour removed, field kept.** Criterion 5 and the prompt were amended, as
+  was criterion 6, which still said `slug` was dropped — stale text predating T6's amendment, in my
+  own documents. The review prompt's instruction to verify which was actually agreed is what caught
+  it.
+
+  ### The second cross-phase collision — the constraint made a phase 2 test unconstructible
+  `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` asserted precedence by
+  seeding a `step_state_records` row carrying **both** explanations. The new CHECK makes that row
+  impossible. I did **not** delete the test: its step record now carries the catalog reference
+  alone (what a worker pause actually looks like), the both-carrying assertion moved to
+  `user_shift_state_records` where it is legal by design, and `bucket_key`'s ordering — now
+  defensive rather than reachable on that table — is asserted directly in
+  `tests/unit/domain/transitions/test_bucket_key_precedence.py`.
+  **This is a judgement call across a phase boundary and is the thing I would most want a second
+  opinion on.**
+
+  ### Verified against the production copy (`.env`, dockerised server copy)
+  - Index: `CREATE UNIQUE INDEX uq_pause_reasons_slug ON pause_reasons (workspace_id, slug)`.
+  - Constraint present: `CHECK ((transition_reason IS NULL) OR (pause_reason_id IS NULL))`.
+    Compliance proven **before** it was added: 0 violating rows.
+  - `pause_other_task_priority` `is_deleted=true`; `pause_ended_shift` `is_deleted=false`;
+    `pause_case_created` untouched. Zero rows carry `is_system_managed`.
+  - Guarded populations unchanged: `pause_ended_shift` 169 → 169, `pause_case_created` 7 → 7.
+  - **Success criterion 6 proven directly**: inserting `pause_lunch_break` into a *second*
+    workspace succeeded, inside a rolled-back transaction. The `IntegrityError` is gone.
+
+  ### Mutation proof
+  `alembic downgrade -1` → 2 of the 5 new tests fail (constraint absent; retired row selectable
+  again), 3 pass as controls. Upgrade restores green.
+  **Honest caveat:** `test_no_row_is_system_managed_any_more` is *not* exercised by that mutation,
+  because `downgrade` deliberately does not restore the flag. It is bound to `upgrade`'s UPDATE,
+  not to the downgrade.
+
+  ### Criterion 7 — NOT met as specified
+  The two-workspace bootstrap needs a **disposable database**, and a fresh `alembic upgrade head`
+  **stalls** — the documented baseline item (empty-DB topological sort). I created a disposable
+  database, hit the stall, killed it and dropped the database. I proved the underlying invariant
+  directly against the real schema instead (above), which is stronger evidence about *this* schema
+  but does **not** exercise the bootstrap path. Recorded as a shortfall, not as met.
+
+  ### Suite
+  23 failed / rest passed, **zero in this phase's surface** (`pause_reason|transition|retirement|
+  kiosk|worker_shift|bucket_key` returns nothing). Down from the recorded 26 because three
+  previously-failing nodes now pass.
+  **Honest caveat:** I did not capture a pre-phase-4 baseline node set before starting, so this is
+  not a rigorous node-set diff. The reviewer should build the baseline worktree and do it properly.
+  `ruff check` clean on all touched files; the repository's 122 pre-existing errors are baseline
+  debt (T8), neither absorbed nor repaired.
+
+  ### The journal — written, deliberately NOT applied
+  Migration `c8f3d2e60a17` drops `transition_reason_backfill_journal` and records its row count
+  (**270**: 228 `step_state_records`, 42 `user_shift_state_records`) in its docstring, so the
+  record outlives the table. It is a **separate revision and has not been applied.** Applying it
+  makes phase 3 permanently irreversible, and the plan's stated default is *keep it*. If this
+  review finds the backfill needs reverting, the journal is exactly what is required. **Apply it
+  after approval, not before.**
+
+  ### Not done — deliberately left for after approval
+  Close-out criteria 13–16 (fresh re-verification of all six success criteria, D3/D5/D14 final
+  state, intention → `achieved`, the deferred-items list). Per the lifecycle, summary and archive
+  follow approval; I did not want to write "achieved" into the intention before an independent
+  reviewer had seen the phase.
 
 ## Lifecycle transition
 
