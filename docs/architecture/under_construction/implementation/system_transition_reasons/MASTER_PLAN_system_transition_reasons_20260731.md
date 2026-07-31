@@ -87,6 +87,15 @@ Numbered `T…` to avoid collision with the declared_worker_states set's `D1–D
   `HANDOFF_TO_FRONTEND_pause_reasons_step_transition_contract_20260722.md` ruling also key off it.
   Full consumer table in "Phase 1 inventory".
 
+  **Extended 2026-07-31 to `is_system_managed`, on identical evidence.** `types.ts:18` declares
+  `is_system_managed: z.boolean()` — required and non-nullable, two lines above `slug`. Removing it
+  from the serializer fails Zod on every pause-reasons response. Phase 1's audit escalated `slug`
+  and missed its neighbour; the phase 2 reviewer's "no frontend consumer" note is true of code
+  branches and false of the schema, which is the distinction that made `slug` blocking. So phase 4
+  removes the **behaviour** — the slug lookup, and `can_delete_pause_reason` — and keeps **both
+  fields** as inert published contract. After the phase, `is_system_managed` is uniformly `false`
+  and carries no meaning.
+
   Scoping the index still resolves the second-workspace `IntegrityError`, and phase 4's other
   retirement work is unchanged. Note this makes the index change a **supporting** change, which the
   intention plan explicitly permits — it does not make it the architectural fix. The fix remains
@@ -183,8 +192,8 @@ deferred under T7.
 |---|---|---|---|---|
 | 1 | **Inventory, vocabulary, schema & read tolerance** | `archived` ✅ (APPROVED round 2, 2026-07-31; round 1 `NEEDS_CHANGES` on F1 blocking + F2–F4, all closed in one fix cycle and re-verified by execution. Node-set diff vs `26d290d` empty. **Overturned T6** — see the amendment note below.) | The read-path audit and volume figures; `TransitionReasonEnum`; nullable `transition_reason` on `step_state_records` and `user_shift_state_records`; every read path resolves both representations. **Zero behaviour change** — nothing writes the column yet. | The audit is the foundation the rest is built on, and a missed read path ships broken in phase 2. |
 | 2 | **Cutover** | `archived` ✅ (APPROVED round 3, 2026-07-31; rounds 1 and 2 `NEEDS_CHANGES` — both raised the **same** defect class, a serializer emitting `null` where the explanation moved from the catalog to the vocabulary, in two different render sites. Node set unchanged across all three rounds. **Closed phase-3 binding item 3** — see the `image_url` correction below. Criterion 11 recorded as a deliberate non-completion, discharged by phase 3.) | Clock-out, both task-switch sites, the derivation rebuild, and the serializer all move to `transition_reason`. `get_system_pause_reason_id` reaches zero runtime callers. **Ends the outage.** | One behavioural change with one question: does clocking out and switching tasks still work, including in a workspace with an empty catalog. |
-| 3 | **Historical backfill** | `under_construction` | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
-| 4 | **Retirement & constraints** | `under_construction` | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` removed; **`slug` kept, `uq_pause_reasons_slug` scoped to `(workspace_id, slug)`** (T6 as amended); check constraints added; final verification. | Drops/scopes constraints — cheap to review, but must follow 3. |
+| 3 | **Historical backfill** | `archived` ✅ (APPROVED round 2, 2026-07-31; round 1 `NEEDS_CHANGES` on 3 findings, **none in the SQL**. 270 rows rewritten via the `pause_other_task_priority` slug alone; `pause_ended_shift` (169) and `pause_case_created` (7) proven byte-identical before and after. Journal retained — phase 4 owns its removal.) | One-time migration: `transition_reason` set on historical rows, their system `pause_reason_id` nulled. | Irreversible. This is where real history gets destroyed if the row selection is wrong. |
+| 4 | **Retirement & constraints** | `under_construction` | System rows retired; `get_system_pause_reason_id` deleted; `is_system_managed` behaviour removed (field kept — T6 as extended); **`slug` kept, `uq_pause_reasons_slug` scoped to `(workspace_id, slug)`** (T6 as amended); check constraints added; final verification. | Drops/scopes constraints — cheap to review, but must follow 3. |
 
 **Phase 1 artefacts.**
 Plan: `../../../archives/implementation/system_transition_reasons/PLAN_system_transition_reasons_phase1_foundation_20260731.md` ·

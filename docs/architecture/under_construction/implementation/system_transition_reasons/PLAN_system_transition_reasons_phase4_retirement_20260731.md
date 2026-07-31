@@ -84,13 +84,31 @@
    `pause_ended_shift` still does. **Assert against the actual endpoint response**, not the query.
 4. `get_system_pause_reason_id` is **deleted** (success criterion 3), with its module if nothing else
    lives there, and its tests.
-5. `is_system_managed` and its consumers removed: `domain/pause_reasons/guards.py`
-   (`can_delete_pause_reason`), the pause-reason serializer field, and the hardcoded `False` in
-   `create_pause_reason.py`. **`can_delete_pause_reason` returning `not is_system_managed` is delete
-   protection** — confirm nothing else depended on it, and state what replaces it (likely nothing,
-   because there is nothing left to protect).
-6. `slug` and `uq_pause_reasons_slug` dropped (**T6**, operator-confirmed). Phase 1's out-of-repo
-   consumer audit must have found none; **if it found one, STOP.**
+5. **`is_system_managed`: the BEHAVIOUR is removed, the COLUMN and the serializer field STAY.**
+   *(Amended 2026-07-31 during implementation — same evidence and same ruling as T6.)*
+
+   Remove `domain/pause_reasons/guards.py::can_delete_pause_reason` and its call sites — that
+   function returning `not is_system_managed` was **delete protection**, and once no row is
+   system-managed there is nothing left to protect. State that explicitly rather than leaving it
+   implied.
+
+   **Do NOT remove the serializer field or drop the column.**
+   `frontend/packages/pause-reasons/src/types.ts:18` declares `is_system_managed: z.boolean()` —
+   **required and non-nullable**, two lines above the `slug` declaration that forced T6's amendment.
+   Removing it fails Zod validation on *every* pause-reasons response, not merely on a branch that
+   reads it. Phase 1's audit escalated `slug` and missed its neighbour; the phase 2 reviewer's note
+   that "`is_system_managed` has no frontend consumer" is true of *code branches* and false of the
+   *schema*, which is the distinction that made `slug` blocking.
+
+   After this phase the column is uniformly `false` and inert — retained to satisfy a published
+   contract, not to carry meaning. `create_pause_reason.py`'s hardcoded `False` stays.
+   `domain/transitions/labels.py` must keep emitting it in the synthesized object so the two shapes
+   stay identical.
+
+6. **`slug` is KEPT; `uq_pause_reasons_slug` is scoped to `(workspace_id, slug)`** (**T6 as
+   amended** — see the master plan). Phase 1's out-of-repo audit found live consumers, the decisive
+   one being `types.ts:19` `slug: z.string()`, required and non-nullable. **Do not drop the column.**
+   Scoping the index is what resolves the second-workspace `IntegrityError`.
 7. **Second-workspace bootstrap succeeds** — the mirror of phase 1's `IntegrityError` reproduction.
    Create two workspaces through the ordinary path on a **disposable** database and prove it is
    gone. This is success criterion 6.
