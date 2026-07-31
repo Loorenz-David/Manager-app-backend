@@ -184,10 +184,11 @@ carry the manager app's per-segment drill-down.
     "working_seconds": 21600,
     "pause_seconds": 3600,
     "idle_seconds": 1800,
-    "pause_by_reason": { "par_…": 2700, "par_…2": 900 }
+    "pause_by_reason": { "par_…": 2700, "par_…2": 600, "unspecified": 300 }
   },
   "pause_reasons": {
-    "par_…": { "name": "Lunch break", "image_url": "https://…", "pause_type": "personal" }
+    "par_…": { "name": "Lunch break", "image_url": "https://…", "pause_type": "personal" },
+    "unspecified": { "name": "Reason unavailable", "image_url": null, "pause_type": null }
   },
   "completed_items": [
     {
@@ -216,8 +217,15 @@ carry the manager app's per-segment drill-down.
 ```
 
 - **`timeline`** — the day resume for tiles/donut. The three buckets partition the recorded shift;
-  `pause_by_reason` sums exactly to `pause_seconds`, keyed by pause-reason id.
+  `pause_by_reason` sums exactly to `pause_seconds`, keyed by pause-reason id — **plus the literal
+  key `"unspecified"`**, which appears whenever paused time could not be attributed to a catalog
+  reason (legacy rows, or a reason deleted since). Do **not** assume every key starts with `par_`,
+  and do not filter the map by that prefix.
 - **`pause_reasons`** — lookup map for those keys, so you can render "Lunch break" with its icon.
+  **Every key in `pause_by_reason` is guaranteed to have an entry here**, including `"unspecified"`,
+  whose entry is `{ "name": "Reason unavailable", "image_url": null, "pause_type": null }`. Note
+  `pause_type` is `null` there and is **not** a valid enum member — a donut grouped by `pause_type`
+  must handle that bucket explicitly or it will silently drop the slice.
 - **`completed_items`** — one entry per item the worker completed that day, ordered by completion
   time. `reference` is `article_number`, falling back to `sku`, else `null` — this system has no
   product-name entity, so the reference *is* the label. `units` is the item's quantity.
