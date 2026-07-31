@@ -1,0 +1,161 @@
+# Domain: Worker Shifts
+
+## Responsibility
+
+Owns a worker's working day: when they clocked in and out, what they were doing at any moment of it,
+and what they declared they were doing when not working a task step.
+
+It does **not** own task steps themselves (that is the task-steps domain) or the catalog of pause
+reasons (that is the pause-reasons domain). It **reads** both.
+
+---
+
+## The one thing to understand first
+
+The domain has **source** tables and a **derived** table, and confusing them is the most common way
+to get this wrong.
+
+```
+SOURCE   step_state_records            what the worker did on task steps
+SOURCE   user_declared_state_records   what the worker DECLARED they were doing off-task
+         ↓
+DERIVED  user_shift_state_records      the worker's timeline — live during the day,
+                                        fully rebuilt at clock-out
+```
+
+`user_shift_state_records` is **not** a log that other code appends to. It is a projection. During
+the day it is maintained provisionally so the UI has something live to render; at clock-out the
+day's rows are discarded and rebuilt deterministically from the two source tables.
+
+The practical consequence: **anything written only to the derived table is destroyed at clock-out.**
+If a fact must survive the day, it belongs in a source table.
+
+---
+
+## Entities
+
+### `UserShiftStateRecord` — derived timeline
+
+Prefix `uss` · `user_shift_state_records`
+
+| Field | Type | Description |
+|---|---|---|
+| `client_id` | prefixed ULID | Primary key and stable public identifier |
+| `user_id` | prefixed ULID | The worker this segment belongs to |
+| `workspace_id` | prefixed ULID | Owning workspace |
+| `state` | `UserShiftStateEnum` | What the worker was doing during this segment |
+| `entered_at` | datetime (UTC) | Segment start |
+| `exited_at` | datetime (UTC), nullable | Segment end; `NULL` means still open |
+| `changed_by_id` | prefixed ULID, nullable | Who caused the transition, when a person did |
+| `reason` | string(512), nullable | Why the worker is paused — see the caveat below |
+| `manually_recorded` | bool | Segment originated from a worker action rather than a step transition |
+
+> **`reason` is overloaded.** It holds either a `par_…` pause-reason id or free text from older
+> records, and readers currently distinguish them by inspecting the id prefix. Treat any code that
+> reads it as fragile, and do not add a third meaning.
+
+### `UserDeclaredStateRecord` — source, worker declarations
+
+Prefix `uds` · `user_declared_state_records`
+
+| Field | Type | Description |
+|---|---|---|
+| `client_id` | prefixed ULID | Primary key |
+| `user_id` | prefixed ULID | The worker who declared |
+| `workspace_id` | prefixed ULID | Owning workspace |
+| `pause_reason_id` | prefixed ULID, **not null** | The catalog reason chosen — a declaration always has one |
+| `description` | string(512), nullable | Free text, required when the reason demands it |
+| `entered_at` / `exited_at` | datetime (UTC) | Open interval; `exited_at NULL` means still declared |
+| `created_by_id` | prefixed ULID | The account that opened it (the acting manager when on-behalf) |
+| `closed_by_id` | prefixed ULID, nullable | The account that closed it |
+
+### `UserWorkProfile` — per-worker settings
+
+Relevant fields only: `clock_in_code` (nullable, ≤16 chars — the code a worker types at a shared
+floor device), `connecteam_user_id`, and hourly salary figures used by reporting.
+
+---
+
+## States
+
+`UserShiftStateEnum`: `STARTED_SHIFT`, `WORKING`, `IN_PAUSE`, `IDLE`, `ENDED_SHIFT`.
+
+See [states.md](states.md) for the machine, the precedence rules, and how the two derivations differ.
+
+---
+
+## Business rules
+
+- A worker has **at most one open shift segment** and **at most one open declaration** at a time.
+  Both are enforced by partial unique indexes on `(user_id, workspace_id) WHERE exited_at IS NULL`,
+  not by application logic alone.
+- **Declaring requires an open shift.** A declaration never clocks anyone in.
+- **Declaring auto-pauses the worker's open working steps**, so step analytics and the shift timeline
+  tell the same story. Starting or resuming a step closes the open declaration.
+- **Declaring while a declaration is open is a switch** — close and open, one transaction.
+- Clock-out **closes any open declaration** at the clock-out instant, then rebuilds the day.
+- A worker may only act on their own shift. An admin or manager must name a worker explicitly and
+  may not act on themselves through these endpoints. This applies identically to clock actions and
+  declarations.
+- Idle is what is left over. Once declarations exist, `IDLE` means genuinely unaccounted time — not
+  "we don't know."
+
+---
+
+## Relationships to other domains
+
+| Domain | Relationship |
+|---|---|
+| Task steps | Reads `step_state_records` as the primary source of the timeline. Step transitions auto-pause conflicting steps, which surfaces here. |
+| Pause reasons | Reads the catalog. Declarations reference a reason by id; the reason's type decides whether a worker may pick it. |
+| Auth | Role and app-scope decide who may act on whose shift, and which fields a roster response exposes. |
+| Analytics / worker stats | Consumes the derived timeline for manager-facing reporting and the clock-out summary. |
+| Connecteam integration | An external clock source that writes shifts through the same close path. |
+
+---
+
+## Files in this domain
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| Router | `routers/api_v1/worker_shifts.py` | Clock and declaration endpoints |
+| Router | `routers/api_v1/worker_stats.py` | Manager-facing reporting endpoints |
+| Commands | `services/commands/users/_clock_worker_shift.py` | Shared clock-in/clock-out core — **every** clock source calls this |
+| Commands | `services/commands/users/clock_in_worker_shift.py`, `clock_out_worker_shift.py`, `toggle_worker_shift.py` | HTTP-facing wrappers |
+| Commands | `services/commands/users/declare_worker_state.py`, `close_declared_worker_state.py` | Declaration write path |
+| Commands | `services/commands/users/reconcile_worker_shift_state.py` | Keeps the derived table current during the day |
+| Commands | `services/commands/users/_reconstruct_shift_middle.py` | The clock-out rebuild |
+| Queries | `services/queries/users/get_current_worker_shift_state.py` | Live state for the UI |
+| Queries | `services/queries/users/worker_shift_access.py` | Who may act on whose shift |
+| Queries | `services/queries/worker_stats/` | Reporting and the clock-out summary |
+| Domain | `domain/users/shift_state_machine.py` | `derive_target_state`, transition validity |
+| Domain | `domain/analytics/linear_timeline.py` | The clock-out linear sweep |
+| Domain | `domain/users/serializers.py` | Shift state output shapes |
+| Models | `models/tables/users/user_shift_state_record.py`, `user_declared_state_record.py`, `user_work_profile.py` | Table definitions |
+| Background | `services/tasks/users/auto_clock_out_open_shifts.py` | Closes shifts left open overnight |
+| Background | `services/tasks/connecteam/handlers/` | External clock source |
+
+---
+
+## Keeping this document true
+
+**This is a living document. It describes what the system does now, not how it came to.**
+
+Any change that alters the *logic* of this domain must update the affected file in this folder **in
+the same change** — not afterwards, and not in a separate document. That includes:
+
+- adding, removing, or changing the meaning of a state, a field, or an entity
+- changing an invariant, a precedence rule, or who may act on whose shift
+- adding or removing an endpoint, or changing a request or response shape
+- changing how the derived timeline is built, or what survives the clock-out rebuild
+- moving a file listed in the table above
+
+Changes that do **not** require an update: refactors that preserve behaviour, performance work,
+test-only changes, and internal renames that no other domain can observe.
+
+If a change makes something here wrong and you are not updating it, that is a defect — the same as
+leaving a broken test. A reader who cannot trust this file will read the code instead, and then this
+file is worse than not existing.
+
+Do not add implementation history, migration steps, or rationale for past decisions here. Those
+belong elsewhere. This file answers *what is true* and *where to look*.
