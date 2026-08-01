@@ -14,6 +14,9 @@ from beyo_manager.models.tables.cases.case_link import CaseLink
 from beyo_manager.models.tables.cases.case_participant import CaseParticipant
 from beyo_manager.models.tables.cases.case_type import CaseType
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
+from beyo_manager.services.commands.cases._case_created_step_pause import (
+    pause_task_working_steps_for_case,
+)
 from beyo_manager.services.commands.cases.requests import parse_create_case_request
 from beyo_manager.services.commands.cases.message_writes import write_case_message
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
@@ -204,8 +207,24 @@ async def create_case(ctx: ServiceContext) -> dict:
             )
         )
     await dispatch(events)
-    return {
+    # Read off the case BEFORE the pause below. A failed pause rolls its own transaction
+    # back, which expires every ORM object on this session — reading `case.*` afterwards
+    # would then attempt lazy IO outside an await and raise, turning a side effect's
+    # failure into a failure of the user's action. Snapshotting first is what makes the
+    # response independent of anything that happens after it.
+    response = {
         "case_client_id": case.client_id,
         "scalar_id": case.scalar_id,
         "reference_number": case.reference_number,
     }
+    # Raising a case means work has stopped. Outside the write transaction above and last,
+    # after the case is committed and its events are out, because the pause is a side
+    # effect of the user's action and must not be able to fail it. Never raises.
+    await pause_task_working_steps_for_case(
+        ctx,
+        entity_type=link_entity_type,
+        entity_client_id=entity_client_id,
+        case_client_id=response["case_client_id"],
+        type_label=type_label,
+    )
+    return response

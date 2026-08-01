@@ -81,6 +81,26 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "requires_description": False,
         "is_system_managed": False,
     },
+    # `name`, `pause_type`, `slug` and `requires_description` reproduce the retired
+    # `pause_case_created` row exactly as it was seeded — see the anchor INSERT in
+    # `migrations/versions/fb10ac7fd439_add_pause_reason_id_to_step_state_.py:71-90`
+    # ('Case created', BLOCKER, requires_description false).
+    #
+    # `image_url` is `None` because **that row has none**. It is the one retired row that
+    # was never in the bootstrap seed list (`seed_pause_reasons.py:48`) or in the seed
+    # migration `49bd666da846`, both of which are where the hardcoded S3 URLs live; the
+    # only row that ever existed for this slug is the soft-deleted anchor, inserted with a
+    # literal `NULL` image. There is no `pause_reasons/case_created.webp` anywhere in this
+    # repository to reproduce. So this is reproduced-as-null, not omitted — the same
+    # honest `None` `worker_declared_state` carries above, arrived at differently.
+    TransitionReasonEnum.CASE_CREATED.value: {
+        "name": "Case created",
+        "image_url": None,
+        "pause_type": PauseTypeEnum.BLOCKER.value,
+        "slug": "pause_case_created",
+        "requires_description": False,
+        "is_system_managed": False,
+    },
 }
 
 # The lookup-entry shape, kept explicit so adding a field above cannot silently widen the

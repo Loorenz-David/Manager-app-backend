@@ -18,3 +18,10 @@ class TransitionReasonEnum(enum.Enum):
     SHIFT_ENDED = "shift_ended"
     OTHER_TASK_PRIORITY = "other_task_priority"
     WORKER_DECLARED_STATE = "worker_declared_state"
+    # A case was raised on the task, so the system stopped its working steps. The worker
+    # does not pick this from the pause sheet — which is exactly why it is a member here
+    # and not a revived `pause_case_created` catalog row. *Which* kind of case it was is
+    # carried by the record's `description`, following the task-switch precedent
+    # ("started working with {article_number}"): this vocabulary names the class of thing
+    # that happened, the description names the instance.
+    CASE_CREATED = "case_created"

@@ -109,6 +109,18 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 - Clock-out **pauses any step the worker was still working**, typed `shift_ended`, and leaves steps
   the worker had already paused untouched. Every step the shift ended under stays open and resumable
   — the worker picks it back up next shift.
+- **Raising a case on a task pauses every working step of that task**, typed `case_created`, with the
+  case type in the description. Raising a case means work has stopped; without this the timeline
+  shows a worker still working while the problem is being discussed. Three things about it:
+  - **Every** working step of the task, not one. A case links to a task, never to a step, and a task
+    may have several steps `WORKING` at once under `allows_batch_working`.
+  - A case on a **customer** pauses nothing — no task, therefore no step.
+  - **Closing the case does not resume the step.** A case closing does not mean the worker is back
+    at the bench. Resumption stays a deliberate human action.
+
+  The pause is a side effect of the case, not part of it: it runs outside the case's write
+  transaction, so a failure to pause logs and leaves the case standing rather than losing the
+  worker's conversation.
 - A worker may only act on their own shift. An admin or manager must name a worker explicitly and
   may not act on themselves through these endpoints. This applies identically to clock actions and
   declarations.
@@ -124,6 +136,7 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 | Task steps | Reads `step_state_records` as the primary source of the timeline. Step transitions auto-pause conflicting steps, which surfaces here. |
 | Pause reasons | Reads the catalog. Declarations reference a reason by id; the reason's type decides whether a worker may pick it. A worker's own choices are the only thing this catalog explains. |
 | Transitions | Reads the code-owned `transition_reason` vocabulary and its label map. System transitions resolve there, never through the catalog, so they do not depend on a workspace having been seeded. |
+| Cases | Raising a case on a task pauses that task's working steps, which surfaces here. This domain is read-only to cases: the write lives in the cases domain and only ever reaches here through `step_state_records`. |
 | Auth | Role and app-scope decide who may act on whose shift, and which fields a roster response exposes. |
 | Analytics / worker stats | Consumes the derived timeline for manager-facing reporting and the clock-out summary. |
 | Connecteam integration | An external clock source that writes shifts through the same close path. |
@@ -140,6 +153,7 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 | Commands | `services/commands/users/clock_in_worker_shift.py`, `clock_out_worker_shift.py`, `toggle_worker_shift.py` | HTTP-facing wrappers |
 | Commands | `services/commands/users/declare_worker_state.py`, `close_declared_worker_state.py` | Declaration write path |
 | Commands | `services/commands/users/reconcile_worker_shift_state.py` | Keeps the derived table current during the day |
+| Commands | `services/commands/cases/_case_created_step_pause.py` | Pauses a task's working steps when a case is raised on it (cases domain; listed here because it writes `step_state_records`) |
 | Commands | `services/commands/users/_reconstruct_shift_middle.py` | The clock-out rebuild |
 | Queries | `services/queries/users/get_current_worker_shift_state.py` | Live state for the UI |
 | Queries | `services/queries/users/worker_shift_access.py` | Who may act on whose shift |
@@ -158,10 +172,11 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 Real, current, and deliberately unfixed. Repository-wide debt lives in
 [docs/repo_health.md](../../repo_health.md); these are specific to worker shifts.
 
-- **Creating a case does not pause the working step.** It used to. The capability was removed and
-  its absence went unnoticed, so a worker who raises a case stays "working" on the timeline while
-  the problem is discussed. Seven historical records from before the removal still carry a
-  case-created pause reason and resolve correctly; nothing has written one since.
+- **The seven historical case-created pause records are not backfilled.** Records written before the
+  capability was removed carry the soft-deleted `pause_case_created` catalog reference rather than
+  the `case_created` transition, so the same interruption has two representations in the data. Both
+  resolve to the same label and nothing depends on the distinction. `pause_ended_shift` is already
+  in exactly this state.
 
 - **`backfill_worker_shift_state_records.py` destroys declared-state projections.** It deletes every
   `UserShiftStateRecord` for a worker-day and rebuilds from **step records alone**, so a declaration

@@ -20,6 +20,7 @@ from beyo_manager.domain.users.serializers import (
     serialize_current_worker_shift_state,
 )
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.queries.worker_stats.list_workers_linear_timeline import (
     build_recorded_shift_timeline,
@@ -77,6 +78,16 @@ def test_label_map_reproduces_the_catalog_strings_it_replaces() -> None:
 def test_every_enum_member_resolves() -> None:
     for member in TransitionReasonEnum:
         assert resolve_transition_reason_label(member.value) is not None, member
+
+
+def test_every_enum_member_fits_the_persisted_column() -> None:
+    """`transition_reason` is `String(32)` on both tables that carry it. A member that
+    does not fit is rejected by the database at write time, inside a user's request —
+    cheap to assert here, expensive to find there."""
+    column_length = StepStateRecord.__table__.c.transition_reason.type.length
+    assert column_length == UserShiftStateRecord.__table__.c.transition_reason.type.length
+    for member in TransitionReasonEnum:
+        assert len(member.value) <= column_length, member
 
 
 @pytest.mark.parametrize("value", [None, "par_01ABC", "pause_ended_shift", "unspecified", ""])

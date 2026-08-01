@@ -27,13 +27,19 @@ collapse into `IDLE` and a manager sees an unexplained gap.
 | Catalog reason | `reason` (a `par_…` id) | A human chose this reason from the workspace catalog |
 | Transition reason | `transition_reason` | The system paused this itself, and this is which transition |
 
-The vocabulary is **code-owned** — `TransitionReasonEnum`, three members:
+The vocabulary is **code-owned** — `TransitionReasonEnum`, four members:
 
 | Member | Written when |
 |---|---|
 | `shift_ended` | Clock-out closed a step that was still being worked |
 | `other_task_priority` | The worker started another task, so this step auto-paused |
 | `worker_declared_state` | The segment projects a worker declaration |
+| `case_created` | A case was raised on the task, so its working steps auto-paused |
+
+A member names **what class of thing happened**; the record's `description` names *which
+one*. `other_task_priority` carries `"started working with {article_number or sku}"` and
+`case_created` carries `"case created: {case type}"`, so the vocabulary stays small instead
+of growing a member per case type or per item.
 
 Because it is code-owned, a system transition never resolves through the catalog and therefore
 never depends on a workspace having been seeded. **Nothing in the state machine may be gated on a
