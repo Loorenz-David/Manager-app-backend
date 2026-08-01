@@ -5,18 +5,19 @@
 - Handoff ID: `HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731`
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Owner agent: `claude-opus-5`
-- Source plan: `backend/docs/architecture/under_construction/implementation/PLAN_reassigned_steps_endpoints_20260731.md`
-- Source summary: pending (backend under construction)
+- Source plan: `backend/docs/architecture/archives/implementation/reassigned_steps_endpoints/PLAN_reassigned_steps_endpoints_20260731.md`
+- Source summary: `backend/docs/architecture/implemented_summaries/SUMMARY_reassigned_steps_endpoints_20260731.md`
+- Liveness last updated: `2026-08-01` by the operator, after round-2 review returned `APPROVED`
 
-> **STATUS: BUILD-AHEAD CONTRACT.** The backend for this surface has **not been implemented yet** —
-> it is being built from the source plan in parallel with this frontend work. This document is the
-> **authoritative API contract**: the backend implements to match it field-for-field; the frontend
-> builds against it now.
+> **STATUS: LIVE.** Both reassigned-steps endpoints are **implemented, reviewed and merged** —
+> stop mocking them and point at the real API. This document remains the **authoritative API
+> contract**: it was written ahead of implementation and the backend was built to match it
+> field-for-field, verified key-by-key in review.
 >
 > | Endpoint | Live? |
 > |---|---|
-> | `GET /api/v1/task-step-acknowledgments/reassigned-steps` (§3) | ⏳ **not live — mock this shape** |
-> | `GET /api/v1/task-step-acknowledgments/reassigned-steps/count` (§4) | ⏳ **not live — mock this shape** |
+> | `GET /api/v1/task-step-acknowledgments/reassigned-steps` (§3) | ✅ **live** (reviewed & approved 2026-08-01) |
+> | `GET /api/v1/task-step-acknowledgments/reassigned-steps/count` (§4) | ✅ **live** (reviewed & approved 2026-08-01) |
 > | `POST /api/v1/task-step-acknowledgments/acknowledge` (§9) | ✅ live today (pre-existing, unchanged) |
 > | `POST /api/v1/task-step-acknowledgments/seen` (§9) | ✅ live today (pre-existing, unchanged) |
 > | `GET /api/v1/worker-shifts/current` (§12, appendix — not part of this delivery) | ✅ live today, but see the §12.3 in-flight warning |
