@@ -6,7 +6,7 @@
 - Status: `under_construction`
 - Owner agent: `claude-opus-5` (operator: David)
 - Created at (UTC): `2026-08-01T00:00:00Z`
-- Last updated at (UTC): `2026-08-01T00:00:00Z`
+- Last updated at (UTC): `2026-08-01T11:30:00Z`
 - Intention plan: `docs/architecture/under_construction/intention/INTENTION_ended_shift_step_state_collapse_20260731.md`
 - Predecessor set: `MASTER_PLAN_system_transition_reasons_20260731.md` — **phases 1–4 must be
   archived before this plan begins.** It reads `transition_reason` on historical rows, which
@@ -348,8 +348,181 @@ operator-owned. Do not edit the handoff.
   `clock_out_shift_for_user` closes `WORKING` only (the basis for E1) and that
   `LinearInterval.transition_reason` is already populated (the timeline re-key has its input).
 
+- `2026-08-01` `implementation session`: steps 1–7 implemented in plan order. **Awaiting independent
+  review — no summary written, no archive, no handoff edited.**
+
+  ### Criterion 7 — the six consumers, verified per consumer
+
+  Each has its own test in
+  `tests/integration/services/queries/analytics/test_ended_shift_bucket_collapse.py`, asserting
+  explicit values rather than inheriting a result from the shared helper. All six were treated as
+  unverified regardless of whether the original trace listed them.
+
+  | # | Consumer | Test | What it asserts |
+  |---|---|---|---|
+  | 1 | `services/queries/analytics/averaged_time.py` (self) | `test_clock_out_force_close_stays_in_the_ended_shift_bucket` | the emitted `.state` is `ended_shift`, and no `paused` contribution appears |
+  | 2 | `services/tasks/analytics/process_step_transition.py` | same test | `total_ended_shift_seconds=54000`, `_count=1`, `total_pause_seconds=0` |
+  | 3 | `services/queries/analytics/reconcile_user_time.py` | `test_reconcile_user_day_time_buckets_the_clock_out_span_as_ended_shift` | the worker's day row: `total_ended_shift_seconds=54000`, `total_pause_seconds=0` |
+  | 4 | `services/queries/worker_stats/get_worker_daily_step_breakdown.py` | `test_daily_step_breakdown_buckets_the_clock_out_span_as_ended_shift` | `totals.ended_shift_seconds` **and** the per-step `contribution` |
+  | 5 | `services/queries/analytics/estimation_sample.py` | `test_estimation_sample_buckets_the_clock_out_span_as_ended_shift` | the `(section, "ended_shift")` sample key, which is a key in a published estimate |
+  | 6 | `services/queries/worker_stats/list_workers_totals.py` | `test_list_workers_totals_reports_an_open_clock_out_record_as_ended_shift` | the live `running` slice — the only consumer reading **open** records — and its published `ended_shift_seconds` / `ended_shift_open_count` |
+
+  Verified by a **second, different route**: rather than re-running the same grep over call sites,
+  the set was re-derived from the *output keys*. `grep -rn '"ended_shift"' beyo_manager scripts`
+  returns 38 sites; every one is a bucket-dict key, a published field name, a type comment, or
+  `UserShiftStateEnum` — no unlisted consumer of `compute_record_contributions.state` exists. That
+  sweep also turned up the two omissions below.
+
+  Emptiness of the sweep was checked, not assumed: corrupting the `CASE`'s `else` branch fails 6 of
+  the module's tests, and after the writer cutover corrupting the *first* branch fails 8. Before the
+  cutover the first branch is genuinely inert (E5), so that check is only meaningful once step 4 has
+  landed — it was re-run there, not only at step 2.
+
+  ### Two sites the plan's step 7 and E3's table both missed
+
+  Found by the output-key route, not by the symbol grep:
+
+  - **`scripts/backfill/backfill_worker_shift_state_records.py:91-102`** builds `LinearInterval`s
+    from step records exactly as `_reconstruct_shift_middle` does, and at `:136` reads an
+    `ended_shift` segment as *"the shift ended here"* to place the day's end marker. Its
+    `_TIME_STATES` **did** include `ENDED_SHIFT` (unlike the rebuild's), so before this change it
+    saw those records directly. Left alone, the collapse would have turned that span into an
+    ordinary `IN_PAUSE` segment and the backfilled shift would never have ended at the right
+    instant — silently, on a script whose whole job is repairing history. It now goes through the
+    same `bucket_for`. **This is a third re-key site; the plan named two.**
+  - **`scripts/backfill/backfill_averaged_time.py:37`** holds a third copy of `_TIME_STATES`.
+    Subtractive, like the others, but absent from step 7's list.
+
+  ### The rebuild path gained a new input, and it needed its own test
+
+  `_reconstruct_shift_middle` loads `WORKING`/`PAUSED` only. Before this change a clock-out
+  force-closed step was in neither, so the rebuild never saw one; after it, such a step is `PAUSED`
+  and lands in the sweep. `test_rebuild_reads_a_shift_ended_pause_as_off_shift_and_stays_idempotent`
+  covers it. Proven failing-first: without `bucket_for` there, the shift-ended span is rebuilt as a
+  **second `IN_PAUSE` segment** (`assert 2 == 1`) — a worker shown as paused, credited to a system
+  transition, for hours they were not on site. Both standing invariants are asserted in that test:
+  the rebuild is idempotent over identical sources, and the worker's own pause survives with its
+  catalog reference. `test_declaration_survives_the_clock_out_rebuild` (declarations) still passes
+  unchanged.
+
+  ### Criterion 3 — the two paths assert opposite things, and the second failed first
+
+  - Clock-out force-close: equality, pinned to explicit values, unchanged from step 1 through step 7.
+  - Worker-picked ended-shift pause: written to assert the **new** classification and run against
+    pre-change code first, where it failed twice — the record was `ENDED_SHIFT` rather than `PAUSED`,
+    and the rebuild produced **zero** `IN_PAUSE` rows for it (the span fell through to idle,
+    unattributed). Both now pass. Evidence retained in the session scratchpad.
+
+  ### Criterion 9 — asserted directly, on real data and on a seeded row of each shape
+
+  Measured workspace-scoped with the suite quiescent, local DB at `c8f3d2e60a17`:
+  **208** `step_state_records` in `ended_shift` (E2 row 1: **39**, row 2: **169**, row 3: **0**;
+  0 conflicted, 0 soft-deleted, 0 typed as another transition) and **58** `task_steps`. One
+  workspace holds 153 of the 169 row-2 rows, so on this database the population E2's row 2 protects
+  is the *dominant* one — this line was not academic here.
+
+  After the migration, asserted against the journal (the live rows are no longer distinguishable,
+  which is the point): of the 169 worker-picked rows, **0** were typed as a system transition and
+  **0** lost their `pause_reason_id`; all 39 row-1 rows kept `transition_reason='shift_ended'`; all
+  208 are now `paused`.
+
+  Row 3 has zero rows on this database, so its branch was proven by rehearsal instead of left
+  untested: downgrade → seed one record of each of E2's three shapes plus an `ended_shift` task step
+  → upgrade → assert each outcome exactly → downgrade, delete the seed, upgrade. All three matched
+  the table, including that row 3's default did not reach the row carrying a `pause_reason_id`.
+  The database was returned to exactly its real population (39/169/0/58) afterwards.
+
+  ### The migration is reversible — this contradicts the plan, deliberately
+
+  The plan states the migration is irreversible. **With the journal it is not**, and the journal is
+  warranted for precisely the reason `architecture/30_migrations.md` gives: after the cutover a
+  newly-written clock-out row is byte-identical to a rewritten row-1, and a worker's pause is
+  identical to a rewritten row-2, so no predicate can identify the rewritten rows afterwards.
+  `ended_shift_collapse_journal` records every touched row with its previous state, previous
+  transition reason, and which E2 rule claimed it; `downgrade()` re-adds the enum member and
+  restores exactly those rows, and refuses outright if the journal is gone rather than restoring by
+  predicate into live data.
+
+  A full **downgrade → upgrade round trip was run on the local database**: the downgrade restored
+  208 records and 58 steps to the exact pre-migration distribution (39/169/0) with the enum member
+  back, and the re-upgrade reproduced identical counts.
+
+  What is *not* undone by any of this is the reporting change E2 chose: a worker-picked ended-shift
+  pause moves from `total_ended_shift_seconds` to `total_pause_seconds` and past reports read
+  differently. The journal does not soften that — it only means the rows can be put back.
+
+  **The journal is not dropped by this change.** Whichever later change makes this one permanently
+  irreversible must drop it deliberately, last, behind an explicit environment acknowledgement, and
+  record the row count it held — the pattern `c8f3d2e60a17` established after the phase 4 incident.
+
+  ### Deployment ordering — the two databases are not in the same state
+
+  Local is at `c8f3d2e60a17`; **the server is still at `a7d21f4c8b03`**. This revision
+  (`2645b4327b17`) stacks on a chain that has not run in production, and it was applied locally with
+  an explicit revision target, never `upgrade head`. Two consequences for whoever deploys:
+
+  - The server has not run phase 3's backfill, so its `ended_shift` rows may include E2 **row 3**
+    (untyped), which is empty locally. That branch is exercised only by the rehearsal above.
+  - `c8f3d2e60a17` sits between the server's revision and this one and **refuses to run without
+    `ALLOW_DROP_BACKFILL_JOURNAL=yes`**. A production `alembic upgrade` toward this revision will
+    stop there by design. Upgrade to `b4e7a1c93f28`, then to `2645b4327b17` explicitly, and drop the
+    transition-reason journal only as its own reviewed decision.
+
+  ### Proposed for the operator — §6.1 of the reassigned-steps handoff (not edited)
+
+  `HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731.md` §6.1 documents this work as pending.
+  Both the rewrite and the liveness flip are operator-owned and were **not** touched. Proposed
+  wording for §6.1:
+
+  > `TaskStepStateEnum` no longer has an `ended_shift` member. A step the shift ended under is
+  > `paused`; the reason travels in `transition_reason` (`shift_ended`) or `pause_reason_id`. Clients
+  > must not send or switch on `new_state: "ended_shift"` — it now returns `422`.
+  > `total_ended_shift_seconds` / `total_ended_shift_count` are **unchanged** in every step payload,
+  > including the reassigned-steps endpoints, and `"ended_shift"` remains a timeline **state string**
+  > — it is a derived label, not a step state, and only its derivation moved.
+
+  Step 5's frontend work was **already present in the workers-app working tree** when this session
+  reached it, matching `HANDOFF_TO_FRONTEND_remove_pause_reason_transition_20260801.md`:
+  `pause-reason-transition.ts` and its test deleted, both `PauseReasonSheetPage.tsx` call sites
+  sending `new_state: "paused"` unconditionally, the `requiresDescription` branch reading
+  `reason.requires_description` directly, no references remaining, and the unit and Playwright specs
+  asserting `new_state: "paused"` for the `pause_ended_shift` pick. Verified, not authored.
+  **Nothing was committed in the frontend repository** — that tree carries a large amount of
+  unrelated in-progress work, and committing into it is the operator's call, not this session's.
+
+  ### Judgement calls made without escalating, for review
+
+  - **`aggregate_metrics.py` had to be touched.** It is dead (E3, zero callers, deletion out of
+    scope) but referenced the enum member being removed, so it could not be left as-is. Taken the
+    smallest edit that leaves it *correct* rather than quietly wrong: it now buckets through the
+    shared `bucket_for` and takes an optional `transition_reason`. It remains dead and still slated
+    for separate deletion — this is not the E3 work and is not offered as such.
+  - **A new module, `domain/analytics/time_buckets.py`**, holds the bucket rule once. E5's expression
+    is applied at three sites in two languages of expression (one SQL `CASE`, two Python); a shared
+    constant plus a pure predicate is what makes "the same expression" checkable rather than
+    asserted. The SQL `CASE` stays in the query layer.
+  - **Four existing tests asserted the old writer's state** and were updated to the new truth rather
+    than deleted. Where the change made an assertion weaker — the force-closed step and a
+    worker-paused step are now both `paused` —
+    `test_clock_out_transitions_working_steps_and_leaves_paused_steps_open` was **strengthened** to
+    separate them by `transition_reason` and to assert the worker's pause record is untouched, which
+    is E1's invariant stated directly.
+  - **`models/tables/tasks/README.md` said "`PAUSED` and `ENDED_SHIFT` are distinct interruption
+    types. Do not collapse them."** Corrected — leaving it would have been a document asserting the
+    opposite of the code.
+
+  ### Validation
+
+  | Check | Result |
+  |---|---|
+  | `pytest -q` from `backend/app`, default plugins | **23 failed, 1448 passed** — failure node set **byte-identical** to the baseline (23 at `b59deb0`, re-measured this session, matching the stated `8a6af89` baseline), +11 new passing |
+  | `ruff check` on touched files | clean. The 5 remaining findings are all unused imports in `transition_step_state.py` and are **pre-existing** — identical count against the stashed baseline, unrelated to this change, left alone |
+  | `grep -rn "ENDED_SHIFT" app/beyo_manager` | `UserShiftStateEnum` hits only, plus the derived `ENDED_SHIFT_BUCKET` label |
+  | Enum member in the database | gone: `pending,working,paused,blocked,completed,skipped,failed,cancelled` |
+  | Rows left in `ended_shift` | 0 in both tables |
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `under_construction` — implemented, **awaiting independent review**
+- Next state: `approved` on review sign-off; summary and archive only after that
 - Transition owner: `David`
