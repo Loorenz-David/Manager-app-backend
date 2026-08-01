@@ -35,25 +35,29 @@ workspace, needs no seeding, and no manager can rename or delete it.
 of thing happened*, `description` for *which one* — is why this does not become a family of
 `CASE_CREATED_DAMAGE` / `CASE_CREATED_MISSING_PART` members.
 
-## Clarifications required — all three are operator decisions
+## Clarifications — all four resolved
 
-- [ ] **1. Which step pauses?** A case links to a **TASK** or a **CUSTOMER**
-      (`CaseLinkEntityTypeEnum`), never to a step. A task may have several steps, and more than one
-      may be `WORKING` (`allows_batch_working`). Options: every working step on that task; only the
-      one the acting user is working; or the most recently started. **Recommend: every working step
-      on the task** — the case is about the task, and leaving a sibling step running contradicts the
-      reason for pausing at all.
-- [ ] **2. Cases on a customer — skip entirely?** No task, so no step. **Recommend: yes, skip**, and
-      make that explicit in code rather than implicit in a null check.
-- [ ] **3. Does closing the case resume the step?** Today nothing would. **Recommend: no** — a case
-      closing does not mean the worker is back at the bench, and auto-resuming would put someone
-      "working" who is not there. If the operator wants resumption, it is a separate change with its
-      own reasoning, not a default.
-- [ ] **4. The 7 historical `pause_case_created` rows.** They point at the soft-deleted anchor and
-      still resolve to their label. **Recommend: leave them.** Backfilling to `CASE_CREATED` buys
-      one representation instead of two, but `pause_ended_shift` is already in that same state and
-      nothing depends on it. If backfilled, it needs a journal — those rows carry per-row
-      information (`30_migrations.md`).
+**All four resolved 2026-08-01 by operator approval of the recommended defaults.** No clarification
+is open; these are rulings, not suggestions. If a case arises that they do not cover, escalate in
+the Review log and stop — do not choose.
+
+- [x] **1. Which step pauses? — EVERY working step on the task.** A case links to a **TASK** or a
+      **CUSTOMER** (`CaseLinkEntityTypeEnum`), never to a step, and a task may have several steps
+      `WORKING` at once under `allows_batch_working`. All of them pause: the case is about the task,
+      and leaving a sibling step running contradicts the reason for pausing at all.
+- [x] **2. Cases on a customer — SKIP.** No task, therefore no step. Make the skip **explicit in
+      code** rather than letting it fall out of a null check, so the next reader sees it was decided
+      rather than unhandled.
+- [x] **3. Closing the case does NOT resume the step.** A case closing does not mean the worker is
+      back at the bench, and auto-resuming would show someone working who is not there. Resumption
+      stays a deliberate human action. If it is ever wanted automatically, that is a separate change
+      with its own reasoning — **do not add it here**, even if it looks like an obvious completion.
+- [x] **4. The 7 historical `pause_case_created` rows are LEFT ALONE.** They point at the
+      soft-deleted anchor and still resolve to their label, so success is already satisfied by
+      construction. Backfilling them to `CASE_CREATED` would buy one representation instead of two,
+      but `pause_ended_shift` is already in exactly that state and nothing depends on it. **No
+      migration is in scope for this plan.** Should that change later, those rows carry per-row
+      information and would need a journal (`30_migrations.md`).
 
 ## Acceptance criteria
 
@@ -84,15 +88,15 @@ of thing happened*, `description` for *which one* — is why this does not becom
 
 ## Implementation steps
 
-1. Resolve the four clarifications. Do not choose.
-2. Add the enum member and the `labels.py` entry.
-3. In `create_case.py`, after the case and its links commit: resolve the task, find its working
+1. Add the enum member and the `labels.py` entry. (All four clarifications are already ruled —
+   see above. No decisions are yours to make.)
+2. In `create_case.py`, after the case and its links commit: resolve the task, find its working
    step(s), write the auto-pause record(s). Follow the shape at
    `transition_step_state.py:268-280` — same fields, same `created_by_id` and `credited_user_id`
    handling.
-4. Tests for criteria 3–9, including the zero-catalog case.
-5. Update `docs/domains/worker_shifts/states.md`.
-6. Review log entry with the four rulings. **STOP for independent review.**
+3. Tests for criteria 3–9, including the zero-catalog case and the two-working-step task.
+4. Update `docs/domains/worker_shifts/states.md`.
+5. Review log entry. **STOP for independent review.**
 
 ## Risks and mitigations
 
