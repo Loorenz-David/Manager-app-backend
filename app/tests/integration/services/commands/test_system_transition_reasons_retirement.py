@@ -143,8 +143,9 @@ async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(db_ses
     slugs = {r.get("slug") for r in result["pause_reasons"]}
 
     assert "pause_ended_shift" in slugs, (
-        "pause_ended_shift vanished from the picker — the worker app maps this slug to a state "
-        "and has no other way to produce it"
+        "pause_ended_shift vanished from the picker. It is an ordinary worker-selectable reason "
+        "and the pause sheet offers it; list_pause_reasons filters is_deleted, so soft-deleting "
+        "the row removes the worker's ability to state that reason at all"
     )
     assert "pause_other_task_priority" not in slugs, (
         "the retired system row is still offered; nothing resolves it and nobody selects it"
