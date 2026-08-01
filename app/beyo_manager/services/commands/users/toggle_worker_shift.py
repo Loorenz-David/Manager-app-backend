@@ -11,6 +11,10 @@ from beyo_manager.services.commands.users._clock_worker_shift import (
 from beyo_manager.services.commands.users._worker_shift_access import resolve_worker_shift_target
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 
 class ToggleWorkerShiftRequest(BaseModel):
@@ -48,9 +52,9 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
                 ctx.user_id,
             )
             action = "clock_in"
-            transitioned_steps = 0
+            paused_step_ids: list[str] = []
         else:
-            transitioned_steps = await clock_out_shift_for_user(
+            paused_step_ids = await clock_out_shift_for_user(
                 ctx.session,
                 ctx.workspace_id,
                 user_id,
@@ -58,10 +62,12 @@ async def toggle_worker_shift(ctx: ServiceContext) -> dict:
                 ctx.user_id,
             )
             action = "clock_out"
+    await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
     result = {
         "action": action,
         "user_id": user_id,
-        "transitioned_steps": transitioned_steps,
+        "transitioned_steps": len(paused_step_ids),
     }
     if action == "clock_out":
         result["analytics"] = None

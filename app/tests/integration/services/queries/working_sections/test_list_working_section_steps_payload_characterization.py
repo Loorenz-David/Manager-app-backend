@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
+from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_upholstery import ItemUpholstery
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -266,3 +268,81 @@ async def test_list_working_section_steps_payload_key_sets_are_stable(db_session
             "updated_at",
             "updated_by_id",
         }
+
+def _filter_ctx(db_session, *, workspace_id: str, user_id: str, working_section_id: str, record_step_state: str) -> ServiceContext:
+    return ServiceContext(
+        identity={
+            "workspace_id": workspace_id,
+            "user_id": user_id,
+            "role_name": "worker",
+            "username": "tester",
+        },
+        incoming_data={"working_section_id": working_section_id},
+        query_params={"record_step_state": record_step_state, "readiness_statuses": "ready"},
+        session=db_session,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "record_step_state",
+    [
+        # The workers app's `DEFAULT_STATE_FILTERS`, verbatim as of 2026-08-01.
+        "pending,working,paused,ended_shift",
+        # Alone, so the alias is the only thing that can match the row.
+        "ended_shift",
+    ],
+)
+async def test_retired_ended_shift_filter_value_selects_paused_steps(db_session, record_step_state):
+    """A client still sending `ended_shift` gets the paused steps, not a 500.
+
+    `2645b4327b17` removed the member from `task_step_state_enum` while
+    `HANDOFF_TO_FRONTEND_remove_pause_reason_transition_20260801` explicitly told the frontend to
+    leave read-side `ended_shift` handling alone until a later handoff — which is why the shipped
+    workers app still sends it and every steps list 500s with
+    `InvalidTextRepresentationError: invalid input value for enum task_step_state_enum`.
+
+    Run against the database on purpose: the defect is that the string reaches Postgres, and only
+    a real bind proves it no longer does.
+    """
+    workspace, user, section, _ = await _seed_step(db_session)
+
+    step = (
+        await db_session.execute(
+            select(TaskStep).where(TaskStep.working_section_id == section.client_id)
+        )
+    ).scalar_one()
+    step.state = TaskStepStateEnum.PAUSED
+    await db_session.flush()
+
+    result = await list_working_section_steps(
+        _filter_ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            working_section_id=section.client_id,
+            record_step_state=record_step_state,
+        )
+    )
+
+    items = result["steps_pagination"]["items"]
+    assert [i["client_id"] for i in items] == [step.client_id]
+    assert items[0]["state"] == TaskStepStateEnum.PAUSED.value
+
+
+@pytest.mark.integration
+async def test_unknown_state_filter_value_is_a_domain_error_not_a_driver_crash(db_session):
+    """A typo must not become an unfiltered list, and must not become a 500 either."""
+    workspace, user, section, _ = await _seed_step(db_session)
+
+    with pytest.raises(ValidationError) as exc:
+        await list_working_section_steps(
+            _filter_ctx(
+                db_session,
+                workspace_id=workspace.client_id,
+                user_id=user.client_id,
+                working_section_id=section.client_id,
+                record_step_state="pending,not_a_state",
+            )
+        )
+    assert "not_a_state" in str(exc.value)

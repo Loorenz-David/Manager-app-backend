@@ -7,6 +7,10 @@ from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.services.commands.users._clock_worker_shift import clock_out_shift_for_user
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +32,11 @@ async def handle_auto_clock_out_open_shifts(raw: dict, task_id: str) -> None:
     )
 
     clocked_out = 0
+    # (workspace_id, user_id, paused step ids) per closed shift, broadcast once the whole
+    # sweep has committed. Collecting rather than emitting inline keeps the transaction
+    # free of network calls and guarantees no worker is told their shift ended by a sweep
+    # that then rolled back.
+    closed_shifts: list[tuple[str, str, list[str]]] = []
     async for session in get_db_session():
         async with session.begin():
             rows = (
@@ -49,14 +58,19 @@ async def handle_auto_clock_out_open_shifts(raw: dict, task_id: str) -> None:
                 )
             ).all()
             for row in rows:
-                await clock_out_shift_for_user(
+                paused_step_ids = await clock_out_shift_for_user(
                     session,
                     row.workspace_id,
                     row.user_id,
                     midnight,
                     changed_by_id=None,
                 )
+                closed_shifts.append((row.workspace_id, row.user_id, paused_step_ids))
                 clocked_out += 1
+
+        for workspace_id, user_id, paused_step_ids in closed_shifts:
+            await emit_worker_shift_state(session, workspace_id, user_id)
+            await emit_steps_paused(workspace_id, paused_step_ids)
 
     logger.info(
         "worker_shift.midnight_safeguard_completed | task_id=%s clocked_out=%d boundary=%s",

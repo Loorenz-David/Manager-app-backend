@@ -18,7 +18,7 @@ from beyo_manager.models.tables.shopify.shopify_product_sync_item import Shopify
 from beyo_manager.models.tables.shopify.shopify_shop_integration import ShopifyShopIntegration
 from beyo_manager.services.infra.execution.db import task_db_session
 from beyo_manager.services.tasks.shopify._product_sync_orchestrator import sync_one_product_sync_item
-from beyo_manager.sockets.worker_emitter import emit_to_workspace_room
+from beyo_manager.services.infra.events.realtime_push import push_workspace_refresh
 
 logger = logging.getLogger(__name__)
 
@@ -151,20 +151,20 @@ async def handle_shopify_process_products(raw: dict, task_client_id: str) -> Non
             await session.commit()
 
     if succeeded or failed:
-        await emit_to_workspace_room(
-            workspace_id=payload.workspace_id,
-            event=SHOPIFY_PRODUCTS_SYNCED_EVENT,
-            payload={
+        await push_workspace_refresh(
+            payload.workspace_id,
+            SHOPIFY_PRODUCTS_SYNCED_EVENT,
+            {
                 "task_id": task_client_id,
                 "succeeded": succeeded,
                 "failed": failed,
             },
         )
     for row in preorder_rows:
-        await emit_to_workspace_room(
-            workspace_id=payload.workspace_id,
-            event=SHOPIFY_PREORDER_PROCESSED_EVENT,
-            payload=_preorder_entry(row, task_client_id=task_client_id),
+        await push_workspace_refresh(
+            payload.workspace_id,
+            SHOPIFY_PREORDER_PROCESSED_EVENT,
+            _preorder_entry(row, task_client_id=task_client_id),
         )
 
 

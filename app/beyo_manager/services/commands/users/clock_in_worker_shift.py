@@ -7,6 +7,7 @@ from beyo_manager.services.commands.users._clock_worker_shift import clock_in_sh
 from beyo_manager.services.commands.users._worker_shift_access import resolve_worker_shift_target
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
 
 
 class ClockInWorkerShiftRequest(BaseModel):
@@ -31,4 +32,7 @@ async def clock_in_worker_shift(ctx: ServiceContext) -> dict:
             datetime.now(timezone.utc),
             ctx.user_id,
         )
+    # After the block: `maybe_begin` has committed, so nothing is broadcast that a
+    # rollback could take back.
+    await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
     return {"action": "clock_in", "user_id": user_id}

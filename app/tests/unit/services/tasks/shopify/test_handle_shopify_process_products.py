@@ -154,15 +154,15 @@ async def test_handle_shopify_process_products_emits_one_final_workspace_summary
         sync_item.error_code = "ambiguous_product_match"
         sync_item.error_message = "Multiple Shopify products matched the same identity."
 
-    async def _fake_emit_to_workspace_room(**kwargs):
-        emitted.update(kwargs)
+    async def _fake_push_workspace_refresh(workspace_id, event_name, payload):
+        emitted.update({"workspace_id": workspace_id, "event": event_name, "payload": payload})
 
     async def _fake_create_event(_session, **kwargs):
         event_types.append(kwargs["event_type"])
 
     monkeypatch.setattr(handler_module, "task_db_session", _fake_task_db_session)
     monkeypatch.setattr(handler_module, "sync_one_product_sync_item", _fake_sync_one_product_sync_item)
-    monkeypatch.setattr(handler_module, "emit_to_workspace_room", _fake_emit_to_workspace_room)
+    monkeypatch.setattr(handler_module, "push_workspace_refresh", _fake_push_workspace_refresh)
     monkeypatch.setattr(
         handler_module,
         "create_shopify_integration_event",
@@ -244,15 +244,15 @@ async def test_handle_shopify_process_products_rolls_back_before_recording_an_un
         # rollback before it can be used again.
         raise RuntimeError("simulated commit failure")
 
-    async def _fake_emit_to_workspace_room(**kwargs):
-        emitted.update(kwargs)
+    async def _fake_push_workspace_refresh(workspace_id, event_name, payload):
+        emitted.update({"workspace_id": workspace_id, "event": event_name, "payload": payload})
 
     async def _fake_create_event(_session, **_kwargs):
         return None
 
     monkeypatch.setattr(handler_module, "task_db_session", _fake_task_db_session)
     monkeypatch.setattr(handler_module, "sync_one_product_sync_item", _fake_sync_one_product_sync_item)
-    monkeypatch.setattr(handler_module, "emit_to_workspace_room", _fake_emit_to_workspace_room)
+    monkeypatch.setattr(handler_module, "push_workspace_refresh", _fake_push_workspace_refresh)
     monkeypatch.setattr(
         handler_module,
         "create_shopify_integration_event",

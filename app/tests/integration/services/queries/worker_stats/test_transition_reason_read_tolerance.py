@@ -215,11 +215,11 @@ async def test_roster_buckets_and_labels_a_transition_reason_pause(db_session) -
     assert entry["timeline"]["pause_by_reason"][OTHER_TASK_PRIORITY] == 3600
     assert result["pause_reasons"][OTHER_TASK_PRIORITY] == {
         "name": "Other task priority",
-        # Criterion 14: a system transition resolves to the same name AND icon its
-        # replaced catalog row carried, so no kiosk surface loses its image.
+        # Criterion 14: a system transition resolves to a name AND icon, so no kiosk
+        # surface loses its image.
         "image_url": (
             "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com"
-            "/images/ws_workspace_test/pause_reasons/other_task_priority.webp"
+            "/images/ws_workspace_test/pause_reasons/other-task-priority.webp"
         ),
         "pause_type": PauseTypeEnum.BLOCKER.value,
     }

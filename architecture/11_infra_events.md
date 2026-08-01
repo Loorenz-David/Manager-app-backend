@@ -11,7 +11,7 @@ The event bus decouples the command from its downstream effects. A command build
 ## Architecture
 
 ```
-Command
+Command / background job
   │
   ├─ builds typed Event instances
   ├─ commits to DB (async with ctx.session.begin())
@@ -21,10 +21,19 @@ Command
           calls each registered handler
                 │
         Handlers (one per side effect)
-          ├─ socket_handler.py     → push to workspace / user room
+          ├─ socket_handler.py     → realtime_push → workspace / user room
           ├─ audit_handler.py      → write audit entry
           └─ webhook_handler.py    → enqueue task for durable delivery
 ```
+
+Two things this diagram does not show, both load-bearing:
+
+- **`realtime_push` picks its transport from the process.** Only the API holds websockets; every
+  other process publishes through Redis for the API to forward. See "Delivery is
+  process-dependent".
+- **A data-carrying emitter may enter at `realtime_push` instead of at `dispatch`,** skipping the
+  audit and webhook handlers. One sanctioned exception, with conditions — see "Data-carrying
+  emitters".
 
 **Two dispatch tiers:**
 
@@ -180,9 +189,7 @@ _handlers: list[callable] = []
 
 
 def register(handler: callable) -> None:
-    """Register a handler to be called on every dispatched event.
-    Call during application startup — not at import time.
-    """
+    """Register a handler to be called on every dispatched event."""
     _handlers.append(handler)
 
 
@@ -192,6 +199,11 @@ def dispatch(events: list[Event]) -> None:
     Handlers are fire-and-forget — a failing handler is logged and skipped,
     not re-raised, so one bad handler cannot block others.
     """
+    if events and not _handlers:
+        # An empty handler list is a valid loop, so dropping events here used to be
+        # completely silent. It must be loud: see "Handler registration".
+        logger.warning("event_bus: %d event(s) dropped — no handlers registered", len(events))
+        return
     for event in events:
         for handler in _handlers:
             try:
@@ -206,30 +218,115 @@ def dispatch(events: list[Event]) -> None:
 ```
 
 **Rules:**
-- `register()` is called during the lifespan startup — never at module import time.
+- `register()` is called on import of the events package — see the next section for why it is
+  deliberately **not** a startup hook.
 - `dispatch()` is called by every command after its transaction commits. Never inside the `begin()` block.
 - Handlers are synchronous and in-process. They must be fast. Anything slow or unreliable (HTTP calls, email sends) must enqueue a task instead of executing inline.
 - A failing handler does not block other handlers or raise to the command. It is logged at `ERROR` level.
 
 ---
 
-## Handler registration at startup
+## Handler registration — on import, in every process
+
+The handler list is module-level state, so **every process that dispatches needs its own copy
+filled.** Registration therefore happens when the events package is imported:
 
 ```python
-# my_app/__init__.py — inside lifespan, after init_db()
-from my_app.services.infra.events import event_bus
-from my_app.services.infra.events.handlers.socket_handler  import handle as socket_handle
-from my_app.services.infra.events.handlers.audit_handler   import handle as audit_handle
-from my_app.services.infra.events.handlers.webhook_handler import handle as webhook_handle
+# services/infra/events/__init__.py
+from my_app.services.infra.events.event_bus import dispatch, register
+from my_app.services.infra.events.bootstrap import register_default_handlers
 
-
-def _register_event_handlers() -> None:
-    event_bus.register(socket_handle)
-    event_bus.register(audit_handle)
-    event_bus.register(webhook_handle)
+register_default_handlers()      # idempotent; runs once per process
 ```
 
-Called once during `lifespan` startup before any request is served. Adding a new side effect means adding one `register()` call here and one handler file — no command files change.
+Adding a new side effect means adding one `register()` call in `bootstrap.py` and one handler
+file — no command files change.
+
+### Why not a startup hook
+
+Because there is no single startup path. The API runs a FastAPI lifespan; of the nine worker
+units, five go through `run_worker()` and four (`task_router`, both schedulers,
+`email_idle_watcher`) have their own `main()`. Any hook covers some entry points and silently
+misses the rest.
+
+That is not hypothetical. Registration lived in the FastAPI lifespan alone from the first
+commit, so `dispatch()` in a worker walked an empty list and discarded the events — no
+exception, no log, no failing test. `notification:new` was never delivered to a connected
+client for two and a half months, and the bug was found by accident.
+
+Importing is the one thing a dispatcher cannot skip: you cannot call `dispatch` without
+importing the package that defines it, and importing any submodule runs the package
+`__init__` first. That makes the guarantee structural instead of remembered.
+
+Safe at import time because it registers three functions and does nothing else — the database
+imports inside `audit_handler` and `webhook_handler` are deferred into their function bodies,
+and the socket module builds no server or connection until `get_sio()` is called.
+
+`create_app()` still calls `register_default_handlers()` explicitly during lifespan. It is a
+no-op by then, kept because startup wiring should be readable in one place.
+
+---
+
+## Delivery is process-dependent — `realtime_push` handles it
+
+**Only the API process holds websocket connections.** A worker runs the same command code but
+has no client connected to it and cannot reach one directly, no matter what it emits.
+
+`realtime_push` is the single place that knows this:
+
+| Process | Transport |
+|---|---|
+| API (`owns_socket_server()` is true) | `manager` → delivers to its own clients immediately, and publishes to Redis for other API instances |
+| Everything else | `sockets/worker_emitter.py` → publishes to the Redis channel the API's socket server subscribes to, and the API forwards |
+
+Both branches build room names from `sockets/rooms.py`, so the two paths cannot drift on
+addressing. The flag is set once by `create_app()` — explicitly, not inferred from whether a
+socket server object happens to exist.
+
+**Callers never choose a transport.** A command used by both a request and a background job
+emits identically from either. If you find yourself importing `worker_emitter` in a command or
+a task handler, you are working around this layer rather than using it.
+
+---
+
+## Data-carrying emitters — the one sanctioned way to skip the bus
+
+The default is `dispatch()`. This section exists because one pattern legitimately does not fit
+the bus's payload shape, and pretending otherwise would leave the codebase contradicting this
+document.
+
+The socket handler builds every payload as `{"client_id": event.client_id, **event.extra}`, and
+`extra` is meant to stay minimal — the client is expected to fetch full data over REST. A
+**data-carrying** event inverts that: it ships a whole serialized object so the client can write
+it straight into a cache without a round trip. That is worth doing only where the round trip is
+felt — a screen someone watches while another person acts on their behalf.
+
+Such an emitter may call `realtime_push` directly, and must obey three constraints:
+
+1. **It is a module, not an inline call.** One named function per event set, holding the read and
+   the payload shape in one place, so there is exactly one definition of what goes on the wire.
+2. **It never touches `worker_emitter`.** `realtime_push` is the floor — dropping below it
+   reintroduces the process bug this whole layer exists to prevent.
+3. **It never raises.** It runs after the write has committed; a broadcast failure is logged and
+   swallowed, never surfaced as a failed command.
+
+**What you give up, explicitly:** the bus's other handlers. Events emitted this way are invisible
+to `audit_handler` and `webhook_handler`, so adding the name to the audited allowlist does
+nothing. If an event ever needs auditing, it belongs on the bus — convert it rather than teaching
+the emitter to write audit rows.
+
+**Current instances:**
+
+| Emitter | Why it carries data |
+|---|---|
+| `services/infra/events/worker_shift_realtime.py` | Payload is re-read from the database so it matches `GET /worker-shifts/current` exactly; the floor app writes it straight into that cache |
+| `services/tasks/emails/handle_sync_email_threads_targeted.py` | Sync outcome — counts, per-thread errors, success flag — exists only in the job that produced it |
+| `services/tasks/shopify/handle_shopify_process_products.py` | Per-item success and failure lists, likewise |
+| `domain/emails/arrival_notifications.py` | Per-user thread updates assembled during inbox processing |
+
+Anything that merely notifies — "this entity changed, go refetch" — is not this pattern. Use the
+bus. Note that three of the four above are *reporting the outcome of a background job*, which is
+the recurring shape: there is no entity for the client to refetch, so `{client_id}` says nothing.
 
 ---
 
@@ -382,7 +479,9 @@ services/infra/events/
 ├── domain_event.py        # Event, WorkspaceEvent, UserEvent, ConversationRoomEvent dataclasses
 ├── build_event.py         # build_workspace_event(), build_user_event(), build_conversation_event()
 ├── event_bus.py           # register(), dispatch()
-├── realtime_push.py       # Redis transport — push_workspace_*, push_to_conversation, push_to_user
+├── bootstrap.py           # register_default_handlers() — called on package import
+├── realtime_push.py       # transport selection — push_workspace_*, push_to_conversation, push_to_user
+├── worker_shift_realtime.py  # data-carrying emitter — sockets only, no audit, no webhooks
 └── handlers/
     ├── socket_handler.py  # conversation + workspace + user socket delivery
     ├── audit_handler.py   # audit log writes
@@ -406,7 +505,12 @@ Adding a new key to `extra` is non-breaking. Renaming or removing a key is break
 
 ## Rules
 
-- **Commands never import handlers directly.** Commands call `event_bus.dispatch()` only.
+- **Commands never import handlers directly.** Commands call `event_bus.dispatch()`, or a
+  data-carrying emitter that calls `realtime_push` — never a handler, and never `worker_emitter`.
+- **`dispatch()` works from any process.** Background jobs use it exactly as commands do — never
+  reach past it to `worker_emitter`, and never add a per-process registration hook.
+- **Skipping the bus costs you audit and webhooks.** A data-carrying emitter reaches sockets only.
+  If the event needs auditing, put it on the bus instead of extending the emitter.
 - **Handlers never query the database for event context.** Events must carry enough information for handlers to act. If a handler needs more data, the builder should include it in `extra`.
 - **Dispatch is always after commit.** `event_bus.dispatch(pending_events)` is always the line after `async with ctx.session.begin()` exits, never inside it.
 - **One handler = one side effect.** Do not combine socket push and email send in one handler.

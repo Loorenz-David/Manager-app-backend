@@ -3,17 +3,24 @@
 Read paths import from here. Duplicating this map anywhere else is a review finding —
 one place, imported.
 
-**Label parity (criterion 5).** Every display value reproduces, byte for byte, what the
-catalog rows these transitions replace carry:
+**Label parity (criterion 5).** Every `name` reproduces, byte for byte, what the catalog
+rows these transitions replace carry:
 
-    pause_ended_shift          -> "Ended shift"          .../pause_reasons/ended_shift.webp
-    pause_other_task_priority  -> "Other task priority"  .../pause_reasons/other_task_priority.webp
+    pause_ended_shift          -> "Ended shift"          .../pause_reasons/ended-shift.webp
+    pause_other_task_priority  -> "Other task priority"  .../pause_reasons/other-task-priority.webp
 
-**Why the image URLs live in code.** They were never workspace-authored. The bootstrap
-phase (`services/commands/bootstrap/phases/seed_pause_reasons.py::_PAUSE_REASONS`) and the
-seed migration (`49bd666da846`) carry the same hardcoded literals, so every workspace
-holding these rows holds the identical URL. Keeping them here is what makes a system
-transition render with its icon and not merely with its name.
+**Why the image URLs live in code.** They were never workspace-authored — keeping them
+here is what makes a system transition render with its icon and not merely with its name.
+
+UPDATED 2026-08-01: the URLs above are no longer byte-identical to what migration
+`49bd666da846` seeded. The icon set was re-slugged to kebab-case and the old
+underscore-named S3 objects were **deleted** (they return 403), so reproducing the
+migration's literals would mean reproducing a dead link. Parity now means parity with the
+live bootstrap phase (`services/commands/bootstrap/phases/seed_pause_reasons.py::
+_PAUSE_REASONS`), which the seed's upsert applies to existing rows on every rerun. That
+phase and this map are the two live copies and MUST be changed together: `pause_ended_shift`
+exists in both, and nothing joins them, so drift makes a worker-selected shift-end render
+differently from a system one — silently. The migration is applied history; do not edit it.
 
 Two shapes are served from one map:
 
@@ -54,7 +61,7 @@ _IMAGE_BASE = "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/w
 _TRANSITION_REASONS: dict[str, dict] = {
     TransitionReasonEnum.SHIFT_ENDED.value: {
         "name": "Ended shift",
-        "image_url": f"{_IMAGE_BASE}/ended_shift.webp",
+        "image_url": f"{_IMAGE_BASE}/ended-shift.webp",
         "pause_type": PauseTypeEnum.BLOCKER.value,
         "slug": "pause_ended_shift",
         "requires_description": False,
@@ -62,7 +69,7 @@ _TRANSITION_REASONS: dict[str, dict] = {
     },
     TransitionReasonEnum.OTHER_TASK_PRIORITY.value: {
         "name": "Other task priority",
-        "image_url": f"{_IMAGE_BASE}/other_task_priority.webp",
+        "image_url": f"{_IMAGE_BASE}/other-task-priority.webp",
         "pause_type": PauseTypeEnum.BLOCKER.value,
         "slug": "pause_other_task_priority",
         "requires_description": True,

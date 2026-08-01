@@ -240,7 +240,7 @@ async def test_zero_catalog_clock_out_closes_open_working_step(db_session) -> No
         changed_by_id=worker.client_id,
     )
 
-    assert transitioned == 1
+    assert len(transitioned) == 1
     await db_session.refresh(step)
     assert step.state is TaskStepStateEnum.PAUSED
 
@@ -288,7 +288,7 @@ async def test_overnight_safeguard_inherits_the_typed_clock_out(db_session) -> N
         changed_by_id=None,
     )
 
-    assert transitioned == 1
+    assert len(transitioned) == 1
     ended_record = next(
         record
         for record in await _step_records(db_session, step.client_id)

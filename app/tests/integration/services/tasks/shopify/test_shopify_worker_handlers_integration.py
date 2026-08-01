@@ -266,8 +266,8 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
     async def _fake_set_shopify_product_metafields(**_kwargs):
         return None
 
-    async def _fake_emit_to_workspace_room(**kwargs):
-        emitted.update(kwargs)
+    async def _fake_push_workspace_refresh(workspace_id, event_name, payload):
+        emitted.update({"workspace_id": workspace_id, "event": event_name, "payload": payload})
 
     monkeypatch.setattr(
         "beyo_manager.services.tasks.shopify._product_sync_orchestrator.find_product_variant_by_identity",
@@ -290,8 +290,8 @@ async def test_handle_shopify_process_products_transitions_rows_to_succeeded_and
         _fake_set_shopify_product_metafields,
     )
     monkeypatch.setattr(
-        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.emit_to_workspace_room",
-        _fake_emit_to_workspace_room,
+        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.push_workspace_refresh",
+        _fake_push_workspace_refresh,
     )
 
     await handle_shopify_process_products(
@@ -350,16 +350,16 @@ async def test_handle_shopify_process_products_skips_rows_for_disabled_shop_inte
     async def _unexpected_graphql_call(**_kwargs):
         raise AssertionError("Shopify GraphQL must not be called for a disabled shop integration")
 
-    async def _fake_emit_to_workspace_room(**kwargs):
-        emitted.update(kwargs)
+    async def _fake_push_workspace_refresh(workspace_id, event_name, payload):
+        emitted.update({"workspace_id": workspace_id, "event": event_name, "payload": payload})
 
     monkeypatch.setattr(
         "beyo_manager.services.infra.shopify.graphql_client.execute_shopify_graphql",
         _unexpected_graphql_call,
     )
     monkeypatch.setattr(
-        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.emit_to_workspace_room",
-        _fake_emit_to_workspace_room,
+        "beyo_manager.services.tasks.shopify.handle_shopify_process_products.push_workspace_refresh",
+        _fake_push_workspace_refresh,
     )
 
     await handle_shopify_process_products(

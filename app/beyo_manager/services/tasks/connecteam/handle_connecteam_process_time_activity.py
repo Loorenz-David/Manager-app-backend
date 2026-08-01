@@ -5,6 +5,10 @@ from beyo_manager.core.logging.config import log_event
 from beyo_manager.domain.connecteam.enums import ConnecteamActivityTypeEnum, ConnecteamEventTypeEnum
 from beyo_manager.domain.connecteam.time_activity_event import ConnecteamTimeActivityEvent
 from beyo_manager.models.database import get_db_session
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 from beyo_manager.services.queries.users.resolve_connecteam_worker import (
     AmbiguousConnecteamMappingError,
     resolve_connecteam_worker,
@@ -81,6 +85,13 @@ async def handle_connecteam_process_time_activity(raw_payload: dict, task_client
                 worker=worker,
                 event=event,
             )
+        # Outside the `begin()` block — the shift is committed, so the broadcast cannot
+        # describe a state the database rolled back. An external clock source is exactly
+        # where realtime matters most: nobody in the building performed this action in an
+        # app that could refetch on its own.
+        if result.changed_shift_state:
+            await emit_worker_shift_state(session, worker.workspace_id, worker.user_id)
+            await emit_steps_paused(worker.workspace_id, list(result.paused_step_ids))
         log_event(
             "connecteam_webhook_completed",
             provider="connecteam",

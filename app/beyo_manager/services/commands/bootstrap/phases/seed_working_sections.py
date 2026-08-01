@@ -32,17 +32,18 @@ _SECTION_CREATION_MAP: dict[str, bool] = {
 
 _SECTION_IMAGE_URLS: dict[str, str] = {
     "assembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/assembly.webp",
-    "cleaning seat": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
-    "cleaning wood": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning_2.webp",
-    "disassembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/dismantler.webp",
-    "structural repair": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/gluing_2.webp",
-    "ground oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/ground_oil.webp",
-    "hardwax oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/hardwax.webp",
+    "cleaning seat": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning-seat.webp",
+    "cleaning wood": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/cleaning-wood.webp",
+    "disassembly": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/disassembly.webp",
+    "structural repair": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/structural-repair.webp",
+    "ground oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/ground-oil.webp",
+    "hardwax oil": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/hardwax-oil.webp",
     "padding": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/padding.webp",
     "sewing": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/sewing.webp",
-    "upholstery installation": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_installer.webp",
-    "upholstery removal": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery_remover_2.webp",
-    "wood fix": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/wood_oil.webp",
+    "upholstery installation": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery-installation.webp",
+    "upholstery removal": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/upholstery-removal.webp",
+    "weaving": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/weaving.webp",
+    "wood fix": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/wood-fix.webp",
     "photography": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/working_sections/photography.webp",
 }
 
@@ -57,10 +58,10 @@ _SECTION_ORDER_LISTS: dict[str, int] = {
     "assembly": 8,
     "sewing": 9,
     "weaving": 7,
-    "wood fix": 1,
-    "ground oil": 2,
-    "hardwax oil": 3,
-    "photography": 10,
+    "wood fix": 101,
+    "ground oil": 102,
+    "hardwax oil": 103,
+    "photography": 1000,
 }
 
 _SECTION_BATCH_MAP: dict[str, bool] = {

@@ -33,6 +33,7 @@ from beyo_manager.services.commands.task_steps._step_transition_core import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_steps_paused
 
 
 logger = logging.getLogger(__name__)
@@ -157,9 +158,7 @@ async def pause_task_working_steps_for_case(
                     now=now,
                 )
 
-            # Realtime step events are not dispatched here, matching clock-out: the
-            # PROCESS_STEP_TRANSITION outbox task each transition emits is what reconciles
-            # the worker's derived shift timeline.
+            paused_step_ids = [step.client_id for _, step, _ in open_working_rows]
             logger.info(
                 "cases.case_created_step_pause | "
                 "workspace_id=%s case_id=%s task_id=%s actor_id=%s paused_steps=%s",
@@ -169,7 +168,6 @@ async def pause_task_working_steps_for_case(
                 ctx.user_id,
                 len(open_working_rows),
             )
-            return len(open_working_rows)
     except Exception:
         logger.exception(
             "cases.case_created_step_pause_failed | "
@@ -180,3 +178,11 @@ async def pause_task_working_steps_for_case(
             ctx.user_id,
         )
         return 0
+
+    # Broadcast after the pause has committed. This one is not optional the way clock-out's
+    # is: a manager raised the case, and the worker whose step just stopped is somewhere
+    # else in the building with a cache that still says `working`. The workers app guards
+    # its own transitions on that cache, so without the event their next action fails
+    # against a step the server already paused.
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
+    return len(paused_step_ids)

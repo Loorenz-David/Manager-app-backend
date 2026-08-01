@@ -132,6 +132,13 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
   declarations.
 - Idle is what is left over. Once declarations exist, `IDLE` means genuinely unaccounted time — not
   "we don't know."
+- **Every shift-state write broadcasts, after it commits, and never fails the write.** The events and
+  their payloads are in [api.md](api.md). Shift state is written from three processes — the API, the
+  tasks worker and the analytics worker — and delivery works identically from each; picking a
+  transport is `realtime_push`'s job, not this domain's (see `architecture/11_infra_events.md`).
+  What is specific here is the **payload**: it is re-read from the database rather than assembled
+  from what the caller holds, so it matches `GET /worker-shifts/current` exactly. That read is why
+  `worker_shift_realtime.py` exists instead of a plain `dispatch` call.
 
 ---
 
@@ -161,7 +168,8 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 | Commands | `services/commands/users/reconcile_worker_shift_state.py` | Keeps the derived table current during the day |
 | Commands | `services/commands/cases/_case_created_step_pause.py` | Pauses a task's working steps when a case is raised on it (cases domain; listed here because it writes `step_state_records`) |
 | Commands | `services/commands/users/_reconstruct_shift_middle.py` | The clock-out rebuild |
-| Queries | `services/queries/users/get_current_worker_shift_state.py` | Live state for the UI |
+| Realtime | `services/infra/events/worker_shift_realtime.py` | The two shift events and the step-pause event — see [api.md](api.md) |
+| Queries | `services/queries/users/get_current_worker_shift_state.py` | Live state for the UI, and the payload the realtime emitter sends |
 | Queries | `services/queries/users/worker_shift_access.py` | Who may act on whose shift |
 | Queries | `services/queries/worker_stats/` | Reporting and the clock-out summary |
 | Domain | `domain/users/shift_state_machine.py` | `derive_target_state`, transition validity |
@@ -189,15 +197,10 @@ Real, current, and deliberately unfixed. Repository-wide debt lives in
   and the step is correctly paused, but **the worker sees an error**. The client must stop firing it.
   Tracked in `docs/handoff/to_frontend/`.
 
-- **The case-created pause emits no `task:step-state-changed` event.** The step is paused server-side
-  and no client is told, so a worker whose step a manager just paused by raising a case keeps seeing
-  it as working until something else refetches. The closer precedent broadcasts: the task-switch
-  auto-pause adds its auto-paused step to the same event (`transition_step_state.py:471-484`);
-  clock-out, which does not broadcast, is the weaker analogue because it is self-initiated. This is
-  also the mechanism behind the client conflict above — the workers app's `step?.state !== "working"`
-  guard reads a cache the backend silently invalidated. Emitting the event would make the stale state
-  self-healing and remove the deploy-ordering coupling the frontend handoff carries. An operator
-  decision, not a defect in what shipped.
+  The pause now broadcasts `task:step-state-changed`, which heals the stale cache — but it does not
+  fix this. The client fires its follow-up transition on the case-creation response, and the event
+  cannot be relied on to arrive first. Self-healing means the *next* render is right; it does not
+  make the racing write legal.
 
 - **The seven historical case-created pause records are not backfilled.** Records written before the
   capability was removed carry the soft-deleted `pause_case_created` catalog reference rather than

@@ -134,7 +134,13 @@ async def clock_out_shift_for_user(
     user_id: str,
     clock_out_at: datetime,
     changed_by_id: str | None,
-) -> int:
+) -> list[str]:
+    """Close the shift; returns the ids of the steps it force-paused.
+
+    The ids, not just the count: every caller broadcasts them as `task:step-state-changed`
+    once its transaction commits, so the worker's device stops rendering steps this
+    clock-out already paused. `len()` is the count callers used to get back.
+    """
     # Cross-command lock order: shift row -> declared row. Phase 3 declaration
     # commands must preserve this order to avoid deadlocks with clock-out/reconcile.
     current = await load_open_worker_shift_for_update(session, workspace_id, user_id)
@@ -229,4 +235,4 @@ async def clock_out_shift_for_user(
         )
     )
     await session.flush()
-    return len(open_working_rows)
+    return [step.client_id for _, step, _ in open_working_rows]

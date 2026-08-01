@@ -75,7 +75,7 @@ def test_system_transition_omits_reason_text_and_resolves_into_pause_reason() ->
         "name": "Other task priority",
         "image_url": (
             "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com"
-            "/images/ws_workspace_test/pause_reasons/other_task_priority.webp"
+            "/images/ws_workspace_test/pause_reasons/other-task-priority.webp"
         ),
     }
     assert data["declared_state"] is None

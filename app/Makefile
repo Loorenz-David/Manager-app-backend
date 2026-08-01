@@ -76,6 +76,14 @@ task_worker: tasks-worker
 worker-logs:
 	docker compose logs -f worker
 
+# Worker-shift stack: clock in/out, declared states, auto clock-out.
+# Assumes task-router and tasks-worker are already running separately.
+shift-workers:
+	@trap 'kill 0' EXIT INT TERM; \
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.analytics_worker & \
+	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.recurring_scheduler_runner & \
+	wait
+
 # Scheduler runners
 delayed-scheduler:
 	PYTHONPATH=. APP_ENV=development python -m beyo_manager.workers.delayed_scheduler_runner
@@ -118,4 +126,4 @@ inspect:
 reset-db:
 	python scripts/ops.py reset-db --dry-run True
 
-.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker notification-worker tasks-worker shopify-worker email-idle-watcher task-worker task_worker
+.PHONY: dev-up dev-down test lint format validate worker seed logs replay inspect reset-db presence-worker analytics-worker notification-worker tasks-worker shopify-worker email-idle-watcher task-worker task_worker shift-workers task-router delayed-scheduler recurring-scheduler

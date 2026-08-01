@@ -18,7 +18,7 @@ async def test_auto_clock_out_uses_same_close_primitive_and_marks_log(
 
     async def fake_clock_out(*args, **kwargs):
         calls.append((args, kwargs))
-        return 1
+        return ["tst_1"]
 
     monkeypatch.setattr(handle_clock_out, "clock_out_shift_for_user", fake_clock_out)
     monkeypatch.setattr(handle_clock_out, "log_event", lambda event_type, **extra: logs.append((event_type, extra)))

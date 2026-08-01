@@ -15,6 +15,21 @@ from beyo_manager.services.tasks.connecteam.handlers._clock_timestamp import clo
 class ConnecteamHandlerResult:
     outcome: str = ConnecteamProcessingOutcomeEnum.PROCESSED.value
     transitioned_steps: int = 0
+    # Carried out to the task entry point, which is where the transaction commits and
+    # where realtime events can safely be broadcast.
+    paused_step_ids: tuple[str, ...] = ()
+
+    @property
+    def changed_shift_state(self) -> bool:
+        return self.outcome in _SHIFT_CHANGING_OUTCOMES
+
+
+_SHIFT_CHANGING_OUTCOMES = frozenset(
+    {
+        ConnecteamProcessingOutcomeEnum.CLOCK_IN_APPLIED.value,
+        ConnecteamProcessingOutcomeEnum.CLOCK_OUT_APPLIED.value,
+    }
+)
 
 
 async def execute(

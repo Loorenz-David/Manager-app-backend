@@ -19,6 +19,7 @@ from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,8 @@ async def close_declared_worker_state(ctx: ServiceContext) -> dict:
             ctx.user_id,
             open_declared.client_id,
         )
+
+    await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
 
     return {
         "shift_state": reconcile_outcome.state.value,

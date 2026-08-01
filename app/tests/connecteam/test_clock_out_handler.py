@@ -16,7 +16,7 @@ async def test_clock_out_applied_logs_transitioned_step_count(
     logs = []
 
     async def fake_clock_out(*args, **kwargs):
-        return 3
+        return ["tst_1", "tst_2", "tst_3"]
 
     monkeypatch.setattr(module, "clock_out_shift_for_user", fake_clock_out)
     monkeypatch.setattr(module, "log_event", lambda event_type, **extra: logs.append((event_type, extra)))
@@ -29,6 +29,7 @@ async def test_clock_out_applied_logs_transitioned_step_count(
 
     assert result.outcome == ConnecteamProcessingOutcomeEnum.CLOCK_OUT_APPLIED.value
     assert result.transitioned_steps == 3
+    assert result.paused_step_ids == ("tst_1", "tst_2", "tst_3")
     assert logs[-1][0] == "connecteam_clock_out_applied"
     assert logs[-1][1]["transitioned_steps"] == 3
     assert logs[-1][1]["auto_clock_out"] is False

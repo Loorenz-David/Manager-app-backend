@@ -7,6 +7,10 @@ from beyo_manager.services.commands.users._clock_worker_shift import clock_out_s
 from beyo_manager.services.commands.users._worker_shift_access import resolve_worker_shift_target
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 
 class ClockOutWorkerShiftRequest(BaseModel):
@@ -31,17 +35,19 @@ async def clock_out_worker_shift(ctx: ServiceContext) -> dict:
     clock_out_at = datetime.now(timezone.utc)
     async with maybe_begin(ctx.session):
         user_id = await resolve_worker_shift_target(ctx, request.user_id)
-        transitioned_steps = await clock_out_shift_for_user(
+        paused_step_ids = await clock_out_shift_for_user(
             ctx.session,
             ctx.workspace_id,
             user_id,
             clock_out_at,
             ctx.user_id,
         )
+    await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
+    await emit_steps_paused(ctx.workspace_id, paused_step_ids)
     return {
         "action": "clock_out",
         "user_id": user_id,
-        "transitioned_steps": transitioned_steps,
+        "transitioned_steps": len(paused_step_ids),
         "analytics": None,
         "_clock_out_at": clock_out_at,
     }

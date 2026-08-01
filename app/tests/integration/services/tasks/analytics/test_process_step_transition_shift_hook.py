@@ -17,6 +17,7 @@ from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_shift_state_record import UserShiftStateRecord
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.models.tables.workspaces.workspace import Workspace
+from beyo_manager.services.infra.events import worker_shift_realtime
 from beyo_manager.services.tasks.analytics.process_step_transition import (
     handle_process_step_transition,
 )
@@ -304,3 +305,70 @@ async def test_batch_event_fanout_creates_one_shift_transition(db_session) -> No
     assert [record.state for record in records].count(UserShiftStateEnum.IN_PAUSE) == 1
     assert sum(record.exited_at is None for record in records) == 1
     assert records[-1].state is UserShiftStateEnum.IN_PAUSE
+
+
+async def test_shift_state_change_is_broadcast_once_per_actual_change(
+    db_session, monkeypatch
+) -> None:
+    """A step transition is what moves a worker between WORKING, IN_PAUSE and IDLE, and the
+    derivation happens here — so this handler is the only place that can announce it.
+
+    The gate is `outcome.changed`, not "a transition arrived". Pausing three steps of a
+    batch produces three payloads and one shift transition; broadcasting per payload would
+    put two redundant events on every device in the workspace for a state that never moved.
+    """
+    user_events: list[tuple[str, str, object]] = []
+    workspace_events: list[tuple[str, str, object]] = []
+
+    async def record_user(user_id, event, payload):
+        user_events.append((user_id, event, payload))
+
+    async def record_workspace(workspace_id, event, payload):
+        workspace_events.append((workspace_id, event, payload))
+
+    monkeypatch.setattr(worker_shift_realtime, "push_to_user", record_user)
+    monkeypatch.setattr(worker_shift_realtime, "push_workspace_refresh", record_workspace)
+
+    workspace, worker, task, section = await _seed_environment(db_session)
+    transitioned_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+    _seed_open_shift(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=worker.client_id,
+        state=UserShiftStateEnum.WORKING,
+        started_at=transitioned_at - timedelta(hours=1),
+    )
+    payloads = [
+        await _seed_post_transition_step(
+            db_session,
+            workspace=workspace,
+            worker=worker,
+            task=task,
+            section=section,
+            closing_state=TaskStepStateEnum.WORKING,
+            new_state=TaskStepStateEnum.PAUSED,
+            transitioned_at=transitioned_at,
+            reason="pause_coffee_break",
+        )
+        for _ in range(3)
+    ]
+    worker_id = worker.client_id
+    await db_session.commit()
+
+    for index, payload in enumerate(payloads):
+        await handle_process_step_transition(payload, f"task_shift_realtime_{index}")
+
+    assert [event for _, event, _ in user_events] == [
+        worker_shift_realtime.WORKER_SHIFT_STATE_CHANGED
+    ]
+    assert user_events[0][0] == worker_id
+    assert user_events[0][2]["state"] == "in_pause"
+    assert [event for _, event, _ in workspace_events] == [
+        worker_shift_realtime.WORKER_SHIFT_ROSTER_CHANGED
+    ]
+    assert workspace_events[0][2] == {
+        "user_id": worker_id,
+        "clocked_in": True,
+        "state": "in_pause",
+        "state_entered_at": user_events[0][2]["state_entered_at"],
+    }

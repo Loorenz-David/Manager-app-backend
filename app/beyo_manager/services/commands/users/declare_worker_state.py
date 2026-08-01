@@ -32,6 +32,10 @@ from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.infra.events.worker_shift_realtime import (
+    emit_steps_paused,
+    emit_worker_shift_state,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -170,6 +174,14 @@ async def declare_worker_state(ctx: ServiceContext) -> dict:
             switched_from_id,
             len(open_working_rows),
         )
+
+    await emit_worker_shift_state(ctx.session, ctx.workspace_id, user_id)
+    # A manager can declare on a worker's behalf, and declaring auto-pauses their steps.
+    # Without this the worker's device keeps rendering those steps as working.
+    await emit_steps_paused(
+        ctx.workspace_id,
+        [step.client_id for _, step, _ in open_working_rows],
+    )
 
     return {
         "declared_state": serialize_declared_state(declared_state, pause_reason),

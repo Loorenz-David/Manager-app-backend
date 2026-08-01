@@ -116,11 +116,11 @@ def test_transition_reason_row_resolves_to_a_pause_reason_label() -> None:
     assert data["pause_reason"] == {
         "id": "other_task_priority",
         "name": "Other task priority",
-        # The icon the replaced catalog row carried, restored from the code-owned map.
-        # `None` here would blank the pause icon the kiosk renders.
+        # The icon for this transition, from the code-owned map. `None` here would blank
+        # the pause icon the kiosk renders.
         "image_url": (
             "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com"
-            "/images/ws_workspace_test/pause_reasons/other_task_priority.webp"
+            "/images/ws_workspace_test/pause_reasons/other-task-priority.webp"
         ),
     }
     # Criterion 17: the row must not gain a field. `reason_text` is absent, not null.

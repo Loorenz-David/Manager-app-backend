@@ -17,7 +17,7 @@ from beyo_manager.services.commands.emails.requests.sync_thread_targeted_request
     SyncThreadsBatchTargetedRequest,
 )
 from beyo_manager.services.infra.audit.write_audit import write_audit
-from beyo_manager.sockets.worker_emitter import emit_to_user_room
+from beyo_manager.services.infra.events.realtime_push import push_to_user
 
 EMAIL_THREADS_SYNCED_EVENT = "email.threads.synced"
 
@@ -75,10 +75,10 @@ async def handle_sync_email_threads_targeted(payload: dict, task_client_id: str)
                     "sync_success": False,
                     "sync_error": str(exc),
                 }
-                await emit_to_user_room(
-                    user_id=task_payload.requested_by_user_id,
-                    event=EMAIL_THREADS_SYNCED_EVENT,
-                    payload=failure_payload,
+                await push_to_user(
+                    task_payload.requested_by_user_id,
+                    EMAIL_THREADS_SYNCED_EVENT,
+                    failure_payload,
                 )
             raise
         break
@@ -101,9 +101,9 @@ async def handle_sync_email_threads_targeted(payload: dict, task_client_id: str)
         "sync_error": result["sync_error"],
         "connection_client_ids": result["connection_client_ids"],
     }
-    await emit_to_user_room(
-        user_id=task_payload.requested_by_user_id,
-        event=EMAIL_THREADS_SYNCED_EVENT,
-        payload=success_payload,
+    await push_to_user(
+        task_payload.requested_by_user_id,
+        EMAIL_THREADS_SYNCED_EVENT,
+        success_payload,
     )
     await emit_arrival_realtime_events(result["realtime_events"])

@@ -172,6 +172,43 @@ state.
 
 ---
 
+## Realtime events
+
+Every shift-state write broadcasts. Two events, because both apps listen on the same two rooms:
+every socket joins `user:{its own user_id}` **and** `workspace:{its workspace_id}` at connect, so a
+workspace broadcast reaches every worker's device, not only the managers'.
+
+| Event | Room | Payload |
+|---|---|---|
+| `worker-shift:state-changed` | `user:{target_user_id}` | Exactly the `GET /worker-shifts/current` body for that worker |
+| `worker-shift:roster-changed` | `workspace:{workspace_id}` | `{ user_id, clocked_in, state, state_entered_at }` |
+| `task:step-state-changed` | `workspace:{workspace_id}` | `[{ client_id, new_state: "paused" }]` — the existing list-shaped event |
+
+**The full payload only ever goes to the room of the worker it describes.** The workspace event
+carries no pause reason and no declaration — a declaration's `description` is free text a worker
+typed about themselves, and the manager-facing detail is gated behind `ADMIN`/`MANAGER` on every
+`/worker-stats/` endpoint. Treat `worker-shift:roster-changed` as a signal to refetch, not as data.
+
+`worker-shift:state-changed` is byte-identical to the `GET /current` response, so a client may write
+it straight into that cache instead of refetching. Clock-out is not a special shape: it arrives as
+`clocked_in: false` with a `null` state, the same as reading `/current` for a worker who is out.
+
+Emitted by every write path, including the ones no request initiated:
+
+| Trigger | Events |
+|---|---|
+| `clock-in`, `clock-out`, `clock` | shift + roster; step event when clock-out force-paused steps |
+| `declared-states`, `declared-states/close` | shift + roster; step event when declaring auto-paused steps |
+| A step transition that moves the worker between `WORKING` / `IN_PAUSE` / `IDLE` | shift + roster, once per actual state change — not once per transition |
+| The external clock integration | shift + roster; step event on clock-out |
+| The overnight safeguard | shift + roster per closed shift; step event per worker |
+| Raising a case on a task | step event for every step the case paused |
+
+All of them fire **after** the write commits, and a failure to broadcast is logged and swallowed —
+a realtime outage costs a stale render until the next fetch, never a lost clock-out.
+
+---
+
 ## `/api/v1/worker-stats/` — manager reporting
 
 | Endpoint | Returns |

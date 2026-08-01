@@ -17,8 +17,8 @@ from beyo_manager.domain.execution.payloads.notification import NotificationPayl
 from beyo_manager.models.tables.emails.email_connection import EmailConnection
 from beyo_manager.models.tables.emails.email_thread import EmailThread
 from beyo_manager.services.infra.email_providers.message_processor import ProcessResult
+from beyo_manager.services.infra.events.realtime_push import push_to_user
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
-from beyo_manager.sockets.worker_emitter import emit_to_user_room
 
 EMAIL_THREADS_UPDATED_EVENT = "email.entity_threads.updated"
 
@@ -104,11 +104,7 @@ async def emit_arrival_realtime_events(events: list[EmailArrivalRealtimeEvent]) 
     if not events:
         return
     await asyncio.gather(*[
-        emit_to_user_room(
-            user_id=event.user_id,
-            event=EMAIL_THREADS_UPDATED_EVENT,
-            payload=event.payload,
-        )
+        push_to_user(event.user_id, EMAIL_THREADS_UPDATED_EVENT, event.payload)
         for event in events
     ])
 

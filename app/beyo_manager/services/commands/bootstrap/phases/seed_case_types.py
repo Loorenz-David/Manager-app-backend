@@ -9,37 +9,37 @@ _CASE_TYPES: list[dict[str, str]] = [
         "name": "Missing Item",
         "legacy_name": "missing_item",
         "description": "The required item is not available at the workstation.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/missing_item.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/missing-item.webp",
     },
     {
         "name": "Missing Materials",
         "legacy_name": "missing_materials",
         "description": "Required materials are not available to continue the task.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/missing_materials.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/missing-materials.webp",
     },
     {
         "name": "No Fabric",
         "legacy_name": "no_fabric",
         "description": "No suitable fabric is available for this task.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/no_fabric.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/no-fabric.webp",
     },
     {
         "name": "Unclear Task",
         "legacy_name": "unclear_task",
         "description": "Task instructions are unclear and need clarification.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/unclear_task.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/unclear-task.webp",
     },
     {
         "name": "Broken Tool",
         "legacy_name": "broken_tool",
         "description": "A required tool is broken and cannot be used safely.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/broken_tool.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/broken-tool.webp",
     },
     {
         "name": "Wrong Fabric",
         "legacy_name": "wrong_fabric",
         "description": "The available fabric does not match task requirements.",
-        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/wrong_fabric.webp",
+        "image_url": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/wrong-fabric.webp",
     },
 ]
 

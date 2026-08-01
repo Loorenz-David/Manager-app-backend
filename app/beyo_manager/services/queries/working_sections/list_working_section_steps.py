@@ -1,7 +1,10 @@
 from sqlalchemy import and_, case, distinct, exists, or_, select
 
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
-from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
+from beyo_manager.domain.task_steps.state_filters import (
+    parse_step_readiness_filter,
+    parse_step_state_filter,
+)
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
@@ -37,14 +40,8 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
     task_types = _split_csv(ctx.query_params.get("task_types"))
     upholstery_search = str(ctx.query_params.get("upholstery_search", "false")).lower() == "true"
     group_by_upholstery = str(ctx.query_params.get("group_by_upholstery", "false")).lower() == "true"
-    record_step_state_raw = ctx.query_params.get("record_step_state")
-    record_step_states = [s.strip() for s in record_step_state_raw.split(",") if s.strip()] if record_step_state_raw else []
-    readiness_statuses_raw = ctx.query_params.get("readiness_statuses")
-    readiness_statuses = (
-        [TaskStepReadinessStatusEnum(s.strip()) for s in readiness_statuses_raw.split(",") if s.strip()]
-        if readiness_statuses_raw
-        else []
-    )
+    record_step_states = parse_step_state_filter(ctx.query_params.get("record_step_state"))
+    readiness_statuses = parse_step_readiness_filter(ctx.query_params.get("readiness_statuses"))
     item_major_category_snapshot_raw = (
         ctx.query_params.get("item_major_category")
         or ctx.query_params.get("major_category")

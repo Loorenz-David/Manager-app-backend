@@ -134,33 +134,64 @@ _WORKER_SECTION_GROUPS: dict[str, tuple[str, ...]] = {
 }
 _WORKER_SECTION_GROUPS["Mykola"] = ("kola_sections",)
 _WORKER_SECTION_GROUPS["Norbi"] = _WORKER_SECTION_GROUPS["Mykola"]
-_WORKER_SECTION_GROUPS["Feruza"] = ("restoration_core", "upholstery", "cleaning_both")
-_WORKER_SECTION_GROUPS["Tetiana"] = ("restoration_core", "upholstery", "cleaning_both")
 _WORKER_SECTION_GROUPS["Vitalii"] = ("photography",)
 _WORKER_SECTION_GROUPS["Fayoz"] = ()
 _WORKER_SECTION_GROUPS["Betty"] = ()
 _WORKER_SECTION_GROUPS["Stina"] = ()
 
+# Explicit section lists per worker, used instead of that worker's section groups.
+# Declaration order drives the seeded ``sort_order``.
+_WORKER_SECTION_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "Andrii": ("structural repair",),
+    "Roman": (
+        "upholstery installation",
+        "upholstery removal",
+        "padding",
+        "sewing",
+        "weaving",
+    ),
+    "Tetiana": (
+        "cleaning seat",
+        "disassembly",
+    ),
+    "Nazar": (
+        "disassembly",
+        "upholstery removal",
+        "padding",
+        "assembly",
+    ),
+    "Feruza": ("cleaning wood",),
+}
+
 
 def _resolve_worker_section_names(worker_name: str) -> list[str]:
     """Ordered, de-duplicated section names for a worker.
 
-    Order follows the worker's group selection and each group's declaration order in
-    ``_SECTION_GROUPS`` so seeded ``sort_order`` is deterministic (a ``set`` would make
-    it depend on hash iteration order).
+    Order follows the worker's explicit override when present, otherwise its group
+    selection and each group's declaration order in ``_SECTION_GROUPS``, so seeded
+    ``sort_order`` is deterministic (a ``set`` would make it depend on hash iteration
+    order).
     """
-    selected_groups = _WORKER_SECTION_GROUPS.get(worker_name, ("all",))
+    override = _WORKER_SECTION_OVERRIDES.get(worker_name)
+    if override is not None:
+        selected_names: tuple[str, ...] = override
+    else:
+        selected_names = tuple(
+            section_name
+            for group_name in _WORKER_SECTION_GROUPS.get(worker_name, ("all",))
+            for section_name in _SECTION_GROUPS.get(group_name, ())
+        )
+
     ordered_names: list[str] = []
     seen: set[str] = set()
 
-    for group_name in selected_groups:
-        for section_name in _SECTION_GROUPS.get(group_name, ()):
-            if section_name in seen:
-                continue
-            if not _WORKING_SECTION_ASSIGNMENT_MAP.get(section_name, True):
-                continue
-            seen.add(section_name)
-            ordered_names.append(section_name)
+    for section_name in selected_names:
+        if section_name in seen:
+            continue
+        if not _WORKING_SECTION_ASSIGNMENT_MAP.get(section_name, True):
+            continue
+        seen.add(section_name)
+        ordered_names.append(section_name)
 
     return ordered_names
 

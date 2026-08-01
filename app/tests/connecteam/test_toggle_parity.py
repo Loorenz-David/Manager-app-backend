@@ -20,7 +20,7 @@ async def test_webhook_clock_actions_delegate_to_the_toggle_endpoint_primitives(
 
     async def fake_clock_out(*args, **kwargs):
         clock_out_calls.append((args, kwargs))
-        return 2
+        return ["tst_1", "tst_2"]
 
     monkeypatch.setattr(handle_clock_in, "clock_in_shift_for_user", fake_clock_in)
     monkeypatch.setattr(handle_clock_out, "clock_out_shift_for_user", fake_clock_out)

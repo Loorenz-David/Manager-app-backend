@@ -29,6 +29,7 @@ from beyo_manager.services.queries.analytics.reconcile_user_time import (
 from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
     reconcile_worker_shift_state,
 )
+from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,9 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
                 payload.workspace_id, payload.credited_user_id, payload.step_id, work_date, closing_state.value,
             )
 
+        shift_reconcile = None
         if payload.credited_user_id:
-            await reconcile_worker_shift_state(
+            shift_reconcile = await reconcile_worker_shift_state(
                 session,
                 payload.workspace_id,
                 payload.credited_user_id,
@@ -94,6 +96,18 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
         if task_step is not None:
             task_step.updated_at = datetime.now(timezone.utc)
         await session.commit()
+
+        # A step transition is what moves a worker between WORKING, IN_PAUSE and IDLE, and
+        # that derivation happens here rather than in the request that transitioned the
+        # step — so this is the only place that can announce it. Gated on `changed`: most
+        # transitions leave the shift state where it was (one of several batched steps
+        # pausing, say) and a broadcast per step would be noise.
+        if shift_reconcile is not None and shift_reconcile.changed:
+            await emit_worker_shift_state(
+                session,
+                payload.workspace_id,
+                payload.credited_user_id,
+            )
 
 
 _STEP_TIME_FIELDS = {

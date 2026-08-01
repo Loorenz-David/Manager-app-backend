@@ -315,7 +315,7 @@ async def _run_clock_out_scenario(db_session, monkeypatch) -> tuple[Workspace, U
         CLOCK_OUT,
         changed_by_id=worker.client_id,
     )
-    assert transitioned == 1, "clock-out must have force-closed exactly the open working step"
+    assert len(transitioned) == 1, "clock-out must have force-closed exactly the open working step"
 
     ctx = _ctx(db_session, workspace, worker)
     await _apply_step_transition(

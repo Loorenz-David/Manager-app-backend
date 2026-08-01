@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from beyo_manager.domain.users.enums import UserShiftStateEnum
@@ -23,8 +24,18 @@ from beyo_manager.services.queries.users.worker_shift_access import (
 logger = logging.getLogger(__name__)
 
 
-async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
-    user_id = await resolve_worker_shift_target(ctx, ctx.query_params.get("user_id"))
+async def load_current_worker_shift_state(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+) -> dict:
+    """The worker's live shift state, already serialized — no access check.
+
+    The caller decides who is allowed to see this. `get_current_worker_shift_state`
+    resolves the target through the access rules first; the realtime emitter addresses
+    the worker's own room and needs no such check. Both go through here so the socket
+    payload and the HTTP response can never drift apart.
+    """
     now = datetime.now(timezone.utc)
     current_pause_reason = aliased(PauseReason)
     declared_pause_reason = aliased(PauseReason)
@@ -32,7 +43,7 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
     shift_started_at = (
         select(func.max(shift_marker.entered_at))
         .where(
-            shift_marker.workspace_id == ctx.workspace_id,
+            shift_marker.workspace_id == workspace_id,
             shift_marker.user_id == user_id,
             shift_marker.state == UserShiftStateEnum.STARTED_SHIFT,
             shift_marker.entered_at <= now,
@@ -41,7 +52,7 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
     )
 
     row = (
-        await ctx.session.execute(
+        await session.execute(
             select(
                 UserShiftStateRecord,
                 current_pause_reason,
@@ -52,7 +63,7 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
             .outerjoin(
                 current_pause_reason,
                 and_(
-                    current_pause_reason.workspace_id == ctx.workspace_id,
+                    current_pause_reason.workspace_id == workspace_id,
                     current_pause_reason.client_id == UserShiftStateRecord.reason,
                 ),
             )
@@ -68,13 +79,13 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
             .outerjoin(
                 declared_pause_reason,
                 and_(
-                    declared_pause_reason.workspace_id == ctx.workspace_id,
+                    declared_pause_reason.workspace_id == workspace_id,
                     declared_pause_reason.client_id
                     == UserDeclaredStateRecord.pause_reason_id,
                 ),
             )
             .where(
-                UserShiftStateRecord.workspace_id == ctx.workspace_id,
+                UserShiftStateRecord.workspace_id == workspace_id,
                 UserShiftStateRecord.user_id == user_id,
                 UserShiftStateRecord.exited_at.is_(None),
             )
@@ -89,7 +100,7 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
         logger.warning(
             "worker_shift.current_state_unresolved_pause_reason | "
             "workspace_id=%s user_id=%s shift_record_id=%s pause_reason_id=%s",
-            ctx.workspace_id,
+            workspace_id,
             user_id,
             current.client_id,
             current.reason,
@@ -102,3 +113,8 @@ async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
         declared_record=declared_record,
         declared_pause_reason=declared_reason,
     )
+
+
+async def get_current_worker_shift_state(ctx: ServiceContext) -> dict:
+    user_id = await resolve_worker_shift_target(ctx, ctx.query_params.get("user_id"))
+    return await load_current_worker_shift_state(ctx.session, ctx.workspace_id, user_id)

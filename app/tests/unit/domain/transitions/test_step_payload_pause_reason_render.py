@@ -105,7 +105,7 @@ def test_ended_shift_record_renders_a_name_and_icon(serializer) -> None:
     reason = data["pause_reason"]
     assert reason is not None, "a clocked-out step would render an unexplained pause"
     assert reason["name"] == "Ended shift"
-    assert reason["image_url"].endswith("/pause_reasons/ended_shift.webp")
+    assert reason["image_url"].endswith("/pause_reasons/ended-shift.webp")
     assert reason["slug"] == "pause_ended_shift"
 
 
@@ -124,7 +124,7 @@ def test_task_switch_auto_pause_renders_a_name_and_icon(serializer) -> None:
     reason = data["pause_reason"]
     assert reason is not None, "an auto-paused step would render an unexplained pause"
     assert reason["name"] == "Other task priority"
-    assert reason["image_url"].endswith("/pause_reasons/other_task_priority.webp")
+    assert reason["image_url"].endswith("/pause_reasons/other-task-priority.webp")
     assert reason["slug"] == "pause_other_task_priority"
 
 

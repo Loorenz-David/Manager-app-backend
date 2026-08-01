@@ -19,7 +19,7 @@ async def _execute_clock_out(
 ) -> ConnecteamHandlerResult:
     occurred_at = clock_event_timestamp(event)
     try:
-        transitioned_steps = await clock_out_shift_for_user(
+        paused_step_ids = await clock_out_shift_for_user(
             session,
             worker.workspace_id,
             worker.user_id,
@@ -63,13 +63,14 @@ async def _execute_clock_out(
         workspace_id=worker.workspace_id,
         internal_user_id=worker.user_id,
         occurred_at=occurred_at.isoformat(),
-        transitioned_steps=transitioned_steps,
+        transitioned_steps=len(paused_step_ids),
         processing_status=ConnecteamProcessingOutcomeEnum.CLOCK_OUT_APPLIED.value,
         auto_clock_out=auto_clock_out,
     )
     return ConnecteamHandlerResult(
         outcome=ConnecteamProcessingOutcomeEnum.CLOCK_OUT_APPLIED.value,
-        transitioned_steps=transitioned_steps,
+        transitioned_steps=len(paused_step_ids),
+        paused_step_ids=tuple(paused_step_ids),
     )
 
 

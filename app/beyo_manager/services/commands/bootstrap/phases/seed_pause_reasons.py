@@ -51,11 +51,11 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # databases created before this row existed will not have it until a manager adds it by hand or a
 # later migration seeds it.
 #
-# It reuses `other_task_priority.webp` — the icon already uploaded for the retired
-# `pause_other_task_priority` row and still referenced by domain/transitions/labels.py. The filename
-# no longer matches the row that uses it, which is a naming accident, not a link: this row and that
-# transition label share an asset URL and nothing else. Do not "fix" the mismatch by renaming the
-# S3 object; that would break the transition label, which is a separate live reference.
+# UPDATED 2026-08-01: it no longer reuses `other_task_priority.webp`. It has its own `other.webp`,
+# uploaded alongside the rest of the re-slugged pause-reason icons, so the row that used to borrow
+# the retired transition's asset now owns one. The transition label in domain/transitions/labels.py
+# keeps its own URL — the two were never linked, only coincidentally identical, and decoupling them
+# by uploading a new object (not by renaming the old one) is what that separation always wanted.
 #
 # NOTE: `pause_case_created` is intentionally NOT in this list — it was removed as a live default.
 # It survives as a soft-deleted anchor row seeded in
@@ -63,12 +63,12 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # `step_state_records` rows that reference it still resolve to their label. Do not re-add it here
 # without also reconciling that migration's anchor-row logic.
 _PAUSE_REASONS = (
-    ("waiting_for_upholstery", "Waiting for upholstery", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/case_types/no_fabric.webp"),
-    ("pause_lunch_break", "Lunch break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/lunch_break.webp"),
-    ("pause_coffee_break", "Coffee break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/coffee_break.webp"),
+    ("waiting_for_upholstery", "Waiting for upholstery", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/waiting-for-upholstery.webp"),
+    ("pause_lunch_break", "Lunch break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/lunch-break.webp"),
+    ("pause_coffee_break", "Coffee break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/coffee-break.webp"),
     ("pause_meeting", "Meeting", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/meeting.webp"),
-    ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended_shift.webp"),
-    ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other_task_priority.webp"),
+    ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended-shift.webp"),
+    ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other.webp"),
 )
 
 

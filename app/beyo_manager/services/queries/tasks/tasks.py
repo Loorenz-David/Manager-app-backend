@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
+from beyo_manager.domain.task_steps.state_filters import parse_step_state_filter
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
     serialize_item,
@@ -94,7 +95,7 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     working_section_ids = _split_csv(ctx.query_params.get("working_section_ids"))
     task_states = _split_csv(ctx.query_params.get("task_states"))
     not_task_states = _split_csv(ctx.query_params.get("not_task_states"))
-    task_step_states = _split_csv(ctx.query_params.get("task_step_states"))
+    task_step_states = parse_step_state_filter(ctx.query_params.get("task_step_states"))
     step_readiness_statuses = _split_csv(ctx.query_params.get("step_readiness_statuses"))
     priorities = _split_csv(ctx.query_params.get("priorities"))
     task_types = _split_csv(ctx.query_params.get("task_types"))
@@ -406,7 +407,7 @@ async def list_tasks(ctx: ServiceContext) -> dict:
 
 async def list_task_counts(ctx: ServiceContext) -> dict:
     task_states = _split_csv(ctx.query_params.get("task_states"))
-    task_step_states = _split_csv(ctx.query_params.get("task_step_states"))
+    task_step_states = parse_step_state_filter(ctx.query_params.get("task_step_states"))
     step_readiness_statuses = _split_csv(ctx.query_params.get("step_readiness_statuses"))
     priorities = _split_csv(ctx.query_params.get("priorities"))
     task_types = _split_csv(ctx.query_params.get("task_types"))
@@ -497,7 +498,10 @@ async def list_task_counts(ctx: ServiceContext) -> dict:
             stmt = _apply_step_state_filter(stmt, [step_state])
             if step_readiness_statuses:
                 stmt = _apply_readiness_filter(stmt, step_readiness_statuses)
-            counts[step_state] = await _count(stmt)
+            # `.value` — the key is the wire representation, and `task_step_states` now holds
+            # enum members. A caller sending the retired `ended_shift` gets back `paused`,
+            # which is the state those steps are in.
+            counts[step_state.value] = await _count(stmt)
         granularity["task_step_states"] = counts
 
     if step_readiness_statuses:

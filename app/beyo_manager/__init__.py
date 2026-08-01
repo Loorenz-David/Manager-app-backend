@@ -23,13 +23,12 @@ def _validate_config() -> None:
 
 
 def _register_event_handlers() -> None:
-    from beyo_manager.services.infra.events import register
-    from beyo_manager.services.infra.events.handlers.socket_handler import handle as socket_handle
-    from beyo_manager.services.infra.events.handlers.audit_handler import handle as audit_handle
-    from beyo_manager.services.infra.events.handlers.webhook_handler import handle as webhook_handle
-    register(socket_handle)
-    register(audit_handle)
-    register(webhook_handle)
+    """Kept as an explicit startup step for readability; the work is idempotent and has
+    already happened on import of the events package. See `events/bootstrap.py` — a startup
+    hook could not be the guarantee, because four of the nine workers never run one.
+    """
+    from beyo_manager.services.infra.events import register_default_handlers
+    register_default_handlers()
 
 
 def _register_routers(app: FastAPI) -> None:
@@ -90,10 +89,13 @@ def create_app() -> FastAPI:
     _validate_config()
 
     import socketio
-    from beyo_manager.sockets import get_sio
+    from beyo_manager.sockets import get_sio, mark_socket_server_process
     import beyo_manager.sockets as sockets_module
     from beyo_manager.sockets.register import register_socket_handlers
 
+    # This process holds the websocket connections; every other process must publish through
+    # Redis instead. `realtime_push` reads this to pick its transport.
+    mark_socket_server_process()
     register_socket_handlers()
     sockets_module.socket_app = socketio.ASGIApp(get_sio(), other_asgi_app=app)
     return app

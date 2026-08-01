@@ -40,6 +40,7 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.commands.cases.create_case import create_case
+from beyo_manager.services.infra.events import worker_shift_realtime
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.worker_stats.list_workers_linear_timeline import (
     list_workers_linear_timeline,
@@ -617,3 +618,72 @@ async def test_roster_timeline_buckets_and_labels_the_new_transition(db_session)
     }
     missing = set(entry["timeline"]["pause_by_reason"]) - set(result["pause_reasons"])
     assert missing == set(), f"unresolved pause_by_reason keys: {missing}"
+
+
+async def test_the_pause_is_announced_to_the_workspace(db_session, monkeypatch) -> None:
+    """Closes the gap this domain's README carried: the step was paused server-side and no
+    client was told.
+
+    It matters more here than for clock-out. A manager raised the case; the worker whose
+    step just stopped is elsewhere in the building with a cache that still reads `working`,
+    and the workers app guards its own transitions on that cache — so without the event
+    their next action fails against a step the server already paused.
+    """
+    _patch_case_side_effects(monkeypatch)
+    emitted: list[tuple[str, str, object]] = []
+
+    async def record_workspace(workspace_id, event, payload):
+        emitted.append((workspace_id, event, payload))
+
+    monkeypatch.setattr(
+        worker_shift_realtime, "push_workspace_event_items", record_workspace
+    )
+
+    workspace, worker = await _seed_workspace_user(db_session)
+    task = await _seed_task(db_session, workspace, worker)
+    step, _ = await _seed_step(db_session, workspace, worker, task)
+    await db_session.commit()
+
+    await create_case(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=worker.client_id,
+            incoming_data={"entity_type": "task", "entity_client_id": task.client_id},
+        )
+    )
+
+    assert emitted == [
+        (
+            workspace.client_id,
+            worker_shift_realtime.TASK_STEP_STATE_CHANGED,
+            [{"client_id": step.client_id, "new_state": "paused"}],
+        )
+    ]
+
+
+async def test_a_case_that_pauses_nothing_emits_nothing(db_session, monkeypatch) -> None:
+    _patch_case_side_effects(monkeypatch)
+    emitted: list = []
+
+    async def record_workspace(workspace_id, event, payload):
+        emitted.append((workspace_id, event, payload))
+
+    monkeypatch.setattr(
+        worker_shift_realtime, "push_workspace_event_items", record_workspace
+    )
+
+    workspace, worker = await _seed_workspace_user(db_session)
+    task = await _seed_task(db_session, workspace, worker)
+    await db_session.commit()
+
+    await create_case(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=worker.client_id,
+            incoming_data={"entity_type": "task", "entity_client_id": task.client_id},
+        )
+    )
+
+    assert emitted == []
