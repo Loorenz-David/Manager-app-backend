@@ -52,15 +52,26 @@ async def test_seed_pause_reasons_is_idempotent(db_session):
     second = await seed_pause_reasons(db_session, workspace.client_id)
     second_count = await _count_for_workspace()
 
-    # Five, not six. `pause_other_task_priority` was removed from the seed: auto-pause on task
-    # switch is a system transition carrying `transition_reason = other_task_priority` with no
-    # catalog reference, so seeding a row nobody selects and nothing resolves would leave a picker
-    # entry with no meaning. `pause_ended_shift` deliberately stays — a worker picks it.
-    assert len(first) == 5
+    # `pause_other_task_priority` is still absent: auto-pause on task switch is a system transition
+    # carrying `transition_reason = other_task_priority` with no catalog reference, so seeding a row
+    # nobody selects and nothing resolves would leave a picker entry with no meaning.
+    # `pause_ended_shift` deliberately stays — a worker picks it. The sixth row is `pause_other`.
+    assert len(first) == 6
     assert first == second
-    assert first_count == second_count == 5
+    assert first_count == second_count == 6
     assert "pause_other_task_priority" not in first
     assert "pause_ended_shift" in first
+
+    # The catch-all carries the only `requires_description = True` in the seed — its reason text is
+    # the row's whole content, so losing that flag would let a worker pause with no explanation.
+    other = await db_session.scalar(
+        select(PauseReason).where(
+            PauseReason.workspace_id == workspace.client_id,
+            PauseReason.slug == "pause_other",
+        )
+    )
+    assert other.pause_type is PauseTypeEnum.PERSONAL
+    assert other.requires_description is True
 
     # No seeded row is system-managed any more; the flag is inert published contract.
     seeded_rows = (

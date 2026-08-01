@@ -40,14 +40,17 @@ async def test_list_pause_reasons_returns_offset_pagination_and_workspace_scope(
 
     ctx = ServiceContext(
         identity={"workspace_id": workspace.client_id, "user_id": user.client_id},
-        query_params={"limit": 2, "offset": 1, "pause_type": PauseTypeEnum.PERSONAL.value},
+        # Offset 2, not 1: the seed now holds four PERSONAL rows (lunch, coffee, meeting, other),
+        # and this case is about the tail page — the one that exhausts the set and reports
+        # has_more False.
+        query_params={"limit": 2, "offset": 2, "pause_type": PauseTypeEnum.PERSONAL.value},
         incoming_data={},
         session=db_session,
     )
     result = await list_pause_reasons(ctx)
 
     assert len(result["pause_reasons"]) == 2
-    assert result["pause_reasons_pagination"] == {"has_more": False, "limit": 2, "offset": 1}
+    assert result["pause_reasons_pagination"] == {"has_more": False, "limit": 2, "offset": 2}
     assert all(row["pause_type"] == "personal" for row in result["pause_reasons"])
     other_ctx = ServiceContext(
         identity={"workspace_id": other_workspace.client_id, "user_id": other_user.client_id},

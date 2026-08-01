@@ -45,6 +45,12 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # without mirroring it there makes a system-written shift-end render differently from a
 # worker-selected one — silently, since nothing joins the two.
 #
+# `pause_other` is the catch-all a worker picks when nothing else fits, and the only seeded row with
+# `requires_description = True` — the reason text IS the row's content, so the picker must prompt for
+# it. It is bootstrap-only: migration 49bd666da846 is already applied and must not be edited, so
+# databases created before this row existed will not have it until a manager adds it by hand or a
+# later migration seeds it.
+#
 # NOTE: `pause_case_created` is intentionally NOT in this list — it was removed as a live default.
 # It survives as a soft-deleted anchor row seeded in
 # migrations/versions/fb10ac7fd439_add_pause_reason_id_to_step_state_.py, purely so historical
@@ -56,6 +62,7 @@ _PAUSE_REASONS = (
     ("pause_coffee_break", "Coffee break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/coffee_break.webp"),
     ("pause_meeting", "Meeting", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/meeting.webp"),
     ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended_shift.webp"),
+    ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other.webp"),
 )
 
 
