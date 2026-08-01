@@ -19,13 +19,13 @@ can act without re-deriving it.
 | **The shared `count_queries` fixture is broken** | Unused. Use a local SQLAlchemy listener for batching assertions. |
 | **Fresh empty-DB `alembic upgrade head` stalls** | Hangs idle-in-transaction after `CREATE TABLE alembic_version`. Reproduced repeatedly. It is why "bootstrap two workspaces on a disposable database" could not be run as written and had to be substituted with a direct invariant probe. |
 | **`client_id_prefix_map.md` records `ussr`** for `UserShiftStateRecord`, whose real prefix is `uss`. |
+| **`_step_transition_core.py`'s auto-pause path is unreachable, so its tests prove nothing** | `transition_step_state_batch.py:130` rejects the only steps that would trigger it, which means any test claiming to exercise that path is not reaching it. *(This entry previously also recorded a `NameError` from a missing `select` import. That is fixed — the import rode along in `867b8fb` — and the residue is the coverage claim.)* |
 | **The "latching shopify node" description is stale** | An older baseline note said one suite node fails on re-runs and passes in isolation. **None of the current failures passes in isolation.** Do not carry the old description into new prompts. |
 
 ## Code defects, unfixed by decision
 
 | Item | Detail |
 |---|---|
-| **`_step_transition_core.py` `NameError`** | Missing `select` import on the auto-pause path. Unreachable in production because `transition_step_state_batch.py:130` rejects the only steps that would trigger it — which also means any test claiming to exercise that path is not reaching it. |
 | **`heal_current_shift` `IntegrityError`** | A worker who clocks in at 08:00 and starts their first task at 09:00 collides on the open-record index: the clock-in's open `IDLE` falls outside the rebuild window and collides when the tail reopens. `_run` catches it as `skipped_raced_live_reconcile`, so it degrades safely. Pre-existing, reproduces identically at `b59deb0`, no `shift_ended` record involved. |
 
 ## Data-quality issues
