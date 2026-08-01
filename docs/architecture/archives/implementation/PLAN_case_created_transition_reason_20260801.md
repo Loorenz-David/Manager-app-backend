@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_case_created_transition_reason_20260801`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-opus-5` (operator: David)
 - Created at (UTC): `2026-08-01T00:00:00Z`
 - Related: `archives/.../system_transition_reasons/` (established `transition_reason`);
@@ -257,8 +257,109 @@ five minutes against those two before you call the sweep done.
     entry looks stale — `select` is imported at `_step_transition_core.py:21`, and every other name
     on that auto-pause path resolves. Left alone; the entry is not mine to delete on a read alone.
 
+- `2026-08-01` `claude-opus-5` (independent reviewer): **APPROVED.** No blocking findings. Two
+  non-blocking observations, both recorded below rather than acted on.
+
+  This is a small change at the end of a long sequence, and it is clean. Every ruling holds as
+  written, nothing was quietly improved, and the two escalations were the right calls.
+
+  **Criterion 7 — reproduced, and the fix is binding.** Reverted the snapshot (built the response
+  after the pause instead of before) and re-ran `test_case_survives_a_failed_pause`: it fails with
+  `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called` escaping `create_case`, at
+  `sqlalchemy/util/_concurrency_py3k.py:123`. Restored; tree verified clean. The implementer's
+  reading is right and the "wrap it in try/except" reading is genuinely insufficient — the test
+  binds to the ordering, not merely to the swallow. Checked the same shape elsewhere in the change:
+  nothing else reads an ORM attribute after the rollback-capable block (`create_case.py:230` returns
+  a plain dict; `type_label` is a local `str`).
+
+  **The four rulings.**
+
+  | # | Verdict |
+  |---|---|
+  | 1 | Held. `test_every_working_step_on_the_task_pauses` uses two `WORKING` steps and keeps **both** controls — a `PENDING` step on the same task and a `WORKING` step on a different task — asserted untouched, including no `PAUSED` record on the unrelated step. That is what proves the selection is scoped and not broad. |
+  | 2 | Held, and explicit. `_case_created_step_pause.py:116-117` is a dedicated `CUSTOMER` branch placed *ahead* of the general guard at `:118-119`. A reader sees a decision, not a fall-through. |
+  | 3 | Held. No resume path exists. `update_case_state.py` touches no step state, and `grep` across `services/commands/cases/` returns zero `StepStateRecord` / `TaskStepStateEnum` / `_apply_step_transition` references outside the new module. |
+  | 4 | Held. `git diff f2cd58f..9497360 -- app/migrations/versions/` is empty. |
+
+  **Criterion 4 — the zero-catalog test.** `_assert_zero_catalog` runs *before* the action in the
+  write-path tests and fails loudly if a fixture ever starts seeding. Correctly asserted, not
+  assumed.
+
+  **The transition path — reuse confirmed, timeline follows, index confirmed.** Probed directly:
+  creating a case increments the `PROCESS_STEP_TRANSITION` `execution_tasks` count by exactly one,
+  so the derived-timeline reconciliation really is emitted rather than a bare row being written.
+  The partial unique index exists and is exactly as the plan's risk describes —
+  `uix_step_state_records_active ON step_state_records (workspace_id, step_id) WHERE exited_at IS
+  NULL`. The pre-existing open record is closed in the same transaction that opens the pause;
+  exactly one open record remains and it is the pause.
+
+  **The sweep — the population claim verified independently.** Walked all 30 call sites keyed on
+  `TaskStepStateEnum.WORKING`, not only the two the implementer named.
+  - `heal_open_shifts_today.py:88-93` — `state IN (WORKING, PAUSED) AND transition_reason IS
+    DISTINCT FROM 'shift_ended'`. A `case_created` pause stays selected. Correct as reported.
+  - `reconcile_worker_shift_state.py:171-174` — loads both states and derives from
+    `open_working_count`, so the worker's shift state correctly becomes `IN_PAUSE`. Not named in
+    the sweep; behaves correctly.
+  - `finalize_pending_step_completion.py:70` — `if step.state != WORKING: return` **would** skip a
+    step a case had paused. Dormant: the only producer of `PENDING_STEP_COMPLETION` is commented
+    out at `transition_step_state.py:193-225`. Not reachable; noted so the next person who
+    re-enables the undo window knows to look.
+  - The remainder (`_roster.py`, `get_worker_working_sections.py`,
+    `get_user_last_active_step_record.py`, the analytics `_TIME_STATES` pairs) are display surfaces
+    where `PAUSED` is the intended reading.
+  - **The one live dependency on the step still being `WORKING` is the state machine itself** — see
+    observation 2.
+
+  **Escalation 2, backend half — correct.** Reproduced the client's follow-up end to end: the case
+  is created, the step is paused **once** with `transition_reason = case_created`, and the follow-up
+  `PAUSED → PAUSED` is rejected as `ValidationError("Cannot transition step from paused to
+  paused.")` from inside `transition_step_state`'s own `session.begin()`, so it rolls back with
+  nothing written. Afterwards: exactly one `PAUSED` record, exactly one open record, step state
+  intact. No corruption, no double-pause. The backend obligation is met; the client fix is the
+  operator's separate handoff and is not counted against this change.
+
+  **Contract, docs and scope.** `description` carries the case type and degrades to `"case created"`
+  when both `case_type_id` and `type_label` are null — all three shapes covered.
+  `docs/domains/worker_shifts/` is accurate, not merely edited: spot-checked the customer-skip claim
+  against `_case_created_step_pause.py:116-117` and the "four members" / description-split claim
+  against `enums.py` and `build_case_created_description`. No `docs/handoff/to_frontend/` file
+  appears in `9497360`; the handoff is the operator's `39a1044`. The `image_url: None` ruling is
+  accepted and not raised.
+
+  **Suite.** Reproduced at `HEAD`: **23 failed / 1463 passed**, matching the implementer's report
+  exactly. The arithmetic reconciles as the plan already states — +10 nodes = 9 integration + 1
+  unit (`test_every_enum_member_fits_the_persisted_column`); no parametrisation involved. None of
+  the 23 touches cases, transitions or worker shifts; the nearest one
+  (`test_endpoint_split.py`) fails on an unrelated stale test double
+  (`empty_page() got an unexpected keyword argument 'roles'`). `ruff check` clean on all six touched
+  files. `transition_step_state.py` is untouched by the diff and still reports its 5 findings. The
+  implementer's stale-entry observation about `_step_transition_core.py` is also correct — `select`
+  is imported at line 21 — and they were right to leave it.
+
+  **Observation 1 (non-blocking, no criterion) — the pause emits no `task:step-state-changed`.**
+  The design note justifies this as "matching clock-out", which is the weaker of the two available
+  precedents: clock-out is self-initiated, whereas the closer analogue — the task-switch auto-pause
+  — *does* broadcast the auto-paused step (`transition_step_state.py:470-488`). A case may be raised
+  by a manager on a worker's live step, and that worker's client is never told. This is also why
+  escalation 2 bites at all: the client's `step?.state !== "working"` guard
+  (`use-task-step-detail.controller.ts:684`) reads a cache the backend just invalidated without
+  saying so, so the guard passes and the request goes out. Emitting the event would make the stale
+  state self-healing and remove the deploy-ordering coupling the handoff currently carries. Not
+  required by any criterion and deliberately not acted on — an operator call.
+
+  **Observation 2 (non-blocking, doc-level) — resume-before-complete is undocumented.**
+  `_ALLOWED_TRANSITIONS` has no `PAUSED → COMPLETED` edge. Confirmed by probe: after a case pause,
+  completing the step returns `ValidationError("Cannot transition step from paused to completed.")`.
+  A worker interrupted by a manager-raised case must now resume before completing, where previously
+  the step stayed `WORKING` and completed directly. This is *consistent* with clarification 3 —
+  resumption is a deliberate human action — but it is the one real consequence of the population
+  moving, and it is written down in neither `docs/domains/worker_shifts/` nor the handoff. Worth a
+  sentence next to the pause rule in `README.md` whenever this area is next touched.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `archived`
+- Previous states: `under_construction` → `approved` (one review round) → `summarized` → `archived`
 - Transition owner: `David`
+- Summary: `implemented_summaries/SUMMARY_case_created_transition_reason_20260801.md`
+- Archive record: `archives/implementation/ARCHIVE_RECORD_PLAN_case_created_transition_reason_20260801.md`
