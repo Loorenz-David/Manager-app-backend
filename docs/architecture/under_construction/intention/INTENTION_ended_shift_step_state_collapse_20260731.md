@@ -134,6 +134,50 @@ ended"). This is what makes the change contract-neutral — see "Published surfa
 > `pause-reason-transition.ts`, the row's reason for existing goes with it, and under option 1 the
 > row should be retired here rather than in phase 4.
 
+### ✅ OPERATOR RULING (2026-08-01) — the blocking question is resolved
+
+**A paused step measures how long the *item* stood still for a stated reason. That is an item
+metric, not worker-shift accounting.** Clock-out therefore continues to close **`WORKING` steps
+only**; a `PAUSED` record is never force-closed, because truncating it at clock-out would destroy
+the very duration it exists to measure. An item waiting three days on "waiting for upholstery" has
+a three-day pause, and that number is the point.
+
+This rejects the two resolutions offered in the box above, and two further ones proposed during the
+ruling (clock-out closing `PAUSED` steps as well; splitting that into a preceding feature set).
+It also **corrects the box's premise**, which is why the objection dissolves rather than being
+traded off:
+
+- The box treats an overnight gap landing in `total_pause_seconds` as *corruption*. Under this
+  ruling it is **correct classification**. The item genuinely stood still, for the reason the
+  worker gave, for that duration.
+- What `total_ended_shift_seconds` measures is narrower than the box assumed: **the item stopped
+  because the shift ended and nobody said why** — i.e. the system force-closed a step that was
+  still `WORKING`. It is the *unattributed* bucket, not "all off-shift time".
+
+**Resulting semantics — this is what the plan implements:**
+
+| Case | step `state` | bucket | attribution |
+|---|---|---|---|
+| Clock-out force-closing a `WORKING` step | `PAUSED` + `transition_reason = SHIFT_ENDED` | `ended_shift` | system; no catalog row |
+| Worker picks **any** reason, including one named "Ended shift" | `PAUSED` + `pause_reason_id` | `pause` | the reason the worker chose |
+| Auto-pause on task switch *(unchanged)* | `PAUSED` + `transition_reason = OTHER_TASK_PRIORITY` | `pause` | system-typed |
+
+So the bucketing re-key is exactly the one-line change first proposed —
+`closing_record.transition_reason == SHIFT_ENDED` — with **no** `pause_reason_id` fallback. No
+catalog dependency re-enters a metric.
+
+**`pause_ended_shift` stays selectable** in the worker's pause sheet (operator, 2026-07-31: *"if
+the user selected ended shift on pause reason for a task step, that is precisely a pause reason,
+thus a pause state"*). It becomes an ordinary workspace-editable reason with no special handling
+anywhere. `pause-reason-transition.ts` is still **deleted** — not because the row goes away, but
+because it maps a reason onto a state that ceases to exist.
+
+**Success criterion 3 is amended by this ruling.** Before-and-after equality holds for the
+clock-out path only. For a worker-picked ended-shift pause the numbers **intentionally move** from
+`total_ended_shift_seconds` to `total_pause_seconds`, where they are now attributed to the chosen
+reason. The characterization test must assert the *new* classification for that case, not equality —
+asserting equality would pin the behaviour this ruling deliberately changes.
+
 ## Traced evidence (2026-07-31 — verify, do not re-derive)
 
 Traced outward from `TaskStepStateEnum.ENDED_SHIFT`. Every reference in `app/` is listed; an
@@ -148,12 +192,31 @@ unlisted site is one the implementing phase can miss.
 
 ### Time bucketing (4) — all key on state, all move to the reason
 
-| # | Site |
-|---|---|
-| B1 | `domain/task_steps/aggregate_metrics.py:23-25` — the step-level totals |
-| B2 | `services/tasks/analytics/process_step_transition.py:102` (`_STEP_TIME_FIELDS`) and `:108` (inaccurate-seconds map) |
-| B3 | `services/queries/worker_stats/get_worker_daily_step_breakdown.py:62` (`_TIME_STATES`), plus the `{"working","paused","ended_shift"}` dicts at `:224,232,321-323,330,427,432` and the field map at `:297` |
-| B4 | `services/queries/analytics/averaged_time.py:27` (`_TIME_STATES`) |
+> **⚠ CORRECTED 2026-08-01 — B1 is dead code and the real bucketing site was missed.**
+> Verified by grep across `app/`: **`increment_step_time_metrics` has zero callers.**
+> `domain/task_steps/aggregate_metrics.py` is unreferenced outside its own module (the
+> `models/base/aggregate_metrics.py` hits are a different, unrelated module of mixins). Re-keying it
+> would change nothing and would look like the job was done.
+>
+> **The real single point is `services/queries/analytics/averaged_time.py`:**
+> `compute_record_contributions` selects `StepStateRecord.state.label("state")` (`:66`) and filters
+> `StepStateRecord.state.in_(_TIME_STATES)` (`:81`, constant at `:27`). Every downstream consumer
+> buckets on that emitted `.state` string. **Six consumers**: `process_step_transition.py`,
+> `get_worker_daily_step_breakdown.py`, `list_workers_totals.py`, `reconcile_user_time.py`,
+> `estimation_sample.py`, and `averaged_time.py` itself.
+>
+> This is *good news for the change*: emit a derived bucket key at that one select — `ended_shift`
+> when `state = PAUSED AND transition_reason = SHIFT_ENDED`, else the state — and all six consumers
+> keep working untouched. It is also the **highest-blast-radius line in the plan**: get it wrong and
+> every analytics surface silently misbuckets.
+
+| # | Site | Status |
+|---|---|---|
+| B1 | `domain/task_steps/aggregate_metrics.py:17-25` | **DEAD CODE — zero callers.** Do not re-key it. Deleting it is a separate cleanup, not this set's business. |
+| B2 | `services/queries/analytics/averaged_time.py:27,66,81` | **THE re-key site.** `_TIME_STATES` + the emitted `.state` label. |
+| B3 | `services/tasks/analytics/process_step_transition.py:99-109` (`_STEP_TIME_FIELDS`, `_STEP_INACCURATE_TIME_FIELDS`) and the `totals` / `inaccurate_totals` dicts at `:163-167` | Consumer — keys unchanged if B2 emits the derived bucket. |
+| B4 | `services/queries/worker_stats/get_worker_daily_step_breakdown.py:62` (`_TIME_STATES`), the `{"working","paused","ended_shift"}` dicts at `:224,232,321-323,330,427,432`, field map at `:297` | Consumer — same. |
+| B5 | `list_workers_totals.py`, `reconcile_user_time.py`, `estimation_sample.py` | Consumers — **not listed in the original evidence.** Each must be verified, not assumed. |
 
 ### Timeline composition (1) — **the highest-risk item**
 
@@ -243,12 +306,14 @@ Under this change it becomes **load-bearing**. It needs a direct test, not an in
    `task_step_state_enum` in the database.
 2. Clock-out with an open working step produces `state = paused`, `transition_reason =
    shift_ended`, `pause_reason_id = NULL`.
-3. `total_ended_shift_seconds` / `total_ended_shift_count` hold the **same values** for an
-   equivalent scenario before and after — proven by a characterization test written first.
-   **This criterion is currently unmeetable as the document is specified** — see the boxed warning
-   in "Architectural direction". The characterization test must cover **both** an
-   operator-initiated clock-out **and** a worker-picked ended-shift pause left open overnight; the
-   second is the one that regresses.
+3. **Amended by the operator ruling of 2026-08-01** (see "Architectural direction"). A
+   characterization test written first must cover both paths, and assert *different* things of
+   each:
+   - **Clock-out force-closing a `WORKING` step** — `total_ended_shift_seconds` /
+     `total_ended_shift_count` hold the **same values** before and after. Equality.
+   - **Worker-picked ended-shift pause left open overnight** — the time **moves** from
+     `total_ended_shift_seconds` to `total_pause_seconds`, attributed to the chosen reason. Assert
+     the new classification; asserting equality here would pin the behaviour the ruling changes.
 4. A worker selecting any pause reason (including one named "ended shift") produces `state =
    paused` with that `pause_reason_id`, and the frontend sends no `new_state` other than `paused`.
 5. The linear timeline still distinguishes "paused while present" from "off shift" for both new
