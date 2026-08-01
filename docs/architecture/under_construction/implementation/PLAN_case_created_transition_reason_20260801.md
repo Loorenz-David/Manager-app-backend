@@ -122,11 +122,26 @@ the Review log and stop — do not choose.
   worktree with all of `app/.env*`. Run `git` from `backend/`.
 - `ruff check` clean on touched files.
 
-## Sequencing
+## Sequencing — UNBLOCKED
 
-**Do not start until `PLAN_ended_shift_step_state_collapse_20260801` is approved and archived.** That
-work is under review now and touches `TransitionReasonEnum` and every bucket path; adding a member
-mid-review would collide with the reviewer's diff and its node-set comparison.
+*(Updated 2026-08-01.)* `PLAN_ended_shift_step_state_collapse_20260801` is **approved and archived**,
+and the `system_transition_reasons` package is archived. Nothing blocks this plan.
+
+Two things that changed while it waited, both in your favour:
+
+- **`TransitionReasonEnum` is stable again.** The collapse work removed `ENDED_SHIFT` from
+  `TaskStepStateEnum` but did not touch the transition vocabulary, so adding `CASE_CREATED` is
+  purely additive to a settled enum.
+- **The migration chain is settled at `2645b4327b17`.** This plan adds no migration (ruling 4), so
+  it does not extend that chain at all.
+
+One inherited caution, now recorded in
+[`docs/repo_health.md`](../../../repo_health.md): when you change what a value means, ask not only
+what reads it and what emits it, but **what filter previously excluded it and now doesn't.** This
+plan introduces a *new* member rather than changing an existing one, so that risk is low — but
+`heal_open_shifts_today.py` and `backfill_worker_shift_state_records.py` both select on step state
+and have no test coverage. A new `PAUSED` record with an unfamiliar `transition_reason` is worth
+five minutes against those two before you call the sweep done.
 
 ## Review log
 

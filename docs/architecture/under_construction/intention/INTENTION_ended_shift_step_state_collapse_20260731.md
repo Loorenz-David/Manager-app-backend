@@ -3,7 +3,7 @@
 ## Metadata
 
 - Intention ID: `INTENTION_ended_shift_step_state_collapse_20260731`
-- Status: `active`
+- Status: `achieved`
 - Owner: David (operator)
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Last updated at (UTC): `2026-07-31T00:00:00Z`
@@ -457,7 +457,7 @@ there is correspondingly less reason to rush.
 
 ## Lifecycle transition
 
-- Current status: `active` — sequencing decided, awaiting its own implementation plan
+- Current status: `achieved`
 - Next status: `achieved`
 - Transition trigger: all success criteria met. **Absorption into
   `MASTER_PLAN_system_transition_reasons_20260731.md` is no longer a possible outcome** — that was

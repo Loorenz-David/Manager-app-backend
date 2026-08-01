@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `MASTER_PLAN_system_transition_reasons_20260731`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-opus-5` (operator: David)
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Last updated at (UTC): `2026-07-31T14:13:35Z`
@@ -634,6 +634,36 @@ a *second consecutive run of the unmodified baseline tree* reproduces the identi
 - Current state: `achieved` — all four phases archived
 - Next state: `approved` (operator reads and approves this master plan, then per-phase plans)
 - Transition owner: `David`
+
+## Success criteria — fresh verification (criterion 13, 2026-08-01)
+
+Re-verified end to end at phase 4, **not inherited** from the phases that first claimed them.
+
+| # | Criterion | State | Evidence |
+|---|---|---|---|
+| 1 | Clock-out succeeds in a zero-catalog workspace with an open WORKING step | ✅ | `test_system_transition_reasons_cutover.py`, 11 passed, re-run at phase 4 |
+| 2 | Task switching auto-pauses in that same workspace | ✅ | same suite; both task-switch modules covered separately |
+| 3 | `get_system_pause_reason_id` has no runtime callers and is deleted | ✅ | file removed; `grep -rn get_system_pause_reason beyo_manager/` returns nothing |
+| 4 | No field requires prefix-sniffing | ⚠️ **PARTIAL** | Closed on the *provably dead* arm only. The branch still exists at `domain/users/serializers.py:170` and clause (a) is **not** satisfied — 272 legacy free-text strings sit beside 58 `par_…` ids on live data, and the three-way `reason_text` suppression is published contract. **Not reachable under the standing rulings; do not upgrade this to met.** |
+| 5 | Historical rows resolve to the same labels after migration | ✅ | phase 3 label parity, captured through the real read paths against a restore point |
+| 6 | Bootstrapping a second workspace succeeds | ✅ | proven twice — a duplicate slug inserted into a second workspace (rolled back), and the phase 4 reviewer's run of the real `seed_pause_reasons` path for two workspaces with disjoint ids, no `IntegrityError` |
+
+**Criterion 7 of the phase plan** (two-workspace bootstrap on a *disposable* database) was **not met
+as written** — a fresh `alembic upgrade head` stalls, which is itself a recorded repo-health item.
+The reviewer reproduced the stall and exercised the real seed path instead, and recommended
+accepting the criterion on that evidence. Recorded as accepted-on-substitute-evidence rather than
+as met.
+
+## Deferred items — MOVED, do not read the list below as current
+
+**Lifted 2026-08-01 to living documents.** This plan is archived history; a list of outstanding work
+does not belong in it, because nothing here is maintained after the archive.
+
+- Repository-wide debt → [`docs/repo_health.md`](../../../../repo_health.md)
+- Worker-shift specifics → [`docs/domains/worker_shifts/README.md`](../../../../domains/worker_shifts/README.md)
+
+The table that stood here is preserved in git history at `8a6af89`. Treat those documents as
+authoritative; items may have been fixed since.
 
 ## Success criteria — fresh verification (criterion 13, 2026-08-01)
 

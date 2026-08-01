@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_ended_shift_step_state_collapse_20260801`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-opus-5` (operator: David)
 - Created at (UTC): `2026-08-01T00:00:00Z`
 - Last updated at (UTC): `2026-08-01T11:30:00Z`
@@ -1035,6 +1035,6 @@ operator-owned. Do not edit the handoff.
 
 ## Lifecycle transition
 
-- Current state: `under_construction` — implemented, reviewed twice, **`APPROVED`**; R4 remainder closed
+- Current state: `archived` — implemented, reviewed twice, **`APPROVED`**; R4 remainder closed
 - Next state: `approved` — summary and archive may proceed
 - Transition owner: `David`
