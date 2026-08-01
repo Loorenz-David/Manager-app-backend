@@ -679,11 +679,17 @@ scope decision under T7 or T8.
 | Item | Detail |
 |---|---|
 | **Fresh empty-DB `alembic upgrade head` stalls** | Hangs idle-in-transaction after `CREATE TABLE alembic_version`. Reproduced twice in this feature set. It is why phase 4's criterion 7 could not be met as written. |
-| **~122 `ruff check` errors** in untouched files | Down from 149. Touched files are clean in every phase. |
+| **~122 `ruff check` errors**, and **5 of them are ours** | Down from 149 overall. *Corrected 2026-08-01:* the earlier claim that "touched files are clean in every phase" is **false**. `services/commands/task_steps/transition_step_state.py` was touched by phase 2 (`867b8fb`) and still carries **5 F401 unused-import errors** — phase 2's own Review log records this twice. Every other touched file is clean. This is the one ruff item this feature set actually inherited rather than merely coexisted with, and the old framing discarded it. |
 | **The shared `count_queries` fixture is broken** | Use a local SQLAlchemy listener. |
 | **`client_id_prefix_map.md` records `ussr`** for `UserShiftStateRecord`, whose real prefix is `uss`. |
 | **`_step_transition_core.py` `NameError`** (missing `select` import) on the auto-pause path | Confirmed still present in phase 2; the branch is unreachable in production because `transition_step_state_batch.py:130` rejects the only steps that trigger it. |
 | **The "latching shopify node" description is now wrong** | *(Corrected 2026-08-01, phase 4 reviewer.)* The baseline note said one node fails on re-runs and passes in isolation. None of the current 23 failures passes in isolation. Do not carry the old description into future prompts. |
+
+### Carried between phases and then dropped
+
+| Item | Detail |
+|---|---|
+| **`backfill_worker_shift_state_records.py` destroys declared-state projections** | Carried from phase 2 to phase 3 as "the script's documented declared-rows limitation" — but **the script contains zero occurrences of "declared"**, so the documentation it was said to have does not exist. The behaviour is real: the script deletes every `UserShiftStateRecord` for a worker-day and rebuilds from **step records alone**, so it would destroy exactly the declaration projections carrying `worker_declared_state` plus a catalog reference — the documented exception this feature set built its CHECK constraint around. Offline and `--execute`-gated, so not a live risk. Recorded here because it is precisely the kind of item criterion 16 exists to stop losing: it survived two phases as a phrase and never became a fact. |
 
 ### Contract-level risk accepted, not resolved
 
@@ -729,8 +735,10 @@ scope decision under T7 or T8.
 - `2026-07-31`: **Phase 4 amended — `pause_ended_shift` is no longer retired.** Raised by
   `INTENTION_ended_shift_step_state_collapse_20260731`, which found that
   `list_pause_reasons.py:19` filters `is_deleted.is_(False)`, so soft-deleting the row removes it
-  from the worker's pause sheet — and the worker app maps that slug to a different state machine
-  target. Phase 4 as written would have broken a live frontend flow. Retiring the *machinery* is
+  from the worker's pause sheet entirely, so a worker could no longer state that reason at all.
+  *(Citation corrected 2026-08-01: an earlier wording added "and the worker app maps that slug to a
+  different state machine target". That branch no longer exists — `pause-reason-transition.ts`
+  returns `paused` for every reason. The conclusion rests on the picker filter alone.)* Phase 4 as written would have broken a live frontend flow. Retiring the *machinery* is
   this set's job; retiring the *row* is not, because a worker legitimately picks it. The distinction
   is the feature set's own thesis: a catalog row is fine, a catalog row that system behaviour
   depends on is not.

@@ -62,10 +62,14 @@
    *Amended 2026-07-31, operator ruling.* The original criterion said all three system rows are
    retired and disappear from every picker. That breaks the worker app.
    `list_pause_reasons.py:19` filters `is_deleted.is_(False)`, so soft-deleting the row removes it
-   from the pause sheet — and the worker app currently translates that specific slug into a
-   different state machine target
-   (`frontend/apps/workers-app/.../lib/pause-reason-transition.ts:12`). Remove the row and a worker
-   can no longer end a shift from the pause sheet at all.
+   from the pause sheet entirely. Remove the row and a worker can no longer state "ended shift" as
+   a reason at all.
+
+   *(Citation corrected 2026-08-01.* An earlier revision justified this by saying the worker app
+   translates the slug into a different state-machine target. **That branch no longer exists** —
+   `pause-reason-transition.ts` returns `newState: "paused"` for every reason, and the worker-home
+   workstream removed the mapping. The conclusion is unchanged and rests on the picker filter
+   above; only the evidence was stale.)
 
    Retiring the **machinery** is this phase's job: the slug lookup, `is_system_managed`, and the
    runtime resolution. Retiring the **row** is not, because the row still has a legitimate use as a
@@ -471,6 +475,118 @@ costs a few kilobytes; a missing one costs the ability to undo a migration over 
   complete 13–16, and drop the journal last. Nothing here requires rethinking the design — the
   engineering in this phase is right, and the constraint work in particular is the best-evidenced
   part of the feature set.
+
+- `2026-08-01` `independent reviewer (claude-opus-5, round 2)`: **`NEEDS_CHANGES`** — but a short,
+  mechanical one. **Round 1's blocker is gone.** F1 is fixed and proven, the close-out is done, and
+  the journal incident is handled about as well as an incident can be handled after the fact. What
+  remains is three documentation corrections, none of which touches logic. No re-review of the
+  engineering is needed — only a check that the three edits landed.
+
+  ### The journal incident — I verified the recovery rather than taking it on trust
+  This outranked everything else on the re-review, so I checked it first and independently.
+  - `previous_pause_reason_id` is a **single constant** across all 270 rows,
+    `par_01KY56Z454Q36VVTR77B88VWGA` — exactly `pause_other_task_priority`'s `client_id`. Phase 3
+    nulled references to one row, so the column carries no per-row information to lose.
+  - The journal's `client_id` set is **exactly** the set of live rows carrying
+    `transition_reason = 'other_task_priority'` — checked in both directions on both tables, all
+    four differences zero (228 step, 42 derived).
+  - No live row carries both explanations.
+
+  **The reconstruction is provably exact, not plausibly exact.** The implementer's account of *why*
+  it was recoverable — no post-cutover traffic, so the two populations had not yet diverged — is
+  correct, and the claim that it would have been impossible otherwise is also correct.
+
+  **The guard works.** I ran a plain `alembic upgrade head` — the exact command that caused the
+  incident. It refuses, head stays at `b4e7a1c93f28`, journal intact at 270. The check sits before
+  any mutation. `architecture/30_migrations.md` carries the pattern. Not verifying the positive path
+  by execution is the right call, not a gap: verifying it would destroy the thing it protects.
+
+  Recording the incident at all — rather than quietly restoring and moving on — is the single most
+  valuable thing in this Review log.
+
+  ### Round-1 findings
+  - **F1 — fixed and independently verified.** The docstring now states the real precondition
+    instead of "Reversible." `downgrade` counts duplicated slugs **before** touching anything and
+    refuses with an explanation. I verified the predicate both ways: 0 with no duplicates, 1 with a
+    second-workspace duplicate planted and rolled back. Post-cycle schema confirmed correct — index
+    scoped to `(workspace_id, slug)`, constraint present, both retired rows in their intended state.
+  - **F3 — accepted.** Stating the tension rather than re-arming a guard is the right resolution,
+    and the reasoning is sound: what the *migration* must not do to a row is not what its *owner*
+    may choose to do. Placed where someone considering a guard will read it.
+  - **F4 — fixed.** All three synthesized entries now emit `is_system_managed: False`, matching
+    every real row. Suite re-run after the fixes: **identical 23-node failure set, 1437 passed** —
+    zero regression from the F1–F5 changes.
+  - **F5 — recorded.**
+  - **F2 — partially fixed. See G1.**
+
+  ### Close-out — verified, not accepted on assertion
+  - **13.** The table is honest and the evidence holds. I spot-checked three, not two: criterion 1
+    (`test_zero_catalog_clock_out_closes_open_working_step`, workspace asserted zero-catalog by
+    `_assert_zero_catalog`, 11 passed), criterion 3 (`grep` returns nothing), criterion 6 (my own
+    two-workspace `seed_pause_reasons` run). **Criterion 4 correctly held at PARTIAL** with an
+    explicit "do not upgrade this to met" — exactly right.
+  - **14.** D3, D5, D14 carry their final state in *this* master plan; the archived
+    declared_worker_states plan is unedited.
+  - **16.** A real standing list now exists, structured by why each item was deferred. **See G2/G3.**
+  - **15** deferred to post-approval — correct; it is genuinely the last act.
+
+  ### Findings
+
+  **G1 — F2 is fixed in 2 of the 4 places I named, and there is a 5th. Severity: low.**
+  `labels.py` and `seed_pause_reasons.py` are corrected well: they now cite `types.ts:18-19`, which
+  I re-verified is accurate, and both carry dated notes recording that the reasoning moved rather
+  than the conclusion. Still uncorrected:
+  - `tests/integration/services/commands/test_system_transition_reasons_retirement.py:146-147` —
+    the assertion message still reads *"the worker app maps this slug to a state and has no other
+    way to produce it."* This is the occurrence that matters most operationally: it is what prints
+    to whoever is debugging the day that test fails.
+  - This plan's criterion 2 (lines 64-68), still citing `pause-reason-transition.ts:12`.
+  - **New:** the master plan's phase-4 progress note repeats *"the worker app maps that slug to a
+    different state machine target."*
+  The conclusion remains correct everywhere; only the evidence is stale. Given T6's amendment turned
+  on precisely this kind of frontend citation, finish the sweep.
+
+  **G2 — the deferred list mischaracterises the ruff item, and drops the only one inside this
+  feature set's blast radius. Severity: low.** The list says *"~122 `ruff check` errors **in
+  untouched files**"* and *"Touched files are clean in every phase."* That second clause is false.
+  `transition_step_state.py` was touched by this feature set — phase 2, commit `867b8fb` — and
+  still carries **5 `F401` errors**, which I confirmed by running ruff. Phase 2's own Review log
+  says so twice ("`ruff check` clean on every touched file **except** `transition_step_state.py`").
+  So the framing quietly discards the one ruff item this set actually inherited responsibility for.
+
+  **G3 — a carried item is missing from the list, and it was never actually documented.
+  Severity: low-medium.** Phase 2's Review log carried
+  `scripts/backfill/backfill_worker_shift_state_records.py` forward to phase 3; phase 3 discharged
+  the `LinearInterval` part and closed with *"the script's **documented** declared-rows limitation
+  stands, out of scope."* Two problems:
+  1. **It is not documented.** The script contains **zero** occurrences of "declared". Its docstring
+     describes idempotent day-rewrites and says nothing about this.
+  2. **It is not on the deferred list** — so it dies with phase 3's archive, which is the exact
+     failure criterion 16 exists to prevent.
+
+  The limitation is real and it touches this phase's own subject matter:
+  `backfill_worker_shift_state_records.py:197-205` deletes **every** `UserShiftStateRecord` in the
+  worker-day and rebuilds from the step sweep alone. It never reads `UserDeclaredStateRecord` and
+  writes `manually_recorded=False` unconditionally — so a run would destroy exactly the
+  declared-state projections that carry `worker_declared_state` **plus** a catalog reference: the
+  documented exception this phase built its CHECK constraint around. Offline and `--execute`-gated,
+  so not a live risk — but it belongs on the list, and the word "documented" should either become
+  true or be dropped.
+
+  ### To approve
+  1. Correct the three remaining F2 citations (G1).
+  2. Fix the ruff line and add `transition_step_state.py`'s 5 `F401`s (G2).
+  3. Add the backfill-script declared-rows limitation, and either document it in the script or stop
+     calling it documented (G3).
+
+  Then drop the journal — with `ALLOW_DROP_BACKFILL_JOURNAL=yes`, deliberately, last — and move the
+  intention to `achieved`.
+
+  **Everything else is approved.** The constraint work is the best-evidenced part of this feature
+  set; the retirement did exactly what it said and nothing it said it would not; the suite shows
+  zero new failure nodes against a rigorous baseline; and the phase now closes with an incident
+  report that makes the next journal safer than this one was. Three documentation edits stand
+  between this and done.
 
 ## Lifecycle transition
 
