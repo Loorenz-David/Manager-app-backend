@@ -18,9 +18,20 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # transition and now carries `transition_reason = other_task_priority` with no catalog reference,
 # so seeding a row nobody selects and nothing resolves would create a picker entry with no meaning.
 #
-# `pause_ended_shift` STAYS, deliberately, as an ordinary selectable reason. The worker app's pause
-# sheet offers it and maps it to a state; removing it would take that option away. The system's own
-# clock-out no longer resolves it — that path carries `transition_reason = shift_ended`.
+# `pause_ended_shift` STAYS, deliberately, as an ordinary selectable reason: the worker app's pause
+# sheet offers it, and removing it from the seed would take that option away from every new
+# workspace. The system's own clock-out no longer resolves it — that path carries
+# `transition_reason = shift_ended`.
+#
+# It is only seeded, not protected. `can_delete_pause_reason` is gone, so a manager may delete this
+# row like any other. That is deliberate and it is the honest consequence of calling it ordinary
+# workspace data: what the *migration* must not do to it is not the same as what its *owner* may
+# choose to do. If the pause sheet should always offer it, that belongs in the frontend's defaults,
+# not in a backend delete guard resurrected for one row.
+#
+# NOTE (corrected 2026-08-01): the earlier justification here said the worker app maps this slug to
+# a different state-machine target. **That branch no longer exists** — removed by the worker-home
+# workstream. The row's value is that a worker can still pick it, which stands on its own.
 #
 # Duplicated (not imported) in migrations/versions/49bd666da846_seed_default_pause_reasons.py.
 # **That migration is history and MUST NOT be edited** — it is already applied, and changing it

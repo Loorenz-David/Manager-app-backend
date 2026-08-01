@@ -28,9 +28,14 @@ retires here (system_transition_reasons phase 4). Four independent changes:
    carries `worker_declared_state` AND the catalog reason the worker chose, by design; both facts
    are true and both are wanted.
 
-Reversible. `downgrade` restores the global index, un-deletes the row, and drops the constraint. It
-does NOT restore `is_system_managed = true` on the two rows that carried it: that flag is inert, and
-restoring it would re-arm a delete guard that no longer exists.
+**Reversible only while no second workspace has used the capability this migration delivers.**
+`downgrade` restores the *global* unique index on `slug`. The whole point of `upgrade` is to let a
+second workspace hold the same slugs — so once one does, the global index cannot be recreated and
+`downgrade` fails. It refuses up front with an explanation rather than dying on an opaque
+IntegrityError halfway through.
+
+`downgrade` does NOT restore `is_system_managed = true` on the rows that carried it: the flag is
+inert, and restoring it would re-arm a delete guard that no longer exists.
 
 Compliance for the constraint was verified against the production copy before it was written:
 `SELECT count(*) FROM step_state_records WHERE transition_reason IS NOT NULL AND pause_reason_id IS
@@ -111,6 +116,25 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+
+    # Refuse rather than fail opaquely. Restoring the GLOBAL index is impossible once a second
+    # workspace holds a slug this migration allowed it to have — which is the capability upgrade()
+    # exists to deliver, so this is a foreseeable state, not a corrupt one.
+    duplicated = bind.execute(
+        sa.text(
+            "SELECT count(*) FROM (SELECT slug FROM pause_reasons "
+            "WHERE slug IS NOT NULL GROUP BY slug HAVING count(*) > 1) d"
+        )
+    ).scalar_one()
+    if duplicated:
+        raise RuntimeError(
+            f"Cannot downgrade: {duplicated} slug(s) are held by more than one workspace, so the "
+            "global unique index this downgrade restores cannot be recreated. That is the exact "
+            "capability the upgrade delivers. Resolve the duplicates first, or stay on this "
+            "revision."
+        )
+
     op.drop_constraint(_CHECK_NAME, 'step_state_records', type_='check')
 
     op.execute(

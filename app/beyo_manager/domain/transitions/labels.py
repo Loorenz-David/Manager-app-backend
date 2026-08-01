@@ -35,14 +35,22 @@ _IMAGE_BASE = "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/w
 # in the published `pause_by_reason` map and is what a database row actually carries.
 #
 # `slug`, `requires_description` and `is_system_managed` reproduce the seeded catalog row
-# each member replaces, for two reasons — neither of which is behavioural branching.
+# each member replaces. Neither is behavioural — nothing branches on them.
 #
-# The published `PauseReason` schema declares `slug` a **non-nullable string**, so an
-# embedded object without one fails client validation for the whole payload it sits in.
-# And display parity: a value that differs from what the replaced row carried is a
-# difference a client could notice. The frontend's `slug === "pause_ended_shift"` branch
-# is NOT a consumer of these — it is fed only from the pause-reasons catalog query, which
-# a synthesized object never reaches.
+# The reason is schema conformance: `frontend/packages/pause-reasons/src/types.ts` declares
+# `slug: z.string()` and `is_system_managed: z.boolean()` **required and non-nullable**, so an
+# embedded object missing either fails Zod validation for the whole payload it sits in. Plus
+# display parity — a value differing from what the replaced row carried is a difference a client
+# could notice.
+#
+# `is_system_managed` is `False` here because it is `false` on every real row after the phase 4
+# retirement. The synthesized shape and the real shape must not diverge; a client comparing them
+# would see a distinction that no longer exists anywhere.
+#
+# NOTE (corrected 2026-08-01): earlier revisions of this comment justified `slug` by pointing at a
+# `slug === "pause_ended_shift"` branch in the worker app that chose a state-machine target. **That
+# branch no longer exists** — it was removed by the worker-home workstream. The conclusion is
+# unchanged and rests on the Zod schema above; only the cited evidence was stale.
 _TRANSITION_REASONS: dict[str, dict] = {
     TransitionReasonEnum.SHIFT_ENDED.value: {
         "name": "Ended shift",
@@ -50,7 +58,7 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "pause_type": PauseTypeEnum.BLOCKER.value,
         "slug": "pause_ended_shift",
         "requires_description": False,
-        "is_system_managed": True,
+        "is_system_managed": False,
     },
     TransitionReasonEnum.OTHER_TASK_PRIORITY.value: {
         "name": "Other task priority",
@@ -58,7 +66,7 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "pause_type": PauseTypeEnum.BLOCKER.value,
         "slug": "pause_other_task_priority",
         "requires_description": True,
-        "is_system_managed": True,
+        "is_system_managed": False,
     },
     # No catalog row ever existed for this one — a declaration carries the reason the
     # worker chose, and this member only records where the segment came from. `image_url`
@@ -71,7 +79,7 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "pause_type": PauseTypeEnum.PERSONAL.value,
         "slug": TransitionReasonEnum.WORKER_DECLARED_STATE.value,
         "requires_description": False,
-        "is_system_managed": True,
+        "is_system_managed": False,
     },
 }
 
