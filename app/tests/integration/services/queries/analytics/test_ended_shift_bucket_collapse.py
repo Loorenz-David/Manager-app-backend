@@ -66,6 +66,9 @@ from beyo_manager.services.queries.analytics.reconcile_user_time import reconcil
 from beyo_manager.services.queries.worker_stats.get_worker_daily_step_breakdown import (
     get_worker_daily_step_breakdown,
 )
+from beyo_manager.services.queries.worker_stats.get_worker_linear_timeline_breakdown import (
+    get_worker_linear_timeline_breakdown,
+)
 from beyo_manager.services.queries.worker_stats.list_workers_totals import list_workers_totals
 from beyo_manager.services.tasks.analytics.process_step_transition import (
     _recompute_step_time_totals,
@@ -801,6 +804,82 @@ async def test_rebuild_reads_a_shift_ended_pause_as_off_shift_and_stays_idempote
         if r.state is UserShiftStateEnum.IDLE and r.entered_at == DAY_ONE.replace(hour=12)
     ]
     assert len(idle_after) == 1
+
+
+# ------------------------------- the timeline drill-down, whose population also widened
+
+
+async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_step(
+    db_session, monkeypatch
+) -> None:
+    """`get_worker_linear_timeline_breakdown` filters step records to `(WORKING, PAUSED)`.
+
+    That tuple never contained the removed member, so the collapse widened what it selects —
+    the same class of change that broke the heal script. Here it is harmless, and this test
+    is why that is a checked claim rather than a reading: the force-closed record is entered
+    at the clock-out instant, so it starts at or after the end of every segment of the shift
+    it ended, and the next day's segments exclude it by the shift-scoping guard.
+
+    If either guard ever goes, a worker's timeline grows a paused block covering the night.
+    """
+    _patch_transition_side_effects(monkeypatch)
+    workspace, worker = await _seed_workspace_and_worker(db_session)
+
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, CLOCK_IN, worker.client_id
+    )
+    step, _, _ = await _seed_working_step(db_session, workspace, worker, entered_at=STEP_STARTED)
+    await clock_out_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, CLOCK_OUT, changed_by_id=worker.client_id
+    )
+    force_closed = await _open_record(db_session, step.client_id)
+
+    # The day it ended...
+    out = await get_worker_linear_timeline_breakdown(
+        _ctx(
+            db_session,
+            workspace,
+            worker,
+            incoming_data={"user_id": worker.client_id},
+            query_params={
+                "date_from": DAY_ONE.date().isoformat(),
+                "date_to": DAY_ONE.date().isoformat(),
+            },
+        )
+    )
+    shown = {
+        record["record_id"]
+        for segment in out["segments"]
+        for record in segment["steps"]
+    }
+    assert force_closed.client_id not in shown, (
+        "the record that ended the shift must not appear as a step inside it"
+    )
+
+    # ...and the morning after, where the carryover guard is what excludes it.
+    await clock_in_shift_for_user(
+        db_session, workspace.client_id, worker.client_id, RESUMED, worker.client_id
+    )
+    next_day = await get_worker_linear_timeline_breakdown(
+        _ctx(
+            db_session,
+            workspace,
+            worker,
+            incoming_data={"user_id": worker.client_id},
+            query_params={
+                "date_from": DAY_TWO.date().isoformat(),
+                "date_to": DAY_TWO.date().isoformat(),
+            },
+        )
+    )
+    shown_next = {
+        record["record_id"]
+        for segment in next_day["segments"]
+        for record in segment["steps"]
+    }
+    assert force_closed.client_id not in shown_next, (
+        "yesterday's carryover must not appear in this morning's timeline"
+    )
 
 
 # ----------------------------------------------- criterion 6: the morning after the clock-out

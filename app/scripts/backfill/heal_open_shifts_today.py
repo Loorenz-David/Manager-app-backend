@@ -39,6 +39,7 @@ from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.config import settings
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import close_db, get_db_session, init_db
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -64,6 +65,32 @@ _DURATIONFUL = (
 
 def _credited():
     return func.coalesce(StepStateRecord.credited_user_id, StepStateRecord.created_by_id)
+
+
+def _worker_activity():
+    """Step records meaning *the worker was doing something* — the shift-scope test.
+
+    `_TIME_STATES` on its own is not that test. Clock-out **pauses** the step it force-closes
+    and stamps it `shift_ended`, so the record that marks the *end* of a shift now sits in
+    the same two states as real work, entered at exactly `clock_out_at` — which is also
+    exactly where `scope_start` lands. Without this exclusion, the query asking *"has this
+    worker done anything since their last clock-out?"* answers yes by finding the clock-out
+    itself, and the script then heals a shift that is already closed.
+
+    Excluding the transition is the whole fix: it restores the population this query had when
+    a force-closed record was its own state, and it reads the mark the record already carries
+    rather than inferring one from timestamps.
+
+    ``IS DISTINCT FROM`` rather than ``!=``: `transition_reason` is NULL on every
+    worker-driven record, and ``NULL != 'shift_ended'`` is NULL, which would discard exactly
+    the rows this is meant to keep.
+    """
+    return and_(
+        StepStateRecord.state.in_(_TIME_STATES),
+        StepStateRecord.transition_reason.is_distinct_from(
+            TransitionReasonEnum.SHIFT_ENDED.value
+        ),
+    )
 
 
 async def heal_current_shift(
@@ -109,12 +136,14 @@ async def heal_current_shift(
             StepStateRecord.workspace_id == workspace_id,
             StepStateRecord.is_deleted.is_(False),
             _credited() == user_id,
-            StepStateRecord.state.in_(_TIME_STATES),
+            _worker_activity(),
             StepStateRecord.entered_at >= scope_start,
         )
     )
     if first_step is None:
-        # No time-bearing work since the last clock-out — nothing in progress to heal.
+        # No work by the worker since the last clock-out — nothing in progress to heal. The
+        # clock-out's own force-closed record sits at `scope_start` and must not count as
+        # activity here, or a worker who has gone home is healed back into an open shift.
         return "skipped_no_current_shift_activity"
 
     # Prefer the real Connecteam clock-in; a worker cannot work before clocking in, so take
@@ -241,9 +270,13 @@ async def _run(*, dry_run: bool, workspace_id: str | None, time_clock_id: str | 
             now = datetime.now(timezone.utc)
             day_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
 
+            # Same exclusion as the per-worker scope test, for the same reason: a worker
+            # whose only record today is their own clock-out has done nothing today and is
+            # not a candidate. `heal_current_shift` would skip them anyway — this keeps the
+            # reported candidate count meaning what it says.
             conditions = [
                 StepStateRecord.is_deleted.is_(False),
-                StepStateRecord.state.in_(_TIME_STATES),
+                _worker_activity(),
                 StepStateRecord.entered_at >= day_start,
             ]
             if workspace_id:
