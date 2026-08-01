@@ -452,21 +452,46 @@ operator-owned. Do not edit the handoff.
   differently. The journal does not soften that — it only means the rows can be put back.
 
   **The journal is not dropped by this change.** Whichever later change makes this one permanently
-  irreversible must drop it deliberately, last, behind an explicit environment acknowledgement, and
-  record the row count it held — the pattern `c8f3d2e60a17` established after the phase 4 incident.
+  irreversible must drop it deliberately, last, and record the row count it held.
+  *(Corrected 2026-08-01: an earlier wording said "behind an explicit environment acknowledgement,
+  the pattern `c8f3d2e60a17` established". That pattern was withdrawn in `4bece10` — a migration
+  that raises mid-`upgrade head` stops the deploy before the service restart. `30_migrations.md`
+  now says to leave such a revision off the chain instead, or do the drop operationally.)*
 
   ### Deployment ordering — the two databases are not in the same state
 
-  Local is at `c8f3d2e60a17`; **the server is still at `a7d21f4c8b03`**. This revision
-  (`2645b4327b17`) stacks on a chain that has not run in production, and it was applied locally with
-  an explicit revision target, never `upgrade head`. Two consequences for whoever deploys:
+  *(Both facts below were corrected by the operator on 2026-08-01; the originals came from the
+  implementer prompt and were stale by the time this ran.)*
+
+  Local is at `c8f3d2e60a17`; **the server is at `d8e4f1a2c6b7`** — verified by `alembic current`
+  on the server, and **three revisions earlier than this plan originally stated**
+  (`a7d21f4c8b03`). That matters: the server predates `595e7b840926`, so it has **no
+  `user_declared_state_records` table and no `clock_in_code` column**. The deploy therefore carries
+  **two** undeployed feature sets — `declared_worker_states` and `system_transition_reasons` — plus
+  this one. Eight migrations:
+
+      d8e4f1a2c6b7 (server) → 595e7b840926 → c2f4a6b8d0e1 → 67cfba8fcb2d
+      → a7d21f4c8b03 → 97b60e06d42a → b4e7a1c93f28 → c8f3d2e60a17 → 2645b4327b17
+
+  Two consequences for whoever deploys:
 
   - The server has not run phase 3's backfill, so its `ended_shift` rows may include E2 **row 3**
-    (untyped), which is empty locally. That branch is exercised only by the rehearsal above.
-  - `c8f3d2e60a17` sits between the server's revision and this one and **refuses to run without
-    `ALLOW_DROP_BACKFILL_JOURNAL=yes`**. A production `alembic upgrade` toward this revision will
-    stop there by design. Upgrade to `b4e7a1c93f28`, then to `2645b4327b17` explicitly, and drop the
-    transition-reason journal only as its own reviewed decision.
+    (untyped), which is empty locally. That branch is exercised only by the rehearsal above. This
+    is the most important unknown in the deploy.
+  - **`c8f3d2e60a17` no longer requires a flag.** Its `ALLOW_DROP_BACKFILL_JOURNAL` guard was
+    removed in `4bece10`, before this work was reviewed. A plain `alembic upgrade head` now runs
+    the whole chain — no explicit revision targets, no environment variable.
+
+    The guard was withdrawn because the transition-reason journal it protected held the *same*
+    `previous_pause_reason_id` on every row, so its entire content was a list of row ids derivable
+    from the rewritten rows; and because raising inside `alembic upgrade head` — which this repo's
+    deploy workflow runs **before** `systemctl restart` — left the schema migrated, the new code
+    pulled but not running, and services never restarted. See `architecture/30_migrations.md`.
+
+    **This does not weaken the judgement made for `ended_shift_collapse_journal` above** — that one
+    holds genuinely per-row information (three E2 row shapes with different previous states), which
+    is exactly the distinction the contract now asks for. Keeping it was right; guarding its drop
+    with a raising migration would not be.
 
   ### Proposed for the operator — §6.1 of the reassigned-steps handoff (not edited)
 
