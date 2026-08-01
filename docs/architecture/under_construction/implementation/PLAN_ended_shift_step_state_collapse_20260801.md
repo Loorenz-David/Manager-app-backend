@@ -482,6 +482,49 @@ operator-owned. Do not edit the handoff.
     removed in `4bece10`, before this work was reviewed. A plain `alembic upgrade head` now runs
     the whole chain — no explicit revision targets, no environment variable.
 
+  #### There is a window where the old code runs against the new enum (R2)
+
+  *Recorded here because this is where the deployer looks; raised in review round 1.*
+
+  `.github/workflows/deploy.yml:32-36` runs `alembic upgrade head`, then
+  `apply_db_triggers.py`, **then** `systemctl restart`. So the readers ship *after* the
+  migration, not before it — the opposite of the order E5 reasons about. E5's property is about
+  **rollout correctness of the bucket** (the expression yields `ended_shift` at every point), and
+  that still holds. It says nothing about the enum member disappearing from under processes that
+  are still running, which is a separate matter and is real.
+
+  Between the migration and the restart, every old-code query binding the removed member raises:
+
+      asyncpg.exceptions.InvalidTextRepresentationError:
+        invalid input value for enum task_step_state_enum: "ended_shift"
+
+  Seven pre-restart sites do that: `averaged_time._TIME_STATES` (and through it all six
+  analytics consumers), `_roster.TIME_STATES`, `get_worker_daily_step_breakdown._TIME_STATES`
+  and `_WORK_STATES`, `get_user_last_active_step_record._ACTIVE_STATES`,
+  `get_worker_working_sections._ACTIVE_STATES`, and `process_step_transition`'s
+  `TIME_BEARING_STATES` in the analytics worker. The worker-facing working-sections read is among
+  them, so this is visible to workers, not only to reporting.
+
+  **It self-heals on restart and is inherent to removing an enum member** — it is not a defect in
+  this work. Leaving the member in the type and dropping it in a later deploy is the alternative,
+  and that is the operator's call, not this session's.
+
+  #### The window's length is set by the table rewrite, not by the 208 rows (R3)
+
+  The reclassified population — 208 records, 58 steps — is **not** what governs the deploy.
+  `_recreate_enum` (`2645b4327b17:96-111`) issues two `ALTER TABLE … ALTER COLUMN state TYPE …
+  USING` statements, and each **rewrites every row of its table and rebuilds every index on it,
+  under `ACCESS EXCLUSIVE`**. Measured locally just now:
+
+  | Table | Rows rewritten | Indexes rebuilt |
+  |---|---|---|
+  | `step_state_records` | 6,164 | 11 |
+  | `task_steps` | 2,389 | 10 |
+
+  So the cost driver is ~8,500 rows and **21** index rebuilds locally, against 208 rows of actual
+  reclassification — a factor of forty. Production volumes are unmeasured. Two `count(*)`s on the
+  server before deploying give the real figure; sizing the risk from 208 will be wrong.
+
     The guard was withdrawn because the transition-reason journal it protected held the *same*
     `previous_pause_reason_id` on every row, so its entire content was a list of row ids derivable
     from the rewritten rows; and because raising inside `alembic upgrade head` — which this repo's
@@ -546,8 +589,268 @@ operator-owned. Do not edit the handoff.
   | Enum member in the database | gone: `pending,working,paused,blocked,completed,skipped,failed,cancelled` |
   | Rows left in `ended_shift` | 0 in both tables |
 
+- `2026-08-01` `independent review session`: **`NEEDS_CHANGES`** — one missed sweep site
+  (blocking), one unflagged deploy-window hazard, one unmeasured volume. Everything else
+  verified independently and holds, including the two lines the change could not afford to get
+  wrong.
+
+  ### Findings
+
+  **R1 — `scripts/backfill/heal_open_shifts_today.py:112` is a fourth site the sweep missed.**
+  *Severity: blocking. Criterion 7 (the sweep), same class as the two the implementer found.*
+
+  Its `_TIME_STATES` is `(WORKING, PAUSED)` and always was — so no grep for `ENDED_SHIFT`, and no
+  grep for the output key `"ended_shift"`, can reach it. It is not a **re-key** site; it is a
+  site whose selected **population changed**. Before the collapse a clock-out force-closed record
+  was `ended_shift` and fell outside that tuple; now it is `paused` and falls inside, and its
+  `entered_at` is exactly `clock_out_at` — so it satisfies `entered_at >= scope_start` where
+  `scope_start` is the last clock-out (`:95-115`).
+
+  That query *is* the mechanism behind the script's documented contract: *"A worker who has
+  already clocked out today … is skipped."* It no longer skips them. Reproduced against the live
+  code by clocking a worker in, seeding a working step, clocking out, and calling
+  `heal_current_shift(..., execute=False)`:
+
+      HEAL OUTCOME: would_heal shift_start=2026-07-20T17:00:00+00:00 start_source=first_task
+      expected:     skipped_no_current_shift_activity
+
+  With `--execute` that writes a `STARTED_SHIFT` marker at the clock-out instant, replaces the
+  day's durationful rows via `reconstruct_shift_middle(shift_start=clock_out_at, now)`, and then
+  deliberately re-opens the tail (`:186-188`) — leaving a clocked-out worker with an open shift
+  record running to `now`, breaking the *"one open record ⟺ worker on shift"* invariant that same
+  block names. The script has no test coverage of any kind.
+
+  This is the identical failure mode the implementer caught in
+  `backfill_worker_shift_state_records.py`, on the identical class of file, and it is why the
+  prompt makes a missed sweep site blocking. The fix is one line — `bucket_for`, or an explicit
+  `transition_reason <> 'shift_ended'` predicate — but the population change wants a test, since
+  nothing currently watches this script at all.
+
+  **R2 — E5's ordering property does not hold in this repo's deploy shape.**
+  *Severity: medium. E5 / the "Deployment ordering" section of the implementation log.*
+
+  E5 reasons that the derived expression is correct at every point *"which is what lets the
+  readers ship before the writer and the migration."* `.github/workflows/deploy.yml:33-36` runs
+  `alembic upgrade head`, then `apply_db_triggers.py`, **then** `systemctl restart`. The readers
+  therefore ship *after* the migration, not before it: for the whole length of the migration
+  chain the old processes are still serving against a database whose enum has already lost
+  `ended_shift`.
+
+  Every old-code query that binds the member then raises. Confirmed against the live migrated
+  database:
+
+      asyncpg.exceptions.InvalidTextRepresentationError:
+        invalid input value for enum task_step_state_enum: "ended_shift"
+
+  Seven sites in the pre-restart code do that: `averaged_time._TIME_STATES` (and through it all
+  six analytics consumers), `_roster.TIME_STATES`, `get_worker_daily_step_breakdown._TIME_STATES`
+  / `_WORK_STATES`, `get_user_last_active_step_record._ACTIVE_STATES`,
+  `get_worker_working_sections._ACTIVE_STATES`, and `process_step_transition`'s
+  `TIME_BEARING_STATES` in the analytics worker. The worker-facing working-sections read is among
+  them.
+
+  Self-healing on restart, and inherent to removing an enum member — but it is not stated
+  anywhere, and the log's "Deployment ordering" section is where whoever deploys will look. It
+  belongs there, alongside the row-3 unknown. The alternative (leave the member in the type,
+  drop it in a later deploy) is a decision for the operator, not a defect in this work.
+
+  **R3 — the volume that was measured is not the volume that governs the deploy.**
+  *Severity: low. `22_performance.md`, listed as a loaded contract.*
+
+  What is recorded is the reclassified population: 208 records, 58 steps. The cost and lock
+  driver is `_recreate_enum` (`2645b4327b17:96-111`), whose two `ALTER TABLE … ALTER COLUMN state
+  TYPE … USING` statements rewrite **every row** of `step_state_records` and `task_steps` and
+  rebuild all eleven indexes on the former, under `ACCESS EXCLUSIVE`. Locally that is 6,157 and
+  2,389 rows; the production figure is unmeasured, and it — not 208 — sets the length of R2's
+  window. One `count(*)` on the server before deploying closes this.
+
+  ### Verified independently — these hold
+
+  - **Criterion 9, checked against the journal directly rather than accepting the counts.**
+    Journal partitions 39 / 169 / 0 plus 58 `task_steps`, matching what was claimed. Of the 169
+    row-2 rows: **0** typed as a system transition, **0** that lost their `pause_reason_id`, **0**
+    not now `paused`. Of the 39 row-1 rows, **0** lost `transition_reason='shift_ended'`. No
+    journal row whose `previous_state` was anything but `ended_shift`, no orphans, no
+    soft-deleted rows swept in. `ck_step_state_records_transition_xor_catalog` confirmed present,
+    so "both set" is genuinely unreachable.
+  - **E2 row 3 constructed independently, not inherited.** The migration's three predicates were
+    replayed verbatim against a seeded population containing row 3 *and* a row-2 row whose
+    catalog reference is the `pause_ended_shift` row itself — the case where the default would do
+    the most damage. Result: 1 / 2 / 1, exact partition, nothing left in `ended_shift`, the
+    control row untouched, and **row 3's `transition_reason` default reached neither row-2 row**.
+    The branch with no local instances behaves as the table says.
+  - **The sweep, re-derived by a third route.** Neither the symbol grep (plan) nor the output-key
+    grep (implementer): every reader of `StepStateRecord.state`, every `LinearInterval(`
+    construction site, and every copy of a `_TIME_STATES`-shaped constant. That route reproduces
+    both sites the implementer found and surfaces exactly one they did not — R1. Four copies of
+    the constant exist, not three.
+  - **The corruption check is non-empty, and the count is right.** Corrupting the SQL `CASE`'s
+    first branch fails 7 of the module's 11 tests; corrupting `bucket_for` fails the 8th
+    (`test_rebuild_reads_a_shift_ended_pause_as_off_shift_and_stays_idempotent`). 8 total, as
+    claimed — split across the rule's two expressions, which is what the shared module buys.
+  - Criterion 7: all six consumers have their own test asserting explicit values. Criterion 6 has
+    its **own** test (`:809`), not an inherited one, and it asserts `IDLE` on the morning after.
+    Rebuild idempotence and the worker's own pause surviving with its catalog reference are both
+    asserted in the same test. Criterion 10: every published name intact — no serializer in the
+    diff.
+  - Suite reproduced: **23 failed, 1448 passed**, and the new module's 11 all pass. The only three
+    failures inside touched domains fail for pre-existing infrastructure reasons — a test double
+    with a stale signature, a session-fixture transaction clash, and role seeding. *Note for the
+    record:* a literal baseline-worktree comparison is no longer possible — the suite runs against
+    the shared `.env` database, which is already migrated, so baseline code cannot execute against
+    it at all (that is R2 in miniature).
+  - Ruff: 5 findings in `transition_step_state.py`, identical against `b59deb0` — pre-existing,
+    left alone correctly.
+  - Handoff untouched, no liveness row flipped, §6.1 proposed only. Nothing committed in the
+    frontend repository — its last commit predates this work and the deletions sit uncommitted in
+    the tree, exactly as described. `docs/domains/worker_shifts/` updated in this change; two
+    claims spot-checked against code and both accurate — the current-shift scoping of the
+    precedence table (`reconcile_worker_shift_state.py:172`) and clock-out pausing worked steps
+    only (`_clock_worker_shift.py:118-121, 200-209`). Remaining `ENDED_SHIFT` mentions in those
+    docs are all `UserShiftStateEnum`, which is correct. No plan references, no phase numbers, no
+    "previously".
+
+  ### Judged, not raised
+
+  - **The journal, and the reversal.** The right call, and the reasoning is the distinction
+    `30_migrations.md` asks for. Confirmed it records enough to reverse row-by-row — per-row
+    `previous_state` and `previous_transition_reason` plus which rule claimed each row — and that
+    `downgrade()` restores by joining that table, refusing outright if it is gone rather than
+    falling back to a predicate. What it does not undo (E2's reporting change) is stated plainly
+    in both the migration docstring and the log. **Nothing drops the journal**, so the table lives
+    in production indefinitely: an item needing a later decision, deliberately, not a defect.
+  - **`increment_step_time_metrics` was edited, not left alone.** Contrary to what the review
+    brief expected, but correctly: it referenced the enum member being removed, so leaving it
+    would have left code naming something that no longer exists and would have broken the plan's
+    own `grep -rn "ENDED_SHIFT"` gate. Zero callers confirmed, so the edit is inert; it is
+    minimal and it was disclosed rather than presented as the E3 work. Accepted.
+  - `ended_by` (linear-timeline drill-down) and `list_workers_last_interacted_step`'s `state` will
+    no longer emit the string `"ended_shift"`. Both are downstream of the intended semantics, and
+    the frontend handles them (`segment-adapter` only branches on `"completed"`; the step-state
+    zod unions still accept the old value). Worth one clause in the §6.1 proposal; not a defect.
+  - Self-reported weaknesses — the step-2 corruption check being meaningless, row 3 resting on a
+    rehearsal — are accurate and were the right things to flag. Both were re-checked here and both
+    stand up.
+
+  ### To clear the verdict
+
+  R1 only. R2 and R3 are for the operator's deploy decision and want a note in the log, not code.
+
+- `2026-08-01` `fix cycle, round 1`: **R1 fixed. R2 and R3 recorded in "Deployment ordering"
+  above. Awaiting re-review.**
+
+  ### R1 — the fix
+
+  `scripts/backfill/heal_open_shifts_today.py` now excludes `transition_reason = 'shift_ended'`
+  from the two queries that ask *"has this worker done anything?"*, via one documented predicate
+  `_worker_activity()` (`:70-93`) used at `:139` and `:279`. That restores the exact population
+  each query had when a force-closed record was its own state, and it reads the mark the record
+  already carries — no state special-case, no timestamp proxy, nothing that names the removed
+  member.
+
+  `IS DISTINCT FROM`, not `!=`: `transition_reason` is NULL on every worker-driven record, and
+  `NULL != 'shift_ended'` is NULL, which would have discarded exactly the rows the query exists
+  to find. Confirmed in the emitted SQL: `transition_reason IS DISTINCT FROM $4`.
+
+  **`:279` (the candidate scan) assessed on the same grounds and fixed too.** Its population
+  changed identically — a worker whose only record today is their own clock-out became a
+  candidate where before they were not. On its own it is *not* harmful once `:139` is fixed,
+  because the per-worker gate is what decides; the effect is that the reported `candidates=`
+  count stops meaning "workers with activity today". Restored anyway, so the two queries keep
+  answering the same question.
+
+  ### R1 — tests, proven failing-first
+
+  The script had none; that is why this was invisible. New file
+  `tests/integration/scripts/backfill/test_heal_open_shifts_today.py`, seeded by driving the
+  **real** clock-in/clock-out commands so it is pinned to what the writer actually produces, and
+  asserting the premise (`state=paused`, `entered_at == clock_out_at`,
+  `transition_reason='shift_ended'`) so it cannot pass vacuously if the writer changes again.
+
+  Against the unfixed script, **3 of 4 fail** — including the reviewer's reproduction verbatim:
+
+      test_worker_who_clocked_out_today_is_skipped
+        AssertionError: assert 'would_heal shift_start=2026-07-20T17:00:00+00:00
+                                start_source=first_task' == 'skipped_no_current_shift_activity'
+
+  | Test | Unfixed | Fixed |
+  |---|---|---|
+  | `test_worker_who_clocked_out_today_is_skipped` | **fails** — `would_heal … 17:00` | passes |
+  | `test_execute_writes_nothing_for_a_worker_who_clocked_out` | **fails** — writes a marker and reopens the tail | passes |
+  | `test_worker_who_clocked_back_in_after_clocking_out_is_still_healed` | **fails** — heals from 17:00 (the clock-out) instead of 17:30 (the real resume) | passes |
+  | `test_worker_still_mid_shift_is_healed` | passes | passes |
+
+  The fourth is the control the fix must not break — it passes on both sides deliberately, which
+  is the evidence that the exclusion is narrow rather than a no-op. The third is an extra
+  manifestation the finding did not name: even for a worker who genuinely *is* mid-shift, a
+  clock-out earlier the same day made the healed shift start at the clock-out instead of at their
+  real resume.
+
+  The `--execute` case asserts the full derived-row shape is byte-identical before and after
+  **and** that no open shift row exists — the damage the finding names is a clocked-out worker
+  left with an open shift, and a tag-only assertion would not have caught it.
+
+  ### The sweep, re-derived on the basis the finding names
+
+  Not "what reads this value" but **"what filter previously excluded `ended_shift` and now
+  admits it?"** Derived by listing every predicate on `StepStateRecord.state` and
+  `TaskStep.state` (37 sites), then reading each constant's definition **at `b59deb0`** to see
+  whether it contained the member before. A tuple that *did* contain it has an unchanged
+  population; one that did not, does not.
+
+  Five sites qualify. Complete list:
+
+  | # | Site | Pre-collapse filter | Status |
+  |---|---|---|---|
+  | 1 | `scripts/backfill/heal_open_shifts_today.py:139` | `_TIME_STATES` (`:58`) — no `ENDED_SHIFT` | **R1 — was broken, fixed** |
+  | 2 | `scripts/backfill/heal_open_shifts_today.py:279` | same tuple | **fixed** — benign alone, restored for consistency |
+  | 3 | `beyo_manager/services/commands/users/_reconstruct_shift_middle.py:110` | `_STEP_TIME_STATES` (`:38`) — no `ENDED_SHIFT` | handled in round 1 (`bucket_for` + failing-first test) |
+  | 4 | `beyo_manager/services/commands/users/reconcile_worker_shift_state.py:171` | inline `(WORKING, PAUSED)` | handled — the `entered_at_or_after` guard at `:172`, criterion 6 test |
+  | 5 | `beyo_manager/services/queries/worker_stats/get_worker_linear_timeline_breakdown.py:234` | inline `(WORKING, PAUSED)` | population widened; **now tested**, see below |
+
+  Everything else is one of: a tuple that already contained the member (`TIME_BEARING_STATES`,
+  `_roster.TIME_STATES`, `get_worker_daily_step_breakdown._TIME_STATES` / `_WORK_STATES`,
+  `get_user_last_active_step_record._ACTIVE_STATES`,
+  `get_worker_working_sections._ACTIVE_STATES`, both backfill `_TIME_STATES`); an equality on
+  `COMPLETED`/`WORKING`/`PENDING`, which no reclassified row can satisfy; a `notin_(TERMINAL_…)`,
+  which excluded neither state; a caller-supplied filter (`tasks.py:155,427`,
+  `list_working_section_steps.py:124`) where the new semantics are the intended ones; or **no
+  state filter at all** (`list_workers_last_interacted_step`,
+  `get_worker_linear_timeline_breakdown._load_record_outcomes`), where the population never
+  changed and only the emitted label did.
+
+  **Site 5 was the one worth a test rather than a reading**, since a reading is what missed R1.
+  `test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_step` asserts the
+  force-closed record appears in **no** segment's `steps` — neither in the shift it ended (it is
+  entered at the clock-out instant, so it starts at or after the end of every segment of that
+  shift) nor in the next morning's (the `entered_at >= current_shift_start` carryover guard,
+  which the code already documents as mirroring `reconstruct_shift_middle`). Two independent
+  guards, both now covered; if either goes, a worker's timeline grows a paused block covering the
+  night.
+
+  ### Out of scope, observed while testing — not fixed
+
+  Seeding a worker who clocked in at 08:00 and started their first task at 09:00 makes
+  `heal_current_shift` raise `IntegrityError` on the open-record unique index: `shift_start`
+  becomes 09:00, so the open `IDLE` the clock-in wrote at 08:00 falls **outside** the rebuild
+  window, is never closed, and collides when the tail is reopened. `_run` catches exactly this
+  and reports `skipped_raced_live_reconcile`, so it degrades safely in production.
+
+  This is **pre-existing and independent of the collapse** — no `shift_ended` record is involved
+  and the behaviour is identical at `b59deb0`. Recorded, not fixed: it is outside this plan, and
+  the test was rewritten to the script's stated primary case (a mid-shift worker with no marker
+  at all) rather than papering over it.
+
+  ### Validation
+
+  | Check | Result |
+  |---|---|
+  | `pytest -q` from `backend/app`, default plugins | **23 failed, 1453 passed** — failure node set **byte-identical** to the baseline at the same run index; +5 over round 1 (4 heal-script, 1 timeline drill-down) |
+  | `ruff check` on touched files | clean; the 5 pre-existing `transition_step_state.py` unused imports are unchanged and still out of scope |
+  | R1 reproduction | fails before, passes after — output quoted above |
+
 ## Lifecycle transition
 
-- Current state: `under_construction` — implemented, **awaiting independent review**
-- Next state: `approved` on review sign-off; summary and archive only after that
+- Current state: `under_construction` — implemented, reviewed, **R1 fixed; awaiting re-review**
+- Next state: `approved` once re-review clears; summary and archive only after that
 - Transition owner: `David`
