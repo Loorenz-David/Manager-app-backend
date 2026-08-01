@@ -59,14 +59,40 @@ request that creates the case.
 
 ## How to know it worked
 
-- Create a case from a **working** step → case created, no error, and the step shows as paused with
-  the case type visible on the timeline segment.
+- Create a case from a **working** step → case created, no error, and the step shows as **paused**
+  with the reason resolving to **"Case created"** on the manager timeline.
 - Create a case from a step that is **not** working → case created, nothing else happens.
 - The manager timeline should stop accumulating pause blocks with no reason attached.
 
+## No new field, and no schema change — asked and answered
+
+**The backend does not emit `transition_reason` on any timeline payload.** It routes the new reason
+through the channels your schemas already have, so nothing is silently dropped:
+
+| Where | What arrives | Your schema |
+|---|---|---|
+| `segment.reason` | the string `"case_created"`, in the slot a `par_…` id normally occupies | `z.string().nullable()` — already fits |
+| the sibling `pause_reasons` lookup map | key `"case_created"` → `{name: "Case created", image_url: null, pause_type: "blocker"}` | `PauseReasonLookupSchema` — `image_url` is already `.nullable()` |
+| `timeline.pause_by_reason` | keyed `"case_created"` | already `z.record(z.string(), z.number())` |
+| `steps[].pause_reason` | a **full** `PauseReason`-shaped object, `client_id: "case_created"` | `PauseReasonSchema.nullable()` — parses; `image_url` and `created_by_id`/`updated_at` are all nullable there |
+
+So `resolvePauseReasonLabel` finds it in the map and renders **"Case created"**, not the raw key.
+The fallback you verified is the safety net, not the path.
+
+### Where the case type actually is
+
+**In `steps[].description`** — `"case created: Damaged item"` — not in the segment label. The label
+is the constant `"Case created"`; the case type is the per-instance detail, and it travels in
+`description` exactly as task-switch's `"started working with {sku}"` does.
+
+That means: on any surface rendering `steps[].description` you get the case type for free. On the
+calendar block, which renders label text only, you get `"Case created"` — correct and sufficient,
+just not itemised. **Nothing to build either way** — the earlier wording of this section implied the
+case type would appear on the segment itself, which was wrong.
+
 ## One thing you will notice
 
-The case-created pause segment renders with a **label but no icon**. Every other transition reason
-carries an image; this one has none, because the retired catalog row was seeded with a null image
-and no asset exists in the repository. Cosmetic, and tracked backend-side — no client change wanted
-for it.
+The case-created pause resolves with a **label but no icon** (`image_url: null`). Every other
+transition reason carries an image; this one has none, because the retired catalog row was seeded
+with a null image and no asset exists in the repository. Moot on the calendar, which renders no
+reason imagery at all. Cosmetic, tracked backend-side — no client change wanted for it.
