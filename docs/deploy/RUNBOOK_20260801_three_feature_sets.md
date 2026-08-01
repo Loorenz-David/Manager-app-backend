@@ -10,6 +10,64 @@ case-created transition reason, which adds no migration.
 
 ---
 
+## The whole chain has been rehearsed against a copy of RDS — 2026-08-01
+
+`secretes/refresh_local_from_rds.sh` restored the RDS `managerbeyo_test` dump over the local
+database and ran `alembic upgrade head` on it. **All eight migrations applied cleanly to real data,
+in 21 seconds including dump and restore.** `alembic current` → `2645b4327b17 (head)`.
+
+That is worth more than any of the pre-flight probes below, because it *is* the deploy, run once
+against the data it will run against. Measured on the result:
+
+| Check | Result |
+|---|---|
+| `ended_shift` enum member | gone (0) |
+| Rows still in `ended_shift` | 0 |
+| CHECK violations (both reason channels set) | 0 |
+| `pause_other_task_priority` references remaining | 0 (**234** retyped by migration 5) |
+| `transition_reason_backfill_journal` | dropped |
+| `step_state_records` / `task_steps` | 5,398 / 1,962 |
+| The reasonless case-created pauses | **40**, as reported |
+
+**The P2 guard could not have fired** — if it had, migration 8 would have raised and `alembic
+current` would not read head.
+
+*Assumption worth naming:* this treats RDS `managerbeyo_test` as the database the server actually
+talks to. `alembic current` on the server reads `alembic_version` in that same database, so P1 below
+still confirms it directly — and if P1 does not read `d8e4f1a2c6b7`, this rehearsal was against
+something else and everything here needs re-deriving.
+
+### The E2 split — measured, and not what this runbook first predicted
+
+| E2 row | What it means | Predicted | **Actual** |
+|---|---|---|---|
+| 1 | system-typed (`transition_reason = shift_ended`) | 0 | **0** |
+| 2 | worker-picked — keeps its catalog reference, stays untyped | some | **153** |
+| 3 | untyped clock-out force-close — gets typed `shift_ended` | *"expected to be the bulk"* | **0** |
+
+Row 3 is **empty on real data**, not the bulk. All 153 rows point at `pause_ended_shift`.
+
+The reason is the one migration `97b60e06d42a` already names: before the cutover, a clock-out
+force-close *attached the catalog row* rather than leaving the record bare, so a system write and a
+worker's pick are historically indistinguishable — and both land in row 2. There was never an
+untyped population to find.
+
+### The consequence: `total_ended_shift_seconds` goes to zero for all history
+
+`bucket_for` returns the `ended_shift` bucket only for `state = paused AND transition_reason =
+shift_ended`. All 153 rows keep `transition_reason = NULL`, so every one of them now buckets as
+**ordinary pause time**. Before the deploy their bucket key was the state itself, so they counted as
+ended-shift time.
+
+**100% of historical ended-shift time reclassifies into `total_pause_seconds`.** This is E1 working
+exactly as ruled — the metric narrows to *the item stopped and nobody said why* — but the magnitude
+was never measured, and it is manager-visible. Going forward the bucket refills normally: post-cutover
+clock-out writes the typed `shift_ended` transition, so new force-closes land in it.
+
+**Tell anyone who reads that number before they notice it themselves.**
+
+---
+
 ## The chain
 
 Server is expected at `d8e4f1a2c6b7`. Eight migrations, single linear chain, no branches (verified
@@ -103,12 +161,9 @@ WHERE c.relname IN ('step_state_records', 'task_steps');
 SELECT count(*) AS ended_shift_rows
 FROM step_state_records WHERE state = 'ended_shift';
 
--- P5. THE MOST IMPORTANT UNKNOWN — the E2 split.
--- The server has no `transition_reason` column yet, so E2 row 1 cannot exist:
--- every ended_shift row is either row 2 (worker picked a reason, kept) or
--- row 3 (untyped, gets typed `shift_ended`). Row 3 is EMPTY locally, so its
--- branch has only ever been exercised by constructed rehearsal — and on the
--- server it is expected to be the bulk.
+-- P5. The E2 split. ANSWERED by the rehearsal above — 153 row 2, 0 row 3 —
+-- so this is now a confirmation, not a discovery. Re-run it only if P1
+-- disagrees with `d8e4f1a2c6b7`.
 SELECT count(*) FILTER (WHERE pause_reason_id IS NOT NULL) AS row_2_worker_picked,
        count(*) FILTER (WHERE pause_reason_id IS NULL)     AS row_3_untyped
 FROM step_state_records WHERE state = 'ended_shift';
