@@ -121,6 +121,12 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
   The pause is a side effect of the case, not part of it: it runs outside the case's write
   transaction, so a failure to pause logs and leaves the case standing rather than losing the
   worker's conversation.
+
+  **A case-paused step must be resumed before it can be completed.** There is no `PAUSED → COMPLETED`
+  edge in the transition matrix, so a worker interrupted by a case cannot finish the step directly —
+  they resume first. This follows from the rule above rather than being a separate decision, but it
+  is a real change for the worker: before the pause existed, the step stayed `WORKING` and completed
+  in one action.
 - A worker may only act on their own shift. An admin or manager must name a worker explicitly and
   may not act on themselves through these endpoints. This applies identically to clock actions and
   declarations.
@@ -182,6 +188,16 @@ Real, current, and deliberately unfixed. Repository-wide debt lives in
   follow-up attempts `PAUSED → PAUSED`, which the transition matrix rejects — the case is created
   and the step is correctly paused, but **the worker sees an error**. The client must stop firing it.
   Tracked in `docs/handoff/to_frontend/`.
+
+- **The case-created pause emits no `task:step-state-changed` event.** The step is paused server-side
+  and no client is told, so a worker whose step a manager just paused by raising a case keeps seeing
+  it as working until something else refetches. The closer precedent broadcasts: the task-switch
+  auto-pause adds its auto-paused step to the same event (`transition_step_state.py:471-484`);
+  clock-out, which does not broadcast, is the weaker analogue because it is self-initiated. This is
+  also the mechanism behind the client conflict above — the workers app's `step?.state !== "working"`
+  guard reads a cache the backend silently invalidated. Emitting the event would make the stale state
+  self-healing and remove the deploy-ordering coupling the frontend handoff carries. An operator
+  decision, not a defect in what shipped.
 
 - **The seven historical case-created pause records are not backfilled.** Records written before the
   capability was removed carry the soft-deleted `pause_case_created` catalog reference rather than
