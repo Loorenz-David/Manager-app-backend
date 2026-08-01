@@ -856,21 +856,46 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
         "the record that ended the shift must not appear as a step inside it"
     )
 
-    # ...and the morning after, where the carryover guard is what excludes it.
+    # ...and the morning after, where the carryover guard is the only thing excluding it.
     #
-    # The worker must actually be WORKING on day two, not merely clocked in. Step records attach
-    # only to WORKING/IN_PAUSE segments, so a worker who is idle produces a timeline with no steps
-    # at all — and `force_closed not in shown_next` then passes over an empty set, proving nothing.
-    # An earlier version of this test did exactly that: deleting the carryover guard left it green.
+    # Arranging this took three attempts, and the two failures are the reason it looks like
+    # this. A step record attaches to a segment only when the segment's shift state maps to
+    # the record's own step state (`_STEP_STATE_FOR_SHIFT`: WORKING→WORKING, IN_PAUSE→PAUSED).
+    # Yesterday's carryover is `paused`, so the **only** block it can ever land in is an
+    # IN_PAUSE one. Give day two no pause and the guard is never consulted: the assertion
+    # passes on the shape of the timeline, not on the guard, and deleting the guard leaves it
+    # green. (The first version was worse still — day two was idle, so it asserted over an
+    # empty set.)
+    #
+    # So day two pauses a step for a reason. That produces an IN_PAUSE segment which
+    # yesterday's carryover overlaps — it is still open, having never been resumed — and which
+    # only `entered_at >= current_shift_start` keeps it out of.
     await clock_in_shift_for_user(
         db_session, workspace.client_id, worker.client_id, RESUMED, worker.client_id
     )
-    today_step, _, today_record = await _seed_working_step(
+    today_step, today_task, today_record = await _seed_working_step(
         db_session, workspace, worker, entered_at=DAY_TWO.replace(hour=9)
     )
-    # Clock out again so day two's derived timeline is rebuilt and actually carries a WORKING
-    # segment for the step records to attach to. This also gives the guard a second thing to
-    # exclude — today's own force-close — so the assertion covers both directions.
+    reason = await _seed_pause_reason(db_session, workspace, worker, "Coffee break")
+    ctx = _ctx(db_session, workspace, worker)
+    await _apply_step_transition(
+        ctx, today_step, today_task, today_record,
+        new_state=TaskStepStateEnum.PAUSED,
+        pause_reason_id=reason.client_id,
+        description=None,
+        credited_user_id=worker.client_id,
+        now=DAY_TWO.replace(hour=10),
+    )
+    today_pause = await _open_record(db_session, today_step.client_id)
+    await _apply_step_transition(
+        ctx, today_step, today_task, today_pause,
+        new_state=TaskStepStateEnum.WORKING,
+        pause_reason_id=None,
+        description=None,
+        credited_user_id=worker.client_id,
+        now=DAY_TWO.replace(hour=11),
+    )
+    # Clock out again so day two's timeline is rebuilt from those records.
     await clock_out_shift_for_user(
         db_session,
         workspace.client_id,
@@ -878,6 +903,9 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
         DAY_TWO.replace(hour=17),
         changed_by_id=worker.client_id,
     )
+    # Yesterday's record must still be open, or it is not a carryover and overlaps nothing.
+    await db_session.refresh(force_closed)
+    assert force_closed.exited_at is None
 
     next_day = await get_worker_linear_timeline_breakdown(
         _ctx(
@@ -896,9 +924,6 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
         for segment in next_day["segments"]
         for record in segment["steps"]
     }
-
-    # Vacuity guard. Without this, every assertion below is satisfied by an empty set — which is
-    # how the original version of this test survived while testing nothing.
     assert shown_next, (
         "day two produced no step records at all; the assertions below would pass vacuously"
     )
@@ -908,6 +933,21 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
     assert force_closed.client_id not in shown_next, (
         "yesterday's carryover must not appear in this morning's timeline"
     )
+
+    # The load-bearing assertion: the paused block exists, and holds *exactly* today's pause.
+    # Delete `entered_at >= current_shift_start` and yesterday's carryover joins it — the
+    # block goes from one step to two, and a manager reading the timeline sees a step paused
+    # during a break it was never part of, carrying yesterday's off-shift span.
+    paused_blocks = [
+        segment for segment in next_day["segments"] if segment["state"] == "paused"
+    ]
+    assert len(paused_blocks) == 1, (
+        "day two must derive exactly one IN_PAUSE block; without one the carryover has "
+        "nothing to attach to and this test cannot see the guard at all"
+    )
+    assert {record["record_id"] for record in paused_blocks[0]["steps"]} == {
+        today_pause.client_id
+    }
 
 
 # ----------------------------------------------- criterion 6: the morning after the clock-out
