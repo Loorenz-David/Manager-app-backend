@@ -72,7 +72,7 @@ The paginated page content.
 
 | Param | Type | Default | Constraints | Meaning |
 |---|---|---|---|---|
-| `limit` | int | `50` | `≤ 200` (else `422`) | page size |
+| `limit` | int | `50` | **`1`–`200`** inclusive (else `422` — note `limit=0` is rejected, not "empty page") | page size |
 | `offset` | int | `0` | `≥ 0` (else `422`) | page offset |
 | `unacknowledged_only` | bool | `false` | — | when `true`, drops rows the worker already acknowledged |
 | `q` | string | — | `max_length=200` (else `422`) | free-text search — see §3.5 |
@@ -738,7 +738,10 @@ type between the two surfaces.
 | `401` | `{"detail": "Invalid or expired token."}` | missing / malformed / expired token |
 | `401` | `{"detail": "Token has been revoked."}` | token blocklisted (logged out) |
 | `403` | `{"detail": "Insufficient role permissions."}` | role outside admin/manager/worker |
-| `422` | `{"detail": [ … FastAPI validation array … ]}` | `limit > 200`, `offset < 0`, non-integer values |
+| `422` | `{"detail": [ … FastAPI validation array … ]}` | `limit > 200`, **`limit < 1`**, `offset < 0`, `q` over 200 chars, non-integer values |
+
+`limit=0` is a `422`, not an empty page — the router declares `ge=1`. If you have a "load nothing
+yet" state, skip the request rather than sending `limit=0`.
 
 Domain errors would use `{"error": "…", "ok": false}` — but **neither endpoint raises one**. In
 particular:
