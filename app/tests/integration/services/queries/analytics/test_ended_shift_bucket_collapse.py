@@ -857,9 +857,28 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
     )
 
     # ...and the morning after, where the carryover guard is what excludes it.
+    #
+    # The worker must actually be WORKING on day two, not merely clocked in. Step records attach
+    # only to WORKING/IN_PAUSE segments, so a worker who is idle produces a timeline with no steps
+    # at all — and `force_closed not in shown_next` then passes over an empty set, proving nothing.
+    # An earlier version of this test did exactly that: deleting the carryover guard left it green.
     await clock_in_shift_for_user(
         db_session, workspace.client_id, worker.client_id, RESUMED, worker.client_id
     )
+    today_step, _, today_record = await _seed_working_step(
+        db_session, workspace, worker, entered_at=DAY_TWO.replace(hour=9)
+    )
+    # Clock out again so day two's derived timeline is rebuilt and actually carries a WORKING
+    # segment for the step records to attach to. This also gives the guard a second thing to
+    # exclude — today's own force-close — so the assertion covers both directions.
+    await clock_out_shift_for_user(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        DAY_TWO.replace(hour=17),
+        changed_by_id=worker.client_id,
+    )
+
     next_day = await get_worker_linear_timeline_breakdown(
         _ctx(
             db_session,
@@ -877,6 +896,15 @@ async def test_timeline_drilldown_never_shows_the_clock_out_record_as_a_paused_s
         for segment in next_day["segments"]
         for record in segment["steps"]
     }
+
+    # Vacuity guard. Without this, every assertion below is satisfied by an empty set — which is
+    # how the original version of this test survived while testing nothing.
+    assert shown_next, (
+        "day two produced no step records at all; the assertions below would pass vacuously"
+    )
+    assert today_record.client_id in shown_next, (
+        "today's own work must be present — otherwise the exclusion below is not selective"
+    )
     assert force_closed.client_id not in shown_next, (
         "yesterday's carryover must not appear in this morning's timeline"
     )
