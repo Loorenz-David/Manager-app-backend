@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_system_transition_reasons_phase4_retirement_20260731`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `<implementer>`
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Last updated at (UTC): `2026-07-31T00:00:00Z`
@@ -590,8 +590,8 @@ costs a few kilobytes; a missing one costs the ability to undo a migration over 
 
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `archived`
+- Next state: `n/a` (approved round 2, summarized and archived)
 - Transition owner: `David`
 
 - `2026-08-01` `implementer (claude-opus-5)`: **Round-1 findings closed. STOPPED for re-review.**

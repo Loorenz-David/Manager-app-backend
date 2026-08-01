@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_system_transition_reasons_phase3_backfill_20260731`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `claude-fable-5 (implementer)`
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Last updated at (UTC): `2026-07-31T19:15:00Z`
@@ -500,8 +500,114 @@
 
   **STOP** — awaiting re-review.
 
+- `2026-07-31` `independent reviewer (round 2)`: **`APPROVED`.** All three round-1 findings are
+  discharged. No new findings. The SQL was not re-reviewed (round 1's per-population md5
+  verification stands) — but the identity claim behind that was checked: the migration file
+  `97b60e06d42a_backfill_other_task_priority_transition_.py` has exactly one commit in its history
+  (`2f96915`), `git diff 3698a70^ HEAD` on it is empty, and it has no working-tree delta. Byte
+  identity to the reviewed commit confirmed.
+
+  **F1 — CLOSED. Proof reproduced independently, both ways, with controls.** I did not run the
+  backfill or touch the operator's database. I built a scratch database
+  (`beyo_autogen_probe` on the same cluster), stamped `alembic_version` at head `97b60e06d42a`,
+  and created three orphan tables — the real journal DDL copied from the migration, plus two
+  controls: `zz_control_orphan` (no suffix) and `zz_future_bookkeeping_journal` (suffix, unrelated
+  name). Autogenerate against that database, twice:
+  - **Filter wired (HEAD as committed)** — revision `20c8cf00bcc5`: `upgrade()` contains
+    `op.drop_table('zz_control_orphan')` (line 2255) and **no mention of either `_journal` table
+    anywhere in the file**. Alembic's own log emits `Detected removed table 'zz_control_orphan'`
+    and nothing for the journals.
+  - **Filter unwired** (the two `include_object=_include_object` kwargs removed, nothing else) —
+    revision `68fb43b918ea`: `upgrade()` contains `op.drop_table('transition_reason_backfill_journal')`
+    (line 2256) and `op.drop_table('zz_future_bookkeeping_journal')` (line 2257), with `downgrade()`
+    re-creating them. This is exactly the destruction F1 predicted.
+
+  The `zz_control_orphan` control is the load-bearing half: it is dropped in **both** runs, so the
+  filter is not suppressing orphan drops in general — only suffix-matching ones. The
+  `zz_future_bookkeeping_journal` control confirms the predicate is genuinely suffix-general, not
+  keyed to the phase-3 table's name.
+
+  **Both configure paths carry it, verified by reading** — `env.py:58` (`run_migrations_offline`)
+  and `env.py:73` (`_do_run_migrations`, the online path). Symmetric; neither path is bare.
+
+  **Predicate narrowness.** `type_ == "table" and reflected and compare_to is None` is correct and
+  each condition is load-bearing; `reflected and compare_to is None` is precisely "in the database,
+  absent from metadata", the only shape autogenerate answers with `drop_table`. One precision note
+  on the docstring at `env.py:37-39` ("a genuine ORM table that happened to use the suffix would
+  have a metadata counterpart and is unaffected"): that holds while the model exists, but at the
+  moment a model is *intentionally deleted* its table also reflects with `compare_to is None`, and
+  the filter would suppress that legitimate drop if the table's name ended in `_journal`. The
+  predicate cannot distinguish the two cases — safety rests entirely on the suffix being reserved.
+  It currently is: `grep '__tablename__'` across the repository returns **zero** ORM tables ending
+  in `_journal`. Not a defect; recorded so the docstring's guarantee is not read as stronger than
+  it is.
+
+  **Cleanup verified.** Neither scratch revision named in the round-1 entry (`d9293879e57e`,
+  `810c3d53f84d`) survives in `app/migrations/versions/`, nor anywhere in `app/`. My own two probe
+  revisions were removed from `versions/` (copies kept outside the repo), `env.py` was restored
+  with `git checkout` and again shows both wirings, and the scratch database was dropped. The
+  operator's database is untouched: `alembic current` reports `a7d21f4c8b03`, head is
+  `97b60e06d42a`, migration not applied, no journal — the state round 1 left it in.
+
+  **On the convention — adequate here, but it does not propagate.** The mechanism is right and the
+  generality-by-convention choice is the correct trade-off for this fix; a name-specific filter
+  would have been worse. Two observations, neither blocking:
+  - **Discoverability is the real weakness.** The convention is documented only in `env.py`. The
+    person who needs it — someone writing a raw-SQL bookkeeping table *inside a migration* — reads
+    `architecture/30_migrations.md`, which has a "Seeding required reference data in migrations"
+    section and a "Migration review checklist" and mentions neither `_journal`, `include_object`,
+    nor migration-owned tables (grep across all of `architecture/` returns zero hits). A future
+    `backfill_log` or `migration_audit` gets no protection and fails exactly as this one would
+    have. **I do think it belongs in the migrations contract** — two lines under the seeding
+    section would close it. Phase 4 already owns the journal's retirement and is the natural home;
+    not a reason to hold phase 3.
+  - `env.py:20-30` documents the marker clearly enough on its own terms — a reader of the filter
+    understands the suffix is deliberate, not coincidence. That half of the question is fine.
+
+  **F2 — CLOSED, and the FK claim verified first-hand, not inherited.** Against the live database:
+  `user_shift_state_records` carries exactly three foreign keys (`changed_by_id`, `user_id`,
+  `workspace_id`, all to `client_id`, all `ON DELETE RESTRICT`); `reason` is
+  `character varying(512)` with `has_fk = false`. Exactly two FKs in the schema reference
+  `pause_reasons` — `step_state_records.pause_reason_id` and
+  `user_declared_state_records.pause_reason_id`. This matches the model
+  (`models/tables/users/user_shift_state_record.py:33`, a bare `mapped_column(String(512))`).
+  The corrected docstring at `test_prefix_branch_post_backfill.py:18-28` states all five things
+  accurately: no FK, nothing referential prevents a stale or foreign id, only writer-side workspace
+  validation does, the resolving-`par_` shape is measured not guaranteed, and the branch is defence
+  rather than dead code. Greps for `cannot dangle` / `never hard-deleted` / `neither be foreign nor
+  dangle` find the phrasing surviving in exactly one place — line 277 of this file, inside the
+  round-0 entry, which is history and correctly left alone. Minor: the round-1 claim at line 478
+  ("no ... phrasing survives anywhere in the phase's files") is literally overstated by that one
+  occurrence, but the very next sentence names it as retained history, so the record is not
+  misleading. The operator-owned review prompt's "the FK raises" instruction still carries the
+  error; the round-1 entry discloses that and correctly did not edit it.
+
+  **F3 — CLOSED.** `INTENTION_system_transition_reasons_20260730.md:311-329` records criterion 4 as
+  an explicit partial completion, not a closure by implication: clause (b) satisfied on the
+  provably-dead arm, clause (a) stated as **NOT satisfied and not reachable**, both blocking
+  constraints named (272 legacy slug strings beside 58 `par_…` ids; the suppression behaviour is
+  the published three-way `reason_text` contract, floor-app handoff §5.3/§4), and a closing
+  instruction to downstream readers to treat it as **met-in-part**. A reader landing on that
+  criterion alone cannot come away thinking it fully met — the heading itself says
+  "closed on ONE arm only".
+
+  **T9 commit hygiene — clean.** `git log --stat` on `3698a70` shows two files (`app/migrations/env.py`,
+  `test_prefix_branch_post_backfill.py`); on `e51e1fd`, two files (this plan, the intention).
+  Nothing outside phase 3's working set was staged. The master plan's last commit is `41271b6`,
+  well before both, so the operator's edit was not swept in. (For the record: the parallel
+  reassigned-steps workstream committed its own files as `213cac7` and `f512eb1` while this review
+  was running — its own working set only, unrelated to phase 3.)
+
+  **Suite not re-run — justified, and spot-checked.** `grep -rl "import alembic\|from alembic\|
+  migrations.env\|command.upgrade"` over `app/tests/` returns nothing, and `conftest.py` has no
+  alembic reference, so `env.py` does not execute under pytest. The autogenerate differential above
+  is that file's behavioural test. The two documentation edits contain no executable change.
+
+  **Verdict: `APPROVED`.** Phase 3 is done. The only carry-forward is the advisory above — put the
+  `_journal` convention into `architecture/30_migrations.md` so it reaches the people who need it.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
+- Current state: `archived`
+- Next state: `n/a` (APPROVED round 2, summarized and archived)
 - Transition owner: `David`

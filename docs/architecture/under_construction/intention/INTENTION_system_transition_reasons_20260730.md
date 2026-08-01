@@ -3,7 +3,7 @@
 ## Metadata
 
 - Intention ID: `INTENTION_system_transition_reasons_20260730`
-- Status: `active`
+- Status: `achieved`
 - Owner: David (operator) — planning to be executed by a fresh session
 - Created at (UTC): `2026-07-30T16:38:18Z`
 - Last updated at (UTC): `2026-07-31T19:10:00Z`
@@ -288,7 +288,7 @@ should never have been catalog rows at all.
 
 ## Lifecycle transition
 
-- Current status: `active`
+- Current status: `achieved`
 - Next status: `achieved` (all success criteria met) or `superseded`
 - Transition trigger: all phases of the linked implementation plan archived with reviewer approval,
   and success criterion 1 verified against a real zero-catalog workspace.
