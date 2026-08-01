@@ -172,6 +172,17 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 Real, current, and deliberately unfixed. Repository-wide debt lives in
 [docs/repo_health.md](../../repo_health.md); these are specific to worker shifts.
 
+- **The workers app fires its own case-created pause, without a reason — and will now conflict.**
+  After creating a case, `use-task-step-detail.controller.ts` transitions the step to `paused` using
+  a reason it looks up by the slug of a catalog row that was soft-deleted. The lookup yields nothing,
+  so the step pauses with **no reason recorded**: **40 such records** exist, 35 of them in July.
+  That is the source of unexplained pauses on the timeline.
+
+  Now that the backend pauses the step itself with a typed `transition_reason`, the client's
+  follow-up attempts `PAUSED → PAUSED`, which the transition matrix rejects — the case is created
+  and the step is correctly paused, but **the worker sees an error**. The client must stop firing it.
+  Tracked in `docs/handoff/to_frontend/`.
+
 - **The seven historical case-created pause records are not backfilled.** Records written before the
   capability was removed carry the soft-deleted `pause_case_created` catalog reference rather than
   the `case_created` transition, so the same interruption has two representations in the data. Both
