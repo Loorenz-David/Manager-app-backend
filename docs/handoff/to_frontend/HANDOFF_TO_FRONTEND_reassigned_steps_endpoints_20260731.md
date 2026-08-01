@@ -368,7 +368,7 @@ The step level is `serialize_step` — 22 keys — plus the enrichment keys belo
 | Field | Type | Null? | Notes |
 |---|---|---|---|
 | `client_id` | string | no | step id, prefix `tsp_` |
-| `task_id` | string | no | prefix `task_` |
+| `task_id` | string | no | prefix `tsk_` |
 | `state` | enum string | no | §6.1 — never a terminal value on this endpoint; **`ended_shift` is being removed, read §6.1** |
 | `readiness_status` | enum string | no | §6.2 |
 | `sequence_order` | int | **yes** | |

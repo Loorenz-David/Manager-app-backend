@@ -3,7 +3,7 @@
 ## Metadata
 
 - Plan ID: `PLAN_reassigned_steps_endpoints_20260731`
-- Status: `under_construction`
+- Status: `archived`
 - Owner agent: `planning_session_claude`
 - Created at (UTC): `2026-07-31T00:00:00Z`
 - Last updated at (UTC): `2026-07-31T00:00:00Z`
@@ -1237,8 +1237,137 @@ Rules for the implementing session:
   The re-review can treat the full-suite criterion as met and should verify against these figures,
   not re-open the 372 number.
 
+- `2026-07-31` `reviewer (adversarial pass, round 2 — full checklist re-run)`: **APPROVED.** Round-1
+  findings 1 and 2 are closed, and every checklist item was re-verified from the repo rather than
+  from the round-1 log. All probes were run in the main tree at `28711b7` against `app/.venv`; every
+  temporary file was deleted and `git status` on `app/` is clean.
+
+  **Round-1 closure.**
+
+  - **Finding 1 (blocking) — closed.** `dccdb7a` (list query), `082b226` (count query), `b29bdbe`
+    (both routes), `4ea8b26` (integration tests), `213cac7` (count statement budget). Steps 5–9 are
+    delivered; the whole feature suite passes: `tests/integration/services/queries/
+    task_step_acknowledgments/` **15 passed**, characterization module **2 passed**.
+  - **Finding 2 (blocking, scope) — closed.** `1ad796c` moved
+    `serialize_task_step_acknowledgment` to `domain/task_steps/serializers.py:26-43` and repointed
+    `list_pending_step_acknowledgments.py:3`; `list_reassigned_steps.py:4` already imported it there.
+    `git diff a747939^ HEAD -- app/beyo_manager/domain/tasks/serializers.py` is **empty** — the
+    241eee5 excursion is fully reverted, so the parallel feature's `serialize_step_pause_reason`
+    surface is untouched. `domain/users/serializers.py` never appears in the range.
+  - **Finding 5 — applied.** `limit: int = Query(50, ge=1, le=200)`
+    (`routers/api_v1/task_step_acknowledgments.py:38`).
+  - **Finding 6** — unchanged by design (pre-existing idiom, `list_reassigned_steps.py:81`).
+
+  **Extraction (highest risk) — re-verified independently, not taken on trust.**
+
+  - `diff <(git show 1204916^:…/list_working_section_steps.py | sed -n '304,592p')
+    <(sed -n '54,342p' steps_list_payload.py)` → **empty; 289 lines byte-identical.** The commit's
+    entire added-line set in the caller is **11 lines**: the pruned `sqlalchemy` import line, the
+    two-line `build_steps_list_payload` import, and the six-line call — no edited logic anywhere.
+    All five listed hazards are inside that identical block (`steps_list_payload.py:122-123`,
+    `:207-213`, `:301-303`, `:279-282`, `:320-341`). Early-empty envelope stays in the caller
+    (`list_working_section_steps.py:275-282`), the builder's bare `[]` is not returned.
+  - **Response parity probed, not inferred.** Loaded `1204916^`'s file as a second module and ran
+    both implementations against the same fixture in one session, both parametrizations:
+    `json.dumps(before) == json.dumps(after)` and identical key *order* — 2 passed.
+  - **Characterization test byte-identical to its pre-Step-2 state:** `git log` on it returns the
+    single commit `a747939`; `1204916` has a two-file stat that excludes it.
+  - **It discriminates:** deleting `group_image_by_step_id=` from the call site fails
+    `…key_sets_are_stable[True]`; restored, tree clean.
+  - `ruff check` clean on all touched source and test files.
+
+  **Visibility, scoping, invariants — probed.** A throwaway module (5 cases, all passing, deleted)
+  plus the committed suite establish: membership re-checked at read time (`removed_at` set after the
+  ack → invisible); each of the four terminal states excluded individually; `ENDED_SHIFT` visible
+  with all four `upholstery_group_*` null; another worker's and another workspace's acks invisible;
+  an **admin**-role caller sees only their own obligations on **both** endpoints. All four joins in
+  `_reassigned_steps_filters.py:31-67` carry `workspace_id`, each table using its own soft-delete
+  idiom (`is_deleted` on step/task/section, `removed_at` on membership, `is_deleted` on the ack).
+  Both `uix_working_section_memberships_active` and `uix_task_step_ack_step_worker` are partial/full
+  unique indexes, so neither join can fan out.
+
+  - **Agreement discriminates.** Temporarily inlining
+    `.where(TaskStepAcknowledgment.acknowledged_at.is_(None))` into the list only made
+    `…list_and_count_agree_and_include_acknowledged_rows` and
+    `…enforces_workspace_and_unacknowledged_filter` fail (2 failed / 13 passed). The test is a real
+    paging loop to exhaustion, not a hardcoded number. Restored.
+  - **Pagination is stable.** Three acks seeded with an identical `created_at`, paged at `limit=1`:
+    no id repeated, none skipped, and the emitted order equals `sorted(ids, reverse=True)` — the
+    `TaskStep.client_id DESC` tiebreak (`list_reassigned_steps.py:62-65`) is what makes it total.
+
+  **`q` — contract 55 completion gate, all seven boxes clear.** `apply_string_filter` used
+  (`list_reassigned_steps.py:61`), no inline `.ilike`; allowed columns are `Item.article_number` /
+  `Item.sku` only; router `max_length=200`; `string_filters` passed through unparsed; no date params;
+  both `q` and `string_filters` present in `query_params`; both joins precede the call and are
+  **unconditional** with `isouter=True` (`:39-58`). Probed: a task with no primary item is returned
+  with no `q` and dropped by any non-empty `q`; an upholstery `name`/`code` seeded on the primary
+  item does **not** match while its SKU does — upholstery search stays out of scope; `q` never
+  widens (a terminal-state step and a step in a section the caller has no membership for both stay
+  invisible under a matching `q`). `uix_task_items_primary_active`
+  (`models/tables/tasks/task_item.py:53`) still exists, so the absence of `DISTINCT` remains sound.
+  `list_working_section_steps` was **not** converted — its inline `.ilike` calls survive at
+  `:219-220` and `:235-236` (D6). The count endpoint has **zero** OpenAPI parameters and no search
+  joins (D7).
+
+  **Contract conformance — mechanically compared, handoff treated as authoritative.** Parsed the
+  handoff §5.1 table and the characterization test's `_STEP_KEYS`: **39 vs 38 + `acknowledgment`,
+  symmetric difference empty in both directions.** `working_sections` is an object keyed by
+  `client_id` covering exactly the page's sections; an empty page returns `working_sections: {}`
+  with the full envelope. `is_reassigned` is `true` on every item (`reassigned_step_ids=set(page_ids)`).
+  Count returns both keys as `0`, never `null`, from **one** statement selecting only
+  `func.count()` / `func.count().filter(...)` — no ORM entities. Router validation exercised through
+  a `TestClient` with auth and DB overridden: `limit=201` → **422**, `offset=-1` → **422**,
+  `q` at 201 chars → **422**, `q` at exactly 200 chars and `limit=50` → pass validation and reach the
+  service. Neither service contains a `raise`, so no `404` is reachable on either path. **The handoff
+  is unmodified** (single commit `9ce1105`, no working-tree diff) and no liveness row was flipped.
+
+  **Performance.** SQLAlchemy `before_cursor_execute` listener, main tree: **13 statements for a
+  1-item page and 13 for a 50-item page** — constant, verified at the checklist's stated page size,
+  not extrapolated from 10. The per-step `load_step_with_latest_record` / `build_step_record_payload`
+  loop was **not** copied, and `list_pending_step_acknowledgments.py:71-81` is intact — its only
+  change across the whole range is the serializer import.
+
+  **Scope and commit hygiene.** Twelve commits belong to this feature: the planned nine, plus the two
+  round-1 remediation commits (`1ad796c`, `213cac7`) and one extra docs entry. Per-commit
+  `--name-only` shows each touches only its own declared paths; commits 1 and 2 have disjoint file
+  sets and are separably revertible. **No migration:** no feature commit touches
+  `app/migrations/`; `97b60e06d42a_…` belongs to `2f96915` (`system_transition_reasons`) and
+  `env.py` to `3698a70`. No `transition_reason` string appears anywhere in this feature's source, and
+  no `docs/domains/` file was edited.
+
+  **Suite.** Taken from the operator entry above per the round-2 instruction, not re-measured:
+  **26 failed / 1424 passed / 0 errors** at `f512eb1`, identical 26-node failure set across two runs,
+  zero acknowledgment- or reassigned-related nodes among them, against the valid 26/1398/0 baseline.
+
+  **Findings (both non-blocking).**
+
+  1. **LOW (contract documentation, proposal only — the handoff was not modified) — round-1 finding
+     3 is only half-closed.** `HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731.md:371` still
+     reads ``| `task_id` | string | no | prefix `task_` |``. The model prefix is `tsk`
+     (`models/tables/tasks/task.py:35`), and the handoff's own §3.6 example (`"task_id": "tsk_44b1de"`)
+     and §5.4 already use `tsk_`. The step prefix was corrected (`tstp_` → `tsp_` everywhere);
+     this one row was missed. The round-2 implementer entry records finding 3 as "operator-resolved",
+     which is accurate for the step prefix but not for the task prefix. Blast radius is frontend
+     fixtures and mocks, not logic. **Proposal for the operator; this review changed no byte of the
+     handoff.**
+  2. **LOW (process) — Step 10 is outstanding.**
+     `docs/architecture/implemented_summaries/SUMMARY_reassigned_steps_endpoints_20260731.md` does
+     not exist, and it is named in both the plan's working set and planned commit 9. This is the
+     lifecycle-transition deliverable and reasonably follows approval rather than preceding it —
+     recorded so the transition owner does not lose it.
+
+  **Also noted, no action:** `Query(50, ge=1, le=200)` makes `limit=0` a `422`, a case handoff §10's
+  table does not list (it names `limit > 200`, `offset < 0`, non-integer). It narrows rather than
+  widens what the endpoint accepts and matches §10's spirit, so it needs no handoff edit — but if
+  the operator wants §10 exhaustive, that row is the one to add.
+
+  Verdict: **APPROVED.** Acceptance criteria 1–9 and 5b are met and independently verified. Neither
+  finding blocks the transition; finding 1 is an operator decision on an operator-owned file.
+
 ## Lifecycle transition
 
-- Current state: `under_construction`
-- Next state: `approved`
-- Transition owner: `implementing_session_claude`
+- Current state: `archived`
+- Next state: — (terminal)
+- Transition owner: `operator (David)`
+- Outcome: round 2 **APPROVED** 2026-08-01. Summary:
+  `backend/docs/architecture/implemented_summaries/SUMMARY_reassigned_steps_endpoints_20260731.md`

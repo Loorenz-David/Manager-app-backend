@@ -157,3 +157,10 @@ A second feature set (`system_transition_reasons`) lands commits in this tree co
 
 End with exactly one of `APPROVED` or `NEEDS_CHANGES` (findings with file:line, violated criterion,
 severity). Record findings in the plan's Review log; that should be the only file you modify.
+
+
+
+
+
+
+Round 2 — the round-1 findings and their closure evidence are in the plan's Review log. Verify findings 1 and 2 are closed (commits dccdb7a..213cac7, 1ad796c), and take the suite figures from the operator entry dated 2026-07-31 rather than re-measuring in a worktree.
