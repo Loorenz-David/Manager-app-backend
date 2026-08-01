@@ -529,3 +529,37 @@ costs a few kilobytes; a missing one costs the ability to undo a migration over 
 
   **The journal remains intact at 270 rows and `c8f3d2e60a17` remains unapplied.** Confirmed by the
   reviewer independently (`alembic_version = b4e7a1c93f28`). Apply it after approval, not before.
+
+- `2026-08-01` `implementer (claude-opus-5)`: **F1 verified by execution, and a real incident to
+  record.**
+
+  **F1 — both paths proven.** Clean `downgrade` succeeds. With a duplicate slug planted across two
+  workspaces it refuses with the explanatory `RuntimeError` rather than an opaque IntegrityError.
+  Probe row removed; database verified back to head `b4e7a1c93f28`, journal 270, guarded populations
+  169 and 7, constraint present, index scoped.
+
+  **Incident — I dropped the journal by accident, and the separate-revision design did not stop
+  me.** Restoring state after the clean-downgrade test, I ran `alembic upgrade head`. `head` had
+  moved to include `c8f3d2e60a17`, so the journal was dropped by a command I did not think of as
+  destructive. 270 rows.
+
+  It was recoverable **on this database only**: `downgrade c8f3d2e60a17` recreated the structure and
+  the rows were rebuilt from `transition_reason = 'other_task_priority'` — 228 step, 42 derived,
+  matching the original split exactly. That worked because phase 3's pre-flight guaranteed no
+  selected row already carried a transition reason, and the counts still equalled 270, proving no
+  post-cutover row had been written since. **With live traffic the two populations are
+  indistinguishable and the reconstruction would have been impossible.**
+
+  **Fix — `c8f3d2e60a17` now refuses without `ALLOW_DROP_BACKFILL_JOURNAL=yes`.** Verified: a plain
+  `alembic upgrade head` stops with an explanation, head stays at `b4e7a1c93f28`, journal intact.
+  The message tells the operator nothing is broken and to upgrade to `b4e7a1c93f28` instead. The
+  positive path (with the variable set) is **not** verified by execution — doing so would drop the
+  journal, which is the thing being protected. `upgrade()` also prints the live row count before
+  dropping, so the deploy log carries the number as it actually was.
+
+  **The pattern is now in `architecture/30_migrations.md`**, under the `_journal` section, so the
+  next migration-owned bookkeeping table gets the guard without anyone rediscovering why.
+
+  Two lessons worth more than the probe result, both mine: a separate revision is not protection
+  when `head` is what people type, and I used `head` against a database holding irreplaceable state
+  after writing "explicit revision targets" into three prompts for other people.
