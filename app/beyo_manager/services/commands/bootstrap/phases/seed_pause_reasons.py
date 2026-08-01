@@ -51,6 +51,12 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 # databases created before this row existed will not have it until a manager adds it by hand or a
 # later migration seeds it.
 #
+# It reuses `other_task_priority.webp` — the icon already uploaded for the retired
+# `pause_other_task_priority` row and still referenced by domain/transitions/labels.py. The filename
+# no longer matches the row that uses it, which is a naming accident, not a link: this row and that
+# transition label share an asset URL and nothing else. Do not "fix" the mismatch by renaming the
+# S3 object; that would break the transition label, which is a separate live reference.
+#
 # NOTE: `pause_case_created` is intentionally NOT in this list — it was removed as a live default.
 # It survives as a soft-deleted anchor row seeded in
 # migrations/versions/fb10ac7fd439_add_pause_reason_id_to_step_state_.py, purely so historical
@@ -62,7 +68,7 @@ _PAUSE_REASONS = (
     ("pause_coffee_break", "Coffee break", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/coffee_break.webp"),
     ("pause_meeting", "Meeting", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/meeting.webp"),
     ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended_shift.webp"),
-    ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other.webp"),
+    ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other_task_priority.webp"),
 )
 
 

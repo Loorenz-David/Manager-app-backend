@@ -1,5 +1,28 @@
 # Deploy runbook — 2026-08-01, three feature sets, eight migrations
 
+> ## ✅ DEPLOYED AND VERIFIED — 2026-08-01
+>
+> Server `alembic current` → `2645b4327b17 (head)`, against
+> `managerbeyo-test-db…eu-north-1.rds.amazonaws.com/managerbeyo_test` — **the same database the
+> rehearsal ran on**, which retroactively confirms the rehearsal's assumption.
+>
+> | Check | Expected | Actual |
+> |---|---|---|
+> | `ended_shift` enum member | 0 | **0** |
+> | CHECK violations (both reason channels) | 0 | **0** |
+> | `pause_other_task_priority` refs remaining | 0 | **0** |
+> | Retyped `other_task_priority` | ~234 | **234** |
+> | Reasonless paused records | ~40 | **40** |
+> | Journal — `step_state_records` E2 row 2 | 153 | **153** |
+> | Journal — `task_steps` | 3 | **3** |
+> | Services `active running` | 10 | **10** |
+>
+> Every figure matches the rehearsal **exactly**, so no relevant rows were written between the dump
+> and the deploy. All ten services restarted, so the pre-restart enum window is closed.
+>
+> Kept for the next migration of this shape — the pre-flight structure, the guard analysis, and the
+> two windows generalise; the numbers do not.
+
 **Read this before pushing.** `git push origin main` **is** the deploy — `.github/workflows/deploy.yml`
 triggers on push to `main`, and there is no manual approval step between the push and
 `alembic upgrade head` running against production.
