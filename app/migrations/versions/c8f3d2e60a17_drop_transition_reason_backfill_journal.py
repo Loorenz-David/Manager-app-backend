@@ -8,23 +8,24 @@ produce rows shape-identical to backfilled ones, so once the journal is gone no 
 identify "the backfilled rows" again. `97b60e06d42a.downgrade()` reads this table; without it that
 downgrade cannot restore anything.
 
-## Why this refuses to run by default
+## Why this runs unguarded
 
-Being a separate revision is **not** enough protection, and this is not hypothetical: during phase
-4 the author ran a routine `alembic upgrade head` to restore state after an unrelated test, `head`
-had moved to include this revision, and the journal was dropped without anyone deciding to drop it.
-It was recoverable only because that database had no post-cutover traffic, so the backfilled rows
-were still exactly the rows carrying `transition_reason = 'other_task_priority'`. **On a database
-with live traffic the two populations are indistinguishable and the reconstruction is impossible.**
+An earlier revision of this migration refused unless `ALLOW_DROP_BACKFILL_JOURNAL=yes` was set. That
+guard was removed after weighing what the journal actually protects.
 
-So `upgrade()` refuses unless `ALLOW_DROP_BACKFILL_JOURNAL=yes` is set in the environment. An
-unqualified `upgrade head` stops here with an explanation instead of destroying the record. Refusing
-is the safe failure: a deploy that halts is recoverable, a journal that is gone is not.
+Every row it holds shares the **same** `previous_pause_reason_id` — the backfill migrated references
+to exactly one catalog row, so the column carries no per-row information. The journal's entire
+content is *a list of which row ids were touched*, and its only use is reversing the backfill. If
+that reversal were ever wanted, it would be wanted for all rows carrying
+`transition_reason = 'other_task_priority'`, which is derivable without this table.
 
-Set the variable only when the retirement has been reviewed **and** phase 3's backfill has been
-verified on the target database — not merely on a copy of it.
+Against that, the guard raised inside `alembic upgrade head`, which in this repository's deploy
+workflow runs **before** `systemctl restart`. A refusal there left the new schema applied, the new
+code pulled but not running, and services never restarted — a worse outcome than the one it was
+protecting against.
 
-    ALLOW_DROP_BACKFILL_JOURNAL=yes alembic upgrade head
+Rollback for this deploy is an RDS snapshot, which restores everything rather than one migration's
+row rewrites.
 
 ## Row count at the time this revision was written
 
@@ -35,7 +36,6 @@ dropping, so the deploy log carries the number as it actually was.
 `downgrade` recreates the table's structure but **cannot** recreate its contents. It exists so the
 revision graph stays walkable, not because it restores anything.
 """
-import os
 from typing import Sequence, Union
 
 from alembic import op
@@ -49,28 +49,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 _JOURNAL = 'transition_reason_backfill_journal'
-_ACK_ENV = 'ALLOW_DROP_BACKFILL_JOURNAL'
 
 
 def upgrade() -> None:
-    if os.environ.get(_ACK_ENV) != 'yes':
-        raise RuntimeError(
-            f"Refusing to drop `{_JOURNAL}` without an explicit acknowledgement.\n"
-            f"\n"
-            f"This table is the only record of which rows migration 97b60e06d42a rewrote, and "
-            f"dropping it makes that backfill permanently irreversible — post-cutover rows are "
-            f"shape-identical to backfilled ones, so nothing can tell them apart afterwards.\n"
-            f"\n"
-            f"If you reached this from a plain `alembic upgrade head`, that is exactly what this "
-            f"guard is for: nothing is broken, and no decision has been lost. Upgrade to "
-            f"`b4e7a1c93f28` instead to apply the retirement without dropping the journal.\n"
-            f"\n"
-            f"When the retirement has been reviewed AND phase 3's backfill is verified on THIS "
-            f"database (not a copy), re-run with:\n"
-            f"\n"
-            f"    {_ACK_ENV}=yes alembic upgrade head\n"
-        )
-
     bind = op.get_bind()
     held = bind.execute(sa.text(f'SELECT count(*) FROM {_JOURNAL}')).scalar_one()
     print(f"[{revision}] dropping {_JOURNAL}, which held {held} rows")

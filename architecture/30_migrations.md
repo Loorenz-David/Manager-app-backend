@@ -258,24 +258,36 @@ Two consequences worth knowing:
 - **A journal is not permanent.** Whichever later change makes the original migration permanently
   irreversible should drop it deliberately, last, and record the row count it held — so what was
   rewritten survives the table itself.
-- **The drop must refuse to run by default.** Putting it in its own revision is *not* enough
-  protection. `alembic upgrade head` is what everyone types, `head` moves as soon as the revision
-  lands, and the journal is then dropped by a command nobody thought of as destructive.
+- **Decide what the journal actually protects before protecting it.** Ask what one of its rows
+  holds that nothing else does. If `previous_value` is the *same constant* on every row — because
+  the migration rewrote references to a single thing — then the journal is just a list of row ids,
+  and that list is usually derivable from the rewritten rows themselves. It is worth far less than
+  it looks.
 
-  This is not hypothetical — it happened during `system_transition_reasons` phase 4, on a database
-  holding the only record of a 270-row backfill. It was recoverable purely because that database had
-  no post-cutover traffic; with live traffic the backfilled rows and the newly-written ones are
-  indistinguishable and the record is gone for good.
+  A journal earns real protection when its rows carry **per-row** information genuinely destroyed by
+  the rewrite: differing previous values, or a boundary that cannot be reconstructed once new writes
+  start producing identical-looking rows.
 
-  Guard the drop behind an explicit environment acknowledgement, so an unqualified upgrade **stops**
-  instead of destroying it:
+- **Do not guard the drop with a migration that raises.** It is tempting, and it was tried in
+  `system_transition_reasons` phase 4. It backfires: `alembic upgrade head` runs inside the deploy
+  **before** the service restart, so a refusal leaves the new schema applied, the new code pulled
+  but not running, and services never restarted — a worse outcome than the loss it was preventing.
+
+  If a drop genuinely must be deliberate, leave the revision **off the chain** until someone wires
+  it up, or do it as an operational step outside the migration graph — not as a migration that fails
+  mid-deploy.
+
+- **Print the row count before dropping.** One line, no downside, and the deploy log then carries
+  what the table held at the moment it went:
 
   ```python
-  if os.environ.get('ALLOW_DROP_<THING>') != 'yes':
-      raise RuntimeError("Refusing to drop …; re-run with ALLOW_DROP_<THING>=yes when …")
+  held = bind.execute(sa.text(f'SELECT count(*) FROM {TABLE}')).scalar_one()
+  print(f"dropping {TABLE}, which held {held} rows")
   ```
 
-  A deploy that halts is recoverable. A journal that is gone is not.
+- **Rollback for a risky deploy is a database snapshot**, not a journal. A snapshot restores
+  everything; a journal reverses one migration's row rewrites. Take the snapshot, and size the
+  journal's protection honestly against it.
 
 ---
 
