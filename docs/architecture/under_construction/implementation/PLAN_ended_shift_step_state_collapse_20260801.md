@@ -826,7 +826,8 @@ operator-owned. Do not edit the handoff.
   shift) nor in the next morning's (the `entered_at >= current_shift_start` carryover guard,
   which the code already documents as mirroring `reconstruct_shift_middle`). Two independent
   guards, both now covered; if either goes, a worker's timeline grows a paused block covering the
-  night.
+  night. **The day-two half is mutation-checked** — see the R4 entry below for what it took to
+  make it detect its own regression.
 
   ### Out of scope, observed while testing — not fixed
 
@@ -849,8 +850,191 @@ operator-owned. Do not edit the handoff.
   | `ruff check` on touched files | clean; the 5 pre-existing `transition_step_state.py` unused imports are unchanged and still out of scope |
   | R1 reproduction | fails before, passes after — output quoted above |
 
+- `2026-08-01` `independent review, round 2`: **`APPROVED`.** R1 is genuinely fixed, the fix is
+  correct at the one place it could have been subtly wrong, and the sweep re-derived
+  independently on the population basis returns the same five sites with nothing missed. One
+  non-blocking evidence gap (R4), recorded below — behaviour is correct, the test that is claimed
+  to cover it does not.
+
+  ### R1 — verified fixed
+
+  - **`IS DISTINCT FROM` confirmed in the emitted SQL, not the source.** Compiling
+    `_worker_activity()` against the postgres dialect yields
+    `step_state_records.transition_reason IS DISTINCT FROM %(transition_reason_1)s`; no bare `!=`
+    anywhere in the statement.
+  - **The `!=` mutation was run.** Swapping it collapses the predicate to NULL for every
+    worker-driven record and **fails the control test** plus the clocked-back-in test (2 failed,
+    2 passed). The two "must skip" tests still pass — for the wrong reason, everything excluded —
+    which is precisely why the control is the test that matters here. It has real power against
+    the exact defect this line invites.
+  - **Failing-first reproduced independently.** Reverting both call sites to the bare tuple gives
+    **3 failed, 1 passed**, matching the recorded table node for node, including the reproduction
+    verbatim: `would_heal shift_start=2026-07-20T17:00:00+00:00 start_source=first_task` where
+    `skipped_no_current_shift_activity` is required.
+  - **The extra manifestation is real and is fixed.** With the predicate reverted,
+    `test_worker_who_clocked_back_in_after_clocking_out_is_still_healed` fails with
+    `shift_start=…17:00` (the clock-out) rather than `…17:30` (the real resume) — a genuinely
+    mid-shift worker healed from the wrong instant. The finding did not name this case; the fix
+    covers it because it removes the record rather than special-casing the clocked-out worker.
+  - **The control is not vacuous**, on two counts: it asserts a specific marker instant, exactly
+    one open row and its state, and no ended-shift marker; and it is the test the `!=` mutation
+    breaks.
+  - **The `--execute` assertion is not vacuous.** The shape it compares is four real rows
+    (`started_shift, idle, working, ended_shift`), so `after == before` is a meaningful equality,
+    and the separate "no open shift row" assertion is the one that names the damage.
+  - `_worker_activity()` is applied at both `:139` and `:279`; the two queries cannot drift.
+    Fixing `:279` is defensible on its own terms — the reported `candidates=` count otherwise
+    stops meaning what it says.
+
+  ### The sweep — re-derived independently, same five
+
+  Derived without reference to their list: every predicate on `StepStateRecord.state` and
+  `TaskStep.state` at HEAD, then each constant's definition read **at `b59deb0`**, keeping only
+  those where the filter admits `PAUSED` and did **not** admit `ENDED_SHIFT` before. Result:
+  `heal_open_shifts_today` (both call sites), `_reconstruct_shift_middle:110`,
+  `reconcile_worker_shift_state:171`, `get_worker_linear_timeline_breakdown:234`. **The same
+  five. Nothing missed.**
+
+  Confirmed excluded for the stated reasons: every other constant genuinely contained the member
+  at `b59deb0` (`TIME_BEARING_STATES`, `_roster.TIME_STATES`, both breakdown tuples, both
+  `_ACTIVE_STATES`, `averaged_time._TIME_STATES`, both backfill copies); `reconcile:96` passes
+  `(WORKING,)` only, so no reclassified row can enter; `notin_(TERMINAL_STEP_STATES)` admitted
+  both states before and after; the caller-supplied filters (`tasks.py:155,427`,
+  `list_working_section_steps.py:124`) are API query params where "a step the shift ended under
+  is paused" is the intended new semantics. Sites 3 and 4 confirmed still handled.
+
+  ### R4 — the day-two half of the site-5 test has no power *(non-blocking)*
+
+  *`tests/…/test_ended_shift_bucket_collapse.py:859-882`. Severity: low — evidence, not
+  behaviour. No criterion violated.*
+
+  The log states of site 5: *"Two independent guards, both now covered; if either goes, a
+  worker's timeline grows a paused block covering the night."* The first half of that is true and
+  the test earns it — instrumenting the day-one assertion shows it running against 4 segments and
+  1 shown step, so the force-closed record is excluded from a genuinely populated set.
+
+  The day-two half is vacuous. It asserts over an **empty** set (`0` steps shown), because the
+  fixture leaves the worker `IDLE` on day two and `_STEP_STATE_FOR_SHIFT` attaches step records
+  only to `WORKING`/`IN_PAUSE` segments — so no step record of any kind can appear, guard or no
+  guard. **Deleting the `entered_at >= current_shift_start` guard from
+  `get_worker_linear_timeline_breakdown.py:322` leaves the test passing.**
+
+  The guard is nonetheless load-bearing, which is what makes this worth recording rather than
+  dismissing. Reconstructing day two so the worker genuinely derives `IN_PAUSE` (clock in, start
+  a step, pause it for a stated reason) and re-running with the guard removed puts yesterday's
+  force-closed record into this morning's timeline — `steps shown` goes 1 → 2 and the carryover
+  is among them. That is exactly the regression the log names, it is real, and the suite does not
+  currently catch it.
+
+  So site 5 is **safe**, and the *reasoning* about it is right; but one of its two guards is
+  still verified only by a reading, which is the thing this round was asked to check. Closing it
+  is a fixture change — give day two a real pause segment — not a code change. Recommended
+  before archive; the wording "both now covered" should be corrected either way.
+
+  ### R2 / R3 — recorded accurately
+
+  - **R2** is in "Deployment ordering", and it correctly separates itself from E5: E5 governs
+    bucket correctness during rollout and still holds; a member vanishing under running processes
+    is a different matter. `deploy.yml` confirmed — `alembic upgrade head` at `:33`,
+    `apply_db_triggers.py` at `:34`, `systemctl restart` at `:36`. The seven pre-restart binding
+    sites are listed correctly.
+  - **R3 — their correction to round 1 is right and round 1 was wrong.** Measured: 11 indexes on
+    `step_state_records` and 10 on `task_steps` = **21**, both tables fully rewritten under
+    `ACCESS EXCLUSIVE`, ~8,500 rows locally against 208 reclassified. Round 1's "eleven" counted
+    `step_state_records` alone. The log tells the deployer to size the window from the table
+    rewrite and to take two `count(*)`s on the server first, which is the right instruction.
+
+  ### The out-of-scope observation — judged, and it holds
+
+  Reproduced both sides. The clock-in-at-08:00 / first-task-at-09:00 scenario raises
+  `UniqueViolationError` on the open-record index under HEAD **and** under the `b59deb0` version
+  of the script loaded side by side, in a scenario containing no `shift_ended` record at all.
+  Genuinely pre-existing and independent of this change. The degradation is real code, not an
+  assertion — `_run:327-331` catches `IntegrityError`, rolls back, and reports
+  `skipped_raced_live_reconcile` per worker without losing the batch.
+
+  Rewriting the test to the script's stated primary case was the **right call**: a worker mid-shift
+  with no marker at all is problem #1 in the script's own docstring, it exercises the heal path end
+  to end, and it is what makes the control a control. Asserting the collision instead would have
+  pinned a pre-existing bug as expected behaviour. Recording it unfixed and out of scope is the
+  correct disposition.
+
+  ### Suite
+
+  **23 failed, 1453 passed** — reproduced exactly, +5 over round 1 as claimed (4 heal-script, 1
+  timeline drill-down). The failure node set is **byte-identical** to the set captured in round 1:
+  23 nodes, `diff` clean. `ruff check` clean on all round-2 touched files; the 5 pre-existing
+  `transition_step_state.py` findings are unchanged and were not raised.
+
+  ### Verdict
+
+  **`APPROVED`.** R1 was a hard find and the fix is the right shape — it restores the population
+  by reading the mark the record already carries, rather than special-casing a state or inferring
+  from timestamps, and it got the NULL semantics right at the one line where getting them wrong
+  would have read as correct. R4 is an evidence gap on a site that is safe, worth a fixture change
+  and a corrected sentence, not another round.
+
+- `2026-08-01` `fix cycle, R4 remainder`: **the carryover test now detects its own regression.**
+  Test-only; no production code touched.
+
+  ### Why the previous fixture could not fail
+
+  `a408ef0` fixed the vacuity (day two produced steps, and today's own record was asserted
+  present), but deleting the guard still left the test green. The reason is the attachment rule,
+  not the timing: a step record joins a segment only when the segment's shift state maps to the
+  record's **own** step state (`_STEP_STATE_FOR_SHIFT`: `WORKING→WORKING`, `IN_PAUSE→PAUSED`).
+
+  Yesterday's carryover is `paused`, so the only block it can ever land in is an **IN_PAUSE**
+  one — and day two had none. It was working all day. With no paused block anywhere in the
+  timeline, the guard is never consulted for that record, and `force_closed not in shown_next`
+  was satisfied by the shape of the day rather than by the guard.
+
+  So both earlier versions passed for a reason unrelated to what they claimed to test: the first
+  over an empty set, the second over a set that could not have contained the record either way.
+
+  ### The arrangement that makes the guard load-bearing
+
+  Day two now pauses a step for a catalog reason at 10:00 and resumes at 11:00, so the rebuilt
+  timeline carries an `IN_PAUSE` block. Yesterday's force-closed record is still open — never
+  resumed, which is what makes it a carryover — so it overlaps that block on both time
+  conditions, and **only** `entered_at >= current_shift_start` keeps it out. The test asserts the
+  block exists and holds *exactly* today's pause, plus a guard that day two derives exactly one
+  such block, so a future change that removes the pause cannot silently restore the old blindness.
+
+  ### Mutation check — both directions, as asked
+
+  Deleting `and (current_shift_start is None or step_record.entered_at >= current_shift_start)`
+  from `get_worker_linear_timeline_breakdown.py:484`:
+
+      AssertionError: yesterday's carryover must not appear in this morning's timeline
+      assert 'ssr_…40DDS9' not in {'ssr_…40DDS9', 'ssr_…0KJAH', 'ssr_…85CVF', 'ssr_…7TBKP'}
+
+  and, with that assertion bypassed so the sharper one is reached, the paused block itself —
+  the **1 → 2 the reviewer measured**:
+
+      assert {…} == {…}
+      Extra items in the left set: 'ssr_01KYYFT0MP69VJBMF5WEAZCZK7'
+
+  Guard restored → passes. Both runs recorded; nothing else in the test file or that module
+  changed.
+
+  One correction to the R4 finding for the record: the carryover guard is the
+  `current_shift_start` clause at `:484`, not `:238-241`. Lines 238-241 are the query's
+  window-overlap clause, which does **not** exclude the carryover — the record exits at day
+  two's clock-in, so it satisfies `exited_at > window_start` and is selected into
+  `step_records` before segment attachment is considered. That is why the guard at `:484` is the
+  one that matters, and it is the one the mutation check removes.
+
+  ### Validation
+
+  | Check | Result |
+  |---|---|
+  | `pytest -q` from `backend/app`, default plugins | **23 failed, 1453 passed** — failure node set **byte-identical** to the baseline at the same run index; unchanged from the previous round, this being test-only |
+  | Guard deleted → target test | **fails**, output above |
+  | Guard restored → target test | passes; module 12/12 |
+
 ## Lifecycle transition
 
-- Current state: `under_construction` — implemented, reviewed, **R1 fixed; awaiting re-review**
-- Next state: `approved` once re-review clears; summary and archive only after that
+- Current state: `under_construction` — implemented, reviewed twice, **`APPROVED`**; R4 remainder closed
+- Next state: `approved` — summary and archive may proceed
 - Transition owner: `David`
