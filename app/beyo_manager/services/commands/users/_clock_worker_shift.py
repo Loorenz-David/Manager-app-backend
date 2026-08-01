@@ -200,7 +200,11 @@ async def clock_out_shift_for_user(
             step,
             task,
             closing_record,
-            new_state=TaskStepStateEnum.ENDED_SHIFT,
+            # A step the shift ended under is simply paused. *Why* it stopped is the
+            # transition below, not the state: the state says what the step is, the reason
+            # says what happened to it. Analytics still bucket this span as `ended_shift`,
+            # derived from the pair (see `domain/analytics/time_buckets.py`).
+            new_state=TaskStepStateEnum.PAUSED,
             # System transition: typed from the code-owned vocabulary rather than resolved
             # from the workspace catalog. This is the line that made clock-out fail in every
             # workspace without a `pause_ended_shift` row. Every clock source — HTTP,

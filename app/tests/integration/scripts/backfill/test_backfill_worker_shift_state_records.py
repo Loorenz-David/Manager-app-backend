@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
@@ -273,7 +274,8 @@ async def test_backfill_ended_shift_segment_terminates_day(db_session) -> None:
         workspace_id=workspace.client_id,
         user_id=worker.client_id,
         step_id=step.client_id,
-        state=TaskStepStateEnum.ENDED_SHIFT,
+        state=TaskStepStateEnum.PAUSED,
+        transition_reason=TransitionReasonEnum.SHIFT_ENDED.value,
         entered_at=base + timedelta(hours=1),
         exited_at=base + timedelta(hours=2),
     )

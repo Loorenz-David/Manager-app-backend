@@ -5,7 +5,6 @@ class TaskStepStateEnum(enum.Enum):
     PENDING = "pending"
     WORKING = "working"
     PAUSED = "paused"
-    ENDED_SHIFT = "ended_shift"
     BLOCKED = "blocked"
     COMPLETED = "completed"
     SKIPPED = "skipped"

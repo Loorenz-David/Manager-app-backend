@@ -271,20 +271,21 @@ async def test_webhook_records_match_toggle_shape_and_use_provider_timestamps(db
     assert any(record.state is UserShiftStateEnum.ENDED_SHIFT for record in manual_after_out)
     assert any(record.state is UserShiftStateEnum.ENDED_SHIFT for record in webhook_after_out)
     await db_session.refresh(working_step)
+    # A step the shift ended under is paused; the typed transition is what says why.
     ended_step_record = (
         await db_session.execute(
             select(StepStateRecord).where(
                 StepStateRecord.step_id == working_step.client_id,
-                StepStateRecord.state == TaskStepStateEnum.ENDED_SHIFT,
+                StepStateRecord.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value,
             )
         )
     ).scalar_one()
     # Criterion 5: the webhook path inherits the typed transition, and carries no catalog
     # reference — the row that used to be required here does not have to exist.
-    assert ended_step_record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
+    assert ended_step_record.state is TaskStepStateEnum.PAUSED
     assert ended_step_record.pause_reason_id is None
     assert webhook_clock_out.transitioned_steps == 1
-    assert working_step.state is TaskStepStateEnum.ENDED_SHIFT
+    assert working_step.state is TaskStepStateEnum.PAUSED
     assert ended_step_record.entered_at == clock_out_at
     assert webhook_after_out[-1].state is UserShiftStateEnum.ENDED_SHIFT
     assert webhook_after_out[-1].entered_at == clock_out_at

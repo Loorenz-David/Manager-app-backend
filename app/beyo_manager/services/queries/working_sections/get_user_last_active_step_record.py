@@ -13,10 +13,9 @@ from beyo_manager.services.queries.working_sections.step_record_payload import (
 _ACTIVE_STATES = [
     TaskStepStateEnum.WORKING,
     TaskStepStateEnum.PAUSED,
-    TaskStepStateEnum.ENDED_SHIFT,
 ]
 
-# 4-tier priority: open WORKING (0) > open PAUSED/ENDED_SHIFT (1) > closed WORKING (2) > closed PAUSED/ENDED_SHIFT (3)
+# 4-tier priority: open WORKING (0) > open PAUSED (1) > closed WORKING (2) > closed PAUSED (3)
 _ACTIVE_RECORD_PRIORITY = case(
     (and_(StepStateRecord.state == TaskStepStateEnum.WORKING, StepStateRecord.exited_at.is_(None)), 0),
     (StepStateRecord.exited_at.is_(None), 1),

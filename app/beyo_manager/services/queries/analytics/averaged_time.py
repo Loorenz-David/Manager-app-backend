@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import String, and_, case, cast, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.analytics.concurrency import (
@@ -20,11 +20,34 @@ from beyo_manager.domain.analytics.concurrency import (
     averaged_seconds_by_record,
     wasted_seconds_by_record,
 )
+from beyo_manager.domain.analytics.time_buckets import ENDED_SHIFT_BUCKET
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 
-_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED, TaskStepStateEnum.ENDED_SHIFT)
+_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED)
+
+# The emitted bucket key — the SQL twin of `domain.analytics.time_buckets.bucket_for`.
+#
+# `ended_shift` is a derived label, not a step state. A pause the system wrote at clock-out
+# is off-shift time nobody explained; a pause a worker gave a reason for is an ordinary
+# pause, whatever that reason is called.
+#
+# This expression is correct at **every** point in the rollout, which is what lets the six
+# consumers ship ahead of the writer and the migration: while clock-out still writes
+# `state='ended_shift'` the `else` branch already yields `ended_shift`, and once it writes
+# `state='paused'` with the typed transition, the first branch does.
+_BUCKET_STATE = case(
+    (
+        and_(
+            StepStateRecord.state == TaskStepStateEnum.PAUSED,
+            StepStateRecord.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value,
+        ),
+        literal(ENDED_SHIFT_BUCKET),
+    ),
+    else_=cast(StepStateRecord.state, String),
+)
 
 
 @dataclass(frozen=True)
@@ -32,7 +55,7 @@ class RecordContribution:
     record_id: str
     step_id: str
     working_section_id: str
-    state: str                 # "working" | "paused" | "ended_shift"
+    state: str                 # bucket key: "working" | "paused" | "ended_shift"
     entered_at: datetime
     exited_at: datetime | None
     is_open: bool              # exited_at IS NULL (running)
@@ -63,7 +86,7 @@ async def compute_record_contributions(
             select(
                 StepStateRecord.client_id.label("record_id"),
                 StepStateRecord.step_id.label("step_id"),
-                StepStateRecord.state.label("state"),
+                _BUCKET_STATE.label("state"),
                 StepStateRecord.entered_at.label("entered_at"),
                 StepStateRecord.exited_at.label("exited_at"),
                 StepStateRecord.recorded_time_marked_wrong.label("marked_wrong"),
@@ -90,7 +113,8 @@ async def compute_record_contributions(
         TimeInterval(
             record_id=row.record_id,
             step_id=row.step_id,
-            state=row.state.value,
+            # Already the derived bucket key — `_BUCKET_STATE` labelled it `state`.
+            state=row.state,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             marked_wrong=bool(row.marked_wrong or row.step_marked_wrong),
@@ -106,7 +130,7 @@ async def compute_record_contributions(
             record_id=row.record_id,
             step_id=row.step_id,
             working_section_id=row.working_section_id,
-            state=row.state.value,
+            state=row.state,
             entered_at=row.entered_at,
             exited_at=row.exited_at,
             is_open=row.exited_at is None,

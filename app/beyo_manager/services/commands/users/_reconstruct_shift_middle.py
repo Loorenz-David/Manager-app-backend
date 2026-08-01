@@ -25,6 +25,7 @@ from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.analytics.linear_timeline import LinearInterval, compute_linear_segments
+from beyo_manager.domain.analytics.time_buckets import bucket_for
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
@@ -119,7 +120,12 @@ async def reconstruct_shift_middle(
     intervals = [
         LinearInterval(
             record_id=row.client_id,
-            state=row.state.value,
+            # The sweep's own vocabulary, not the step state: a pause the system wrote at
+            # clock-out is `ended_shift` here, which the precedence rules treat as off-shift
+            # time rather than as the worker being paused while present. Without this a
+            # force-closed step would come back as a pause segment and label the worker
+            # `in_pause` for time they were not on site.
+            state=bucket_for(row.state.value, row.transition_reason),
             reason=row.pause_reason_id,
             transition_reason=row.transition_reason,
             entered_at=row.entered_at,

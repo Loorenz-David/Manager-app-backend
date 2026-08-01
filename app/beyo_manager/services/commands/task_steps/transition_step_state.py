@@ -54,17 +54,13 @@ from beyo_manager.services.infra.execution.task_factory import create_instant_ta
 _ALLOWED_TRANSITIONS: dict[TaskStepStateEnum, set[TaskStepStateEnum]] = {
     TaskStepStateEnum.PENDING:      {TaskStepStateEnum.WORKING},
     TaskStepStateEnum.WORKING:      {
-        TaskStepStateEnum.PAUSED, TaskStepStateEnum.ENDED_SHIFT,
+        TaskStepStateEnum.PAUSED,
         TaskStepStateEnum.COMPLETED, TaskStepStateEnum.FAILED,
         TaskStepStateEnum.CANCELLED
     },
     TaskStepStateEnum.PAUSED:       {
-        TaskStepStateEnum.WORKING, TaskStepStateEnum.ENDED_SHIFT,
+        TaskStepStateEnum.WORKING,
         TaskStepStateEnum.FAILED, TaskStepStateEnum.CANCELLED
-    },
-    TaskStepStateEnum.ENDED_SHIFT:  {
-        TaskStepStateEnum.WORKING, TaskStepStateEnum.FAILED,
-        TaskStepStateEnum.CANCELLED
     },
     TaskStepStateEnum.COMPLETED:    set(),
     TaskStepStateEnum.SKIPPED:      set(),

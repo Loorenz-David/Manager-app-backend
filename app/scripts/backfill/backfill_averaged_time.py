@@ -34,7 +34,7 @@ from beyo_manager.services.queries.analytics.reconcile_user_time import (
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
-_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED, TaskStepStateEnum.ENDED_SHIFT)
+_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED)
 _TIME_FIELDS = (
     "total_working_seconds", "total_pause_seconds", "total_ended_shift_seconds",
     "total_working_count", "total_pause_count", "total_ended_shift_count", "total_cost_minor",

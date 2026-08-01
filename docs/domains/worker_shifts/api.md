@@ -77,7 +77,8 @@ Clock-in responses carry **no** `analytics` key.
 ```
 
 - Not clocked in → `409` `"Worker is not clocked in."`
-- `transitioned_steps` — working task steps this clock-out force-closed.
+- `transitioned_steps` — task steps this clock-out paused because the worker was still working
+  them. Steps the worker had already paused are not counted and not touched.
 - `analytics` — the worker's day summary, or **`null`**.
 
 **The clock-out time is decided by the server.** Any `clock_out_at` in the request body is ignored.

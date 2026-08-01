@@ -19,6 +19,7 @@ from beyo_manager.domain.analytics.linear_timeline import (
     LinearInterval,
     compute_linear_segments,
 )
+from beyo_manager.domain.analytics.time_buckets import bucket_for
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.database import close_db, get_db_session, init_db
@@ -32,7 +33,6 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 _TIME_STATES = (
     TaskStepStateEnum.WORKING,
     TaskStepStateEnum.PAUSED,
-    TaskStepStateEnum.ENDED_SHIFT,
 )
 _SEGMENT_TO_SHIFT_STATE = {
     "working": UserShiftStateEnum.WORKING,
@@ -91,7 +91,12 @@ async def _load_day_intervals(
     return [
         LinearInterval(
             record_id=row.client_id,
-            state=row.state.value,
+            # Same derived bucket as `_reconstruct_shift_middle`: a pause the system wrote
+            # at clock-out is off-shift time, not the worker being paused while present.
+            # Before the ended-shift collapse this script read `ended_shift` records
+            # directly and the sweep classified them the same way; keeping the derivation
+            # here is what preserves that.
+            state=bucket_for(row.state.value, row.transition_reason),
             reason=row.pause_reason_id,
             # Same mechanism as `_reconstruct_shift_middle`: both explanation channels
             # are carried separately end to end, so a system-typed step record rebuilds

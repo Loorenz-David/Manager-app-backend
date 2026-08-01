@@ -59,7 +59,7 @@ _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
 _SORT_BY = frozenset({"contribution", "working", "paused", "completed", "last_activity"})
 _ORDER = frozenset({"asc", "desc"})
-_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED, TaskStepStateEnum.ENDED_SHIFT)
+_TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED)
 # States that can represent work by the credited user. Everything else (notably
 # PENDING) is a lifecycle marker, not labor — see `_credited` below.
 _WORK_STATES = _TIME_STATES + (TaskStepStateEnum.COMPLETED,)

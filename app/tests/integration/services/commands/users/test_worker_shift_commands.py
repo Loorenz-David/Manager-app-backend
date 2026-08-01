@@ -12,6 +12,7 @@ from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.permissions import PermissionDenied
@@ -1153,8 +1154,31 @@ async def test_clock_out_transitions_working_steps_and_leaves_paused_steps_open(
     )
     assert result["transitioned_steps"] == 1
     assert result["analytics"] is None
-    assert working_step.state is TaskStepStateEnum.ENDED_SHIFT
+    # Both steps end up `paused`; what separates them is *why*. The one the shift ended
+    # under carries the typed transition, and the one the worker paused is untouched —
+    # clock-out never force-closes it, because a pause measures how long the item stood
+    # still and truncating it at clock-out would destroy that measurement.
+    assert working_step.state is TaskStepStateEnum.PAUSED
     assert paused_step.state is TaskStepStateEnum.PAUSED
+    force_closed = (
+        await db_session.execute(
+            select(StepStateRecord).where(
+                StepStateRecord.step_id == working_step.client_id,
+                StepStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert force_closed.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
+    untouched = (
+        await db_session.execute(
+            select(StepStateRecord).where(
+                StepStateRecord.step_id == paused_step.client_id,
+                StepStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    assert untouched.transition_reason is None
+    assert untouched.entered_at == now - timedelta(minutes=20)
     assert paused_open == 1
     assert transition_tasks >= 1
 

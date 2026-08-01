@@ -106,6 +106,9 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
   tell the same story. Starting or resuming a step closes the open declaration.
 - **Declaring while a declaration is open is a switch** — close and open, one transaction.
 - Clock-out **closes any open declaration** at the clock-out instant, then rebuilds the day.
+- Clock-out **pauses any step the worker was still working**, typed `shift_ended`, and leaves steps
+  the worker had already paused untouched. Every step the shift ended under stays open and resumable
+  — the worker picks it back up next shift.
 - A worker may only act on their own shift. An admin or manager must name a worker explicitly and
   may not act on themselves through these endpoints. This applies identically to clock actions and
   declarations.

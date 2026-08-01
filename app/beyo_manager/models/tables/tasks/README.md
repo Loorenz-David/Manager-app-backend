@@ -82,11 +82,12 @@ To remove an item: set `removed_at` + `removed_by_id`. Do not delete the row.
 `latest_state_record_id` → `step_state_records.client_id`. Pointer updates must be transactionally coupled with the state record append.
 
 ### Step state machine (`TaskStepStateEnum`)
-`PENDING → WORKING → PAUSED → WORKING` (cycle) → `ENDED_SHIFT → WORKING` (next shift) → terminal.
+`PENDING → WORKING → PAUSED → WORKING` (cycle) → terminal.
 
 Terminal states: `COMPLETED`, `SKIPPED`, `FAILED`, `CANCELLED`.
-- `ENDED_SHIFT` is **not** a terminal state — work resumes next shift.
-- `PAUSED` and `ENDED_SHIFT` are distinct interruption types. Do not collapse them.
+- `PAUSED` is the only interruption. A step the shift ended under is paused like any other;
+  *why* it stopped is `transition_reason` (the system) or `pause_reason_id` (the worker's
+  choice), never the state. Work resumes next shift by transitioning back to `WORKING`.
 - `BLOCKED` means a dependency is unmet.
 
 ### Aggregate metrics mixins

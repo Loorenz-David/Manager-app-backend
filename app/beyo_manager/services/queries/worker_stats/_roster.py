@@ -22,7 +22,6 @@ _DEFAULT_LIMIT = 50
 TIME_STATES = (
     TaskStepStateEnum.WORKING,
     TaskStepStateEnum.PAUSED,
-    TaskStepStateEnum.ENDED_SHIFT,
 )
 
 

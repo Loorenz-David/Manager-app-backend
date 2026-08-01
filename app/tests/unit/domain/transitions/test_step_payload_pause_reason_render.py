@@ -97,7 +97,7 @@ def _catalog_reason() -> PauseReason:
 def test_ended_shift_record_renders_a_name_and_icon(serializer) -> None:
     data = serializer(
         _record(
-            state=TaskStepStateEnum.ENDED_SHIFT,
+            state=TaskStepStateEnum.PAUSED,
             transition_reason=TransitionReasonEnum.SHIFT_ENDED.value,
         )
     )

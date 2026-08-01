@@ -11,7 +11,6 @@ TERMINAL_STEP_STATES: frozenset[TaskStepStateEnum] = frozenset({
 TIME_BEARING_STATES: frozenset[TaskStepStateEnum] = frozenset({
     TaskStepStateEnum.WORKING,
     TaskStepStateEnum.PAUSED,
-    TaskStepStateEnum.ENDED_SHIFT,
 })
 
 TERMINAL_TASK_STATES: frozenset[TaskStateEnum] = frozenset({

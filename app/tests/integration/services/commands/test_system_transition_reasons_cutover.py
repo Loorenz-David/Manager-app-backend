@@ -242,14 +242,14 @@ async def test_zero_catalog_clock_out_closes_open_working_step(db_session) -> No
 
     assert transitioned == 1
     await db_session.refresh(step)
-    assert step.state is TaskStepStateEnum.ENDED_SHIFT
+    assert step.state is TaskStepStateEnum.PAUSED
 
     ended_record = next(
         record
         for record in await _step_records(db_session, step.client_id)
-        if record.state is TaskStepStateEnum.ENDED_SHIFT
+        if record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
     )
-    assert ended_record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
+    assert ended_record.state is TaskStepStateEnum.PAUSED
     assert ended_record.pause_reason_id is None
     assert ended_record.entered_at == clock_out_at
 
@@ -292,9 +292,9 @@ async def test_overnight_safeguard_inherits_the_typed_clock_out(db_session) -> N
     ended_record = next(
         record
         for record in await _step_records(db_session, step.client_id)
-        if record.state is TaskStepStateEnum.ENDED_SHIFT
+        if record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
     )
-    assert ended_record.transition_reason == TransitionReasonEnum.SHIFT_ENDED.value
+    assert ended_record.state is TaskStepStateEnum.PAUSED
     assert ended_record.pause_reason_id is None
 
 

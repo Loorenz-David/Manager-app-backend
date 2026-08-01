@@ -47,6 +47,11 @@ chose, because both facts are true and both are wanted.
 Readers resolve the catalog reference first when a segment has one, then the transition reason, and
 fall back to an unattributed bucket only when a pause carries neither.
 
+**The explanation channel is the only thing that separates one kind of pause from another.** A step
+the worker paused for a stated reason and a step the system paused because the shift ended are both
+simply paused; there is no third state, and nothing may reintroduce one. Which of the two a segment
+is has to be read from `transition_reason` / `reason`, never from the state.
+
 ---
 
 ## Two derivations, not one
@@ -65,6 +70,13 @@ open WORKING step  >  open declaration  >  open PAUSED step  >  IDLE
 
 Highest match wins. It is cheap, it only looks at open rows, and it is deliberately provisional —
 the segment it writes may be replaced later the same day.
+
+**The open rows it considers are scoped to the current shift** — only those entered at or after this
+shift's start marker. That scoping is load-bearing, not an optimisation. Clock-out pauses any step
+the worker still had open and leaves it that way, so a step stopped at 17:00 is still an open pause
+at 08:00 the next morning. Without the scoping it would win the precedence table and the worker
+would clock in reading `IN_PAUSE`, credited to yesterday's interruption, before they had done
+anything. A carryover step is not this shift's state; the worker is `IDLE` until they act.
 
 ### At clock-out — `compute_linear_segments` (`domain/analytics/linear_timeline.py`)
 
@@ -86,7 +98,11 @@ reproducible". Only the second one is authoritative.
 At clock-out:
 
 1. Any open declaration is closed at the clock-out instant, in the source table.
-2. Any open working step is closed.
+2. Any step still being **worked** is paused, carrying `shift_ended`. A step the worker had already
+   paused is left exactly as it is — a pause measures how long the item stood still for the reason
+   given, and truncating it at clock-out would destroy the duration it exists to measure. An item
+   waiting three days on "waiting for upholstery" has a three-day pause, and that number is the
+   point.
 3. The day's derived rows are discarded.
 4. The day is rebuilt from `step_state_records` and `user_declared_state_records` by the linear
    sweep.

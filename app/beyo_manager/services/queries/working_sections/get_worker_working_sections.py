@@ -16,7 +16,6 @@ _ACTIVE_STATES = (
     TaskStepStateEnum.PENDING,
     TaskStepStateEnum.WORKING,
     TaskStepStateEnum.PAUSED,
-    TaskStepStateEnum.ENDED_SHIFT,
     TaskStepStateEnum.BLOCKED,
 )
 _TERMINAL_STATES = (

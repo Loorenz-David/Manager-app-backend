@@ -8,6 +8,7 @@ from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
@@ -110,6 +111,7 @@ async def _add_step_record(
     *,
     exited_at: datetime | None = None,
     reason: str | None = None,
+    transition_reason: str | None = None,
 ) -> None:
     suffix = uuid4().hex[:8]
     section = WorkingSection(
@@ -148,6 +150,7 @@ async def _add_step_record(
                 if reason is not None
                 else None
             ),
+            transition_reason=transition_reason,
             entered_at=entered_at,
             exited_at=exited_at,
             created_by_id=user_id,
@@ -396,9 +399,12 @@ async def test_roster_ignores_step_record_bleed_outside_shift(db_session) -> Non
         db_session,
         workspace.client_id,
         worker.client_id,
-        TaskStepStateEnum.ENDED_SHIFT,
+        # A step the shift ended under: paused, and typed so the sweep still reads it as
+        # off-shift time rather than as the worker being paused while present.
+        TaskStepStateEnum.PAUSED,
         base - timedelta(hours=20),
         exited_at=base,
+        transition_reason=TransitionReasonEnum.SHIFT_ENDED.value,
     )
 
     out = await list_workers_linear_timeline(
