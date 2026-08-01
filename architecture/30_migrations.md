@@ -258,6 +258,24 @@ Two consequences worth knowing:
 - **A journal is not permanent.** Whichever later change makes the original migration permanently
   irreversible should drop it deliberately, last, and record the row count it held — so what was
   rewritten survives the table itself.
+- **The drop must refuse to run by default.** Putting it in its own revision is *not* enough
+  protection. `alembic upgrade head` is what everyone types, `head` moves as soon as the revision
+  lands, and the journal is then dropped by a command nobody thought of as destructive.
+
+  This is not hypothetical — it happened during `system_transition_reasons` phase 4, on a database
+  holding the only record of a 270-row backfill. It was recoverable purely because that database had
+  no post-cutover traffic; with live traffic the backfilled rows and the newly-written ones are
+  indistinguishable and the record is gone for good.
+
+  Guard the drop behind an explicit environment acknowledgement, so an unqualified upgrade **stops**
+  instead of destroying it:
+
+  ```python
+  if os.environ.get('ALLOW_DROP_<THING>') != 'yes':
+      raise RuntimeError("Refusing to drop …; re-run with ALLOW_DROP_<THING>=yes when …")
+  ```
+
+  A deploy that halts is recoverable. A journal that is gone is not.
 
 ---
 
