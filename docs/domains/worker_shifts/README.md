@@ -153,6 +153,30 @@ See [states.md](states.md) for the machine, the precedence rules, and how the tw
 
 ---
 
+## Known gaps in this domain
+
+Real, current, and deliberately unfixed. Repository-wide debt lives in
+[docs/repo_health.md](../../repo_health.md); these are specific to worker shifts.
+
+- **Creating a case does not pause the working step.** It used to. The capability was removed and
+  its absence went unnoticed, so a worker who raises a case stays "working" on the timeline while
+  the problem is discussed. Seven historical records from before the removal still carry a
+  case-created pause reason and resolve correctly; nothing has written one since.
+
+- **`backfill_worker_shift_state_records.py` destroys declared-state projections.** It deletes every
+  `UserShiftStateRecord` for a worker-day and rebuilds from **step records alone**, so a declaration
+  projection — which carries `worker_declared_state` *and* the catalog reason the worker chose — is
+  not reconstructed. Offline and `--execute`-gated, so not a live risk, but do not run it on a day
+  containing declarations expecting them to survive.
+
+- **Offline repair scripts have no test coverage**, and they are where this domain's subtlest bugs
+  land. Both `heal_open_shifts_today.py` and `backfill_worker_shift_state_records.py` have shipped
+  defects that no suite could catch, in both cases because a filter's *selected population* changed
+  without the filter being edited. If you change what a step state or transition reason means, check
+  these two by hand — see the sweep note in `docs/repo_health.md`.
+
+---
+
 ## Keeping this document true
 
 **This is a living document. It describes what the system does now, not how it came to.**
