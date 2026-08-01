@@ -165,6 +165,24 @@ the intention links.
   `pause_reasons` label map. Amended only if the retirement changes which keys can appear; the
   published contract is preserved (see "Sequencing against Phase 7").
 
+### Final amendment state (criterion 14, recorded 2026-08-01)
+
+**Settled. No further amendment is expected**, and the archived declared_worker_states plan was
+never edited — these are the record.
+
+- **D3** — *amended.* A declared state's derived row carries `transition_reason =
+  worker_declared_state` **and** the catalog reason the worker chose. `reason` is no longer a
+  polymorphic slot: the two explanation channels are separate fields end to end. This is the one
+  documented exception to mutual exclusion, and it is why phase 4's CHECK constraint is scoped to
+  `step_state_records` only.
+- **D5** — *amended.* Auto-pause on task switch carries `transition_reason = other_task_priority`
+  with `pause_reason_id = NULL`, not the declared catalog id. Declaring still auto-pauses open
+  working steps; only what the resulting record carries changed.
+- **D14** — *unamended in substance.* `pause_by_reason` is still keyed by reason id, and every key
+  still resolves in the accompanying map — including the literal `"unspecified"` bucket, which is
+  part of the published contract. Transition-sourced keys resolve through the code-owned label map
+  instead of the catalog, which is invisible to the client. **No handoff change was required.**
+
 ## Sequencing against declared_worker_states Phase 7
 
 Phase 7 (clock-out analytics) is in an active implement→review cycle and its contract is **already
@@ -616,6 +634,62 @@ a *second consecutive run of the unmodified baseline tree* reproduces the identi
 - Current state: `under_construction`
 - Next state: `approved` (operator reads and approves this master plan, then per-phase plans)
 - Transition owner: `David`
+
+## Success criteria — fresh verification (criterion 13, 2026-08-01)
+
+Re-verified end to end at phase 4, **not inherited** from the phases that first claimed them.
+
+| # | Criterion | State | Evidence |
+|---|---|---|---|
+| 1 | Clock-out succeeds in a zero-catalog workspace with an open WORKING step | ✅ | `test_system_transition_reasons_cutover.py`, 11 passed, re-run at phase 4 |
+| 2 | Task switching auto-pauses in that same workspace | ✅ | same suite; both task-switch modules covered separately |
+| 3 | `get_system_pause_reason_id` has no runtime callers and is deleted | ✅ | file removed; `grep -rn get_system_pause_reason beyo_manager/` returns nothing |
+| 4 | No field requires prefix-sniffing | ⚠️ **PARTIAL** | Closed on the *provably dead* arm only. The branch still exists at `domain/users/serializers.py:170` and clause (a) is **not** satisfied — 272 legacy free-text strings sit beside 58 `par_…` ids on live data, and the three-way `reason_text` suppression is published contract. **Not reachable under the standing rulings; do not upgrade this to met.** |
+| 5 | Historical rows resolve to the same labels after migration | ✅ | phase 3 label parity, captured through the real read paths against a restore point |
+| 6 | Bootstrapping a second workspace succeeds | ✅ | proven twice — a duplicate slug inserted into a second workspace (rolled back), and the phase 4 reviewer's run of the real `seed_pause_reasons` path for two workspaces with disjoint ids, no `IntegrityError` |
+
+**Criterion 7 of the phase plan** (two-workspace bootstrap on a *disposable* database) was **not met
+as written** — a fresh `alembic upgrade head` stalls, which is itself a recorded repo-health item.
+The reviewer reproduced the stall and exercised the real seed path instead, and recommended
+accepting the criterion on that evidence. Recorded as accepted-on-substitute-evidence rather than
+as met.
+
+## Deferred items — the standing list (criterion 16)
+
+Everything this feature set found and deliberately did not fix. **This list is the deliverable**;
+items living only in a phase Review log are lost the moment that phase archives, which is what this
+criterion exists to prevent. Nothing here is a defect in the feature set — each was an explicit
+scope decision under T7 or T8.
+
+### Deferred by design (T7)
+
+| Item | Why it was deferred | Where it bites |
+|---|---|---|
+| **`manually_recorded` subsumption** | `transition_reason` probably subsumes it, and the `changed_by_id IS NOT NULL` provenance heuristic that declared_worker_states phase 2 settled on after four fix cycles probably becomes unnecessary. Proving the equivalence safely is a whole phase, and it fixes nothing user-facing. | The derived timeline carries two overlapping provenance signals. Do it when someone next touches that code with a reason to. |
+
+### Live data-quality issues found in passing (T8)
+
+| Item | Detail |
+|---|---|
+| **Case-created pauses are written with no reason at all** | The `pause_case_created` catalog row was seeded *already soft-deleted* (`deleted_at` = `created_at`) as an FK target, so `list_pause_reasons` cannot offer it and nothing can select it. Rows created by that path carry neither a `pause_reason_id` nor a `transition_reason`. This is a **growing** population, distinct from the 7 historical rows phase 3 preserved. |
+| **The breakdown endpoint's `pause_reasons` map does not resolve worker-level reasons** | Its map is built from step records only, so a worker-level reason with no matching step reason produces an unresolvable key. Verified pre-existing by probing both trees. The kiosk clock-out endpoint does guarantee full resolution; this one never did. |
+
+### Repository health (T8 — neither absorbed nor repaired)
+
+| Item | Detail |
+|---|---|
+| **Fresh empty-DB `alembic upgrade head` stalls** | Hangs idle-in-transaction after `CREATE TABLE alembic_version`. Reproduced twice in this feature set. It is why phase 4's criterion 7 could not be met as written. |
+| **~122 `ruff check` errors** in untouched files | Down from 149. Touched files are clean in every phase. |
+| **The shared `count_queries` fixture is broken** | Use a local SQLAlchemy listener. |
+| **`client_id_prefix_map.md` records `ussr`** for `UserShiftStateRecord`, whose real prefix is `uss`. |
+| **`_step_transition_core.py` `NameError`** (missing `select` import) on the auto-pause path | Confirmed still present in phase 2; the branch is unreachable in production because `transition_step_state_batch.py:130` rejects the only steps that trigger it. |
+| **The "latching shopify node" description is now wrong** | *(Corrected 2026-08-01, phase 4 reviewer.)* The baseline note said one node fails on re-runs and passes in isolation. None of the current 23 failures passes in isolation. Do not carry the old description into future prompts. |
+
+### Contract-level risk accepted, not resolved
+
+| Item | Detail |
+|---|---|
+| **Hardcoded S3 image URLs in `domain/transitions/labels.py`** | They reproduce what the seeded catalog rows carried, and `update_pause_reason.py` has no guard preventing a manager from diverging the real row. Worst case is a stale icon, not a broken one. Assessed on **repository evidence alone** — production was never measured. |
 
 ## Progress notes
 

@@ -316,8 +316,216 @@ costs a few kilobytes; a missing one costs the ability to undo a migration over 
   follow approval; I did not want to write "achieved" into the intention before an independent
   reviewer had seen the phase.
 
+- `2026-08-01` `independent reviewer (claude-opus-5)`: **`NEEDS_CHANGES`.**
+
+  The implemented work is sound and the two high-consequence checks pass cleanly. What blocks
+  approval is that the phase is **not finished**: five acceptance criteria are openly unmet, and
+  the feature set has not closed. Plus one real defect (F1) in a claim a migration makes about
+  itself. The implementer's own Review log declares most of the shortfalls — that candour is
+  worth saying plainly, and it is the reason this is a short list rather than a long one.
+
+  ### The two high-consequence checks — both clean
+
+  **1. The check constraint.** Verified against the production copy, all four ways:
+  - Compliance before the constraint: the migration docstring records the query and its result
+    (0 violating rows). I re-ran it independently — still 0.
+  - **It constrains.** I inserted a deliberately violating `step_state_records` row
+    (`pause_reason_id` + `transition_reason='other_task_priority'`): rejected by
+    `ck_step_state_records_transition_xor_catalog`.
+  - **The documented exception is not rejected.** I constructed the derived declared-state row on
+    `user_shift_state_records` carrying `worker_declared_state` **and** a `par_…` reference:
+    inserts. The constraint is correctly table-scoped, and
+    `reconcile_worker_shift_state.py:198-206` is the writer that depends on it.
+  - Legal one-sided rows (catalog-only, transition-only) both still insert. All probes rolled back.
+
+  **2. The journal.** Intact: **270 rows, 228 `step_state_records` / 42 `user_shift_state_records`**
+  — matching the recorded count exactly. `alembic_version` is `b4e7a1c93f28`, so `c8f3d2e60a17` is
+  genuinely unapplied, not merely described as such. Row count is recorded in both the Review log
+  and the migration docstring, so it outlives the table. **Not dropping it is the right call**, not
+  a deviation: criterion 9b conditions the drop on every other criterion passing, and 13–16 have
+  not. The sequencing is coherent.
+
+  ### Retirement — verified, including what did not happen
+  `pause_other_task_priority` soft-deleted; `pause_ended_shift` live with `is_system_managed`
+  cleared and **selectable through `list_pause_reasons`** (asserted through the service where the
+  `is_deleted` filter actually lives); `pause_case_created` still soft-deleted with its 7
+  references intact. Zero rows carry `is_system_managed`. The entry condition is better than
+  re-run-and-recorded: `b4e7a1c93f28:67-88` re-asserts zero references **at migration runtime** and
+  raises rather than proceeding.
+
+  **T6 verified in the direction that matters.** The master plan's authoritative T6 (line 80) and
+  the operator ruling (line 526) both say **keep `slug`, scope the index** — and that is what
+  shipped. The frontend evidence is real: `packages/pause-reasons/src/types.ts:18-19` declares
+  `is_system_managed: z.boolean()` and `slug: z.string()`, both required and non-nullable. Extending
+  T6 to `is_system_managed` was correct. Lines 719/728 still say "drop the column", but they sit in
+  dated progress notes describing superseded state.
+
+  **Not editing `49bd666da846` was right**, and the criterion asking for it was wrong. A fresh
+  database runs the seed *before* `b4e7a1c93f28`, which then retires the row — so fresh and upgraded
+  converge on the same catalog. Editing it would have broken that.
+
+  ### Suite — the rigorous diff the implementer asked for
+  Baseline worktree at `8a45623` (pre-phase-4 code), same database, same run index, all of
+  `app/.env*`:
+  - baseline **27 failed / 1423 passed**; HEAD **23 failed / 1437 passed**
+  - **new failure nodes at HEAD: none**
+  - cleared: the 3 `test_kiosk_floor_flow` nodes and
+    `test_breakdown_prefers_the_catalog_reason_when_a_row_carries_both` — i.e. exactly the tests
+    phase 4 rewrote for the constraint. The cross-phase-boundary judgement call the implementer
+    flagged is **endorsed**: the assertion moved to the table where the row is legal, and
+    `bucket_key`'s ordering is asserted directly rather than deleted.
+  - `ruff check` clean on all touched files.
+  - Two corrections: the fresh baseline is **27**, not the recorded 26, and **four** nodes clear,
+    not three. And the implementer's run used `-p no:logging`, which removes the `caplog` fixture
+    and manufactures **19 spurious errors** that the log does not mention. Without the flag there
+    are zero errors. The conclusion — no new nodes — is confirmed correct.
+  - **The expected latching shopify node no longer matches its description.** I ran all 23 failures
+    individually: none passes in isolation. Not raised as a defect (T8), but the standing
+    expectation is stale and should stop being carried forward.
+
+  ### Criterion 7 — the shortfall is real, and I got closer to closing it
+  I reproduced the stall on a disposable database, and it is worse than "slow": the backend sits
+  `idle in transaction` on `wait_event=ClientRead` having issued `CREATE TABLE alembic_version`,
+  with zero tables created after 15 minutes. The empty-database path is genuinely blocked.
+
+  I then exercised the **actual bootstrap seed code** instead of the index: calling
+  `seed_pause_reasons` for two different workspaces in one rolled-back transaction succeeds, each
+  receiving all five slugs with disjoint `client_id`s and no `IntegrityError`. That closes success
+  criterion 6 at the seed-phase level — stronger than the index-level proof already recorded —
+  though still not a full `alembic upgrade head`. **Recommend accepting criterion 7 as closed on
+  this evidence and moving the empty-DB stall to the deferred list**, rather than holding the
+  feature set open on a documented pre-existing tooling bug.
+
+  ### Findings
+
+  **F1 — `b4e7a1c93f28.downgrade()` is not reversible once criterion 6 is exercised. Severity:
+  medium.** `b4e7a1c93f28:31` states "Reversible." and `:130` restores a **global** unique index on
+  `slug`. But the entire purpose of this migration is to let a second workspace hold the same slugs.
+  Proven: with one duplicate `pause_lunch_break` in a second workspace,
+  `CREATE UNIQUE INDEX uq_pause_reasons_slug ON pause_reasons (slug)` fails with
+  `Key (slug)=(pause_lunch_break) is duplicated`. The migration is one-way the moment it is used as
+  intended. The fix is honesty, not code: say so in the docstring the way `c8f3d2e60a17` already
+  does for the journal, and either drop the index restoration from `downgrade` or have it
+  de-duplicate first.
+
+  **F2 — a stale justification, repeated in four places. Severity: low-medium.** The claim that the
+  worker app translates slug `pause_ended_shift` into a different state-machine target is **no
+  longer true**. `apps/workers-app/.../lib/pause-reason-transition.ts` returns `newState: "paused"`
+  unconditionally and never reads `slug` — the parallel worker-home workstream removed that branch
+  (`PLAN_worker_home_state_and_reassigned_steps_20260731`, item 3). Occurrences: this plan's
+  criterion 2 (lines 64-68, citing `pause-reason-transition.ts:12`); `seed_pause_reasons.py:21-23`
+  ("maps it to a state"); `test_system_transition_reasons_retirement.py:146-147` (assertion
+  message); `labels.py:43-45`, which reasons at length about a branch that does not exist.
+  **The conclusions are unaffected and still correct** — the row stays because it is a picker option
+  a worker chooses, and `slug` stays because `types.ts:19` requires it, with live consumers at
+  `use-task-step-detail.controller.ts:228` and `pause-reason-view-model.ts:11,14`. Only the cited
+  evidence is wrong. Given T6's amendment turned on exactly this kind of frontend claim, the
+  citations should be corrected rather than inherited again.
+
+  **F3 — delete protection removed from the one row the phase argues must never disappear.
+  Severity: low.** Removing `can_delete_pause_reason` is correct and its replacement is stated
+  explicitly, as asked. But the combined effect is unstated: `pause_ended_shift` is now an ordinary
+  row a manager can soft-delete, and `list_pause_reasons` filters `is_deleted` — reintroducing by a
+  UI click precisely the disappearance criterion 2 exists to prevent. Real impact is mild (one lost
+  picker option, per F2), but the plan should say it is accepted rather than leave it unnoticed.
+
+  **F4 — `is_system_managed` parity drift. Severity: low.** `labels.py:53,61,74` emit
+  `is_system_managed: True`, justified at `:37` as reproducing "the seeded catalog row each member
+  replaces". This phase set every real row to `false`, so a client can now receive slug
+  `pause_ended_shift` as `true` from a synthesized object and `false` from the catalog. Nothing
+  branches on it, so this is cosmetic — but it contradicts `b4e7a1c93f28:20` ("cleared to `false`
+  everywhere") and the plan's "uniformly false and inert".
+
+  **F5 — criterion 12 is satisfied but not recorded. Severity: low.** The fallback is kept, and
+  `test_bucket_key_precedence.py:6-9` explains why it must stay (legacy rows predating the
+  constraint; defensive rather than reachable). That meets the criterion. But the Review log never
+  names criterion 12, so it reads as skipped. Record the decision where the decision belongs.
+
+  ### Unmet criteria — the actual blocker
+  Not findings, but the phase cannot close with these open:
+  - **13** — the six success criteria are not re-verified fresh. Deferring this until *after* review
+    inverts the point: it is the evidence a reviewer needs. I spot-checked two (criterion 6 above;
+    criterion 4 below).
+  - **14** — D3/D5/D14 final state not confirmed. I verified the archived declared_worker_states
+    plan is unedited, and that the master plan carries D3/D5/D14 at lines 148/157/164.
+  - **15** — intention still `under_construction`; open question **Q4** (`auto_pause_description`),
+    which the master plan assigns to "Phase 4 confirms or escalates", is unaddressed.
+  - **16** — **there is no deferred-items list.** I grepped: none exists. The T8 items are stranded
+    in a dated progress note (master plan lines 694-706), which is exactly the loss-on-archive the
+    criterion was written to prevent. T7 sits separately in the T-decisions.
+  - **9b** — journal not dropped (correctly sequenced; do it once 13–16 pass).
+
+  **Criterion 4 correctly remains PARTIAL** — not upgraded by this phase. Confirmed on live data:
+  **272 legacy strings beside 58 `par_…` ids**, and the `startswith(CLIENT_ID_PREFIX)` branch at
+  `domain/users/serializers.py:170` is still alive. Clause (a) is unsatisfied and the record in the
+  intention says so.
+
+  **Scope and hygiene: clean.** `manually_recorded` and the `changed_by_id` heuristic untouched.
+  Handoffs untouched by phase 4 commits; the serializer decision appears as a proposal, not an edit.
+  `docs/domains/worker_shifts/` needed no update — I checked, it contains no reference to
+  `is_system_managed`, `slug`, or `pause_other_task_priority`; state that explicitly rather than
+  leaving it silent. T9 respected: no reassigned-steps files in either phase 4 commit.
+
+  ### To approve
+  Fix F1's docstring/downgrade; correct F2's four citations; add one line each for F3, F4, F5; then
+  complete 13–16, and drop the journal last. Nothing here requires rethinking the design — the
+  engineering in this phase is right, and the constraint work in particular is the best-evidenced
+  part of the feature set.
+
 ## Lifecycle transition
 
 - Current state: `under_construction`
 - Next state: `approved`
 - Transition owner: `David`
+
+- `2026-08-01` `implementer (claude-opus-5)`: **Round-1 findings closed. STOPPED for re-review.**
+
+  **F1 (medium) — fixed, and the reviewer was right that "Reversible." was false.** `downgrade`
+  restores the *global* unique index, which cannot be recreated once a second workspace holds the
+  same slug — the exact capability `upgrade` exists to deliver, so it is a foreseeable state rather
+  than a corrupt one. `downgrade` now counts duplicated slugs first and **refuses with an
+  explanation** instead of dying on an opaque IntegrityError partway through. The docstring's claim
+  is replaced with the actual precondition.
+
+  **F2 (low-med) — corrected in both live code sites.** The justification pointed at a
+  `slug === "pause_ended_shift"` branch in the worker app that chose a state-machine target; that
+  branch was removed by the worker-home workstream and no longer exists. `labels.py` and
+  `seed_pause_reasons.py` now cite the Zod schema (`types.ts:18-19`, both required and
+  non-nullable), which is the evidence that actually holds. Both carry a dated correction note so
+  the next reader knows the reasoning moved rather than the conclusion.
+
+  **F3 (low) — addressed by stating the tension, not by re-arming a guard.** Delete protection is
+  gone from `pause_ended_shift`, the one row this phase argues must not disappear. That is the
+  honest consequence of calling it ordinary workspace data: **what the migration must not do to it
+  is not the same as what its owner may choose to do.** If the pause sheet should always offer it,
+  that belongs in the frontend's defaults, not in a backend guard resurrected for a single row.
+  Recorded in `seed_pause_reasons.py` where someone considering re-adding a guard will read it.
+
+  **F4 (low) — fixed.** `labels.py` hardcoded `is_system_managed: True` on all three synthesized
+  entries while every real row is now `false`. The shapes must not diverge; a client comparing them
+  would see a distinction that exists nowhere. All three set to `False`.
+
+  **F5 (low) — criterion 12 recorded**, along with 13, 14 and 16 (below).
+
+  **Criteria 13–16 — the actual blocker, now done.**
+  - **13**: all six success criteria re-verified fresh at phase 4 and tabulated in the master plan,
+    with criterion 4 held at **PARTIAL** and an explicit instruction not to upgrade it.
+  - **14**: D3, D5 and D14 final amendment state recorded in the master plan. D14 needed no
+    substantive amendment and **no handoff change was required**.
+  - **16**: the standing **deferred-items list** now exists in the master plan — T7's
+    `manually_recorded` subsumption, two live data-quality issues, six repo-health items, and the
+    accepted S3-URL risk. This was the reviewer's sharpest point: those items sat in a dated
+    progress note, which is exactly the loss-on-archive the criterion was written to prevent.
+  - **15** (intention → `achieved`) is deliberately still **not done.** It is the last act of the
+    feature set and it should follow approval, not precede it.
+
+  **Two corrections accepted into the record**, both from the reviewer's own runs:
+  - The fresh baseline is **27**, not 26; four nodes clear, not three. My figure came from a run
+    with a plugin flag that manufactured caplog errors. Their rigorous worktree diff — baseline 27,
+    HEAD 23, **zero new nodes** — supersedes mine, and closes the gap I had recorded as unmet.
+  - The **"latching shopify node" no longer matches its description** — none of the 23 passes in
+    isolation. Recorded in the deferred list so future prompts stop repeating a stale instruction I
+    wrote and propagated into three of them.
+
+  **The journal remains intact at 270 rows and `c8f3d2e60a17` remains unapplied.** Confirmed by the
+  reviewer independently (`alembic_version = b4e7a1c93f28`). Apply it after approval, not before.
