@@ -158,24 +158,6 @@ class ShopifyPreorderProductInput(BaseModel):
 				raise ValueError("image_url must be an absolute HTTPS URL.")
 		return self
 
-	@field_validator("metafields")
-	@classmethod
-	def _reject_caller_supplied_quantity(cls, value: dict) -> dict:
-		# The backend derives `custom.quantity` from the inventory selection, so accepting it
-		# here would create a second source of truth that can silently disagree. Rejecting is
-		# louder than overwriting: a form still sending it gets told, rather than watching its
-		# value vanish.
-		from beyo_manager.domain.shopify.preorder_policy import (
-			PREORDER_QUANTITY_METAFIELD_KEY,
-		)
-
-		if PREORDER_QUANTITY_METAFIELD_KEY in value:
-			raise ValueError(
-				f"metafields.{PREORDER_QUANTITY_METAFIELD_KEY} is derived from the inventory "
-				"quantity and must not be supplied."
-			)
-		return value
-
 
 class ShopifyPreorderSectionInput(BaseModel):
 	shop_integration_id: str
@@ -202,20 +184,6 @@ class ShopifyPreorderSectionInput(BaseModel):
 				"or under product, not both."
 			)
 		return self
-
-	@field_validator("metafields")
-	@classmethod
-	def _reject_section_quantity_metafield(cls, value: dict) -> dict:
-		from beyo_manager.domain.shopify.preorder_policy import (
-			PREORDER_QUANTITY_METAFIELD_KEY,
-		)
-
-		if PREORDER_QUANTITY_METAFIELD_KEY in value:
-			raise ValueError(
-				f"metafields.{PREORDER_QUANTITY_METAFIELD_KEY} is derived from the inventory "
-				"quantity and must not be supplied."
-			)
-		return value
 
 
 class CreateTaskRequest(BaseModel):

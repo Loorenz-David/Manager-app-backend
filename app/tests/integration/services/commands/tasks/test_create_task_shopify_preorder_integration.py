@@ -177,9 +177,9 @@ async def test_create_task_commits_preorder_intent_atomically_without_shopify_ht
         sync_item.normalized_payload_json["variant"]["barcode"]
         == "ARTICLE-PREORDER-1"
     )
-    # `custom.quantity` is derived from the inventory selection (one location, quantity 2), not
-    # taken from the caller. The fixture supplies a different metafield to prove the caller's
-    # other metafields still pass through.
+    # The fixture doesn't supply a `quantity` metafield, so it defaults to the inventory selection
+    # (one location, quantity 2). See test_caller_supplied_quantity_metafield_overrides_the_default
+    # for the case where the caller sets it explicitly.
     metafields = {entry["key"]: entry for entry in sync_item.normalized_payload_json["metafields"]}
     assert metafields["quantity"]["value"] == "2"
     assert metafields["quantity"]["type"] == "single_line_text_field"
@@ -192,6 +192,39 @@ async def test_create_task_commits_preorder_intent_atomically_without_shopify_ht
     assert execution_task.state == ExecutionTaskStateEnum.OPEN
     assert event.metadata_json["task_id"] == result["client_id"]
     assert graphql_calls == 0
+
+
+@pytest.mark.integration
+async def test_caller_supplied_quantity_metafield_overrides_the_default(
+    db_session,
+    monkeypatch,
+) -> None:
+    # The merchant's live products carry a `custom.quantity` that can legitimately differ from
+    # available stock (e.g. a pack size), so a caller-supplied value must win over the
+    # inventory-derived default.
+    ctx = await _seed_context(db_session)
+    ctx.incoming_data["shopify_preorder"]["metafields"]["quantity"] = "6"
+    await _disable_event_dispatch(monkeypatch)
+
+    async def _unexpected_graphql(**_kwargs):
+        raise AssertionError("Shopify HTTP must not run during create_task")
+
+    monkeypatch.setattr(
+        "beyo_manager.services.infra.shopify.graphql_client.execute_shopify_graphql",
+        _unexpected_graphql,
+    )
+
+    result = await create_task(ctx)
+    sync_item = (
+        await db_session.execute(
+            select(ShopifyProductSyncItem).where(
+                ShopifyProductSyncItem.frontend_client_id == result["client_id"]
+            )
+        )
+    ).scalar_one()
+
+    metafields = {entry["key"]: entry for entry in sync_item.normalized_payload_json["metafields"]}
+    assert metafields["quantity"]["value"] == "6"
 
 
 @pytest.mark.integration

@@ -21,8 +21,6 @@ def _payload(*, quantity: object = 2) -> dict:
                 "title": "Chair",
                 "sku": "SKU-1",
                 "price": "5200.00",
-                # No `quantity` here — the backend derives it from `inventory`, and supplying
-                # it is now rejected (see test_caller_supplied_quantity_metafield_is_rejected).
                 "metafields": {
                     "notes": "handle with care",
                 },
@@ -70,21 +68,26 @@ def test_no_http_request_model_exposes_inventory_mode() -> None:
 
 
 @pytest.mark.unit
-def test_caller_supplied_quantity_metafield_is_rejected() -> None:
-    # The backend derives `custom.quantity` from the inventory selection. Accepting it here would
-    # create a second source of truth; rejecting is louder than silently overwriting.
+def test_caller_supplied_quantity_metafield_is_accepted() -> None:
+    # `custom.quantity` can legitimately differ from the inventory the pre-order writes (e.g. a
+    # pack size), so the caller may set it explicitly; it's only defaulted from inventory when
+    # omitted (see _create_preorder_sync_item_in_session).
     payload = _payload()
     payload["shopify_preorder"]["product"]["metafields"]["quantity"] = {
         "type": "single_line_text_field",
         "value": "6",
     }
 
-    with pytest.raises(ValidationError, match="derived from the inventory quantity"):
-        parse_create_task_request(payload)
+    request = parse_create_task_request(payload)
+
+    assert request.shopify_preorder.product.metafields["quantity"] == {
+        "type": "single_line_text_field",
+        "value": "6",
+    }
 
 
 @pytest.mark.unit
-def test_section_level_quantity_metafield_is_rejected() -> None:
+def test_section_level_quantity_metafield_is_accepted() -> None:
     payload = _payload()
     payload["shopify_preorder"]["metafields"] = {
         "quantity": {
@@ -93,8 +96,12 @@ def test_section_level_quantity_metafield_is_rejected() -> None:
         }
     }
 
-    with pytest.raises(ValidationError, match="derived from the inventory quantity"):
-        parse_create_task_request(payload)
+    request = parse_create_task_request(payload)
+
+    assert request.shopify_preorder.metafields["quantity"] == {
+        "type": "single_line_text_field",
+        "value": "6",
+    }
 
 
 @pytest.mark.unit

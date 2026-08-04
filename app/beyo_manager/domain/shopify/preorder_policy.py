@@ -2,9 +2,9 @@
 
 Pure constants and derivations — no I/O, no session, no Shopify client.
 
-These values are deliberately *not* caller-supplied. A pre-order provisions a product for the
-till under a fixed shape; letting the caller vary the status or the quantity-metafield contract
-would make two pre-orders mean different things in Shopify.
+`PREORDER_PRODUCT_STATUS` is deliberately not caller-supplied. A pre-order provisions a product for
+the till under a fixed shape; letting the caller vary the status would make two pre-orders mean
+different things in Shopify.
 """
 
 from __future__ import annotations
@@ -25,16 +25,13 @@ PREORDER_QUANTITY_METAFIELD_TYPE = "single_line_text_field"
 
 
 def build_preorder_quantity_metafield(inventory_quantities: Iterable[int]) -> dict[str, str]:
-    """Build `custom.quantity` from the units this pre-order provisions.
+    """Build the default `custom.quantity` from the units this pre-order provisions.
 
-    The metafield mirrors the **total** inventory the pre-order writes, summed across every
-    selected location, so one seller-entered number drives both the till stock and the product's
-    own quantity field.
-
-    Note for anyone reading older revisions of the plans: these two were previously required to be
-    independent, on the evidence that the merchant's live products carry a `custom.quantity` that
-    differs from their available stock. That rule was reversed by explicit decision on 2026-07-27 —
-    the metafield is now derived here and is not accepted from the caller.
+    Used only when the caller doesn't supply their own `quantity` metafield. The merchant's live
+    products carry a `custom.quantity` that can legitimately differ from available stock (e.g. a
+    pack size or display quantity), so a caller-supplied value always wins; this is just the
+    fallback that mirrors the **total** inventory the pre-order writes, summed across every
+    selected location, for callers who don't need the two to diverge.
     """
     return {
         "type": PREORDER_QUANTITY_METAFIELD_TYPE,

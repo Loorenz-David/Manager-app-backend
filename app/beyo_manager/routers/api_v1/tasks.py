@@ -153,8 +153,6 @@ class _ShopifyPreorderProductBody(BaseModel):
     description: str | None = None
     tags: list[str] | None = None
     product_category: str | None = None
-    # `quantity` is reserved — it is derived from the inventory selection and rejected by the
-    # service-layer request model if supplied.
     metafields: dict | None = None
     image_id: str | None = None
     image_url: str | None = None

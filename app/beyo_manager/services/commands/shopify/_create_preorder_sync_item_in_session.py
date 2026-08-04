@@ -44,17 +44,19 @@ async def _create_preorder_sync_item_in_session(
         ).scalar_one_or_none()
         if category_name:
             product["product_category"] = category_name
-    # `custom.quantity` is derived from the inventory the seller selected, summed across every
-    # location, so one entered number drives both the till stock and the product's quantity field.
-    # Authoritative: anything the caller sent under this key is replaced, keeping a single source
-    # of truth rather than two numbers that can silently diverge.
+    # `custom.quantity` is independent of the inventory the seller selected — the merchant's live
+    # products carry a `custom.quantity` that legitimately differs from available stock (e.g. a
+    # pack size or a display quantity), so the caller's value wins when supplied. When the caller
+    # doesn't set it, it defaults to the total inventory this pre-order provisions, summed across
+    # every selected location.
     metafields = {
         **(product.pop("metafields", None) or {}),
         **preorder.metafields,
     }
-    metafields[PREORDER_QUANTITY_METAFIELD_KEY] = build_preorder_quantity_metafield(
-        entry.quantity for entry in preorder.inventory
-    )
+    if PREORDER_QUANTITY_METAFIELD_KEY not in metafields:
+        metafields[PREORDER_QUANTITY_METAFIELD_KEY] = build_preorder_quantity_metafield(
+            entry.quantity for entry in preorder.inventory
+        )
     product_sync_request_data = {
         "items": [
             {
