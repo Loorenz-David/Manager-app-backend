@@ -55,7 +55,20 @@ async def maybe_evaluate_task_ready(
     workspace_id: str,
     now: datetime,
     updated_by_id: str,
+    allow_stepless: bool = False,
 ) -> bool:
+    """Flip a task to ``READY`` when every step has reached a terminal state.
+
+    This is the ONLY way into ``READY``: it owns the ``reconcile_task_side_effects``
+    call that creates the post-handling and customer-coordination instances, so a
+    caller that writes ``task.state = READY`` itself silently skips them.
+
+    ``allow_stepless`` lets a task with no steps at all become ready. Organic readiness
+    is "all the work finished", which a stepless task can never satisfy — so this stays
+    off by default and is opted into only by ``force_task_ready``, where a manager has
+    explicitly declared a step-free task done. The side effects still run either way,
+    which is the whole reason that command routes through here.
+    """
     if task.state in TERMINAL_TASK_STATES:
         return False
     if task.state == TaskStateEnum.READY:
@@ -70,7 +83,10 @@ async def maybe_evaluate_task_ready(
             )
         )
     ).scalars().all()
-    if not all_steps or not all(step.state in TERMINAL_STEP_STATES for step in all_steps):
+    if all_steps:
+        if not all(step.state in TERMINAL_STEP_STATES for step in all_steps):
+            return False
+    elif not allow_stepless:
         return False
 
     task.state = TaskStateEnum.READY

@@ -108,6 +108,28 @@ _TRANSITION_REASONS: dict[str, dict] = {
         "requires_description": False,
         "is_system_managed": False,
     },
+    # The first member that is never written to a PAUSED record — `force_task_ready`
+    # writes it to SKIPPED ones. It still belongs here: `serialize_step_pause_reason`
+    # resolves through this map for *any* record without a catalog row, so omitting it
+    # would serialize `pause_reason: null` on a skipped step and leave the client with
+    # nothing explaining why the step closed. That is the blank this module exists to
+    # prevent, and the reason is no less real for not being a pause.
+    #
+    # No catalog row was ever retired into this member, so nothing is being reproduced:
+    # `image_url` is genuinely None (as for `case_created`) and `slug` is the member's
+    # own value because the published schema requires a string (as for
+    # `worker_declared_state`). BLOCKER over PERSONAL — the work stopped for a reason
+    # outside the worker, which is the same call `other_task_priority` and
+    # `case_created` make. `requires_description` is True because the endpoint rejects a
+    # blank reason, so a record carrying this member always has one.
+    TransitionReasonEnum.FORCED_READY.value: {
+        "name": "Forced ready",
+        "image_url": None,
+        "pause_type": PauseTypeEnum.BLOCKER.value,
+        "slug": TransitionReasonEnum.FORCED_READY.value,
+        "requires_description": True,
+        "is_system_managed": False,
+    },
 }
 
 # The lookup-entry shape, kept explicit so adding a field above cannot silently widen the

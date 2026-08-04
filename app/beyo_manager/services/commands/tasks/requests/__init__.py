@@ -249,6 +249,25 @@ class TerminalTaskRequest(BaseModel):
 	client_id: str
 
 
+class ForceTaskReadyRequest(BaseModel):
+	client_id: str
+	# Mandatory and non-blank: an override that leaves no justification is indistinguishable
+	# from work that actually happened once the steps read SKIPPED. It lands on both the
+	# task history record and every synthetic step record's `description`.
+	reason: str = Field(min_length=1, max_length=1024)
+	# Only bites on steps closed out of WORKING/PAUSED, where real accrued time is being
+	# cut short administratively. PENDING steps carry no time, so there is nothing to flag.
+	mark_inaccurate: bool = True
+
+	@field_validator("reason")
+	@classmethod
+	def _require_non_blank_reason(cls, value: str) -> str:
+		trimmed = value.strip()
+		if not trimmed:
+			raise ValueError("reason must not be blank.")
+		return trimmed
+
+
 class AddItemToTaskRequest(BaseModel):
 	task_id: str
 	item_id: str
@@ -346,6 +365,13 @@ def parse_send_customer_coordination_reply_request(
 def parse_terminal_task_request(data: dict) -> TerminalTaskRequest:
 	try:
 		return TerminalTaskRequest.model_validate(data)
+	except PydanticValidationError as exc:
+		_raise_validation_error(exc)
+
+
+def parse_force_task_ready_request(data: dict) -> ForceTaskReadyRequest:
+	try:
+		return ForceTaskReadyRequest.model_validate(data)
 	except PydanticValidationError as exc:
 		_raise_validation_error(exc)
 

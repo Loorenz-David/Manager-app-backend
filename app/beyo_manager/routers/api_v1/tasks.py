@@ -28,6 +28,7 @@ from beyo_manager.services.commands.tasks.create_task_note import create_task_no
 from beyo_manager.services.commands.tasks.delete_task import delete_task
 from beyo_manager.services.commands.tasks.delete_task_note import delete_task_note
 from beyo_manager.services.commands.tasks.fail_task import fail_task
+from beyo_manager.services.commands.tasks.force_task_ready import force_task_ready
 from beyo_manager.services.commands.tasks.remove_item_from_task import remove_item_from_task
 from beyo_manager.services.commands.tasks.resolve_task import resolve_task
 from beyo_manager.services.commands.tasks.send_customer_coordination_email_batch import (
@@ -287,6 +288,11 @@ class _UpdateStepReadyByAtItemBody(BaseModel):
 
 class _UpdateStepsReadyByAtBody(BaseModel):
     items: list[_UpdateStepReadyByAtItemBody]
+
+
+class _ForceTaskReadyBody(BaseModel):
+    reason: str
+    mark_inaccurate: bool = True
 
 
 class _AssignWorkerBody(BaseModel):
@@ -739,6 +745,24 @@ async def route_resolve_task(
         session=session,
     )
     outcome = await run_service(resolve_task, ctx)
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(outcome.data)
+
+
+@router.post("/{task_id}/force-ready")
+async def route_force_task_ready(
+    task_id: str,
+    body: _ForceTaskReadyBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    ctx = ServiceContext(
+        incoming_data={"client_id": task_id, **body.model_dump()},
+        identity=claims,
+        session=session,
+    )
+    outcome = await run_service(force_task_ready, ctx)
     if not outcome.success:
         return build_err(outcome.error)
     return build_ok(outcome.data)

@@ -9,7 +9,6 @@ from sqlalchemy import select
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.task_steps.notification_targets import resolve_task_step_notification_targets
 from beyo_manager.domain.task_steps.readiness import recalculate_readiness
@@ -19,6 +18,7 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
+from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
@@ -150,19 +150,19 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                     recalculate_readiness(dep_step)
                     readiness_changes.append((dep_step, old_dep_readiness))
 
-            all_steps_result = await session.execute(
-                select(TaskStep).where(
-                    TaskStep.workspace_id == workspace_id,
-                    TaskStep.task_id == task.client_id,
-                    TaskStep.is_deleted.is_(False),
-                )
+            # Delegated, not reimplemented: this used to evaluate the predicate inline and
+            # assign `task.state = READY` directly, which skipped the auxiliary instances
+            # `maybe_evaluate_task_ready` creates via `reconcile_task_side_effects`. A task
+            # finishing through the undo window would land on READY with no post-handling
+            # and no customer-coordination row, and nothing downstream would ever repair it
+            # — every other caller of that predicate early-returns once the state is READY.
+            await maybe_evaluate_task_ready(
+                session,
+                task,
+                workspace_id=workspace_id,
+                now=now,
+                updated_by_id=performed_by,
             )
-            all_steps = all_steps_result.scalars().all()
-            if all_steps and all(s.state in TERMINAL_STEP_STATES for s in all_steps):
-                if task.state not in TERMINAL_TASK_STATES:
-                    task.state = TaskStateEnum.READY
-                    task.updated_at = now
-                    task.updated_by_id = performed_by
 
             analytics_payload = StepTransitionPayload(
                 step_id=step.client_id,

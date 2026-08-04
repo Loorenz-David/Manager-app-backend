@@ -25,3 +25,14 @@ class TransitionReasonEnum(enum.Enum):
     # ("started working with {article_number}"): this vocabulary names the class of thing
     # that happened, the description names the instance.
     CASE_CREATED = "case_created"
+    # A manager forced a task to READY, so the system skipped its still-open steps
+    # (`force_task_ready`). The worker never picks this — it is not on the pause sheet —
+    # which is what makes it a member here. It types every synthetic close so analytics
+    # can tell an administrative closure from work that actually happened; the free-text
+    # justification rides on the record's `description`, following the precedent above.
+    #
+    # Unlike every member above it, this one is never written to a PAUSED record — it
+    # lands on the SKIPPED records the force closes produce. It still carries a
+    # `labels.py` entry, because the step serializer resolves through that map for any
+    # record without a catalog row; see the note there.
+    FORCED_READY = "forced_ready"
