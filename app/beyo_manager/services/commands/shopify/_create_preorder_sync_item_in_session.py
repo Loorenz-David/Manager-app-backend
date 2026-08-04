@@ -26,8 +26,21 @@ async def _create_preorder_sync_item_in_session(
     preorder: ShopifyPreorderSectionInput,
     item_article_number: str | None = None,
     item_category_id: str | None = None,
+    item_sku: str | None = None,
 ) -> dict:
     product = preorder.product.model_dump(exclude_none=True)
+    # The Shopify product's sku defaults to the task item's own sku — which may itself have
+    # just been auto-assigned from a SKU template — so the local item and the Shopify variant
+    # share one sku unless the caller explicitly sets a different `product.sku`.
+    if not product.get("sku") and item_sku:
+        product["sku"] = item_sku
+    # A seller who didn't type a product title still needs *something* Shopify will accept —
+    # title is required on the Shopify side regardless of sku. Falls back to the resolved sku
+    # (above), not the raw item_sku, so an explicit `product.sku` override is honoured here too.
+    # If neither resolves, title stays absent and the request-layer validation on
+    # ProcessShopifyProductItemRequest.title raises a clear error instead of a downstream one.
+    if not product.get("title") and product.get("sku"):
+        product["title"] = product["sku"]
     # Shopify's productType defaults to the task item's category name, so a seller who has already
     # categorised the item does not have to restate it. An explicit `product_category` on the
     # pre-order section wins — unlike the quantity metafield, this is a product attribute a seller

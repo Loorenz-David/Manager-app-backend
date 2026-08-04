@@ -3,6 +3,7 @@
 from decimal import Decimal
 from pydantic import BaseModel, field_validator
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
+from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.errors.validation import ValidationError
 
 
@@ -184,6 +185,7 @@ class CreateItemRequest(BaseModel):
     client_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
+    sku_template_task_type: TaskTypeEnum | None = None
     item_category_id: str | None = None
     quantity: int = 1
     designer: str | None = None

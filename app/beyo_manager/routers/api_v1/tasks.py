@@ -148,8 +148,8 @@ class _ShopifyPreorderInventoryBody(BaseModel):
 
 
 class _ShopifyPreorderProductBody(BaseModel):
-    title: str
-    sku: str
+    title: str | None = None
+    sku: str | None = None
     price: str
     description: str | None = None
     tags: list[str] | None = None

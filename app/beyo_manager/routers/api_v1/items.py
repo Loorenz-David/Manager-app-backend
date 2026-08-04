@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
+from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
@@ -57,6 +58,7 @@ class _CreateItemBody(BaseModel):
     client_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
+    sku_template_task_type: TaskTypeEnum | None = None
     item_category_id: str | None = None
     quantity: int = 1
     designer: str | None = None

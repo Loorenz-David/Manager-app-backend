@@ -3,24 +3,19 @@
 from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
-from beyo_manager.domain.items.enums import ItemStateEnum, ItemUpholsterySourceEnum
+from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.validation import ConflictError, ValidationError
-from beyo_manager.models.tables.items.item import Item
-from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.upholstery.upholstery import Upholstery
 from beyo_manager.services.commands.history._create_history_record_in_session import (
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_create_message
+from beyo_manager.services.commands.items._create_item_in_session import create_item_in_session
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
-from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
-    enqueue_item_zone_location_push,
-)
 from beyo_manager.services.commands.items.requests import parse_create_item_request
-from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -31,8 +26,10 @@ async def create_item(ctx: ServiceContext) -> dict:
     """Create Item with optional embedded issues and optional item upholstery."""
     request = parse_create_item_request(ctx.incoming_data)
 
-    if request.article_number is None and request.sku is None:
-        raise ValidationError("At least one of article_number or sku must be provided.")
+    if request.article_number is None and request.sku is None and request.sku_template_task_type is None:
+        raise ValidationError(
+            "At least one of article_number, sku, or sku_template_task_type must be provided."
+        )
 
     if request.item_upholstery is not None:
         iup_input = request.item_upholstery
@@ -52,36 +49,15 @@ async def create_item(ctx: ServiceContext) -> dict:
             raise ValidationError("item_upholstery.upholstery_id must be null when source is customer.")
 
     async with maybe_begin(ctx.session):
-        item_kwargs: dict[str, str] = {}
-        if request.client_id is not None:
-            validate_provided_client_id(request.client_id, "itm")
-            existing = await ctx.session.get(Item, request.client_id)
-            if existing is not None:
-                raise ConflictError("Provided client_id is already in use.")
-            item_kwargs["client_id"] = request.client_id
-
-        item_category_snapshot: str | None = None
-        item_major_category_snapshot: str | None = None
-        if request.item_category_id is not None:
-            category_result = await ctx.session.execute(
-                select(ItemCategory).where(
-                    ItemCategory.workspace_id == ctx.workspace_id,
-                    ItemCategory.client_id == request.item_category_id,
-                    ItemCategory.is_deleted.is_(False),
-                )
-            )
-            category = category_result.scalar_one_or_none()
-            if category is None:
-                raise NotFound("ItemCategory not found.")
-            item_category_snapshot = category.name
-            item_major_category_snapshot = category.major_category.value
-
-        item = Item(
-            **item_kwargs,
+        item, pending_events = await create_item_in_session(
+            ctx.session,
             workspace_id=ctx.workspace_id,
+            user_id=ctx.user_id,
+            username=ctx.identity.get("username"),
+            client_id=request.client_id,
             article_number=request.article_number,
             sku=request.sku,
-            state=ItemStateEnum.PENDING,
+            sku_template_task_type=request.sku_template_task_type,
             item_category_id=request.item_category_id,
             quantity=request.quantity,
             designer=request.designer,
@@ -97,20 +73,7 @@ async def create_item(ctx: ServiceContext) -> dict:
             external_url=request.external_url,
             external_source=request.external_source,
             external_order_id=request.external_order_id,
-            item_category_snapshot=item_category_snapshot,
-            item_major_category_snapshot=item_major_category_snapshot,
-            created_by_id=ctx.user_id,
         )
-        ctx.session.add(item)
-        await ctx.session.flush()
-
-        if item.item_zone:
-            await enqueue_item_zone_location_push(
-                ctx.session,
-                item,
-                username=ctx.identity.get("username"),
-                requested_by_user_id=ctx.user_id,
-            )
 
         if request.item_issues:
             await _create_item_issues_in_session(
@@ -168,7 +131,6 @@ async def create_item(ctx: ServiceContext) -> dict:
             username_snapshot=username,
         )
 
-    await event_bus.dispatch([
-        build_workspace_event(item, "item:created"),
-    ])
+    pending_events.append(build_workspace_event(item, "item:created"))
+    await event_bus.dispatch(pending_events)
     return {"client_id": item.client_id}

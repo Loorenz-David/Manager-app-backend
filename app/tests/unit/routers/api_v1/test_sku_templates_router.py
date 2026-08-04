@@ -28,20 +28,20 @@ async def test_create_sku_template_route_forwards_body(monkeypatch):
 
 
 @pytest.mark.unit
-async def test_reserve_route_forwards_task_type(monkeypatch):
+async def test_get_by_task_type_route_forwards_task_type(monkeypatch):
     captured = {}
 
     async def fake_run_service(command, ctx):
         captured["command"] = command
         captured["ctx"] = ctx
-        return SimpleNamespace(success=True, data={"reserved_scalar": 1}, error=None)
+        return SimpleNamespace(success=True, data={"next_sku_preview": "PRE-7"}, error=None)
 
     monkeypatch.setattr(sku_templates_router, "run_service", fake_run_service)
-    await sku_templates_router.route_reserve_sku_scalar(
+    await sku_templates_router.route_get_sku_template_by_task_type(
         task_type="pre_order",
         claims={"user_id": "usr_1", "workspace_id": "ws_1"},
         session=object(),
     )
 
-    assert captured["command"] is sku_templates_router.reserve_sku_scalar
+    assert captured["command"] is sku_templates_router.get_sku_template_by_task_type
     assert captured["ctx"].incoming_data["task_type"] == "pre_order"

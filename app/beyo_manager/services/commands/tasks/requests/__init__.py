@@ -117,8 +117,14 @@ class ShopifyPreorderInventoryInput(BaseModel):
 
 
 class ShopifyPreorderProductInput(BaseModel):
-	title: str
-	sku: str
+	# Optional: when omitted, _create_preorder_sync_item_in_session defaults it to whatever
+	# `sku` resolves to below — a seller who didn't bother naming the product still ends up
+	# with a usable title instead of a hard validation failure.
+	title: str | None = None
+	# Optional: when omitted, _create_preorder_sync_item_in_session defaults it to the
+	# task item's own (possibly template-assigned) sku, so the local item and the Shopify
+	# product end up sharing one sku unless the caller explicitly wants them to differ.
+	sku: str | None = None
 	price: str
 	description: str | None = None
 	tags: list[str] = Field(default_factory=list)

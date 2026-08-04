@@ -10,8 +10,10 @@ from beyo_manager.models.tables.sku_templates.sku_template import SkuTemplate
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.commands.bootstrap.phases.seed_sku_templates import seed_sku_templates
+from beyo_manager.services.commands.sku_templates._allocate_sku_scalar_in_session import (
+    allocate_sku_scalar_in_session,
+)
 from beyo_manager.services.commands.sku_templates.create_sku_template import create_sku_template
-from beyo_manager.services.commands.sku_templates.reserve_sku_scalar import reserve_sku_scalar
 from beyo_manager.services.commands.sku_templates.update_sku_template import update_sku_template
 from beyo_manager.services.context import ServiceContext
 
@@ -39,7 +41,7 @@ def _ctx(session, workspace, user, incoming_data):
 
 
 @pytest.mark.integration
-async def test_create_update_conflict_and_reserve_monotonicity(db_session):
+async def test_create_update_conflict_and_allocate_monotonicity(db_session):
     workspace, user = await _seed_identity(db_session)
     ctx = _ctx(
         db_session,
@@ -64,11 +66,14 @@ async def test_create_update_conflict_and_reserve_monotonicity(db_session):
     updated = await update_sku_template(ctx)
     assert updated["prefix"] == "ORD"
 
-    ctx.incoming_data = {"task_type": TaskTypeEnum.PRE_ORDER}
-    first = await reserve_sku_scalar(ctx)
-    second = await reserve_sku_scalar(ctx)
-    assert [first["reserved_scalar"], second["reserved_scalar"]] == [7, 8]
-    assert first["sku"] == "ORD-7"
+    first_sku, _, first_scalar = await allocate_sku_scalar_in_session(
+        db_session, workspace_id=workspace.client_id, task_type=TaskTypeEnum.PRE_ORDER, user_id=user.client_id
+    )
+    second_sku, _, second_scalar = await allocate_sku_scalar_in_session(
+        db_session, workspace_id=workspace.client_id, task_type=TaskTypeEnum.PRE_ORDER, user_id=user.client_id
+    )
+    assert [first_scalar, second_scalar] == [7, 8]
+    assert first_sku == "ORD-7"
     row = await db_session.scalar(select(SkuTemplate).where(SkuTemplate.client_id == created["client_id"]))
     assert row.last_scalar == 8
 
@@ -99,7 +104,7 @@ async def test_update_rejects_lowering_last_scalar(db_session):
 
 
 @pytest.mark.integration
-async def test_concurrent_reserves_return_distinct_scalars(db_session):
+async def test_concurrent_allocations_return_distinct_scalars(db_session):
     workspace, user = await _seed_identity(db_session)
     ctx = _ctx(db_session, workspace, user, {"task_type": "pre_order", "prefix": "PRE"})
     created = await create_sku_template(ctx)
@@ -107,17 +112,22 @@ async def test_concurrent_reserves_return_distinct_scalars(db_session):
 
     from beyo_manager.models.database import _session_factory
 
-    async def _reserve():
+    async def _allocate():
         session = _session_factory()
         try:
-            return await reserve_sku_scalar(
-                _ctx(session, workspace, user, {"task_type": TaskTypeEnum.PRE_ORDER})
-            )
+            async with session.begin():
+                _, _, scalar = await allocate_sku_scalar_in_session(
+                    session,
+                    workspace_id=workspace.client_id,
+                    task_type=TaskTypeEnum.PRE_ORDER,
+                    user_id=user.client_id,
+                )
+            return scalar
         finally:
             await session.close()
 
-    first, second = await asyncio.gather(_reserve(), _reserve())
-    assert {first["reserved_scalar"], second["reserved_scalar"]} == {1, 2}
+    first, second = await asyncio.gather(_allocate(), _allocate())
+    assert {first, second} == {1, 2}
     row = await db_session.scalar(select(SkuTemplate).where(SkuTemplate.client_id == created["client_id"]))
     assert row.last_scalar == 2
 

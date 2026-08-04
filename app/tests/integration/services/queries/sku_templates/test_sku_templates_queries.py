@@ -7,7 +7,6 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.commands.sku_templates.create_sku_template import create_sku_template
-from beyo_manager.services.commands.sku_templates.reserve_sku_scalar import reserve_sku_scalar
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.sku_templates.get_sku_template_by_task_type import get_sku_template_by_task_type
 from beyo_manager.services.queries.sku_templates.list_sku_templates import list_sku_templates
@@ -57,10 +56,6 @@ async def test_by_task_type_preview_math_and_404(db_session):
     other_workspace, other_user = await _seed_identity(db_session, "Other workspace")
     with pytest.raises(NotFound):
         await get_sku_template_by_task_type(
-            _ctx(db_session, other_workspace, other_user, {"task_type": "pre_order"})
-        )
-    with pytest.raises(NotFound):
-        await reserve_sku_scalar(
             _ctx(db_session, other_workspace, other_user, {"task_type": "pre_order"})
         )
 

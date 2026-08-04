@@ -6,6 +6,7 @@ from sqlalchemy.orm import load_only
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
+from beyo_manager.domain.sku_templates.events import SkuTemplateEvent
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.not_found import NotFound
@@ -19,11 +20,15 @@ from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.customers.find_or_create_customer import find_or_create_customer
+from beyo_manager.services.commands.items._create_item_in_session import create_item_in_session
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.shopify._create_preorder_sync_item_in_session import (
     _create_preorder_sync_item_in_session,
+)
+from beyo_manager.services.commands.sku_templates._allocate_sku_scalar_in_session import (
+    allocate_sku_scalar_in_session,
 )
 from beyo_manager.services.commands.task_steps._wire_new_step_dependencies import (
     wire_batch_steps_into_dependency_graph,
@@ -43,7 +48,7 @@ from beyo_manager.services.commands.history.message_builder import build_create_
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
-from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
+from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 
 
 _SELLER_ROLES = {"seller"}
@@ -63,6 +68,7 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
 
     shopify_preorder_result: dict | None = None
+    sku_events: list = []
     async with maybe_begin(ctx.session):
         task_kwargs: dict[str, str] = {}
         if request.client_id is not None:
@@ -176,16 +182,76 @@ async def create_task(ctx: ServiceContext) -> dict:
         item_id: str | None = None
         resolved_item: Item | None = None
         if request.item is not None:
-            item_ctx = ServiceContext(
-                incoming_data=request.item.model_dump(exclude_unset=True),
-                identity=ctx.identity,
-                session=ctx.session,
-            )
-            item_result = await find_or_create_item(item_ctx)
-            item_id = item_result["client_id"]
-            resolved_item = await ctx.session.get(Item, item_id)
-            if resolved_item is None:
-                raise NotFound("Item not found.")
+            if request.item.article_number is None and request.item.sku is None:
+                # Neither identifier was given, so the SKU template is this item's only
+                # source of identity — there's nothing to look up an existing item by, so
+                # this always creates fresh (never matches find_or_create_item's semantics).
+                # Unlike the branch below, a missing template is a hard error here: with no
+                # article_number and no template, the item would have no identity at all.
+                item, item_events = await create_item_in_session(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    user_id=ctx.user_id,
+                    username=ctx.identity.get("username"),
+                    client_id=request.item.client_id,
+                    sku_template_task_type=request.task_type,
+                    item_category_id=request.item.item_category_id,
+                    quantity=request.item.quantity,
+                    designer=request.item.designer,
+                    height_in_cm=request.item.height_in_cm,
+                    width_in_cm=request.item.width_in_cm,
+                    depth_in_cm=request.item.depth_in_cm,
+                    item_value_minor=request.item.item_value_minor,
+                    item_cost_minor=request.item.item_cost_minor,
+                    item_currency=request.item.item_currency,
+                    item_position=request.item.item_position,
+                    item_zone=request.item.item_zone,
+                    external_id=request.item.external_id,
+                    external_url=request.item.external_url,
+                    external_source=request.item.external_source,
+                    external_order_id=request.item.external_order_id,
+                )
+                item_id = item.client_id
+                resolved_item = item
+                sku_events.extend(item_events)
+            else:
+                item_ctx = ServiceContext(
+                    incoming_data=request.item.model_dump(exclude_unset=True),
+                    identity=ctx.identity,
+                    session=ctx.session,
+                )
+                item_result = await find_or_create_item(item_ctx)
+                item_id = item_result["client_id"]
+                resolved_item = await ctx.session.get(Item, item_id)
+                if resolved_item is None:
+                    raise NotFound("Item not found.")
+
+                # Only backfill a SKU for an item find_or_create_item just created, and only
+                # when the caller didn't supply one — never touch the sku of a pre-existing
+                # item matched by article_number/sku. A task type with no configured template
+                # (e.g. anything but PRE_ORDER today) silently leaves sku as None, same as
+                # before this existed — this is an automatic helper, not a required field.
+                if item_result["was_created"] and resolved_item.sku is None:
+                    try:
+                        resolved_sku, sku_template_id, reserved_scalar = await allocate_sku_scalar_in_session(
+                            ctx.session,
+                            workspace_id=ctx.workspace_id,
+                            task_type=request.task_type,
+                            user_id=ctx.user_id,
+                        )
+                    except NotFound:
+                        resolved_sku = None
+                    if resolved_sku is not None:
+                        resolved_item.sku = resolved_sku
+                        resolved_item.updated_by_id = ctx.user_id
+                        sku_events.append(
+                            WorkspaceEvent(
+                                event_name=SkuTemplateEvent.SCALAR_RESERVED,
+                                client_id=sku_template_id,
+                                workspace_id=ctx.workspace_id,
+                                extra={"last_scalar": reserved_scalar},
+                            )
+                        )
 
             task_item = TaskItem(
                 workspace_id=ctx.workspace_id,
@@ -208,6 +274,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                 item_category_id=(
                     resolved_item.item_category_id if resolved_item is not None else None
                 ),
+                item_sku=resolved_item.sku if resolved_item is not None else None,
             )
 
         if request.item_upholstery is not None:
@@ -379,7 +446,8 @@ async def create_task(ctx: ServiceContext) -> dict:
             task,
             "task:created",
             extra={"working_section_ids": [step.working_section_id for step in created_steps]},
-        )
+        ),
+        *sku_events,
     ]
     if created_steps:
         pending_events.append(
@@ -397,6 +465,9 @@ async def create_task(ctx: ServiceContext) -> dict:
         )
     await event_bus.dispatch(pending_events)
     result = {"client_id": task.client_id, "task_scalar_id": task.task_scalar_id}
+    if resolved_item is not None:
+        result["item_id"] = resolved_item.client_id
+        result["item_sku"] = resolved_item.sku
     if shopify_preorder_result is not None:
         result["shopify_preorder"] = shopify_preorder_result
     return result
