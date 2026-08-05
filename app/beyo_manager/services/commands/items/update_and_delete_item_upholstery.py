@@ -245,7 +245,7 @@ async def update_item_upholstery(ctx: ServiceContext) -> dict:
 
 
 async def delete_item_upholstery(ctx: ServiceContext) -> dict:
-    """Soft delete an ItemUpholstery."""
+    """Soft delete an ItemUpholstery, cancelling its unfinished requirement first."""
     request = parse_delete_item_upholstery_request(ctx.incoming_data)
 
     async with maybe_begin(ctx.session):
@@ -260,8 +260,32 @@ async def delete_item_upholstery(ctx: ServiceContext) -> dict:
         if iup is None:
             raise NotFound("ItemUpholstery not found.")
 
+        now = datetime.now(timezone.utc)
+
+        if iup.active_requirement_id is not None:
+            active_req_result = await ctx.session.execute(
+                select(ItemUpholsteryRequirement).where(
+                    ItemUpholsteryRequirement.workspace_id == ctx.workspace_id,
+                    ItemUpholsteryRequirement.client_id == iup.active_requirement_id,
+                    ItemUpholsteryRequirement.item_upholstery_id == iup.client_id,
+                    ItemUpholsteryRequirement.is_deleted.is_(False),
+                )
+            )
+            active_req = active_req_result.scalar_one_or_none()
+            if active_req is not None:
+                if active_req.state == ItemUpholsteryRequirementStateEnum.COMPLETED:
+                    raise ConflictError("Cannot delete upholstery after requirement completion.")
+
+                await cancel_requirements_in_session(
+                    session=ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    requirements=[active_req],
+                    actor_id=ctx.user_id,
+                    now=now,
+                )
+
         iup.is_deleted = True
-        iup.deleted_at = datetime.now(timezone.utc)
+        iup.deleted_at = now
         iup.deleted_by_id = ctx.user_id
 
         username = ctx.identity.get("username")
