@@ -120,7 +120,7 @@ async def fetch_shopify_orders_by_product_identity(
         access_token_encrypted=access_token_encrypted,
         barcode=identity_value,
     )
-    exact_variants = [variant for variant in variants if _clean_str(variant.get("barcode")) == _clean_str(identity_value)]
+    exact_variants = [variant for variant in variants if _casefold(variant.get("barcode")) == _casefold(identity_value)]
     variant_skus = []
     for variant in exact_variants:
         sku = _clean_str(variant.get("sku"))
@@ -191,3 +191,8 @@ def _clean_str(value: object) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _casefold(value: object) -> str | None:
+    cleaned = _clean_str(value)
+    return cleaned.casefold() if cleaned is not None else None

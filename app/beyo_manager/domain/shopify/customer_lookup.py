@@ -75,17 +75,18 @@ def _order_has_exact_line_item_match(
     expected = _clean_str(identity_value)
     if expected is None:
         return False
+    expected_casefolded = expected.casefold()
 
     line_item_edges = (order_node.get("lineItems") or {}).get("edges") or []
     for edge in line_item_edges:
         line_item = (edge or {}).get("node") or {}
         if identity_type == "sku":
-            if _clean_str(line_item.get("sku")) == expected:
+            if _casefold(line_item.get("sku")) == expected_casefolded:
                 return True
             continue
 
         variant = line_item.get("variant") or {}
-        if _clean_str(variant.get("barcode")) == expected:
+        if _casefold(variant.get("barcode")) == expected_casefolded:
             return True
     return False
 
@@ -129,6 +130,11 @@ def _clean_str(value: object) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _casefold(value: object) -> str | None:
+    cleaned = _clean_str(value)
+    return cleaned.casefold() if cleaned is not None else None
 
 
 def _coerce_float(value: object) -> float | None:

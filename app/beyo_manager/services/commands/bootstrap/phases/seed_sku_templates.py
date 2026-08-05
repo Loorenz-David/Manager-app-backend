@@ -7,6 +7,7 @@ from beyo_manager.models.tables.sku_templates.sku_template import SkuTemplate
 
 _SKU_TEMPLATES = (
     (TaskTypeEnum.PRE_ORDER, "PRE_ORDER", "-", 0, 0),
+    (TaskTypeEnum.RETURN, "RETURN", "-", 0, 0),
 )
 
 
