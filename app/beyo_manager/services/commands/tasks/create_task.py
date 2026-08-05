@@ -278,6 +278,20 @@ async def create_task(ctx: ServiceContext) -> dict:
                         needs_fixing=needs_fixing_for_task_type(request.task_type),
                     )
 
+                # needs_fixing is a fact about the task, not about movement: the item came back
+                # damaged whether or not it changed zone. find_or_create_item only defers a push
+                # when the zone actually changed, which drops the flag for the common case of an
+                # item already sitting where the tracker last saw it. deferred_pushes holds at
+                # most this same item, so an empty list means nothing above covered it.
+                if not deferred_pushes and needs_fixing_for_task_type(request.task_type):
+                    await enqueue_item_zone_location_push(
+                        ctx.session,
+                        resolved_item,
+                        username=ctx.identity.get("username"),
+                        requested_by_user_id=ctx.user_id,
+                        needs_fixing=True,
+                    )
+
             task_item = TaskItem(
                 workspace_id=ctx.workspace_id,
                 task_id=task.client_id,

@@ -108,9 +108,10 @@ async def test_zone_push_carries_the_backfilled_sku_for_a_newly_created_item(db_
     assert payloads[0]["changes"] == [
         {
             "position": "Shelf A",
-            "item_targets": [{"article_number": "ART-Z", "sku": "PRE-1"}],
+            "item_targets": [
+                {"article_number": "ART-Z", "sku": "PRE-1", "needs_fixing": False}
+            ],
             "username": "tester",
-            "needs_fixing": False,
         }
     ]
     assert payloads[0]["requested_by_user_id"] == user.client_id
@@ -149,7 +150,7 @@ async def test_zone_push_for_an_existing_item_carries_its_stored_sku(db_session,
     assert len(payloads) == 1
     assert payloads[0]["changes"][0]["position"] == "Shelf B"
     assert payloads[0]["changes"][0]["item_targets"] == [
-        {"article_number": "ART-EXISTING", "sku": "MANUAL-SKU-1"}
+        {"article_number": "ART-EXISTING", "sku": "MANUAL-SKU-1", "needs_fixing": False}
     ]
 
 
@@ -180,9 +181,8 @@ async def test_zone_push_for_a_template_only_item_carries_the_template_sku(db_se
     assert payloads[0]["changes"] == [
         {
             "position": "Shelf C",
-            "item_targets": [{"sku": "PRE-1"}],
+            "item_targets": [{"sku": "PRE-1", "needs_fixing": False}],
             "username": "tester",
-            "needs_fixing": False,
         }
     ]
 
@@ -209,7 +209,7 @@ async def test_return_task_flags_needs_fixing_at_creation(db_session, monkeypatc
     )
 
     assert len(payloads) == 1
-    assert payloads[0]["changes"][0]["needs_fixing"] is True
+    assert payloads[0]["changes"][0]["item_targets"][0]["needs_fixing"] is True
 
 
 @pytest.mark.integration
@@ -245,7 +245,7 @@ async def test_later_zone_move_resolves_needs_fixing_from_the_open_return_task(d
 
     assert len(payloads) == 1
     assert payloads[0]["changes"][0]["position"] == "Shelf B"
-    assert payloads[0]["changes"][0]["needs_fixing"] is True
+    assert payloads[0]["changes"][0]["item_targets"][0]["needs_fixing"] is True
 
 
 @pytest.mark.integration
@@ -280,7 +280,7 @@ async def test_zone_move_on_a_non_return_item_is_not_flagged(db_session, monkeyp
     )
 
     assert len(payloads) == 1
-    assert payloads[0]["changes"][0]["needs_fixing"] is False
+    assert payloads[0]["changes"][0]["item_targets"][0]["needs_fixing"] is False
 
 
 @pytest.mark.integration
@@ -328,6 +328,134 @@ async def test_repeated_zone_value_does_not_push_again(db_session, monkeypatch):
     )
 
     assert len(payloads) == 1
+
+
+@pytest.mark.integration
+async def test_return_task_on_an_unmoved_item_still_flags_needs_fixing(db_session, monkeypatch):
+    """The item came back damaged whether or not it moved — the zone-change gate must not eat it.
+
+    This is the real-world shape: the item is already sitting where the tracker last saw it, so
+    find_or_create_item defers nothing and create_task has to enqueue the flag itself.
+    """
+    workspace, user = await _seed_workspace_and_user(db_session)
+    await _disable_event_dispatch(monkeypatch)
+
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "return",
+                "title": "First return",
+                "item": {"article_number": "ART-UNMOVED", "item_zone": "R31"},
+            },
+        )
+    )
+
+    payloads = _capture_pushes(monkeypatch)
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "return",
+                "title": "Second return, same zone",
+                "item": {"article_number": "ART-UNMOVED", "item_zone": "R31"},
+            },
+        )
+    )
+
+    assert len(payloads) == 1
+    assert payloads[0]["changes"] == [
+        {
+            "position": "R31",
+            "item_targets": [{"article_number": "ART-UNMOVED", "needs_fixing": True}],
+            "username": "tester",
+        }
+    ]
+
+
+@pytest.mark.integration
+async def test_return_task_on_an_unmoved_item_pushes_once_not_twice(db_session, monkeypatch):
+    """A return task that *does* move the item gets one push carrying the flag, not two."""
+    workspace, user = await _seed_workspace_and_user(db_session)
+    await _disable_event_dispatch(monkeypatch)
+
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "return",
+                "title": "First return",
+                "item": {"article_number": "ART-MOVED", "item_zone": "R31"},
+            },
+        )
+    )
+
+    payloads = _capture_pushes(monkeypatch)
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "return",
+                "title": "Second return, new zone",
+                "item": {"article_number": "ART-MOVED", "item_zone": "R32"},
+            },
+        )
+    )
+
+    assert len(payloads) == 1
+    assert payloads[0]["changes"][0]["position"] == "R32"
+    assert payloads[0]["changes"][0]["item_targets"][0]["needs_fixing"] is True
+
+
+@pytest.mark.integration
+async def test_non_return_task_on_an_unmoved_item_pushes_nothing(db_session, monkeypatch):
+    """Only return tasks earn an unconditional push — everything else stays zone-change driven."""
+    workspace, user = await _seed_workspace_and_user(db_session)
+    await _disable_event_dispatch(monkeypatch)
+    await _seed_preorder_template(db_session, workspace, user)
+
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "pre_order",
+                "title": "Pre-order chair",
+                "item": {"article_number": "ART-PO-SAME", "item_zone": "Shelf A"},
+            },
+        )
+    )
+
+    payloads = _capture_pushes(monkeypatch)
+    await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "pre_order",
+                "title": "Second pre-order, same zone",
+                "item": {"article_number": "ART-PO-SAME", "item_zone": "Shelf A"},
+            },
+        )
+    )
+
+    assert payloads == []
 
 
 @pytest.mark.integration

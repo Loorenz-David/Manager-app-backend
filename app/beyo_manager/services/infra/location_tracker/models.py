@@ -5,6 +5,9 @@ from dataclasses import dataclass
 class ItemLocationTarget:
     article_number: str | None = None
     sku: str | None = None
+    #: Per target, not per change: one position can carry several items and only some of them
+    #: came back damaged. Always serialized, true or false, so the tracker never infers a default.
+    needs_fixing: bool = False
 
 
 @dataclass(frozen=True)
@@ -12,8 +15,6 @@ class ItemPositionChange:
     position: str
     item_targets: list[ItemLocationTarget]
     username: str | None = None
-    #: Always serialized, true or false, so the tracker never has to infer a default.
-    needs_fixing: bool = False
 
 
 @dataclass(frozen=True)

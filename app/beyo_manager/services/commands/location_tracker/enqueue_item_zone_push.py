@@ -51,6 +51,10 @@ async def enqueue_item_zone_location_push(
     if needs_fixing is None:
         needs_fixing = await resolve_item_needs_fixing(session, item.client_id)
 
+    # Set after the falsy filter above, which exists to drop absent identifiers — a False flag
+    # is meaningful and must still reach the tracker.
+    target["needs_fixing"] = needs_fixing
+
     await create_instant_task(
         session=session,
         task_type=TaskType.LOCATION_TRACKER_PUSH_LOCATIONS,
@@ -61,7 +65,6 @@ async def enqueue_item_zone_location_push(
                         "position": zone,
                         "item_targets": [target],
                         "username": username or None,
-                        "needs_fixing": needs_fixing,
                     }
                 ],
                 requested_by_user_id=requested_by_user_id,

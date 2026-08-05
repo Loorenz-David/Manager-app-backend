@@ -8,6 +8,7 @@ _ALLOWED_ITEM_IDENTITIES = ("article_number", "sku")
 class ItemLocationTargetRequest(BaseModel):
     article_number: str | None = None
     sku: str | None = None
+    needs_fixing: bool = False
 
     @field_validator("article_number", "sku", mode="before")
     @classmethod
@@ -28,7 +29,6 @@ class PushItemLocationEntry(BaseModel):
     position: str
     item_targets: list[ItemLocationTargetRequest]
     username: str | None = None
-    needs_fixing: bool = False
 
     @field_validator("position", mode="before")
     @classmethod
