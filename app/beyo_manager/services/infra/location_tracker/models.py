@@ -12,6 +12,8 @@ class ItemPositionChange:
     position: str
     item_targets: list[ItemLocationTarget]
     username: str | None = None
+    #: Always serialized, true or false, so the tracker never has to infer a default.
+    needs_fixing: bool = False
 
 
 @dataclass(frozen=True)

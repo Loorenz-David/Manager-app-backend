@@ -89,6 +89,7 @@ async def test_push_item_locations_enqueues_task_with_default_username(monkeypat
             "position": "Shelf A",
             "item_targets": [{"article_number": "ART-1", "sku": None}],
             "username": "alice",
+            "needs_fixing": False,
         }
     ]
 

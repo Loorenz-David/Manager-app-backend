@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemStateEnum
+from beyo_manager.domain.items.location_push import normalize_zone
 from beyo_manager.domain.sku_templates.events import SkuTemplateEvent
 from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.errors.not_found import NotFound
@@ -43,6 +44,7 @@ async def create_item_in_session(
     external_url: str | None = None,
     external_source: str | None = None,
     external_order_id: str | None = None,
+    needs_fixing: bool | None = None,
 ) -> tuple[Item, list]:
     """Build, add, and flush a new Item row. Always creates — this never looks up an existing
     item the way find_or_create_item does, so callers must only reach for this when they
@@ -127,12 +129,13 @@ async def create_item_in_session(
     session.add(item)
     await session.flush()
 
-    if item.item_zone:
+    if normalize_zone(item.item_zone):
         await enqueue_item_zone_location_push(
             session,
             item,
             username=username,
             requested_by_user_id=user_id,
+            needs_fixing=needs_fixing,
         )
 
     return item, pending_events

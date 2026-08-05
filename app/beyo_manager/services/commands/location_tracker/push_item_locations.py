@@ -32,6 +32,7 @@ async def push_item_locations(ctx: ServiceContext) -> dict:
                 for target in entry.item_targets
             ],
             username=entry.username or default_username or None,
+            needs_fixing=entry.needs_fixing,
         )
         changes.append(asdict(change))
 

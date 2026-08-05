@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
+from beyo_manager.domain.items.location_push import has_zone_changed
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
@@ -65,6 +66,8 @@ async def _update_item_in_session(
     if item is None:
         raise NotFound("Item not found.")
 
+    zone_before_update = item.item_zone
+
     for field_name in _DIRECT_FIELDS:
         if field_name in request.model_fields_set:
             setattr(item, field_name, getattr(request, field_name))
@@ -91,7 +94,7 @@ async def _update_item_in_session(
     item.updated_at = datetime.now(timezone.utc)
     item.updated_by_id = user_id
 
-    if "item_zone" in request.model_fields_set:
+    if "item_zone" in request.model_fields_set and has_zone_changed(zone_before_update, item.item_zone):
         await enqueue_item_zone_location_push(
             session,
             item,

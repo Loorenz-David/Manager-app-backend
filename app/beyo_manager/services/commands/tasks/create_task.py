@@ -4,6 +4,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import load_only
 
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
+from beyo_manager.domain.items.location_push import needs_fixing_for_task_type
 from beyo_manager.domain.items.upholstery_selection import should_defer_requirement_creation
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.sku_templates.events import SkuTemplateEvent
@@ -24,6 +25,9 @@ from beyo_manager.services.commands.items._create_item_in_session import create_
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
 from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
+from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
+    enqueue_item_zone_location_push,
+)
 from beyo_manager.services.commands.shopify._create_preorder_sync_item_in_session import (
     _create_preorder_sync_item_in_session,
 )
@@ -210,6 +214,9 @@ async def create_task(ctx: ServiceContext) -> dict:
                     external_url=request.item.external_url,
                     external_source=request.item.external_source,
                     external_order_id=request.item.external_order_id,
+                    # This branch's TaskItem row does not exist yet, so a lookup would come
+                    # back empty — the task being created is the one that decides.
+                    needs_fixing=needs_fixing_for_task_type(request.task_type),
                 )
                 item_id = item.client_id
                 resolved_item = item
@@ -220,7 +227,10 @@ async def create_task(ctx: ServiceContext) -> dict:
                     identity=ctx.identity,
                     session=ctx.session,
                 )
-                item_result = await find_or_create_item(item_ctx)
+                deferred_pushes: list[Item] = []
+                item_result = await find_or_create_item(
+                    item_ctx, deferred_location_pushes=deferred_pushes
+                )
                 item_id = item_result["client_id"]
                 resolved_item = await ctx.session.get(Item, item_id)
                 if resolved_item is None:
@@ -252,6 +262,20 @@ async def create_task(ctx: ServiceContext) -> dict:
                                 extra={"last_scalar": reserved_scalar},
                             )
                         )
+
+                # Deferred out of find_or_create_item so the outbound target snapshot includes
+                # any sku backfilled just above — enqueueing inside that call would freeze a
+                # payload carrying only the article_number for an item that ends up with both.
+                # The create_item_in_session branch needs no equivalent: it resolves its sku
+                # before building the row, so its own enqueue already sees the final values.
+                for deferred_item in deferred_pushes:
+                    await enqueue_item_zone_location_push(
+                        ctx.session,
+                        deferred_item,
+                        username=ctx.identity.get("username"),
+                        requested_by_user_id=ctx.user_id,
+                        needs_fixing=needs_fixing_for_task_type(request.task_type),
+                    )
 
             task_item = TaskItem(
                 workspace_id=ctx.workspace_id,

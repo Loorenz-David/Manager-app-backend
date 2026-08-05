@@ -28,6 +28,7 @@ class PushItemLocationEntry(BaseModel):
     position: str
     item_targets: list[ItemLocationTargetRequest]
     username: str | None = None
+    needs_fixing: bool = False
 
     @field_validator("position", mode="before")
     @classmethod

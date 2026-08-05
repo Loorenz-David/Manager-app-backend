@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, select
 
 from beyo_manager.domain.items.enums import ItemStateEnum
+from beyo_manager.domain.items.location_push import has_zone_changed, normalize_zone
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.items.item import Item
@@ -38,9 +39,33 @@ _DIRECT_FIELDS = {
 }
 
 
-async def find_or_create_item(ctx: ServiceContext) -> dict:
-    """Return an existing active item matched by article_number or sku, updating its fields; create if not found."""
+async def find_or_create_item(
+    ctx: ServiceContext,
+    *,
+    deferred_location_pushes: list[Item] | None = None,
+) -> dict:
+    """Return an existing active item matched by article_number or sku, updating its fields; create if not found.
+
+    Pass deferred_location_pushes to collect the items whose zone should be pushed to the
+    location tracker instead of enqueueing them here. The push payload is a frozen snapshot of
+    article_number/sku taken at enqueue time, so a caller that writes either field after this
+    returns (create_task backfilling a template sku, for instance) would otherwise ship a target
+    that never matches what landed in the row. Collecting keeps the decision of *whether* to
+    push — which needs the pre-update zone only visible in here — with the caller's control over
+    *when*.
+    """
     request = parse_find_or_create_item_request(ctx.incoming_data)
+
+    async def _push_or_defer(item: Item) -> None:
+        if deferred_location_pushes is not None:
+            deferred_location_pushes.append(item)
+            return
+        await enqueue_item_zone_location_push(
+            ctx.session,
+            item,
+            username=ctx.identity.get("username"),
+            requested_by_user_id=ctx.user_id,
+        )
 
     if request.article_number is None and request.sku is None:
         raise ValidationError("At least one of article_number or sku must be provided.")
@@ -67,6 +92,8 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
         existing = existing_result.scalar_one_or_none()
 
         if existing is not None:
+            zone_before_update = existing.item_zone
+
             for field_name in _DIRECT_FIELDS:
                 if field_name in request.model_fields_set:
                     setattr(existing, field_name, getattr(request, field_name))
@@ -93,13 +120,10 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
             existing.updated_at = datetime.now(timezone.utc)
             existing.updated_by_id = ctx.user_id
 
-            if "item_zone" in request.model_fields_set:
-                await enqueue_item_zone_location_push(
-                    ctx.session,
-                    existing,
-                    username=ctx.identity.get("username"),
-                    requested_by_user_id=ctx.user_id,
-                )
+            if "item_zone" in request.model_fields_set and has_zone_changed(
+                zone_before_update, existing.item_zone
+            ):
+                await _push_or_defer(existing)
 
             return {"client_id": existing.client_id, "was_created": False}
 
@@ -154,12 +178,7 @@ async def find_or_create_item(ctx: ServiceContext) -> dict:
         ctx.session.add(item)
         await ctx.session.flush()
 
-        if item.item_zone:
-            await enqueue_item_zone_location_push(
-                ctx.session,
-                item,
-                username=ctx.identity.get("username"),
-                requested_by_user_id=ctx.user_id,
-            )
+        if normalize_zone(item.item_zone):
+            await _push_or_defer(item)
 
     return {"client_id": item.client_id, "was_created": True}

@@ -10,6 +10,9 @@ from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
+from beyo_manager.services.commands.items.batch_update_item_positions import (
+    batch_update_item_positions,
+)
 from beyo_manager.services.commands.items.create_item import create_item
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.requests import (
@@ -104,6 +107,7 @@ async def test_enqueue_item_zone_location_push_enqueues_existing_job(monkeypatch
         item,
         username="alice",
         requested_by_user_id="usr_1",
+        needs_fixing=False,
     )
 
     assert enqueued is True
@@ -115,10 +119,72 @@ async def test_enqueue_item_zone_location_push_enqueues_existing_job(monkeypatch
                 "position": "Shelf A",
                 "item_targets": [{"article_number": "ART-1"}],
                 "username": "alice",
+                "needs_fixing": False,
             }
         ],
         "requested_by_user_id": "usr_1",
     }
+
+
+@pytest.mark.asyncio
+async def test_enqueue_item_zone_location_push_flags_needs_fixing(monkeypatch) -> None:
+    create_task_calls: list[dict[str, Any]] = []
+
+    async def _create_instant_task(**kwargs):
+        create_task_calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.location_tracker.enqueue_item_zone_push.create_instant_task",
+        _create_instant_task,
+    )
+
+    item = Item(client_id="itm_1", workspace_id="ws_1", article_number="ART-1", item_zone="Shelf A")
+
+    await enqueue_item_zone_location_push(
+        object(),
+        item,
+        username="alice",
+        requested_by_user_id="usr_1",
+        needs_fixing=True,
+    )
+
+    assert create_task_calls[0]["payload"]["changes"][0]["needs_fixing"] is True
+
+
+@pytest.mark.asyncio
+async def test_enqueue_item_zone_location_push_resolves_needs_fixing_when_not_supplied(monkeypatch) -> None:
+    create_task_calls: list[dict[str, Any]] = []
+    resolve_calls: list[str] = []
+
+    async def _create_instant_task(**kwargs):
+        create_task_calls.append(kwargs)
+        return object()
+
+    async def _resolve(_session, item_id):
+        resolve_calls.append(item_id)
+        return True
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.location_tracker.enqueue_item_zone_push.create_instant_task",
+        _create_instant_task,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.location_tracker.enqueue_item_zone_push.resolve_item_needs_fixing",
+        _resolve,
+    )
+
+    item = Item(client_id="itm_1", workspace_id="ws_1", article_number="ART-1", item_zone="Shelf A")
+
+    await enqueue_item_zone_location_push(
+        object(),
+        item,
+        username="alice",
+        requested_by_user_id="usr_1",
+    )
+
+    assert resolve_calls == ["itm_1"]
+    assert create_task_calls[0]["payload"]["changes"][0]["needs_fixing"] is True
 
 
 @pytest.mark.asyncio
@@ -161,8 +227,9 @@ async def test_create_item_triggers_zone_push_when_item_zone_present(monkeypatch
         "beyo_manager.services.commands.items.create_item.parse_create_item_request",
         lambda _data: CreateItemRequest(article_number="ART-1", item_zone="Zone A"),
     )
+    # The enqueue lives in create_item_in_session, which create_item delegates the row build to.
     monkeypatch.setattr(
-        "beyo_manager.services.commands.items.create_item.enqueue_item_zone_location_push",
+        "beyo_manager.services.commands.items._create_item_in_session.enqueue_item_zone_location_push",
         _enqueue,
     )
     monkeypatch.setattr(
@@ -227,6 +294,174 @@ async def test_find_or_create_item_triggers_zone_push_for_create_branch(monkeypa
 
     assert result["was_created"] is True
     assert push_calls == ["Zone C"]
+
+
+@pytest.mark.asyncio
+async def test_find_or_create_item_collects_deferred_pushes_instead_of_enqueueing(monkeypatch) -> None:
+    push_calls: list[str | None] = []
+
+    async def _enqueue(_session, item, **_kwargs):
+        push_calls.append(item.item_zone)
+        return True
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.find_or_create_item.parse_find_or_create_item_request",
+        lambda _data: FindOrCreateItemRequest(article_number="ART-1", item_zone="Zone D"),
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.find_or_create_item.enqueue_item_zone_location_push",
+        _enqueue,
+    )
+
+    existing = Item(client_id="itm_1", workspace_id="ws_1", article_number="ART-1")
+    update_deferred: list[Item] = []
+    create_deferred: list[Item] = []
+    update_result = await find_or_create_item(
+        _ctx(_Session(execute_results=[existing]), {}), deferred_location_pushes=update_deferred
+    )
+    create_result = await find_or_create_item(
+        _ctx(_Session(execute_results=[None]), {}), deferred_location_pushes=create_deferred
+    )
+
+    # The field write still happens — only the outbound push is left to the caller.
+    assert update_result["was_created"] is False
+    assert existing.item_zone == "Zone D"
+    assert create_result["was_created"] is True
+    assert push_calls == []
+    assert [item.item_zone for item in update_deferred] == ["Zone D"]
+    assert [item.item_zone for item in create_deferred] == ["Zone D"]
+
+
+@pytest.mark.asyncio
+async def test_find_or_create_item_skips_push_when_zone_is_unchanged(monkeypatch) -> None:
+    """Case F: a repeated zone value is a no-op for the tracker, not another push."""
+    push_calls: list[str | None] = []
+
+    async def _enqueue(_session, item, **_kwargs):
+        push_calls.append(item.item_zone)
+        return True
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.find_or_create_item.enqueue_item_zone_location_push",
+        _enqueue,
+    )
+
+    for stored_zone, sent_zone in (("Zone A", "Zone A"), ("Zone A", "  Zone A  ")):
+        monkeypatch.setattr(
+            "beyo_manager.services.commands.items.find_or_create_item.parse_find_or_create_item_request",
+            lambda _data, _zone=sent_zone: FindOrCreateItemRequest(
+                article_number="ART-1", item_zone=_zone
+            ),
+        )
+        existing = Item(
+            client_id="itm_1", workspace_id="ws_1", article_number="ART-1", item_zone=stored_zone
+        )
+        await find_or_create_item(_ctx(_Session(execute_results=[existing]), {}))
+
+    assert push_calls == []
+
+
+@pytest.mark.asyncio
+async def test_find_or_create_item_pushes_when_zone_actually_changes(monkeypatch) -> None:
+    push_calls: list[str | None] = []
+
+    async def _enqueue(_session, item, **_kwargs):
+        push_calls.append(item.item_zone)
+        return True
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.find_or_create_item.parse_find_or_create_item_request",
+        lambda _data: FindOrCreateItemRequest(article_number="ART-1", item_zone="Zone B"),
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.find_or_create_item.enqueue_item_zone_location_push",
+        _enqueue,
+    )
+
+    existing = Item(
+        client_id="itm_1", workspace_id="ws_1", article_number="ART-1", item_zone="Zone A"
+    )
+    await find_or_create_item(_ctx(_Session(execute_results=[existing]), {}))
+
+    assert push_calls == ["Zone B"]
+
+
+class _ScalarsResult:
+    def __init__(self, values: list[Any]):
+        self._values = values
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return list(self._values)
+
+
+class _BatchSession(_Session):
+    """_Session's execute returns scalar_one_or_none; the batch command wants scalars().all()."""
+
+    def __init__(self, items: list[Item]):
+        super().__init__()
+        self._items = items
+
+    async def execute(self, _statement):
+        return _ScalarsResult(self._items)
+
+
+@pytest.mark.asyncio
+async def test_batch_update_item_positions_pushes_only_changed_zones(monkeypatch) -> None:
+    pushed: list[tuple[str, bool | None]] = []
+
+    async def _enqueue(_session, item, **kwargs):
+        pushed.append((item.client_id, kwargs.get("needs_fixing")))
+        return True
+
+    async def _resolve(_session, item_ids):
+        assert item_ids == ["itm_changed"], "only items about to push should be resolved"
+        return {"itm_changed"}
+
+    async def _history(**_kwargs):
+        return None
+
+    async def _dispatch(_events):
+        return None
+
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.batch_update_item_positions.enqueue_item_zone_location_push",
+        _enqueue,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.batch_update_item_positions.resolve_items_needing_fixing",
+        _resolve,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.batch_update_item_positions._create_history_record_in_session",
+        _history,
+    )
+    monkeypatch.setattr(
+        "beyo_manager.services.commands.items.batch_update_item_positions.event_bus.dispatch",
+        _dispatch,
+    )
+
+    unchanged = Item(client_id="itm_same", workspace_id="ws_1", article_number="A-1", item_zone="Zone A")
+    changed = Item(client_id="itm_changed", workspace_id="ws_1", article_number="A-2", item_zone="Zone A")
+    no_zone_sent = Item(client_id="itm_plain", workspace_id="ws_1", article_number="A-3", item_zone="Zone A")
+    session = _BatchSession([unchanged, changed, no_zone_sent])
+
+    await batch_update_item_positions(
+        _ctx(
+            session,
+            {
+                "entries": [
+                    {"client_id": "itm_same", "item_position": "1", "item_zone": "  Zone A  "},
+                    {"client_id": "itm_changed", "item_position": "2", "item_zone": "Zone B"},
+                    {"client_id": "itm_plain", "item_position": "3"},
+                ]
+            },
+        )
+    )
+
+    assert pushed == [("itm_changed", True)]
 
 
 @pytest.mark.asyncio

@@ -5,12 +5,16 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
+from beyo_manager.domain.items.location_push import has_zone_changed
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.services.commands.history._create_history_record_in_session import (
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_update_message
+from beyo_manager.services.commands.location_tracker._resolve_needs_fixing import (
+    resolve_items_needing_fixing,
+)
 from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
     enqueue_item_zone_location_push,
 )
@@ -52,18 +56,29 @@ async def batch_update_item_positions(ctx: ServiceContext) -> dict:
         now = datetime.now(timezone.utc)
         username = ctx.identity.get("username")
 
+        # Resolved once for every item about to move rather than per item, so a batch of N
+        # stays at one round trip instead of N.
+        pushing_ids = [
+            client_id
+            for client_id in ordered_ids
+            if client_id in final_zones
+            and has_zone_changed(items_by_id[client_id].item_zone, final_zones[client_id])
+        ]
+        needs_fixing_ids = await resolve_items_needing_fixing(ctx.session, pushing_ids)
+
         for client_id in ordered_ids:
             item = items_by_id[client_id]
             item.item_position = final_positions[client_id]
 
-            zone_changed = client_id in final_zones
-            if zone_changed:
+            zone_supplied = client_id in final_zones
+            zone_changed = client_id in pushing_ids
+            if zone_supplied:
                 item.item_zone = final_zones[client_id]
 
             item.updated_at = now
             item.updated_by_id = ctx.user_id
 
-            updated_fields = ["item_position", "item_zone"] if zone_changed else ["item_position"]
+            updated_fields = ["item_position", "item_zone"] if zone_supplied else ["item_position"]
             await _create_history_record_in_session(
                 session=ctx.session,
                 entity_type=HistoryRecordEntityTypeEnum.ITEM,
@@ -83,6 +98,7 @@ async def batch_update_item_positions(ctx: ServiceContext) -> dict:
                     item,
                     username=username,
                     requested_by_user_id=ctx.user_id,
+                    needs_fixing=client_id in needs_fixing_ids,
                 )
 
     await event_bus.dispatch(
