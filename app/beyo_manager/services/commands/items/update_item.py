@@ -41,6 +41,7 @@ _DIRECT_FIELDS = {
     "external_url",
     "external_source",
     "external_order_id",
+    "can_have_upholstery",
 }
 
 

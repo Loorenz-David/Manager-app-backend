@@ -25,6 +25,10 @@ def _seat_category_match():
     return func.lower(Item.item_major_category_snapshot) == _SEAT_MAJOR_CATEGORY
 
 
+def _can_have_upholstery_match():
+    return Item.can_have_upholstery.is_(True)
+
+
 def _include_return_tasks(ctx: ServiceContext) -> bool:
     raw = ctx.query_params.get("include_return_tasks", False)
     if isinstance(raw, str):
@@ -84,6 +88,7 @@ def _missing_selection_subquery(ctx: ServiceContext):
             TaskItem.role == TaskItemRoleEnum.PRIMARY,
             Item.is_deleted.is_(False),
             _seat_category_match(),
+            _can_have_upholstery_match(),
             or_(
                 ItemUpholstery.client_id.is_(None),
                 and_(
@@ -114,6 +119,7 @@ def _missing_quantity_subquery(ctx: ServiceContext):
             TaskItem.role == TaskItemRoleEnum.PRIMARY,
             Item.is_deleted.is_(False),
             _seat_category_match(),
+            _can_have_upholstery_match(),
             or_(ItemUpholstery.amount_meters.is_(None), ItemUpholstery.amount_meters == 0),
         )
         .distinct()

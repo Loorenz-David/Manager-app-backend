@@ -42,6 +42,7 @@ class Item(IdentityMixin, Base):
     )
     item_position: Mapped[str | None] = mapped_column(String(255), nullable=True)
     item_zone: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    can_have_upholstery: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     external_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     external_source: Mapped[str | None] = mapped_column(String(128), nullable=True)

@@ -2,7 +2,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from beyo_manager.domain.items.enums import ItemUpholsterySourceEnum
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.services.queries.items.seat_tasks_pending_upholstery import (
+    _can_have_upholstery_match,
     _include_return_tasks,
     _resolve_pending_upholstery,
 )
@@ -59,3 +61,9 @@ def test_include_return_tasks_accepts_string_true():
     ctx = SimpleNamespace(query_params={"include_return_tasks": "true"})
 
     assert _include_return_tasks(ctx) is True
+
+
+def test_can_have_upholstery_match_filters_on_the_item_flag():
+    condition = _can_have_upholstery_match()
+
+    assert condition.compare(Item.can_have_upholstery.is_(True))

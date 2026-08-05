@@ -44,6 +44,7 @@ async def create_item_in_session(
     external_url: str | None = None,
     external_source: str | None = None,
     external_order_id: str | None = None,
+    can_have_upholstery: bool = True,
     needs_fixing: bool | None = None,
 ) -> tuple[Item, list]:
     """Build, add, and flush a new Item row. Always creates — this never looks up an existing
@@ -122,6 +123,7 @@ async def create_item_in_session(
         external_url=external_url,
         external_source=external_source,
         external_order_id=external_order_id,
+        can_have_upholstery=can_have_upholstery,
         item_category_snapshot=item_category_snapshot,
         item_major_category_snapshot=item_major_category_snapshot,
         created_by_id=user_id,

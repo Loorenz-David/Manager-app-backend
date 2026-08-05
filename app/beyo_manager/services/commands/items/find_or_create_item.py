@@ -36,6 +36,7 @@ _DIRECT_FIELDS = {
     "external_url",
     "external_source",
     "external_order_id",
+    "can_have_upholstery",
 }
 
 
@@ -171,6 +172,7 @@ async def find_or_create_item(
             external_url=request.external_url,
             external_source=request.external_source,
             external_order_id=request.external_order_id,
+            can_have_upholstery=request.can_have_upholstery,
             item_category_snapshot=item_category_snapshot,
             item_major_category_snapshot=item_major_category_snapshot,
             created_by_id=ctx.user_id,

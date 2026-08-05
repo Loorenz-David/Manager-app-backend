@@ -42,6 +42,7 @@ class FindOrCreateItemInput(BaseModel):
 	external_url: str | None = None
 	external_source: str | None = None
 	external_order_id: str | None = None
+	can_have_upholstery: bool = True
 
 
 class ItemIssueInput(BaseModel):

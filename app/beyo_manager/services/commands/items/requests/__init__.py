@@ -201,6 +201,7 @@ class CreateItemRequest(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool = True
     item_issues: list[ItemIssueCreateInput] | None = None
     item_upholstery: ItemUpholsteryCreateInput | None = None
 
@@ -251,6 +252,7 @@ class UpdateItemRequest(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool | None = None
 
     @field_validator("quantity")
     @classmethod
@@ -464,6 +466,7 @@ class FindOrCreateItemRequest(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool = True
 
     @field_validator("article_number", "sku", mode="before")
     @classmethod

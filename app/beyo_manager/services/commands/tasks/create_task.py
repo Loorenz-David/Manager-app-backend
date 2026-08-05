@@ -214,6 +214,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                     external_url=request.item.external_url,
                     external_source=request.item.external_source,
                     external_order_id=request.item.external_order_id,
+                    can_have_upholstery=request.item.can_have_upholstery,
                     # This branch's TaskItem row does not exist yet, so a lookup would come
                     # back empty — the task being created is the one that decides.
                     needs_fixing=needs_fixing_for_task_type(request.task_type),

@@ -109,6 +109,7 @@ def _serialize_item_base(item: Item) -> dict:
         "external_url": item.external_url,
         "external_source": item.external_source,
         "external_order_id": item.external_order_id,
+        "can_have_upholstery": item.can_have_upholstery,
         "created_at": item.created_at.isoformat(),
         "created_by_id": item.created_by_id,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,

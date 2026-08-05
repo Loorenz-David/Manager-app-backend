@@ -74,6 +74,7 @@ class _CreateItemBody(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool = True
     item_issues: list[_ItemIssueBody] | None = None
     item_upholstery: _ItemUpholsteryBody | None = None
 
@@ -96,6 +97,7 @@ class _UpdateItemBody(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool | None = None
 
 
 class _FindOrCreateItemBody(BaseModel):
@@ -117,6 +119,7 @@ class _FindOrCreateItemBody(BaseModel):
     external_url: str | None = None
     external_source: str | None = None
     external_order_id: str | None = None
+    can_have_upholstery: bool = True
 
 
 class _BatchCreateIssuesBody(BaseModel):
@@ -336,7 +339,7 @@ async def route_batch_update_item_positions(
 async def route_update_item(
     client_id: str,
     body: _UpdateItemBody,
-    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
     ctx = ServiceContext(

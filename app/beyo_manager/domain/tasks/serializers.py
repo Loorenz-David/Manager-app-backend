@@ -110,6 +110,7 @@ def serialize_item(item: Item | None) -> dict | None:
         "external_url": item.external_url,
         "external_source": item.external_source,
         "external_order_id": item.external_order_id,
+        "can_have_upholstery": item.can_have_upholstery,
         "item_category_snapshot": item.item_category_snapshot,
         "item_major_category_snapshot": item.item_major_category_snapshot,
     }
