@@ -353,7 +353,7 @@ but they are **different objects** — do not reuse one type for both.
 |---|---|---|
 | Scope | All sections in the workspace | Only sections the caller is an active member of |
 | Roles | admin, manager, worker, seller | admin, manager, worker (**no seller**) |
-| Extra fields | `dependencies`, `item_categories`, `supported_issue_types`, `members` | `task_steps_counts`, `ready_and_pending_count` |
+| Extra fields | `dependencies`, `item_categories`, `supported_issue_types`, `members` | `task_steps_counts`, `active_ready` |
 | Pagination | `working_sections_pagination` | none — returns everything |
 | Ordering | `order_list` (nulls last), then `created_at` | `order_list` (nulls last), then `name` |
 | Query params | `limit`, `offset` | `today_start` (ISO 8601) |

@@ -23,6 +23,11 @@ _TERMINAL_STATES = (
     TaskStepStateEnum.SKIPPED,
     TaskStepStateEnum.FAILED,
 )
+_READY_ELIGIBLE_STATES = (
+    TaskStepStateEnum.PENDING,
+    TaskStepStateEnum.WORKING,
+    TaskStepStateEnum.PAUSED,
+)
 
 
 async def get_worker_working_sections(ctx: ServiceContext) -> dict:
@@ -121,7 +126,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
         .group_by(TaskStep.working_section_id, TaskStep.state)
     )
 
-    ready_and_pending_result = await ctx.session.execute(
+    active_ready_result = await ctx.session.execute(
         select(
             TaskStep.working_section_id,
             func.count().label("cnt"),
@@ -138,7 +143,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
             TaskStep.workspace_id == ctx.workspace_id,
             TaskStep.working_section_id.in_(active_section_ids),
             TaskStep.is_deleted.is_(False),
-            TaskStep.state == TaskStepStateEnum.PENDING,
+            TaskStep.state.in_(_READY_ELIGIBLE_STATES),
             TaskStep.readiness_status == TaskStepReadinessStatusEnum.READY,
         )
         .group_by(TaskStep.working_section_id)
@@ -150,9 +155,9 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
     for row in terminal_counts_result.all():
         counts_map[row.working_section_id][row.state.value] = row.cnt
 
-    ready_and_pending_map: dict[str, int] = {}
-    for row in ready_and_pending_result.all():
-        ready_and_pending_map[row.working_section_id] = row.cnt
+    active_ready_map: dict[str, int] = {}
+    for row in active_ready_result.all():
+        active_ready_map[row.working_section_id] = row.cnt
 
     all_states = [state.value for state in (_ACTIVE_STATES + _TERMINAL_STATES)]
 
@@ -171,7 +176,7 @@ async def get_worker_working_sections(ctx: ServiceContext) -> dict:
                     state: counts_map[section.client_id].get(state, 0)
                     for state in all_states
                 },
-                "ready_and_pending_count": ready_and_pending_map.get(section.client_id, 0),
+                "active_ready": active_ready_map.get(section.client_id, 0),
             }
             for section in sections
         ]

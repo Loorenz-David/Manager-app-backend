@@ -367,4 +367,4 @@ async def test_worker_working_sections_excludes_counts_for_deleted_parent_tasks(
 
     section = next(s for s in worker_sections["working_sections"] if s["client_id"] == section_id)
     assert section["task_steps_counts"]["pending"] == 1
-    assert section["ready_and_pending_count"] == 1
+    assert section["active_ready"] == 1
