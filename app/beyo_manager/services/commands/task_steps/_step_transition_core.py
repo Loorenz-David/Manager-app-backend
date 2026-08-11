@@ -1,13 +1,28 @@
-"""Shared per-step transition core used by the batch transition command.
+"""Shared per-step transition core.
 
-DRIFT NOTE: the per-step transition sub-processes here MIRROR
-`transition_step_state.transition_step_state` (the single-step endpoint). Any change
-to the state-machine handling, record close/open, metrics accrual, terminal handling,
-task side-effects, or the PROCESS_STEP_TRANSITION outbox in one of the two MUST be
-evaluated for the other — they are intentionally kept in sync by convention
-(see docs/architecture/.../PLAN_batch_step_transition_20260623, Option B). The
-transition-rules map `_ALLOWED_TRANSITIONS` is single-sourced from `transition_step_state`
-and used for validation by the batch command, so the legal transitions cannot drift.
+DRIVERS (the canonical list — add here, not in each caller's docstring):
+  - `transition_step_state_batch`      :162
+  - `_clock_worker_shift`              :204
+  - `declare_worker_state`             :132
+  - `_case_created_step_pause`         :133
+  - `force_task_ready`                 :154
+
+DRIFT NOTE: the per-step transition sub-processes here MIRROR two hand-maintained
+copies of the same body — `transition_step_state.transition_step_state` (the
+single-step endpoint, which does NOT call this core) and
+`finalize_pending_step_completion` (the deferred-completion worker, currently
+dormant). Three copies in total. Any change to the state-machine handling, record
+close/open, metrics accrual, terminal handling, task side-effects, or the
+PROCESS_STEP_TRANSITION outbox in one MUST be evaluated for the other two — they are
+intentionally kept in sync by convention
+(see docs/architecture/.../PLAN_batch_step_transition_20260623, Option B).
+
+TRANSITION RULES: `_ALLOWED_TRANSITIONS` is single-sourced from `transition_step_state`
+and imported by the batch command, so those two cannot drift from each other. That
+guarantee does NOT extend to every driver: this core validates nothing (preconditions
+are the caller's job), and `force_task_ready` deliberately owns a separate
+`_FORCE_READY_TRANSITIONS` map so administrative skips stay off the worker-facing
+route. Legal transitions therefore differ per driver by design.
 
 This core is transaction-free and dispatch-free: the caller owns the `maybe_begin`
 transaction and the single post-commit `event_bus.dispatch`. It does NOT emit

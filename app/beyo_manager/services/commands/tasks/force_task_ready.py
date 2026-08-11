@@ -24,8 +24,10 @@ authority this endpoint exists to gate. ``_apply_step_transition`` validates not
 its docstring makes preconditions the caller's job — so each driver owning its own
 legality map is the established contract here, not a workaround.
 
-DRIFT NOTE: this is the third driver over ``_apply_step_transition``, after
-``transition_step_state`` and ``transition_step_state_batch``. It deliberately uses the
+DRIFT NOTE: this is one of several drivers over ``_apply_step_transition`` — that
+core's docstring carries the canonical list. (Note ``transition_step_state`` is NOT
+among them: it owns its own hand-mirrored copy of the body and never calls the core.)
+It deliberately uses the
 narrowest possible slice — a single hop to a terminal state, never to ``WORKING`` — so
 the auto-pause guard and the completion cascade in that core are both unreachable from
 here. Changes to record close/open, the PROCESS_STEP_TRANSITION outbox, or the task

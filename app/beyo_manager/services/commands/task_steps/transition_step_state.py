@@ -113,12 +113,15 @@ def _completed_the_whole_task(task_became_ready: bool, new_state: TaskStepStateE
 async def transition_step_state(ctx: ServiceContext) -> dict:
     """Atomically close current StepStateRecord and open a new one; apply task side effects; publish outbox.
 
-    DRIFT NOTE: the per-step transition sub-processes below are MIRRORED by
-    `_step_transition_core._apply_step_transition` (used by `transition_step_state_batch`).
-    Any change here to the state machine, record close/open, metrics, terminal handling,
-    task side-effects, or the PROCESS_STEP_TRANSITION outbox MUST be evaluated for that core,
-    and vice versa — they are intentionally kept in sync by convention (Option B).
-    `_ALLOWED_TRANSITIONS` is imported by the batch command, so the transition rules are single-sourced here.
+    DRIFT NOTE: this body is copy #1 of three. It is MIRRORED by
+    `_step_transition_core._apply_step_transition` (copy #2, the shared core — see its
+    docstring for the canonical driver list) and by `finalize_pending_step_completion`
+    (copy #3, deferred completion, currently dormant). This command does NOT call the
+    core. Any change here to the state machine, record close/open, metrics, terminal
+    handling, task side-effects, or the PROCESS_STEP_TRANSITION outbox MUST be evaluated
+    for the other two — they are intentionally kept in sync by convention (Option B).
+    `_ALLOWED_TRANSITIONS` is defined here and imported by the batch command, so those
+    two cannot drift; other drivers of the core may use their own legality map.
     """
     request = parse_transition_step_state_request(ctx.incoming_data)
     old_task_state = None
