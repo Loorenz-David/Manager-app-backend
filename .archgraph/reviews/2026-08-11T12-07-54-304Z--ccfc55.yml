@@ -1,0 +1,132 @@
+reviewId: 2026-08-11T12-07-54-304Z--ccfc55
+reviewedItemIds:
+  - node:decision-idempotent-completion-counters
+  - node:analytics-reconcile-user-day-completions
+  - node:analytics-recompute-step-completion-totals
+  - node:analytics-apply-completion-reconcile-deltas
+  - node:script-backfill-missing-completion-counts
+  - node:test-completion-replay-idempotency
+  - edge:analytics-process-step-transition--calls-->analytics-reconcile-user-day-completions
+  - edge:analytics-process-step-transition--calls-->analytics-apply-completion-reconcile-deltas
+  - edge:analytics-process-step-transition--calls-->analytics-recompute-step-completion-totals
+decisions:
+  - itemId: node:decision-idempotent-completion-counters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 92
+            endLine: 112
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 88
+            endLine: 117
+        - index: 1
+          from:
+            path: app/beyo_manager/services/infra/execution/worker_base.py
+            startLine: 174
+            endLine: 198
+          to:
+            path: app/beyo_manager/services/infra/execution/worker_base.py
+            startLine: 84
+            endLine: 108
+    rationale: Both claims re-derived. ev1 accurately describes
+      _process_task/_finalize_task but 174-198 covers only _fail_task;
+      re-anchored to the three-session structure at 84-108.
+  - itemId: node:analytics-reconcile-user-day-completions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived: recounts via _completed_steps_for_user_day and
+      _issue_counts_by_step, SETs daily and section-daily. Symbol-anchored;
+      survived all commits."
+  - itemId: node:analytics-recompute-step-completion-totals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified at 228-265: counts non-deleted COMPLETED records and
+      issues, assigns all three counters absolutely."
+  - itemId: node:analytics-apply-completion-reconcile-deltas
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified at 547-567: writes lifetime and working-section-daily via
+      _apply_delta_completions."
+  - itemId: node:script-backfill-missing-completion-counts
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _run replays each affected user-day through both live
+      reconcile functions; dry-run does the work then rolls back."
+  - itemId: node:test-completion-replay-idempotency
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: All six tests exist under matching names; headline reconciles twice
+      and asserts no rollup moved.
+  - itemId: edge:analytics-process-step-transition--calls-->analytics-reconcile-user-day-completions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 100
+            endLine: 109
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 104
+            endLine: 107
+    rationale: Real call; anchor read-verified to the current call site.
+  - itemId: edge:analytics-process-step-transition--calls-->analytics-apply-completion-reconcile-deltas
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 106
+            endLine: 109
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 108
+            endLine: 111
+    rationale: Real call; anchor read-verified (line map mis-aligned this one).
+  - itemId: edge:analytics-process-step-transition--calls-->analytics-recompute-step-completion-totals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 110
+            endLine: 112
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 115
+            endLine: 117
+    rationale: Real call; anchor read-verified. Sits outside the credited-user gate
+      since 087c950.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:07:54.304Z
+graphRevisionBefore: f5c5cb6eb1e3c533ace72c90440db1046b7ca7d3f0751f5ac16b3097b22aae6f
+graphRevisionAfter: e262c1edbfe206f829ca62f8b71764d567803b2370d7fe901c43f59086c2ad95
+evidenceSummary: 11 evidence entries across 5 files; no drift detected
+humanInstruction: "Authorized by David after independently verifying all four
+  anchor corrections against the source: process_step_transition 88-117,
+  worker_base 84-108, and the three call-site ranges."
+reviewTokenCorrelation: 5ae9bca77a23

@@ -1,0 +1,125 @@
+reviewId: 2026-08-11T12-02-05-114Z--6c69bd
+reviewedItemIds:
+  - node:analytics-apply-step-completed
+  - node:analytics-apply-issues-at-completion
+  - node:concept-attribution-split
+  - edge:analytics-apply-step-completed--writes_to-->table-task-step
+  - edge:analytics-apply-step-completed--writes_to-->table-user-daily-work-stats
+  - edge:analytics-apply-step-completed--writes_to-->table-user-lifetime-stats
+  - edge:analytics-apply-step-completed--writes_to-->table-user-section-daily-work-stats
+  - edge:analytics-apply-step-completed--writes_to-->table-working-section-daily-work-stats
+  - edge:analytics-apply-issues-at-completion--reads_from-->table-item-issue
+  - edge:concept-attribution-split--links_to-->concept-credited-user-vs-performer
+  - edge:command-transition-step-state--implements-->concept-attribution-split
+  - edge:analytics-process-step-transition--implements-->concept-attribution-split
+  - edge:domain-work-analytics--contains-->concept-attribution-split
+  - edge:script-backfill-completed-count--links_to-->concept-attribution-split
+decisions:
+  - itemId: node:analytics-apply-step-completed
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Symbol _apply_step_completed deleted by 71f7411; anchor 291-330
+      ALL-DELETED. Claim was accurate when written, so deprecate preserves
+      provenance. decision-idempotent-completion-counters cites this node by
+      name as superseded.
+  - itemId: node:analytics-apply-issues-at-completion
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Symbol _apply_issues_at_completion deleted by 71f7411; anchor 245-290
+      ALL-DELETED. Claim was true when written. The live rule it captured is now
+      separately recorded as rule-issue-counting-ignores-marked-wrong.
+  - itemId: node:concept-attribution-split
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: "Central premise falsified by 71f7411: transition_step_state.py:348
+      now sets credited_user_id, and completions attribute via SQL COALESCE on
+      records, not the payload. Both halves of the split are gone. True when
+      written at 09:18, deliberately eliminated 90 minutes later."
+  - itemId: edge:analytics-apply-step-completed--writes_to-->table-task-step
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 291-330 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:analytics-apply-step-completed--writes_to-->table-user-daily-work-stats
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 291-330 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:analytics-apply-step-completed--writes_to-->table-user-lifetime-stats
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 291-330 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:analytics-apply-step-completed--writes_to-->table-user-section-daily-work-stats
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 291-330 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:analytics-apply-step-completed--writes_to-->table-working-section-daily-work-stats
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 291-330 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:analytics-apply-issues-at-completion--reads_from-->table-item-issue
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Source function deleted by 71f7411; anchor 245-290 ALL-DELETED.
+      Consistent with its deprecated source node.
+  - itemId: edge:concept-attribution-split--links_to-->concept-credited-user-vs-performer
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: "Source node deprecated: the attribution split it links from no
+      longer exists after 71f7411. The target concept remains valid and is
+      unaffected."
+  - itemId: edge:command-transition-step-state--implements-->concept-attribution-split
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Target node deprecated. Its evidence summary ('opens records without
+      credited_user_id while sending it in the payload') was directly falsified
+      by 71f7411, which added credited_user_id at transition_step_state.py:348.
+  - itemId: edge:analytics-process-step-transition--implements-->concept-attribution-split
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: "Target node deprecated. The handler no longer implements a split:
+      after 71f7411 both the time sweep and the completion recount attribute via
+      COALESCE(credited_user_id, created_by_id) on records."
+  - itemId: edge:domain-work-analytics--contains-->concept-attribution-split
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: Target node deprecated; the containing domain retains no split to contain.
+  - itemId: edge:script-backfill-completed-count--links_to-->concept-attribution-split
+    decision: deprecate
+    previousStatus: active
+    resultingStatus: deprecated
+    rationale: "Target node deprecated, and this edge's own summary is now false: it
+      contrasts the backfill's RECORD-side rule against 'the payload-side rule
+      the live worker uses for completions', but since 71f7411 the live worker
+      also uses the record-side rule. Same was-accurate-then-removed shape as
+      the node."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:02:05.114Z
+graphRevisionBefore: 2bf3494beaf517adf1fd9840e49c35afa942c6dfeca35f161542779dede06c30
+graphRevisionAfter: f5c5cb6eb1e3c533ace72c90440db1046b7ca7d3f0751f5ac16b3097b22aae6f
+evidenceSummary: 18 evidence entries across 3 files; no drift detected
+humanInstruction: "Authorized by David: apply the fourteen-item deprecation
+  batch (3 nodes + 11 edges) covering _apply_step_completed,
+  _apply_issues_at_completion and concept-attribution-split, all invalidated or
+  removed by commit 71f7411."
+reviewTokenCorrelation: 5b29cbfb5cf0
