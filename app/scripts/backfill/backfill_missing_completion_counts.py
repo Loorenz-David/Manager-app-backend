@@ -27,6 +27,12 @@ Dry-run by default. Use ``--execute`` to commit.
 Operational note: prefer a quiet window with the analytics queue drained. This writes
 absolute values per user-day, so a completion the live worker commits between this
 script's read and its write would be overwritten (recoverable by re-running).
+
+The measured size and shape of the gap this script exists to close — 497 completions,
+uncounted before 2026-07-16, with the re-runnable query and its caveats — is recorded
+in docs/architecture/implemented_summaries/completion_counting_gap_20260811.md.
+Those figures come from a production snapshot, not from anything in this repo, which
+is why they live in a dated note rather than in this docstring.
 """
 
 from __future__ import annotations
