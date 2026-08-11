@@ -1,0 +1,48 @@
+reviewId: 2026-08-11T12-20-19-613Z--5210dc
+reviewedItemIds:
+  - node:decision-undo-window-disabled
+  - node:domain-linear-timeline
+decisions:
+  - itemId: node:decision-undo-window-disabled
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+            startLine: 190
+            endLine: 231
+          to:
+            path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+            startLine: 193
+            endLine: 234
+    rationale: "All claims verified: block fully commented out, NOTE about temporary
+      disablement present, completion_delay_seconds = 5 confirms the ~5s window,
+      and finalize_pending_step_completion is dormant because its only scheduler
+      creator sits inside this block. Anchor corrected to the block's true
+      bounds: 190-191 is live code preceding it, 193 is the header comment and
+      234 the closing brace."
+  - itemId: node:domain-linear-timeline
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Every specific verified. Stale-pause capping is real at 194-196 (a
+      pause's active_end is capped at the next working start). The priority
+      order working > paused > ended_shift > idle is the actual cascade: paused
+      at 237, ended_shift at 241-243, idle at 245. Anchor left as-is: the
+      mechanics live in _sweep and the evidence summary says so explicitly."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:20:19.613Z
+graphRevisionBefore: 8c842e657c8d90ad42ba74f642eba82e119aaffd1363699f622d464c87e2ba12
+graphRevisionAfter: 4db90afb5960ca43dac226c6e15a68add7b266e89a2914a79afd96a4ba25fff7
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: "Authorized by David: apply C1 — decision-undo-window-disabled
+  with the anchor corrected to the verified block bounds 193-234, and
+  domain-linear-timeline unchanged."
+reviewTokenCorrelation: c693b6cc9046

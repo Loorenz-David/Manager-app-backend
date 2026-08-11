@@ -1,0 +1,110 @@
+reviewId: 2026-08-11T12-19-38-950Z--3e4e7d
+reviewedItemIds:
+  - edge:analytics-reconcile-user-day-completions--writes_to-->table-user-daily-work-stats
+  - edge:analytics-reconcile-user-day-completions--writes_to-->table-user-section-daily-work-stats
+  - edge:analytics-reconcile-user-day-completions--reads_from-->table-step-state-record
+  - edge:analytics-reconcile-user-day-completions--reads_from-->table-item-issue
+  - edge:analytics-apply-completion-reconcile-deltas--writes_to-->table-user-lifetime-stats
+  - edge:analytics-apply-completion-reconcile-deltas--writes_to-->table-working-section-daily-work-stats
+  - edge:analytics-recompute-step-completion-totals--writes_to-->table-task-step
+  - edge:analytics-reconcile-user-day-completions--governed_by-->decision-idempotent-completion-counters
+  - edge:decision-idempotent-completion-counters--links_to-->decision-recompute-not-increment
+  - edge:test-completion-replay-idempotency--verifies-->analytics-reconcile-user-day-completions
+  - edge:test-completion-replay-idempotency--verifies-->decision-idempotent-completion-counters
+  - edge:script-backfill-missing-completion-counts--calls-->analytics-reconcile-user-day-completions
+  - edge:domain-work-analytics--contains-->decision-idempotent-completion-counters
+decisions:
+  - itemId: edge:analytics-reconcile-user-day-completions--writes_to-->table-user-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _get_or_create_user_daily + _apply_set_completions."
+  - itemId: edge:analytics-reconcile-user-day-completions--writes_to-->table-user-section-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Verified, including zeroing of sections dropped to nil via the
+      set-union loop.
+  - itemId: edge:analytics-reconcile-user-day-completions--reads_from-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _completed_steps_for_user_day filters COMPLETED,
+      non-deleted, day-windowed, attributed by SQL COALESCE."
+  - itemId: edge:analytics-reconcile-user-day-completions--reads_from-->table-item-issue
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _issue_counts_by_step groups non-deleted issues by step."
+  - itemId: edge:analytics-apply-completion-reconcile-deltas--writes_to-->table-user-lifetime-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Verified via _get_or_create_user_lifetime + _apply_delta_completions.
+  - itemId: edge:analytics-apply-completion-reconcile-deltas--writes_to-->table-working-section-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Verified via _get_or_create_section_daily + _apply_delta_completions.
+  - itemId: edge:analytics-recompute-step-completion-totals--writes_to-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: assigns all three step-grain counters on the TaskStep."
+  - itemId: edge:analytics-reconcile-user-day-completions--governed_by-->decision-idempotent-completion-counters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Accurate: the function exists to replace the increment path."
+  - itemId: edge:decision-idempotent-completion-counters--links_to-->decision-recompute-not-increment
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the completion trio mirrors the time path's
+      _snapshot/_apply_set/as_delta."
+  - itemId: edge:test-completion-replay-idempotency--verifies-->analytics-reconcile-user-day-completions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified against the test body: reconciles twice, asserts no rollup
+      moved."
+  - itemId: edge:test-completion-replay-idempotency--verifies-->decision-idempotent-completion-counters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 3-of-6 mutation result confirmed by execution and independently
+      predictable from the test structure.
+  - itemId: edge:script-backfill-missing-completion-counts--calls-->analytics-reconcile-user-day-completions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: real call inside the per-user-day loop of _run."
+  - itemId: edge:domain-work-analytics--contains-->decision-idempotent-completion-counters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 92
+            endLine: 112
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 88
+            endLine: 117
+    rationale: Claim accurate; anchor re-pointed to the full COMPLETED branch
+      including its rationale comments.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:19:38.950Z
+graphRevisionBefore: e262c1edbfe206f829ca62f8b71764d567803b2370d7fe901c43f59086c2ad95
+graphRevisionAfter: a3deabbad04bc92c198d901d197743bc974afaebee8b707e71f4a518c4e48ff8
+evidenceSummary: 13 evidence entries across 4 files; no drift detected
+humanInstruction: "Authorized by David: apply B1b, the 13 remaining 10:47-wave
+  edges, including the domain-work-analytics contains re-anchor to 88-117."
+reviewTokenCorrelation: 7f8f65627711

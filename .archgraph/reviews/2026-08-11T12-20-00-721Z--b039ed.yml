@@ -1,0 +1,67 @@
+reviewId: 2026-08-11T12-20-00-721Z--b039ed
+reviewedItemIds:
+  - node:rule-issue-counting-ignores-marked-wrong
+  - edge:analytics-process-step-transition--implements-->rule-issue-counting-ignores-marked-wrong
+  - edge:rule-issue-counting-ignores-marked-wrong--links_to-->concept-inaccurate-time-flagging
+  - edge:analytics-reconcile-user-day-completions--reads_from-->table-task-step
+  - edge:script-backfill-missing-completion-counts--calls-->analytics-apply-completion-reconcile-deltas
+decisions:
+  - itemId: node:rule-issue-counting-ignores-marked-wrong
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Both evidence entries verified. concurrency.py sweeps two disjoint
+      populations: the trusted path filters `not marked_wrong` at 93,
+      wasted_seconds_by_record filters `marked_wrong` at 105. Both return
+      seconds, which is why counts are unaffected by the flag."
+  - itemId: edge:analytics-process-step-transition--implements-->rule-issue-counting-ignores-marked-wrong
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 92
+            endLine: 99
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            startLine: 88
+            endLine: 117
+    rationale: "Core assertion (never gates on recorded_time_marked_wrong) verified.
+      Re-anchored to the whole COMPLETED branch: the credited-user gate is at
+      102, outside the cited 92-99, and the branch is two-tier since 087c950."
+  - itemId: edge:rule-issue-counting-ignores-marked-wrong--links_to-->concept-inaccurate-time-flagging
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the flag routes duration into a separate wasted sweep,
+      scoping its effect to duration rather than counts."
+  - itemId: edge:analytics-reconcile-user-day-completions--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _completed_steps_for_user_day joins TaskStep on client_id
+      == StepStateRecord.step_id and selects working_section_id. This is the
+      read dependency I flagged as missing."
+  - itemId: edge:script-backfill-missing-completion-counts--calls-->analytics-apply-completion-reconcile-deltas
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: _run calls apply_completion_reconcile_deltas with the
+      returned result immediately after the reconcile. This is the second
+      missing edge I flagged."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:20:00.721Z
+graphRevisionBefore: a3deabbad04bc92c198d901d197743bc974afaebee8b707e71f4a518c4e48ff8
+graphRevisionAfter: 8c842e657c8d90ad42ba74f642eba82e119aaffd1363699f622d464c87e2ba12
+evidenceSummary: 6 evidence entries across 4 files; no drift detected
+humanInstruction: "Authorized by David: apply B1c, the five items recorded
+  additively in response to review findings, including the implements-edge
+  re-anchor to 88-117."
+reviewTokenCorrelation: 911ce61805fe

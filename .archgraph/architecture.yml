@@ -300,7 +300,10 @@ nodes:
       2645b4327b17, that survives in two derived forms: an analytics bucket
       derived from PAUSED + transition_reason SHIFT_ENDED, and a legacy client
       filter alias resolving to PAUSED. It is NOT a member of TaskStepStateEnum
-      — the single most likely source of confusion when reading this branch."
+      — the single most likely source of confusion when reading this branch. It
+      does, however, remain a live member of UserShiftStateEnum
+      (domain/users/enums.py:9), used by the shift state machine and the
+      linear-timeline breakdown: only TaskStepStateEnum lost it."
     tags:
       - concept
       - legacy
@@ -318,7 +321,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-11T12:20:56.469Z
   - id: decision-mirrored-transition-body
     type: decision
     name: Transition body mirrored, not shared (Option B)
@@ -451,6 +454,16 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          startLine: 193
+          endLine: 234
+          summary: A large commented-out block scheduling PENDING_STEP_COMPLETION,
+            prefaced by a NOTE that undo-window scheduling is temporarily
+            disabled and should be kept for future re-enablement.
+          inferenceReason: Deliberately preserved dead code with a re-enablement note is a
+            recorded architectural decision, and it makes a whole downstream
+            path dormant.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
           startLine: 190
           endLine: 231
           summary: A large commented-out block scheduling PENDING_STEP_COMPLETION,
@@ -459,16 +472,20 @@ nodes:
           inferenceReason: Deliberately preserved dead code with a re-enablement note is a
             recorded architectural decision, and it makes a whole downstream
             path dormant.
-    origin: ai_inferred
+          supersededAt: 2026-08-11T12:20:19.602Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-11T12:20:19.602Z
   - id: decision-credited-user-no-fk
     type: decision
     name: credited_user_id carries no DB foreign key
-    description: StepStateRecord.credited_user_id is stored without a foreign-key
-      constraint, by design, so analytics attribution survives user-row changes
-      and stays decoupled from the users table lifecycle.
+    description: 'StepStateRecord.credited_user_id is stored without a foreign-key
+      constraint, by design. The column comment gives two reasons: it is an
+      approximate-analytics reference rather than a referential one, and
+      omitting the FK keeps the add-column migration lock-free on this
+      high-volume table. Contrast created_by_id and deleted_by_id, which both
+      carry ForeignKey("users.client_id", ondelete="RESTRICT").'
     tags:
       - decision
       - schema
@@ -484,7 +501,7 @@ nodes:
     origin: ai_inferred
     confidence: 0.85
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-11T12:20:56.469Z
   - id: vocab-task-step-state-enum
     type: domain
     name: TaskStepStateEnum
@@ -663,10 +680,10 @@ nodes:
             an internal _sweep at 162.
           inferenceReason: A second, independent sweep with different collapse semantics
             is a distinct analytics concept from the averaging sweep.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-11T12:20:19.602Z
   - id: domain-user-shift-state-machine
     type: domain
     name: Worker Shift State Machine
@@ -2709,10 +2726,10 @@ nodes:
           summary: Flagged intervals are swept in a separate population from trusted ones.
           inferenceReason: Shows the flag's effect is scoped to duration accounting, which
             is precisely why counters are unaffected by it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T11:50:46.447Z
-    updatedAt: 2026-08-11T11:50:46.447Z
+    updatedAt: 2026-08-11T12:20:00.708Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -4789,10 +4806,10 @@ edges:
           summary: SETs the daily completion/issue columns.
           inferenceReason: Daily counters are recomputable from records so they are set
             absolutely.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-reconcile-user-day-completions
     relationshipType: writes_to
     targetNodeId: table-user-section-daily-work-stats
@@ -4803,10 +4820,10 @@ edges:
           summary: SETs per-section completion counters and zeroes sections that dropped
             to nil.
           inferenceReason: Mirrors the time reconcile's ownership of the day's section rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-reconcile-user-day-completions
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -4817,10 +4834,10 @@ edges:
           summary: Counts COMPLETED records via COALESCE(credited_user_id, created_by_id)
             within the day window.
           inferenceReason: Records are the source of truth the counters are rebuilt from.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-reconcile-user-day-completions
     relationshipType: reads_from
     targetNodeId: table-item-issue
@@ -4830,10 +4847,10 @@ edges:
           symbol: _issue_counts_by_step
           summary: Groups non-deleted issues by step for the completed steps of that day.
           inferenceReason: Issue counters are recomputed from the issue table, not accumulated.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-apply-completion-reconcile-deltas
     relationshipType: writes_to
     targetNodeId: table-user-lifetime-stats
@@ -4843,10 +4860,10 @@ edges:
           symbol: apply_completion_reconcile_deltas
           summary: Adds the completion delta onto the lifetime row.
           inferenceReason: Lifetime spans all days so it takes a delta rather than a SET.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-apply-completion-reconcile-deltas
     relationshipType: writes_to
     targetNodeId: table-working-section-daily-work-stats
@@ -4856,10 +4873,10 @@ edges:
           symbol: apply_completion_reconcile_deltas
           summary: Adds the completion delta onto the section-wide daily row.
           inferenceReason: Section-wide aggregates across users so it takes a delta.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-recompute-step-completion-totals
     relationshipType: writes_to
     targetNodeId: table-task-step
@@ -4869,10 +4886,10 @@ edges:
           symbol: _recompute_step_completion_totals
           summary: Assigns the step's completion and issue counters absolutely.
           inferenceReason: Step rollups are a projection over its own records.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-reconcile-user-day-completions
     relationshipType: governed_by
     targetNodeId: decision-idempotent-completion-counters
@@ -4882,10 +4899,10 @@ edges:
           symbol: reconcile_user_day_completions
           summary: Exists to replace the increment path.
           inferenceReason: This function is the decision's implementation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: decision-idempotent-completion-counters
     relationshipType: links_to
     targetNodeId: decision-recompute-not-increment
@@ -4896,10 +4913,10 @@ edges:
             path established.
           inferenceReason: This decision extends the earlier time-only recompute decision
             to completion counters.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: test-completion-replay-idempotency
     relationshipType: verifies
     targetNodeId: analytics-reconcile-user-day-completions
@@ -4908,10 +4925,10 @@ edges:
         - path: app/tests/integration/services/queries/analytics/test_reconcile_user_completions.py
           summary: Runs the reconcile twice and asserts no rollup moved.
           inferenceReason: Direct regression coverage of the function.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: test-completion-replay-idempotency
     relationshipType: verifies
     targetNodeId: decision-idempotent-completion-counters
@@ -4920,10 +4937,10 @@ edges:
         - path: app/tests/integration/services/queries/analytics/test_reconcile_user_completions.py
           summary: "Mutation-tested: reintroducing `+=` makes 3 of 6 tests fail."
           inferenceReason: The test is what keeps the decision enforced over time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: script-backfill-missing-completion-counts
     relationshipType: calls
     targetNodeId: analytics-reconcile-user-day-completions
@@ -4934,10 +4951,10 @@ edges:
           summary: Replays each affected user-day through the live reconcile function.
           inferenceReason: Reuse rather than reimplementation is what keeps backfill and
             live consistent.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: script-backfill-missing-completion-counts
     relationshipType: links_to
     targetNodeId: finding-completion-counting-golive
@@ -4956,14 +4973,21 @@ edges:
     metadata:
       evidence:
         - path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          startLine: 88
+          endLine: 117
+          summary: The decision governs how the analytics tier books completions.
+          inferenceReason: Counter semantics are a core concern of the analytics domain.
+      evidenceHistory:
+        - path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
           startLine: 92
           endLine: 112
           summary: The decision governs how the analytics tier books completions.
           inferenceReason: Counter semantics are a core concern of the analytics domain.
-    origin: ai_inferred
+          supersededAt: 2026-08-11T12:19:38.940Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
+    updatedAt: 2026-08-11T12:19:38.940Z
   - sourceNodeId: analytics-reconcile-user-day-completions
     relationshipType: reads_from
     targetNodeId: table-task-step
@@ -4979,10 +5003,10 @@ edges:
           inferenceReason: Without this join the reconcile could not attribute completions
             to a working section, so task_steps is a genuine read dependency of
             the completion path and was missing from the graph.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T11:50:46.447Z
-    updatedAt: 2026-08-11T11:50:46.447Z
+    updatedAt: 2026-08-11T12:20:00.708Z
   - sourceNodeId: script-backfill-missing-completion-counts
     relationshipType: calls
     targetNodeId: analytics-apply-completion-reconcile-deltas
@@ -4998,25 +5022,33 @@ edges:
           inferenceReason: Only the first call was recorded; without the delta call the
             backfill would leave lifetime and section-wide totals untouched, so
             this edge is load-bearing for its correctness claim.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T11:50:46.447Z
-    updatedAt: 2026-08-11T11:50:46.447Z
+    updatedAt: 2026-08-11T12:20:00.708Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: implements
     targetNodeId: rule-issue-counting-ignores-marked-wrong
     metadata:
       evidence:
         - path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          startLine: 88
+          endLine: 117
+          summary: The completion branch gates on state and credited user, never on
+            recorded_time_marked_wrong.
+          inferenceReason: This is the enforcement point of the rule.
+      evidenceHistory:
+        - path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
           startLine: 92
           endLine: 99
           summary: The completion branch gates on state and credited user, never on
             recorded_time_marked_wrong.
           inferenceReason: This is the enforcement point of the rule.
-    origin: ai_inferred
+          supersededAt: 2026-08-11T12:20:00.708Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T11:50:46.447Z
-    updatedAt: 2026-08-11T11:50:46.447Z
+    updatedAt: 2026-08-11T12:20:00.708Z
   - sourceNodeId: rule-issue-counting-ignores-marked-wrong
     relationshipType: links_to
     targetNodeId: concept-inaccurate-time-flagging
@@ -5028,7 +5060,7 @@ edges:
           summary: The flag routes duration into a separate wasted sweep.
           inferenceReason: "This rule defines the boundary of the inaccurate-time concept:
             it governs duration, not counts."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T11:50:46.447Z
-    updatedAt: 2026-08-11T11:50:46.447Z
+    updatedAt: 2026-08-11T12:20:00.708Z

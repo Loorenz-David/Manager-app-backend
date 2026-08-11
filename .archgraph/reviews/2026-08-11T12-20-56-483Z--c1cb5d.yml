@@ -1,0 +1,55 @@
+reviewId: 2026-08-11T12-20-56-483Z--c1cb5d
+reviewedItemIds:
+  - node:decision-credited-user-no-fk
+  - node:concept-ended-shift-collapse
+decisions:
+  - itemId: node:decision-credited-user-no-fk
+    decision: edit
+    editedFields:
+      description: 'StepStateRecord.credited_user_id is stored without a foreign-key
+        constraint, by design. The column comment gives two reasons: it is an
+        approximate-analytics reference rather than a referential one, and
+        omitting the FK keeps the add-column migration lock-free on this
+        high-volume table. Contrast created_by_id and deleted_by_id, which both
+        carry ForeignKey("users.client_id", ondelete="RESTRICT").'
+    rationale: "The observation (no FK) is correct, but the stored description
+      supplied a rationale the code does not state — 'so analytics attribution
+      survives user-row changes'. The real reasons were two lines from the
+      column being described, in the same comment block the anchor already
+      pointed at, so the original wrote over an explicit answer rather than
+      filling a gap. It was also incoherent: created_by_id uses
+      ondelete=RESTRICT, so user rows cannot be deleted out from under a
+      reference anyway. Replacement text is quoted from the comment at 88-93,
+      with the FK contrast at 85 and 95."
+  - itemId: node:concept-ended-shift-collapse
+    decision: edit
+    editedFields:
+      description: "ENDED_SHIFT is a former step state, deleted by migration
+        2645b4327b17, that survives in two derived forms: an analytics bucket
+        derived from PAUSED + transition_reason SHIFT_ENDED, and a legacy client
+        filter alias resolving to PAUSED. It is NOT a member of
+        TaskStepStateEnum — the single most likely source of confusion when
+        reading this branch. It does, however, remain a live member of
+        UserShiftStateEnum (domain/users/enums.py:9), used by the shift state
+        machine and the linear-timeline breakdown: only TaskStepStateEnum lost
+        it."
+    rationale: "All three original claims verified true: migration
+      2645b4327b17_collapse_ended_shift_step_state.py exists,
+      _LEGACY_STATE_ALIASES maps 'ended_shift' to PAUSED at state_filters.py:31,
+      and it is absent from TaskStepStateEnum. But a node whose stated purpose
+      is defusing the most likely source of confusion omitted that ENDED_SHIFT
+      is still a live member of UserShiftStateEnum. Adding that clause."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-11T12:20:56.483Z
+graphRevisionBefore: 4db90afb5960ca43dac226c6e15a68add7b266e89a2914a79afd96a4ba25fff7
+graphRevisionAfter: b0702c3c7d96d4a989527b025c086543544bfd24c6e4764394b455d68c8a59e6
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: "Authorized by David: apply C2 — correct
+  decision-credited-user-no-fk to the rationale documented in the column
+  comment, and add the live UserShiftStateEnum.ENDED_SHIFT clause to
+  concept-ended-shift-collapse."
+reviewTokenCorrelation: 3f6cf7491600
