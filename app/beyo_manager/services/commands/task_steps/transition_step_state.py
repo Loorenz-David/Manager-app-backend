@@ -342,6 +342,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             entered_at=now,
             exited_at=None,
             created_by_id=ctx.user_id,
+            # Analytics attributes this interval's time via
+            # COALESCE(credited_user_id, created_by_id) — see the functional index
+            # ix_step_state_records_ws_credited_entered. Mirrors _step_transition_core:188.
+            credited_user_id=credited_user_id,
         )
         new_record.pause_reason = pause_reason  # already validated above; avoids a second fetch
         ctx.session.add(new_record)

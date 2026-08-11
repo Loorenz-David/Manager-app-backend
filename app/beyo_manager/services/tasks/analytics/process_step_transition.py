@@ -2,19 +2,15 @@
 
 import logging
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
 from beyo_manager.domain.task_steps.constants import TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
-from beyo_manager.models.tables.analytics.user_daily_work_stats import UserDailyWorkStats
-from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetimeStats
-from beyo_manager.models.tables.analytics.user_section_daily_work_stats import UserSectionDailyWorkStats
-from beyo_manager.models.tables.analytics.working_section_daily_work_stats import WorkingSectionDailyWorkStats
 from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -23,7 +19,9 @@ from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.services.infra.execution.db import task_db_session
 from beyo_manager.services.queries.analytics.averaged_time import compute_record_contributions
 from beyo_manager.services.queries.analytics.reconcile_user_time import (
+    apply_completion_reconcile_deltas,
     apply_reconcile_deltas,
+    reconcile_user_day_completions,
     reconcile_user_day_time,
 )
 from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
@@ -87,11 +85,27 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
                 now,
             )
 
-        # Issues rule: applies regardless of recorded_time_marked_wrong
+        # COMPLETION + ISSUES. Recompute-and-SET from records, exactly like the time path
+        # above, so a worker retry cannot double-count: replaying the same transition
+        # recomputes identical counts and the Σ deltas collapse to zero. (The queue is
+        # at-least-once — the handler commits in its own session, and the task is only
+        # marked COMPLETED in a later one, so re-execution is always possible.)
+        # Applies regardless of recorded_time_marked_wrong: inaccurate time does not
+        # suppress the fact that the step completed or that it carried issues.
         new_state = TaskStepStateEnum(payload.new_state)
-        if new_state == TaskStepStateEnum.COMPLETED:
-            await _apply_step_completed(session, payload, credited_user_display_name, task_step)
-            await _apply_issues_at_completion(session, payload, credited_user_display_name, task_step)
+        if new_state == TaskStepStateEnum.COMPLETED and payload.credited_user_id:
+            completion_date = datetime.fromisoformat(payload.exited_at).date()
+            completion_result = await reconcile_user_day_completions(
+                session, payload.workspace_id, payload.credited_user_id,
+                credited_user_display_name, completion_date, now,
+            )
+            await apply_completion_reconcile_deltas(
+                session, payload.workspace_id, payload.credited_user_id,
+                credited_user_display_name, completion_date, now, completion_result,
+            )
+            await _recompute_step_completion_totals(
+                session, payload.workspace_id, payload.step_id, task_step
+            )
 
         if task_step is not None:
             task_step.updated_at = datetime.now(timezone.utc)
@@ -211,6 +225,46 @@ async def _recompute_step_time_totals(
     step.updated_at = now
 
 
+async def _recompute_step_completion_totals(
+    session: AsyncSession,
+    workspace_id: str,
+    step_id: str,
+    step: TaskStep | None,
+) -> None:
+    """SET the step's own completion/issue counters from records.
+
+    Mirrors _recompute_step_time_totals: absolute assignment rather than increment, so a
+    replayed transition cannot inflate them.
+    """
+    if step is None:
+        return
+
+    completed_count = await session.scalar(
+        select(func.count())
+        .select_from(StepStateRecord)
+        .where(
+            StepStateRecord.workspace_id == workspace_id,
+            StepStateRecord.step_id == step_id,
+            StepStateRecord.state == TaskStepStateEnum.COMPLETED,
+            StepStateRecord.is_deleted.is_(False),
+        )
+    )
+    issues_count = await session.scalar(
+        select(func.count())
+        .select_from(ItemIssue)
+        .where(
+            ItemIssue.workspace_id == workspace_id,
+            ItemIssue.step_id == step_id,
+            ItemIssue.is_deleted.is_(False),
+        )
+    )
+
+    step.total_completed_count = completed_count or 0
+    # Resolved mirrors total: reaching COMPLETED is what resolves a step's issues.
+    step.total_issues_count = issues_count or 0
+    step.total_issues_resolved_count = issues_count or 0
+
+
 async def _fetch_closing_record(session: AsyncSession, payload: StepTransitionPayload) -> StepStateRecord | None:
     """Fetch the StepStateRecord being closed."""
     result = await session.execute(
@@ -241,321 +295,3 @@ async def _fetch_task_step(session: AsyncSession, step_id: str, workspace_id: st
     )
     return result.scalar_one_or_none()
 
-
-async def _apply_issues_at_completion(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    worker_display_name: str,
-    task_step: TaskStep | None,
-) -> None:
-    """Apply increments for issues when step completes."""
-    issues_result = await session.execute(
-        select(ItemIssue).where(
-            ItemIssue.workspace_id == payload.workspace_id,
-            ItemIssue.step_id == payload.step_id,
-            ItemIssue.is_deleted.is_(False),
-        )
-    )
-    issues = issues_result.scalars().all()
-    if not issues:
-        return
-
-    total_count = len(issues)
-    resolved_count = total_count
-
-    work_date = datetime.fromisoformat(payload.entered_at).date()
-
-    if payload.credited_user_id:
-        await _increment_user_daily(
-            session, payload, work_date, worker_display_name,
-            issues_count=total_count, issues_resolved_count=resolved_count
-        )
-        await _increment_user_lifetime(
-            session, payload, worker_display_name,
-            issues_count=total_count, issues_resolved_count=resolved_count
-        )
-        await _increment_user_section_daily(
-            session, payload, work_date, worker_display_name,
-            issues_count=total_count, issues_resolved_count=resolved_count
-        )
-
-    await _increment_section_daily(
-        session, payload, work_date,
-        issues_count=total_count, issues_resolved_count=resolved_count
-    )
-    if task_step is not None:
-        task_step.total_issues_count += total_count
-        task_step.total_issues_resolved_count += resolved_count
-
-
-async def _apply_step_completed(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    worker_display_name: str,
-    task_step: TaskStep | None,
-) -> None:
-    """Increment completion counters on the UTC date the step completed."""
-    work_date = datetime.fromisoformat(payload.exited_at).date()
-
-    if payload.credited_user_id:
-        await _increment_user_daily(
-            session, payload, work_date, worker_display_name, completed_count=1
-        )
-        await _increment_user_lifetime(
-            session, payload, worker_display_name, completed_count=1
-        )
-        await _increment_user_section_daily(
-            session, payload, work_date, worker_display_name, completed_count=1
-        )
-
-    await _increment_section_daily(session, payload, work_date, completed_count=1)
-    if task_step is not None:
-        task_step.total_completed_count += 1
-    logger.info(
-        "step_completed_metrics_increment | workspace_id=%s step_id=%s credited_user_id=%s "
-        "working_section_id=%s work_date=%s completed_count=1 task_step_found=%s",
-        payload.workspace_id,
-        payload.step_id,
-        payload.credited_user_id,
-        payload.working_section_id,
-        work_date.isoformat(),
-        task_step is not None,
-    )
-
-
-async def _get_or_create_user_daily(
-    session: AsyncSession, workspace_id: str, user_id: str, work_date: date, display_name: str
-) -> UserDailyWorkStats:
-    """Get or create UserDailyWorkStats row."""
-    result = await session.execute(
-        select(UserDailyWorkStats).where(
-            UserDailyWorkStats.workspace_id == workspace_id,
-            UserDailyWorkStats.user_id == user_id,
-            UserDailyWorkStats.work_date == work_date,
-        )
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = UserDailyWorkStats(
-            workspace_id=workspace_id,
-            user_id=user_id,
-            user_display_name_snapshot=display_name,
-            work_date=work_date,
-        )
-        session.add(row)
-        await session.flush()
-    return row
-
-
-async def _get_or_create_user_lifetime(
-    session: AsyncSession, workspace_id: str, user_id: str, display_name: str
-) -> UserLifetimeStats:
-    """Get or create UserLifetimeStats row."""
-    result = await session.execute(
-        select(UserLifetimeStats).where(
-            UserLifetimeStats.workspace_id == workspace_id,
-            UserLifetimeStats.user_id == user_id,
-        )
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = UserLifetimeStats(
-            workspace_id=workspace_id,
-            user_id=user_id,
-            user_display_name_snapshot=display_name,
-        )
-        session.add(row)
-        await session.flush()
-    return row
-
-
-async def _get_or_create_user_section_daily(
-    session: AsyncSession, workspace_id: str, user_id: str, section_id: str, work_date: date,
-    display_name: str, section_name: str | None = None,
-) -> UserSectionDailyWorkStats:
-    """Get or create UserSectionDailyWorkStats row."""
-    result = await session.execute(
-        select(UserSectionDailyWorkStats).where(
-            UserSectionDailyWorkStats.workspace_id == workspace_id,
-            UserSectionDailyWorkStats.user_id == user_id,
-            UserSectionDailyWorkStats.working_section_id == section_id,
-            UserSectionDailyWorkStats.work_date == work_date,
-        )
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = UserSectionDailyWorkStats(
-            workspace_id=workspace_id,
-            user_id=user_id,
-            working_section_id=section_id,
-            section_name_snapshot=section_name or "",
-            user_display_name_snapshot=display_name,
-            work_date=work_date,
-        )
-        session.add(row)
-        await session.flush()
-    return row
-
-
-async def _get_or_create_section_daily(
-    session: AsyncSession, workspace_id: str, section_id: str, section_name: str | None, work_date: date
-) -> WorkingSectionDailyWorkStats:
-    """Get or create WorkingSectionDailyWorkStats row."""
-    result = await session.execute(
-        select(WorkingSectionDailyWorkStats).where(
-            WorkingSectionDailyWorkStats.workspace_id == workspace_id,
-            WorkingSectionDailyWorkStats.working_section_id == section_id,
-            WorkingSectionDailyWorkStats.work_date == work_date,
-        )
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        row = WorkingSectionDailyWorkStats(
-            workspace_id=workspace_id,
-            working_section_id=section_id,
-            section_name_snapshot=section_name or "",
-            work_date=work_date,
-        )
-        session.add(row)
-        await session.flush()
-    return row
-
-
-async def _increment_user_daily(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    work_date: date,
-    worker_display_name: str,
-    *,
-    working_seconds: int = 0,
-    working_count: int = 0,
-    pause_seconds: int = 0,
-    pause_count: int = 0,
-    ended_shift_seconds: int = 0,
-    ended_shift_count: int = 0,
-    issues_count: int = 0,
-    issues_resolved_count: int = 0,
-    completed_count: int = 0,
-    cost_minor: int = 0,
-) -> None:
-    """Increment UserDailyWorkStats row."""
-    row = await _get_or_create_user_daily(
-        session, payload.workspace_id, payload.credited_user_id, work_date, worker_display_name
-    )
-    row.total_working_seconds += working_seconds
-    row.total_working_count += working_count
-    row.total_pause_seconds += pause_seconds
-    row.total_pause_count += pause_count
-    row.total_ended_shift_seconds += ended_shift_seconds
-    row.total_ended_shift_count += ended_shift_count
-    row.total_issues_count += issues_count
-    row.total_issues_resolved_count += issues_resolved_count
-    row.total_completed_count += completed_count
-    if cost_minor:
-        row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
-    row.updated_at = datetime.now(timezone.utc)
-
-
-async def _increment_user_lifetime(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    worker_display_name: str,
-    *,
-    working_seconds: int = 0,
-    working_count: int = 0,
-    pause_seconds: int = 0,
-    pause_count: int = 0,
-    ended_shift_seconds: int = 0,
-    ended_shift_count: int = 0,
-    issues_count: int = 0,
-    issues_resolved_count: int = 0,
-    completed_count: int = 0,
-    cost_minor: int = 0,
-) -> None:
-    """Increment UserLifetimeStats row."""
-    row = await _get_or_create_user_lifetime(
-        session, payload.workspace_id, payload.credited_user_id, worker_display_name
-    )
-    row.total_working_seconds += working_seconds
-    row.total_working_count += working_count
-    row.total_pause_seconds += pause_seconds
-    row.total_pause_count += pause_count
-    row.total_ended_shift_seconds += ended_shift_seconds
-    row.total_ended_shift_count += ended_shift_count
-    row.total_issues_count += issues_count
-    row.total_issues_resolved_count += issues_resolved_count
-    row.total_completed_count += completed_count
-    if cost_minor:
-        row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
-    row.updated_at = datetime.now(timezone.utc)
-
-
-async def _increment_user_section_daily(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    work_date: date,
-    worker_display_name: str,
-    *,
-    working_seconds: int = 0,
-    working_count: int = 0,
-    pause_seconds: int = 0,
-    pause_count: int = 0,
-    ended_shift_seconds: int = 0,
-    ended_shift_count: int = 0,
-    issues_count: int = 0,
-    issues_resolved_count: int = 0,
-    completed_count: int = 0,
-    cost_minor: int = 0,
-) -> None:
-    """Increment UserSectionDailyWorkStats row."""
-    row = await _get_or_create_user_section_daily(
-        session, payload.workspace_id, payload.credited_user_id, payload.working_section_id,
-        work_date, worker_display_name, payload.working_section_name_snapshot,
-    )
-    row.total_working_seconds += working_seconds
-    row.total_working_count += working_count
-    row.total_pause_seconds += pause_seconds
-    row.total_pause_count += pause_count
-    row.total_ended_shift_seconds += ended_shift_seconds
-    row.total_ended_shift_count += ended_shift_count
-    row.total_issues_count += issues_count
-    row.total_issues_resolved_count += issues_resolved_count
-    row.total_completed_count += completed_count
-    if cost_minor:
-        row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
-    row.updated_at = datetime.now(timezone.utc)
-
-
-async def _increment_section_daily(
-    session: AsyncSession,
-    payload: StepTransitionPayload,
-    work_date: date,
-    *,
-    working_seconds: int = 0,
-    working_count: int = 0,
-    pause_seconds: int = 0,
-    pause_count: int = 0,
-    ended_shift_seconds: int = 0,
-    ended_shift_count: int = 0,
-    issues_count: int = 0,
-    issues_resolved_count: int = 0,
-    completed_count: int = 0,
-    cost_minor: int = 0,
-) -> None:
-    """Increment WorkingSectionDailyWorkStats row."""
-    row = await _get_or_create_section_daily(
-        session, payload.workspace_id, payload.working_section_id,
-        payload.working_section_name_snapshot, work_date
-    )
-    row.total_working_seconds += working_seconds
-    row.total_working_count += working_count
-    row.total_pause_seconds += pause_seconds
-    row.total_pause_count += pause_count
-    row.total_ended_shift_seconds += ended_shift_seconds
-    row.total_ended_shift_count += ended_shift_count
-    row.total_issues_count += issues_count
-    row.total_issues_resolved_count += issues_resolved_count
-    row.total_completed_count += completed_count
-    if cost_minor:
-        row.total_cost_minor = (row.total_cost_minor or 0) + cost_minor
-    row.updated_at = datetime.now(timezone.utc)

@@ -6,8 +6,11 @@ The single write path for time seconds/counts/cost across the analytics tables:
 - `working_section_daily_work_stats` + `user_lifetime_stats`: kept consistent by
   **applying the delta** (they are Σ over users / Σ over days of the per-user rows).
 
-Issue counts, completed counts, and the count-of-transitions cost inputs other than
-time are untouched here (they stay in the worker's completion path).
+Completion and issue counters follow the SAME recompute-and-SET contract via
+`reconcile_user_day_completions` / `apply_completion_reconcile_deltas` at the bottom
+of this module. They deliberately use their own `_CompletionTotals` rather than
+extending `_TimeTotals`: `_apply_set` writes every `_TimeTotals` field, so a shared
+struct would make the time path zero out completion counters on every transition.
 """
 
 from __future__ import annotations
@@ -17,9 +20,13 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.models.tables.items.item_issue import ItemIssue
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.analytics.user_daily_work_stats import UserDailyWorkStats
 from beyo_manager.models.tables.analytics.user_lifetime_stats import UserLifetimeStats
 from beyo_manager.models.tables.analytics.user_section_daily_work_stats import UserSectionDailyWorkStats
@@ -353,4 +360,208 @@ async def apply_reconcile_deltas(
         name = await _section_name(session, workspace_id, section_id)
         section_daily = await _get_or_create_section_daily(session, workspace_id, section_id, work_date, name)
         _apply_delta(section_daily, delta)
+        section_daily.updated_at = now
+
+
+# ---------------------------------------------------------------------------
+# Completion / issue counters — same recompute-and-SET contract as time above.
+#
+# Kept in a separate struct on purpose: `_apply_set` assigns every `_TimeTotals`
+# field, so folding these counters into `_TimeTotals` would make the time path
+# zero them out on every transition.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _CompletionTotals:
+    completed_count: int = 0
+    issues_count: int = 0
+    issues_resolved_count: int = 0
+
+    def as_delta(self, previous: "_CompletionTotals") -> "_CompletionTotals":
+        return _CompletionTotals(
+            completed_count=self.completed_count - previous.completed_count,
+            issues_count=self.issues_count - previous.issues_count,
+            issues_resolved_count=self.issues_resolved_count - previous.issues_resolved_count,
+        )
+
+
+@dataclass
+class DayCompletionReconcileResult:
+    """Deltas the caller applies to the Σ tables (lifetime, section-wide)."""
+
+    user_delta: _CompletionTotals
+    section_deltas: dict[str, _CompletionTotals] = field(default_factory=dict)
+
+
+def _snapshot_completions(row) -> _CompletionTotals:
+    return _CompletionTotals(
+        completed_count=row.total_completed_count or 0,
+        issues_count=row.total_issues_count or 0,
+        issues_resolved_count=row.total_issues_resolved_count or 0,
+    )
+
+
+def _apply_set_completions(row, totals: _CompletionTotals) -> None:
+    row.total_completed_count = totals.completed_count
+    row.total_issues_count = totals.issues_count
+    row.total_issues_resolved_count = totals.issues_resolved_count
+
+
+def _apply_delta_completions(row, delta: _CompletionTotals) -> None:
+    row.total_completed_count = (row.total_completed_count or 0) + delta.completed_count
+    row.total_issues_count = (row.total_issues_count or 0) + delta.issues_count
+    row.total_issues_resolved_count = (
+        row.total_issues_resolved_count or 0
+    ) + delta.issues_resolved_count
+
+
+async def _completed_steps_for_user_day(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    work_date: date,
+) -> dict[str, str]:
+    """step_id -> working_section_id for every step this user completed on ``work_date``.
+
+    A COMPLETED record's ``entered_at`` IS the completion instant, so filtering on it
+    reproduces the old `payload.exited_at` day-keying exactly. Attribution uses
+    COALESCE(credited_user_id, created_by_id), matching the time sweep and the
+    functional index ix_step_state_records_ws_credited_entered.
+
+    Deleted steps are intentionally included, mirroring reconcile_user_day_time —
+    the daily row reflects work actually done.
+    """
+    day_start = datetime.combine(work_date, time.min, tzinfo=timezone.utc)
+    day_end = day_start + timedelta(days=1)
+
+    rows = (
+        await session.execute(
+            select(StepStateRecord.step_id, TaskStep.working_section_id)
+            .join(TaskStep, TaskStep.client_id == StepStateRecord.step_id)
+            .where(
+                StepStateRecord.workspace_id == workspace_id,
+                StepStateRecord.state == TaskStepStateEnum.COMPLETED,
+                func.coalesce(
+                    StepStateRecord.credited_user_id, StepStateRecord.created_by_id
+                ) == user_id,
+                StepStateRecord.entered_at >= day_start,
+                StepStateRecord.entered_at < day_end,
+                StepStateRecord.is_deleted.is_(False),
+            )
+        )
+    ).all()
+    return {row.step_id: row.working_section_id for row in rows}
+
+
+async def _issue_counts_by_step(
+    session: AsyncSession, workspace_id: str, step_ids: list[str]
+) -> dict[str, int]:
+    if not step_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(ItemIssue.step_id, func.count())
+            .where(
+                ItemIssue.workspace_id == workspace_id,
+                ItemIssue.step_id.in_(step_ids),
+                ItemIssue.is_deleted.is_(False),
+            )
+            .group_by(ItemIssue.step_id)
+        )
+    ).all()
+    return {step_id: count for step_id, count in rows}
+
+
+async def reconcile_user_day_completions(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    display_name: str,
+    work_date: date,
+    now: datetime,
+) -> DayCompletionReconcileResult:
+    """SET the user's daily + user-section-daily **completion/issue** counters for
+    ``work_date`` by recounting from records; return the deltas for the Σ tables.
+
+    Idempotent by construction: replaying the same transition recomputes the same
+    counts, so the deltas collapse to zero and the Σ tables do not drift. This is what
+    makes the analytics worker safe under the queue's at-least-once retry semantics.
+    """
+    section_by_step = await _completed_steps_for_user_day(
+        session, workspace_id, user_id, work_date
+    )
+    issues_by_step = await _issue_counts_by_step(session, workspace_id, list(section_by_step))
+
+    day_totals = _CompletionTotals()
+    per_section: dict[str, _CompletionTotals] = defaultdict(_CompletionTotals)
+    for step_id, section_id in section_by_step.items():
+        # Resolved mirrors total: reaching COMPLETED is what resolves a step's issues.
+        n_issues = issues_by_step.get(step_id, 0)
+        day_totals.completed_count += 1
+        day_totals.issues_count += n_issues
+        day_totals.issues_resolved_count += n_issues
+        section_totals = per_section[section_id]
+        section_totals.completed_count += 1
+        section_totals.issues_count += n_issues
+        section_totals.issues_resolved_count += n_issues
+
+    # --- user_daily: SET, capture delta for lifetime ---
+    user_daily = await _get_or_create_user_daily(
+        session, workspace_id, user_id, display_name, work_date
+    )
+    user_prev = _snapshot_completions(user_daily)
+    _apply_set_completions(user_daily, day_totals)
+    user_daily.updated_at = now
+    user_delta = day_totals.as_delta(user_prev)
+
+    # --- user_section_daily: SET each section; zero sections that dropped to nil ---
+    section_deltas: dict[str, _CompletionTotals] = {}
+    existing_sections = (
+        await session.execute(
+            select(UserSectionDailyWorkStats).where(
+                UserSectionDailyWorkStats.workspace_id == workspace_id,
+                UserSectionDailyWorkStats.user_id == user_id,
+                UserSectionDailyWorkStats.work_date == work_date,
+            )
+        )
+    ).scalars().all()
+    existing_by_section = {row.working_section_id: row for row in existing_sections}
+
+    for section_id in set(per_section) | set(existing_by_section):
+        new_totals = per_section.get(section_id, _CompletionTotals())
+        row = existing_by_section.get(section_id)
+        if row is None:
+            name = await _section_name(session, workspace_id, section_id)
+            row = await _get_or_create_user_section_daily(
+                session, workspace_id, user_id, section_id, work_date, display_name, name
+            )
+        prev = _snapshot_completions(row)
+        _apply_set_completions(row, new_totals)
+        row.updated_at = now
+        section_deltas[section_id] = new_totals.as_delta(prev)
+
+    return DayCompletionReconcileResult(user_delta=user_delta, section_deltas=section_deltas)
+
+
+async def apply_completion_reconcile_deltas(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+    display_name: str,
+    work_date: date,
+    now: datetime,
+    result: DayCompletionReconcileResult,
+) -> None:
+    """Apply the completion deltas to the Σ tables (lifetime, section-wide)."""
+    lifetime = await _get_or_create_user_lifetime(session, workspace_id, user_id, display_name)
+    _apply_delta_completions(lifetime, result.user_delta)
+    lifetime.updated_at = now
+
+    for section_id, delta in result.section_deltas.items():
+        name = await _section_name(session, workspace_id, section_id)
+        section_daily = await _get_or_create_section_daily(
+            session, workspace_id, section_id, work_date, name
+        )
+        _apply_delta_completions(section_daily, delta)
         section_daily.updated_at = now

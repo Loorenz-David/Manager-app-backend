@@ -118,6 +118,9 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                 entered_at=completion_requested_at,
                 exited_at=None,
                 created_by_id=performed_by,
+                # Analytics attributes this interval's time via
+                # COALESCE(credited_user_id, created_by_id). Mirrors _step_transition_core:188.
+                credited_user_id=credited_user_id,
             )
             session.add(new_record)
             await session.flush()
