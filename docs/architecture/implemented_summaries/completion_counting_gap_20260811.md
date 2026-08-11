@@ -49,13 +49,14 @@ Re-runnable against any snapshot that has not yet been backfilled:
 
 ```sql
 with rec as (
-  select coalesce(r.credited_user_id, r.created_by_id) as user_id,
+  select r.workspace_id,
+         coalesce(r.credited_user_id, r.created_by_id) as user_id,
          (r.entered_at at time zone 'UTC')::date as work_date,
          count(*) as recorded
   from step_state_records r
   where r.state = 'completed' and r.is_deleted is false
     and r.created_by_id is not null
-  group by 1, 2
+  group by 1, 2, 3
 )
 select to_char(date_trunc('month', coalesce(rec.work_date, ud.work_date)), 'YYYY-MM') as month,
        sum(coalesce(rec.recorded, 0))::int                                    as from_records,
@@ -63,9 +64,20 @@ select to_char(date_trunc('month', coalesce(rec.work_date, ud.work_date)), 'YYYY
        sum(coalesce(rec.recorded, 0) - coalesce(ud.total_completed_count, 0))::int as gap
 from rec
 full outer join user_daily_work_stats ud
-  on ud.user_id = rec.user_id and ud.work_date = rec.work_date
+  on ud.workspace_id = rec.workspace_id
+ and ud.user_id      = rec.user_id
+ and ud.work_date    = rec.work_date
 group by 1 order by 1;
 ```
+
+`workspace_id` is load-bearing in both the CTE and the join. `user_daily_work_stats`
+is uniquely keyed on `(workspace_id, user_id, work_date)`, so joining on user and date
+alone lets one record-side row fan out across a user's rows in several workspaces,
+counting their records once per workspace and inflating the gap.
+
+It did not distort the figures above — that snapshot held exactly one workspace, and no
+user had rows in more than one on any date — but the query is published here to be
+re-run against snapshots where that may not hold.
 
 Attribution uses `COALESCE(credited_user_id, created_by_id)` to match the live worker,
 the backfill, and the functional index `ix_step_state_records_ws_credited_entered`.
