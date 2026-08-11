@@ -93,16 +93,25 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
         # Applies regardless of recorded_time_marked_wrong: inaccurate time does not
         # suppress the fact that the step completed or that it carried issues.
         new_state = TaskStepStateEnum(payload.new_state)
-        if new_state == TaskStepStateEnum.COMPLETED and payload.credited_user_id:
-            completion_date = datetime.fromisoformat(payload.exited_at).date()
-            completion_result = await reconcile_user_day_completions(
-                session, payload.workspace_id, payload.credited_user_id,
-                credited_user_display_name, completion_date, now,
-            )
-            await apply_completion_reconcile_deltas(
-                session, payload.workspace_id, payload.credited_user_id,
-                credited_user_display_name, completion_date, now, completion_result,
-            )
+        if new_state == TaskStepStateEnum.COMPLETED:
+            # User-scoped rollups need somebody to credit. Section-wide totals are derived
+            # from those per-user deltas, so they require a credited user too — a narrowing
+            # from the pre-recompute path, which incremented section-daily unconditionally.
+            # Defensive rather than reachable: every driver of the transition core resolves
+            # a non-empty credited user, and no stored record lacks attribution.
+            if payload.credited_user_id:
+                completion_date = datetime.fromisoformat(payload.exited_at).date()
+                completion_result = await reconcile_user_day_completions(
+                    session, payload.workspace_id, payload.credited_user_id,
+                    credited_user_display_name, completion_date, now,
+                )
+                await apply_completion_reconcile_deltas(
+                    session, payload.workspace_id, payload.credited_user_id,
+                    credited_user_display_name, completion_date, now, completion_result,
+                )
+            # Step-grain counters are a pure function of the step's OWN records and need no
+            # credited user, so they must not sit behind that gate — the pre-recompute path
+            # incremented task_step.total_completed_count unconditionally.
             await _recompute_step_completion_totals(
                 session, payload.workspace_id, payload.step_id, task_step
             )
