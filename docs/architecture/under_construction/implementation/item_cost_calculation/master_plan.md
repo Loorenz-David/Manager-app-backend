@@ -545,16 +545,21 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   configured development database** (`.env` → `beyo_manager` @ 5433) — there is no
   built-in test-schema creation anywhere in `tests/` (no `create_all`, no alembic
   hook). Plans must say per criterion which database it runs against.
-  **From-scratch recipe (verified 2026-08-12, maintenance r1):** create the named
+  **From-scratch recipe (verified 2026-08-12, maintenance r2):** create the named
   disposable database with `PYTHONPATH=. APP_ENV=development DATABASE_URL=…
   python3 -m scripts.create_db`, run the same `DATABASE_URL=…` prefix on
   `PYTHONPATH=. APP_ENV=development alembic upgrade head`, then drop the database
   with `docker compose exec -T postgres dropdb -U postgres --if-exists <name>`.
-  The migration environment repairs the historical revision-cycle shape in memory
-  and supplies the minimal cold-build catalog anchors without rewriting applied
-  migration files. Verified on `beyo_manager_stall_probe`: empty database to
-  `90cdd23a828e` in 1.80s, 106 public tables, then configured `make db-migrate`
-  no-op at head in 0.68s. The clone-and-stamp workaround is retired.
+  The owner-authorized metadata correction in `8cf57fa23110` makes the on-disk
+  revision graph acyclic; `env.py` contains no private-Alembic graph repair. During
+  a genuinely cold build it creates a transient migration workspace solely for the
+  historical pause-reason migrations, then deletes that workspace and its
+  anchor-owned rows before the command returns. Verified twice on
+  `beyo_manager_migration_shim_r2`: empty database to `90cdd23a828e` in 2s, with
+  zero workspaces, zero pause reasons, zero `mig_cold_build_workspace` rows, and
+  zero matches for either shim identifier in all text columns. The configured
+  database remained at head; `alembic upgrade head` was a no-op in 1s. The
+  clone-and-stamp workaround and runtime graph shim are retired.
 - **Error surface:** `run_service` (`services/run_service.py`) is the single error
   boundary; DomainError → `StatusOutcome(success=False, error=exc)`; identities per
   §6.4 travel in `error.message`.
