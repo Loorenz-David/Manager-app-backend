@@ -255,3 +255,26 @@ separate maintenance item.** Coordinator authored the maintenance-session prompt
 `prompts/maintenance/2026-08-12_migration-chain-stall_r1.md` (parallel-safe:
 read-only against the pipeline's files; destructive verification on disposable DBs
 only). Master plan §10 caveat updated with the disposition.
+
+---
+
+# Maintenance card (shim follow-up r1 → answered 2026-08-12)
+
+Card carried in
+`handoffs/maintenance/2026-08-12_migration-shim-followup_r1_handoff.md` (session
+BLOCKED/ESCALATE — correctly refused to rewrite an applied migration alone).
+
+## Maintenance card 1 — Authorize the only durable graph correction
+
+**Question:** Authorize a one-line historical metadata correction in applied
+migration `8cf57fa23110_improve_task_notes_and_image_links.py`
+(`down_revision: 'a3b5c7d9e1f2'` → `'183fb6115bd3'`) — a rule-7 exception — so the
+revision graph becomes acyclic on disk and the private-internals shim can be
+removed? And which replacement for the cold-build workspace anchor?
+
+**ANSWER (2026-08-12):** **Yes — the edit is authorized** as an owner-authorized
+one-time correction (metadata only; no DDL; databases at head unaffected; makes
+durable what the runtime shim already does on every invocation). Anchor
+replacement: **transient environment-only anchor**, inserted only during a
+genuinely cold build and deleted before `upgrade head` returns — fresh databases
+end with zero synthetic rows; mechanism documented in env.py.
