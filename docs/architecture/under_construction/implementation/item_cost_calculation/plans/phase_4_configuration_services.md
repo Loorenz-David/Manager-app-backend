@@ -4,7 +4,7 @@
 plan: phase 4
 role: phase plan
 date: 2026-08-11
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 ```
 
 ## Goal
@@ -56,7 +56,14 @@ Phase 3 APPROVED (rate derivation calls the calculator).
    any derivation reads it — `monthly_paid_hours` → 2 dp,
    `planning_utilization_percent` → 2 dp, `percent_value` → 3 dp. (The S4 forward
    item — `Decimal(str(v))` parsing — is SEPARATE and does not close this; both are
-   criteria.) Then `create_production_cost_basis_version`: admission per **§7A.4's
+   criteria.) **Request-bounds validation (review r1 B2 — §6A.4's "rejected twice" where
+   §6.2 pins no DB CHECK): the request models validate RANGES, not only shape** —
+   `fixed_monthly_cost_minor > 0`, `monthly_paid_hours > 0`,
+   `0 < planning_utilization_percent ≤ 100`, `0 ≤ percent_value ≤ 999.999`,
+   `fixed_amount_minor ≥ 0`, `purchase-cost/nullability per §6A.4` — each
+   out-of-range input is a 422/ValidationError naming the field, NEVER an HTTP
+   500 (the review proved all eight current 500 cases; each becomes a criterion
+   row under C4/C5). Then `create_production_cost_basis_version`: admission per **§7A.4's
    full table**; chain construction per **§7A.1** (S1 close-if-open, S2 insert;
    config chains have no S3); derived rate via
    `calculate_cost_per_worker_minute` **from the canonicalized inputs**, persisted
@@ -174,19 +181,31 @@ pre-check alone does NOT satisfy this row; a monkeypatched flush does not either
 
 **C5 — term validation (projection S1 — TOTAL):** command-level rows mirroring the
 §6A.4 12-cell matrix — 3 valid, **all 9 invalid cells enumerated** (same table as
-phase 2 C3 / phase 3 C1); second `item_purchase_cost` term → 
-`ITEM_COST_PURCHASE_TERM_DUPLICATE` on the app pre-check AND on the A5 DB conflict
-path (registry §6.4, dual-path); duplicate term name →
-`ITEM_COST_TERM_NAME_TAKEN` (both paths); term immutability: no update/delete
+phase 2 C3 / phase 3 C1); second `item_purchase_cost` term →
+`ITEM_COST_PURCHASE_TERM_DUPLICATE` on the app pre-check; duplicate term name →
+`ITEM_COST_TERM_NAME_TAKEN` on the app pre-check. **(Amended per review r1 N6/L2:
+the two term indexes' DB-conflict paths are UNREACHABLE by construction — terms are
+only ever inserted with a version created in the same transaction, so no concurrent
+writer exists; the dual-path demand is satisfied by the pre-check row plus a
+recorded reachability note. The index-discrimination mapping for these two indexes
+stays in `_common.py` as defence and is exercised by the C5 named mutation via the
+translation-unit test.)** term immutability: no update/delete
 route exists for terms (router-surface assertion; A6). Named mutation (B2):
 "collapse the index discrimination to a single blanket `except IntegrityError` →
 the A5 DB-path row must redden" (it would report the wrong identity).
 
 **C6 — §7A.6 guard race (concurrent — see the harness block; projection B5's SPLIT
 mutations):** delete of a version referenced by an evaluation row → `…_IN_USE` on
-the locked re-check path (serial row); the interleaved row: with the delete
-transaction holding `FOR UPDATE` and paused at the injected seam, a second session
-commits a referencing evaluation; the re-check inside the lock rejects. **Two
+the locked re-check path (serial row); the interleaved row **(amended per
+review r1 S3/L3/L4 — the original wording deadlocks: a referencing INSERT takes FK
+`KEY SHARE` on the version row, which conflicts with `FOR UPDATE`, so the second
+session cannot commit while the seam is paused)**: with the delete transaction
+holding `FOR UPDATE` and paused at the seam, a second session issues the
+referencing INSERT and the row asserts **`reference_blocked_while_locked` is True**
+(the observable that flips when the lock is dropped); after the delete commits, the
+blocked INSERT proceeds — the row additionally documents the §7.5 residual (the
+evaluation lands against a soft-deleted version; N11 verified it live; phase 7's
+`FOR SHARE` counterparty is the closure). **Two
 named mutations, separately declared (observed node ids):**
 (a) drop the in-lock re-check, keep the lock → the serial guard row reddens;
 (b) drop `FOR UPDATE`, keep the re-check → the interleaved row reddens.
@@ -294,3 +313,136 @@ row per command).
   the implementation includes the required lock, conflict, and synchronization
   seams, while the local focused suite is intentionally smaller than that
   reviewer harness.
+
+### Review r1 — 2026-08-12 — Claude (CHANGES_REQUESTED)
+
+**Verified correct (independently re-derived, not read from the log).** Perimeter
+exact: `git diff 98c75a8 ef21f1e -- app/` is empty, so no post-checkpoint commit
+touched code. Suite at HEAD 1756 passed / 23 failed / 1 deselected; pre-phase-4
+(`3075fc3`) 1749/23/1; failure sets byte-identical (`diff` clean); collection
+1772 → 1779 = **+7 exactly**. ruff clean on all phase paths. Production behaviour
+re-derived on the configured development database with a disposable reviewer probe
+suite (deleted; see the handoff's probe declaration): **C1 all 20 admission rows,
+both chains, each returning its one exact registered identity**; C2 adjacency on
+both chains incl. the three `is_applicable` boundary rows and §7A.3's theorem row;
+**C3 both chains on the genuine DB-conflict path** (two committed sessions, both
+past S1, loser blocked then raised `ITEM_COST_CONCURRENT_BASIS_VERSION` /
+`_MODEL_VERSION`, exactly one open row afterwards); C4 underflow + canonicalize-
+then-derive (`173.46` / `12.0105`) + smuggled-field ignored; **C5 all 12 §6A.4
+cells** (3 accept, 9 `ITEM_COST_TERM_SHAPE_INVALID`) + both duplicate pre-checks;
+C6 serial guard (`…_IN_USE`) and the lock's real counterparty; C7 INV-G1 + all
+three group-delete rows + name-taken; C8 rows 1–5 through the status query plus
+row 6 (`evaluable`, `first_failure is None`); C10 scoping/`is_deleted`/ordering/
+`limit + 1` on the group list; C11 audit vocabulary (all 9 registered event
+strings, format `<entity>.<action>`); scope fence clean (no valuation/evaluation/
+item/task read, no term-mutation route, no workspace event); 13 routes exactly as
+§6.5 registers them, all `require_roles([ADMIN, MANAGER])`. **The production code
+is substantially right. The tests are not there.**
+
+**B1 (blocking) — criteria coverage.** The phase ships **7 test nodes** against a
+criteria set enumerating ~60 required rows. Per-criterion inventory: C1 **2 of
+20**; C2 **0** (the shipped `is_applicable` test uses `SimpleNamespace`, never a
+chain the command built — charter rule 3); C3 **0** (the shipped translation test
+is the hand-built `IntegrityError` the harness block explicitly excludes); C4 3 of
+5 row groups (underflow both paths and the S4-forward row distinct from B1's
+fixture are absent); C5 **0 of 12 cells**, 0 dual-path rows, 0 router-surface
+assertion; C6 **0** (declared); C7 **0**; C8 rows 1–4 only as a pure-function call
+on hand-built rows, not "via the status query"; row 5 absent; C9 **0**; C10 **0**;
+C11 **0** — verified structurally: **no test anywhere in the repo references the
+item-economics router**, and removing `MANAGER` from `POST /cost-groups` leaves
+the entire suite unchanged. Correction: implement the enumerated rows; every row
+asserts one exact outcome and states which fixture field it varies (P-M/P-G).
+
+**B2 (blocking) — request models validate shape only; every out-of-range numeric
+escapes as HTTP 500.** §6A.4 pins that an invalid term is "rejected twice (request
++ DB CHECK)", and registry §6.2 pins that `percent_value` has **no** upper-bound
+CHECK — so above 999.999 the request layer is the only specified rejector and it
+is absent. Verified outcomes through the commands: `monthly_paid_hours = 0` and
+`planning_utilization_percent = 0` → `decimal.DivisionByZero` raised inside
+`calculate_cost_per_worker_minute` (derivation runs before the INSERT, so §6A.6's
+"denominator > 0 by the §4.3 CHECKs" is not yet in force); `utilization = 150`,
+`fixed_monthly_cost_minor = -1`, `monthly_paid_hours = -5`, `percent_value = -1`,
+`fixed_amount_minor = -5` → `IntegrityError` re-raised by
+`translate_integrity_error`; `percent_value = 1000` → `DataError`. All eight land
+in `run_service`'s catch-all and reach the client as
+`{"error": "An unexpected internal error occurred."}` with **HTTP 500** and a
+logged traceback. Correction: mirror the §4.3/§6.2 bounds in the request models
+(`fixed_monthly_cost_minor > 0`, `monthly_paid_hours > 0`,
+`0 < planning_utilization_percent ≤ 100`, `0 ≤ percent_value ≤ 999.999`,
+`fixed_amount_minor ≥ 0`), each with its own registered identity and criterion row.
+
+**S1 (should-fix) — the router body model declares the derived rate as an input.**
+`_BasisVersionBody.cost_per_worker_minute_minor` is a declared field, so the
+published OpenAPI schema advertises it as accepted input, contradicting §5 /
+§6A.6 ("never accepted from an API request"). The value is dropped (the command
+request model has no such field, `extra="ignore"` — persisted value verified
+equal to the derived one while smuggling `999.9999`), so nothing is corrupted.
+Correction: delete the field; N4's pin is satisfied by `extra="ignore"`, which is
+already in place.
+
+**S2 (should-fix) — dead helper.** `_common.reference_exists` has no caller
+anywhere (both delete commands inline the equivalent query); `get_group`'s
+`for_update` parameter is never passed `True`. Charter rule 4. Correction: delete
+both, or route the delete commands through the helper.
+
+**S3 (should-fix, plan text) — C6's interleaved row cannot be built as written.**
+While the delete holds `SELECT … FOR UPDATE`, a second session's INSERT of a
+referencing `item_cost_evaluations` row **blocks** — the FK check needs
+`KEY SHARE` on the version row, which conflicts with `FOR UPDATE` (verified: the
+insert is still pending after 600 ms and the criterion's "a second session commits
+a referencing evaluation [while] paused at the injected seam" deadlocks until the
+seam returns). Consequences: (a) mutation (a) — drop the in-lock re-check — is
+live and reddens a serial guard row (verified); (b) mutation (b) — drop
+`FOR UPDATE` — **is** falsifiable in this phase, but its arbiter is "the
+referencing insert is blocked while the lock is held" (True as shipped, False
+mutated), not the plan's rejection outcome. Correction: restate C6's interleaved
+row as: seam holds the lock → second session's referencing INSERT is issued with
+`SET LOCAL lock_timeout` → assert it has not completed → release the seam → assert
+it completes; mutation (b) flips the blocked assertion.
+
+**Notes.** N1 §7A.1's S1 is realized as an ORM attribute mutation (UPDATE by PK),
+not a predicated UPDATE; behaviourally equivalent under the index arbiter
+(verified), but S1-before-S2 rests on SQLAlchemy's per-mapper "updates before
+inserts" flush order, which nothing pins — C2's absence is what hides it. N2
+`create_cost_model_version` compares enums via `.value` strings (§6A.1: members).
+N3 `ITEM_COST_TERM_SHAPE_INVALID` is reused at the command layer while registry
+§6.4 scopes it to the calculator's re-validation and requires the message to name
+the `calculation_type` and the offending column — the shipped messages name
+neither. N4 every translated conflict emits the same sentence regardless of index
+(identity token correct, sentence uninformative). N5 C9's shipped description
+begins "Planning allocation percentage…" — a literal lowercase string assertion
+would fail; restate the criterion case-insensitively. N6 C5's DB-conflict rows for
+the two term indexes are **unreachable by construction** (terms are always
+inserted against a version created in the same transaction), so the dual-path
+requirement can only be met structurally there. N7 `has_open_*` (open-row
+predicate) vs the classifier (applicability) verified consistent under §7A.3's
+theorem; the only divergent state (`effective_to` in the future) is unreachable
+from these commands — recorded so phases 5/7 do not re-litigate it. N8 the
+handoff's "1755 passed / +6 net" is off by one (measured 1756 / +7) and its
+"phase-focused suites: 72 passed" counts phase-3 tests (P-L). N9 the mutation
+ledger cites archgraph anchors instead of pytest node ids (P-I second extension);
+all four executable declarations were nonetheless accurate when re-run. N10
+`delete_cost_model_version` carries a vestigial `version = None`. N11 §7.5's
+residual hazard is live and real, not theoretical: an evaluation whose INSERT was
+blocked by the lock commits **after** the delete and references a soft-deleted
+version — closed only by phase 7's `FOR SHARE` counterparty.
+
+**Mutations re-run (observed pytest node ids, disposable worktree, all reverted;
+"shipped" = the 7 phase test nodes).** C1 drop `is_deleted = false` from the
+open-basis lookup → reddens exactly
+`tests/integration/services/commands/item_economics/test_configuration_commands.py::test_basis_admission_ignores_a_soft_deleted_open_row`.
+C4 return the unquantized Decimal → reddens
+`tests/unit/services/commands/item_economics/test_item_economics_requests.py::test_basis_request_canonicalizes_numeric_columns_before_command_derivation`,
+`…::test_model_request_canonicalizes_percentage_terms_to_three_places`,
+`…/test_configuration_commands.py::test_configuration_commands_canonicalize_chain_and_status`.
+C5 collapse the index discrimination to a blanket conflict → reddens only
+`…/test_item_economics_requests.py::test_integrity_translation_preserves_registered_and_unknown_paths`,
+the proxy the plan excludes. C8 derive precedence from `EconomicsStatusEnum`
+iteration → shipped 7/7 green **and** all five reviewer status rows green (the
+declaration order happens to match §11A.4, so only the structural guard bites —
+the shipped explicit tuple is correct). C11 remove `MANAGER` from
+`POST /cost-groups` → shipped 7/7 green, full suite byte-identical to unmutated.
+C9 delete the router `percent_value` description → shipped 7/7 green, full suite
+byte-identical. C6(a) drop the in-lock re-check → shipped 7/7 green; reviewer
+serial probe reddens. C6(b) drop `FOR UPDATE` → shipped 7/7 green; reviewer lock
+probe flips `reference_blocked_while_locked` True → False.
