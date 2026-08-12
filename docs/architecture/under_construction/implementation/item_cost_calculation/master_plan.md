@@ -78,7 +78,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | IMPLEMENTED | 2026-08-12 | coordinator | handoff consumed, perimeter verified vs `4416570`; review r1 prompt authored (probe P-R1: baseline was recorded in a broken sandbox — "22 pre-existing failures" unverified) |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | CHANGES_REQUESTED | 2026-08-12 | reviewer (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10), fix-r2 prompt authored; reviewer handoff file was not deposited (content complete in this Review log — deviation recorded) |
 | 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended) |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
@@ -376,14 +376,30 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend/app`).
 - **Infra:** `make dev-up` starts postgres + redis in Docker (hybrid mode: app local,
   infra containerized). `make dev-up-full` runs backend + worker containerized.
+  Service addresses: PostgreSQL `127.0.0.1:5433`, Redis `127.0.0.1:6380`.
+- **Codex sandbox caveat (owner-verified 2026-08-12):** the default Codex sandbox
+  **cannot reach 127.0.0.1:5433 / 127.0.0.1:6380** — a baseline/test run inside it
+  produces connection-noise failures that look like a broken suite (this burned the
+  phase-1 baseline). Every coordinator prompt for a Codex session that runs tests,
+  migrations, or baselines MUST instruct: *run those commands with elevated
+  permissions, because PostgreSQL and Redis are local Docker services on
+  127.0.0.1:5433 and 127.0.0.1:6380 and are inaccessible from the normal Codex
+  sandbox.* If elevation is unavailable, the session records "baseline
+  unobtainable" and stops — it never records a sandboxed run as a baseline. (A
+  permanent per-project Codex permission config replaces this prompt clause when
+  the owner sets one up.)
 - **Tests:** `PYTHONPATH=. pytest -m 'not e2e'` — **`PYTHONPATH=.` is required**;
   bare `make test` (which omits it) fails at conftest import
   (`ModuleNotFoundError: beyo_manager`), verified 2026-08-12. Collection verified:
   `PYTHONPATH=. pytest --collect-only -q` → **1602 tests, 1.72s**. Markers:
   `unit` / `integration` / `e2e` (`pytest.ini`, strict markers, asyncio_mode auto).
-  Full-suite baseline was NOT run by the planner; the phase-1 implementer records
-  the baseline (count + any pre-existing failures) in its Review log before first
-  change, and later phases inherit it from there.
+  **Verified branch baseline (reviewer r1, healthy containers, elevated
+  permissions, 2026-08-12):** pre-phase-1 `545e504` → 1578 passed / **23 failed** /
+  1 deselected; phase-1 checkpoint `4416570` → 1600 passed / **23 failed** /
+  1 deselected — failure sets byte-identical (zero phase-1 regressions). The 23
+  pre-existing failures are enumerated in the phase-1 Review log (S2 correction);
+  later phases compare against that list, not the implementer's original
+  sandbox-invalidated numbers.
 - **Migrations:** `APP_ENV=development alembic upgrade head` (= `make db-migrate`);
   autogenerate via `APP_ENV=development alembic revision --autogenerate -m "<msg>"`
   then hand-fix per `30_migrations` (partial uniques via `postgresql_where`, idiom

@@ -80,6 +80,12 @@ automatic finding.
 
 - Full suite run per master plan §10 (`PYTHONPATH=. pytest -m 'not e2e'` from
   `backend/app/`, healthy containers via `make dev-up`).
+- **Execution environment:** run all test/baseline commands **with elevated
+  permissions** — PostgreSQL and Redis are local Docker services on
+  `127.0.0.1:5433` and `127.0.0.1:6380` and are inaccessible from the normal Codex
+  sandbox (master plan §10 caveat; this is what invalidated the implementer's
+  baseline). If elevation is unavailable, stop and report — never record a
+  sandboxed run as evidence.
 - Findings go to the phase plan's **Review log** (append-only) with severity
   (B/blocking, S/should-fix, N/note); your tracker row update only
   (IMPLEMENTED → REVIEWING → your verdict: APPROVED or CHANGES_REQUESTED).

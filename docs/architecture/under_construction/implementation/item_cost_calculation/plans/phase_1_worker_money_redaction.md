@@ -194,3 +194,172 @@ M5's builder).
 - Key-set change record: working-section and reassigned-step worker payloads now omit `total_cost_minor`; manager/admin rows assert the seeded value `4321`. The site-5 and endpoint-8 manager/admin retention rows assert the same value.
 - Mutation probes: M1, M2, M3, M4, M5, M6, site-5 blanket-False, and shared-builder blanket-False all turned their named tests red and were reverted. Probe files: `app/beyo_manager/domain/tasks/serializers.py`, `app/beyo_manager/services/queries/tasks/tasks.py`, `app/beyo_manager/services/queries/tasks/list_task_steps.py`, `app/beyo_manager/services/queries/working_sections/steps_list_payload.py`, `app/beyo_manager/services/queries/working_sections/step_record_payload.py`, and `app/beyo_manager/services/queries/worker_stats/get_worker_daily_step_breakdown.py`.
 - Architecture Graph closeout: status remained valid at 116 nodes / 157 edges, revision `b0702c3c…`, zero stale nodes. The batched closeout apply recorded an exact duplicate of `table-task-step`, so `applied=[]`; architectural delta is explicitly zero.
+
+### Reviewer r1 — 2026-08-12 — Claude (plan-reviewer)
+
+**Verdict: CHANGES_REQUESTED.** No behavioral defect found: the leak is closed on all
+eight endpoints, fail-closed, and every named mutation bites. Two should-fix items
+(both about what the tests and the record *prove*, not about what the code does),
+six notes. Findings routed below with the exact correction clause per item.
+
+**S1 — five acceptance-criteria rows have no asserting test (charter rules 1 + 2).**
+Rows **9, 12, 17, 20, 23** — ADMIN, money present, on `/working-sections/{id}/steps`,
+`/working-sections/steps/user-last-active`,
+`/task-step-acknowledgments/reassigned-steps`, `/task-step-acknowledgments/pending`
+and `/worker-stats/last-interacted-steps` — are unexercised. ADMIN appears in only
+three places in the whole phase: `test_worker_money_redaction.py:23` and `:46`
+(rows 1, 5) and `test_get_worker_daily_step_breakdown.py:169` (row 15b). The four
+role-parametrized payload tests carry `["worker", "manager"]` only
+(`test_list_working_section_steps_payload_characterization.py:228`,
+`test_get_user_last_active_step_record_integration.py:154`,
+`test_reassigned_steps_integration.py:262` for both the reassigned and the pending
+assertion), and `test_worker_stats_endpoint_split_integration.py:31` (`_ctx`)
+hardcodes `role_name="manager"` with no override, so row 23 cannot be reached.
+Verified coverage is **19 of the 24 (endpoint × admitted role) cells, 21 of 26 rows**.
+The plan enumerated all 24 deliberately after the round-5 correction; the
+implementation samples them. *Correction:* add `"admin"` to the three parametrize
+lists named above (and an ADMIN pass for the pending assertion at `:276`), and give
+`test_worker_stats_endpoint_split_integration.py::_ctx` a `role_name` parameter so
+`test_last_interacted_steps_keep_money_for_manager` (`:256`) also runs under ADMIN;
+each added row asserts `== 4321`, not key presence. *Alternative, coordinator's call
+only:* if the ADMIN rows are judged redundant because a single shared helper serves
+ADMIN and MANAGER identically, amend the plan's criteria table to say so — five
+enumerated criteria must not stay silently unmet.
+
+**S2 — the recorded suite baseline is wrong, and master plan §10 makes later phases
+inherit it.** The implementer r1 entry above records "1601 passed, 22 failed" at the
+checkpoint and a pre-change baseline of 1092/473/38 taken in a sandbox with
+PostgreSQL/Redis denied. Re-run with healthy containers (probe P-R1): the pre-change
+commit `545e504` gives **1578 passed / 23 failed / 1 deselected** and the checkpoint
+`4416570` gives **1600 passed / 23 failed / 1 deselected** — and the two failure
+**sets are byte-identical**, so phase 1 introduced zero regressions and added 22
+passing tests. The count is **23, not 22**, and the category list omits
+`tests/integration/services/commands/shopify/test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`.
+*Correction:* replace the baseline numbers in the implementer entry (or add a
+correction line) with the verified pair above and the 23-item list below, so
+phase 2 does not compare against a number that was never measured.
+
+**Verified pre-existing failure set (identical at `545e504` and `4416570`,
+2026-08-12, healthy containers) — the inheritable baseline for phases 2–9:**
+
+1. `integration/services/commands/bootstrap/test_seed_working_sections_integration.py::test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections`
+2. `integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_rolls_back_when_any_item_is_missing`
+3. `integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_updates_all_items_creates_history_and_dispatches_events`
+4. `integration/services/commands/shopify/test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference` ← **absent from the implementer's category list**
+5. `integration/services/commands/task_steps/test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task`
+6. `integration/services/commands/tasks/test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged`
+7–9. `integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::{test_set_current_stored_amount_inventory_demotes_low_priority_available_first, …_noop_emits_no_events, …_promotes_expected_candidates}`
+10–11. `integration/services/commands/working_sections/test_batch_working_section_integration.py::{test_batch_flag_round_trips_and_new_step_snapshots_follow_section_value, test_worker_working_sections_excludes_counts_for_deleted_parent_tasks}`
+12–13. `integration/services/commands/working_sections/test_working_section_ordering_integration.py::{test_reorder_rejects_payload_not_matching_active_set, test_reorder_rewrites_sort_order_and_worker_view_follows_it}`
+14–15. `integration/test_audit_log.py::{test_detail_defaults_to_empty_dict, test_write_audit_from_event_inserts_row}`
+16–17. `unit/domain/shopify/test_dimension_migration.py::{test_legacy_multiline_rerun_is_idempotent_and_protects_existing_values, test_legacy_seat_height_without_height_maps_without_zero_values}`
+18. `unit/services/commands/auth/test_sign_in_user.py::test_sign_in_user_preserves_custom_workspace_role_name`
+19. `unit/services/queries/worker_stats/test_endpoint_split.py::test_split_services_return_disjoint_worker_shapes`
+20. `unit/test_case_type_serializers.py::test_serialize_case_type_entry_returns_contract_fields`
+21–22. `unit/test_items_router.py::{test_route_delete_item_issues_forwards_ids, test_route_list_item_issues_forwards_client_id}`
+23. `unit/test_upholstery_inventories_router.py::test_route_list_upholstery_inventories_passes_filter_query_params`
+
+Counts: `545e504` → 1578 passed / 23 failed / 1 deselected (1602 collected);
+`4416570` → 1600 passed / 23 failed / 1 deselected (1624 collected). Command:
+`PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/`.
+
+**N1 — live frontend contract doc now misstates the worker payload.**
+`docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731.md`
+documents a **worker-app** page (`app_scope="worker"`, roles admin/manager/worker) and
+publishes `total_cost_minor` as an always-present nullable int (`:393`, sample
+`:166`). After this phase a WORKER receives no such key on that endpoint. Not a code
+defect — the redaction is owner-ordered — but a published contract that is now false.
+*Correction:* route to phase 9's docs/drift batch; coordinator note for the frontend
+team, alongside the existing `LastActiveStepCard.tsx` smoke note.
+
+**N2 — the money-audience boundary is stated nowhere in the architecture graph.** The
+implementer's explicit zero delta is **confirmed correct** (see below), but the
+ADMIN/MANAGER-only step-money audience is now a real architectural policy that no node
+carries. *Correction:* carry forward to phase 9 as a candidate node/description, not a
+phase-1 fix.
+
+**N3 — cross-module id reconstruction in the new test.**
+`tests/integration/services/queries/tasks/test_worker_money_redaction.py:32` and `:48`
+rebuild the seeded task's `client_id` as
+`f"tsk_{workspace.client_id.removeprefix('ws_')}"` because the imported `_seed_step`
+returns no task. It is correct today and fails loudly (not silently) if that helper's
+id scheme changes. *Correction:* optional — have `_seed_step` return the task, or
+query it. No criterion depends on it.
+
+**N4 — gratuitous whitespace churn in two pre-existing test files.** A stray blank
+line added inside an unrelated test at
+`test_get_worker_daily_step_breakdown.py:136-137`, and at
+`test_reassigned_steps_integration.py:250` a blank line removed plus the new test
+separated by one blank line instead of two. In perimeter, zero behavioral effect.
+*Correction:* optional tidy on the next touch.
+
+**N5 — tracker actor stamp overwritten.** The `4416570` tracker row read
+`IMPLEMENTED | Codex`; the coordinator's consumption commit `d457d84` rewrote the
+actor to `coordinator`, so the row no longer records who implemented the phase (and
+this review's own gate check, which expects "actor Codex", mismatched). *Correction:*
+process note for the coordinator — keep the producing actor and add consumption detail
+to the Note column instead.
+
+**N6 — rows 19 and 22 share one test function.** Both round-5 worker rows are asserted
+inside
+`test_reassigned_steps_integration.py::test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker`.
+M4 and M5 each redden it (verified), and row 19 has a second independent witness in
+the pre-existing pagination characterization, so detection is intact; a single failure
+report just does not say which endpoint regressed. *Correction:* optional split.
+
+**Verified correct (so re-review can skip it).**
+- Census re-derived from the tree independently of every recorded census: exactly five
+  `serialize_step` call expressions, no sixth; `build_steps_list_payload` has 2 callers
+  and `build_step_record_payload` has 3; **eight** endpoints; all eight `require_roles`
+  sets read directly from the routers and matching the plan's rows. No caller passes a
+  synthetic `ctx` — every one is the request identity.
+- Fail-closed construction: keyword-only, no default (`serializers.py:161`); the
+  allow-list helper (`:153-158`) returns False for WORKER, SELLER, `""` and unknown;
+  `ServiceContext.role_name` defaults to `""` (`services/context.py:40-41`). No
+  hardcoded boolean at any of the five sites — site 5 included, per D5.
+- Absent-key (not `null`) redaction at `serializers.py:187-188`.
+- **No production consumer reads the key** — the only other `total_cost_minor`
+  references in `beyo_manager/` are the ORM column and the analytics writers, so
+  redaction cannot raise a `KeyError` downstream.
+- **The redaction survives to the wire**: none of the four routers declares a
+  `response_model`, and `build_ok` (`routers/http/response.py:11`) wraps the dict
+  verbatim in a `JSONResponse` — no schema coercion re-adds the key. This is the one
+  gap the query-service harness pin cannot see, so it was checked structurally.
+- Mutation battery re-run independently in a disposable worktree at `4416570`:
+  **M1–M6 plus both blanket-`False` probes all bite (8/8)**. M4 reddens row 11 **and**
+  row 19 (two independent tests), M5 reddens row 14 **and** row 22 — the round-5
+  pairing holds. All six probe files sha256-identical after revert.
+- Sole-predicate companion: every redacted-row fixture seeds `total_cost_minor=4321`
+  (five seed helpers + the unit stub), every present row asserts `== 4321`, every
+  absent row asserts `key ∉ dict`. No row can pass vacuously — each indexes a payload
+  that must exist first.
+- Characterization authority (P-R4): `_STEP_KEYS` still contains `total_cost_minor`
+  (`:48`) — the published key set was role-conditioned, not edited; the ended-shift
+  test shows exactly the one-token keyword addition with no assertion change; the
+  key-set change is recorded in the implementer entry.
+- Scope fences: `serialize_item` untouched (item money stays until phase 6 per R5-2);
+  the three round-5 query services untouched; serialization stays in the query layer
+  per master plan contract-gap 2; ADMIN/MANAGER money retained on both worker-stats
+  endpoints.
+- Perimeter: `git diff 545e504..4416570` is exactly the 14 declared code/test files
+  plus this plan and the master plan — nothing outside. The Review log edit was
+  append-only and the master-plan edit touched only the phase-1 row.
+- Archgraph zero delta **confirmed**: status unchanged (116/157, revision
+  `b0702c3c…`, 0 stale, 244 pending), no node exists for `serialize_step` or for seven
+  of the eight endpoints, `endpoint-worker-daily-step-breakdown`'s description says
+  nothing about money or per-role visibility, and `table-task-step` describes
+  `total_cost_minor` as a column (unchanged by this phase). Nothing in the graph became
+  false. No discrepancy to file.
+
+**Reviewer mutation-probe declaration.** Every probe ran in a throwaway `git worktree`
+at `4416570` (`probe_head`), never in the working tree; a second worktree at `545e504`
+served the P-R1 baseline. Files mutated and reverted there:
+`domain/tasks/serializers.py`, `services/queries/tasks/tasks.py`,
+`services/queries/tasks/list_task_steps.py`,
+`services/queries/working_sections/steps_list_payload.py`,
+`services/queries/working_sections/step_record_payload.py`,
+`services/queries/worker_stats/get_worker_daily_step_breakdown.py` — each sha256
+byte-identical after revert, worktree `git status` clean, both worktrees removed and
+pruned. The primary tree was never modified (clean at `d457d84` before and after). DB
+side effects: none committed — the suite's `db_session` fixture rolls back; the
+configured database is left as found, at head.

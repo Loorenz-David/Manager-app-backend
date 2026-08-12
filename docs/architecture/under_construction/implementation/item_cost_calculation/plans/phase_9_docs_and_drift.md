@@ -99,6 +99,13 @@ recorded in the Review log.
   the waiver justification the charter requires is this line; the coordinator may
   still order a projection if phase-8 lessons suggest it.
 - Archgraph: expected delta ≈ zero (docs); state it explicitly at close.
+- **Phase-1 review r1 additions to the drift batch (2026-08-12):**
+  (N1) `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_reassigned_steps_endpoints_20260731.md`
+  publishes `total_cost_minor` as always-present on a worker-app endpoint — false
+  since phase 1; correct it here and note it for the frontend team alongside the
+  `LastActiveStepCard.tsx` smoke note.
+  (N2) the ADMIN/MANAGER-only step-money audience is a real architectural policy no
+  archgraph node carries — candidate node/description in this phase's graph delta.
 
 ## Review log
 
