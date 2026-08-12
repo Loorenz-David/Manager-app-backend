@@ -7,6 +7,7 @@ import pytest
 from beyo_manager.domain.item_economics import calculator
 from beyo_manager.domain.item_economics.calculator import (
     CALCULATION_VERSION,
+    REDERIVE_MISMATCH,
     REDERIVE_SKIPPED,
     calculate_actual_worker_minutes,
     calculate_allowed_worker_minutes,
@@ -246,6 +247,11 @@ def test_money_guard_excludes_non_int_arrivals(value: object) -> None:
             calculate_production_budget(value, [])  # type: ignore[arg-type]
 
 
+def test_system_supplied_money_none_is_a_type_error() -> None:
+    with pytest.raises(TypeError, match="^production_budget_minor must be"):
+        calculate_variance_cost_minor(None, 100)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("value", [1.0, True, 1, "1", None])
 def test_rate_guard_excludes_every_non_decimal_arrival(value: object) -> None:
     with pytest.raises(TypeError, match="^monthly_paid_hours must be"):
@@ -267,6 +273,33 @@ def test_purchase_cost_none_is_a_named_user_input_error() -> None:
             None,
             None,
         )
+
+
+def test_negative_percentage_term_value_is_a_shape_error() -> None:
+    with pytest.raises(ValidationError, match="^ITEM_COST_TERM_SHAPE_INVALID:"):
+        calculate_term_amount(
+            CostModelTermCalculationTypeEnum.PERCENTAGE_OF_EXPECTED_SALE_PRICE,
+            4000,
+            Decimal("-1.000"),
+            None,
+            1234,
+        )
+
+
+def test_negative_fixed_term_value_is_a_shape_error() -> None:
+    with pytest.raises(ValidationError, match="^ITEM_COST_TERM_SHAPE_INVALID:"):
+        calculate_term_amount(
+            CostModelTermCalculationTypeEnum.FIXED_AMOUNT,
+            4000,
+            None,
+            -1,
+            1234,
+        )
+
+
+def test_zero_rate_reaching_allowance_is_rate_underflow() -> None:
+    with pytest.raises(ValidationError, match="^ITEM_COST_RATE_UNDERFLOW:"):
+        calculate_allowed_worker_minutes(100, Decimal("0"))
 
 
 def test_enum_guard_accepts_members_but_rejects_values_and_none() -> None:
@@ -300,7 +333,8 @@ def test_currency_mismatch_names_the_failing_pair_and_both_values(
     assert message.startswith("ITEM_COST_CURRENCY_MISMATCH:")
     assert pair in message
     assert valuation.value in message
-    assert basis.value in message or model.value in message
+    assert basis.value in message
+    assert model.value in message
 
 
 def _evaluation_for_rederive(**overrides: object) -> ItemCostEvaluation:
@@ -373,22 +407,64 @@ def test_rederive_version_mismatch_returns_named_skip_marker_before_reading_snap
 
 def test_rederive_detects_a_changed_term_amount_on_the_same_orm_shape() -> None:
     evaluation = _evaluation_for_rederive()
-    term = ItemCostEvaluationTerm(
-        workspace_id="ws_test",
-        evaluation_id="ice_test",
-        name="fixed allocation",
-        calculation_type=CostModelTermCalculationTypeEnum.FIXED_AMOUNT,
-        fixed_amount_minor=1234,
-        amount_minor=1235,
-    )
-    with pytest.raises(ValidationError, match="^ITEM_COST_SNAPSHOT_MISMATCH:"):
-        rederive(evaluation, [term])
+    terms = [
+        ItemCostEvaluationTerm(
+            workspace_id="ws_test",
+            evaluation_id="ice_test",
+            name="percentage allocation",
+            calculation_type=CostModelTermCalculationTypeEnum.PERCENTAGE_OF_EXPECTED_SALE_PRICE,
+            percent_value=Decimal("15.000"),
+            amount_minor=600,
+        ),
+        ItemCostEvaluationTerm(
+            workspace_id="ws_test",
+            evaluation_id="ice_test",
+            name="fixed allocation",
+            calculation_type=CostModelTermCalculationTypeEnum.FIXED_AMOUNT,
+            fixed_amount_minor=1234,
+            amount_minor=1235,
+        ),
+    ]
+    result = rederive(evaluation, terms)
+    assert result["marker"] == REDERIVE_MISMATCH  # type: ignore[index]
+    assert result["mismatches"] == [  # type: ignore[index]
+        {
+            "field": "term[fixed allocation].amount_minor",
+            "rederived_value": 1234,
+            "stored_value": 1235,
+        }
+    ]
 
 
 def test_calculation_version_constant_and_docstring_pin_the_bump_lists() -> None:
     assert CALCULATION_VERSION == 1
     assert "§6A.10" in (calculator.__doc__ or "")
-    assert "rounding" in (calculator.__doc__ or "").lower()
+    assert "term formula" in (calculator.__doc__ or "").lower()
+    assert "renames" in (calculator.__doc__ or "").lower()
+
+
+def test_public_surface_is_exactly_the_registered_calculator_api() -> None:
+    assert set(calculator.__all__) == {
+        "CALCULATION_VERSION",
+        "REDERIVE_SKIPPED",
+        "REDERIVE_MISMATCH",
+        "EvaluationSnapshot",
+        "TermSnapshot",
+        "calculate_percentage_term_amount",
+        "calculate_term_amount",
+        "calculate_term_amounts",
+        "calculate_production_budget",
+        "calculate_cost_per_worker_minute",
+        "calculate_allowed_worker_minutes",
+        "calculate_actual_worker_minutes",
+        "calculate_consumed_cost_minor",
+        "calculate_remaining_worker_minutes",
+        "calculate_percent_consumed",
+        "calculate_variance_worker_minutes",
+        "calculate_variance_cost_minor",
+        "validate_currency_equality",
+        "rederive",
+    }
 
 
 def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
@@ -399,6 +475,9 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
         calculate_allowed_worker_minutes(40_000_000, Decimal("400.0000")),
         calculate_actual_worker_minutes(100),
         calculate_consumed_cost_minor(60, Decimal("24.5000")),
+        calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
+        calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
+        calculate_percent_consumed(Decimal("995.02"), Decimal("203.02")),
     )
     with localcontext() as ambient:
         ambient.rounding = ROUND_CEILING
@@ -409,5 +488,8 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
             calculate_allowed_worker_minutes(40_000_000, Decimal("400.0000")),
             calculate_actual_worker_minutes(100),
             calculate_consumed_cost_minor(60, Decimal("24.5000")),
+            calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
+            calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
+            calculate_percent_consumed(Decimal("995.02"), Decimal("203.02")),
         ) == baseline
     assert (getcontext().rounding, getcontext().prec) == original_context

@@ -316,3 +316,38 @@ not the handoff's declared `371–425` — it starts inside `validate_currency_e
 comprehension (`:365`) and stops one line before `rederive`'s `return` (`:426`). Recommendation: hold,
 do not promote as-is — the B1/B2 fix cycle will shift these line numbers anyway; re-anchor
 (`1–26`, `137–219`, `371–426`) after the fix and adjudicate once.
+
+### Implementer fix r2 — 2026-08-12 — Codex
+
+Resolved the review-r1 findings within the declared fix-cycle perimeter. B1 now
+runs `calculate_remaining_worker_minutes` and `calculate_variance_worker_minutes`
+inside `localcontext()` with precision 50, and C9's hostile-context tuple covers
+those functions plus `calculate_percent_consumed`. B2 adds the system-supplied
+money `None` row and its zero-return mutation probe. S1 asserts both currency
+values and the exact failing pair in every C8 row. S2 replaces every unregistered
+`ITEM_COST_SNAPSHOT_MISMATCH` exception with the module marker
+`REDERIVE_MISMATCH` and a structured list of field, rederived value, and stored
+value; re-derivation never raises for a snapshot mismatch. S3 asserts one bump
+token and one never-bump token against the module docstring. The absorbed guards
+now have exact rows for negative percentage, negative fixed amount, and zero rate
+at allowance. N2 adds the exact registered `__all__` surface: the 16 calculator
+API names, both snapshot Protocols, and both re-derivation markers.
+
+Judgment calls: the structured mismatch carrier is a dictionary with
+`marker` and `mismatches` keys so callers can log every disagreement in one
+result; a mismatch entry uses `field`, `rederived_value`, and `stored_value`.
+The public surface follows master-plan §6.5's set, with duplicate mention of
+`REDERIVE_SKIPPED` in the prompt naturally deduplicated by set semantics. Optional
+N1, N5, and N6 were not taken because they are outside the routed findings and
+would add unrelated surface changes to this fix cycle.
+
+Verification: focused calculator suite **59 passed**; Ruff clean; full suite
+**1743 passed / 23 failed / 1 deselected**, with the 23-failure set unchanged
+from the routed baseline. Every inherited Q-site, shared-guard, closed-set FK,
+and hostile-context mutation was applied at its named site, reddened its expected
+assertions, reverted, and hash-checked. The new B1 context-removal mutation
+reddened the hostile-context row; the B2 `_require_money` zero-return mutation
+reddened the system-`None` row; and the C8 right-value deletion reddened the
+incomplete message assertions. The absorbed guard rows and public-surface row
+are green. No architecture-graph change was made; the pending
+`domain-item-economics` node remains held per owner card 3.

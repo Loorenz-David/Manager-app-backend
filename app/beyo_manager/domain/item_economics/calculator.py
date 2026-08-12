@@ -24,6 +24,29 @@ never bump for renames, value-preserving storage widening, API shape, or docs.
 
 # D4: a version mismatch is an intentional skip, not a failed re-derivation.
 REDERIVE_SKIPPED = "rederive_skipped_calculation_version"
+REDERIVE_MISMATCH = "rederive_mismatch"
+
+__all__ = [
+    "CALCULATION_VERSION",
+    "REDERIVE_SKIPPED",
+    "REDERIVE_MISMATCH",
+    "EvaluationSnapshot",
+    "TermSnapshot",
+    "calculate_percentage_term_amount",
+    "calculate_term_amount",
+    "calculate_term_amounts",
+    "calculate_production_budget",
+    "calculate_cost_per_worker_minute",
+    "calculate_allowed_worker_minutes",
+    "calculate_actual_worker_minutes",
+    "calculate_consumed_cost_minor",
+    "calculate_remaining_worker_minutes",
+    "calculate_percent_consumed",
+    "calculate_variance_worker_minutes",
+    "calculate_variance_cost_minor",
+    "validate_currency_equality",
+    "rederive",
+]
 
 _T = TypeVar("_T")
 _DECIMAL_ZERO = Decimal("0")
@@ -309,7 +332,9 @@ def calculate_remaining_worker_minutes(
     """Subtract two already-quantized minute values exactly."""
     allowed = _require_rate(allowed_worker_minutes, "allowed_worker_minutes")
     actual = _require_rate(actual_worker_minutes, "actual_worker_minutes")
-    return allowed - actual
+    with localcontext() as context:
+        context.prec = 50
+        return allowed - actual
 
 
 def calculate_percent_consumed(
@@ -332,7 +357,9 @@ def calculate_variance_worker_minutes(
     actual_worker_minutes: Decimal,
 ) -> Decimal:
     """Calculate the exact two-decimal worker-minute variance."""
-    return calculate_remaining_worker_minutes(allowed_worker_minutes, actual_worker_minutes)
+    with localcontext() as context:
+        context.prec = 50
+        return calculate_remaining_worker_minutes(allowed_worker_minutes, actual_worker_minutes)
 
 
 def calculate_variance_cost_minor(
@@ -360,7 +387,7 @@ def validate_currency_equality(
         (basis, model, "basis", "model"),
     )
     mismatches = [
-        f"{left_name}={left.value} differs from {right_name}={right.value}"
+            f"{left_name}={left.value} differs from {right_name}={right.value}"
         for left, right, left_name, right_name in pairs
         if left != right
     ]
@@ -371,12 +398,13 @@ def validate_currency_equality(
 def rederive(
     evaluation_row: EvaluationSnapshot,
     term_rows: Sequence[TermSnapshot],
-) -> tuple[Decimal, int, Decimal] | str:
+) -> tuple[Decimal, int, Decimal] | str | dict[str, object]:
     """Reproduce the HC-7 closed-set values without dereferencing any FK.
 
     A row from a future calculation version returns ``REDERIVE_SKIPPED`` before
     reading any other field.  A same-version snapshot that no longer agrees
-    with its stored derived values raises ``ValidationError``.
+    with its stored derived values returns a ``REDERIVE_MISMATCH`` marker and
+    the disagreeing fields.
     """
     version = evaluation_row.calculation_version
     if type(version) is not int:
@@ -393,8 +421,15 @@ def rederive(
         evaluation_row.cost_per_worker_minute_minor_snapshot,
         "cost_per_worker_minute_minor_snapshot",
     )
+    mismatches: list[dict[str, object]] = []
     if rate != stored_rate:
-        raise ValidationError("ITEM_COST_SNAPSHOT_MISMATCH: rate snapshot differs")
+        mismatches.append(
+            {
+                "field": "cost_per_worker_minute_minor_snapshot",
+                "rederived_value": rate,
+                "stored_value": stored_rate,
+            }
+        )
 
     expected_price = _require_money(
         evaluation_row.expected_sale_price_minor,
@@ -409,18 +444,37 @@ def rederive(
     for term_row, amount in zip(term_rows, amounts):
         stored_amount = _require_money(term_row.amount_minor, "amount_minor")
         if amount != stored_amount:
-            raise ValidationError(
-                f"ITEM_COST_SNAPSHOT_MISMATCH: term {term_row.name} amount differs"
+            mismatches.append(
+                {
+                    "field": f"term[{term_row.name}].amount_minor",
+                    "rederived_value": amount,
+                    "stored_value": stored_amount,
+                }
             )
 
     budget = calculate_production_budget(expected_price, amounts)
-    if budget != _require_money(evaluation_row.production_budget_minor, "production_budget_minor"):
-        raise ValidationError("ITEM_COST_SNAPSHOT_MISMATCH: budget snapshot differs")
+    stored_budget = _require_money(evaluation_row.production_budget_minor, "production_budget_minor")
+    if budget != stored_budget:
+        mismatches.append(
+            {
+                "field": "production_budget_minor",
+                "rederived_value": budget,
+                "stored_value": stored_budget,
+            }
+        )
     allowed = calculate_allowed_worker_minutes(budget, stored_rate)
     stored_allowed = _require_rate(
         evaluation_row.allowed_worker_minutes,
         "allowed_worker_minutes",
     )
     if allowed != stored_allowed:
-        raise ValidationError("ITEM_COST_SNAPSHOT_MISMATCH: allowance snapshot differs")
+        mismatches.append(
+            {
+                "field": "allowed_worker_minutes",
+                "rederived_value": allowed,
+                "stored_value": stored_allowed,
+            }
+        )
+    if mismatches:
+        return {"marker": REDERIVE_MISMATCH, "mismatches": mismatches}
     return rate, budget, allowed
