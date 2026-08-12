@@ -554,3 +554,155 @@ remained at head and was not downgraded. The disposable schema clone was used fo
 DDL mutations, then dropped. The migration source SHA-256 after all source probes was
 `3fc5cd88367b8a7ba2c0dadc34a00ae878a4b586db0b913a055ca6816fda48d0`, byte-identical to
 the pre-probe value. Archgraph delta: **zero**; this cycle changed tests and README only.
+
+### 2026-08-12 — reviewer r2 (Claude, plan-reviewer, delta-scoped) — CHANGES_REQUESTED
+
+**Verdict: CHANGES_REQUESTED.** Seven of the eight r1 items (B1–B4, S1–S3) are
+genuinely closed — re-derived independently, not inherited, and in two places verified
+harder than the fix declared. One row of C2's 25 does not match the cell it implements,
+and the invariant behind it has no live arbiter: **B5**, mutation-proven.
+
+**Verified perimeter.** `39e6fbe` contains exactly four files (schema test module,
+`item_economics/README.md`, this plan, master-plan tracker row); `7e1b11d` contains
+exactly three (`app/migrations/env.py`, master plan §10, its handoff — added at repo
+root, relocated to `handoffs/maintenance/` by the coordinator in `2985165`). Nothing
+outside either perimeter. Working tree clean; migration sha
+`3fc5cd88…48d0` byte-identical before and after this session's probes.
+
+**Verified correct this round (settled — do not re-derive):**
+- **R2-P1 — the 25 C2 cases map one-to-one onto the table**, none missing, none
+  invented: 2+2+3+3+3+3+4+3+2 by index = 25 = 9 (a) + 14 clause rows + 2 key-column
+  rows. The 14 clause rows equal the 14 `postgresql_where` clauses counted off the
+  live DDL (1,1,2,2,2,1,3,2). **r1's "22 (9 + 13)" was the arithmetic error; the
+  fixer was right to follow the table.** Plan prose to be corrected (lesson L1).
+- **R2-P2 index probes (7 of 14 clauses re-run independently at the DDL site** on a
+  from-scratch disposable DB, the other 7 stand on the fixer's declaration): dropping
+  each clause of INV-B1 (`effective_to IS NULL`, `is_deleted = false`), INV-E1
+  (`kind = 'committed'`, `superseded_at IS NULL`, `is_deleted = false`) and INV-V1
+  (`superseded_at IS NULL`, `is_deleted = false`) reddens **exactly** its named (b)
+  row, with sibling rows green. All reverted; index definitions verified restored.
+- **R2-P2 B2 source probes, all three re-run and reverted:** adding
+  `_task_state_enum.drop(...)` to `downgrade` (the literal M-b defect), deleting
+  `_item_valuation_currency_enum.drop(...)`, deleting
+  `op.drop_table('item_cost_results')` — each turns
+  `test_downgrade_static_proxy_is_exact` red. C1(b) now bites on the defect it names.
+- **B3/B4 verified beyond the declaration — full 16-CHECK sweep.** Each of the closed
+  list dropped one at a time on the disposable DB: **all 16 redden a behavioural test**
+  (not merely the inventory existence assertion), each reddening exactly its own
+  named row(s) — `ck_pcbv_fixed_monthly_cost_minor_positive` → both the −1 and 0 rows,
+  `ck_cost_model_terms_value_by_type` → all 9 reject rows, every other → 1 row.
+  A1 and A2 now have live tests. The B3 fixture closes its basis version
+  (`_foundation(basis_open=False)` → `effective_to = 2099-01-01`) so
+  `uix_production_cost_basis_versions_open` cannot fire, and every reject row asserts
+  its constraint name via `match=`. Constraint count restored to 16; module green.
+- **R2-P3 combined tree:** full non-e2e suite on HEAD = **1684 passed / 23 failed /
+  1 deselected**, failure set **byte-identical** to the phase-1 recorded 23-item
+  baseline (set-diff empty), zero connection noise. The maintenance session's
+  transient collection error in the fix's file is **gone** — 79 tests collect and pass.
+- **R2-P4 maintenance:** §10's from-scratch recipe verified — empty database to
+  `90cdd23a828e` via `alembic upgrade head` in **1.52s**, 106 public tables; the
+  stall fix's central claim holds. `env.py`'s repair is guarded on the exact legacy
+  graph (three shape conditions on `8cf57fa23110` / `a3b5c7d9e1f2` / `6f4d2c1b9a7e`)
+  and the two cold-build hooks are gated on `step.up_revision_id == 'a1312183fdfb'`;
+  effectively inert at head — `alembic upgrade head` on the configured DB is a 0.49s
+  no-op, still at `90cdd23a828e`, zero cold-build anchor rows. No historical migration
+  file was rewritten (rule 7 holds). See N10/N11 for what is broader than inert.
+- **R2-P5 S1/S2/S3:** README's "four currency columns use three PostgreSQL enum types
+  … `item_cost_evaluations.currency` … owned by `item_valuations`" matches §6.3's
+  ratified reuse row exactly. S2's `pg_type` assertions **bite in both halves**,
+  drop-simulated on the disposable DB: renaming `item_cost_evaluation_kind_enum` reddens
+  the five-new-types assertion; rebinding `tasks.return_source` to a decoy type of the
+  same name (so all eight names still exist) reddens the `tasks` binding assertion.
+  S3's renamed `test_item_valuation_amount_and_currency_boundaries` covers every case
+  its name claims — negative-sale, negative-purchase, both-null, price-only, cost-only,
+  null-currency. N2 taken: the inventory pins reflected `percent_value` to
+  `numeric(6,3)`.
+- **Archgraph:** read-only, zero delta from both sessions — revision
+  `9476e89ab7d263e43bf8eb055ccc6d0f8186ba34c861787c4d1422c4890019e6`, 125 nodes,
+  161 edges, **15 pending**, 0 stale, 0 diagnostics. Unchanged from r1.
+
+**B5 (blocking) — INV-G1's C2 (a) row puts both memberships in the SAME group; the
+invariant "a working section belongs to at most one production cost group" has no live
+arbiter.**
+The C2 table's cell reads "(a) conflict → `IntegrityError`: **section active in two
+groups**". `test_partial_unique_indexes_enforce_conflicts_and_exclusions[sections_
+conflict]` builds both `ProductionCostGroupSection` rows against the same
+`group.client_id` from `_foundation`, so the row conflicts on the duplicated
+`(workspace_id, working_section_id)` pair *and* on a duplicated group — it cannot
+distinguish the shipped key from a group-scoped one. This is the last of the 25 rows
+still passing for a reason other than the one its cell states (B3's rule, applied to
+C2 instead of C3).
+*Proof (applied and reverted on a from-scratch disposable DB, index name preserved):*
+recreating `uix_production_cost_group_sections_active` as
+`(workspace_id, production_cost_group_id, working_section_id) WHERE removed_at IS NULL`
+— which permits one section in unlimited groups simultaneously, destroying INV-G1 —
+leaves the **entire phase-2 module at 79 passed**, `sections_conflict` and
+`sections_removed` both green. Restored; 79 passed.
+*Violated authority:* plan C2, the `uix_production_cost_group_sections_active` (a)
+cell; intention §7A.2 ("the index is the only arbiter") and §4.2; charter rule 2
+companion.
+*Correction clause:* in the `sections_conflict` / `sections_removed` branch, create a
+**second `ProductionCostGroup`** in the same workspace and attach the second
+`ProductionCostGroupSection` to *that* group (same `working_section_id`), so the shared
+key is `(workspace_id, working_section_id)` alone and the group differs — exactly the
+"section active in two groups" the cell specifies. Re-run the reviewer's named
+mutation (widen the index key to include `production_cost_group_id` at the DDL site on
+a disposable DB) and declare that `sections_conflict` turns red. Leave
+`sections_removed`'s `removed_at` clause row as it is, but move it onto the second
+group too so it stays a one-clause delta from the corrected (a) row.
+
+**Notes (no fix required this cycle unless routed):**
+- **N8 — the B2 proxy recognises only the `_<name>_enum.drop(` idiom.** Probed: adding
+  `op.execute('DROP TYPE task_state_enum')` to `downgrade` leaves
+  `test_downgrade_static_proxy_is_exact` **green**. C1(b)'s three named mutations all
+  bite, so the criterion is met; a `DROP TYPE` textual scan would close the residue.
+  Next touch of the migration / phase 9.
+- **N9 — the maintenance handoff declares `Commit hash: 2875320`; the commit is
+  `7e1b11d`.** The perimeter had to be verified by content rather than by the declared
+  hash. Provenance hygiene — coordinator note.
+- **N10 — `_ensure_cold_build_workspace` writes a permanent row into every cold
+  database.** Verified: the from-scratch DB carries
+  `workspaces('mig_cold_build_workspace', 'Migration workspace', created_by_id NULL)`;
+  the configured dev DB carries none. It is a data insert performed by the migration
+  *environment*, not by any revision — so it appears in no `alembic history`, no
+  downgrade removes it, and every future staging/production database built cold
+  inherits it. Outside phase-2 scope; attributed to the maintenance session. Route to
+  the maintenance ledger.
+- **N11 — the graph repair mutates Alembic private internals and runs on every
+  invocation.** `script.revision_map._revision_map`, `revision.nextrev`,
+  `revision._all_nextrev` are private; the guard is on the on-disk graph shape, not on
+  database state, so the repair executes on every alembic run (effectively inert at
+  head — verified). `_restore_cold_build_role_enum` additionally executes
+  `UPDATE workspace_roles SET name = NULL`, destructive but double-guarded (revision id
+  + both role enum types absent). This is a durable compatibility shim standing in for
+  the real fix — a merge/branch revision that makes the on-disk graph acyclic. An
+  Alembic upgrade renaming those internals breaks every migration run. Route to the
+  maintenance ledger.
+- **N12 — C2's nine (a) rows assert bare `IntegrityError` with no `match=`** on the
+  index name, unlike the C3 rows which now do. Every fixture is otherwise sole-cause
+  (verified above), so no row is currently decoration; a name match would keep them
+  discriminating as constraints are added. Next touch.
+- **N13 — `test_percent_boundaries_use_check_and_numeric_type[numeric-bound-reject]`
+  expects `DBAPIError`, of which `IntegrityError` is a subclass** — a later
+  `CHECK percent_value < 1000` would leave it green. It conforms to D12 as written, and
+  N2-taken now pins the reflected precision structurally, so **r1's N2 is closed**;
+  tightening the row to `DataError` is optional. Next touch.
+- **Carried forward from r1, still open:** N3 (`EconomicsStatusEnum` declaration order
+  → phase 4), N4 (`checkfirst=True` on the five new types → phase 9), N5
+  (`client_id_prefix_map.md` ordering → phase 9). Closed this round: N1 (evidenced),
+  N2 (assertion added), N6 (stall owned and fixed), N7 (graph items held for
+  post-approval).
+
+**Lessons for the plans:**
+- **L1 — C2's prose count contradicted its own table** ("9 (a) + 13 (b) = 22" vs the
+  25 rows the table enumerates, and 14 clauses in the DDL). Two sessions spent effort
+  reconciling it. A criterion that states a count must derive it from the table, or
+  omit it.
+- **L2 — an (a) conflict row must name the key columns it discriminates, not only the
+  predicate clauses.** C2's per-clause discipline (D8) covered predicates exhaustively
+  and left key columns to prose ("two groups"), which is exactly where B5 slipped
+  through. Criteria for a partial-unique index should enumerate one accept row per
+  *key column* as well as one per predicate clause.
+- **L3 — `_foundation`-style shared fixtures are where second sufficient causes are
+  born** (r1 B3, now B5). When a phase's tests hang off one factory, each row's cell
+  should state which field of the shared fixture it varies.
