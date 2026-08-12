@@ -79,7 +79,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
 | 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | **APPROVED** | 2026-08-12 | reviewer (Claude); Codex (fix r2); reviewer r2 (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative. Fix r2: S1 ADMIN rows added and asserted `== 4321`; S2 baseline correction and full 23-item list recorded; focused 39 passed, full run 1605 passed / 23 failed / 1 deselected. Coordinator: fix handoff consumed, perimeter exact vs `ed99e7e`, arithmetic reconciled (1624→1629 = the 5 rows); re-review r2 prompt authored (probes: reshaped worker assertions, baseline list match, new-row liveness). **Review r2: APPROVED** — perimeter exact (six files, zero production-code change), S1+S2 resolved, criteria now 26/26 (24/24 cells), rows 19/22 survived the reshaping and run twice, all four probes bite per-parameter plus an ADMIN-drop probe reddening exactly 9 ADMIN ids with zero collateral, baseline list set-identical to r1's, suite 1605/23/1 with the failure set byte-identical to baseline, archgraph zero delta. Open notes carried forward: N1/N2→phase 9, N7 (test naming)→next touch |
-| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended); projection r0 prompt authored (`prompts/reviewer/2026-08-12_phase2_projection_r0.md`) |
+| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | PROMPT_READY | 2026-08-12 | coordinator | projection r0 AMENDMENTS_REQUIRED (16-row ledger, 4 blocking: name truncation, open name list, unfalsifiable C5, no disposable-DB harness) — fully routed: §6.2 closed CHECK list + named FKs, §6.1 citation fix, §10 disposable recipe, intention round 7 (icet columns), plan tasks/criteria rewritten (C1a/b, C2 per-clause, C3 12-row table, C5 migration-site, C6); implementer prompt authored |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
 | 5 | Valuation surface | `plans/phase_5_valuation_surface.md` | ⚑ (rows 15,16 — valuation chain; 34) | NOT_STARTED | 2026-08-11 | planner | ItemValuation chain command + preview |
@@ -176,9 +176,13 @@ name routes it back to the coordinator rather than inventing one.
   dropped by the phase-6 migrations only.
 - Column names exactly as intention §4/§4A (as amended: `cost_per_worker_minute_minor`,
   `cost_per_worker_minute_minor_snapshot`, `percent_value`, `fixed_amount_minor`).
-  Temporal columns `effective_from`/`effective_to` (Date) follow the repo's
-  effective-dating precedent (`issue_category_configs`, sibling compensation) — a
-  deliberate, recorded deviation from `21`'s `<context>_date` suffix guidance.
+  Temporal columns `effective_from`/`effective_to` (Date) — a deliberate, recorded
+  deviation from `21`'s `<context>_date` suffix guidance, justified by §7A.3's
+  calendar-date resolution semantics and vocabulary continuity with the sibling
+  compensation intention. *(Correction, projection D14: the previously cited
+  `issue_category_configs` precedent was dropped from the schema by `99accdeba8b9`
+  and used `DateTime`, not `Date` — no live effective-dated table exists; the
+  decision stands on the semantics, not on precedent.)*
 
 ### 6.2 Constraint & index names (repo idiom: `uix_` partial uniques, `ck_` CHECKs)
 
@@ -193,10 +197,45 @@ name routes it back to the coordinator rather than inventing one.
 | INV-E1 one current committed evaluation per task | `uix_item_cost_evaluations_current` |
 | INV-V1 one current valuation per item | `uix_item_valuations_current` |
 | one result per episode | `uq_item_cost_results_task_id` (plain unique) |
-| window CHECKs (both config chains) | `ck_<table>_effective_window` |
-| money/rate CHECKs | `ck_<table>_<column>_positive` / `_non_negative` per §4/§4A |
-| valuation ≥1 amount CHECK | `ck_item_valuations_amount_present` |
-| term per-type nullability CHECK (6A.4) | `ck_cost_model_terms_value_by_type` |
+
+**CHECK constraints (CLOSED enumerated list — phase-2 projection D1/D2, 2026-08-12;
+this replaces the earlier pattern rows).** Registry rule: names use the full table
+name unless the result exceeds **60 bytes** (PostgreSQL truncates at 63 silently —
+verified empirically), in which case the table token is the registered client
+prefix. C1 asserts exactly this list, nothing else.
+
+| Constraint | Name (bytes) |
+|---|---|
+| `production_cost_basis_versions.fixed_monthly_cost_minor > 0` (A1) | `ck_pcbv_fixed_monthly_cost_minor_positive` |
+| `production_cost_basis_versions.cost_per_worker_minute_minor > 0` (A2) | `ck_pcbv_cost_per_worker_minute_minor_positive` |
+| `production_cost_basis_versions.monthly_paid_hours > 0` | `ck_pcbv_monthly_paid_hours_positive` |
+| `production_cost_basis_versions.planning_utilization_percent > 0` | `ck_pcbv_planning_utilization_percent_positive` |
+| `production_cost_basis_versions.planning_utilization_percent <= 100` | `ck_pcbv_planning_utilization_percent_max` |
+| basis-version window | `ck_production_cost_basis_versions_effective_window` |
+| model-version window | `ck_cost_model_versions_effective_window` |
+| term per-type nullability (6A.4) | `ck_cost_model_terms_value_by_type` |
+| `cost_model_terms.percent_value >= 0` | `ck_cost_model_terms_percent_value_non_negative` |
+| `cost_model_terms.fixed_amount_minor >= 0` | `ck_cost_model_terms_fixed_amount_minor_non_negative` |
+| `item_cost_evaluations.expected_sale_price_minor >= 0` | `ck_ice_expected_sale_price_minor_non_negative` (full name is 63 bytes — prefix token per the rule) |
+| `item_cost_evaluations.purchase_cost_minor >= 0` | `ck_ice_purchase_cost_minor_non_negative` |
+| `item_valuations.expected_sale_price_minor >= 0` | `ck_item_valuations_expected_sale_price_minor_non_negative` |
+| `item_valuations.purchase_cost_minor >= 0` | `ck_item_valuations_purchase_cost_minor_non_negative` |
+| valuation ≥1 amount | `ck_item_valuations_amount_present` |
+| `item_cost_results.actual_worker_seconds >= 0` | `ck_item_cost_results_actual_worker_seconds_non_negative` |
+
+**Deliberate CHECK absences (registry decisions — stated so nobody "fixes" them):**
+`production_budget_minor` / `allowed_worker_minutes` carry NO CHECK (A8);
+`task_state_snapshot` carries NO narrowing CHECK (admission is the §8B.2 handler's
+job); `percent_value` has NO upper-bound CHECK — `Numeric(6,3)` is the bound (1000
+raises `NumericValueOutOfRangeError`, a DataError, before any CHECK — verified;
+projection D12).
+
+**Named foreign keys (projection D7):** the three self-FKs are `use_alter=True`
+per §2.5's pointer convention, explicitly named, and **hand-added to the migration**
+— autogenerate omits `use_alter` FKs in this repo (precedent `243e62bcd858`):
+`fk_item_cost_evaluations_superseded_by_id`,
+`fk_item_cost_evaluations_promoted_from_id`,
+`fk_item_valuations_superseded_by_id`.
 
 ### 6.3 Enums
 
@@ -452,6 +491,17 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   on disposable databases only; the configured DB is always left at `head`
   (charter rule 7). `make reset-db` is dry-run by default. Tests that commit rows
   own their teardown (charter rule 11½).
+- **Disposable-database recipe (projection D4, verified mechanics 2026-08-12):**
+  the suite and alembic both resolve `settings.database_url`, and a real
+  `DATABASE_URL` env var **overrides `.env`** (pydantic-settings precedence;
+  `config.py` alias `DATABASE_URL`). So, from `backend/app/`:
+  1. `DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager_disposable PYTHONPATH=. APP_ENV=development python3 -m scripts.create_db`
+  2. same `DATABASE_URL=…` prefix on `alembic upgrade head` / `alembic downgrade <rev>` for the round-trip;
+  3. drop afterwards: `docker compose exec postgres psql -U postgres -c 'DROP DATABASE beyo_manager_disposable;'`.
+  **Without the `DATABASE_URL` override, every pytest/alembic command targets the
+  configured development database** (`.env` → `beyo_manager` @ 5433) — there is no
+  built-in test-schema creation anywhere in `tests/` (no `create_all`, no alembic
+  hook). Plans must say per criterion which database it runs against.
 - **Error surface:** `run_service` (`services/run_service.py`) is the single error
   boundary; DomainError → `StatusOutcome(success=False, error=exc)`; identities per
   §6.4 travel in `error.message`.

@@ -409,6 +409,17 @@ term; `amount_minor` Integer — the computed subtraction (§6.1). Written only 
 calculator at evaluation creation; immutable. These rows are the "where did the cost
 come from" drill-down (raw §8) and make the budget re-derivable line by line.
 
+**Round-7 column-set pin (projection D6 — this paragraph governs the table shape):**
+the exact columns are `client_id` (prefix `icet`), `workspace_id` (FK RESTRICT —
+`24_multi_tenancy` binds every domain table), `evaluation_id` (FK RESTRICT + index),
+`name`, `calculation_type`, **`percent_value` and `fixed_amount_minor`** (A3's
+replacement of the round-0 `value` column applies to this snapshot table too — the
+§6A.11 closed set is the authority), `amount_minor`, and `created_at` only. **No**
+`created_by_id`/`updated_*` (system-authored; the acting user is stamped on the
+evaluation) and **no** soft-delete trio (rows are immutable and reachable only
+through their evaluation; a projection's soft delete orphans its term rows
+harmlessly — every read path goes through the evaluation).
+
 ### 4.6 `ItemCostResult` — the final actuals of a closed episode
 (table `item_cost_results`, prefix `icr`)
 
@@ -2065,6 +2076,15 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   already structural — (task_id, item_id) evaluation keying, per-episode results,
   read-time lifetime summation (8B.4). Recorded so no session "fixes" what is
   deliberate.
+
+**Round 7 — 2026-08-12 (phase-2 projection D6 folded; coordinator):**
+
+- **R7-1** `ItemCostEvaluationTerm`'s column set pinned in §4.5 (round-7 paragraph):
+  `workspace_id` added (`24_multi_tenancy` — three artifacts disagreed and none
+  carried it), A3's `percent_value`/`fixed_amount_minor` replace the round-0 `value`
+  in the snapshot table too (§6A.11 is the authority), audit shape is `created_at`
+  only, no soft-delete trio. Resolves the §4.5-vs-§4A-vs-contract conflict the
+  phase-2 projection found (D6); no product semantic changed.
 
 ---
 
