@@ -390,17 +390,16 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
 - **Infra:** `make dev-up` starts postgres + redis in Docker (hybrid mode: app local,
   infra containerized). `make dev-up-full` runs backend + worker containerized.
   Service addresses: PostgreSQL `127.0.0.1:5433`, Redis `127.0.0.1:6380`.
-- **Codex sandbox caveat (owner-verified 2026-08-12):** the default Codex sandbox
-  **cannot reach 127.0.0.1:5433 / 127.0.0.1:6380** — a baseline/test run inside it
-  produces connection-noise failures that look like a broken suite (this burned the
-  phase-1 baseline). Every coordinator prompt for a Codex session that runs tests,
-  migrations, or baselines MUST instruct: *run those commands with elevated
-  permissions, because PostgreSQL and Redis are local Docker services on
-  127.0.0.1:5433 and 127.0.0.1:6380 and are inaccessible from the normal Codex
-  sandbox.* If elevation is unavailable, the session records "baseline
-  unobtainable" and stops — it never records a sandboxed run as a baseline. (A
-  permanent per-project Codex permission config replaces this prompt clause when
-  the owner sets one up.)
+- **Codex sandbox access — RESOLVED by permanent configuration (owner,
+  2026-08-12):** the default Codex sandbox originally could not reach
+  `127.0.0.1:5433` / `127.0.0.1:6380` (this burned the phase-1 baseline —
+  connection-noise failures recorded as a baseline). The owner has since granted
+  the access in Codex's own configuration, so **prompts no longer carry an
+  elevated-permissions clause**. The environment-agnostic rule stands for every
+  agent and session: **a run whose environment cannot reach the database/Redis is
+  never recorded as a baseline or as evidence** — the session verifies
+  connectivity is real (no connection-refused / `OperationalError` noise in the
+  output) and otherwise stops and reports "baseline unobtainable".
 - **Tests:** `PYTHONPATH=. pytest -m 'not e2e'` — **`PYTHONPATH=.` is required**;
   bare `make test` (which omits it) fails at conftest import
   (`ModuleNotFoundError: beyo_manager`), verified 2026-08-12. Collection verified:
