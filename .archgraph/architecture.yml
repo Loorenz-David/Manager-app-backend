@@ -2750,8 +2750,9 @@ nodes:
     name: production_cost_groups
     description: A workspace-owned named production-cost grouping. It owns its
       versioned basis and section membership configuration, but does not choose
-      an evaluation group. Its active-name constraint preserves one current name
-      per workspace.
+      an evaluation group. Its active-name constraint makes the name unique per
+      workspace among non-deleted rows — a workspace may hold many groups with
+      distinct names.
     metadata:
       evidence:
         - path: app/beyo_manager/models/tables/item_economics/production_cost_group.py
@@ -2760,10 +2761,10 @@ nodes:
           endLine: 24
           summary: The ProductionCostGroup ORM model defines production_cost_groups.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:37.728Z
   - id: table-production-cost-group-section
     type: table
     name: production_cost_group_sections
@@ -2780,10 +2781,10 @@ nodes:
           summary: The ProductionCostGroupSection ORM model defines
             production_cost_group_sections.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-production-cost-basis-version
     type: table
     name: production_cost_basis_versions
@@ -2800,10 +2801,10 @@ nodes:
           summary: The ProductionCostBasisVersion ORM model defines
             production_cost_basis_versions.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-cost-model-version
     type: table
     name: cost_model_versions
@@ -2818,10 +2819,10 @@ nodes:
           endLine: 33
           summary: The CostModelVersion ORM model defines cost_model_versions.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-cost-model-term
     type: table
     name: cost_model_terms
@@ -2837,10 +2838,10 @@ nodes:
           endLine: 38
           summary: The CostModelTerm ORM model defines cost_model_terms.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-item-cost-evaluation
     type: table
     name: item_cost_evaluations
@@ -2856,10 +2857,10 @@ nodes:
           endLine: 56
           summary: The ItemCostEvaluation ORM model defines item_cost_evaluations.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-item-cost-evaluation-term
     type: table
     name: item_cost_evaluation_terms
@@ -2876,10 +2877,10 @@ nodes:
           summary: The ItemCostEvaluationTerm ORM model defines
             item_cost_evaluation_terms.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-item-cost-result
     type: table
     name: item_cost_results
@@ -2894,10 +2895,10 @@ nodes:
           endLine: 36
           summary: The ItemCostResult ORM model defines item_cost_results.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - id: table-item-valuation
     type: table
     name: item_valuations
@@ -2913,10 +2914,10 @@ nodes:
           endLine: 36
           summary: The ItemValuation ORM model defines item_valuations.
           inferenceReason: The model directly implements this persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -5235,10 +5236,10 @@ edges:
           endLine: 42
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - sourceNodeId: table-production-cost-group
     relationshipType: owns
     targetNodeId: table-production-cost-group-section
@@ -5249,10 +5250,10 @@ edges:
           endLine: 22
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - sourceNodeId: table-cost-model-version
     relationshipType: owns
     targetNodeId: table-cost-model-term
@@ -5263,10 +5264,10 @@ edges:
           endLine: 37
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - sourceNodeId: table-item-cost-evaluation
     relationshipType: owns
     targetNodeId: table-item-cost-evaluation-term
@@ -5277,10 +5278,10 @@ edges:
           endLine: 25
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - sourceNodeId: table-task
     relationshipType: owns
     targetNodeId: table-item-cost-evaluation
@@ -5291,10 +5292,10 @@ edges:
           endLine: 55
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z
   - sourceNodeId: table-task
     relationshipType: owns
     targetNodeId: table-item-cost-result
@@ -5305,7 +5306,7 @@ edges:
           endLine: 35
           summary: The child model's foreign key carries the parent reference.
           inferenceReason: The reference establishes architectural ownership.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T12:54:15.377Z

@@ -1,0 +1,140 @@
+reviewId: 2026-08-12T12-54-15-393Z--9f9769
+reviewedItemIds:
+  - node:table-production-cost-group
+  - node:table-production-cost-group-section
+  - node:table-production-cost-basis-version
+  - node:table-cost-model-version
+  - node:table-cost-model-term
+  - node:table-item-cost-evaluation
+  - node:table-item-cost-evaluation-term
+  - node:table-item-cost-result
+  - node:table-item-valuation
+  - edge:table-task--owns-->table-item-cost-evaluation
+  - edge:table-task--owns-->table-item-cost-result
+  - edge:table-production-cost-group--owns-->table-production-cost-group-section
+  - edge:table-production-cost-group--owns-->table-production-cost-basis-version
+  - edge:table-cost-model-version--owns-->table-cost-model-term
+  - edge:table-item-cost-evaluation--owns-->table-item-cost-evaluation-term
+decisions:
+  - itemId: node:table-production-cost-group
+    decision: edit
+    editedFields:
+      description: A workspace-owned named production-cost grouping. It owns its
+        versioned basis and section membership configuration, but does not
+        choose an evaluation group. Its active-name constraint makes the name
+        unique per workspace among non-deleted rows — a workspace may hold many
+        groups with distinct names.
+    rationale: "Phase-2 review r1 (P2-6): claim imprecise — 'preserves one current
+      name per workspace' reads as one GROUP per workspace; the index is
+      (workspace_id, name) unique among non-deleted, i.e. many groups, distinct
+      names. Reworded per the reviewer's recommendation; anchor exact."
+  - itemId: node:table-production-cost-group-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Phase-2 review r1 P2-6: code read before claim; interval membership,
+      no soft-delete state, one active group per section (INV-G1) — exact.
+      Anchor exact. Owner standing authorization 2026-08-12; phase 2 APPROVED
+      (re-review r3)."
+  - itemId: node:table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: effective-dated basis, positive facts, open-version index —
+      exact (nit on 'snapshot input' noted, not edit-worthy). Anchor exact.
+      Phase 2 APPROVED; standing authorization."
+  - itemId: node:table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: effective-dated, owns currency (A4) and its terms, one open
+      version per workspace — exact. Anchor exact. Phase 2 APPROVED; standing
+      authorization."
+  - itemId: node:table-cost-model-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: immutable rule (A6), one valid typed shape per calculation
+      type, name + purchase-cost uniqueness (A5) — exact. Anchor exact. Phase 2
+      APPROVED; standing authorization."
+  - itemId: node:table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: projection/committed, frozen snapshots for HC-7
+      reproducibility, current-committed index + self references — exact. Anchor
+      exact. Phase 2 APPROVED; standing authorization."
+  - itemId: node:table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: immutable applied-term snapshot, reachable only via its
+      evaluation — exact. Anchor exact. Phase 2 APPROVED; standing
+      authorization."
+  - itemId: node:table-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: recomputable per episode, one result per task, linked to
+      evaluation and triggering task state — exact. Anchor exact. Phase 2
+      APPROVED; standing authorization."
+  - itemId: node:table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: immutable price/cost history, required currency, >=1 amount,
+      supersession chain, current-row index — exact. Anchor exact. Phase 2
+      APPROVED; standing authorization."
+  - itemId: edge:table-task--owns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: item_cost_evaluations.task_id FK RESTRICT verified; the
+      conflicting-canonical-relationship contradiction is a false positive of
+      the one-owns-target heuristic (tasks legitimately owns several children).
+      Phase 2 APPROVED; standing authorization."
+  - itemId: edge:table-task--owns-->table-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: item_cost_results.task_id FK RESTRICT verified; contradiction
+      false positive (same heuristic). Phase 2 APPROVED; standing
+      authorization."
+  - itemId: edge:table-production-cost-group--owns-->table-production-cost-group-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: child FK verified; contradiction false positive (same
+      heuristic). Phase 2 APPROVED; standing authorization."
+  - itemId: edge:table-production-cost-group--owns-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: child FK verified; contradiction false positive (same
+      heuristic). Phase 2 APPROVED; standing authorization."
+  - itemId: edge:table-cost-model-version--owns-->table-cost-model-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: child FK verified. Phase 2 APPROVED; standing authorization."
+  - itemId: edge:table-item-cost-evaluation--owns-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "P2-6: child FK verified. Phase 2 APPROVED; standing authorization."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-12T12:54:15.393Z
+graphRevisionBefore: 9476e89ab7d263e43bf8eb055ccc6d0f8186ba34c861787c4d1422c4890019e6
+graphRevisionAfter: 89c88a2c37e4f274f4e1c6e310e9c29d12bdb85306e1b776ada3abce2532841a
+evidenceSummary: 15 evidence entries across 9 files; no drift detected
+humanInstruction: "Owner standing authorization (2026-08-12, recorded in
+  item-cost master plan §8): this implementation's graph-delta items are
+  reviewer-verified per phase and coordinator-confirmed after phase approval.
+  Phase 2 APPROVED at re-review r3; per-item verification in the phase-2 review
+  r1 handoff (P2-6) and re-confirmed unchanged through r2/r3 (zero delta both
+  rounds)."
+reviewTokenCorrelation: 931e1f94a4ea

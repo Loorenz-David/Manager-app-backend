@@ -1,0 +1,27 @@
+reviewId: 2026-08-12T12-54-37-746Z--9bff2f
+reviewedItemIds:
+  - node:table-production-cost-group
+decisions:
+  - itemId: node:table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Description corrected this session per the phase-2 reviewer's edit
+      recommendation (name unique per workspace among non-deleted rows; many
+      groups per workspace). Mechanism and anchor verified exact in review r1
+      P2-6; the sole imprecision is now fixed, so the claim is promotable. Phase
+      2 APPROVED; owner standing authorization 2026-08-12.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-12T12:54:37.746Z
+graphRevisionBefore: 89c88a2c37e4f274f4e1c6e310e9c29d12bdb85306e1b776ada3abce2532841a
+graphRevisionAfter: 10d94f14556538fb9d4eeb48bf7235afdefe77e2817d38d65cbfec58f7650c35
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: "Second act of the phase-2 delta confirmation (owner standing
+  authorization, master plan §8): promote the node whose description was
+  corrected in the immediately preceding edit decision, completing the 15-item
+  batch (14 promote + 1 edit-then-promote)."
+reviewTokenCorrelation: 04a2ee555586

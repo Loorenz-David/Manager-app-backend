@@ -728,3 +728,92 @@ database; exactly `sections_conflict` reddened (`DID NOT RAISE`), then the origi
 non-e2e suite passed **1684 / 23 failed / 1 deselected**, with the same 23 known
 baseline failures. The configured development database remained at
 `90cdd23a828e` and the disposable database was dropped. Archgraph delta: **zero**.
+
+### 2026-08-12 — reviewer r3 (Claude, plan-reviewer, delta-scoped: B5 only) — APPROVED
+
+**Verdict: APPROVED.** B5 is resolved and independently mutation-verified. Phase 2 is
+complete: the schema was settled at r1, the test layer at r2 bar one row, and that row
+now arbitrates the invariant it names.
+
+**Verified perimeter.** `git show e9d6ac6` contains exactly three files — the schema
+test module, this plan (Review log), the master-plan tracker row. Nothing else.
+The test-module diff is **+5/−2**, not the prompt's stated +7/−2 (coordinator
+transcription; the change itself is exactly the correction clause). Checkpoint not
+amended. Working tree clean at close; no repository file was touched by this session's
+probes.
+
+**B5 — RESOLVED.**
+*Fixture read:* the `sections_conflict` / `sections_removed` branch now creates
+`second_group = ProductionCostGroup(workspace_id=workspace.client_id,
+name=f"group {uuid4().hex}", …)`. The first membership takes `group.client_id`, the
+second takes `second_group.client_id`, and both share `workspace_id` and
+`working_section_id`. The two memberships therefore share exactly
+`(workspace_id, working_section_id)` and differ in group — the C2 cell's "section
+active in two groups". `sections_removed` is the same pair with `removed_at` set on
+the second, i.e. a one-clause delta from (a), still on the second group. The second
+group's name is a fresh uuid, so `uix_production_cost_groups_name_active` cannot be a
+second sufficient cause.
+*Named mutation, re-run by the reviewer* on a from-scratch disposable DB
+(`beyo_manager_rereview_r3`, §10 recipe, empty → `90cdd23a828e` in 1.63s): recreating
+`uix_production_cost_group_sections_active` as
+`(workspace_id, production_cost_group_id, working_section_id) WHERE removed_at IS NULL`
+with the name preserved → **1 failed, 78 passed**, the single failure being exactly
+`…[sections_conflict]`. Zero collateral. Restored and re-read from `pg_indexes`
+(`… USING btree (workspace_id, working_section_id) WHERE (removed_at IS NULL)`);
+module back to 79 passed. r2's proof — that this mutation left all 79 green — is
+therefore closed by construction.
+*Paired clause mutation (reviewer addition, closing INV-G1's pair):* dropping the
+`removed_at IS NULL` clause → **1 failed, 78 passed**, the single failure being exactly
+`…[sections_removed]`. INV-G1 now has both arbiters live — the (a) row bites on key
+width, the (b) row on the predicate clause. This was one of the seven clause mutations
+r2 left on the fixer's declaration; it is now re-derived.
+
+**Suite.** Full non-e2e on HEAD: **1684 passed / 23 failed / 1 deselected**, failure
+set **byte-identical** to the phase-1 recorded baseline, zero connection noise.
+*Disclosure:* the reviewer's first run of the suite overlapped this session's own
+disposable-DB probes and reported 24 failed / 1683 passed — one extra, unrelated
+failure (see N14). The clean re-run with nothing else touching the container gave
+1684/23/1. The recorded result is the clean run.
+
+**Archgraph.** Read-only (`archgraph_status` only). Zero delta — revision
+`9476e89ab7d263e43bf8eb055ccc6d0f8186ba34c861787c4d1422c4890019e6`, 125 nodes,
+161 edges, **15 pending**, 0 stale, 0 diagnostics. Unchanged since r1. The 14 promote /
+1 edit recommendations remain held for the owner's post-approval adjudication.
+
+**N14 (note, passing-glance — pre-existing, outside phase 2) —
+`test_process_shopify_products_fans_out_to_all_active_workspace_shops_and_enqueues_one_task`
+carries an order-dependent assertion that can redden any baseline at random.**
+`rows` comes from `select(ShopifyProductSyncItem).where(workspace_id == …)` with **no
+`ORDER BY`**, and `sync_item_client_ids` is compared as an ordered **list**
+(`test_process_shopify_products_integration.py:176`). The test's own comment two lines
+above documents this exact hazard for `event_client_ids` and compares *those* as a
+set — the same latent defect, half-fixed. Observed failing once under container load
+with the two ids in transposed order, identical contents. This matters here because
+the project gates every phase on a byte-identical baseline comparison: a randomly
+flaky member of the 23-item set can cost a future round a false regression hunt.
+*Correction (when someone next touches that file):* compare `sync_item_client_ids` as
+a set, or add `ORDER BY` to the query. Not phase-2 work.
+
+**Minor, recorded not filed:** the fix-r3 handoff transcribes the archgraph revision as
+`9476e89ab7d263e43bf8eb055ccc6d0f8186ba34c861787c4d1422c4890019e` — 63 hex characters,
+one short of the real 64-character digest. Harmless here, but a "revision unchanged"
+check compares strings.
+
+**Carry-forward dispositions (final for this phase).**
+
+| Item | Origin | Destination |
+|---|---|---|
+| N3 — `EconomicsStatusEnum` declaration order ≠ §11A.4 evaluation order | r1 | phase 4 |
+| N4 — `checkfirst=True` on the five new types | r1 | phase 9 drift batch |
+| N5 — `client_id_prefix_map.md` row ordering | r1 | phase 9 drift batch |
+| N8 — B2 proxy regex misses a raw-SQL `DROP TYPE` | r2 | next touch of the migration / phase 9 |
+| N9 — maintenance handoff commit hash wrong | r2 | coordinator (recorded) |
+| N10 — cold-build workspace row in every cold DB | r2 | maintenance ledger |
+| N11 — private-Alembic-internals graph shim | r2 | maintenance ledger |
+| N12 — C2 (a) rows lack `match=` | r2 | next touch (optional; correctly not taken in r3) |
+| N13 — `DBAPIError` too broad on the numeric-bound row | r2 | next touch (optional; correctly not taken in r3) |
+| N14 — Shopify order-dependent assertion | r3 | next touch of that file / phase 9 |
+| N1, N2, N6, N7 | r1 | closed |
+| B1–B5, S1–S3 | r1, r2 | **closed** |
+
+No lessons this round beyond r2's L1–L3, which stand.
