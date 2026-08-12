@@ -336,11 +336,25 @@ in this plan deletes it.
 ## 8. Tool protocols
 
 Archgraph per §3 obligations. Named orientation nodes per phase are listed in each
-phase plan. The D-3 anchor drift (`analytics-recompute-step-time-totals`, evidence
-span 138–211 vs symbol at 161–234) is filed in the gate handoff and remains for the
-**human-authorized maintenance channel** (`archgraph_repair_anchors` is enabled);
-no pipeline session repairs it as a side effect. Phases record deltas additively
-only; review adjudication stays human.
+phase plan.
+
+**D-3: RESOLVED 2026-08-12** — owner-authorized; the node was promoted to
+`human_confirmed` with corrected anchors (161–234); audit record
+`.archgraph/reviews/2026-08-12T10-23-51-250Z--45ed55.yml`; graph revision now
+`810325a0…`, pending 243. Ledger record:
+`../archGraph_mapping_mantainance/resolved/node-analytics-recompute-step-time-totals.md`.
+Its three outgoing edges still carry the stale 138–211 span and remain pending —
+queued for the phase-8/9 delta adjudication.
+
+**Graph-delta adjudication flow (standing owner authorization, 2026-08-12):** for
+review items **created or changed by this implementation's phases** (and the three
+stale-anchor edges above), the phase reviewer verifies the delta as part of the
+phase review, and the **coordinator confirms** (promote/reject via
+preview→apply) after the phase is APPROVED — batched per phase, each with its
+audit record and a commit. The pre-existing pending backlog (unrelated to this
+project) remains owner-adjudicated; sessions still never adjudicate it.
+Reporter discipline (learned on D-3): a discrepancy is "filed" only when its file
+exists in the maintenance ledger's `open/` — a handoff row alone is not a filing.
 
 ## 9. Standing rules
 

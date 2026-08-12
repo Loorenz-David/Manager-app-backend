@@ -1,0 +1,41 @@
+reviewId: 2026-08-12T10-23-51-250Z--45ed55
+reviewedItemIds:
+  - node:analytics-recompute-step-time-totals
+decisions:
+  - itemId: node:analytics-recompute-step-time-totals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            symbol: _recompute_step_time_totals
+            startLine: 138
+            endLine: 211
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+            symbol: _recompute_step_time_totals
+            startLine: 161
+            endLine: 234
+    rationale: "D-3 (filed at the item-cost mechanism gate): anchor-only drift,
+      138-211 -> 161-234. Independently re-derived from source 2026-08-12 before
+      reading the stored claim: per-user min/max windows (189-197), sweep re-run
+      via compute_record_contributions (207-210), absolute SET of
+      total_*_seconds/_count (221-223), inaccurate_* (224), total_cost_minor
+      from working+paused seconds x salary rate (226-233). Claim and
+      inferenceReason verified exact; owner authorized closure this session."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-12T10:23:51.250Z
+graphRevisionBefore: b0702c3c7d96d4a989527b025c086543544bfd24c6e4764394b455d68c8a59e6
+graphRevisionAfter: 810325a05140eba346d76a7ce49f99560756fc0365a271a2535d8cc886c10f46
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: 'Owner (David) authorized closing D-3 in the coordinator
+  session of 2026-08-12: "yes you can close the D-3 anchor drift." Coordinator
+  (Claude) verified the claim independently from source before applying.'
+reviewTokenCorrelation: 327665729a88
