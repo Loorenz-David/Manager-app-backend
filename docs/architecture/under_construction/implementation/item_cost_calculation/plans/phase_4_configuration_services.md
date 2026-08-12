@@ -143,6 +143,11 @@ on the schema's field metadata); OpenAPI mirror row updated (reviewer-checked).
 - Phase-3 projection S4: the `Decimal(str(v))` request-layer parse criterion moved
   here — this phase ships the first request schemas; prove the parse on a value
   with more decimals than target scale (never `Decimal(v)` on a float, §6A.1).
+- Phase-3 review N7: C2's "Q3 consumes the persisted rate" cannot bite inside the
+  pure module (the rate arrives as a parameter). **The real arbiter lands here**:
+  when this phase wires basis-version creation, a criterion must prove the
+  persisted (quantized) `cost_per_worker_minute_minor` — not the raw division —
+  is what later calls receive.
 
 ## Review log
 

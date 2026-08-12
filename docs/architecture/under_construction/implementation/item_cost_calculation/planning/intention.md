@@ -806,6 +806,14 @@ typing** — they are not inputs to any derivation, and no re-derivation may rea
 The re-derivation is a pure function `rederive(evaluation_row, term_rows) -> (rate,
 budget, allowed)` used by the HC-1/HC-7 test (§14 test 2) on ORM instances, not dicts.
 
+**Mismatch outcome (round 9, R9-1 — owner card, phase-3 review):** when a stored
+value disagrees with its own re-derivation, `rederive` returns the named
+**`REDERIVE_MISMATCH`** structured result (naming the disagreeing fields and both
+values) — it **never raises a `ValidationError`** and no user-facing error identity
+exists for it. A snapshot disagreeing with itself is a data-integrity event, not a
+reader's mistake: calling services (phases 7–8) log/escalate the marker at error
+level and the read still renders. Same carrier family as `REDERIVE_SKIPPED`.
+
 ---
 
 ## 7. Temporal semantics & mutation operations
@@ -2111,6 +2119,21 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   verified). Also corrected §6A.2's citation: the accidental-HALF_EVEN precedent is
   the local `cost_minor` at `process_step_transition.py:231-233`, not a
   `_cost_minor` function.
+
+**Round 9 — 2026-08-12 (phase-3 review cards answered; coordinator fold):**
+
+- **R9-1 (review card 1)** Re-derivation mismatch is an **internal integrity
+  alarm**, never a user-facing validation error: §6A.11 gains the
+  `REDERIVE_MISMATCH` structured-result contract (marker carrier, sibling of
+  `REDERIVE_SKIPPED`); the fix cycle replaces the implementer's unregistered
+  `ITEM_COST_SNAPSHOT_MISMATCH` ValidationError with it. Callers log/escalate;
+  the read renders.
+- **R9-2 (review card 2)** The implementer's two defensive guards are **absorbed
+  as intended semantics**: (a) negative `percent_value`/`fixed_amount_minor`
+  reject with `ITEM_COST_TERM_SHAPE_INVALID` — the calculator re-validates §6A.4's
+  `≥ 0` range, not only presence/type; (b) a zero rate reaching the allowance
+  (Q3) raises `ITEM_COST_RATE_UNDERFLOW` — defence-in-depth at a second site of
+  §6A.6's identity. Both gain required test rows (fix r2).
 
 ---
 

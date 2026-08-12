@@ -209,3 +209,110 @@ Baseline from the correct app-topology invocation (`backend/app`, `PYTHONPATH=. 
 Named mutations were applied at and reverted from their required sites: M-Q1, M-Q2, M-Q3, M-Q4 quantize deletion, M-Q5; C6 shared `_guard_type` definition deletion; C7 FK read of `production_cost_basis_version_id`; C9 removal of Q1 explicit rounding; C9 removal of the Q3 `localcontext()` wrapper. Each mutation reddened its named assertion set. Calculator SHA-256 after every probe and at close: `088e6514ee3552f433b5aa28f082932ff98273e6507a2bfd82bff67ee1845e90`.
 
 Architecture Graph delta: one inferred `domain` node, `domain-item-economics` (`Item Economics`), recorded in one batch with calculator evidence at lines 1–26, 137–212, and 371–425. No pending review item was adjudicated. No owner decision is required.
+
+### Reviewer r1 — 2026-08-12 — Claude (plan-reviewer) — CHANGES_REQUESTED
+
+Verified correct and independently re-derived: perimeter exact (4 files at `2a860b2`, working tree
+clean, declared sha256s match byte-for-byte); scope fence clean (no service/command/router/schema/
+persistence, no phase-2 model edits, no `EconomicsStatusEnum`, no request-layer parse); purity holds
+structurally — `calculator.py` imports only `decimal`, `typing`, two domain enum modules and
+`ValidationError`, zero matches for sqlalchemy/session/httpx/os/await (P-F, `08_domain`); ruff clean.
+All ten Q-site values re-computed by hand and confirmed (C2's 5×2 table incl. the Diophantine Q2 tie
+`400.00005 → 400.0000`, and C5's seeded triple `995.02 / 203.02 / 20403 / 792.00 / 79597` with
+`792.00 × 100.5000 = 79596.000000`, difference exactly 1). C1 = 12 rows and `_term_shape` is total over
+type × presence. Suite re-run by the reviewer: **1738 passed / 23 failed / 1 deselected**, +54 exactly,
+zero connectivity noise, failure set **byte-identical** to the phase-1 routed 23-item list (diff empty;
+N14's Shopify flake did not fire — no re-run needed). All **nine** declared mutations re-run
+independently in a disposable worktree and each reddens exactly its named assertion set (M-Q1/Q3/Q5 per
+site; M-Q2 the tie row; M-Q4 the two exactness rows + the variance triple; C6 the 14 guard rows; C7 the
+FK tripwire; C9(a)/(b)). P3-6 verified positively: swapping C9's Q3 row for the plan's *other* seeded Q3
+fixture makes the C9(b) mutation **pass** — the declared test change genuinely strengthened the
+criterion. P3-8: all 16 §6.5 names present, none missing.
+
+**B1 (blocking) — `calculate_remaining_worker_minutes` (`calculator.py:312`) and
+`calculate_variance_worker_minutes` (`:335`, delegates) run Decimal arithmetic OUTSIDE
+`localcontext()`.** Authority: intention §6A.2 as amended round 8 (R8-2) — the module "runs its
+arithmetic inside a `decimal.localcontext()`", realized "by construction, not by hope"; §6A.8 ("exact
+2 dp subtraction"). Verified: under `getcontext().prec = 6`,
+`calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33"))` returns `99999.7`, not
+`99999.67`; `calculate_variance_worker_minutes` returns the same wrong value; every other public
+function is unaffected. C9 cannot see it because the criterion enumerates only Q1–Q5 — the exact hole
+P3-4 named. Correction: wrap both in `with localcontext() as context: context.prec = 50` as at the five
+Q sites, and extend C9's baseline/hostile tuples to **every** public function performing Decimal
+arithmetic (`calculate_remaining_worker_minutes`, `calculate_variance_worker_minutes`,
+`calculate_percent_consumed`), with the named mutation "remove the `localcontext()` wrapper from
+`calculate_remaining_worker_minutes`" reddening the new row.
+
+**B2 (blocking) — C6's `money × None (system-supplied)` cell has no asserting row, and the R-9
+inferred-zero defect survives the entire suite.** C6 is declared TOTAL; 24 of 25 cells have a row. Every
+money guard row (`test_calculator.py:240-246`) drives `expected_sale_price_minor` — a *user-supplied*
+field carrying `required_identity` — so its `None` row asserts `ITEM_COST_EXPECTED_PRICE_REQUIRED` and
+the system-supplied branch of `_require_money` (`calculator.py:72-75`) is never exercised. Authority:
+plan C6, master plan §9 **P-B** (R-9: absent input ⇒ named error or null, **never 0**), charter rule 2.
+Verified by mutation: replacing `raise _type_error(...)` at `calculator.py:75` with `return 0` — exactly
+the inferred zero P-B forbids — leaves **54/54 green**. C6's declared shared-`_guard_type` mutation does
+not reach it either: it reddens 14 rows, and both the money and rate `None` paths return before
+`_guard_type`. Correction: add the cell on a system-supplied money parameter (e.g.
+`calculate_variance_cost_minor(None, 100)`), with the named mutation "`_require_money`'s system-supplied
+`None` branch returns 0" (charter rule 11).
+
+**S1 (should-fix) — C8's message assertion is a disjunction; 2 of 3 rows never check the second
+currency.** `test_calculator.py:303`: `assert basis.value in message or model.value in message`. C8
+requires "the presence of **both** currency values" per row. Verified: dropping the right-hand value
+from the message (`f"{left_name}={left.value} differs from {right_name}"`) reddens only **1 of 3** rows —
+rows 2 and 3 survive because `basis.value` is `swedish_krona`, still present in the left-hand text.
+`assert pair in message` (`:301`) is likewise trivially true — every mismatch message enumerates a pair
+beginning with `valuation`. Authority: plan C8; charter rule 2 (no disjunctive assertions). Correction:
+per row, assert both distinct currency values by name and the exact failing-pair label.
+
+**S2 (should-fix) — `ITEM_COST_SNAPSHOT_MISMATCH` (`calculator.py:397, 413, 418, 425`) is not in the
+§6.4 registry**, which is marked FINAL and registry-authored. §6A.11 specifies `rederive` only as
+returning `(rate, budget, allowed)`; C7/D5 mandate the comparison without pinning a mismatch outcome, so
+the implementer had to author one. Raising is a defensible reading, but the identity is unregistered and
+a snapshot-integrity failure will travel the §10 `run_service` boundary as a user-facing
+`ValidationError`. → owner card 1. Correction: register in §6.4 or change the carrier.
+
+**S3 (should-fix) — C9's version-constant row under-asserts.** `test_calculator.py:388-391` asserts
+`CALCULATION_VERSION == 1`, `"§6A.10" in calculator.__doc__`, `"rounding" in ...lower()`. C9 requires the
+docstring to name §6A.10's **bump/never-bump lists**; no never-bump token (`renames`, `widening`,
+`API shape`, `documentation`) is asserted, and the assertion reads the *module* docstring while the
+constant carries its own (`calculator.py:21-23`). Correction: assert a distinctive token from each list
+against the intended docstring.
+
+**Notes.** N1 `test_purchase_term_missing_purchase_cost_...` (`:148-156`) and
+`test_purchase_cost_none_is_a_named_user_input_error` (`:261-269`) have byte-identical bodies — one of
+the 54 is dead weight → next touch. N2 public surface exceeds §6.5's 16: `EvaluationSnapshot`,
+`TermSnapshot` and re-exported `ROUND_HALF_EVEN` are public and there is no `__all__` → coordinator:
+fold the two Protocols into §6.5 or add `__all__`. N3 `_term_shape` (`:131-134`) rejects negative
+`percent_value`/`fixed_amount_minor` — consistent with §6A.4's `≥ 0` but beyond the plan's
+"presence/type, not range" note, and **both branches are untested** → owner card 2. N4
+`calculate_allowed_worker_minutes` (`:269-272`) raises `ITEM_COST_RATE_UNDERFLOW` on a zero rate; §6A.6
+sites that identity at Q2/basis-version creation — reasonable, unregistered at this site, untested →
+owner card 2. N5 `_require_rate`'s `required=False` (`:86-90`) has no caller and its `-> Decimal`
+annotation is false on that path (charter rule 4) → next touch. N6 C2's fixtures are evaluated at
+collection time inside the `parametrize` lists (`:171-176, 186-189`); mutations still bite, but a raising
+mutation becomes a whole-module collection error and the parametrize ids shift with the computed value
+(`[Q1-24-24]` → `[Q1-25-24]`), which makes per-row mutation declarations hard to read across rounds →
+next touch. N7 (plan-level, passing glance) C2's Q3 exactness cell claims it "asserts Q3 consumes the
+persisted rate", but in phase 3 the rate is a parameter, so nothing distinguishes a caller passing the
+persisted value from one passing the raw — the arbiter belongs where the call is wired → phase 4/5.
+
+**Lessons for the plans.** L1: C9 scoped a module-wide construction rule (§6A.2) to "every Q1–Q5
+output"; such a criterion enumerates over the module's public surface, not over the mechanism list that
+motivated it (earned: B1). L2: C6's cells name an input *class* and arriving *type* but not **which
+parameter** the row drives — every money row was satisfied by a user-supplied parameter while the cell
+looked covered; extends P-M's companion to parameters, not only fields (earned: B2). L3: charter rule
+2's no-disjunction clause needs restating for criteria asserting message *content*, not only expected
+outcomes — "presence of both values" was satisfiable by an `or` (earned: S1). L4: a criterion mandating
+a comparison names the outcome **and** its error identity, or the implementer authors one that lands
+unregistered (earned: S2).
+
+**P3-7 (graph, no adjudication).** One pending item, `node:domain-item-economics`; graph revision
+`671fd92a…` matches the handoff. Claims 1–3 all ACCURATE against the code (read before the stored
+claim). Anchors imprecise: evidence 2 (`137–212`, symbol `calculate_term_amount`) starts at
+`calculate_percentage_term_amount` (`:137`) and ends mid-body of `calculate_term_amounts`, excluding the
+duplicate-purchase guard (`:215-218`) that S8 made load-bearing; evidence 3 is stored as **`365–425`**,
+not the handoff's declared `371–425` — it starts inside `validate_currency_equality`'s list
+comprehension (`:365`) and stops one line before `rederive`'s `return` (`:426`). Recommendation: hold,
+do not promote as-is — the B1/B2 fix cycle will shift these line numbers anyway; re-anchor
+(`1–26`, `137–219`, `371–426`) after the fix and adjudicate once.

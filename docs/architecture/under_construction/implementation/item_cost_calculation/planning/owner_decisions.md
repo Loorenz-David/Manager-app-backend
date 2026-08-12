@@ -278,3 +278,34 @@ durable what the runtime shim already does on every invocation). Anchor
 replacement: **transient environment-only anchor**, inserted only during a
 genuinely cold build and deleted before `upgrade head` returns — fresh databases
 end with zero synthetic rows; mechanism documented in env.py.
+
+---
+
+# Phase-3 review cards (round 1 → answered 2026-08-12)
+
+Cards carried verbatim in
+`handoffs/reviewer/2026-08-12_phase3_review_r1_handoff.md`.
+
+## Review card 1 — What happens when a stored evaluation no longer re-derives?
+
+**ANSWER (2026-08-12):** Recommendation accepted — **internal integrity alarm**,
+never a user-facing validation error. A snapshot disagreeing with itself is never
+the reader's fault: the read still renders, the mismatch surfaces as a named
+`REDERIVE_MISMATCH` result that calling services log/escalate. Folded as R9-1
+(§6A.11 amended; the unregistered `ITEM_COST_SNAPSHOT_MISMATCH` ValidationError is
+replaced by the marker carrier in fix r2).
+
+## Review card 2 — Keep the two extra guards (negative term values, zero rate at allowance)?
+
+**ANSWER (2026-08-12):** Recommendation accepted — **absorb into the intention**.
+Negative `percent_value`/`fixed_amount_minor` reject with
+`ITEM_COST_TERM_SHAPE_INVALID` (codifies §6A.4's `≥ 0`); a zero rate reaching the
+allowance raises `ITEM_COST_RATE_UNDERFLOW` (defence-in-depth at Q3, §6A.6's
+identity). Folded as R9-2; both gain required test rows in fix r2.
+
+## Review card 3 — Adjudicate the pending `domain-item-economics` graph node now or after the fix?
+
+**ANSWER (2026-08-12):** Recommendation accepted — **hold**. One adjudication
+against final line numbers: coordinator promotes with corrected anchors
+(1–26 / 137–219 / 371–426, re-verified post-fix) after phase-3 approval, per the
+§8 standing flow.
