@@ -468,3 +468,83 @@ it covers, or the implementer closes only the class the finding named (earned: B
 extends a hostile-context criterion to new functions, each added row needs its own fixture chosen to
 *bite*, and the fix's mutation declaration must name the row it reddens per function — one blanket
 "hostile-context row red" hid an inert row among two live ones (earned: S4; extends P-I).
+
+### Reviewer r3 (re-review, delta-scoped: B3/S4/S5) — 2026-08-12 — Claude (plan-reviewer) — CHANGES_REQUESTED
+
+Perimeter **exact**: `git show 8908619` = the five expected files; declared hashes match byte-for-byte
+(calculator `e5f42531…611a49`, tests `d7251cde…97ba30`); tree clean at start and end. Suite **1749
+passed / 23 failed / 1 deselected**, focused **65**, zero connectivity noise, failure set byte-identical
+to the phase-1 routed list (`diff` empty; N14 did not fire). Ruff clean. Graph read-only and unchanged —
+`671fd92a…`, 126 nodes / 161 edges, 1 pending item, zero diagnostics/stale: **zero delta**, as declared.
+The handoff-inside-the-checkpoint process slip was pre-recorded by the coordinator and is not re-filed.
+
+**B3 CLOSED — and verified TOTAL, not just on the three named classes.** All three R10-1 input classes
+return the `REDERIVE_MISMATCH` payload on unsaved ORM instances: (ii) NULL typed term value and
+duplicate `item_purchase_cost` rows → `term_snapshot`; (iii) zeroed stored rate → rate entry + cascaded
+`allowed_worker_minutes` entry carrying the converted `ITEM_COST_RATE_UNDERFLOW`; (iii) NULL purchase
+cost → `term_snapshot`. I then hunted a fourth escape across **17 further hostile inputs** — negative
+stored rate, `Decimal("NaN")` in the rate and in the allowance, zero `monthly_paid_hours`, zero
+utilization, Q2 underflow, a `float` rate, `None`/`str` expected price, `None` budget, `None` allowance,
+`None` term amount, a `str` `calculation_type`, a `float` `percent_value`, a negative percent term,
+empty `term_rows`, `None` calculation version, and version 2. **Every one returned the marker (or
+`REDERIVE_SKIPPED`); no `ValidationError` escaped on any path.** Both conversion-seam re-raise mutations
+bite: the allowance seam reddens the zeroed-rate row; the term-amounts seam reddens both malformed-term
+rows. **Regression check that mattered most:** the except tuple is
+`(AttributeError, TypeError, ValidationError, ArithmeticError)` and deliberately excludes
+`AssertionError`, so the C7 closed-set tripwire still bites through the new catch-all — re-running the
+FK-read mutation reddens `test_rederive_uses_unsaved_orm_instances_and_only_the_closed_snapshot_fields`
+(a broader `except Exception` would have silently swallowed the phase's closed-set guarantee).
+
+**S4 CLOSED.** r2's verified counterfactual is now the shipped fixture in **both** C9 tuples
+(`calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00"))`); removing
+`calculate_percent_consumed`'s `localcontext()` wrapper reddens the row (1 failed / 64 passed) where in
+r2 it left 59/59 green.
+
+**S5 — four of five parts closed.** The four field-branch rows each assert their exact payload and each
+is live: corrupting the `production_budget_minor` label reddens exactly its row, corrupting the
+`term[...]` label reddens exactly its row.
+
+**S6 (should-fix) — the pinned rate→allowance cascade has no live arbiter.** R10-1 pins it: "a mismatched
+stored rate **also** yields a derived `allowed_worker_minutes` entry … both entries are reported, by
+design", implemented as the `or rate != stored_rate` clause at `calculator.py:533`. **Deleting that
+clause leaves 65/65 green.** The cascade row's fixture (`cost_per_worker_minute_minor_snapshot =
+399.0000`) carries a *second sufficient cause*: at that rate the allowance re-derives to `5.43` against a
+stored `5.42`, so the entry appears for the ordinary disagreement reason and the pinned clause is never
+exercised — charter rule 2's sole-predicate companion, the same shape as phase-2 B5. The clause also
+*looks* redundant, so a future "cleanup" would delete it and silently drop the owner's pinned behaviour.
+**Verified correction:** set the fixture's stored rate to `Decimal("399.5000")` and its expected
+allowance entry to `rederived_value = stored_value = Decimal("5.42")` — at that rate the allowance
+agrees, so the entry can only come from the cascade clause. End-to-end: fixture swapped + clause intact →
+65 pass; fixture swapped + clause deleted → **1 failed, exactly
+`test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload`**.
+**Related declaration defect:** the fix-r3 handoff and the Review-log entry above both state "invert the
+rate-cascade condition → `test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload` red".
+Re-run independently, the `and` inversion reddens
+`test_rederive_reports_allowed_worker_minutes_mismatch_payload` — the plain allowance row — **not** the
+cascade row. The mis-attributed declaration is exactly how the unguarded clause reached re-review.
+
+**Notes.** N12 `term_row.name` (`calculator.py:487`) is the one attribute read left outside a `try`; a
+term object lacking the attribute raises `AttributeError` out of `rederive`. **Not an R10-1 violation**
+(that contract names `ValidationError`) and **unreachable for real rows** — `name` is NOT NULL and an ORM
+instance always carries the attribute — but it is the single asymmetry in an otherwise total defensive
+perimeter → next touch. N13 dead branching at `calculator.py:472-477`: two
+`if str(error).startswith(...)` tests guard three **identical** `return marker(mismatches,
+"term_snapshot", error)` statements — it reads as if it discriminates and does not → next touch.
+N14 the payload shape is heterogeneous: converted-exception entries carry an extra `"error"` key that
+value-disagreement entries lack, so a caller doing `entry["error"]` raises `KeyError` on half the
+entries; R10-1 pins no shape → pin it, or phases 7/8 must key defensively. N15 the broad
+`except (AttributeError, TypeError, …)` also converts **programmer** errors into data-integrity markers —
+a future caller passing a wrong-typed object is told "the data is corrupt" rather than getting the
+`TypeError` §6A.1 deliberately reserves for that. R10-1 asked for totality including "missing snapshot
+field", so this is the chosen trade-off, but phases 7/8 must not read the marker as proof of corruption
+→ phase 7/8. N16 (test fidelity) `test_rederive_malformed_purchase_snapshot_returns_integrity_marker`
+(`:509`) passes a `SimpleNamespace` from `_term()` into `rederive`, while the other five new rederive
+rows use `ItemCostEvaluationTerm`; C7 pins ORM instances and charter rule 3 requires the production
+object type — one-line fix, bundle with S6.
+
+**Lessons.** L7: a criterion pinning an **implication** ("X also implies Y") needs a fixture in which Y
+would NOT otherwise fire; otherwise the row passes for the ordinary reason and the pin has no arbiter.
+Extends rule 2's sole-predicate companion from equality rows to cascade/implication pins (earned: S6).
+L8: extending L6 — a mutation declaration must be checked **against the run that produced it**; naming a
+plausible-but-wrong row ("the cascade row reddened") is worse than naming none, because it converts an
+unguarded clause into an apparently-verified one (earned: S6's declaration defect).

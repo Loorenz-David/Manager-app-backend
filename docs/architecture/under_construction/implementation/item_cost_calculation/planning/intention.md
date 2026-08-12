@@ -826,7 +826,10 @@ escapes `rederive` on any path** — the calculation-path guards (§6A.4, §6A.6
 still raise for live calculation, but `rederive` catches/converts them into the
 marker payload. **Cascade pinned:** a mismatched stored rate also yields a derived
 `allowed_worker_minutes` entry (the allowance re-derives from the rate) — both
-entries are reported, by design.
+entries are reported, by design. **Payload shape pinned (R10-2):** every mismatch
+entry carries the same four keys — `field`, `rederived_value`, `stored_value`,
+`error` — with `error = None` for plain value disagreements and the converted
+exception text for malformed-input conversions; callers never key defensively.
 
 ---
 
@@ -2158,6 +2161,10 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   escape routes, one opened by the fix's own refactor). Cascade pinned: a rate
   mismatch also reports its derived allowance entry. Lesson L5 applied: a
   "never raises" contract enumerates the input classes it covers.
+- **R10-2 (re-review r3 N14; coordinator)** Mismatch-payload shape pinned
+  homogeneous: every entry carries `field`/`rederived_value`/`stored_value`/`error`
+  (`error = None` on plain disagreements) — half the entries carrying an extra key
+  would make callers key defensively or crash on `entry["error"]`.
 
 ---
 

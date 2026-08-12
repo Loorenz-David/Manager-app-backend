@@ -155,6 +155,8 @@ neither occurs on a failed commit.
 - Archgraph: delta = evaluation command/endpoint nodes + edges to the task/item
   tables; orient on `table-task-item`, `helper-task-state-transitions`.
 
+- **Forward note (phase-3 re-review r3, N15):** `REDERIVE_MISMATCH` conversions also swallow programmer errors (wrong-typed objects) by design — when this phase's services log/escalate the marker, the copy must say "integrity check failed", never assert "data corruption"; and callers rely on the R10-2 homogeneous payload shape (`error` key always present).
+
 ## Review log
 
 (append-only)

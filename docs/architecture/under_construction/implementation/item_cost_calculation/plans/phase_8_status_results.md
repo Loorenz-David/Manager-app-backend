@@ -186,6 +186,8 @@ inside their transaction (three rows).
   `analytics-recompute-step-time-totals`, `domain-work-analytics`. Do NOT repair the
   D-3 anchor drift here (maintenance channel owns it — master plan §8).
 
+- **Forward note (phase-3 re-review r3, N15):** same N15 guidance as phase 7 — the rederive marker is an integrity signal, not proof of data corruption; escalation copy stays neutral; payload shape per R10-2.
+
 ## Review log
 
 (append-only)
