@@ -81,7 +81,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
 | 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | **APPROVED** | 2026-08-12 | reviewer (Claude); Codex (fix r2); reviewer r2 (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative. Fix r2: S1 ADMIN rows added and asserted `== 4321`; S2 baseline correction and full 23-item list recorded; focused 39 passed, full run 1605 passed / 23 failed / 1 deselected. Coordinator: fix handoff consumed, perimeter exact vs `ed99e7e`, arithmetic reconciled (1624→1629 = the 5 rows); re-review r2 prompt authored (probes: reshaped worker assertions, baseline list match, new-row liveness). **Review r2: APPROVED** — perimeter exact (six files, zero production-code change), S1+S2 resolved, criteria now 26/26 (24/24 cells), rows 19/22 survived the reshaping and run twice, all four probes bite per-parameter plus an ADMIN-drop probe reddening exactly 9 ADMIN ids with zero collateral, baseline list set-identical to r1's, suite 1605/23/1 with the failure set byte-identical to baseline, archgraph zero delta. Open notes carried forward: N1/N2→phase 9, N7 (test naming)→next touch |
-| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | IMPLEMENTED | 2026-08-12 | coordinator; Codex | projection r0 AMENDMENTS_REQUIRED (16-row ledger, 4 blocking: name truncation, open name list, unfalsifiable C5, no disposable-DB harness) — fully routed: §6.2 closed CHECK list + named FKs, §6.1 citation fix, §10 disposable recipe, intention round 7 (icet columns), plan tasks/criteria rewritten (C1a/b, C2 per-clause, C3 12-row table, C5 migration-site, C6); implementer r1: nine models/migration and focused suite 23 passed; full suite 1628 passed / 23 known failures / 1 deselected; enum ownership mutations pass; C2 predicate mutations outstanding for review. Coordinator: handoff consumed — effective checkpoint is `8b3f9f7` (500dfbd was amended; one-line handoff diff); graph state committed (`ab2b71c`: owner backlog adjudication 243→15 pending + the phase-2 delta); §10 gained the migration-chain-stall caveat; review r1 prompt authored (probes P2-1 C2 mutations … P2-6 graph delta per-item) |
+| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | **CHANGES_REQUESTED** | 2026-08-12 | coordinator; Codex; reviewer r1 (Claude) | projection r0 AMENDMENTS_REQUIRED (16-row ledger, 4 blocking: name truncation, open name list, unfalsifiable C5, no disposable-DB harness) — fully routed: §6.2 closed CHECK list + named FKs, §6.1 citation fix, §10 disposable recipe, intention round 7 (icet columns), plan tasks/criteria rewritten (C1a/b, C2 per-clause, C3 12-row table, C5 migration-site, C6); implementer r1: nine models/migration and focused suite 23 passed; full suite 1628 passed / 23 known failures / 1 deselected; enum ownership mutations pass; C2 predicate mutations outstanding for review. Coordinator: handoff consumed — effective checkpoint is `8b3f9f7` (500dfbd was amended; one-line handoff diff); graph state committed (`ab2b71c`: owner backlog adjudication 243→15 pending + the phase-2 delta); §10 gained the migration-chain-stall caveat; review r1 prompt authored (probes P2-1 C2 mutations … P2-6 graph delta per-item). **Review r1: CHANGES_REQUESTED** — the schema itself is correct and independently re-verified (DDL exact vs §6.2 both directions, longest name 57 bytes; `compare_metadata(compare_type=True)` reports 0 diffs on all nine tables; C1 round-trip + C5(a)/(b) re-run on a disposable DB with reused-type oids unchanged; M-a/M-b both bite; P2-5 shapes and all deliberate absences correct; scope fence clean; suite 1628/23/1 with the failure set byte-identical to the phase-1 baseline). The **tests** do not hold it: 4 blocking — B1 C2 entirely unimplemented (0 of 22 rows; stripping a clause from three multi-clause index predicates leaves 23/23 green), B2 the C1(b) downgrade proxy survives all three defects it names incl. the literal M-b, B3 the five `ck_pcbv_*` boundary rows pass on `uix_production_cost_basis_versions_open` not on their CHECKs (A1/A2 have no live test), B4 nine of sixteen CHECKs behaviorally untested + the enumerated accept-rows largely absent — plus 3 should-fix (S1 unregistered 4th currency column reusing `item_valuation_currency_enum`, S2 five-new-enum-types clause unasserted, S3 test name overclaims) and 7 notes. P2-4 stall confirmed pre-existing (reproduces at `7758ea23764e`) but recorded-not-filed → owner card 1. P2-6: 15 items, all anchors exact — 14 promote / 1 edit, contradictions are heuristic false positives, edge count reconciled to the handoff's 6. Coordinator (post-review): card 1 answered — own the stall NOW (maintenance prompt authored, `prompts/maintenance/2026-08-12_migration-chain-stall_r1.md`); S1 registry decision = reuse ratified (§6.3 lists columns, not counts); lessons folded (§9 P-G(a) DDL-site, P-J, P-K, P-L); fix-r2 prompt authored (`prompts/implementer/2026-08-12_phase2_fix_r2.md`); graph items 14 promote / 1 edit held for post-approval confirmation |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
 | 5 | Valuation surface | `plans/phase_5_valuation_surface.md` | ⚑ (rows 15,16 — valuation chain; 34) | NOT_STARTED | 2026-08-11 | planner | ItemValuation chain command + preview |
@@ -245,7 +245,10 @@ per §2.5's pointer convention, explicitly named, and **hand-added to the migrat
 |---|---|---|---|
 | term calculation type | `CostModelTermCalculationTypeEnum` | `cost_model_term_calculation_type_enum` | members `PERCENTAGE_OF_EXPECTED_SALE_PRICE`, `FIXED_AMOUNT`, `ITEM_PURCHASE_COST`; lowercase values |
 | evaluation kind | `ItemCostEvaluationKindEnum` | `item_cost_evaluation_kind_enum` | `PROJECTION`, `COMMITTED` |
-| currencies (3 columns) | **reuse `ItemCurrencyEnum`** (`domain/items/enums.py`) | `item_valuation_currency_enum`, `production_cost_basis_version_currency_enum`, `cost_model_version_currency_enum` | one Python class, three per-table PG types (each `create_type=True` on its own column); values stay lockstep by construction |
+| `item_valuations.currency` | **reuse `ItemCurrencyEnum`** (`domain/items/enums.py`) | `item_valuation_currency_enum` (`create_type=True` — ownership here) | per-table type |
+| `production_cost_basis_versions.currency` | reuse `ItemCurrencyEnum` | `production_cost_basis_version_currency_enum` (`create_type=True`) | per-table type |
+| `cost_model_versions.currency` | reuse `ItemCurrencyEnum` | `cost_model_version_currency_enum` (`create_type=True`) | per-table type |
+| `item_cost_evaluations.currency` | reuse `ItemCurrencyEnum` | **reuses `item_valuation_currency_enum`** with `create_type=False` — ownership stays on `item_valuations.currency` (registry decision 2026-08-12, review-r1 S1: the intention's fourth currency column was missed by the count-based registry row; reuse ratified — R2-1 pattern, drop order verified safe; a fourth type would cost a follow-up revision for no behavioral difference) | four columns, three PG types |
 | evaluation episode snapshots | reuse `TaskTypeEnum` / `TaskReturnSourceEnum` | **reuse** `business_task_type_enum` / `task_return_source_enum` with `create_type=False` | type-creation ownership stays on `tasks` columns (R2-1 lesson: pin ownership explicitly; PG enums are append-only, so snapshots can never hold a value the type lost) |
 | result lifecycle snapshot (round 6) | reuse `TaskStateEnum` | **reuse** `task_state_enum` with `create_type=False` (ownership stays on `tasks.state`, `task.py:52`) | `item_cost_results.task_state_snapshot` — §4.6 as amended, §8B.2 |
 | economics status | `EconomicsStatusEnum` | **none — never persisted** | code-owned (§11A.4, catalog lesson); members = the 11 ordered values of §11A.4, lowercase values |
@@ -438,6 +441,22 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   coverage finding **mutation-tests those rows itself** — "do the new rows bite?"
   never reaches the re-reviewer unanswered. Fix prompts carry this line whenever
   the findings include missing coverage.
+- **P-G(a) extension (phase-2 review lesson 1):** a named mutation on a **schema
+  object** names its site as *the migration or direct DDL on a disposable database*
+  — never the ORM model. Tests run against the migrated schema, so a model-side
+  DDL mutation is inert and reports a false green.
+- **P-J (phase-2 review lesson 2):** a criterion that substitutes a static check
+  for a runtime one names the **source the test inspects** (e.g.
+  `inspect.getsource(migration.downgrade)`) and carries its own named mutation — a
+  static proxy that reads adjacent constants survives the defect it names.
+- **P-K (phase-2 review lesson 3):** charter rule 2's sole-predicate companion
+  reaches **shared fixture helpers**: any helper a criterion row uses is audited
+  for constraints it pre-satisfies or pre-violates (a second sufficient cause in a
+  helper poisons every row built on it).
+- **P-L (phase-2 review lesson 5):** an implementer's declared gap states **what
+  was built** for the criterion, not only what was skipped — the coordinator sizes
+  the next cycle from it. Registries list **columns/items, never counts**
+  (lesson 4 — a count invites silent invention when reality grows past it).
 - **P-H (review-r1 lesson 4):** a phase that redacts or reshapes an existing
   payload carries a one-line **structural criterion** for the HTTP boundary — "no
   `response_model` (or equivalent coercion) on the affected routes re-adds the
@@ -510,8 +529,11 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   chain, unrelated to this project. Interim recipe amendment: clone the development
   schema into the disposable DB (e.g. `pg_dump --schema-only | psql`), stamp it, then
   exercise the target revision's `downgrade → upgrade` there. Root-causing the chain
-  stall is OUT of this project's scope — candidate for the phase-9 drift batch or a
-  separate maintenance item.
+  stall is OUT of this project's scope. **Disposition (owner, 2026-08-12, phase-2
+  review card 1): owned NOW as a separate maintenance item** — prompt at
+  `prompts/maintenance/2026-08-12_migration-chain-stall_r1.md`; reviewer-verified
+  repro: the stall occurs targeting `7758ea23764e` (pre-phase-2), first statement
+  `CREATE TABLE alembic_version`, session `idle in transaction` / `ClientRead`.
 - **Error surface:** `run_service` (`services/run_service.py`) is the single error
   boundary; DomainError → `StatusOutcome(success=False, error=exc)`; identities per
   §6.4 travel in `error.message`.

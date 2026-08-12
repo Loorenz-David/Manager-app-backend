@@ -263,3 +263,248 @@ NOT NULL and of PG type `task_state_enum`; `task_closed_at` is nullable;
   `DuplicateObject`; M-b adding `_task_state_enum.drop(...)` made downgrade fail because
   `tasks.state` depends on the reused type. C2's multi-clause predicate mutations were
   not run before the session deadline; this remains an explicit review item.
+
+### 2026-08-12 — reviewer r1 (Claude, plan-reviewer) — CHANGES_REQUESTED
+
+**Verdict: CHANGES_REQUESTED.** The *schema* is correct — verified structurally and
+independently, not inherited. The *tests* do not hold it: four blocking findings, all
+mutation-proven, of which three are tests that survive the exact defect they name.
+
+**Verified correct (settled ground — do not re-verify on re-review):**
+- **DDL vs §6.2, both directions (P2-2).** `pg_constraint` / `pg_indexes` on the
+  migrated dev DB carry exactly the 16 closed-list CHECKs (nothing missing, nothing
+  extra), the nine `uix_`/`uq_` names with predicates byte-matching §4/§4A, and the
+  three named `use_alter` FKs. Longest stored name 57 bytes (`ck_item_valuations_
+  expected_sale_price_minor_non_negative`) — no silent truncation.
+- **Model/schema agreement.** `alembic.autogenerate.compare_metadata` with
+  `compare_type=True` against the migrated schema reports **0 diffs** on all nine
+  tables (4 repo-wide diffs, all pre-existing and unrelated). Column types, precisions
+  and nullability match the ORM exactly.
+- **C1 round-trip + C5(a)/(b) (P2-3, P2-4), re-run independently on a disposable DB.**
+  `downgrade` drops exactly the five new types and all nine tables; the three reused
+  types survive with **unchanged oids** (`business_task_type_enum` 175330,
+  `task_return_source_enum` 175954, `task_state_enum` 175962) across the full
+  `downgrade → upgrade`, and `tasks.{state,task_type,return_source}` stay bound to
+  them. M-a (`create_type=True` on a reused type) → `DuplicateObjectError`; M-b
+  (`_task_state_enum.drop()` in `downgrade`) → `DependentObjectsStillExistError` on
+  `tasks.state`. Both bite. C5 holds.
+- **P2-4 stall is genuinely pre-existing.** A from-scratch `alembic upgrade` on an
+  empty DB stalls at `CREATE TABLE alembic_version` (`idle in transaction` /
+  `ClientRead`) when targeting **`7758ea23764e`** — this revision's *down_revision*,
+  which predates the phase. Not caused by `90cdd23a828e`. The implementer's
+  clone-and-round-trip substitute is sound: one revision's round-trip needs only the
+  pre-state schema, which the clone supplies.
+- **P2-5 per-table shapes.** `production_cost_group_sections` has the membership
+  interval shape and no soft-delete trio / no `updated_*`; `item_valuations` has no
+  `updated_*`; `item_cost_evaluation_terms` matches the §4.5 round-7 pin exactly
+  (`workspace_id` present, no `value`, `created_at` only, no `created_by_id`, no soft
+  delete); `item_cost_results` has `task_state_snapshot` NOT NULL + nullable
+  `task_closed_at`. All deliberate absences absent (no CHECK on
+  budget/allowance/`task_state_snapshot`, no `percent_value` upper bound).
+- **Scope fence.** No existing table's model changed; no command/query/router/
+  calculator; the three reused types are neither created nor dropped by the migration;
+  the configured dev DB is at head `90cdd23a828e` and was never downgraded.
+- **Suite.** 1628 passed / 23 failed / 1 deselected, zero connection noise; the
+  23-item failure set is **byte-identical** to the phase-1 recorded baseline. Zero
+  regressions.
+- **C4 bites** (adding `production_budget_minor >= 0` reddens it). **C6 bites**
+  (dropping NOT NULL on `task_state_snapshot` reddens it). The 12-row
+  `ck_cost_model_terms_value_by_type` matrix bites on all 9 reject rows.
+  `ck_item_valuations_amount_present` bites. `test_schema_inventory_is_closed` bites
+  in both directions (dropped index → red; added stray CHECK → red).
+
+**B1 (blocking) — C2 is entirely unimplemented: 0 of 22 rows.**
+The plan's C2 table requires 9 (a) conflict rows + 13 (b) per-clause rows. The test
+tree contains **no partial-unique conflict test of any kind** — 23 tests collected,
+all accounted for by C1a/C1b/C3/C4/C6. The implementer's Review log declares only that
+the *mutations* were not run; the *rows themselves* are absent.
+*Proof:* on a disposable DB, one clause was stripped from each of the three
+multi-clause indexes (`uix_production_cost_basis_versions_open` → lost
+`effective_to IS NULL`; `uix_item_cost_evaluations_current` → lost
+`kind = 'committed'`; `uix_item_valuations_current` → lost `superseded_at IS NULL`),
+index names preserved. Result: **23 passed**. Nothing observes these indexes.
+*Violated authority:* plan C2 (whole table); intention §7A.2 ("the index is the only
+arbiter"); charter rules 1 and 2.
+*Correction clause:* implement all 22 rows exactly as the C2 table enumerates —
+one (a) conflict row per index asserting `IntegrityError`, and one (b) accepted row
+per predicate clause whose fixture differs from (a) in exactly that clause — then run
+the P-G(a) named mutation per clause and declare each result.
+*Mutation-site note for the fix prompt (earned this round):* the tests run against the
+**migrated** database, so mutating `postgresql_where` in the ORM model has **no
+effect** on the index the test meets. The clause must be dropped in the migration (or
+by direct DDL) on a **disposable** DB re-created from the dev schema. A mutation
+applied model-side and reported green is a false negative.
+
+**B2 (blocking) — C1(b)'s downgrade static proxy is decoration; it survives the exact
+defect it exists to catch.**
+`test_downgrade_static_proxy_is_exact` asserts the `.name` of five module-level
+`postgresql.ENUM` constants against five string literals, and that the three reused
+names are disjoint from them. It **never reads `downgrade`**. C1(b) requires the
+assertion to be about *what `downgrade` drops* and that *every table `upgrade` creates,
+`downgrade` drops* — neither is asserted.
+*Proof (three mutations, each applied and reverted):* (i) adding
+`_task_state_enum.drop(op.get_bind(), checkfirst=True)` to `downgrade` — **the literal
+M-b defect** — 1 passed; (ii) deleting `_item_valuation_currency_enum.drop(...)` from
+`downgrade` — 1 passed; (iii) deleting `op.drop_table('item_cost_results')` from
+`downgrade` — 1 passed.
+*Violated authority:* plan C1(b) ("bites on the exact reversibility defect without
+running a downgrade in-suite"); charter rule 11 (a named mutation must turn its test
+red).
+*Correction clause:* the proxy must inspect the `downgrade` function body itself (e.g.
+`inspect.getsource(migration.downgrade)`) and assert (i) the set of enum type names
+dropped equals exactly the five new types, (ii) none of `business_task_type_enum`,
+`task_return_source_enum`, `task_state_enum` appears in any drop in `downgrade`, and
+(iii) the set of table names passed to `op.drop_table` in `downgrade` equals the set
+passed to `op.create_table` in `upgrade`. Re-run mutations (i)–(iii) above and declare
+that each turns it red.
+
+**B3 (blocking) — the five `test_basis_positive_boundaries` rows pass on a second
+sufficient cause; all five named CHECKs can be deleted with the rows still green.**
+`_foundation()` already inserts an open `ProductionCostBasisVersion` for `group`, and
+the test then inserts a **second** open version for the **same group** — so
+`uix_production_cost_basis_versions_open` raises `IntegrityError` regardless of the
+CHECK under test.
+*Proof:* with all five `ck_pcbv_*` CHECKs dropped → **5 passed**. Dropping the CHECKs
+*and* `uix_production_cost_basis_versions_open` → **5 failed**. Restoring the CHECKs
+with the index still absent → **5 passed**. The index, not the CHECK, is the live
+cause; the CHECK is merely also true.
+*Violated authority:* charter rule 2 companion ("each row's fixture makes its own
+predicate the ONLY reason the expected outcome holds"), earned as plan 3 round 2 B1;
+plan C3.
+*Consequence:* A1 (`fixed_monthly_cost_minor > 0`) and A2
+(`cost_per_worker_minute_minor > 0`) — the two amendments that exist to stop a
+divide-by-zero surfacing months after the config is typed — currently have **no live
+test at all**.
+*Correction clause:* give each row a group with no open basis version (or set
+`effective_to` on the fixture's version) so the CHECK is the sole cause, and assert the
+violated constraint **name** appears in the raised error. Re-run the five deletions and
+declare that each row reddens on its own CHECK alone.
+
+**B4 (blocking) — C3 coverage: 9 of the 16 registered CHECKs have no behavioral test,
+and the enumerated accept-rows are largely absent.**
+*Proof:* dropping all nine of `ck_cost_model_terms_percent_value_non_negative`,
+`ck_cost_model_terms_fixed_amount_minor_non_negative`,
+`ck_production_cost_basis_versions_effective_window`,
+`ck_cost_model_versions_effective_window`,
+`ck_ice_expected_sale_price_minor_non_negative`,
+`ck_ice_purchase_cost_minor_non_negative`,
+`ck_item_valuations_expected_sale_price_minor_non_negative`,
+`ck_item_valuations_purchase_cost_minor_non_negative`,
+`ck_item_cost_results_actual_worker_seconds_non_negative` from a disposable DB reddens
+**only** `test_schema_inventory_is_closed` (the existence assertion) — 1 failed,
+22 passed. No behavioral row bites.
+Missing rows against the C3 enumeration, exhaustively:
+- `fixed_monthly_cost_minor`: −1 reject, 1 accept (only the 0-reject row exists);
+- `cost_per_worker_minute_minor`: 0.0001 accept; `monthly_paid_hours`: 0.01 accept;
+- `planning_utilization_percent`: 0.01 accept, 100 accept;
+- `percent_value`: −0.001 reject, 0 accept, 999.999 accept (only the 1000-reject row
+  exists — and see N2);
+- money CHECKs (D10): all eight rows for `item_cost_evaluations.expected_sale_price_minor`,
+  `item_cost_evaluations.purchase_cost_minor` (incl. NULL accept),
+  `cost_model_terms.fixed_amount_minor`, `item_cost_results.actual_worker_seconds`;
+- valuation: negative `expected_sale_price_minor` reject, negative
+  `purchase_cost_minor` reject, **cost-only + currency accept** (see S3), NULL currency
+  reject;
+- window CHECK: all **eight** rows (4 boundaries × 2 chains) — both
+  `_effective_window` CHECKs are wholly untested.
+Related structural gap: `ProductionCostGroupSection`, `ItemCostEvaluationTerm` and
+`ItemCostResult` are **never instantiated** by any test in this phase — those three
+tables have zero row-level coverage.
+*Violated authority:* plan C3 (enumerated); charter rule 2 ("enumerate, never sample";
+"expected outputs too").
+*Correction clause:* add every row listed above, one assertion per row with its exact
+expected outcome and exception class, each fixture built so its own predicate is the
+only reason the outcome holds (B3's rule applies to all of them). Per P-I, the fix
+cycle mutation-tests its own new rows and declares the results.
+
+**S1 (should-fix) — `item_cost_evaluations.currency` silently reuses the PG type
+`item_valuation_currency_enum`; the registry never authorized a fourth currency
+column.**
+§6.3 registers **three** currency PG types for "3 columns"
+(`item_valuation_currency_enum`, `production_cost_basis_version_currency_enum`,
+`cost_model_version_currency_enum`), but intention §4.5 gives `ItemCostEvaluation` a
+`currency` column too — a **fourth**. The implementer resolved the gap unilaterally by
+binding it to the valuation table's type (`create_type=False`), verified on the live
+DB: `item_cost_evaluations.currency → item_valuation_currency_enum`.
+*Violated authority:* master plan §6 preamble — "a session needing an unlisted name
+routes it back to the coordinator rather than inventing one"; intention §4.3's
+per-table enum-type convention.
+*Second-order:* the new `models/tables/item_economics/README.md` now states "The three
+currency columns own their per-table PostgreSQL enum types" — false as shipped.
+*Assessment:* no data risk (all four columns carry identical members and the drop order
+in `downgrade` is safe), but it creates an unrecorded cross-table type dependency and a
+registry that no longer describes the schema. Changing it later requires a follow-up
+revision (charter rule 7), so the decision belongs now.
+*Correction clause:* coordinator picks one and records it — (a) amend §6.3 to register
+the reuse explicitly ("`item_cost_evaluations.currency` reuses
+`item_valuation_currency_enum`, `create_type=False`; ownership stays on
+`item_valuations`") **and** correct the README sentence to say four columns / three
+types; or (b) add a fourth type `item_cost_evaluation_currency_enum` in a follow-up
+revision. Either way the README sentence is corrected.
+
+**S2 (should-fix) — C1(a)'s "the five new PG enum types exist" is asserted nowhere.**
+`test_schema_inventory_is_closed` queries tables, checks, indexes, uniques and FKs but
+never `pg_type`; `test_downgrade_static_proxy_is_exact` only reads module constants.
+The clause is unimplemented.
+*Correction clause:* add to the inventory test a `pg_type` query asserting the five new
+type names exist, and — cheap and directly protective of C5 — that
+`business_task_type_enum` / `task_return_source_enum` / `task_state_enum` exist and are
+still the declared types of `tasks.task_type` / `tasks.return_source` / `tasks.state`.
+
+**S3 (should-fix) — a test name overclaims its coverage (P-G(b)).**
+`test_item_valuation_requires_an_amount_and_accepts_each_single_amount` asserts the
+both-NULL rejection and the **price-only** accept; it never inserts a cost-only row,
+despite "each single amount" in its name. C3 requires two accept rows precisely so each
+amount is the sole satisfier of its own row.
+*Correction clause:* add the cost-only accept row (and the NULL-currency reject row,
+per B4), or rename. Per P-G(b), the name must describe what is actually covered.
+
+**Notes (no fix required this cycle unless routed):**
+- **N1 — C5(a)/(b) evidence was not recorded, only the mutations were.** The
+  implementer's log states the round-trip passed but records no oid comparison. Verified
+  by the reviewer this round and it holds (oids above); C5 is now evidenced in this log.
+  No code change.
+- **N2 — the `percent_value` 1000-reject row is enforced at whichever of {ORM
+  `Numeric(6,3)`, DB `numeric(6,3)`} is narrower, and cannot be reddened by widening
+  either one alone.** It is not decoration — a direct probe confirms the raised error is
+  `asyncpg.exceptions.NumericValueOutOfRangeError`, exactly as D12 predicts — but it does
+  not pin the *column's* precision, so a migration shipping the wrong scale would pass.
+  Route to the next touch of this file.
+- **N3 — `EconomicsStatusEnum`'s declaration order is not §11A.4's evaluation order.**
+  Members and values are correct and complete (11/11), but the file declares the group-2
+  reasons first and appends `INFEASIBLE`, `OK` last, whereas §11A.4 evaluates group 1
+  (`infeasible` / `ok`) **first**. Phase 4's ordered classifier must not derive precedence
+  by iterating the enum. Carry to phase 4.
+- **N4 — the migration creates the five new types with `.create(..., checkfirst=True)`.**
+  A pre-existing type of the same name would be silently adopted rather than failing
+  loudly. Low risk (all five names are new), but it is the opposite posture from the one
+  M-a proves for the reused types. Phase-9 drift batch.
+- **N5 — `client_id_prefix_map.md` rows were inserted out of the file's alphabetical
+  order** (the five `ProductionCost*`/`CostModel*` rows land after `StaticCost`).
+  Cosmetic; phase-9 drift batch.
+- **N6 — the from-scratch migration-chain stall is recorded but not filed.** Master plan
+  §10 carries it as a caveat and names two candidate destinations, but `open/` in the
+  maintenance ledger is empty and no phase plan owns it. See owner card 1.
+- **N7 — archgraph delta (P2-6): 9 nodes + 6 edges, all anchors exact.** Every node's
+  evidence span is precisely `class` first line → EOF of its model file, verified
+  file-by-file. Per-item recommendations are in the reviewer handoff; one node
+  (`table-production-cost-group`) is recommended **edit**, the other 14 **promote**. The
+  four `conflicting-canonical-relationship` contradictions are false positives of the
+  engine's one-`owns`-target-per-source heuristic — `tasks` legitimately owns both
+  `task_steps` and the two new child tables, and `production_cost_groups` legitimately
+  owns both its sections and its basis versions. Edge count reconciled: the handoff's
+  "6 ownership edges" matches the 6 pending edges exactly (all stamped
+  `2026-08-12T10:54:05.436Z`, one batch); the coordinator's observed "+4 net" is an
+  artifact of the owner's concurrent backlog adjudication running in the same window.
+
+**Mutation-probe declaration.** All probes ran in a disposable git worktree at `8b3f9f7`
+(`scratchpad/probe-wt`, removed at close) and against a disposable database
+(`beyo_manager_disposable`, created from a `pg_dump --schema-only` clone of the dev
+schema, dropped at close). Files applied-and-reverted, each verified byte-identical by
+sha256 (`3fc5cd88…48d0` for the migration): `90cdd23a828e_item_economics_schema.py`,
+`models/tables/item_economics/cost_model_term.py`. DDL mutations (index predicates,
+CHECK drops/adds, column-type and nullability changes) were applied **only** to the
+disposable database. The main working tree is clean and the configured development
+database is at head `90cdd23a828e` with all 16 CHECKs intact — both verified at close.
+One stray `alembic` process from the stall reproduction was killed; it never reached the
+configured database.

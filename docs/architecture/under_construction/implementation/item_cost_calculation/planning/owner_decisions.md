@@ -235,3 +235,23 @@ accepted) — `task_state_snapshot` enum copy + `task_closed_at` NULL until term
 
 **ANSWER (2026-08-12):** refresh at reopen too (recommendation accepted) — the row
 flips to `working` immediately and never claims READY during ongoing work.
+
+---
+
+# Phase-2 review card (round 1 → answered 2026-08-12)
+
+Card carried verbatim in
+`handoffs/reviewer/2026-08-12_phase2_review_r1_handoff.md`.
+
+## Review card 1 — Who owns the from-scratch migration stall, and when?
+
+**Question:** Root-cause the migration-chain stall (a from-scratch
+`alembic upgrade` on an empty database hangs at `CREATE TABLE alembic_version` —
+pre-existing, predates this project) now as its own maintenance item, or defer it to
+phase 9's drift batch?
+
+**ANSWER (2026-08-12):** "The recommendation made is correct" — **own it now as a
+separate maintenance item.** Coordinator authored the maintenance-session prompt at
+`prompts/maintenance/2026-08-12_migration-chain-stall_r1.md` (parallel-safe:
+read-only against the pipeline's files; destructive verification on disposable DBs
+only). Master plan §10 caveat updated with the disposition.
