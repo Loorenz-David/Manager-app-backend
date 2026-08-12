@@ -139,6 +139,18 @@ BOTH new migrations on a scratch schema; fresh metadata-create succeeds post-dro
   routes the frontend-schema cleanup separately.
 - Archgraph: delta = evidence updates on the items branch if mapped (the `Item`
   table itself is NOT in the graph — research §7); likely zero new nodes; state it.
+- **Forward hazard from the phase-1 projection (D9, 2026-08-12) — resolve at this
+  phase's projection before the implementer prompt:** this plan says "five embedding
+  payloads"; the projection counted **six `serialize_item` call expressions in five
+  files** (`services/queries/tasks/tasks.py:387` `list_tasks` and `:696` `get_task`;
+  `list_task_coordination_threads.py:224`; `upholstery/upholstery_order_needs.py:595`;
+  `items/seat_tasks_pending_upholstery.py:335`;
+  `upholstery/upholstery_orders_query.py:496`). Same call-expressions-vs-surfaces
+  error class as the phase-1 D1 census finding — this phase's projection re-derives
+  the full caller/endpoint graph of `serialize_item` before criteria C5 is trusted.
+- **Owner decision (projection card 1 → R5-2, 2026-08-12):** the worker-reachable
+  item-money exposure deliberately survives phases 1–5 and ends here, by column
+  removal. This phase's projection verifies no interim redaction was assumed anywhere.
 
 ## Review log
 

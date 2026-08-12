@@ -74,7 +74,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | NOT_STARTED | 2026-08-12 | coordinator | projection prompt authored (`prompts/reviewer/2026-08-12_phase1_projection_r0.md`); criteria row 15b folded (rule 2) |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | PROMPT_READY | 2026-08-12 | coordinator | projection r0 AMENDMENTS_REQUIRED; ledger D1–D9 fully routed (census → intention R5-1; plan rows 17–25; owner card → R5-2); implementer prompt authored |
 | 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-11 | planner | all 9 tables + enums + partial uniques + CHECKs |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
@@ -129,6 +129,18 @@ defines a `code: str` attribute on `DomainError` subclasses; the implementation
 `message` + `http_status` — no code field, and no `05_errors_local.md` records the
 divergence. This plan does not repair the drift; §6's error-identity carrier decision
 below is valid under either resolution.
+
+**Contract gap 2 (phase-1 projection D7, recorded 2026-08-12):** `46_serialization.md`
+mandates router-owned serialization ("services never call serializer functions";
+dataclasses, never dicts); the repo's entire task / working-section query layer does
+the opposite, and `46_serialization_local.md` is an unmodified template recording no
+override. **Standing divergence record:** phases of this project keep serialization
+where the code they modify has it (the query layer); re-emitting the contract bundle
+is never license to relocate serialization mid-phase. The local contract file's
+actual amendment lands with the phase-9 drift batch, alongside the `05_errors` gap.
+Verified not in conflict: `28_roles_permissions` blesses `require_roles` route
+dependencies and the `role_name` claim — identity-derived flags at the query boundary
+are contract-faithful.
 
 ## 6. Shared skeleton & naming registry (FINAL — authority over intention's proposals)
 

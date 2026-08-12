@@ -1477,6 +1477,30 @@ Sites **1 and 4 are round-3 findings** — §10.4 and research_context §5 name 
 3. Site 4 is the worker's live step card (`LastActiveStepCard.tsx`), i.e. the most
 frequently fetched worker payload in the app.
 
+**Round-5 correction (phase-1 projection finding D1, verified 2026-08-12): the five
+call expressions above are correct, but two of them are shared payload builders, and
+the exposure surface is *endpoints*, not call expressions.** Site 3's builder
+(`build_steps_list_payload`) and site 4's builder (`build_step_record_payload`) are
+each called by more than one query service. The complete endpoint census is
+**eight**, adding three the round-3 table missed:
+
+| # | Via builder of site | Endpoint | Query service | Roles today | v1 |
+|---|---|---|---|---|---|
+| 6 | 3 | `GET /task-step-acknowledgments/reassigned-steps` (`routers/api_v1/task_step_acknowledgments.py:35`) | `task_step_acknowledgments/list_reassigned_steps.py:85` | ADMIN, MANAGER, WORKER | redact for WORKER |
+| 7 | 4 | `GET /task-step-acknowledgments/pending` (`routers/api_v1/task_step_acknowledgments.py:74`) | `task_step_acknowledgments/list_pending_step_acknowledgments.py:75` | ADMIN, MANAGER, WORKER | redact for WORKER |
+| 8 | 4 | `GET /worker-stats/last-interacted-steps` (`routers/api_v1/worker_stats.py:30`) | `worker_stats/list_workers_last_interacted_step.py:111` | ADMIN, MANAGER | unchanged (money stays; anti-blanket-redaction row like site 5) |
+
+Endpoints 6 and 7 are live WORKER money exposures of exactly the kind card 4 ordered
+closed. The exposure matrix over (endpoint × admitted role) is therefore **24 cells**.
+Consequence for §11A.3's boundary: the flag is derived from the request identity
+**once inside each shared builder** (both already receive `ctx`), so every endpoint
+riding a builder — present and future — inherits the redaction; if a builder's flag
+is ever instead threaded as a parameter, that parameter must itself be keyword-only
+with **no default** (the fail-closed guarantee must sit at the level where new
+callers actually appear). M4/M5 of the §11A.3 table apply at the builders' flag
+derivation and must each also turn red the acknowledgment-endpoint rows riding that
+builder (M4 → endpoints 3 and 6; M5 → endpoints 4 and 7).
+
 #### 11A.3 The boundary declaration (charter rule 11)
 
 The safeguard is a **declared field of the interface, failing closed**:
@@ -1925,6 +1949,24 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   were relayed to the owner with this fold; per the handoff's protocol they need
   visibility, not answers — they stand as written, and any later veto folds as a
   lettered amendment, never a rewrite.
+
+**Round 5 — 2026-08-12 (phase-1 projection findings folded; coordinator):**
+
+- **R5-1 (projection D1)** §11A.2's census corrected: the five call expressions are
+  right, but two are shared payload builders and the exposure surface is endpoints —
+  **eight**, not five. Endpoints 6–7 (`task-step-acknowledgments`
+  reassigned-steps/pending) are live WORKER exposures the round-3 census missed;
+  endpoint 8 (`worker-stats/last-interacted-steps`, ADMIN/MANAGER) keeps money.
+  Boundary consequence pinned: the flag derives once inside each shared builder; a
+  threaded parameter, if ever chosen instead, is keyword-only with no default.
+  (Same error class as the §10.4 two-of-five drift the round-3 census itself
+  corrected: counting call expressions where the claim is about surfaces.)
+- **R5-2 (projection card 1)** Owner answered 2026-08-12: the item-money exposure on
+  worker-reachable task payloads (`item_value_minor`/`item_cost_minor`/`item_currency`
+  via `serialize_item`) **remains until phase 6 removes the columns** — no phase-1
+  interim redaction (recommendation accepted; the fields are not rendered by any
+  worker screen). Phase 1's "money absent" criterion stays scoped to
+  `total_cost_minor` exactly as written.
 
 ---
 

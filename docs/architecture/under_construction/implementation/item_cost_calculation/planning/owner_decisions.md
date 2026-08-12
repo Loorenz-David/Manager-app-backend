@@ -5,7 +5,8 @@ role: owner-decision ledger (companion to intention.md §17)
 date: 2026-08-11
 state: CLOSED — shaping cards 1–4 answered 2026-08-11 (folded as changelog round 1,
        R1-1…R1-5); mechanism-gate cards 1–2 answered 2026-08-11 (folded as changelog
-       round 4, R4-1…R4-2). Nothing open.
+       round 4, R4-1…R4-2); phase-1 projection card 1 answered 2026-08-12 (folded as
+       R5-2). Nothing open.
 ```
 
 Answers recorded below verbatim in spirit; the authoritative folded form is
@@ -190,3 +191,21 @@ semantics of this planning allocation.
 Folded as R4-2: §6A.4 rewritten — gross base confirmed; planning-allocation
 semantics; binding presentation rule (never present a percentage term as legally
 payable tax); VMB out of scope; the 25→20 translation kept as documentation guidance.
+
+---
+
+# Phase-1 projection card (round 0 → answered 2026-08-12)
+
+Card carried verbatim in
+`handoffs/reviewer/2026-08-12_phase1_projection_r0_handoff.md`.
+
+## Projection card 1 — Do workers keep seeing item prices until phase 6?
+
+**Question:** Close the item-price exposure (`item_value_minor` / `item_cost_minor` /
+`item_currency` via `serialize_item` on worker-reachable task payloads) now in
+phase 1 too, or leave it to phase 6 as currently sequenced?
+
+**ANSWER (2026-08-12):** "The recommendation is correct" — **leave it to phase 6**.
+No worker screen renders the numbers; phase 6 removes the columns rather than hiding
+them, so nothing is written twice. Folded as R5-2: phase 1's "money absent" stays
+scoped to `total_cost_minor`; recorded in the phase-1 plan's Notes.
