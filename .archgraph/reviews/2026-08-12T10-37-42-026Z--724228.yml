@@ -1,0 +1,194 @@
+reviewId: 2026-08-12T10-37-42-026Z--724228
+reviewedItemIds:
+  - edge:helper-apply-step-transition--calls-->helper-fetch-open-user-working-record
+  - edge:helper-apply-step-transition--governed_by-->decision-mirrored-transition-body
+  - edge:helper-apply-step-transition--implements-->concept-one-active-step-per-user
+  - edge:helper-apply-step-transition--produces-->event-process-step-transition
+  - edge:helper-apply-step-transition--writes_to-->table-step-state-record
+  - edge:helper-apply-step-transition--writes_to-->table-task-step
+  - edge:helper-cascade-step-completion--calls-->src-recalculate-readiness
+  - edge:helper-cascade-step-completion--implements-->concept-readiness-gating
+  - edge:helper-cascade-step-completion--reads_from-->table-task-step-dependency
+  - edge:intention-step-transition-analytics--contains-->domain-task-execution
+  - edge:intention-step-transition-analytics--contains-->domain-work-analytics
+  - edge:src-create-instant-task--governed_by-->decision-transactional-outbox
+  - edge:src-recalculate-readiness--implements-->concept-readiness-gating
+  - edge:table-step-state-record--governed_by-->decision-credited-user-no-fk
+  - edge:table-step-state-record--implements-->concept-one-active-step-per-user
+  - edge:task-finalize-pending-step-completion--calls-->helper-task-state-transitions
+  - edge:task-finalize-pending-step-completion--governed_by-->decision-mirrored-transition-body
+  - edge:task-finalize-pending-step-completion--produces-->event-process-step-transition
+  - edge:task-finalize-pending-step-completion--writes_to-->table-step-state-record
+  - edge:vocab-transition-reason-enum--governed_by-->decision-code-owned-transition-reasons
+decisions:
+  - itemId: edge:helper-apply-step-transition--calls-->helper-fetch-open-user-working-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-apply-step-transition--governed_by-->decision-mirrored-transition-body
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-apply-step-transition--implements-->concept-one-active-step-per-user
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-apply-step-transition--produces-->event-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-apply-step-transition--writes_to-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-apply-step-transition--writes_to-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-cascade-step-completion--calls-->src-recalculate-readiness
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-cascade-step-completion--implements-->concept-readiness-gating
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:helper-cascade-step-completion--reads_from-->table-task-step-dependency
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:intention-step-transition-analytics--contains-->domain-task-execution
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:intention-step-transition-analytics--contains-->domain-work-analytics
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:src-create-instant-task--governed_by-->decision-transactional-outbox
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:src-recalculate-readiness--implements-->concept-readiness-gating
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:table-step-state-record--governed_by-->decision-credited-user-no-fk
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:table-step-state-record--implements-->concept-one-active-step-per-user
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: The cited index guarantees one open record per step, not the per-user
+      auto-pause invariant; this relationship overstates the database
+      constraint.
+  - itemId: edge:task-finalize-pending-step-completion--calls-->helper-task-state-transitions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:task-finalize-pending-step-completion--governed_by-->decision-mirrored-transition-body
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:task-finalize-pending-step-completion--produces-->event-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:task-finalize-pending-step-completion--writes_to-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:vocab-transition-reason-enum--governed_by-->decision-code-owned-transition-reasons
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+retiredItemIds:
+  - edge:table-step-state-record--implements-->concept-one-active-step-per-user
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0
+timestamp: 2026-08-12T10:37:42.026Z
+graphRevisionBefore: 9561c7e2925267ed73217d98cb5452d1329658278f66a1331545265c207f6531
+graphRevisionAfter: ce557e6af3406410f882873739449dd7840b779419b0f71b42997f7a1671e244
+evidenceSummary: 20 evidence entries across 9 files; no drift detected
+humanInstruction: User explicitly authorized review, correction, and approval of
+  all pending Architecture Graph items in this turn.
+reviewTokenCorrelation: 6f29768df037

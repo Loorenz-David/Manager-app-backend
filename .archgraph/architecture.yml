@@ -37,10 +37,10 @@ nodes:
           inferenceReason: This single command is the entry point that ties the step state
             machine to the analytics pipeline, so it defines the scope of this
             intention.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: domain-task-execution
     type: domain
     name: Task Execution
@@ -55,10 +55,10 @@ nodes:
             SKIPPED, FAILED, CANCELLED.
           inferenceReason: A dedicated domain package for task step vocabulary marks task
             execution as a bounded domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: domain-work-analytics
     type: domain
     name: Work Analytics
@@ -73,10 +73,10 @@ nodes:
             concurrently open intervals.
           inferenceReason: A pure domain package holding the averaging math shows
             analytics is modelled as its own domain, not incidental reporting.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-step-state-machine
     type: domain
     name: Step State Machine (8 states)
@@ -106,10 +106,10 @@ nodes:
             to go to SKIPPED.
           inferenceReason: A second map bypassing the main one shows the machine has a
             deliberate administrative escape hatch.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-terminal-vs-time-bearing
     type: domain
     name: Terminal vs Time-Bearing States
@@ -136,10 +136,10 @@ nodes:
           summary: Time recomputation is gated on `closing_state in TIME_BEARING_STATES`.
           inferenceReason: The analytics worker branches on the time-bearing set,
             confirming it gates duration accounting specifically.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-readiness-gating
     type: domain
     name: Step Readiness / Dependency Gating
@@ -161,10 +161,10 @@ nodes:
           inferenceReason: Readiness computed from stored counters rather than by querying
             dependencies defines the gating model and its consistency
             requirement.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-credited-user-vs-performer
     type: domain
     name: Credited User vs Performer
@@ -190,10 +190,10 @@ nodes:
           summary: Analytics attributes via COALESCE(credited_user_id, created_by_id).
           inferenceReason: The consumer's fallback confirms credited_user_id is the
             analytics attribution key, not the audit key.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-inaccurate-time-flagging
     type: domain
     name: Inaccurate Time Flagging
@@ -221,10 +221,10 @@ nodes:
           summary: A separate sweep population for intervals marked wrong.
           inferenceReason: Sweeping flagged intervals separately proves the flag changes
             the divisor, not just a display label.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-one-active-step-per-user
     type: domain
     name: One Active Step Per User (Auto-Pause)
@@ -252,10 +252,10 @@ nodes:
             step_id) where exited_at IS NULL.
           inferenceReason: A DB partial unique index is the backstop guaranteeing at most
             one open record per step regardless of application logic.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-concurrency-averaged-time
     type: domain
     name: Concurrency-Averaged Time Accounting
@@ -289,10 +289,10 @@ nodes:
             sweeps.
           inferenceReason: Every consumer routing through one primitive makes the
             averaging a single-sourced, reproducible projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: concept-ended-shift-collapse
     type: domain
     name: "'ended_shift' Collapse (legacy state)"
@@ -318,10 +318,10 @@ nodes:
             maps to 'ended_shift', else the state itself.
           inferenceReason: A bucket defined as a bare string rather than an enum member
             shows the concept outlived the deleted state it came from.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T12:20:56.469Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: decision-mirrored-transition-body
     type: decision
     name: Transition body mirrored, not shared (Option B)
@@ -353,10 +353,10 @@ nodes:
             core.
           inferenceReason: Both sides carrying the warning confirms the duplication is
             deliberate and bidirectional.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: decision-transactional-outbox
     type: decision
     name: Transactional outbox for analytics
@@ -377,10 +377,10 @@ nodes:
           summary: Inserts task and payload rows and only flushes, never commits.
           inferenceReason: Flushing without committing inside the caller's transaction is
             the defining property of the transactional-outbox pattern.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: decision-recompute-not-increment
     type: decision
     name: Recompute-and-SET rather than increment (time)
@@ -410,10 +410,10 @@ nodes:
             sums over users/days and cannot be SET.
           inferenceReason: The explicit justification for delta application confirms the
             idempotency boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: decision-code-owned-transition-reasons
     type: decision
     name: Transition reasons are code-owned, not workspace data
@@ -435,10 +435,10 @@ nodes:
             workspace holding zero pause reasons.'"
           inferenceReason: An in-code rationale for bypassing the catalog documents a
             deliberate decoupling decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: decision-undo-window-disabled
     type: decision
     name: COMPLETED undo window currently disabled
@@ -498,10 +498,10 @@ nodes:
             comment noting the deliberate absence of a FK.
           inferenceReason: An intentionally omitted constraint documented in the model is
             a schema-level decision worth recording separately from the concept.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T12:20:56.469Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: vocab-task-step-state-enum
     type: domain
     name: TaskStepStateEnum
@@ -517,10 +517,10 @@ nodes:
           summary: Enum with the eight step state members.
           inferenceReason: The enum is the authoritative vocabulary every transition,
             filter and analytics bucket is defined against.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: vocab-task-state-enum
     type: domain
     name: TaskStateEnum
@@ -536,10 +536,10 @@ nodes:
           summary: Enum with the eight task state members.
           inferenceReason: Step transitions mutate task state, so the task vocabulary is
             part of this branch's contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: vocab-transition-reason-enum
     type: domain
     name: TransitionReasonEnum
@@ -555,10 +555,10 @@ nodes:
           summary: Five code-owned transition reason members.
           inferenceReason: A separate enum from the workspace pause catalog encodes the
             system-vs-user reason split.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: vocab-step-state-constants
     type: domain
     name: Step State Constants (terminal / time-bearing)
@@ -572,10 +572,10 @@ nodes:
           summary: Three frozensets partitioning the step and task state enums.
           inferenceReason: These constants are imported by both the command layer and the
             analytics worker, making them a shared contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: vocab-user-shift-state-enum
     type: domain
     name: UserShiftStateEnum
@@ -591,10 +591,10 @@ nodes:
           summary: Five shift state members.
           inferenceReason: Step transitions drive shift reconciliation, so this vocabulary
             is a downstream contract of the branch.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: src-recalculate-readiness
     type: source_symbol
     name: recalculate_readiness()
@@ -610,10 +610,10 @@ nodes:
             callers are responsible for flushing.
           inferenceReason: A pure function with several call sites is the single
             implementation of the readiness rule.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: src-bucket-for
     type: source_symbol
     name: bucket_for()
@@ -638,10 +638,10 @@ nodes:
           summary: A SQL CASE expression replicating bucket_for for in-database bucketing.
           inferenceReason: A duplicated rule in two languages is a drift risk worth
             recording on the node.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: domain-concurrency-sweep
     type: domain
     name: Concurrency Sweep (averaging math)
@@ -659,10 +659,10 @@ nodes:
             wasted_seconds_by_record at 96.
           inferenceReason: A pure module holding the only implementation of the averaging
             math is the computational heart of work analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: domain-linear-timeline
     type: domain
     name: Linear Timeline Collapse
@@ -700,10 +700,10 @@ nodes:
           inferenceReason: Separating duration-bearing states from instantaneous markers
             mirrors the step-level time-bearing distinction and is required to
             reconcile shifts from step activity.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: src-increment-step-time-metrics-vestigial
     type: source_symbol
     name: increment_step_time_metrics() [VESTIGIAL]
@@ -724,10 +724,10 @@ nodes:
             analytics recomputes totals instead.
           inferenceReason: Self-documented dead code adjacent to the live path is a
             navigation hazard worth an explicit node.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:38:59.972Z
-    updatedAt: 2026-08-11T08:38:59.972Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: table-task-step
     type: table
     name: task_steps
@@ -751,10 +751,10 @@ nodes:
             models/base/aggregate_metrics.py.
           inferenceReason: A table holding both live state and derived rollups is the join
             point between the execution and analytics domains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-step-state-record
     type: table
     name: step_state_records
@@ -777,10 +777,10 @@ nodes:
             columns, plus a partial unique index on open records.
           inferenceReason: An append-only interval table with a nullable exit is the
             canonical source every time aggregate is derived from.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-task
     type: table
     name: tasks
@@ -796,10 +796,10 @@ nodes:
           summary: Task model owning task_steps and task_items.
           inferenceReason: Step transitions mutate task.state, making the task table a
             direct write target of this branch.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-task-item
     type: table
     name: task_items
@@ -815,10 +815,10 @@ nodes:
           summary: Task-to-item join carrying a role and removed_at.
           inferenceReason: The transition command queries the PRIMARY task item to build
             human-readable descriptions, so this table is part of the flow.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-task-step-dependency
     type: table
     name: task_step_dependencies
@@ -834,10 +834,10 @@ nodes:
           summary: Edge table between two task steps.
           inferenceReason: Completion cascade walks this table to increment dependents'
             counters, making it the backing store for readiness gating.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-task-step-acknowledgment
     type: table
     name: task_step_acknowledgments
@@ -854,10 +854,10 @@ nodes:
             reason.
           inferenceReason: The WORKING branch of the transition command bulk-acknowledges
             these rows, tying the table into the transition flow.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-task-step-assignment-record
     type: table
     name: task_step_assignment_records
@@ -872,10 +872,10 @@ nodes:
           summary: Interval model recording who was assigned to a step and when.
           inferenceReason: Mirrors the state-record interval pattern for assignment, and
             is written by assign_worker_to_step in the same branch.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-pause-reason
     type: table
     name: pause_reasons
@@ -892,10 +892,10 @@ nodes:
           summary: Workspace catalog with pause_type and requires_description.
           inferenceReason: The transition command validates requires_description against
             this row, so the catalog participates in transition validation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-item-issue
     type: table
     name: item_issues
@@ -914,10 +914,10 @@ nodes:
             columns.
           inferenceReason: The analytics worker counts these rows when a step completes,
             making the table an input to the completion rules.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-user-daily-work-stats
     type: table
     name: user_daily_work_stats
@@ -937,10 +937,10 @@ nodes:
             grain constraint.
           inferenceReason: A uniquely-grained stat table written by the reconciler is a
             derived projection, not a source of truth.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-user-lifetime-stats
     type: table
     name: user_lifetime_stats
@@ -958,10 +958,10 @@ nodes:
           summary: All-time per-user stat table with the same metric set.
           inferenceReason: Spanning all days makes it non-recomputable from a single day
             window, which is why the reconciler applies deltas here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-user-section-daily-work-stats
     type: table
     name: user_section_daily_work_stats
@@ -980,10 +980,10 @@ nodes:
             snapshots.
           inferenceReason: The finest analytics grain; the reconciler both sets and zeroes
             rows here, confirming absolute recomputation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-working-section-daily-work-stats
     type: table
     name: working_section_daily_work_stats
@@ -1001,10 +1001,10 @@ nodes:
           summary: Per-section daily stat table with the same metric set.
           inferenceReason: Aggregating across users makes it non-recomputable from one
             user's reconcile, hence delta application.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-execution-task
     type: table
     name: execution_tasks
@@ -1022,10 +1022,10 @@ nodes:
           summary: Outbox row with task_type, lifecycle state and retry bookkeeping.
           inferenceReason: Written inside the domain transaction and consumed by workers,
             this table is the durability boundary of all async analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-execution-payload
     type: table
     name: execution_payloads
@@ -1043,10 +1043,10 @@ nodes:
           summary: JSON payload table with a unique FK to execution_tasks.
           inferenceReason: Payload stays in Postgres while only the id is queued in Redis,
             so this table carries the command-to-worker contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-delayed-scheduler
     type: table
     name: delayed_schedulers
@@ -1067,10 +1067,10 @@ nodes:
           inferenceReason: The commented-out undo-window block in the transition command
             targets exactly this table, tying it to the branch as a dormant
             path.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-user-shift-state-record
     type: table
     name: user_shift_state_records
@@ -1087,10 +1087,10 @@ nodes:
           inferenceReason: The analytics worker calls reconcile_worker_shift_state on
             every credited transition, so this table is a downstream write
             target of step transitions.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: table-user-work-profile
     type: table
     name: user_work_profiles
@@ -1105,10 +1105,10 @@ nodes:
           summary: Work profile model carrying the hourly salary rate.
           inferenceReason: Cost metrics in the analytics pipeline are derived from this
             rate, making it an input to every cost rollup.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-transition-step-state
     type: endpoint
     name: POST /api/v1/tasks/{task_id}/steps/{step_id}/transition
@@ -1125,10 +1125,10 @@ nodes:
             transition_step_state through run_service.
           inferenceReason: This is the HTTP entry point that begins the whole
             step-transition-to-analytics flow.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-transition-step-state-batch
     type: endpoint
     name: POST /api/v1/tasks/steps/transition-batch
@@ -1143,10 +1143,10 @@ nodes:
           summary: Route handler dispatching to transition_step_state_batch.
           inferenceReason: A separate batch route explains why a mirrored transition core
             exists alongside the single-step command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-cancel-pending-step-completion
     type: endpoint
     name: DELETE /api/v1/tasks/{task_id}/steps/{step_id}/pending-completion
@@ -1162,10 +1162,10 @@ nodes:
           summary: Route handler dispatching to cancel_pending_step_completion.
           inferenceReason: The route remains registered while the scheduling side is
             commented out, making it a reachable but inert path.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: endpoint-mark-step-time-inaccurate
     type: endpoint
     name: POST
@@ -1180,10 +1180,10 @@ nodes:
           summary: Route handler dispatching to mark_step_time_inaccurate.
           inferenceReason: A dedicated route for data-quality correction confirms
             inaccurate-time flagging is a user-facing capability.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-assign-worker-to-step
     type: endpoint
     name: POST /api/v1/tasks/{task_id}/steps/{step_id}/assign-worker
@@ -1197,10 +1197,10 @@ nodes:
           summary: Route handler dispatching to assign_worker_to_step.
           inferenceReason: Assignment changes create the acknowledgment obligations that a
             later WORKING transition clears.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: endpoint-list-task-steps
     type: endpoint
     name: GET /api/v1/tasks/{task_id}/steps
@@ -1213,10 +1213,10 @@ nodes:
           summary: Route handler dispatching to the list_task_steps query.
           inferenceReason: The primary read of step state, consuming what the transition
             command writes.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: endpoint-count-task-step-states
     type: endpoint
     name: GET /api/v1/tasks/{task_id}/steps/counts
@@ -1230,10 +1230,10 @@ nodes:
           summary: Route handler dispatching to the count_task_step_states query.
           inferenceReason: A count projection over step states is a direct read-side
             consumer of the state machine.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:35:57.680Z
   - id: endpoint-list-workers-totals
     type: endpoint
     name: GET /api/v1/worker-stats/totals
@@ -1249,10 +1249,10 @@ nodes:
           summary: Route handler dispatching to list_workers_totals.
           inferenceReason: This is the main read endpoint over the analytics rollup tables
             the worker maintains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-worker-daily-step-breakdown
     type: endpoint
     name: GET /api/v1/worker-stats/{user_id}/daily-steps
@@ -1268,10 +1268,10 @@ nodes:
           summary: Route handler dispatching to get_worker_daily_step_breakdown.
           inferenceReason: Reads both raw StepStateRecord rows and the derived daily
             stats, exposing the analytics pipeline's output.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-worker-linear-timeline-breakdown
     type: endpoint
     name: GET /api/v1/worker-stats/{user_id}/linear-timeline
@@ -1287,10 +1287,10 @@ nodes:
           summary: Route handler dispatching to get_worker_linear_timeline_breakdown.
           inferenceReason: The consumer of the linear-timeline collapse, a distinct
             analytics concept from the averaging sweep.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: endpoint-list-working-section-steps
     type: endpoint
     name: GET /api/v1/working-sections/{working_section_id}/steps
@@ -1304,10 +1304,10 @@ nodes:
           summary: Route handler dispatching to list_working_section_steps.
           inferenceReason: This queue read is why terminal states must be excluded from
             open-work queries, connecting it to the state partition concept.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:40:34.203Z
-    updatedAt: 2026-08-11T08:40:34.203Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: command-transition-step-state
     type: command
     name: transition_step_state
@@ -1328,10 +1328,10 @@ nodes:
             effects and outbox publication.
           inferenceReason: This command is the single place where the step state machine,
             the interval log and the analytics outbox meet.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: command-transition-step-state-batch
     type: command
     name: transition_step_state_batch
@@ -1350,10 +1350,10 @@ nodes:
             events at the end.
           inferenceReason: All-or-nothing validation plus coalesced dispatch is a distinct
             transactional contract from the single-step command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: helper-apply-step-transition
     type: command
     name: _apply_step_transition (shared core)
@@ -1375,10 +1375,10 @@ nodes:
             event dispatch, returning a result dataclass.
           inferenceReason: A transaction-free core with two callers plus one mirrored twin
             is the structural centre of the duplication decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: helper-cascade-step-completion
     type: command
     name: cascade_step_completion
@@ -1395,10 +1395,10 @@ nodes:
             recalculate_readiness.
           inferenceReason: This is the mechanism that keeps the denormalised readiness
             counters consistent after a completion.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: helper-fetch-open-user-working-record
     type: command
     name: fetch_open_user_working_record
@@ -1415,10 +1415,10 @@ nodes:
             allows_batch_working.
           inferenceReason: Excluding batch-enabled steps in the conflict query is exactly
             how the one-active-step invariant is scoped.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: command-mark-step-time-inaccurate
     type: command
     name: mark_step_time_inaccurate
@@ -1436,10 +1436,10 @@ nodes:
             is at 30 and dispatches task:updated.
           inferenceReason: Sharing the flag helper with the transition path shows
             inaccuracy can be applied both retroactively and at transition time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: command-cancel-pending-step-completion
     type: command
     name: cancel_pending_step_completion
@@ -1456,10 +1456,10 @@ nodes:
           summary: Finds the active scheduler row and flips its state to CANCELED.
           inferenceReason: It targets the scheduler type whose creation is commented out,
             making it currently unreachable in practice.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: command-assign-worker-to-step
     type: command
     name: assign_worker_to_step
@@ -1476,10 +1476,10 @@ nodes:
             notification.
           inferenceReason: Reassignment creates the acknowledgment obligations that a
             subsequent WORKING transition clears, linking it into the flow.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: helper-task-state-transitions
     type: command
     name: Task state transition helpers
@@ -1502,10 +1502,10 @@ nodes:
             way in.
           inferenceReason: A documented single entry point into a state carrying side
             effects is an architectural invariant worth its own node.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: command-mark-step-obligations-acknowledged
     type: command
     name: mark_step_obligations_acknowledged
@@ -1522,10 +1522,10 @@ nodes:
             given step ids.
           inferenceReason: Invoked from the WORKING branch of the transition command,
             making acknowledgment a side effect of the state machine.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: task-finalize-pending-step-completion
     type: command
     name: handle_finalize_pending_step_completion
@@ -1555,10 +1555,10 @@ nodes:
           summary: TODO noting section side effects are not fired from this path.
           inferenceReason: An acknowledged behavioural gap relative to the primary command
             is evidence of active drift.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: command-pause-task-working-steps-for-case
     type: command
     name: pause_task_working_steps_for_case
@@ -1577,10 +1577,10 @@ nodes:
             code-owned transition reason, wrapped in a broad except.
           inferenceReason: A second real consumer of the shared core, and a demonstration
             of the code-owned reason vocabulary in practice.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:35.957Z
   - id: contract-step-transition-payload
     type: source_symbol
     name: StepTransitionPayload
@@ -1604,10 +1604,10 @@ nodes:
             both user ids and the section snapshot.
           inferenceReason: Strict keyword rehydration makes this dataclass a hard
             versioning boundary between the command and analytics tiers.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: event-process-step-transition
     type: event
     name: TaskType.PROCESS_STEP_TRANSITION
@@ -1624,10 +1624,10 @@ nodes:
           summary: TaskType.PROCESS_STEP_TRANSITION = 43.
           inferenceReason: This enum value is the routing key linking every transition
             producer to the analytics consumer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: event-create-notifications
     type: event
     name: TaskType.CREATE_NOTIFICATIONS
@@ -1642,10 +1642,10 @@ nodes:
           summary: TaskType.CREATE_NOTIFICATIONS = 22.
           inferenceReason: Transitions enqueue this alongside the analytics event, so it
             is a parallel side effect of the same command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: event-delayed-step-completion
     type: event
     name: TaskType.DELAYED_STEP_COMPLETION
@@ -1662,10 +1662,10 @@ nodes:
           summary: TaskType.DELAYED_STEP_COMPLETION = 30.
           inferenceReason: Its only producer is the scheduler runner, whose input rows are
             no longer created, making the whole path inert.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: ws-task-step-state-changed
     type: event
     name: "ws: task:step-state-changed"
@@ -1681,10 +1681,10 @@ nodes:
             dispatches a BatchWorkspaceEvent.
           inferenceReason: Batching the primary and auto-paused step into one event is how
             the client learns about the invisible side effect.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: ws-task-state-changed
     type: event
     name: "ws: task:state-changed"
@@ -1699,10 +1699,10 @@ nodes:
           summary: Conditional dispatch guarded on task.state != old_task_state.
           inferenceReason: The guard shows task-level events are emitted only on real
             transitions, not on every step change.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: ws-task-step-readiness-changed
     type: event
     name: "ws: task:step-readiness-changed"
@@ -1717,10 +1717,10 @@ nodes:
             per dependent step.
           inferenceReason: This event is the client-visible consequence of dependency
             gating, tying the cascade to the UI.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: ws-worker-shift-state-changed
     type: event
     name: "ws: worker-shift:state-changed / roster-changed"
@@ -1742,10 +1742,10 @@ nodes:
           inferenceReason: This is the one realtime emission originating in the analytics
             tier rather than the command tier, which is easy to miss when
             tracing events.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: src-create-instant-task
     type: source_symbol
     name: create_instant_task()
@@ -1764,10 +1764,10 @@ nodes:
             without committing.
           inferenceReason: Flush-not-commit inside the caller's session is the precise
             mechanism giving the outbox its atomicity guarantee.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-pg-notify-task-open
     type: infrastructure
     name: trg_task_open (Postgres trigger)
@@ -1782,10 +1782,10 @@ nodes:
           summary: DDL creating the trigger and its notify function.
           inferenceReason: A database-level NOTIFY is what makes the outbox low-latency
             rather than poll-driven, and it lives outside the application code.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-task-router
     type: infrastructure
     name: Task Router
@@ -1814,10 +1814,10 @@ nodes:
             -> queue:analytics.
           inferenceReason: The queue mapping lives in the router, while handler mapping
             lives per worker — a split worth capturing.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-queue-analytics
     type: infrastructure
     name: Redis queue:analytics
@@ -1831,10 +1831,10 @@ nodes:
           summary: "QUEUE_MAP entry TaskType.PROCESS_STEP_TRANSITION: 'queue:analytics'."
           inferenceReason: A dedicated queue isolates analytics throughput from
             notifications and general task work.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-queue-notifications
     type: infrastructure
     name: Redis queue:notifications
@@ -1847,10 +1847,10 @@ nodes:
           summary: "QUEUE_MAP entry TaskType.CREATE_NOTIFICATIONS: 'queue:notifications'."
           inferenceReason: Transitions enqueue notification work onto a separate queue, so
             notification lag cannot delay analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-queue-tasks
     type: infrastructure
     name: Redis queue:tasks
@@ -1863,10 +1863,10 @@ nodes:
           summary: "QUEUE_MAP entry TaskType.DELAYED_STEP_COMPLETION: 'queue:tasks'."
           inferenceReason: The deferred completion path is queued separately from
             analytics, which is why it can drift independently.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-worker-base
     type: infrastructure
     name: Worker base loop
@@ -1884,10 +1884,10 @@ nodes:
             with jittered backoff.
           inferenceReason: SKIP LOCKED claiming is what makes concurrent analytics workers
             safe, an important property for the recompute-and-SET model.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-analytics-worker
     type: infrastructure
     name: Analytics Worker
@@ -1905,10 +1905,10 @@ nodes:
             then run_worker on queue:analytics.
           inferenceReason: Handler binding lives in the worker rather than the router, so
             this file is where the event-to-code link is made.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-notification-worker
     type: infrastructure
     name: Notification Worker
@@ -1923,10 +1923,10 @@ nodes:
             call.
           inferenceReason: The consumer side of the notification events the transition
             commands produce.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-tasks-worker
     type: infrastructure
     name: Tasks Worker
@@ -1941,10 +1941,10 @@ nodes:
             call.
           inferenceReason: This binding is what would execute the deferred completion path
             were the undo window re-enabled.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-delayed-scheduler-runner
     type: infrastructure
     name: Delayed Scheduler Runner
@@ -1959,10 +1959,10 @@ nodes:
             snapshots.
           inferenceReason: It bridges the scheduler table into the same outbox machinery,
             which is why deferred completion reuses the worker infrastructure.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-event-bus
     type: infrastructure
     name: Event Bus (realtime)
@@ -1977,10 +1977,10 @@ nodes:
           summary: Dispatcher iterating registered handlers for each event.
           inferenceReason: Dispatching outside the transaction is a deliberate ordering
             guarantee distinct from the outbox's in-transaction write.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: infra-worker-shift-realtime
     type: infrastructure
     name: Worker Shift Realtime Emitter
@@ -1996,10 +1996,10 @@ nodes:
             processes.
           inferenceReason: Being callable from workers as well as the API is what lets the
             analytics tier announce shift changes.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-11T08:42:30.238Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: analytics-process-step-transition
     type: command
     name: handle_process_step_transition (WORKER-1)
@@ -2026,10 +2026,10 @@ nodes:
           inferenceReason: The two independent gates are the answer to when analytics is
             actually recorded, and are the defining logic of the whole analytics
             tier.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: analytics-recompute-step-time-totals
     type: projection
     name: _recompute_step_time_totals
@@ -2082,10 +2082,10 @@ nodes:
             step.
           inferenceReason: Completion counting is the one analytics effect genuinely gated
             on the new state being COMPLETED.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:15.606Z
     status: deprecated
   - id: analytics-apply-issues-at-completion
     type: command
@@ -2107,10 +2107,10 @@ nodes:
             comments that it applies regardless of the marked-wrong flag.
           inferenceReason: Issue counting escaping the inaccuracy gate is a subtle rule
             worth recording separately from time accounting.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:36:48.424Z
     status: deprecated
   - id: analytics-reconcile-user-day-time
     type: projection
@@ -2133,10 +2133,10 @@ nodes:
             deltas rather than writing the sum tables itself.
           inferenceReason: The SET-plus-return-deltas shape is the concrete implementation
             of the recompute-not-increment decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: analytics-apply-reconcile-deltas
     type: command
     name: apply_reconcile_deltas
@@ -2154,10 +2154,10 @@ nodes:
           summary: Adds the deltas onto lifetime and section-daily rows.
           inferenceReason: This function marks the exact boundary between idempotent
             projections and accumulating sums.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:36:48.424Z
   - id: src-compute-record-contributions
     type: source_symbol
     name: compute_record_contributions()
@@ -2180,10 +2180,10 @@ nodes:
             sweeps, OR-ing the step-or-record inaccuracy flags.
           inferenceReason: One primitive shared by write-side, read-side and backfill is
             what keeps recomputed and live-read numbers consistent.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: command-reconcile-worker-shift-state
     type: command
     name: reconcile_worker_shift_state
@@ -2203,10 +2203,10 @@ nodes:
             shift record when it changes.
           inferenceReason: Deriving shift state from step records is why a step transition
             has worker-level consequences beyond its own task.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: projection-list-workers-totals
     type: projection
     name: list_workers_totals
@@ -2223,10 +2223,10 @@ nodes:
             StepStateRecord and TaskStep.
           inferenceReason: Reading both rollups and raw records shows the dashboard blends
             precomputed and live-derived numbers.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: projection-worker-daily-step-breakdown
     type: projection
     name: get_worker_daily_step_breakdown
@@ -2243,10 +2243,10 @@ nodes:
             tables.
           inferenceReason: A read that spans both the source records and their rollups is
             the natural place inconsistencies between them surface.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: projection-worker-linear-timeline-breakdown
     type: projection
     name: get_worker_linear_timeline_breakdown
@@ -2263,10 +2263,10 @@ nodes:
             timeline collapse.
           inferenceReason: The only consumer of the linear-timeline sweep, distinguishing
             it from the averaging sweep.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: projection-worker-clock-out-analytics
     type: projection
     name: get_worker_clock_out_analytics
@@ -2293,10 +2293,10 @@ nodes:
             try/except rather than through run_service.
           inferenceReason: Confirms the bypass is in the router, and that it is
             deliberately failure-tolerant.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: projection-list-workers-insights
     type: projection
     name: list_workers_insights
@@ -2312,10 +2312,10 @@ nodes:
           summary: Loads daily rows into DailyStats and delegates to the pure evaluate().
           inferenceReason: Separating the bounded read from pure evaluation keeps the
             insight rules testable without a database.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: domain-analytics-insights-engine
     type: domain
     name: Insights Rule Engine
@@ -2330,10 +2330,10 @@ nodes:
           summary: Pure evaluation over precomputed stats against configured rules.
           inferenceReason: A pure engine over the rollups shows insights are a
             second-order derivation, downstream of the analytics tables.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: domain-estimation-strategies
     type: domain
     name: Duration Estimation Strategies
@@ -2348,10 +2348,10 @@ nodes:
           summary: TimeEstimationStrategy with iqr_trimmed_mean and estimate_fill.
           inferenceReason: Estimation depending on trusted samples is why inaccuracy
             flagging must exclude rather than delete records.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: script-backfill-averaged-time
     type: source_symbol
     name: backfill_averaged_time.py
@@ -2372,10 +2372,10 @@ nodes:
             the database.
           inferenceReason: A script writing the same tables as the worker is a second
             write path that must honour the same recompute semantics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: script-backfill-completed-count
     type: source_symbol
     name: backfill_completed_count.py
@@ -2395,10 +2395,10 @@ nodes:
             counters absolutely.
           inferenceReason: It reproduces the worker's attribution rule independently, so a
             change to attribution must be mirrored here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-11T08:43:31.692Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - id: concept-attribution-split
     type: domain
     name: "Attribution Split: hours follow the record, completions follow the
@@ -2485,10 +2485,10 @@ nodes:
           inferenceReason: Shows the column is populated only on system-generated records,
             confirming the omission on ordinary records is the norm rather than
             an isolated slip.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - id: decision-idempotent-completion-counters
     type: decision
@@ -2648,32 +2648,6 @@ nodes:
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
     updatedAt: 2026-08-11T12:07:54.287Z
-  - id: finding-completion-counting-golive
-    type: decision
-    name: Completion counting went live 2026-07-16 (497 uncounted before)
-    description: "OPERATIONAL FINDING, not a code decision. Completions recorded
-      before 2026-07-16 were written to step_state_records but never counted
-      into any rollup: June 59/59 uncounted, July 438 uncounted, August 0
-      uncounted. 2026-07-16 is partial (41 of 50 counted); every day from 07-17
-      is exact. Total gap 497, stable across two production snapshots taken days
-      apart, and the 5 completions added between those snapshots were counted
-      correctly — so this is historical debt with a go-live date, NOT an ongoing
-      leak. Closed by backfill_missing_completion_counts.py."
-    tags:
-      - finding
-      - data-quality
-      - historical
-    metadata:
-      evidence:
-        - path: app/scripts/backfill/backfill_missing_completion_counts.py
-          summary: The script that closes the gap; its --until flag exists specifically to
-            bound the run to the pre-go-live days.
-          inferenceReason: The remedy encodes the finding, and the cutover date is the
-            natural --until value.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
   - id: test-completion-replay-idempotency
     type: test
     name: test_reconcile_user_completions.py
@@ -2740,6 +2714,209 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-11T11:50:46.447Z
     updatedAt: 2026-08-11T12:20:00.708Z
+  - id: finding-completion-counting-golive
+    type: decision
+    name: Completion-counting historical gap (497; go-live 2026-07-16)
+    description: "An operational finding from a production snapshot taken on
+      2026-08-11: 497 completed step records were absent from completion rollups
+      before the completion path became reliable. The final affected day,
+      2026-07-16, is partial; every day from 2026-07-17 onward matched the
+      measured records. This is historical data debt rather than an ongoing
+      leak, because two snapshots showed the same gap while newly recorded
+      completions were counted. The finding defines the safe scope for the
+      completion-count backfill and must remain tied to the dated measurement,
+      not inferred from the remedy script."
+    tags:
+      - analytics
+      - historical-finding
+      - backfill
+    metadata:
+      evidence:
+        - path: docs/architecture/implemented_summaries/completion_counting_gap_20260811.md
+          startLine: 1
+          endLine: 50
+          summary: Dated measurement document records a 497-completion historical rollup
+            gap, identifies 2026-07-16 as the final partial day, and states that
+            every day from 2026-07-17 onward is exact.
+          inferenceReason: The production-snapshot measurement directly substantiates the
+            count, cutoff date, and conclusion that the issue is historical debt
+            rather than an ongoing leak.
+    origin: human_confirmed
+    confidence: 0.95
+    createdAt: 2026-08-12T10:38:53.600Z
+    updatedAt: 2026-08-12T10:39:12.020Z
+  - id: table-production-cost-group
+    type: table
+    name: production_cost_groups
+    description: A workspace-owned named production-cost grouping. It owns its
+      versioned basis and section membership configuration, but does not choose
+      an evaluation group. Its active-name constraint preserves one current name
+      per workspace.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/production_cost_group.py
+          symbol: ProductionCostGroup
+          startLine: 10
+          endLine: 24
+          summary: The ProductionCostGroup ORM model defines production_cost_groups.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-production-cost-group-section
+    type: table
+    name: production_cost_group_sections
+    description: An interval membership between a working section and a
+      production-cost group. It owns added and removed timestamps rather than
+      soft-delete state. Its active-membership index prevents a section from
+      belonging to more than one active group.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/production_cost_group_section.py
+          symbol: ProductionCostGroupSection
+          startLine: 10
+          endLine: 22
+          summary: The ProductionCostGroupSection ORM model defines
+            production_cost_group_sections.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-production-cost-basis-version
+    type: table
+    name: production_cost_basis_versions
+    description: An effective-dated cost basis for one production-cost group. It
+      owns positive configuration facts and the persisted worker-minute rate
+      snapshot input. Window checks and the open-version index preserve one
+      active basis version per group.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/production_cost_basis_version.py
+          symbol: ProductionCostBasisVersion
+          startLine: 14
+          endLine: 43
+          summary: The ProductionCostBasisVersion ORM model defines
+            production_cost_basis_versions.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-cost-model-version
+    type: table
+    name: cost_model_versions
+    description: An effective-dated allocation model for a workspace. It owns a
+      currency and the cost-model terms applicable at the version. Its window
+      check and partial index ensure no more than one open model version.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/cost_model_version.py
+          symbol: CostModelVersion
+          startLine: 14
+          endLine: 33
+          summary: The CostModelVersion ORM model defines cost_model_versions.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-cost-model-term
+    type: table
+    name: cost_model_terms
+    description: An immutable allocation rule inside a cost-model version. It
+      accepts exactly one valid typed value shape for its calculation type. Its
+      indexes prevent duplicate active names and duplicate purchase-cost terms
+      per version.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/cost_model_term.py
+          symbol: CostModelTerm
+          startLine: 14
+          endLine: 38
+          summary: The CostModelTerm ORM model defines cost_model_terms.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-item-cost-evaluation
+    type: table
+    name: item_cost_evaluations
+    description: A durable projection or committed economic decision for a task and
+      item. It owns frozen inputs and configuration snapshots so the budget can
+      be reproduced without live configuration. Its current-committed index and
+      self references preserve one current decision chain per task.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_evaluation.py
+          symbol: ItemCostEvaluation
+          startLine: 16
+          endLine: 56
+          summary: The ItemCostEvaluation ORM model defines item_cost_evaluations.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-item-cost-evaluation-term
+    type: table
+    name: item_cost_evaluation_terms
+    description: An immutable snapshot of one cost-model term as applied to an
+      evaluation. It stores copied typed inputs and the resulting minor-unit
+      amount. It remains reachable through its evaluation so historical
+      derivation does not read live terms.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_evaluation_term.py
+          symbol: ItemCostEvaluationTerm
+          startLine: 14
+          endLine: 25
+          summary: The ItemCostEvaluationTerm ORM model defines
+            item_cost_evaluation_terms.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-item-cost-result
+    type: table
+    name: item_cost_results
+    description: A recomputable actual-cost record for one task episode. It records
+      worker-time and variance outputs linked to the applied evaluation and the
+      triggering task state. One result per task remains the invariant.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_result.py
+          symbol: ItemCostResult
+          startLine: 14
+          endLine: 36
+          summary: The ItemCostResult ORM model defines item_cost_results.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - id: table-item-valuation
+    type: table
+    name: item_valuations
+    description: Immutable expected-price and purchase-cost history for an item. It
+      owns a required currency and at least one non-negative amount, while
+      supersession forms the current valuation chain. Its current-row index
+      prevents multiple active valuations.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_valuation.py
+          symbol: ItemValuation
+          startLine: 14
+          endLine: 36
+          summary: The ItemValuation ORM model defines item_valuations.
+          inferenceReason: The model directly implements this persistence boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -2749,10 +2926,10 @@ edges:
         - path: app/beyo_manager/domain/task_steps/enums.py
           summary: Task execution vocabulary underpinning the branch.
           inferenceReason: The intention spans both the execution and analytics domains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
     targetNodeId: domain-work-analytics
@@ -2761,10 +2938,10 @@ edges:
         - path: app/beyo_manager/domain/analytics/concurrency.py
           summary: Analytics domain underpinning the branch.
           inferenceReason: The intention spans both the execution and analytics domains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: endpoint-transition-step-state
     relationshipType: accepts
     targetNodeId: command-transition-step-state
@@ -2777,10 +2954,10 @@ edges:
             run_service.
           inferenceReason: Direct import and dispatch establishes the endpoint-to-command
             binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-transition-step-state-batch
     relationshipType: accepts
     targetNodeId: command-transition-step-state-batch
@@ -2791,10 +2968,10 @@ edges:
           endLine: 1144
           summary: Route dispatches to transition_step_state_batch.
           inferenceReason: Direct import and dispatch establishes the binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-cancel-pending-step-completion
     relationshipType: accepts
     targetNodeId: command-cancel-pending-step-completion
@@ -2805,10 +2982,10 @@ edges:
           endLine: 1162
           summary: Route dispatches to cancel_pending_step_completion.
           inferenceReason: Direct import and dispatch establishes the binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-mark-step-time-inaccurate
     relationshipType: accepts
     targetNodeId: command-mark-step-time-inaccurate
@@ -2819,10 +2996,10 @@ edges:
           endLine: 1180
           summary: Route dispatches to mark_step_time_inaccurate.
           inferenceReason: Direct import and dispatch establishes the binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-assign-worker-to-step
     relationshipType: accepts
     targetNodeId: command-assign-worker-to-step
@@ -2833,10 +3010,10 @@ edges:
           endLine: 1030
           summary: Route dispatches to assign_worker_to_step.
           inferenceReason: Direct import and dispatch establishes the binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-list-workers-totals
     relationshipType: calls
     targetNodeId: projection-list-workers-totals
@@ -2848,10 +3025,10 @@ edges:
           summary: Route dispatches to the list_workers_totals query.
           inferenceReason: Read endpoints resolve to query projections the same way
             commands resolve.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-worker-daily-step-breakdown
     relationshipType: calls
     targetNodeId: projection-worker-daily-step-breakdown
@@ -2862,10 +3039,10 @@ edges:
           endLine: 164
           summary: Route dispatches to get_worker_daily_step_breakdown.
           inferenceReason: Read endpoint to projection binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: endpoint-worker-linear-timeline-breakdown
     relationshipType: calls
     targetNodeId: projection-worker-linear-timeline-breakdown
@@ -2876,10 +3053,10 @@ edges:
           endLine: 200
           summary: Route dispatches to get_worker_linear_timeline_breakdown.
           inferenceReason: Read endpoint to projection binding.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: writes_to
     targetNodeId: table-step-state-record
@@ -2892,10 +3069,10 @@ edges:
             StepStateRecord.
           inferenceReason: The close/open pair is the command's primary write and the
             source of all downstream analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: writes_to
     targetNodeId: table-task-step
@@ -2908,10 +3085,10 @@ edges:
             terminal states.
           inferenceReason: The step row carries the authoritative current state and the
             latest-record pointer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: writes_to
     targetNodeId: table-task
@@ -2924,10 +3101,10 @@ edges:
             the step transition.
           inferenceReason: Task state is mutated transitively by step transitions, not by
             a separate command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: reads_from
     targetNodeId: table-pause-reason
@@ -2939,10 +3116,10 @@ edges:
           summary: Loads the pause reason and enforces requires_description before
             proceeding.
           inferenceReason: Pause reason validation is part of transition admission control.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: reads_from
     targetNodeId: table-task-item
@@ -2954,10 +3131,10 @@ edges:
           summary: Reads the PRIMARY task item and its item to build the auto-pause
             description.
           inferenceReason: Item lookup exists to make the auto-pause human-readable.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: writes_to
     targetNodeId: table-task-step-acknowledgment
@@ -2970,10 +3147,10 @@ edges:
             obligations.
           inferenceReason: Starting work is treated as fulfilling any outstanding
             reassignment obligation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: produces
     targetNodeId: event-process-step-transition
@@ -2993,10 +3170,10 @@ edges:
             conflicting step.
           inferenceReason: One request can produce two analytics events, which matters
             when reasoning about counts.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: produces
     targetNodeId: event-create-notifications
@@ -3009,10 +3186,10 @@ edges:
             task_state_changed notifications.
           inferenceReason: Notifications are a parallel outbox side effect of the same
             transaction.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: produces
     targetNodeId: ws-task-step-state-changed
@@ -3025,10 +3202,10 @@ edges:
             transaction closes.
           inferenceReason: Post-commit dispatch guarantees clients never see an
             uncommitted state.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: produces
     targetNodeId: ws-task-state-changed
@@ -3041,10 +3218,10 @@ edges:
             changed.
           inferenceReason: Guarded emission avoids redundant task events on ordinary step
             changes.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: produces
     targetNodeId: ws-task-step-readiness-changed
@@ -3055,10 +3232,10 @@ edges:
           endLine: 503
           summary: Emits one readiness event per dependent step changed by the cascade.
           inferenceReason: Readiness events are the visible output of dependency gating.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: calls
     targetNodeId: helper-cascade-step-completion
@@ -3071,10 +3248,10 @@ edges:
             changes for dispatch.
           inferenceReason: Cascade runs only on completion, defining when dependents can
             unblock.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state
     relationshipType: calls
     targetNodeId: helper-fetch-open-user-working-record
@@ -3085,10 +3262,10 @@ edges:
           endLine: 237
           summary: Queries for a conflicting open WORKING record before entering WORKING.
           inferenceReason: This lookup is the trigger for the auto-pause enforcement.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state
     relationshipType: calls
     targetNodeId: helper-task-state-transitions
@@ -3100,10 +3277,10 @@ edges:
           summary: Calls maybe_advance_task_to_working and maybe_evaluate_task_ready.
           inferenceReason: Task state changes are delegated to the sanctioned helpers
             rather than assigned inline.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state
     relationshipType: calls
     targetNodeId: command-mark-step-obligations-acknowledged
@@ -3114,10 +3291,10 @@ edges:
           endLine: 376
           summary: Acknowledges step obligations when the step enters WORKING.
           inferenceReason: Ties the acknowledgment subsystem into the state machine.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state
     relationshipType: calls
     targetNodeId: src-create-instant-task
@@ -3129,10 +3306,10 @@ edges:
           summary: Uses create_instant_task to publish the outbox event inside the
             transaction.
           inferenceReason: The command relies on the outbox writer for atomic async handoff.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state-batch
     relationshipType: calls
     targetNodeId: helper-apply-step-transition
@@ -3144,10 +3321,10 @@ edges:
           summary: Applies each validated item through the shared core inside one
             transaction.
           inferenceReason: The batch path is the primary consumer of the shared core.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-pause-task-working-steps-for-case
     relationshipType: calls
     targetNodeId: helper-apply-step-transition
@@ -3160,10 +3337,10 @@ edges:
             CASE_CREATED.
           inferenceReason: A second consumer of the core, showing it is genuinely shared
             rather than batch-specific.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: calls
     targetNodeId: helper-cascade-step-completion
@@ -3175,10 +3352,10 @@ edges:
           summary: The core cascades dependency completion just as the single-step command
             does.
           inferenceReason: Mirrored behaviour between the two transition bodies.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: calls
     targetNodeId: helper-fetch-open-user-working-record
@@ -3190,10 +3367,10 @@ edges:
           summary: The core performs the same one-active-step conflict lookup and
             auto-pause.
           inferenceReason: The invariant is enforced in both transition bodies.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: produces
     targetNodeId: event-process-step-transition
@@ -3205,10 +3382,10 @@ edges:
           summary: Enqueues PROCESS_STEP_TRANSITION at line 145 and again at 233 for the
             auto-paused step.
           inferenceReason: The core is an independent producer of the analytics event.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: writes_to
     targetNodeId: table-step-state-record
@@ -3220,10 +3397,10 @@ edges:
           summary: Closes and opens interval records identically to the single-step
             command.
           inferenceReason: Both bodies write the same interval log.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: writes_to
     targetNodeId: table-task-step
@@ -3234,10 +3411,10 @@ edges:
           endLine: 160
           summary: Updates step state and latest record pointer.
           inferenceReason: Both bodies write the same step row.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: task-finalize-pending-step-completion
     relationshipType: produces
     targetNodeId: event-process-step-transition
@@ -3250,10 +3427,10 @@ edges:
             record and new_state COMPLETED.
           inferenceReason: A third independent producer of the analytics event, currently
             dormant.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: task-finalize-pending-step-completion
     relationshipType: writes_to
     targetNodeId: table-step-state-record
@@ -3266,10 +3443,10 @@ edges:
             record inline.
           inferenceReason: Reimplements the close/open rather than delegating, which is
             the drift risk.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: task-finalize-pending-step-completion
     relationshipType: calls
     targetNodeId: helper-task-state-transitions
@@ -3282,10 +3459,10 @@ edges:
             is not reimplemented.
           inferenceReason: Shows the single-entry-point invariant for READY is respected
             even by the drifted copy.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-cascade-step-completion
     relationshipType: calls
     targetNodeId: src-recalculate-readiness
@@ -3297,10 +3474,10 @@ edges:
           summary: Recomputes readiness for each dependent after incrementing its counter.
           inferenceReason: Counter update and readiness recomputation must stay paired for
             gating to be correct.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-cascade-step-completion
     relationshipType: reads_from
     targetNodeId: table-task-step-dependency
@@ -3311,10 +3488,10 @@ edges:
           endLine: 40
           summary: Selects dependent steps via the dependency edge table.
           inferenceReason: The edge table is the traversal source for the cascade.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: command-assign-worker-to-step
     relationshipType: writes_to
     targetNodeId: table-task-step-assignment-record
@@ -3325,10 +3502,10 @@ edges:
           endLine: 140
           summary: Closes the active assignment interval and opens a new one.
           inferenceReason: Assignment history follows the same interval-record pattern as state.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-mark-step-time-inaccurate
     relationshipType: writes_to
     targetNodeId: table-step-state-record
@@ -3339,10 +3516,10 @@ edges:
           endLine: 45
           summary: Sets recorded_time_marked_wrong and taken_from_average on the record.
           inferenceReason: Flagging mutates the interval log without deleting rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-cancel-pending-step-completion
     relationshipType: writes_to
     targetNodeId: table-delayed-scheduler
@@ -3353,10 +3530,10 @@ edges:
           endLine: 40
           summary: Flips the active scheduler row to CANCELED.
           inferenceReason: The undo action operates on the scheduler, not on the step.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: command-transition-step-state
     relationshipType: implements
     targetNodeId: concept-step-state-machine
@@ -3368,10 +3545,10 @@ edges:
           summary: Rejects terminal states and validates the requested transition against
             _ALLOWED_TRANSITIONS.
           inferenceReason: This is where the state machine is actually enforced.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: implements
     targetNodeId: concept-one-active-step-per-user
@@ -3383,10 +3560,10 @@ edges:
           summary: Auto-pauses a conflicting WORKING record using the deduplicated
             performer/credited user set.
           inferenceReason: Enforcement point for the invariant.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: implements
     targetNodeId: concept-one-active-step-per-user
@@ -3397,24 +3574,10 @@ edges:
           endLine: 95
           summary: The core enforces the same auto-pause rule.
           inferenceReason: The invariant is enforced independently in both bodies.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
-  - sourceNodeId: table-step-state-record
-    relationshipType: implements
-    targetNodeId: concept-one-active-step-per-user
-    metadata:
-      evidence:
-        - path: app/beyo_manager/models/tables/tasks/step_state_record.py
-          startLine: 100
-          endLine: 106
-          summary: Partial unique index on open records per step.
-          inferenceReason: The database provides the backstop the application logic assumes.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: src-recalculate-readiness
     relationshipType: implements
     targetNodeId: concept-readiness-gating
@@ -3425,10 +3588,10 @@ edges:
           endLine: 19
           summary: The pure derivation of readiness from the two counters.
           inferenceReason: Sole implementation of the gating rule.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: helper-cascade-step-completion
     relationshipType: implements
     targetNodeId: concept-readiness-gating
@@ -3439,10 +3602,10 @@ edges:
           endLine: 45
           summary: Maintains the counters the readiness rule reads.
           inferenceReason: Gating is only correct if the cascade keeps the counters accurate.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: command-mark-step-time-inaccurate
     relationshipType: implements
     targetNodeId: concept-inaccurate-time-flagging
@@ -3453,10 +3616,10 @@ edges:
           endLine: 45
           summary: Applies the flag at record and step level.
           inferenceReason: User-facing entry point for the concept.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: contract-step-transition-payload
     relationshipType: implements
     targetNodeId: concept-credited-user-vs-performer
@@ -3467,10 +3630,10 @@ edges:
           endLine: 20
           summary: Carries performed_by_user_id and credited_user_id as separate fields.
           inferenceReason: The payload preserves the distinction across the async boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: command-transition-step-state
     relationshipType: governed_by
     targetNodeId: decision-mirrored-transition-body
@@ -3481,10 +3644,10 @@ edges:
           endLine: 121
           summary: DRIFT NOTE requiring changes here to be evaluated for the core.
           inferenceReason: The decision imposes an ongoing obligation on this file.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:30.327Z
   - sourceNodeId: helper-apply-step-transition
     relationshipType: governed_by
     targetNodeId: decision-mirrored-transition-body
@@ -3495,10 +3658,10 @@ edges:
           endLine: 11
           summary: The reciprocal DRIFT NOTE naming Option B.
           inferenceReason: The decision imposes an ongoing obligation on this file.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: task-finalize-pending-step-completion
     relationshipType: governed_by
     targetNodeId: decision-mirrored-transition-body
@@ -3511,10 +3674,10 @@ edges:
             credited_user_id.
           inferenceReason: It is subject to the same drift obligation even though it lacks
             the explicit note.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: src-create-instant-task
     relationshipType: governed_by
     targetNodeId: decision-transactional-outbox
@@ -3526,10 +3689,10 @@ edges:
           summary: Flushes without committing so the outbox row shares the caller's
             transaction.
           inferenceReason: This function is the decision's implementation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: vocab-transition-reason-enum
     relationshipType: governed_by
     targetNodeId: decision-code-owned-transition-reasons
@@ -3540,10 +3703,10 @@ edges:
           endLine: 38
           summary: A code-owned enum separate from the workspace pause catalog.
           inferenceReason: The enum exists because of the decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: command-cancel-pending-step-completion
     relationshipType: governed_by
     targetNodeId: decision-undo-window-disabled
@@ -3555,10 +3718,10 @@ edges:
           summary: The scheduling block that would make this command reachable is
             commented out.
           inferenceReason: The decision is what renders this command dormant.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:15.606Z
   - sourceNodeId: table-step-state-record
     relationshipType: governed_by
     targetNodeId: decision-credited-user-no-fk
@@ -3569,10 +3732,10 @@ edges:
           endLine: 91
           summary: credited_user_id deliberately declared without a foreign key.
           inferenceReason: The schema shape is the decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:45:38.974Z
-    updatedAt: 2026-08-11T08:45:38.974Z
+    updatedAt: 2026-08-12T10:37:42.013Z
   - sourceNodeId: src-create-instant-task
     relationshipType: writes_to
     targetNodeId: table-execution-task
@@ -3583,10 +3746,10 @@ edges:
           endLine: 45
           summary: Inserts an ExecutionTask row in state OPEN.
           inferenceReason: The outbox row is the durable record of pending async work.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: src-create-instant-task
     relationshipType: writes_to
     targetNodeId: table-execution-payload
@@ -3597,10 +3760,10 @@ edges:
           endLine: 45
           summary: Inserts the paired JSON payload row.
           inferenceReason: Payload persistence in Postgres is why only ids travel through Redis.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: event-process-step-transition
     relationshipType: persists_in
     targetNodeId: table-execution-payload
@@ -3613,10 +3776,10 @@ edges:
             execution payload.
           inferenceReason: The event's body lives in the payload table until a worker
             consumes it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-pg-notify-task-open
     relationshipType: depends_on
     targetNodeId: table-execution-task
@@ -3627,10 +3790,10 @@ edges:
           endLine: 30
           summary: Trigger defined on the execution_tasks table.
           inferenceReason: The notification is driven by inserts into the outbox table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-task-router
     relationshipType: depends_on
     targetNodeId: infra-pg-notify-task-open
@@ -3642,10 +3805,10 @@ edges:
           summary: Holds a dedicated LISTEN task_open connection with a 30s fallback poll.
           inferenceReason: The router reacts to the trigger's notifications, with polling
             only as a safety net.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-task-router
     relationshipType: reads_from
     targetNodeId: table-execution-task
@@ -3656,10 +3819,10 @@ edges:
           endLine: 135
           summary: Selects OPEN tasks, pushes ids to Redis and flips them to PENDING.
           inferenceReason: The router is the sole reader that moves work out of the outbox.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-task-router
     relationshipType: links_to
     targetNodeId: infra-queue-analytics
@@ -3670,10 +3833,10 @@ edges:
           endLine: 34
           summary: QUEUE_MAP routes PROCESS_STEP_TRANSITION to queue:analytics.
           inferenceReason: Queue selection happens in the router, not the producer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-task-router
     relationshipType: links_to
     targetNodeId: infra-queue-notifications
@@ -3684,10 +3847,10 @@ edges:
           endLine: 19
           summary: QUEUE_MAP routes CREATE_NOTIFICATIONS to queue:notifications.
           inferenceReason: Queue selection happens in the router.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-task-router
     relationshipType: links_to
     targetNodeId: infra-queue-tasks
@@ -3698,10 +3861,10 @@ edges:
           endLine: 27
           summary: QUEUE_MAP routes DELAYED_STEP_COMPLETION to queue:tasks.
           inferenceReason: Queue selection happens in the router.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-analytics-worker
     relationshipType: depends_on
     targetNodeId: infra-queue-analytics
@@ -3712,10 +3875,10 @@ edges:
           endLine: 20
           summary: Runs the worker loop against queue:analytics.
           inferenceReason: The worker blocks on this specific Redis list.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-analytics-worker
     relationshipType: depends_on
     targetNodeId: infra-worker-base
@@ -3727,10 +3890,10 @@ edges:
           summary: Delegates to the shared run_worker loop.
           inferenceReason: Claiming, retries and timeouts come from the shared base, not
             this worker.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-analytics-worker
     relationshipType: consumes
     targetNodeId: event-process-step-transition
@@ -3741,10 +3904,10 @@ edges:
           endLine: 13
           summary: HANDLER_MAP binds PROCESS_STEP_TRANSITION to the analytics handler.
           inferenceReason: This is the only consumer of the step transition event.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-analytics-worker
     relationshipType: calls
     targetNodeId: analytics-process-step-transition
@@ -3755,10 +3918,10 @@ edges:
           endLine: 13
           summary: Maps the task type directly to handle_process_step_transition.
           inferenceReason: Handler binding is where the event becomes executed code.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-notification-worker
     relationshipType: consumes
     targetNodeId: event-create-notifications
@@ -3769,10 +3932,10 @@ edges:
           endLine: 19
           summary: HANDLER_MAP binds CREATE_NOTIFICATIONS to handle_create_notifications.
           inferenceReason: Consumer side of the notification outbox.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-tasks-worker
     relationshipType: consumes
     targetNodeId: event-delayed-step-completion
@@ -3783,10 +3946,10 @@ edges:
           endLine: 34
           summary: HANDLER_MAP binds DELAYED_STEP_COMPLETION to the finalizer.
           inferenceReason: Consumer side of the dormant deferred-completion path.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-tasks-worker
     relationshipType: calls
     targetNodeId: task-finalize-pending-step-completion
@@ -3798,10 +3961,10 @@ edges:
           summary: Maps the task type to handle_finalize_pending_step_completion.
           inferenceReason: Would execute the third transition body if the undo window were
             re-enabled.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: infra-delayed-scheduler-runner
     relationshipType: produces
     targetNodeId: event-delayed-step-completion
@@ -3812,10 +3975,10 @@ edges:
           endLine: 80
           summary: Converts due PENDING_STEP_COMPLETION rows into execution tasks.
           inferenceReason: The scheduler runner is the event's only producer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-delayed-scheduler-runner
     relationshipType: reads_from
     targetNodeId: table-delayed-scheduler
@@ -3826,10 +3989,10 @@ edges:
           endLine: 80
           summary: Polls ACTIVE scheduler rows for due entries.
           inferenceReason: The scheduler table is the runner's work source.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: infra-event-bus
     relationshipType: consumes
     targetNodeId: ws-task-step-state-changed
@@ -3840,10 +4003,10 @@ edges:
           endLine: 60
           summary: Dispatches each event to registered socket, audit and webhook handlers.
           inferenceReason: The bus is the fan-out point for all realtime step events.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: command-transition-step-state
     relationshipType: depends_on
     targetNodeId: infra-event-bus
@@ -3855,10 +4018,10 @@ edges:
           summary: Calls event_bus.dispatch after the transaction block has closed.
           inferenceReason: Dispatching post-commit is a deliberate ordering guarantee of
             this command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: consumes
     targetNodeId: event-process-step-transition
@@ -3869,10 +4032,10 @@ edges:
           endLine: 40
           summary: Rehydrates the payload as the handler's first action.
           inferenceReason: The handler is the event's terminal consumer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: depends_on
     targetNodeId: contract-step-transition-payload
@@ -3884,10 +4047,10 @@ edges:
           summary: StepTransitionPayload(**raw) raises TypeError on any field mismatch.
           inferenceReason: Strict rehydration couples the worker to the exact
             producer-side field set.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: implements
     targetNodeId: concept-terminal-vs-time-bearing
@@ -3900,10 +4063,10 @@ edges:
             counters gated separately on new_state == COMPLETED.
           inferenceReason: The two independent gates are the operational meaning of the
             state partitions.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: depends_on
     targetNodeId: vocab-step-state-constants
@@ -3915,10 +4078,10 @@ edges:
           summary: Imports TIME_BEARING_STATES from the domain constants module.
           inferenceReason: The worker shares the partition definition with the command
             layer rather than redefining it.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: analytics-recompute-step-time-totals
@@ -3930,10 +4093,10 @@ edges:
           summary: Invoked inside the time-bearing branch.
           inferenceReason: Step rollups are refreshed only when the closing interval
             carried time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: analytics-reconcile-user-day-time
@@ -3944,10 +4107,10 @@ edges:
           endLine: 79
           summary: Reconciles the credited user's day inside the time-bearing branch.
           inferenceReason: Day totals are recomputed per transition rather than incremented.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: analytics-apply-reconcile-deltas
@@ -3958,10 +4121,10 @@ edges:
           endLine: 79
           summary: Applies the returned deltas to the sum tables.
           inferenceReason: Completes the split between SET projections and accumulating sums.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: analytics-apply-step-completed
@@ -3972,10 +4135,10 @@ edges:
           endLine: 94
           summary: Called only when new_state is COMPLETED.
           inferenceReason: Completion counting is the COMPLETED-only analytics effect.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: analytics-apply-issues-at-completion
@@ -3986,10 +4149,10 @@ edges:
           endLine: 94
           summary: Called alongside completion counting under the same gate.
           inferenceReason: Issue counting shares the COMPLETED gate but not the time gate.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
     targetNodeId: command-reconcile-worker-shift-state
@@ -4002,10 +4165,10 @@ edges:
             independent of closing_state.
           inferenceReason: Shift reconciliation is the one effect not gated on the
             time-bearing partition.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: produces
     targetNodeId: ws-worker-shift-state-changed
@@ -4017,10 +4180,10 @@ edges:
           summary: Emits the shift event only when the reconcile reports changed, with a
             comment explaining this is the only place that can announce it.
           inferenceReason: The sole realtime emission originating in the analytics tier.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-process-step-transition
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -4032,10 +4195,10 @@ edges:
           summary: Fetches the closing record by id and warns/no-ops if absent.
           inferenceReason: The worker re-reads the record rather than trusting the payload
             for durations.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-recompute-step-time-totals
     relationshipType: writes_to
     targetNodeId: table-task-step
@@ -4046,10 +4209,10 @@ edges:
           endLine: 211
           summary: SETs the step's time, count, inaccurate and cost columns absolutely.
           inferenceReason: Step rollups are a projection over its own records.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-recompute-step-time-totals
     relationshipType: calls
     targetNodeId: src-compute-record-contributions
@@ -4060,10 +4223,10 @@ edges:
           endLine: 211
           summary: Re-runs the shared sweep over the step's window.
           inferenceReason: All averaging routes through the one primitive.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-recompute-step-time-totals
     relationshipType: governed_by
     targetNodeId: decision-recompute-not-increment
@@ -4075,10 +4238,10 @@ edges:
           summary: Absolute SET from recomputed contributions rather than incremental
             accrual.
           inferenceReason: Implements the idempotency decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-reconcile-user-day-time
     relationshipType: calls
     targetNodeId: src-compute-record-contributions
@@ -4089,10 +4252,10 @@ edges:
           endLine: 337
           summary: Uses the shared primitive over the day window.
           inferenceReason: Guarantees day totals and step totals agree by construction.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-reconcile-user-day-time
     relationshipType: writes_to
     targetNodeId: table-user-daily-work-stats
@@ -4104,10 +4267,10 @@ edges:
           summary: SETs the user's daily row for the reconciled date.
           inferenceReason: Daily stats are recomputable from records, so they are set
             absolutely.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: analytics-reconcile-user-day-time
     relationshipType: writes_to
     targetNodeId: table-user-section-daily-work-stats
@@ -4118,10 +4281,10 @@ edges:
           endLine: 337
           summary: SETs per-section rows and zeroes sections dropped from the day.
           inferenceReason: Explicit zeroing shows full ownership of the day's section rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: analytics-reconcile-user-day-time
     relationshipType: reads_from
     targetNodeId: table-user-work-profile
@@ -4133,10 +4296,10 @@ edges:
           summary: Derives cost from salary_per_hour_before_tax.
           inferenceReason: Cost metrics depend on the worker's configured rate at
             recompute time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: analytics-reconcile-user-day-time
     relationshipType: governed_by
     targetNodeId: decision-recompute-not-increment
@@ -4147,10 +4310,10 @@ edges:
           endLine: 345
           summary: SETs recomputable tables and returns deltas for the sums.
           inferenceReason: This function defines the decision's boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-apply-reconcile-deltas
     relationshipType: writes_to
     targetNodeId: table-user-lifetime-stats
@@ -4161,10 +4324,10 @@ edges:
           endLine: 350
           summary: Adds deltas onto the lifetime row.
           inferenceReason: Lifetime spans all days so it cannot be set from one day's window.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-apply-reconcile-deltas
     relationshipType: writes_to
     targetNodeId: table-working-section-daily-work-stats
@@ -4176,10 +4339,10 @@ edges:
           summary: Adds deltas onto the section-daily row.
           inferenceReason: Section-daily aggregates across users so it cannot be set from
             one user's reconcile.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:37:51.749Z
   - sourceNodeId: analytics-apply-step-completed
     relationshipType: writes_to
     targetNodeId: table-user-daily-work-stats
@@ -4190,10 +4353,10 @@ edges:
           endLine: 330
           summary: Increments total_completed_count on the user's daily row.
           inferenceReason: Completion counts are incremented, not recomputed.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: analytics-apply-step-completed
     relationshipType: writes_to
@@ -4205,10 +4368,10 @@ edges:
           endLine: 330
           summary: Increments the lifetime completion counter.
           inferenceReason: Completion counts are incremented across all four rollups.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: analytics-apply-step-completed
     relationshipType: writes_to
@@ -4220,10 +4383,10 @@ edges:
           endLine: 330
           summary: Increments the per-section daily completion counter.
           inferenceReason: Completion counts are incremented across all four rollups.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: analytics-apply-step-completed
     relationshipType: writes_to
@@ -4235,10 +4398,10 @@ edges:
           endLine: 330
           summary: Increments the section-wide daily completion counter.
           inferenceReason: Completion counts are incremented across all four rollups.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: analytics-apply-step-completed
     relationshipType: writes_to
@@ -4250,10 +4413,10 @@ edges:
           endLine: 330
           summary: Also increments total_completed_count on the step row.
           inferenceReason: The step carries its own completion counter alongside the rollups.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: analytics-apply-issues-at-completion
     relationshipType: reads_from
@@ -4265,10 +4428,10 @@ edges:
           endLine: 290
           summary: Counts non-deleted issues for the completing step.
           inferenceReason: Issue rollups are derived from the issue table at completion time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:37:51.749Z
     status: deprecated
   - sourceNodeId: src-compute-record-contributions
     relationshipType: reads_from
@@ -4280,10 +4443,10 @@ edges:
           endLine: 140
           summary: Loads WORKING/PAUSED records overlapping the window joined to TaskStep.
           inferenceReason: The interval log is the sole input to all averaged time.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: src-compute-record-contributions
     relationshipType: calls
     targetNodeId: domain-concurrency-sweep
@@ -4294,10 +4457,10 @@ edges:
           endLine: 140
           summary: Runs both the trusted and wasted sweeps from the domain module.
           inferenceReason: The IO primitive delegates the math to the pure domain sweep.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: src-compute-record-contributions
     relationshipType: implements
     targetNodeId: concept-concurrency-averaged-time
@@ -4309,10 +4472,10 @@ edges:
           summary: Joins allows_batch_working so non-batchable steps never enter the
             divisor.
           inferenceReason: The batchability join is what scopes the averaging rule correctly.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: domain-concurrency-sweep
     relationshipType: implements
     targetNodeId: concept-concurrency-averaged-time
@@ -4323,10 +4486,10 @@ edges:
           endLine: 76
           summary: Divides each boundary segment equally among open intervals.
           inferenceReason: This is the concept's actual math.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: src-bucket-for
     relationshipType: implements
     targetNodeId: concept-ended-shift-collapse
@@ -4337,10 +4500,10 @@ edges:
           endLine: 34
           summary: Derives the ended_shift bucket from PAUSED plus the SHIFT_ENDED reason.
           inferenceReason: This derivation is how the deleted state survives in analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: command-reconcile-worker-shift-state
     relationshipType: writes_to
     targetNodeId: table-user-shift-state-record
@@ -4352,10 +4515,10 @@ edges:
           summary: Closes the current shift record and inserts a new one when the derived
             target differs.
           inferenceReason: Shift intervals are rotated as a consequence of step activity.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: command-reconcile-worker-shift-state
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -4368,10 +4531,10 @@ edges:
             target state.
           inferenceReason: Shift state is derived from step activity rather than declared
             independently.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: command-reconcile-worker-shift-state
     relationshipType: depends_on
     targetNodeId: domain-user-shift-state-machine
@@ -4382,10 +4545,10 @@ edges:
           endLine: 330
           summary: Calls derive_target_state from the shift state machine module.
           inferenceReason: The derivation rules live in the pure domain layer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: projection-list-workers-totals
     relationshipType: reads_from
     targetNodeId: table-user-daily-work-stats
@@ -4396,10 +4559,10 @@ edges:
           endLine: 80
           summary: Aggregates the daily rollup rows for the dashboard.
           inferenceReason: The dashboard reads the projection the analytics worker maintains.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: projection-worker-daily-step-breakdown
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -4411,10 +4574,10 @@ edges:
           summary: Reads raw interval records alongside the rollups.
           inferenceReason: Blending raw and rolled-up data is where drift between them
             would appear.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: projection-worker-linear-timeline-breakdown
     relationshipType: calls
     targetNodeId: domain-linear-timeline
@@ -4425,10 +4588,10 @@ edges:
           endLine: 380
           summary: Applies the timeline collapse to the loaded records.
           inferenceReason: The only consumer of the linear-timeline sweep.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: projection-list-workers-insights
     relationshipType: calls
     targetNodeId: domain-analytics-insights-engine
@@ -4439,10 +4602,10 @@ edges:
           endLine: 60
           summary: Delegates to the pure evaluate() after a bounded read.
           inferenceReason: Insights are a pure second-order derivation over the rollups.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: script-backfill-averaged-time
     relationshipType: calls
     targetNodeId: analytics-reconcile-user-day-time
@@ -4454,10 +4617,10 @@ edges:
           summary: Re-runs the same reconciler per user and day.
           inferenceReason: Reusing the reconciler is what makes the backfill agree with
             live processing.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: script-backfill-completed-count
     relationshipType: writes_to
     targetNodeId: table-user-daily-work-stats
@@ -4468,10 +4631,10 @@ edges:
           endLine: 160
           summary: Writes absolute recounted completion values.
           inferenceReason: A second write path to the rollups that bypasses the worker.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: script-backfill-completed-count
     relationshipType: implements
     targetNodeId: concept-credited-user-vs-performer
@@ -4484,10 +4647,10 @@ edges:
             the worker's attribution rule.
           inferenceReason: The attribution rule is expressed independently here and must
             be kept in sync.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: table-task
     relationshipType: owns
     targetNodeId: table-task-step
@@ -4498,10 +4661,10 @@ edges:
           endLine: 60
           summary: task_steps.task_id foreign key to tasks.
           inferenceReason: Steps are owned parts of a task.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: table-task-step
     relationshipType: owns
     targetNodeId: table-step-state-record
@@ -4514,10 +4677,10 @@ edges:
             latest_state_record_id pointer uses use_alter to break the cycle.
           inferenceReason: Ownership runs step -> records, with the latest pointer as a
             secondary edge.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: table-execution-task
     relationshipType: owns
     targetNodeId: table-execution-payload
@@ -4528,10 +4691,10 @@ edges:
           endLine: 39
           summary: Unique foreign key execution_task_id enforcing a 1:1 relation.
           inferenceReason: Payload rows exist only as part of a task.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: table-step-state-record
     relationshipType: depends_on
     targetNodeId: table-pause-reason
@@ -4544,10 +4707,10 @@ edges:
             exclusive with transition_reason.
           inferenceReason: User-chosen pauses reference the catalog while system pauses
             use the code-owned reason instead.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:20.976Z
   - sourceNodeId: domain-task-execution
     relationshipType: contains
     targetNodeId: concept-step-state-machine
@@ -4558,10 +4721,10 @@ edges:
           endLine: 70
           summary: The transition legality map.
           inferenceReason: The state machine is the core concept of the execution domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-task-execution
     relationshipType: contains
     targetNodeId: concept-readiness-gating
@@ -4572,10 +4735,10 @@ edges:
           endLine: 19
           summary: Readiness derivation.
           inferenceReason: Dependency gating belongs to task execution.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-task-execution
     relationshipType: contains
     targetNodeId: concept-one-active-step-per-user
@@ -4586,10 +4749,10 @@ edges:
           endLine: 40
           summary: The conflict lookup behind the invariant.
           inferenceReason: The one-active-step rule governs execution, not analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-task-execution
     relationshipType: contains
     targetNodeId: table-task-step
@@ -4600,10 +4763,10 @@ edges:
           endLine: 60
           summary: The step table.
           inferenceReason: Primary aggregate of the execution domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
     targetNodeId: concept-concurrency-averaged-time
@@ -4614,10 +4777,10 @@ edges:
           endLine: 76
           summary: The averaging sweep.
           inferenceReason: The defining concept of work analytics.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
     targetNodeId: analytics-process-step-transition
@@ -4628,10 +4791,10 @@ edges:
           endLine: 110
           summary: The analytics worker handler.
           inferenceReason: The write-side entry point of the analytics domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
     targetNodeId: table-user-daily-work-stats
@@ -4642,10 +4805,10 @@ edges:
           endLine: 50
           summary: The primary daily rollup.
           inferenceReason: Analytics rollups belong to the analytics domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
     targetNodeId: concept-terminal-vs-time-bearing
@@ -4656,10 +4819,10 @@ edges:
           endLine: 14
           summary: TIME_BEARING_STATES gates all duration accounting.
           inferenceReason: The partition is shared, but its analytic meaning belongs here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T08:48:03.567Z
-    updatedAt: 2026-08-11T08:48:03.567Z
+    updatedAt: 2026-08-12T10:38:05.063Z
   - sourceNodeId: concept-attribution-split
     relationshipType: links_to
     targetNodeId: concept-credited-user-vs-performer
@@ -4672,10 +4835,10 @@ edges:
             actually resolves.
           inferenceReason: This concept is the concrete operational consequence of the
             performer-vs-credited distinction.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - sourceNodeId: command-transition-step-state
     relationshipType: implements
@@ -4687,10 +4850,10 @@ edges:
           endLine: 345
           summary: Opens records without credited_user_id while sending it in the payload.
           inferenceReason: The producing side of the split originates here.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - sourceNodeId: analytics-process-step-transition
     relationshipType: implements
@@ -4704,10 +4867,10 @@ edges:
             the time sweep.
           inferenceReason: The consuming side of the split, where the two attribution
             paths visibly separate.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
@@ -4719,10 +4882,10 @@ edges:
           endLine: 172
           summary: Attribution determines which worker every rollup lands on.
           inferenceReason: Attribution is a core concern of the analytics domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - sourceNodeId: script-backfill-completed-count
     relationshipType: links_to
@@ -4738,10 +4901,10 @@ edges:
           inferenceReason: The backfill and the live path can therefore attribute the same
             completion to different workers, making this the place the split
             becomes visible.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.85
     createdAt: 2026-08-11T09:18:57.580Z
-    updatedAt: 2026-08-11T12:02:05.098Z
+    updatedAt: 2026-08-12T10:38:32.858Z
     status: deprecated
   - sourceNodeId: analytics-process-step-transition
     relationshipType: calls
@@ -4965,18 +5128,6 @@ edges:
     confidence: 0.95
     createdAt: 2026-08-11T10:47:41.028Z
     updatedAt: 2026-08-11T12:19:38.940Z
-  - sourceNodeId: script-backfill-missing-completion-counts
-    relationshipType: links_to
-    targetNodeId: finding-completion-counting-golive
-    metadata:
-      evidence:
-        - path: app/scripts/backfill/backfill_missing_completion_counts.py
-          summary: The --until flag bounds the run to the pre-go-live days.
-          inferenceReason: The script is the remedy for the finding.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-11T10:47:41.028Z
-    updatedAt: 2026-08-11T10:47:41.028Z
   - sourceNodeId: domain-work-analytics
     relationshipType: contains
     targetNodeId: decision-idempotent-completion-counters
@@ -5074,3 +5225,87 @@ edges:
     confidence: 0.9
     createdAt: 2026-08-11T11:50:46.447Z
     updatedAt: 2026-08-11T12:20:00.708Z
+  - sourceNodeId: table-production-cost-group
+    relationshipType: owns
+    targetNodeId: table-production-cost-basis-version
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/production_cost_basis_version.py
+          startLine: 18
+          endLine: 42
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - sourceNodeId: table-production-cost-group
+    relationshipType: owns
+    targetNodeId: table-production-cost-group-section
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/production_cost_group_section.py
+          startLine: 14
+          endLine: 22
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - sourceNodeId: table-cost-model-version
+    relationshipType: owns
+    targetNodeId: table-cost-model-term
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/cost_model_term.py
+          startLine: 18
+          endLine: 37
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - sourceNodeId: table-item-cost-evaluation
+    relationshipType: owns
+    targetNodeId: table-item-cost-evaluation-term
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_evaluation_term.py
+          startLine: 18
+          endLine: 25
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - sourceNodeId: table-task
+    relationshipType: owns
+    targetNodeId: table-item-cost-evaluation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_evaluation.py
+          startLine: 20
+          endLine: 55
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z
+  - sourceNodeId: table-task
+    relationshipType: owns
+    targetNodeId: table-item-cost-result
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/item_economics/item_cost_result.py
+          startLine: 18
+          endLine: 35
+          summary: The child model's foreign key carries the parent reference.
+          inferenceReason: The reference establishes architectural ownership.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-12T10:54:05.436Z
+    updatedAt: 2026-08-12T10:54:05.436Z

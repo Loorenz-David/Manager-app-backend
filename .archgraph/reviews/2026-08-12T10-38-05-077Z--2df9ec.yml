@@ -1,0 +1,240 @@
+reviewId: 2026-08-12T10-38-05-077Z--2df9ec
+reviewedItemIds:
+  - edge:analytics-reconcile-user-day-time--reads_from-->table-user-work-profile
+  - edge:analytics-reconcile-user-day-time--writes_to-->table-user-daily-work-stats
+  - edge:analytics-reconcile-user-day-time--writes_to-->table-user-section-daily-work-stats
+  - edge:command-reconcile-worker-shift-state--depends_on-->domain-user-shift-state-machine
+  - edge:command-reconcile-worker-shift-state--reads_from-->table-step-state-record
+  - edge:command-reconcile-worker-shift-state--writes_to-->table-user-shift-state-record
+  - edge:command-transition-step-state--depends_on-->infra-event-bus
+  - edge:domain-concurrency-sweep--implements-->concept-concurrency-averaged-time
+  - edge:domain-task-execution--contains-->concept-one-active-step-per-user
+  - edge:domain-task-execution--contains-->concept-readiness-gating
+  - edge:domain-task-execution--contains-->concept-step-state-machine
+  - edge:domain-task-execution--contains-->table-task-step
+  - edge:domain-work-analytics--contains-->analytics-process-step-transition
+  - edge:domain-work-analytics--contains-->concept-concurrency-averaged-time
+  - edge:domain-work-analytics--contains-->concept-terminal-vs-time-bearing
+  - edge:domain-work-analytics--contains-->table-user-daily-work-stats
+  - edge:event-process-step-transition--persists_in-->table-execution-payload
+  - edge:infra-analytics-worker--calls-->analytics-process-step-transition
+  - edge:infra-analytics-worker--consumes-->event-process-step-transition
+  - edge:infra-analytics-worker--depends_on-->infra-queue-analytics
+  - edge:infra-analytics-worker--depends_on-->infra-worker-base
+  - edge:infra-delayed-scheduler-runner--produces-->event-delayed-step-completion
+  - edge:infra-delayed-scheduler-runner--reads_from-->table-delayed-scheduler
+  - edge:infra-event-bus--consumes-->ws-task-step-state-changed
+  - edge:infra-notification-worker--consumes-->event-create-notifications
+decisions:
+  - itemId: edge:analytics-reconcile-user-day-time--reads_from-->table-user-work-profile
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:analytics-reconcile-user-day-time--writes_to-->table-user-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:analytics-reconcile-user-day-time--writes_to-->table-user-section-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:command-reconcile-worker-shift-state--depends_on-->domain-user-shift-state-machine
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:command-reconcile-worker-shift-state--reads_from-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:command-reconcile-worker-shift-state--writes_to-->table-user-shift-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:command-transition-step-state--depends_on-->infra-event-bus
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-concurrency-sweep--implements-->concept-concurrency-averaged-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-task-execution--contains-->concept-one-active-step-per-user
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-task-execution--contains-->concept-readiness-gating
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-task-execution--contains-->concept-step-state-machine
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-task-execution--contains-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-work-analytics--contains-->analytics-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-work-analytics--contains-->concept-concurrency-averaged-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-work-analytics--contains-->concept-terminal-vs-time-bearing
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-work-analytics--contains-->table-user-daily-work-stats
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:event-process-step-transition--persists_in-->table-execution-payload
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-analytics-worker--calls-->analytics-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-analytics-worker--consumes-->event-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-analytics-worker--depends_on-->infra-queue-analytics
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-analytics-worker--depends_on-->infra-worker-base
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-delayed-scheduler-runner--produces-->event-delayed-step-completion
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-delayed-scheduler-runner--reads_from-->table-delayed-scheduler
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-event-bus--consumes-->ws-task-step-state-changed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:infra-notification-worker--consumes-->event-create-notifications
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0
+timestamp: 2026-08-12T10:38:05.077Z
+graphRevisionBefore: 8349211acf85d11b5bff41a55bc91fe36dfa97bcc73e036a7683a6ff42a32286
+graphRevisionAfter: cf721db61e8e2a6da055f35ff4be22eaf2eb16d4e635d6b4e4a25fa1745763a8
+evidenceSummary: 25 evidence entries across 14 files; no drift detected
+humanInstruction: User explicitly authorized review, correction, and approval of
+  all pending Architecture Graph items in this turn.
+reviewTokenCorrelation: a5a65e3c9ee5

@@ -1,0 +1,285 @@
+reviewId: 2026-08-12T10-36-48-435Z--f7f68f
+reviewedItemIds:
+  - node:command-transition-step-state
+  - node:command-transition-step-state-batch
+  - node:contract-step-transition-payload
+  - node:event-create-notifications
+  - node:event-delayed-step-completion
+  - node:event-process-step-transition
+  - node:helper-apply-step-transition
+  - node:helper-cascade-step-completion
+  - node:helper-fetch-open-user-working-record
+  - node:helper-task-state-transitions
+  - node:infra-analytics-worker
+  - node:infra-delayed-scheduler-runner
+  - node:infra-event-bus
+  - node:infra-notification-worker
+  - node:infra-pg-notify-task-open
+  - node:infra-queue-analytics
+  - node:infra-queue-notifications
+  - node:infra-queue-tasks
+  - node:infra-task-router
+  - node:infra-tasks-worker
+  - node:infra-worker-base
+  - node:infra-worker-shift-realtime
+  - node:src-create-instant-task
+  - node:task-finalize-pending-step-completion
+  - node:ws-task-state-changed
+  - node:ws-task-step-readiness-changed
+  - node:ws-task-step-state-changed
+  - node:ws-worker-shift-state-changed
+  - node:analytics-apply-issues-at-completion
+  - node:analytics-apply-reconcile-deltas
+decisions:
+  - itemId: node:command-transition-step-state
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:command-transition-step-state-batch
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:contract-step-transition-payload
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:event-create-notifications
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:event-delayed-step-completion
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:event-process-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:helper-apply-step-transition
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:helper-cascade-step-completion
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:helper-fetch-open-user-working-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:helper-task-state-transitions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-analytics-worker
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-delayed-scheduler-runner
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-event-bus
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-notification-worker
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-pg-notify-task-open
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-queue-analytics
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-queue-notifications
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-queue-tasks
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-task-router
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-tasks-worker
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-worker-base
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:infra-worker-shift-realtime
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:src-create-instant-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:task-finalize-pending-step-completion
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:ws-task-state-changed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:ws-task-step-readiness-changed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:ws-task-step-state-changed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:ws-worker-shift-state-changed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:analytics-apply-issues-at-completion
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:analytics-apply-reconcile-deltas
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0
+timestamp: 2026-08-12T10:36:48.435Z
+graphRevisionBefore: 94cf72cf1b50b0b2d256396fecf004beb5c6776f2b7a6def6884294267c8e6c2
+graphRevisionAfter: d0b22eac7ed3ba3cecc72b138a6d644a11396ac627a7855537b52fef02098a03
+evidenceSummary: 32 evidence entries across 21 files; no drift detected
+humanInstruction: User explicitly authorized review, correction, and approval of
+  all pending Architecture Graph items in this turn.
+reviewTokenCorrelation: cf7e74ba85ab

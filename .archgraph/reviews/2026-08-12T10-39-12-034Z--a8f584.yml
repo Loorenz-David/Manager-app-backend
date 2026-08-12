@@ -1,0 +1,23 @@
+reviewId: 2026-08-12T10-39-12-034Z--a8f584
+reviewedItemIds:
+  - node:finding-completion-counting-golive
+decisions:
+  - itemId: node:finding-completion-counting-golive
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-recorded against the dated production-snapshot measurement and
+      independently re-read. The measured count, cutoff, and historical-debt
+      conclusion are accurately stated.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0
+timestamp: 2026-08-12T10:39:12.034Z
+graphRevisionBefore: 4b851f813dd56892b177652bf0e3db08b86a45ae33f00d626f76037876824167
+graphRevisionAfter: 542c59baa06f35d30f79d82617e4e3c2c81aa478aaa9ea39a3e84220383dc325
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: User explicitly authorized review, correction, and approval of
+  all pending Architecture Graph items in this turn.
+reviewTokenCorrelation: 6030db15ace4

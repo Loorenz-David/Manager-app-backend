@@ -1,0 +1,87 @@
+reviewId: 2026-08-12T10-38-32-870Z--d5a7e5
+reviewedItemIds:
+  - edge:analytics-process-step-transition--implements-->concept-attribution-split
+  - edge:command-transition-step-state--implements-->concept-attribution-split
+  - edge:concept-attribution-split--links_to-->concept-credited-user-vs-performer
+  - edge:domain-work-analytics--contains-->concept-attribution-split
+  - edge:script-backfill-completed-count--links_to-->concept-attribution-split
+  - node:concept-attribution-split
+  - edge:script-backfill-missing-completion-counts--links_to-->finding-completion-counting-golive
+  - node:finding-completion-counting-golive
+decisions:
+  - itemId: edge:analytics-process-step-transition--implements-->concept-attribution-split
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:command-transition-step-state--implements-->concept-attribution-split
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:concept-attribution-split--links_to-->concept-credited-user-vs-performer
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:domain-work-analytics--contains-->concept-attribution-split
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:script-backfill-completed-count--links_to-->concept-attribution-split
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:concept-attribution-split
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: edge:script-backfill-missing-completion-counts--links_to-->finding-completion-counting-golive
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independently re-derived from the cited implementation evidence; the
+      claim and relationship direction are accurate. Any listed canonical
+      conflicts are false positives caused by multiple valid outgoing
+      relationships of the same type.
+  - itemId: node:finding-completion-counting-golive
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: The historical finding is true but its cited remedy script does not
+      substantiate the measured count or cutover date; it will be re-recorded
+      with the measurement document as evidence.
+retiredItemIds:
+  - node:finding-completion-counting-golive
+  - edge:script-backfill-missing-completion-counts--links_to-->finding-completion-counting-golive
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0
+timestamp: 2026-08-12T10:38:32.870Z
+graphRevisionBefore: 3f4ca985b3f7dde64c93d4880ab0e180952f7ec122cad9d949f9046d2d3369a7
+graphRevisionAfter: 888d32765f01bce69a21cf1b5a629a1200bae7dfef34f6a802538f248f8e3412
+evidenceSummary: 12 evidence entries across 4 files; no drift detected
+humanInstruction: User explicitly authorized review, correction, and approval of
+  all pending Architecture Graph items in this turn.
+reviewTokenCorrelation: 022761ad5c56
