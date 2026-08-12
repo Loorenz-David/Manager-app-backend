@@ -106,6 +106,13 @@ recorded in the Review log.
   `LastActiveStepCard.tsx` smoke note.
   (N2) the ADMIN/MANAGER-only step-money audience is a real architectural policy no
   archgraph node carries — candidate node/description in this phase's graph delta.
+- **Phase-2/3 additions to the drift batch (2026-08-12):** phase-2 review N4
+  (`checkfirst=True` on the five new enum types), N5 (prefix-map row ordering),
+  re-review N8 (downgrade proxy misses raw-SQL `DROP TYPE`), r3 N14 (order-dependent
+  Shopify assertion — flaky under load, threatens byte-identical baseline gates);
+  phase-3 projection S7 (**eleven `Mapped[float]` annotations on `Numeric` columns**
+  in the item_economics models → `Mapped[Decimal]`/`| None` per
+  `user_work_profile.py:33` precedent — annotation-only, no runtime change).
 
 ## Review log
 

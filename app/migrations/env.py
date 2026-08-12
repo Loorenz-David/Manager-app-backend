@@ -2,7 +2,6 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from alembic.script.revision import RevisionMap
 from sqlalchemy import pool, text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -49,49 +48,6 @@ def _include_object(object_, name, type_, reflected, compare_to):
     return True
 
 
-def _repair_legacy_revision_graph() -> None:
-    """Linearize the historical cycle without rewriting applied revisions.
-
-    The role-specialization revisions were later grafted onto a branch that the
-    image/task-note revision already depended on.  That left this cycle in the
-    on-disk Alembic graph::
-
-        a3b5 -> 8cf5 -> 6f4d -> 7e1c -> 71df -> 26d4 -> 4f2e -> a3b5
-
-    Existing databases at head do not traverse the graph, but a cold upgrade
-    asks Alembic to topologically sort it and loops before the first migration
-    can run.  Reparenting 8cf5 to the earlier branch predecessor preserves all
-    migration bodies and makes the runtime graph acyclic.  The compatibility
-    repair is guarded by the exact historical shape so a later, corrected graph
-    is left alone.
-    """
-    script = getattr(getattr(context, "_proxy", None), "script", None)
-    if script is None:
-        return
-
-    current_map = script.revision_map._revision_map
-    revisions = [revision for revision in current_map.values() if revision is not None]
-    by_id = {revision.revision: revision for revision in revisions}
-    image_notes = by_id.get("8cf57fa23110")
-    role_specialization = by_id.get("a3b5c7d9e1f2")
-    role_merge = by_id.get("6f4d2c1b9a7e")
-    if (
-        image_notes is None
-        or role_specialization is None
-        or role_merge is None
-        or image_notes.down_revision != "a3b5c7d9e1f2"
-        or role_specialization.down_revision != "4f2e9a7b6c1d"
-        or "8cf57fa23110" not in role_merge.down_revision
-    ):
-        return
-
-    image_notes.down_revision = "183fb6115bd3"
-    for revision in revisions:
-        revision.nextrev = frozenset()
-        revision._all_nextrev = frozenset()
-    script.revision_map = RevisionMap(lambda: iter(revisions))
-
-
 def _restore_cold_build_role_enum(*, ctx, step, **_) -> None:
     """Restore the schema that the superseded role-enum revision used to build.
 
@@ -123,23 +79,70 @@ def _restore_cold_build_role_enum(*, ctx, step, **_) -> None:
     )
 
 
-def _ensure_cold_build_workspace(*, ctx, step, **_) -> None:
-    """Provide the minimal catalog anchor required by later data migrations."""
-    if step.up_revision_id != "a1312183fdfb" or ctx.as_sql:
-        return
-    ctx.connection.execute(
+_COLD_BUILD_WORKSPACE_ID = "mig_cold_build_workspace"
+
+
+def _cold_build_workspace_callbacks(connection):
+    """Temporarily anchor a genuinely cold build, then remove its residue.
+
+    The historical pause-reason migrations require one workspace while the
+    schema is built from empty. The anchor is created only when neither
+    ``alembic_version`` nor ``workspaces`` exists, and cleanup runs in the
+    caller's ``finally`` block so a successful or failed build cannot leave the
+    synthetic workspace (or its anchor-owned pause reasons) behind.
+    """
+    is_cold_build = connection.execute(
         text(
             """
-            INSERT INTO workspaces (name, time_zone, created_by_id, created_at, client_id)
-            SELECT 'Migration workspace', 'UTC', NULL, now(), 'mig_cold_build_workspace'
-            WHERE NOT EXISTS (SELECT 1 FROM workspaces)
+            SELECT NOT EXISTS (
+                       SELECT 1
+                       FROM information_schema.tables
+                       WHERE table_schema = current_schema()
+                         AND table_name = 'alembic_version'
+                   )
+               AND NOT EXISTS (
+                       SELECT 1
+                       FROM information_schema.tables
+                       WHERE table_schema = current_schema()
+                         AND table_name = 'workspaces'
+                   )
             """
         )
-    )
+    ).scalar_one()
+    created = False
+
+    def ensure(*, ctx, step, **_) -> None:
+        nonlocal created
+        if not is_cold_build or step.up_revision_id != "a1312183fdfb" or ctx.as_sql:
+            return
+        created_id = ctx.connection.execute(
+            text(
+                """
+                INSERT INTO workspaces (name, time_zone, created_by_id, created_at, client_id)
+                VALUES ('Migration workspace', 'UTC', NULL, now(), :client_id)
+                RETURNING client_id
+                """
+            ),
+            {"client_id": _COLD_BUILD_WORKSPACE_ID},
+        ).scalar_one_or_none()
+        created = created_id == _COLD_BUILD_WORKSPACE_ID
+
+    def cleanup() -> None:
+        if not created:
+            return
+        connection.execute(
+            text("DELETE FROM pause_reasons WHERE workspace_id = :workspace_id"),
+            {"workspace_id": _COLD_BUILD_WORKSPACE_ID},
+        )
+        connection.execute(
+            text("DELETE FROM workspaces WHERE client_id = :workspace_id"),
+            {"workspace_id": _COLD_BUILD_WORKSPACE_ID},
+        )
+
+    return ensure, cleanup
 
 
 def run_migrations_offline() -> None:
-    _repair_legacy_revision_graph()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -153,20 +156,23 @@ def run_migrations_offline() -> None:
 
 
 def _do_run_migrations(connection) -> None:
-    _repair_legacy_revision_graph()
     # transaction_per_migration=True commits after each migration instead of wrapping the
     # whole `upgrade` in one transaction. This is required so a migration that adds a
     # Postgres enum value commits before a later migration inserts a row using it
     # (Postgres forbids using a new enum value within the transaction that added it).
+    ensure_cold_build_workspace, cleanup_cold_build_workspace = _cold_build_workspace_callbacks(connection)
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         transaction_per_migration=True,
         include_object=_include_object,
-        on_version_apply=(_ensure_cold_build_workspace, _restore_cold_build_role_enum),
+        on_version_apply=(ensure_cold_build_workspace, _restore_cold_build_role_enum),
     )
-    with context.begin_transaction():
-        context.run_migrations()
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        cleanup_cold_build_workspace()
 
 
 async def _run_async_migrations() -> None:

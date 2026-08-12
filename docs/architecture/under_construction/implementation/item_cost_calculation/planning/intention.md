@@ -640,12 +640,18 @@ proven with the object types production holds).
 #### 6A.2 Decimal context and rounding — explicit, never ambient
 
 Every quantization passes `rounding=ROUND_HALF_EVEN` **explicitly**. The module never
-mutates the global decimal context and never relies on it.
+mutates the global decimal context, and **runs its arithmetic inside a
+`decimal.localcontext()`** (round 8, R8-2): an explicit `rounding=` argument
+neutralizes an ambient rounding change, but `Decimal.__truediv__` and `.quantize()`
+read `getcontext().prec` — a lowered ambient precision turns the division sites into
+`InvalidOperation` unless a local context pins precision. "Never relies on the global
+context" is therefore realized by construction, not by hope.
 
-*Correction to §6.6's citation:* the repo has no explicit banker's-rounding precedent.
-`_cost_minor` (`services/tasks/analytics/process_step_transition.py:161-234`) calls
-`.to_integral_value()` with no argument — it inherits ROUND_HALF_EVEN from Python's
-default context by accident, not by decision. The only *explicit* quantize in the repo
+*Correction to §6.6's citation (address corrected round 8):* the repo has no explicit
+banker's-rounding precedent. The step-cost computation (local `cost_minor` inside
+`_recompute_step_time_totals`, `services/tasks/analytics/process_step_transition.py:231-233`)
+calls `.to_integral_value()` with no argument — it inherits ROUND_HALF_EVEN from
+Python's default context by accident, not by decision. The only *explicit* quantize in the repo
 rounds the other way (`ROUND_HALF_UP`,
 `services/commands/upholstery/requests/__init__.py:17`). ROUND_HALF_EVEN therefore
 stands as this domain's own decision (money quantized at scale, no systematic upward
@@ -738,8 +744,13 @@ Negative when the budget is negative. Never clamped.
 - Variances: `variance_worker_minutes = allowed − actual` (2 dp, exact);
   `variance_cost_minor = production_budget_minor − consumed_cost_minor` (integer,
   exact). These are two independent quantities: `variance_cost_minor` may differ from
-  `variance_worker_minutes × rate` by up to one minor unit. Pinned as correct, so no
-  future reviewer "reconciles" them.
+  `variance_worker_minutes × rate` — **bound corrected round 8 (R8-1):** the
+  discrepancy scales with the rate, ≈ `0.01 × rate + 0.5` minor units (both `allowed`
+  (Q3) and `actual_worker_minutes` (Q4) carry 2-dp rounding error the multiplication
+  amplifies — ~3 minor units at rate `400.0000`, ~8 at `1000.0000`; the earlier
+  "up to one minor unit" was measured only at rates below 6). Pinned as correct and
+  deliberately unreconciled, so no future reviewer "reconciles" them; any test
+  asserts an exact difference for its seeded fixture, never the general bound.
 
 #### 6A.9 Currency — resolution order and the three-way equality
 
@@ -2085,6 +2096,21 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   in the snapshot table too (§6A.11 is the authority), audit shape is `created_at`
   only, no soft-delete trio. Resolves the §4.5-vs-§4A-vs-contract conflict the
   phase-2 projection found (D6); no product semantic changed.
+
+**Round 8 — 2026-08-12 (phase-3 projection findings folded; coordinator):**
+
+- **R8-1 (projection S6)** §6A.8's variance-independence bound was **factually
+  wrong**: "up to one minor unit" holds only at rates below ~6; the real discrepancy
+  scales ≈ `0.01 × rate + 0.5` minor units (verified: ~3 at rate 400, ~8 at 1000).
+  Sentence replaced with the derived bound; tests assert exact per-fixture
+  differences, never the general bound. Formulas unchanged.
+- **R8-2 (projection S5)** §6A.2's "never relies on the global context" tightened
+  into a **`decimal.localcontext()` requirement**: explicit `rounding=` neutralizes
+  ambient rounding changes but not ambient precision (`__truediv__`/`quantize` read
+  `getcontext().prec` — a lowered precision turns Q3 into `InvalidOperation`,
+  verified). Also corrected §6A.2's citation: the accidental-HALF_EVEN precedent is
+  the local `cost_minor` at `process_step_transition.py:231-233`, not a
+  `_cost_minor` function.
 
 ---
 

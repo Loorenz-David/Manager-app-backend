@@ -136,6 +136,14 @@ on the schema's field metadata); OpenAPI mirror row updated (reviewer-checked).
 - Archgraph: orient on the phase-2 table nodes; delta = command/endpoint nodes for
   the configuration surface.
 
+**Forward items routed here (coordinator, 2026-08-12):**
+- Phase-2 review N3: `EconomicsStatusEnum`'s declaration order ≠ §11A.4's
+  evaluation order — the §7A.5 ordered classifier must NOT derive precedence by
+  iterating the enum.
+- Phase-3 projection S4: the `Decimal(str(v))` request-layer parse criterion moved
+  here — this phase ships the first request schemas; prove the parse on a value
+  with more decimals than target scale (never `Decimal(v)` on a float, §6A.1).
+
 ## Review log
 
 (append-only)

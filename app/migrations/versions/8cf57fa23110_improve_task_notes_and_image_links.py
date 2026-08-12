@@ -11,7 +11,9 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = '8cf57fa23110'
-down_revision: Union[str, None] = 'a3b5c7d9e1f2'
+# Owner-authorized metadata correction 2026-08-12: breaks the historical
+# revision-graph cycle; no DDL changed.
+down_revision: Union[str, None] = '183fb6115bd3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
