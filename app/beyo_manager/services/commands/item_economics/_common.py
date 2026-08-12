@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timezone
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +11,6 @@ from sqlalchemy.exc import IntegrityError
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
-from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
 from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
 from beyo_manager.models.tables.item_economics.production_cost_group import ProductionCostGroup
 from beyo_manager.services.context import ServiceContext
@@ -55,14 +53,12 @@ def admission_error(prefix: str, effective_from: date | None, open_version: obje
         raise ValidationError(f"{prefix}_EFFECTIVE_FROM_NOT_AFTER_OPEN: effective_from must be after the open version")
 
 
-async def get_group(ctx: ServiceContext, client_id: str, *, for_update: bool = False) -> ProductionCostGroup:
+async def get_group(ctx: ServiceContext, client_id: str) -> ProductionCostGroup:
     statement = select(ProductionCostGroup).where(
         ProductionCostGroup.workspace_id == ctx.workspace_id,
         ProductionCostGroup.client_id == client_id,
         ProductionCostGroup.is_deleted.is_(False),
     )
-    if for_update:
-        statement = statement.with_for_update()
     row = await ctx.session.scalar(statement)
     if row is None:
         raise NotFound("Production cost group not found.")
@@ -95,12 +91,6 @@ async def get_model(ctx: ServiceContext, client_id: str, *, for_update: bool = F
     if row is None:
         raise NotFound("Cost model version not found.")
     return row
-
-
-async def reference_exists(ctx: ServiceContext, column: Any, client_id: str) -> bool:
-    return await ctx.session.scalar(
-        select(ItemCostEvaluation.client_id).where(column == client_id).limit(1)
-    ) is not None
 
 
 async def audit(ctx: ServiceContext, event: str, resource_type: str, resource_id: str, detail: dict | None = None) -> None:

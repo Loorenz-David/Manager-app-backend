@@ -68,10 +68,10 @@ class RemoveSectionFromCostGroupRequest(_Request):
 class ProductionCostBasisVersionCreateRequest(_Request):
     production_cost_group_id: str
     effective_from: date | None = None
-    fixed_monthly_cost_minor: int
+    fixed_monthly_cost_minor: int = Field(gt=0)
     currency: ItemCurrencyEnum
-    monthly_paid_hours: Decimal
-    planning_utilization_percent: Decimal
+    monthly_paid_hours: Decimal = Field(gt=0)
+    planning_utilization_percent: Decimal = Field(gt=0, le=Decimal("100"))
 
     @field_validator("monthly_paid_hours", mode="before")
     @classmethod
@@ -87,8 +87,8 @@ class ProductionCostBasisVersionCreateRequest(_Request):
 class CostModelTermRequest(_Request):
     name: str
     calculation_type: CostModelTermCalculationTypeEnum
-    percent_value: Decimal | None = None
-    fixed_amount_minor: int | None = None
+    percent_value: Decimal | None = Field(default=None, ge=0, le=Decimal("999.999"))
+    fixed_amount_minor: int | None = Field(default=None, ge=0)
 
     @field_validator("name")
     @classmethod

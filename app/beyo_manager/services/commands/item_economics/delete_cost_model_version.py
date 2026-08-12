@@ -16,7 +16,6 @@ async def delete_cost_model_version(
     *,
     after_lock: AfterLock | None = None,
 ) -> dict:
-    version = None
     request = parse_client_id_request(ctx.incoming_data)
     async with maybe_begin(ctx.session):
         version = await get_model(ctx, request.client_id, for_update=True)

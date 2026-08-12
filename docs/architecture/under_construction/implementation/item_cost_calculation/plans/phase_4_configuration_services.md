@@ -446,3 +446,51 @@ C9 delete the router `percent_value` description → shipped 7/7 green, full sui
 byte-identical. C6(a) drop the in-lock re-check → shipped 7/7 green; reviewer
 serial probe reddens. C6(b) drop `FOR UPDATE` → shipped 7/7 green; reviewer lock
 probe flips `reference_blocked_while_locked` True → False.
+
+### Implementer fix r2 — 2026-08-13 — Codex
+
+- Resolved the review-r1 corrections within the allowed perimeter. B1 is now
+  covered by a command-backed integration matrix: C1 has all 20 admission rows,
+  C2 has both chains and all three adjacency boundaries, C3 exercises genuine
+  two-session DB conflicts for both chains, C4 covers underflow plus
+  canonicalize-then-derive/persisted-rate rederivation, C5 has all 12 term
+  shapes plus both duplicate prechecks, C6 covers serial and interleaved
+  guarded deletes, C7 covers membership/group guards, C8 runs all six status
+  fixtures through the status query, C10 covers all three list queries, and C11
+  asserts all nine registered audit events. Router tests cover all 13 routes,
+  both rejected roles, ADMIN/MANAGER retention, the deliberate term-route
+  absence, and the router percent-field documentation.
+- Resolved B2 with request-layer bounds: positive fixed cost/hours, utilization
+  in `(0, 100]`, percent in `[0, 999.999]`, and non-negative fixed term amount.
+  S1 removes the derived rate from `_BasisVersionBody`; S2 removes unused
+  helper/parameter scaffolding; N2 uses enum-member comparisons in the model
+  command. No term mutation routes were added.
+- Focused phase suite: **126 passed**. Ruff passes on all changed production and
+  test files. The full non-e2e suite completed at **1,875 passed / 23 known
+  failures / 1 deselected / 2 warnings**, with the same 23-failure baseline
+  set recorded by the phase plan. Full-tree Ruff remains the pre-existing
+  repository-wide result (**131 findings**); no new finding is reported in the
+  changed perimeter.
+
+Mutation probes were run in disposable local clones because the managed
+workspace `.git` directory cannot create worktrees. Probe clones were not
+written to the main worktree and were not included in the checkpoint.
+
+| Criterion | Mutation and observed result | Main-file SHA-256 | Mutated-file SHA-256 | Observed pytest node |
+|---|---|---|---|---|
+| C1/S2 | Drop `is_deleted = false` from the open-basis lookup; the soft-deleted-open admission row fails with the wrong required-date outcome. | `acd64c36b8de89530d9aee50e5a1f0c737bd538bb0b6c2b816c0bb6edad4b5cb` | `d613591f8374ea70537fd32ff7891622f514225a49fe39a79c42df4525c4522f` | `test_c1_admission_matrix_has_one_exact_outcome_per_chain[soft-deleted-open-treated-as-none-soft-deleted-none-None-basis]` |
+| C2 | Remove predecessor closure; the v1-at-d boundary reaches the unique-open-index failure. | `acd64c36b8de89530d9aee50e5a1f0c737bd538bb0b6c2b816c0bb6edad4b5cb` | `cd2bf7464a6d692d1c2217125827c35aed852b2f62b7d5f4d83ce813f2a40124` | `test_c2_adjacency_uses_command_built_orm_versions_and_is_applicable[v1-at-basis]` |
+| C3 | Map the basis unique index to the model identity; the registered basis translator assertion fails, while the clean real two-session race passes for both chains. | `3b594c367b535a0b74766f9435b390b85d928a561bc9bc14316cdaa94b018b0d` | `71249f1a9c7c25351f24dc59a6c43ed758a7c28130e7c6948d76d9cd52a91d22` | `test_integrity_translation_preserves_each_registered_index_identity[uix_production_cost_basis_versions_open-ITEM_COST_CONCURRENT_BASIS_VERSION]` |
+| C4 | Quantize hours to four decimal places instead of two; canonical persisted hours/rate assertion fails. | `904b635fcca7670729d2d3d470ea6b2f32cc82223bacdca852a653cbf5424860` | `1008720dd6f60a6b3c48b5dbb8d43d17abbdf29a86b53fa874eba713dfb8b368` | `test_configuration_commands_canonicalize_chain_and_status` |
+| C5 | Collapse every integrity identity to the basis-concurrency marker; the purchase-term identity assertion fails. | `3b594c367b535a0b74766f9435b390b85d928a561bc9bc14316cdaa94b018b0d` | `6d425e12055c7f317633f0786feb30ed630a3f065c025240d62e3f863b078e05` | `test_integrity_translation_preserves_each_registered_index_identity[uix_cost_model_terms_purchase_cost-ITEM_COST_PURCHASE_TERM_DUPLICATE]` |
+| C6(a) | Remove the locked reference re-check; the serial in-use guard row no longer raises. | `196fa87033064c79886f66899c4ff6f0b2b0faf6fde1fa301203e55e50d4104c` | `28a6abca6b7d8facbfd19b0957ae66533a54b280cc4d84c5224403da8ecabe72` | `test_c6_serial_delete_guard_rechecks_all_evaluation_references[basis]` |
+| C6(b) | Remove `FOR UPDATE`; the interleaved FK insert completes before release instead of remaining blocked. | `196fa87033064c79886f66899c4ff6f0b2b0faf6fde1fa301203e55e50d4104c` | `80646d9dd7c6fcb3b0256f079d9bfae29325145b1eb21a88b92f2cadc4eb2373` | `test_c6_interleaved_fk_insert_is_blocked_by_the_delete_row_lock_then_proceeds` |
+| C8 | Swap the first two entries in the explicit precedence tuple; the no-cost-group status row returns the ambiguous-group identity. | `3e4412f01c4925e90b855b81a05303823948d86b4d39cb70c7e2f6e63d08b195` | `a5de2350b4ee03deddf0300684937682884c96067adbf83e225dd0c4f6a023f3` | `test_c8_status_query_enumerates_each_first_failure_and_success` |
+| C9 | Remove the router `percent_value` description; the documentation assertion fails. | `891f9a18f4a72d4bc619c62fd8ea24c3a8f34702eeae5f8b0c8bddba5474b792` | `acfa6b6fff2d4765c9b279c92ff4a98da08dd28bf4149742806c3213ef279df0` | `test_router_body_percent_field_carries_planning_allocation_documentation` |
+| C11 | Remove MANAGER from the first route allow-list; the manager retention row returns 403. | `891f9a18f4a72d4bc619c62fd8ea24c3a8f34702eeae5f8b0c8bddba5474b792` | `e6c3a5fceb26166d00d5f9cbaaf8f07251f9ef3db125dc24ba0099a4e8cce663` | `test_every_configuration_route_retains_admin_and_manager_access[post-cost-groups-manager]` |
+| B2 | Remove `gt=0` from fixed monthly cost; the negative bound row does not raise. | `904b635fcca7670729d2d3d470ea6b2f32cc82223bacdca852a653cbf5424860` | `22ea01255e468b1d681adbbb370fd79ba2270f0020390d6b1775d9e6d05f9ea2` | `test_basis_request_rejects_each_out_of_range_numeric_field[fixed-negative]` |
+| S1 | Re-add `cost_per_worker_minute_minor` to the router basis body; the derived-rate absence assertion fails. | `891f9a18f4a72d4bc619c62fd8ea24c3a8f34702eeae5f8b0c8bddba5474b792` | `abcc8c31943313e19fd8422a87b002f155772dfcc2a1c84e0bae2ccc3aac547b` | `test_router_surface_has_no_term_mutation_and_no_derived_rate_input` |
+
+- Architecture Graph: read-only status/orientation only; initialized and valid,
+  revision `bf6dad5b9264937b5950366affe9910dcaacf7abd68a42114bb52fa327e68262`,
+  and **delta = zero**. No graph mutation was performed.

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from beyo_manager.domain.item_economics.enums import CostModelTermCalculationTypeEnum
 from beyo_manager.domain.item_economics.serializers import serialize_cost_model_version
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.item_economics.cost_model_term import CostModelTerm
@@ -18,15 +19,15 @@ async def create_cost_model_version(ctx: ServiceContext) -> dict:
         raise ValidationError("ITEM_COST_TERM_NAME_TAKEN: term names must be unique within a version")
     purchase_terms = [
         term for term in request.terms
-        if term.calculation_type.value == "item_purchase_cost"
+        if term.calculation_type is CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST
     ]
     if len(purchase_terms) > 1:
         raise ValidationError("ITEM_COST_PURCHASE_TERM_DUPLICATE: only one item_purchase_cost term is allowed")
     for term in request.terms:
-        if term.calculation_type.value == "percentage_of_expected_sale_price":
+        if term.calculation_type is CostModelTermCalculationTypeEnum.PERCENTAGE_OF_EXPECTED_SALE_PRICE:
             if term.percent_value is None or term.fixed_amount_minor is not None:
                 raise ValidationError("ITEM_COST_TERM_SHAPE_INVALID: percentage term has an invalid value shape")
-        elif term.calculation_type.value == "fixed_amount":
+        elif term.calculation_type is CostModelTermCalculationTypeEnum.FIXED_AMOUNT:
             if term.percent_value is not None or term.fixed_amount_minor is None:
                 raise ValidationError("ITEM_COST_TERM_SHAPE_INVALID: fixed term has an invalid value shape")
         elif term.percent_value is not None or term.fixed_amount_minor is not None:

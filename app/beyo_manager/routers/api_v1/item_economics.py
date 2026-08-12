@@ -52,7 +52,6 @@ class _BasisVersionBody(BaseModel):
     currency: ItemCurrencyEnum
     monthly_paid_hours: Decimal
     planning_utilization_percent: Decimal
-    cost_per_worker_minute_minor: Decimal | None = None
 
 
 _PERCENT_DESCRIPTION = (
