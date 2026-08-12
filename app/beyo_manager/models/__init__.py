@@ -162,3 +162,14 @@ from beyo_manager.models.tables.shopify import shopify_inventory_adjustment  # n
 from beyo_manager.models.tables.shopify import shopify_shop_integration  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_webhook_intake  # noqa: F401
 from beyo_manager.models.tables.shopify import shopify_webhook_subscription  # noqa: F401
+
+# --- Item economics (depends on tasks, items, working sections, users, workspaces) ---
+from beyo_manager.models.tables.item_economics import production_cost_group  # noqa: F401
+from beyo_manager.models.tables.item_economics import production_cost_group_section  # noqa: F401
+from beyo_manager.models.tables.item_economics import production_cost_basis_version  # noqa: F401
+from beyo_manager.models.tables.item_economics import cost_model_version  # noqa: F401
+from beyo_manager.models.tables.item_economics import cost_model_term  # noqa: F401
+from beyo_manager.models.tables.item_economics import item_cost_evaluation  # noqa: F401
+from beyo_manager.models.tables.item_economics import item_cost_evaluation_term  # noqa: F401
+from beyo_manager.models.tables.item_economics import item_cost_result  # noqa: F401
+from beyo_manager.models.tables.item_economics import item_valuation  # noqa: F401

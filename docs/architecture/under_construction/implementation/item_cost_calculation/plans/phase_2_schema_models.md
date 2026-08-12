@@ -238,3 +238,28 @@ NOT NULL and of PG type `task_state_enum`; `task_closed_at` is nullable;
 ## Review log
 
 (append-only)
+
+### 2026-08-12 — implementer r1 (Codex)
+
+- Confirmed the healthy-container pre-change baseline: **1605 passed / 23 failed /
+  1 deselected**. The post-change run is **1628 passed / 23 failed / 1 deselected**;
+  the 23 failures are the recorded pre-existing baseline, and the 23 added passing
+  tests are this phase's focused schema tests.
+- Implemented the nine registered models, enum package, model registration, prefix-map
+  entries, table guide, and Alembic revision `90cdd23a828e`. The migration creates and
+  drops exactly five new enum types; it uses `postgresql.ENUM(..., create_type=False)`
+  for the three task-owned types and hand-adds the three named self foreign keys.
+- Judgment calls: chose no `is_deleted` index uniformly (none of the eight applicable
+  tables has it); placed model imports in the requested trailing item-economics block;
+  used flush-only, nested-transaction constraint tests so no test commits rows.
+- Disposable DB lifecycle proof: the documented from-empty recipe stalled while
+  replaying the pre-existing migration chain after creating `alembic_version`; to keep
+  destructive verification isolated, restored the configured development schema into
+  a disposable DB, stamped it at this revision, then completed downgrade → upgrade.
+  The configured development DB stayed at head throughout. The disposable DB was
+  dropped afterwards.
+- Mutation probes, applied and reverted in `90cdd23a828e_item_economics_schema.py`:
+  M-a changing `business_task_type_enum` to `create_type=True` made upgrade fail with
+  `DuplicateObject`; M-b adding `_task_state_enum.drop(...)` made downgrade fail because
+  `tasks.state` depends on the reused type. C2's multi-clause predicate mutations were
+  not run before the session deadline; this remains an explicit review item.

@@ -37,6 +37,10 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | ItemIssue | iis | iis_xxxxxxx |
 | ItemUpholstery | iup | iup_xxxxxxx |
 | ItemUpholsteryRequirement | iur | iur_xxxxxxx |
+| ItemValuation | ival | ival_xxxxxxx |
+| ItemCostEvaluation | ice | ice_xxxxxxx |
+| ItemCostEvaluationTerm | icet | icet_xxxxxxx |
+| ItemCostResult | icr | icr_xxxxxxx |
 | Notification | not | not_xxxxxxx |
 | NotificationPin | npn | npn_xxxxxxx |
 | PauseReason | par | par_xxxxxxx |
@@ -45,6 +49,11 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | RecurringScheduler | rsch | rsch_xxxxxxx |
 | Role | role | role_xxxxxxx |
 | StaticCost | stc | stc_xxxxxxx |
+| ProductionCostGroup | pcg | pcg_xxxxxxx |
+| ProductionCostGroupSection | pcgs | pcgs_xxxxxxx |
+| ProductionCostBasisVersion | pcbv | pcbv_xxxxxxx |
+| CostModelVersion | cmv | cmv_xxxxxxx |
+| CostModelTerm | cmvt | cmvt_xxxxxxx |
 | SkuTemplate | skt | skt_xxxxxxx |
 | ShopifyIntegrationEvent | shpevt | shpevt_xxxxxxx |
 | ShopifyOAuthState | shpoau | shpoau_xxxxxxx |
