@@ -6,7 +6,8 @@ date: 2026-08-11
 state: CLOSED — shaping cards 1–4 answered 2026-08-11 (folded as changelog round 1,
        R1-1…R1-5); mechanism-gate cards 1–2 answered 2026-08-11 (folded as changelog
        round 4, R4-1…R4-2); phase-1 projection card 1 answered 2026-08-12 (folded as
-       R5-2). Nothing open.
+       R5-2); round-6 owner correction + 2 pins answered 2026-08-12 (folded as
+       R6-1…R6-3, new §8B). Nothing open.
 ```
 
 Answers recorded below verbatim in spirit; the authoritative folded form is
@@ -209,3 +210,28 @@ phase 1 too, or leave it to phase 6 as currently sequenced?
 No worker screen renders the numbers; phase 6 removes the columns rather than hiding
 them, so nothing is written twice. Folded as R5-2: phase 1's "money absent" stays
 scoped to `total_cost_minor`; recorded in the phase-1 plan's Notes.
+
+---
+
+# Round-6 owner correction (2026-08-12) — results at every episode boundary
+
+Owner-initiated (not a session card): reading the plans, the owner corrected the
+result boundary — READY on the task (all steps terminal) is the machine-detectable
+completion; RESOLVED/FAILED/CANCELLED are manual and may lag, so terminal-only
+results would never fire at actual completion. Reopens (READY → WORKING on step
+addition/reassignment) must re-converge the result; and an item added to a future
+task (return / pre_order, matched by article/SKU) keeps accumulating economics
+across episodes — the item is decoupled from any single task.
+
+Folded as R6-1…R6-3 (new intention §8B; §4.6/§8A.3/§8A.5 amended). The
+cross-episode accumulation was verified already structural — recorded, no change.
+
+## Pin 1 — How does a result row mark provisional vs final?
+
+**ANSWER (2026-08-12):** state snapshot + nullable closed_at (recommendation
+accepted) — `task_state_snapshot` enum copy + `task_closed_at` NULL until terminal.
+
+## Pin 2 — Refresh the stored result at reopen, or leave until next READY?
+
+**ANSWER (2026-08-12):** refresh at reopen too (recommendation accepted) — the row
+flips to `working` immediately and never claims READY during ongoing work.

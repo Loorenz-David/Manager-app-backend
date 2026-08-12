@@ -47,7 +47,9 @@ Phase 1 APPROVED.
 2. Nine models exactly per intention §4/§4.7A as amended by §4A, with registry §6.1
    columns/§6.2 constraint names. Load-bearing details: `IdentityMixin` prefixes;
    inline tz-aware audit + `created_by_id`/`updated_by_id` (users FK RESTRICT);
-   soft-delete trio everywhere except `ItemCostResult` (`created_at` only, §4.6);
+   soft-delete trio everywhere except `ItemCostResult` (`created_at` only, §4.6 —
+   **as amended round 6**: `task_closed_at` nullable + `task_state_snapshot` enum
+   copy reusing PG type `task_state_enum` with `create_type=False`, registry §6.3);
    self-FKs (`superseded_by_id`, both chains) with `use_alter=True`;
    `ItemCostResult.evaluation_id` NOT NULL; A8 — **no** non-negativity CHECK on
    `production_budget_minor` / `allowed_worker_minutes` (deliberate; do not let

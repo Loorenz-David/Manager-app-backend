@@ -18,11 +18,15 @@ authority: planning/intention.md (round 4) is the semantic authority; this file 
 Build the **item-economics domain**: expected sale price minus configured allocation
 terms → production budget → aggregate worker-minute allowance, frozen as immutable
 committed evaluations per task episode, with what-if projections, live consumption
-from the existing step-time rollups, and a replay-safe final result at episode close.
+from the existing step-time rollups, and a replay-safe result refreshed at every
+episode boundary (READY entries, reopens, terminal transitions — intention §8B,
+round 6; "final" = terminal-computed).
 Full semantics: `planning/intention.md` — this plan never restates them. The
-mechanism contracts live in intention §4A, §6A, §7A, §7B, §8A, §10A, §11A (lettered
-sections govern the numbered ones they amend). Round-4 owner decisions are settled:
-**§8A.5 branch A (re-emit) only — branch B is rejected and no phase builds it**;
+mechanism contracts live in intention §4A, §6A, §7A, §7B, §8A, **§8B**, §10A, §11A
+(lettered sections govern the numbered ones they amend). Round-4 owner decisions are
+settled:
+**§8A.5 branch A (re-emit) only — branch B is rejected and no phase builds it**
+(guard widened to READY ∪ terminal, round 6);
 **§6A.4 gross-base planning-allocation semantics with the binding presentation rule**
 (a percentage term is never presented as computing legally payable tax).
 
@@ -74,14 +78,14 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | IMPLEMENTED | 2026-08-12 | Codex | fail-closed role-derived step money redaction; 57 phase-focused tests passed; full suite 1601 passed / 22 pre-existing failures |
-| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-11 | planner | all 9 tables + enums + partial uniques + CHECKs |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | IMPLEMENTED | 2026-08-12 | coordinator | handoff consumed, perimeter verified vs `4416570`; review r1 prompt authored (probe P-R1: baseline was recorded in a broken sandbox — "22 pre-existing failures" unverified) |
+| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended) |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
 | 5 | Valuation surface | `plans/phase_5_valuation_surface.md` | ⚑ (rows 15,16 — valuation chain; 34) | NOT_STARTED | 2026-08-11 | planner | ItemValuation chain command + preview |
 | 6 | Legacy money migration & API bridge | `plans/phase_6_legacy_migration_api_bridge.md` | ⚑ (rows 31,32) | NOT_STARTED | 2026-08-11 | planner | journaled migrate-and-drop + reject-iff-non-null bridge |
 | 7 | Evaluations | `plans/phase_7_evaluations.md` | ⚑ (rows 2,5,7,10,14,16,17,19,21–25) | NOT_STARTED | 2026-08-11 | planner | commit tx, projections, promotion, auto path, mirror |
-| 8 | Status & results | `plans/phase_8_status_results.md` | ⚑ (rows 9,26–30,34) | NOT_STARTED | 2026-08-11 | planner | status query, result handler, §8A.5 re-emit |
+| 8 | Status & results | `plans/phase_8_status_results.md` | ⚑ (rows 9,26–30,34) | NOT_STARTED | 2026-08-12 | coordinator | status query, result handler, §8B boundary emissions (round-6 fold: READY/reopen hooks, widened guard, C6b) |
 | 9 | Living docs & drift routing | `plans/phase_9_docs_and_drift.md` | waivable (no S1/S2 mechanism; docs only) | NOT_STARTED | 2026-08-11 | planner | living-docs page, §2.6 + D-1…D-4 landing spots |
 
 ## 5. Contract resolution (goal-mapping guide protocol)
@@ -202,6 +206,7 @@ name routes it back to the coordinator rather than inventing one.
 | evaluation kind | `ItemCostEvaluationKindEnum` | `item_cost_evaluation_kind_enum` | `PROJECTION`, `COMMITTED` |
 | currencies (3 columns) | **reuse `ItemCurrencyEnum`** (`domain/items/enums.py`) | `item_valuation_currency_enum`, `production_cost_basis_version_currency_enum`, `cost_model_version_currency_enum` | one Python class, three per-table PG types (each `create_type=True` on its own column); values stay lockstep by construction |
 | evaluation episode snapshots | reuse `TaskTypeEnum` / `TaskReturnSourceEnum` | **reuse** `business_task_type_enum` / `task_return_source_enum` with `create_type=False` | type-creation ownership stays on `tasks` columns (R2-1 lesson: pin ownership explicitly; PG enums are append-only, so snapshots can never hold a value the type lost) |
+| result lifecycle snapshot (round 6) | reuse `TaskStateEnum` | **reuse** `task_state_enum` with `create_type=False` (ownership stays on `tasks.state`, `task.py:52`) | `item_cost_results.task_state_snapshot` — §4.6 as amended, §8B.2 |
 | economics status | `EconomicsStatusEnum` | **none — never persisted** | code-owned (§11A.4, catalog lesson); members = the 11 ordered values of §11A.4, lowercase values |
 
 All new enums via `configure_sa_enum_values` (`models/base/sa_enum.py`), lowercase
@@ -355,8 +360,12 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   payable tax. Phase 4 (API field docs) and phase 9 (living docs) carry it as
   tasks + criteria.
 - **P-E (HC-3):** no phase modifies `step_state_records` writers, the concurrency
-  sweep, or `_recompute_step_time_totals` — except the single §8A.5 guarded re-emit
-  line in `handle_process_step_transition` (phase 8).
+  sweep, or `_recompute_step_time_totals` — except the four §8B emission touch
+  points, all phase 8: the §8A.5 guarded re-emit line in
+  `handle_process_step_transition` (guard: READY ∪ terminal, round 6), one emit hook
+  in `maybe_evaluate_task_ready`, one in `maybe_reopen_task_to_working`
+  (`services/commands/tasks/_task_state_transitions.py`), and the three terminal
+  commands' side-effect lines. Nothing else in the execution path.
 - **P-F (calculator monopoly):** every derived economic value is produced by
   `domain/item_economics/calculator.py`; no service computes money/rate/minutes
   arithmetic inline. Snapshots are written only from calculator outputs.

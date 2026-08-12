@@ -421,8 +421,14 @@ come from" drill-down (raw §8) and make the budget re-derivable line by line.
 | `actual_worker_minutes` | Numeric(12,2) | worker handler | seconds/60, quantized §6.6 |
 | `consumed_cost_minor` | Integer | worker handler | minutes × snapshot rate (§6.5) |
 | `variance_worker_minutes` / `variance_cost_minor` | Numeric(12,2) / Integer | worker handler | allowed − actual (negative = overrun) |
-| `task_closed_at` / `computed_at` | tz datetimes | worker handler | |
+| `task_closed_at` | tz datetime, **nullable (round 6)** | worker handler | copied from `task.closed_at`; NULL while the episode is not terminal |
+| `task_state_snapshot` | enum copy of task state (**round 6**; reuses PG type `task_state_enum`, `create_type=False`, ownership stays on `tasks.state` — R2-1 rule) | worker handler | the lifecycle boundary the row was last computed at (working \| ready \| resolved \| failed \| cancelled) |
+| `computed_at` | tz datetime | worker handler | |
 | `created_at` (no soft delete) | | system | corrections happen by replay (recompute-and-SET), not edits |
+
+*(Round 6: the result is computed at every episode boundary, not only at terminal
+close — contract in §8B. `task_closed_at` therefore became nullable and
+`task_state_snapshot` was added; both are refreshed by every recompute.)*
 
 ### 4.7 `Item` changes — the legacy monetary columns are REMOVED (round 1, card 1)
 
@@ -1108,6 +1114,10 @@ project alters.
 
 ### 8.3 Final result (episode close)
 
+*(Round 6: terminal transitions are no longer the only producers — §8B governs; the
+result is computed at every episode boundary, READY entries and reopens included,
+and "final" means terminal-computed. This section's handler description stands.)*
+
 The three terminal-transition commands (`resolve_task`, `fail_task`, `cancel_task`)
 gain one line in their existing side-effect block: `create_instant_task` with a new
 event type `PROCESS_ITEM_COST_RESULT` (routed to `queue:analytics`, repo outbox
@@ -1185,8 +1195,9 @@ payload (`services/queries/item_economics/…`, definition site) must turn it re
   beside `domain/execution/payloads/step_transition.py`. No derived value ever travels
   in a payload; the handler re-resolves everything, which is what makes a replay of an
   old event produce today's correct answer.
-- Handler: open `task_db_session()`; load the task (terminal and non-deleted, else log
-  and return); resolve the **current committed evaluation at handler time**
+- Handler: open `task_db_session()`; load the task (non-deleted and in a §8B-admitted
+  state — round 6 supersedes the original "terminal only" admission — else log and
+  return); resolve the **current committed evaluation at handler time**
   (`kind = committed AND superseded_at IS NULL AND is_deleted = false`) — none ⇒ log and
   return, **writing and deleting nothing** (R-9); compute 8A.1 and §6A.8; upsert.
 - **Upsert:** `INSERT … ON CONFLICT (task_id) DO UPDATE SET <derived columns>`. The
@@ -1218,11 +1229,11 @@ result event. §8.3's "self-heals on any replay" is true only if a replay happen
 v1 nothing produces one. The stored result then disagrees with a live recompute
 **forever**, silently.
 
-**Contract (gate card 1 answered re-emit, R4-1):** in
+**Contract (gate card 1 answered re-emit, R4-1; guard widened round 6, §8B):** in
 `handle_process_step_transition`, inside the existing time-bearing branch after
 `_recompute_step_time_totals`, enqueue one `PROCESS_ITEM_COST_RESULT` for the step's
-task **iff** that task is in a terminal state. Recompute-and-SET makes redundant
-emissions free. This is the only change to an existing analytics handler; it adds no
+task **iff** that task's state is **READY or terminal**. Recompute-and-SET makes
+redundant emissions free. This is the only change to an existing analytics handler; it adds no
 time mechanism and reads no new source (HC-3 intact). The result is therefore always
 the truth about the episode, and §8.4's replay invariant holds as stated.
 
@@ -1239,6 +1250,60 @@ committed evaluation's snapshot values, live consumption (§6A.8), `item_binding
 operational read carries the literal filter `kind = 'committed' AND superseded_at IS
 NULL AND is_deleted = false` (HC-2); §14 test 4's named mutation is the deletion of that
 filter at its call site.
+
+### 8B. Result lifecycle — computed at every episode boundary (round 6)
+
+Owner correction (2026-08-12): READY is the machine-detectable completion of the work
+(all steps terminal); RESOLVED/FAILED/CANCELLED are manual acts that may lag it by
+days. Terminal-only results (R-10's original boundary) would mean the machine never
+writes the result at actual completion. The result is therefore a
+**continuously-converging snapshot of the episode's economics, refreshed at every
+lifecycle boundary**; "final" = computed at a terminal state (`task_state_snapshot`
+terminal, `task_closed_at` set). R-10's *reasons* stand — READY still has no
+timestamp and still reopens — which is exactly why the row snapshots its boundary
+instead of pretending READY is a close.
+
+**8B.1 Emission points (the complete list; all feed the same §8A.3 handler):**
+
+1. **Every sanctioned entry into READY** — one emit hook inside
+   `maybe_evaluate_task_ready` (`services/commands/tasks/_task_state_transitions.py`),
+   which is the only route into READY (all its callers — step transition core,
+   batch transition, remove_task_step, and force_task_ready's sweep — inherit it).
+2. **Every reopen** — one emit hook inside `maybe_reopen_task_to_working` (same
+   file; sole production caller today is add_task_steps, which is also how section
+   reassignment flows): the row refreshes immediately, its snapshot flipping to
+   `working`, so a stored result never claims READY while work is ongoing (owner pin
+   2, 2026-08-12).
+3. **The three terminal commands** (unchanged from §8.3/§8A.3).
+4. **Post-boundary time settlement** — §8A.5's guard, widened to
+   `state ∈ {READY} ∪ terminal`: time that settles while the episode sits at READY
+   or after close refreshes the row.
+
+**8B.2 Handler admission — total over all eight `TaskStateEnum` values:**
+`WORKING | READY | RESOLVED | FAILED | CANCELLED` → compute and upsert (WORKING is
+admitted solely so the reopen refresh is honest);
+`PENDING | ASSIGNED | STALLED` → log and return, writing nothing (no v1 emission
+point can fire there; a replayed or operator-re-emitted event must not fabricate a
+result for an unstarted episode — R-9 discipline). Every recompute stamps
+`task_state_snapshot` with the task's state **at handler time** and copies
+`task.closed_at` (NULL when not terminal). The §8A.3 upsert, idempotency key, and
+payload are unchanged; the §8A.4 replay-identity column set gains
+`task_state_snapshot` and `task_closed_at` (both are functions of re-resolved state,
+so replays converge exactly as before).
+
+**8B.3 Reopen convergence invariant (extends §8.4):** for any interleaving of
+READY entries, reopens, terminal transitions, and straggler settlements, the stored
+row always equals the handler's recompute at the last-fired boundary; a task that
+re-reaches READY after a reopen converges onto the new totals with no special case
+(recompute-and-SET; no delete path).
+
+**8B.4 Cross-episode accumulation (owner-confirmed reading, no change):** an item
+returning on a future task (return / pre_order; matched by article_number/SKU through
+`find_or_create_item`) is the same item row on a new episode: new evaluation
+(auto-path per card 3, or explicit), new result row keyed by the new task. Lifetime
+economics remain read-time summation over the item's episodes (§11) — results never
+merge across tasks, and item economics stay decoupled from any single task (R-3's
+episode chain, reaffirmed).
 
 ---
 
@@ -1700,6 +1765,17 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
     `computed_at` advances; asserting over the whole row instead must fail, proving the
     exclusion is real and not a convenience.
 
+**Round-6 addition:**
+
+22. **Boundary lifecycle (§8B)** — enumerated over the emission points: entry into
+    READY writes the row (`task_state_snapshot = ready`, `task_closed_at` NULL);
+    reopen refreshes it (`snapshot = working`); re-entry into READY after more work
+    converges onto the new totals (8B.3); terminal transition finalizes
+    (`snapshot` = the exact terminal state, `task_closed_at` set); straggler
+    settlement while READY refreshes the row, while WORKING (mid-episode) emits
+    nothing; a replayed event for a PENDING task with a committed evaluation writes
+    nothing (8B.2 admission row).
+
 ---
 
 ## 15. Pre-implementation protocol
@@ -1967,6 +2043,28 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   interim redaction (recommendation accepted; the fields are not rendered by any
   worker screen). Phase 1's "money absent" criterion stays scoped to
   `total_cost_minor` exactly as written.
+
+**Round 6 — 2026-08-12 (owner correction: results at every episode boundary):**
+
+- **R6-1 (owner-initiated)** The result is computed at **every episode boundary**,
+  not only at terminal close — new §8B: emit hooks at every sanctioned READY entry
+  (`maybe_evaluate_task_ready`) and every reopen (`maybe_reopen_task_to_working`),
+  the three terminal emissions kept, and §8A.5's straggler guard widened to
+  `{READY} ∪ terminal`. Handler admission made total over all 8 task states (8B.2).
+  Rationale: READY is the machine-detectable completion; terminal states are manual
+  and may lag. **Supersedes R-10's terminal-only boundary** (R-10's reasons stand —
+  no READY timestamp, reopens happen — which is why the row snapshots its boundary
+  rather than treating READY as a close). Gate card 1's re-emit answer (R4-1) is
+  extended, not contradicted.
+- **R6-2 (owner pins, same day)** Finality marking: `task_state_snapshot` (enum copy,
+  PG type reuse `task_state_enum` with `create_type=False`) + `task_closed_at` made
+  nullable (§4.6 as amended); **reopen refreshes the row immediately** so it never
+  claims READY during ongoing work. Both columns join the §8A.4 replay-identity set.
+- **R6-3 (owner-confirmed reading, no change)** Cross-episode accumulation for an
+  item returning on future tasks (return / pre_order via article/SKU matching) is
+  already structural — (task_id, item_id) evaluation keying, per-episode results,
+  read-time lifetime summation (8B.4). Recorded so no session "fixes" what is
+  deliberate.
 
 ---
 

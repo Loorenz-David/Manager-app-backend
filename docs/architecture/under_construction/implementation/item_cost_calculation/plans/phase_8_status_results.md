@@ -9,20 +9,23 @@ state: NOT_STARTED
 
 ## Goal
 
-Ship the operational reads and the episode close: live budget status (manager and
-worker variants), the result event + idempotent handler, the terminal-command
-emissions, the §8A.5 branch-A re-emit, and the lifetime read model.
+Ship the operational reads and the episode-boundary result lifecycle (intention §8B,
+round 6): live budget status (manager and worker variants), the result event +
+idempotent handler, **all four emission touch points** (READY-entry hook, reopen
+hook, terminal commands, §8A.5 straggler re-emit with the widened READY ∪ terminal
+guard), and the lifetime read model.
 **NOT in this phase:** branch B of §8A.5 (rejected by the owner — R4-1; never
 built); the operational CLI re-emit (only-if-cheap ledger); any change to the time
-pipeline beyond the single guarded re-emit line (master plan rule P-E).
+pipeline beyond the P-E touch-point list (master plan rule P-E as amended round 6).
 
 ## Read first
 
 1. `master_plan.md` §§5, 6 (registry: TaskType, payload, handler, routes), 9
    (P-A/P-B/P-E/P-F), 10 (analytics-worker launch caveat — needed to run this
    phase's integration tests).
-2. Intention **§8, §8A entire** (consumption read, two-cost boundary, handler
-   contract, replay identity, §8A.5 branch A), §11A.1–§11A.4 (exposure predicate,
+2. Intention **§8, §8A entire, §8B entire** (consumption read, two-cost boundary,
+   handler contract, replay identity, §8A.5 branch A with the round-6 guard, the
+   §8B emission points and total admission), §11A.1–§11A.4 (exposure predicate,
    status vocabulary), §7B.3 (item_binding read side), §6A.8, HC-2/HC-3/HC-7.
 3. In-tree: `services/tasks/analytics/process_step_transition.py`
    (`handle_process_step_transition`, `_recompute_step_time_totals` — verified at
@@ -51,9 +54,12 @@ Phase 7 APPROVED.
 - `app/beyo_manager/services/commands/tasks/resolve_task.py`, `fail_task.py`,
   `cancel_task.py` (one `create_instant_task` line each, inside the existing
   side-effect block / same transaction)
+- `app/beyo_manager/services/commands/tasks/_task_state_transitions.py` (round 6,
+  §8B.1: one emit hook in `maybe_evaluate_task_ready`, one in
+  `maybe_reopen_task_to_working` — both inside the helpers so every caller inherits)
 - `app/beyo_manager/services/tasks/analytics/process_step_transition.py`
-  (§8A.5 branch-A guarded re-emit — the ONLY change to an existing analytics
-  handler)
+  (§8A.5 branch-A guarded re-emit, guard READY ∪ terminal — the ONLY change to an
+  existing analytics handler)
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_status.py`,
   `get_task_budget_status_worker.py`, `get_item_lifetime_economics.py`
 - `app/beyo_manager/domain/item_economics/serializers.py` (status serializers — the
@@ -74,16 +80,22 @@ Phase 7 APPROVED.
    `infeasible` status (P-B). Worker variant: separate service + serializer with
    zero monetary keys (minutes/percent only — §11A.3's declared-field discipline).
    Router selects worker service for WORKER and SELLER identities (§11A.1).
-3. **Result pipeline** (§8A.3): TaskType + routing + payload; emissions in the three
-   terminal commands (same transaction, outbox semantics); handler — 
-   `task_db_session()`; task terminal + non-deleted else log-and-return; current
-   committed evaluation **at handler time** else log-and-return writing nothing
-   (R-9); compute §8A.1 + §6A.8 at the evaluation's snapshot rate; upsert
+3. **Result pipeline** (§8A.3 + §8B): TaskType + routing + payload; **emissions at
+   all four §8B.1 touch points** — READY-entry hook in `maybe_evaluate_task_ready`,
+   reopen hook in `maybe_reopen_task_to_working`, the three terminal commands (same
+   transaction, outbox semantics), and task 4's straggler re-emit; handler —
+   `task_db_session()`; **§8B.2 total admission**: non-deleted and state ∈
+   {WORKING, READY, RESOLVED, FAILED, CANCELLED} → compute; {PENDING, ASSIGNED,
+   STALLED} → log-and-return writing nothing; current committed evaluation **at
+   handler time** else log-and-return writing nothing (R-9); compute §8A.1 + §6A.8
+   at the evaluation's snapshot rate; stamp `task_state_snapshot` (state at handler
+   time) and `task_closed_at` (copied, NULL when not terminal); upsert
    `INSERT … ON CONFLICT (task_id) DO UPDATE SET <derived columns>`; `evaluation_id`
    NOT NULL; `calculation_version` copied (A7); no delete path exists.
-4. **§8A.5 branch-A re-emit** (R4-1): in `handle_process_step_transition`, inside
-   the existing time-bearing branch after `_recompute_step_time_totals`, enqueue one
-   `PROCESS_ITEM_COST_RESULT` for the step's task **iff** the task is terminal.
+4. **§8A.5 straggler re-emit** (R4-1, guard widened round 6): in
+   `handle_process_step_transition`, inside the existing time-bearing branch after
+   `_recompute_step_time_totals`, enqueue one `PROCESS_ITEM_COST_RESULT` for the
+   step's task **iff** the task's state ∈ {READY} ∪ terminal.
    Nothing else in the file changes (P-E).
 5. **Lifetime read model:** per item, committed evaluations + result rows across its
    tasks, typed by `task_type_snapshot`/`return_source_snapshot` (never live task
@@ -117,10 +129,23 @@ convenience); no committed evaluation → nothing written, log only; late-arrivi
 step analytics + replay converges; config supersession after close → recompute
 byte-identical (§8.4); ON CONFLICT update path exercised (row exists → updated).
 
-**C6 — post-close straggler (test 18; §8A.5 branch A):** transition a step of a
-RESOLVED task → a `PROCESS_ITEM_COST_RESULT` task is enqueued and the result row
-converges onto the new total; same transition on a WORKING task → **no** result
-event enqueued (the guard's other half). The branch-B freeze row is NOT built.
+**C6 — post-boundary straggler (test 18; §8A.5 with the round-6 guard):** transition
+a step of a RESOLVED task → a `PROCESS_ITEM_COST_RESULT` task is enqueued and the
+result row converges onto the new total; same for a READY task (guard's round-6
+half); same transition on a WORKING task (mid-episode) → **no** result event
+enqueued from the straggler path. The branch-B freeze row is NOT built.
+
+**C6b — boundary lifecycle (test 22; §8B, round 6), enumerated:** entry into READY
+(via a real step-transition reaching `maybe_evaluate_task_ready`) writes the row
+with `task_state_snapshot = ready`, `task_closed_at` NULL; reopen (add steps to a
+READY task) refreshes it to `snapshot = working`; re-entry into READY converges onto
+the new totals (8B.3); RESOLVED finalizes (`snapshot = resolved`, `task_closed_at`
+set — one row per terminal command, three rows); a replayed event for a PENDING task
+carrying a committed evaluation writes nothing (8B.2 admission row). **Named
+mutation:** removing the READY-entry emit hook in `maybe_evaluate_task_ready`
+(call-site-of-hook, `_task_state_transitions.py`) must turn the READY-entry row red.
+`task_state_snapshot` and `task_closed_at` join C5's §8A.4 replay-identity column
+set.
 
 **C7 — status vocabulary (§11A.4), all eleven values enumerated** (each fixture
 sole-predicate, exact enum value): `ok` (exact numbers), `infeasible`
