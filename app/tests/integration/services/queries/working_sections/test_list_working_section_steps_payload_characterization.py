@@ -102,12 +102,20 @@ _ITEM_KEYS = {
 }
 
 
-def _ctx(db_session, *, workspace_id: str, user_id: str, working_section_id: str, group_by_upholstery: bool) -> ServiceContext:
+def _ctx(
+    db_session,
+    *,
+    workspace_id: str,
+    user_id: str,
+    working_section_id: str,
+    group_by_upholstery: bool,
+    role_name: str = "worker",
+) -> ServiceContext:
     return ServiceContext(
         identity={
             "workspace_id": workspace_id,
             "user_id": user_id,
-            "role_name": "worker",
+            "role_name": role_name,
             "username": "tester",
         },
         incoming_data={"working_section_id": working_section_id},
@@ -161,6 +169,7 @@ async def _seed_step(db_session) -> tuple[Workspace, User, WorkingSection, Uphol
         completed_dependencies=0,
         created_by_id=user.client_id,
         created_at=now,
+        total_cost_minor=4321,
     )
     task_item = TaskItem(
         client_id=f"tim_{suffix}",
@@ -216,7 +225,10 @@ async def _seed_step(db_session) -> tuple[Workspace, User, WorkingSection, Uphol
 
 @pytest.mark.integration
 @pytest.mark.parametrize("group_by_upholstery", [False, True])
-async def test_list_working_section_steps_payload_key_sets_are_stable(db_session, group_by_upholstery):
+@pytest.mark.parametrize("role_name", ["worker", "manager"])
+async def test_list_working_section_steps_payload_key_sets_are_stable(
+    db_session, group_by_upholstery, role_name
+):
     workspace, user, section, upholstery = await _seed_step(db_session)
 
     result = await list_working_section_steps(
@@ -226,6 +238,7 @@ async def test_list_working_section_steps_payload_key_sets_are_stable(db_session
             user_id=user.client_id,
             working_section_id=section.client_id,
             group_by_upholstery=group_by_upholstery,
+            role_name=role_name,
         )
     )
 
@@ -233,7 +246,12 @@ async def test_list_working_section_steps_payload_key_sets_are_stable(db_session
     assert len(result["steps_pagination"]["items"]) == 1
 
     item = result["steps_pagination"]["items"][0]
-    assert set(item) == _STEP_KEYS
+    expected_step_keys = _STEP_KEYS if role_name == "manager" else _STEP_KEYS - {"total_cost_minor"}
+    assert set(item) == expected_step_keys
+    if role_name == "manager":
+        assert item["total_cost_minor"] == 4321
+    else:
+        assert "total_cost_minor" not in item
     assert set(item["last_state_record"]) == _LAST_STATE_RECORD_KEYS
     assert set(item["task"]) == _TASK_KEYS
     assert set(item["item"]) == _ITEM_KEYS

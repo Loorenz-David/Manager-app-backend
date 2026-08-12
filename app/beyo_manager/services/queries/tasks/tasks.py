@@ -7,6 +7,7 @@ from beyo_manager.domain.images.serializers import serialize_image, serialize_im
 from beyo_manager.domain.task_steps.state_filters import parse_step_state_filter
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPriorityEnum
 from beyo_manager.domain.tasks.serializers import (
+    include_monetary_step_fields,
     serialize_item,
     serialize_requirement,
     serialize_step,
@@ -699,7 +700,10 @@ async def get_task(ctx: ServiceContext) -> dict:
         "requirements": [serialize_requirement(r) for r in requirements],
         "task_steps": [
             {
-                **serialize_step(step),
+                **serialize_step(
+                    step,
+                    include_monetary=include_monetary_step_fields(ctx.role_name),
+                ),
                 "latest_state_records": serialize_step_latest_state_record(step.latest_state_record),
             }
             for step in steps

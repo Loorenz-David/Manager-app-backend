@@ -30,6 +30,7 @@ from beyo_manager.domain.analytics.estimation import (
 )
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.serializers import (
+    include_monetary_step_fields,
     serialize_item_worker_light,
     serialize_step,
     serialize_task_light,
@@ -433,7 +434,10 @@ async def get_worker_daily_step_breakdown(ctx: ServiceContext) -> dict:
         )
         items.append(
             {
-                **serialize_step(step),
+                **serialize_step(
+                    step,
+                    include_monetary=include_monetary_step_fields(ctx.role_name),
+                ),
                 "task": serialize_task_light(task) if task else None,
                 "item": serialize_item_worker_light(item, item_reqs, bundle.upholstery_by_id),
                 "item_images": bundle.images_by_item.get(primary_item_id, []) if primary_item_id else [],

@@ -184,3 +184,13 @@ M5's builder).
 ## Review log
 
 (append-only; implementer and reviewer entries land here)
+
+### Implementer r1 — 2026-08-12 — Codex
+
+- Baseline before implementation: `PYTHONPATH=. pytest -m 'not e2e'` collected 1602 tests, selected 1601; 1092 passed, 473 failed, 38 errors, 1 deselected. The failures/errors were caused primarily by sandbox-denied connections to the local PostgreSQL/Redis services, with unrelated unit failures also present.
+- Implementation verification with the already-running containers: 57 phase-focused tests passed. Final full non-e2e run: 1624 collected, 1623 selected; 1601 passed, 22 failed, 1 deselected. The 22 failures are outside this phase (bootstrap/item-position/task-step/task-date/upholstery/working-section commands, audit log, Shopify dimension migration, auth, worker-stats unit seam, case serializer, item router, and upholstery-inventory router tests); all phase-focused tests passed.
+- Implemented `serialize_step(step, *, include_monetary: bool)` with absent-key redaction, one allow-list helper for ADMIN/MANAGER, and helper-derived flags at all five serializer call sites. Shared builders cover the three round-5 acknowledgment/last-interacted endpoints without edits to those query services. `serialize_item` and item money fields were untouched.
+- Authorized judgment calls: helper lives beside `serialize_step`; test fixture reuse imports the existing working-section step seed and flushes only the rolled-back `db_session`; characterization tests were role-parameterized rather than deleting the published key; the existing ended-shift characterization call received only the required keyword.
+- Key-set change record: working-section and reassigned-step worker payloads now omit `total_cost_minor`; manager/admin rows assert the seeded value `4321`. The site-5 and endpoint-8 manager/admin retention rows assert the same value.
+- Mutation probes: M1, M2, M3, M4, M5, M6, site-5 blanket-False, and shared-builder blanket-False all turned their named tests red and were reverted. Probe files: `app/beyo_manager/domain/tasks/serializers.py`, `app/beyo_manager/services/queries/tasks/tasks.py`, `app/beyo_manager/services/queries/tasks/list_task_steps.py`, `app/beyo_manager/services/queries/working_sections/steps_list_payload.py`, `app/beyo_manager/services/queries/working_sections/step_record_payload.py`, and `app/beyo_manager/services/queries/worker_stats/get_worker_daily_step_breakdown.py`.
+- Architecture Graph closeout: status remained valid at 116 nodes / 157 edges, revision `b0702c3c…`, zero stale nodes. The batched closeout apply recorded an exact duplicate of `table-task-step`, so `applied=[]`; architectural delta is explicitly zero.

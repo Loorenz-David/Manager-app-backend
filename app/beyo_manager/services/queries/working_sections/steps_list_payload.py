@@ -6,6 +6,7 @@ from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.domain.tasks.serializers import (
+    include_monetary_step_fields,
     serialize_item_worker_light,
     serialize_step,
     serialize_step_state_record_light,
@@ -317,7 +318,10 @@ async def build_steps_list_payload(
 
         items_payload.append(
             {
-                **serialize_step(step),
+                **serialize_step(
+                    step,
+                    include_monetary=include_monetary_step_fields(ctx.role_name),
+                ),
                 "updated_at": step.updated_at.isoformat() if step.updated_at else None,
                 "created_by": serialize_user_working_section_member(creator) if creator else None,
                 "updated_by": serialize_user_working_section_member(updater) if updater else None,

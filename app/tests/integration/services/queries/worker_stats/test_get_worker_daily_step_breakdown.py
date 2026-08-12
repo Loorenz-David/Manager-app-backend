@@ -30,9 +30,9 @@ def _at(hour: int, minute: int = 0) -> datetime:
     return DAY.replace(hour=hour, minute=minute)
 
 
-def _ctx(db_session, *, workspace_id, user_id, query_params) -> ServiceContext:
+def _ctx(db_session, *, workspace_id, user_id, query_params, role_name="manager") -> ServiceContext:
     return ServiceContext(
-        identity={"workspace_id": workspace_id, "user_id": "usr_mgr", "role_name": "manager", "username": "mgr"},
+        identity={"workspace_id": workspace_id, "user_id": "usr_mgr", "role_name": role_name, "username": "mgr"},
         incoming_data={"user_id": user_id},
         query_params=query_params,
         session=db_session,
@@ -80,6 +80,7 @@ async def _seed_step(db_session, workspace_id: str, user_id: str) -> TaskStep:
         working_section_id=section.client_id, working_section_name_snapshot=section.name,
         state=TaskStepStateEnum.WORKING, readiness_status=TaskStepReadinessStatusEnum.READY,
         total_dependencies=0, completed_dependencies=0, created_by_id=user_id,
+        total_cost_minor=4321,
     )
     db_session.add(step)
     await db_session.flush()
@@ -133,6 +134,7 @@ async def test_breakdown_settled_totals_active_record_and_reconciliation(db_sess
     items = {i["client_id"]: i for i in out["steps"]["items"]}
     assert set(items) == {step_a.client_id, step_b.client_id}  # open-only step still listed
 
+
     a = items[step_a.client_id]
     assert a["contribution"] == {"working_seconds": 3600, "pause_seconds": 600, "ended_shift_seconds": 0, "completed_count": 1}
     assert a["active_record"] is None            # completed record is not a running interval
@@ -144,6 +146,38 @@ async def test_breakdown_settled_totals_active_record_and_reconciliation(db_sess
 
     # contribution sort → active step (B) floats to top.
     assert out["steps"]["items"][0]["client_id"] == step_b.client_id
+
+
+@pytest.mark.integration
+async def test_daily_step_breakdown_keeps_money_for_manager_and_admin(db_session):
+    suffix = uuid4().hex[:8]
+    ws = Workspace(client_id=f"ws_{suffix}", name="W")
+    db_session.add(ws)
+    await db_session.flush()
+    worker = await _seed_worker(db_session, ws.client_id)
+    step = await _seed_step(db_session, ws.client_id, worker.client_id)
+    await _record(
+        db_session,
+        workspace_id=ws.client_id,
+        step_id=step.client_id,
+        user_id=worker.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        entered=_at(9),
+        exited=_at(10),
+    )
+
+    for role_name in ("manager", "admin"):
+        out = await get_worker_daily_step_breakdown(
+            _ctx(
+                db_session,
+                workspace_id=ws.client_id,
+                user_id=worker.client_id,
+                role_name=role_name,
+                query_params={"date_from": "2026-07-15", "date_to": "2026-07-15", "limit": 50, "offset": 0},
+            )
+        )
+        item = out["steps"]["items"][0]
+        assert item["total_cost_minor"] == 4321
 
 
 @pytest.mark.integration

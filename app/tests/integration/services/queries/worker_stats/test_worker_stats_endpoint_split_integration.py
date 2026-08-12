@@ -79,6 +79,7 @@ async def _seed_step(db_session, workspace_id: str, user_id: str) -> TaskStep:
         working_section_id=section.client_id, working_section_name_snapshot=section.name,
         state=TaskStepStateEnum.WORKING, readiness_status=TaskStepReadinessStatusEnum.READY,
         total_dependencies=0, completed_dependencies=0, created_by_id=user_id,
+        total_cost_minor=4321,
     )
     db_session.add(step)
     await db_session.flush()
@@ -249,3 +250,29 @@ async def test_split_endpoints_share_roster_and_return_disjoint_shapes(db_sessio
     assert totals["workers"][0]["daily_stats"]["total_working_seconds"] == 0
     assert totals["workers"][0]["running"]["working_open_count"] == 0
     assert insights["workers"][0]["insights"] == []
+
+
+@pytest.mark.integration
+async def test_last_interacted_steps_keep_money_for_manager(db_session):
+    ws = Workspace(client_id=f"ws_{uuid4().hex[:8]}", name="W")
+    db_session.add(ws)
+    await db_session.flush()
+    worker = await _seed_worker(db_session, ws.client_id)
+    step = await _seed_step(db_session, ws.client_id, worker.client_id)
+    now = datetime.now(timezone.utc)
+    record = StepStateRecord(
+        workspace_id=ws.client_id,
+        step_id=step.client_id,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=now,
+        created_at=now,
+        created_by_id=worker.client_id,
+    )
+    db_session.add(record)
+    await db_session.flush()
+    step.latest_state_record_id = record.client_id
+    await db_session.flush()
+
+    result = await list_workers_last_interacted_step(_ctx(db_session, workspace_id=ws.client_id))
+    payload = result["workers"][0]["last_interacted_step"]
+    assert payload["total_cost_minor"] == 4321

@@ -74,7 +74,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | PROMPT_READY | 2026-08-12 | coordinator | projection r0 AMENDMENTS_REQUIRED; ledger D1–D9 fully routed (census → intention R5-1; plan rows 17–25; owner card → R5-2); implementer prompt authored |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | IMPLEMENTED | 2026-08-12 | Codex | fail-closed role-derived step money redaction; 57 phase-focused tests passed; full suite 1601 passed / 22 pre-existing failures |
 | 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-11 | planner | all 9 tables + enums + partial uniques + CHECKs |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |

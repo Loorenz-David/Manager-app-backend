@@ -20,14 +20,17 @@ from beyo_manager.models.tables.working_sections.working_section_membership impo
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.task_step_acknowledgments.count_reassigned_steps import count_reassigned_steps
 from beyo_manager.services.queries.task_step_acknowledgments.list_reassigned_steps import list_reassigned_steps
+from beyo_manager.services.queries.task_step_acknowledgments.list_pending_step_acknowledgments import (
+    list_pending_step_acknowledgments,
+)
 from tests.integration.services.queries.working_sections.test_list_working_section_steps_payload_characterization import (
     _STEP_KEYS,
 )
 
 
-def _ctx(db_session, workspace_id, user_id, **params):
+def _ctx(db_session, workspace_id, user_id, *, role_name="worker", **params):
     return ServiceContext(
-        identity={"workspace_id": workspace_id, "user_id": user_id, "role_name": "worker"},
+        identity={"workspace_id": workspace_id, "user_id": user_id, "role_name": role_name},
         incoming_data={}, query_params=params, session=db_session,
     )
 
@@ -46,7 +49,7 @@ async def _seed(db_session, *, state=TaskStepStateEnum.PENDING, article="302.445
         await db_session.flush()
     section = WorkingSection(client_id=f"wsec_{suffix}", workspace_id=workspace.client_id, name=f"Section {suffix}", is_deleted=section_deleted)
     task = Task(client_id=f"tsk_{suffix}", workspace_id=workspace.client_id, task_scalar_id=int(suffix[:7], 16), task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=worker.client_id, is_deleted=task_deleted)
-    step = TaskStep(client_id=f"tsp_{suffix}", workspace_id=workspace.client_id, task_id=task.client_id, working_section_id=section.client_id, working_section_name_snapshot=section.name, state=state, readiness_status=TaskStepReadinessStatusEnum.READY, total_dependencies=0, completed_dependencies=0, created_by_id=worker.client_id, is_deleted=step_deleted)
+    step = TaskStep(client_id=f"tsp_{suffix}", workspace_id=workspace.client_id, task_id=task.client_id, working_section_id=section.client_id, working_section_name_snapshot=section.name, state=state, readiness_status=TaskStepReadinessStatusEnum.READY, total_dependencies=0, completed_dependencies=0, created_by_id=worker.client_id, total_cost_minor=4321, is_deleted=step_deleted)
     db_session.add_all([section, task, step])
     await db_session.flush()
     if item:
@@ -62,7 +65,7 @@ async def _seed(db_session, *, state=TaskStepStateEnum.PENDING, article="302.445
     return workspace, worker, other, section, task, step
 
 
-def _list_ctx(db_session, workspace, worker, **params):
+def _list_ctx(db_session, workspace, worker, *, role_name="worker", **params):
     query_params = {
         "limit": 50,
         "offset": 0,
@@ -75,6 +78,7 @@ def _list_ctx(db_session, workspace, worker, **params):
         db_session,
         workspace.client_id,
         worker.client_id,
+        role_name=role_name,
         **query_params,
     )
 
@@ -238,14 +242,14 @@ async def test_reassigned_list_payload_sections_order_and_filtered_pagination(db
     assert [item["client_id"] for item in first_page["steps_pagination"]["items"]] == [third_step.client_id, second_step.client_id]
 
     item = first_page["steps_pagination"]["items"][0]
-    assert set(item) == _STEP_KEYS | {"acknowledgment"}
+    assert set(item) == (_STEP_KEYS - {"total_cost_minor"}) | {"acknowledgment"}
+    assert "total_cost_minor" not in item
     assert item["is_reassigned"] is True
     assert item["acknowledgment"]["acknowledged_at"] is None
     assert set(first_page["working_sections"]) == {third_section.client_id, second_section.client_id}
     assert set(first_page["working_sections"][third_section.client_id]) == {
         "client_id", "name", "image", "order_list", "allows_batch_working", "allows_shopify_product_modifications"
     }
-
     filtered = await list_reassigned_steps(_list_ctx(db_session, workspace, worker, q="SoFa", limit=1))
     filtered_next = await list_reassigned_steps(_list_ctx(db_session, workspace, worker, q="302.4", limit=1, offset=1))
     assert filtered["steps_pagination"]["has_more"] is True
@@ -253,6 +257,27 @@ async def test_reassigned_list_payload_sections_order_and_filtered_pagination(db
     assert [item["client_id"] for item in filtered_next["steps_pagination"]["items"]] == [first_step.client_id]
     assert filtered_next["steps_pagination"]["has_more"] is False
 
+
+@pytest.mark.integration
+async def test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker(db_session):
+    workspace, worker, _, _, _, step = await _seed(db_session, suffix=uuid4().hex[:8])
+
+    worker_reassigned = await list_reassigned_steps(_list_ctx(db_session, workspace, worker))
+    manager_reassigned = await list_reassigned_steps(
+        _list_ctx(db_session, workspace, worker, role_name="manager")
+    )
+    assert "total_cost_minor" not in worker_reassigned["steps_pagination"]["items"][0]
+    assert manager_reassigned["steps_pagination"]["items"][0]["total_cost_minor"] == 4321
+
+    worker_pending = await list_pending_step_acknowledgments(
+        _ctx(db_session, workspace.client_id, worker.client_id, limit=50, offset=0)
+    )
+    manager_pending = await list_pending_step_acknowledgments(
+        _ctx(db_session, workspace.client_id, worker.client_id, role_name="manager", limit=50, offset=0)
+    )
+    assert worker_pending["acknowledgments"][0]["client_id"] == step.client_id
+    assert "total_cost_minor" not in worker_pending["acknowledgments"][0]
+    assert manager_pending["acknowledgments"][0]["total_cost_minor"] == 4321
 
 @pytest.mark.integration
 async def test_reassigned_count_is_q_independent_and_list_statement_count_is_bounded(db_session, executed_statements):

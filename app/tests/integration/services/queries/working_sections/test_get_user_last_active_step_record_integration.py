@@ -19,12 +19,12 @@ from beyo_manager.services.queries.working_sections.get_user_last_active_step_re
 )
 
 
-def _ctx(db_session, *, workspace_id: str, user_id: str) -> ServiceContext:
+def _ctx(db_session, *, workspace_id: str, user_id: str, role_name: str = "worker") -> ServiceContext:
     return ServiceContext(
         identity={
             "workspace_id": workspace_id,
             "user_id": user_id,
-            "role_name": "worker",
+            "role_name": role_name,
             "username": "tester",
         },
         incoming_data={},
@@ -96,6 +96,7 @@ async def _seed_step_with_record(
         total_dependencies=0,
         completed_dependencies=0,
         created_by_id=user_id,
+        total_cost_minor=4321,
         is_deleted=step_deleted,
         deleted_at=created_at if step_deleted else None,
         deleted_by_id=user_id if step_deleted else None,
@@ -147,6 +148,33 @@ async def test_returns_non_deleted_step_when_deleted_task_has_newer_active_recor
     assert result["user_last_active_step_record"] is not None
     assert result["user_last_active_step_record"]["client_id"] == valid_step.client_id
     assert result["active_batch_steps"] is None
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("role_name, expected_money", [("worker", False), ("manager", True)])
+async def test_last_active_step_payload_applies_role_money_boundary(db_session, role_name, expected_money):
+    workspace, user = await _seed_workspace_and_user(db_session)
+    step = await _seed_step_with_record(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+        task_scalar_id=1,
+        created_at=datetime.now(timezone.utc),
+    )
+    result = await get_user_last_active_step_record(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name=role_name,
+        )
+    )
+    payload = result["user_last_active_step_record"]
+    assert payload["client_id"] == step.client_id
+    if expected_money:
+        assert payload["total_cost_minor"] == 4321
+    else:
+        assert "total_cost_minor" not in payload
 
 
 @pytest.mark.integration

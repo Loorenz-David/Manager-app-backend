@@ -4,6 +4,7 @@ from datetime import datetime
 
 from beyo_manager.domain.images.serializers import serialize_image
 from beyo_manager.domain.pause_reasons.serializers import serialize_pause_reason
+from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.transitions.labels import resolve_transition_reason_catalog_reference
 from beyo_manager.domain.users.serializers import serialize_user_compact_with_role, serialize_user_working_section_member
 from beyo_manager.models.tables.images.image import Image
@@ -149,8 +150,16 @@ def serialize_requirement(row: ItemUpholsteryRequirement) -> dict:
     }
 
 
-def serialize_step(step: TaskStep) -> dict:
-    return {
+def include_monetary_step_fields(role_name: str) -> bool:
+    """Return whether a role may receive the step's monetary fields."""
+    return role_name in {
+        RoleNameEnum.ADMIN.value,
+        RoleNameEnum.MANAGER.value,
+    }
+
+
+def serialize_step(step: TaskStep, *, include_monetary: bool) -> dict:
+    payload = {
         "client_id": step.client_id,
         "task_id": step.task_id,
         "state": step.state.value,
@@ -173,9 +182,11 @@ def serialize_step(step: TaskStep) -> dict:
         "total_ended_shift_count": step.total_ended_shift_count,
         "total_issues_count": step.total_issues_count,
         "total_issues_resolved_count": step.total_issues_resolved_count,
-        "total_cost_minor": step.total_cost_minor,
         "recorded_time_marked_wrong": step.recorded_time_marked_wrong,
     }
+    if include_monetary:
+        payload["total_cost_minor"] = step.total_cost_minor
+    return payload
 
 
 def serialize_step_pause_reason(record: StepStateRecord) -> dict | None:

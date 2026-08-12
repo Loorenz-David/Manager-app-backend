@@ -1016,7 +1016,7 @@ async def test_step_payload_keeps_its_ended_shift_fields(db_session, monkeypatch
     await _recompute_step_time_totals(db_session, workspace.client_id, step.client_id, COMPLETED)
     await db_session.flush()
 
-    payload = serialize_step(step)
+    payload = serialize_step(step, include_monetary=True)
 
     assert payload["total_ended_shift_seconds"] == OFF_SHIFT_SECONDS
     assert payload["total_ended_shift_count"] == 1

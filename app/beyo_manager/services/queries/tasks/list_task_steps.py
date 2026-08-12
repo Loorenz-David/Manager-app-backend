@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.tasks.serializers import (
+    include_monetary_step_fields,
     serialize_step,
     serialize_step_latest_state_record,
 )
@@ -54,7 +55,10 @@ async def list_task_steps(ctx: ServiceContext) -> dict:
         "steps_pagination": {
             "items": [
                 {
-                    **serialize_step(step),
+                    **serialize_step(
+                        step,
+                        include_monetary=include_monetary_step_fields(ctx.role_name),
+                    ),
                     "latest_state_records": serialize_step_latest_state_record(step.latest_state_record),
                 }
                 for step in page
