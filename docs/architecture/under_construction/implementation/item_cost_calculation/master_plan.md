@@ -78,8 +78,8 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | IMPLEMENTED | 2026-08-12 | reviewer (Claude); Codex (fix r2) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative. Fix r2: S1 ADMIN rows added and asserted `== 4321`; S2 baseline correction and full 23-item list recorded; focused 39 passed, full run 1605 passed / 23 failed / 1 deselected. Coordinator: fix handoff consumed, perimeter exact vs `ed99e7e`, arithmetic reconciled (1624→1629 = the 5 rows); re-review r2 prompt authored (probes: reshaped worker assertions, baseline list match, new-row liveness) |
-| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended) |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | **APPROVED** | 2026-08-12 | reviewer (Claude); Codex (fix r2); reviewer r2 (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative. Fix r2: S1 ADMIN rows added and asserted `== 4321`; S2 baseline correction and full 23-item list recorded; focused 39 passed, full run 1605 passed / 23 failed / 1 deselected. Coordinator: fix handoff consumed, perimeter exact vs `ed99e7e`, arithmetic reconciled (1624→1629 = the 5 rows); re-review r2 prompt authored (probes: reshaped worker assertions, baseline list match, new-row liveness). **Review r2: APPROVED** — perimeter exact (six files, zero production-code change), S1+S2 resolved, criteria now 26/26 (24/24 cells), rows 19/22 survived the reshaping and run twice, all four probes bite per-parameter plus an ADMIN-drop probe reddening exactly 9 ADMIN ids with zero collateral, baseline list set-identical to r1's, suite 1605/23/1 with the failure set byte-identical to baseline, archgraph zero delta. Open notes carried forward: N1/N2→phase 9, N7 (test naming)→next touch |
+| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended); projection r0 prompt authored (`prompts/reviewer/2026-08-12_phase2_projection_r0.md`) |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
 | 5 | Valuation surface | `plans/phase_5_valuation_surface.md` | ⚑ (rows 15,16 — valuation chain; 34) | NOT_STARTED | 2026-08-11 | planner | ItemValuation chain command + preview |
@@ -369,11 +369,20 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
 - **P-F (calculator monopoly):** every derived economic value is produced by
   `domain/item_economics/calculator.py`; no service computes money/rate/minutes
   arithmetic inline. Snapshots are written only from calculator outputs.
-- **P-G (review-r1 lesson 1):** when a criteria table carries rows whose expected
-  outcome is identical to a neighbour's (e.g. ADMIN mirroring MANAGER), the plan
-  names them **separately required** or collapses them explicitly — a row that
-  looks redundant is the row that gets sampled. Implementer prompts restate this
-  where such rows exist.
+- **P-G (review-r1 lesson 1; extended by re-review r2):** when a criteria table
+  carries rows whose expected outcome is identical to a neighbour's (e.g. ADMIN
+  mirroring MANAGER), the plan names them **separately required** or collapses
+  them explicitly — a row that looks redundant is the row that gets sampled.
+  Additionally: (a) such **retention rows get their own named mutation** ("removing
+  ADMIN from the allow-list must redden every ADMIN row") so they cannot be
+  dismissed as redundant — charter rule 11 applied to retention, not only guards;
+  (b) role/audience-parametrized tests **name the audience in the test name**, not
+  one example member (opacity about covered roles is what produced S1/N7).
+  Implementer prompts restate this where such rows exist.
+- **P-I (re-review-r2 lesson 3):** a fix cycle that adds test rows to satisfy a
+  coverage finding **mutation-tests those rows itself** — "do the new rows bite?"
+  never reaches the re-reviewer unanswered. Fix prompts carry this line whenever
+  the findings include missing coverage.
 - **P-H (review-r1 lesson 4):** a phase that redacts or reshapes an existing
   payload carries a one-line **structural criterion** for the HTTP boundary — "no
   `response_model` (or equivalent coercion) on the affected routes re-adds the

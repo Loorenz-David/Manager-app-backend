@@ -395,3 +395,111 @@ configured database is left as found, at head.
 - Focused verification: **39 passed** across the four changed integration modules.
 - Optional notes N3, N4, and N6 were not taken: none is required by S1/S2, and keeping the cycle limited preserves the finding-scoped perimeter.
 - No production code changed. Architecture Graph status remained valid at 116 nodes / 157 edges, zero stale nodes, revision `b0702c3c…`; no architectural delta was recorded.
+
+### Reviewer r2 — 2026-08-12 — Claude (plan-reviewer, delta-scoped re-review)
+
+**Verdict: APPROVED.** S1 and S2 are both resolved and independently verified. No new
+findings; one cosmetic note carried forward. Settled ground from r1 was not re-derived,
+per the charter's re-review protocol.
+
+**Perimeter — PASS.** `git show ed99e7e` contains exactly the six allowed files: the
+four test modules, this plan (Review log) and the master-plan tracker row. Nothing
+outside. **No production code changed** — `git diff 4416570..ed99e7e --
+app/beyo_manager/` is empty, so the redaction machinery approved on the merits in r1 is
+byte-identical, and the r1 "Verified correct" list stands unchanged. Commits `3e40646`,
+`65a20f0`, `bb7de26` after the checkpoint are coordinator docs only.
+
+**S1 — RESOLVED.** All five previously untested rows now collect as live parameters and
+assert equality with the seeded value: row 9 →
+`test_list_working_section_steps_payload_key_sets_are_stable[admin-False]` and
+`[admin-True]`; row 12 → `test_last_active_step_payload_applies_role_money_boundary[admin-True]`;
+rows 17 and 20 →
+`test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker[admin]`
+(both assertions in that param); row 23 →
+`test_last_interacted_steps_keep_money_for_manager[admin]`. Criteria coverage is now
+**24 of 24 (endpoint × admitted role) cells, 26 of 26 rows**.
+
+**R2-P1 — PASS. The WORKER rows survived the reshaping.** The two reshaped tests
+parametrize only the *retained-money* context; the worker contexts take the `"worker"`
+default, so rows 19 and 22 still execute — and now run **twice each**, once per
+parameter. Verified by collection (14 ids across the five criteria tests) and by
+mutation (below), not by reading alone.
+
+**R2-P3 — PASS, probes run independently (fix r2 ran none).** In a disposable worktree
+at `ed99e7e`, per-parameter granularity, control run 15/15 green first:
+
+| Probe | Result |
+|---|---|
+| blanket `False` at site-5 derivation | RED — daily-breakdown test (rows 15 + 15b) |
+| blanket `False` at `build_step_record_payload` derivation | RED — `last_interacted[admin]` **and** `last_interacted[manager]` (rows 23 + 24) independently; also `last_active[admin-True]`/`[manager-True]` (rows 12/13); worker row correctly green |
+| M4 hardcode `True` at `build_steps_list_payload` | RED — `key_sets_are_stable[worker-False]`/`[worker-True]` (row 11) and the reassigned test under both params plus the pre-existing pagination characterization (row 19); admin/manager rows correctly green |
+| M5 hardcode `True` at `build_step_record_payload` | RED — `last_active[worker-False]` (row 14) and the reassigned test under both params (row 22); retention rows correctly green |
+
+**Additional probe (not requested — the sharpest test of whether S1's fix earns its
+place): ADMIN dropped from the allow-list.** Exactly **nine** ADMIN-bearing ids went
+red — one per endpoint plus the unit helper row — with **zero** ADMIN ids left green and
+**zero** collateral reddening of any MANAGER or WORKER row. This is the defect the five
+new rows exist to catch: before fix r2 it would have been caught on only three of the
+eight endpoints, and an admin-visible money regression on the working-section list, the
+live step card, both acknowledgment screens and the last-interacted roster would have
+shipped green. The fix has real detection value, not just row-count conformance. It also
+settles a doubt about the daily-breakdown test's sequential `for role_name in
+("manager", "admin")` loop: the admin iteration does execute and does bite, so row 15b
+is genuinely live (r1 note N6's shared-test caveat is cosmetic, not a coverage hole).
+
+**S2 / R2-P2 — RESOLVED and exact.** The correction is **append-only** — the plan-file
+diff for `ed99e7e` contains no deletions at all, and the historical implementer r1
+numbers are preserved beside it (placement inside the implementer entry is exactly what
+the r1 correction clause authorized). It carries the verified pair (`545e504` →
+1578/23/1; `4416570` → 1600/23/1) verbatim, and its 23-item list was **set-compared
+programmatically** against the r1 reviewer's verified set: identical in both directions,
+no additions, no omissions.
+
+**Arithmetic — PASS, exact.** Collection 1624 → **1629** = +5, matching the added
+parameters precisely (characterization role 2→3 × group 2 = +2; last-active 2→3 = +1;
+reassigned 1→2 = +1; last-interacted 1→2 = +1). Nothing else was added or removed.
+
+**Full suite — PASS.** `PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/`:
+**1605 passed / 23 failed / 1 deselected** (1629 collected), 55 s, containers healthy.
+Zero connection noise (no `ConnectionRefused` / `OperationalError` / redis
+`ConnectionError` lines), so this run is admissible evidence. The failure set is
+**byte-identical** to the recorded 23-item baseline — the fix introduced no regression
+and resolved none of the pre-existing failures.
+
+**Archgraph — zero delta, confirmed.** Read-only `archgraph_status`: 116 nodes /
+157 edges, revision `b0702c3c…`, 0 stale, 244 pending, unchanged. Trivially correct
+here — the fix touched only test files, so no architecture could have moved. No
+discrepancy filed.
+
+**N7 — note (new, cosmetic, carry-forward).** Two test names now under-describe what
+they assert: `test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker`
+and `test_last_interacted_steps_keep_money_for_manager` both cover ADMIN, and the local
+variables still read `manager_reassigned` / `manager_pending`. This matters mildly
+because opacity about which roles were covered is what produced S1 in the first place —
+a reader scanning names would conclude ADMIN is untested. *Correction:* rename to
+`…_for_money_audience_roles_and_redact_worker` / `…_keep_money_for_money_audience_roles`
+on the next touch of these files. Not a blocker and not worth its own cycle.
+
+**Carry-forward dispositions (open notes at approval).**
+
+| Note | Origin | Destination |
+|---|---|---|
+| N1 — live frontend handoff doc publishes `total_cost_minor` for the worker reassigned-steps page | review r1 | phase 9 docs/drift batch; coordinator note to the frontend team |
+| N2 — money-audience boundary stated nowhere in the architecture graph | review r1 | phase 9 (candidate node/description) |
+| N3, N4, N6 — id reconstruction, whitespace churn, rows 19/22 sharing one test | review r1, declined in fix r2 | closed as declined; N6 additionally settled by the ADMIN-drop probe |
+| N5 — tracker Actor column overwritten | review r1 | absorbed: fix r2 preserved the reviewer stamp and appended its own |
+| N7 — two test names under-describe their role coverage | review r2 | next touch of the two files; no dedicated cycle |
+| Lessons P-G/P-H | review r1, folded by coordinator | master plan §9 |
+
+**Reviewer mutation-probe declaration (round 2).** All probes ran in a throwaway
+`git worktree` at `ed99e7e` (`probe_r2`); the primary working tree was **never
+modified** — clean at `bb7de26` before and after. Files mutated and reverted inside the
+probe worktree, each sha256 byte-identical afterwards:
+`domain/tasks/serializers.py` (ADMIN-drop probe),
+`services/queries/working_sections/steps_list_payload.py` (M4),
+`services/queries/working_sections/step_record_payload.py` (M5 + blanket-False),
+`services/queries/worker_stats/get_worker_daily_step_breakdown.py` (site-5
+blanket-False). Worktree `git status` clean before removal; worktree removed and
+`git worktree prune` run. DB side effects: none committed — `db_session` rolls back; the
+configured database is left as found, at head. No migrations run. Archgraph: read-only,
+nothing written.
