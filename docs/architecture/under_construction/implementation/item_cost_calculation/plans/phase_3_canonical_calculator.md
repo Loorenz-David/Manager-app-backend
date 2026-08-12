@@ -548,3 +548,32 @@ Extends rule 2's sole-predicate companion from equality rows to cascade/implicat
 L8: extending L6 — a mutation declaration must be checked **against the run that produced it**; naming a
 plausible-but-wrong row ("the cascade row reddened") is worse than naming none, because it converts an
 unguarded clause into an apparently-verified one (earned: S6's declaration defect).
+
+### Implementer fix r4 — 2026-08-12 — Codex
+
+Resolved S6, N14, and N16 within the fix-cycle perimeter. S6's cascade fixture now stores the rate as
+`Decimal("399.5000")` and expects the cascade allowance entry to carry
+`rederived_value = stored_value = Decimal("5.42")`, making the `or rate != stored_rate` clause the sole
+reason that entry exists. N16 now passes an unsaved `ItemCostEvaluationTerm` to the malformed-purchase
+re-derivation row. N14 pins a homogeneous four-key mismatch shape (`field`, `rederived_value`,
+`stored_value`, `error`), using `error: None` for plain disagreements and retaining the existing error
+text for converted failures. Optional N12/N13 were not taken; they are outside the routed corrections.
+
+Verification: focused calculator suite **65 passed**; Ruff and `git diff --check` are clean. The full
+non-E2E suite is **1749 passed / 23 known failures / 1 deselected**, with the 23-failure set matching the
+established baseline; the failures are unrelated pre-existing failures. The S6 mutation (delete
+`or rate != stored_rate` at the production call site) failed exactly
+`test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload`. N14 error-key mutations were
+run and reverted at each plain-entry call site: the rate entry failed
+`test_rederive_malformed_evaluation_rate_returns_integrity_marker_and_cascade` and
+`test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload`; the term entry failed
+`test_rederive_detects_a_changed_term_amount_on_the_same_orm_shape`; the budget entry failed
+`test_rederive_reports_production_budget_mismatch_payload`; and the allowance entry failed
+`test_rederive_reports_allowed_worker_minutes_mismatch_payload` plus the cascade row. All mutation edits
+were reverted before the final suite and hash capture. Final SHA-256: calculator
+`03389d0a2743ae7968a0e5aecc88cc5b2675bea6762c2b9bbec2d87662af8eb0`; tests
+`6733181ed998b101ac2bcb0d95f4f5bfc3729f4d1a6ca8e40b619b8b705daa86`.
+
+Architecture Graph: zero delta; the graph remains read-only for this fix, at revision
+`671fd92a…`, 126 nodes / 161 edges, one pending `domain-item-economics` node, zero diagnostics and
+zero stale nodes. No owner decision is required.

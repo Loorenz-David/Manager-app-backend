@@ -452,6 +452,7 @@ def rederive(
                 "field": "cost_per_worker_minute_minor_snapshot",
                 "rederived_value": rate,
                 "stored_value": stored_rate,
+                "error": None,
             }
         )
 
@@ -487,6 +488,7 @@ def rederive(
                     "field": f"term[{term_row.name}].amount_minor",
                     "rederived_value": amount,
                     "stored_value": stored_amount,
+                    "error": None,
                 }
             )
 
@@ -502,6 +504,7 @@ def rederive(
                 "field": "production_budget_minor",
                 "rederived_value": budget,
                 "stored_value": stored_budget,
+                "error": None,
             }
         )
     stored_allowed_value: object = None
@@ -536,6 +539,7 @@ def rederive(
                 "field": "allowed_worker_minutes",
                 "rederived_value": allowed,
                 "stored_value": stored_allowed,
+                "error": None,
             }
         )
     if mismatches:

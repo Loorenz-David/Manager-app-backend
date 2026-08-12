@@ -432,6 +432,7 @@ def test_rederive_detects_a_changed_term_amount_on_the_same_orm_shape() -> None:
             "field": "term[fixed allocation].amount_minor",
             "rederived_value": 1234,
             "stored_value": 1235,
+            "error": None,
         }
     ]
 
@@ -472,6 +473,7 @@ def test_rederive_malformed_evaluation_rate_returns_integrity_marker_and_cascade
                 "field": "cost_per_worker_minute_minor_snapshot",
                 "rederived_value": Decimal("400.0000"),
                 "stored_value": Decimal("0"),
+                "error": None,
             },
             {
                 "field": "allowed_worker_minutes",
@@ -506,8 +508,12 @@ def test_rederive_malformed_purchase_snapshot_returns_integrity_marker() -> None
     result = rederive(
         _evaluation_for_rederive(purchase_cost_minor=None),
         [
-            _term(
-                CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST,
+            ItemCostEvaluationTerm(
+                workspace_id="ws_test",
+                evaluation_id="ice_test",
+                calculation_type=CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST,
+                percent_value=None,
+                fixed_amount_minor=None,
                 amount_minor=1234,
                 name="purchase allocation",
             )
@@ -540,6 +546,7 @@ def test_rederive_reports_production_budget_mismatch_payload() -> None:
                 "field": "production_budget_minor",
                 "rederived_value": 2166,
                 "stored_value": 2165,
+                "error": None,
             }
         ],
     }
@@ -558,6 +565,7 @@ def test_rederive_reports_allowed_worker_minutes_mismatch_payload() -> None:
                 "field": "allowed_worker_minutes",
                 "rederived_value": Decimal("5.42"),
                 "stored_value": Decimal("5.41"),
+                "error": None,
             }
         ],
     }
@@ -566,7 +574,7 @@ def test_rederive_reports_allowed_worker_minutes_mismatch_payload() -> None:
 def test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload() -> None:
     result = rederive(
         _evaluation_for_rederive(
-            cost_per_worker_minute_minor_snapshot=Decimal("399.0000")
+            cost_per_worker_minute_minor_snapshot=Decimal("399.5000")
         ),
         _valid_rederive_terms(),
     )
@@ -577,12 +585,14 @@ def test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload() -> No
             {
                 "field": "cost_per_worker_minute_minor_snapshot",
                 "rederived_value": Decimal("400.0000"),
-                "stored_value": Decimal("399.0000"),
+                "stored_value": Decimal("399.5000"),
+                "error": None,
             },
             {
                 "field": "allowed_worker_minutes",
-                "rederived_value": Decimal("5.43"),
+                "rederived_value": Decimal("5.42"),
                 "stored_value": Decimal("5.42"),
+                "error": None,
             },
         ],
     }
