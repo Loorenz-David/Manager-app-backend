@@ -325,3 +325,30 @@ row (value disagreement, malformed term shape, malformed evaluation snapshot —
 zeroed rate included) returns the integrity marker; the read always renders; no
 `ValidationError` escapes `rederive` on any path. Folded as R10-1 (§6A.11
 input-class enumeration per lesson L5).
+
+---
+
+# Round-12 owner scope decision (2026-08-12) — category-driven group selection
+
+Owner-initiated: v1 must NOT ship with the single-group workspace rule. Cost
+groups are selected by the item's **major category** (wood | seat): e.g. group A
+carries the seat sections' fixed cost, group B the wood sections'.
+
+## Pin 1 — How is a group bound to its category?
+
+**ANSWER (2026-08-12):** Required at creation — every cost group declares its
+major category (wood | seat), and a DB constraint allows **one active group per
+(workspace, major_category)**. Selection is unambiguous by construction; a second
+seat group is refused with a named error. (Clean now: the table has no production
+data.)
+
+## Pin 2 — Items without a major category?
+
+**ANSWER (2026-08-12):** Option A — **economics precondition only**: a
+category-less item cannot be evaluated and surfaces the new named status
+`item_missing_major_category` (never guessed, never zero). Item creation
+elsewhere in the app is untouched; making category mandatory at item creation is
+a separate item-domain decision, not this project's.
+
+Folded as R12-1 (new intention §7C; §7.4/§7A.5 superseded for group resolution;
+§11A.4 vocabulary grows to 12 ordered values; phase 4B inserted between 4 and 5).

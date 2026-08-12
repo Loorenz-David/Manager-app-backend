@@ -904,6 +904,10 @@ operational read filters `kind = 'committed' AND superseded_at IS NULL`.
 
 ### 7.4 Basis selection (v1 rule)
 
+*(Round 12: SUPERSEDED for group resolution by §7C — selection is by the item's
+major category, one active group per category. This section's zero/many refusal
+discipline survives inside §7C.2.)*
+
 The evaluation uses the workspace's **single active production cost group**. Zero
 active groups, or more than one → `ValidationError` naming the condition — never a
 guess (R-8). The schema supports many groups; selection among them (per item category,
@@ -1141,6 +1145,54 @@ commit either.
   `services/commands/tasks/create_task.py` (definition site) must turn red a test in
   which the evaluation INSERT itself raises (the 7A.2 conflict path, or a patched
   calculator) and which asserts the task row is committed and readable afterwards.
+
+### 7C. Category-driven group selection (round 12 — supersedes §7.4's and §7A.5's group-resolution rows)
+
+Owner decision (2026-08-12): the workspace's cost groups are resolved by the
+item's **major category** (wood | seat), not by being the workspace's only group.
+Ships as phase 4B, before v1.
+
+**7C.1 Schema.** `production_cost_groups.major_category` — **NOT NULL** enum copy
+of the items domain's major-category vocabulary (WOOD | SEAT; PG type reused with
+`create_type=False`, ownership stays on its owning items-domain column — R2-1
+rule; exact type name pinned by the phase-4B registry row). **INV-G3: one active
+group per (workspace, major_category)** — partial unique
+`uix_production_cost_groups_major_category_active` (`WHERE is_deleted = false`).
+The name-uniqueness (INV of §4.1) stands unchanged. Migration note: the table is
+unshipped to production; the column lands NOT NULL with a pre-flight refusing if
+uncategorizable rows exist in the target DB (dev rows are test residue — the
+migration reports, never guesses a category).
+
+**7C.2 Selection rule (total, ordered — replaces "the single active group"):**
+1. Resolve the task's PRIMARY item's major category from the item's
+   denormalized `item_major_category_snapshot`. **Absent → status/refusal
+   `item_missing_major_category`** (new §11A.4 value; owner pin 2: economics
+   precondition only — item creation elsewhere is untouched).
+2. Resolve the workspace's active group **for that category**. None →
+   `not_configured_no_cost_group` (message names the category). More than one →
+   `not_configured_ambiguous_cost_group` — structurally unreachable under INV-G3,
+   retained as the classifier's total-order defence row.
+3. The chosen group's open basis version resolves as before (§7A.3/§7A.5 rows 3–4
+   unchanged, now per the selected group).
+The evaluation snapshots the chosen group/basis exactly as before (§4.5) — no
+history semantics change.
+
+**7C.3 Vocabulary (§11A.4 amended):** `item_missing_major_category` joins the
+ordered group-2 reasons and **evaluates FIRST among them** (the category is a
+precondition of every later config check); the list is now 12 values, order:
+`item_missing_major_category` → `not_configured_no_cost_group` →
+`not_configured_ambiguous_cost_group` → `not_configured_no_basis_version` →
+`not_configured_no_cost_model_version` → `item_unvalued` → … (rest unchanged).
+The workspace-level configuration-status query becomes **per-category**: one
+evaluability block per major category (group? open basis?) plus the shared
+cost-model fields — the onboarding UI shows wood and seat readiness separately.
+
+**7C.4 Commands.** Group create requires `major_category`; group update may not
+change it once any basis version exists (a category flip would silently reprice —
+correction is delete-and-recreate under the §7.5 guards); the INV-G3 conflict is
+dual-path like its siblings (registry identity, phase-4B row).
+
+---
 
 ---
 
@@ -1729,6 +1781,8 @@ search for a missing evidence doc).
   per-section budget guidance (raw §2's "later implementation"; §9.3).
 - Multi-item allocation beyond PRIMARY; any RELATED-item economics (§9.1).
 - Multi-group basis selection rules; per-group rate analytics (§7.4).
+  *(Round 12: category-driven selection is CONSUMED into v1 as §7C / phase 4B;
+  per-task-section and other finer selection rules remain deferred.)*
 - Observed utilization surfaces (per-worker ratio from shift records; per-section
   blocked on the §2.4 attribution gap) and planned-vs-observed comparisons.
 - Actual sale price ingestion (Shopify orders) and realized-margin analytics.
@@ -2189,6 +2243,22 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   silently falsifying HC-7's re-derivation theorem. Over-precise entries are
   rounded, never refused (owner: the manager mid-setup is not blocked over a
   payroll export's spare digit).
+
+**Round 12 — 2026-08-12 (owner scope decision: category-driven group selection):**
+
+- **R12-1 (owner-initiated, pre-v1)** Cost groups are selected by the PRIMARY
+  item's **major category** (wood | seat) — new §7C: `major_category` NOT NULL on
+  groups (enum reuse, R2-1 ownership), **INV-G3** one active group per
+  (workspace, category), the total ordered selection rule (missing category →
+  new status `item_missing_major_category`, evaluated first among group-2
+  reasons; §11A.4 now 12 values), per-category configuration status, and the
+  category-immutable-once-versioned command rule. Owner pins: category required
+  at group creation (one per category); category-less items are an economics
+  precondition failure only — item creation untouched. Ships as **phase 4B**
+  between phases 4 and 5 (the consumers — preview, commit, status — build against
+  the final rule; the unshipped schema takes NOT NULL cleanly). §7.4's and
+  §7A.5's single-group rows are superseded; §13's "multi-group basis selection
+  rules" deferral is partially consumed (per-task-section rules stay deferred).
 
 ---
 
