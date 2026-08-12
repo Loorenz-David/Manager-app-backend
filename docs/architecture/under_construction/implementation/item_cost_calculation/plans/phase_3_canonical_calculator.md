@@ -197,3 +197,15 @@ reddens the precision half (Q3 → `InvalidOperation`). Plus:
 ## Review log
 
 (append-only)
+
+### Implementer r1 — 2026-08-12 — Codex
+
+Built the pure canonical calculator in `app/beyo_manager/domain/item_economics/calculator.py` and its 54-test unit proof in `app/tests/unit/domain/item_economics/test_calculator.py`. The implementation owns the boundary guards, the five visible quantization sites, total term-shape validation (including duplicate purchase-cost snapshots), budget, rate/underflow, allowance, consumption, remaining/variance, currency equality, calculation version, and HC-7 re-derivation. It performs no I/O, request parsing, service orchestration, persistence, or FK dereferencing.
+
+Judgment calls: D1 public API names are the exported `calculate_percentage_term_amount`, `calculate_term_amount`, `calculate_term_amounts`, `calculate_production_budget`, `calculate_cost_per_worker_minute`, `calculate_allowed_worker_minutes`, `calculate_actual_worker_minutes`, `calculate_consumed_cost_minor`, `calculate_remaining_worker_minutes`, `calculate_percent_consumed`, `calculate_variance_worker_minutes`, `calculate_variance_cost_minor`, `validate_currency_equality`, and `rederive`; D3 is implemented as one `_guard_type` definition used by all boundary wrappers; D4 uses the module constant `REDERIVE_SKIPPED = "rederive_skipped_calculation_version"`; D5 re-derives every term amount and compares it before returning the rate/budget/allowance tuple. C9's precision-hostile ambient row uses Q3 `(40_000_000, 400.0000)` so removal of `localcontext()` raises `InvalidOperation` at the intended site.
+
+Baseline from the correct app-topology invocation (`backend/app`, `PYTHONPATH=. pytest -m 'not e2e'`) was 1684 passed / 23 failed / 1 deselected. After implementation the full suite was 1738 passed / 23 failed / 1 deselected; the failure IDs are set-identical to baseline. Focused calculator suite: 54 passed.
+
+Named mutations were applied at and reverted from their required sites: M-Q1, M-Q2, M-Q3, M-Q4 quantize deletion, M-Q5; C6 shared `_guard_type` definition deletion; C7 FK read of `production_cost_basis_version_id`; C9 removal of Q1 explicit rounding; C9 removal of the Q3 `localcontext()` wrapper. Each mutation reddened its named assertion set. Calculator SHA-256 after every probe and at close: `088e6514ee3552f433b5aa28f082932ff98273e6507a2bfd82bff67ee1845e90`.
+
+Architecture Graph delta: one inferred `domain` node, `domain-item-economics` (`Item Economics`), recorded in one batch with calculator evidence at lines 1–26, 137–212, and 371–425. No pending review item was adjudicated. No owner decision is required.
