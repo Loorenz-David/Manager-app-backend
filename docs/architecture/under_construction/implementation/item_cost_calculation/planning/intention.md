@@ -422,7 +422,7 @@ come from" drill-down (raw §8) and make the budget re-derivable line by line.
 | `consumed_cost_minor` | Integer | worker handler | minutes × snapshot rate (§6.5) |
 | `variance_worker_minutes` / `variance_cost_minor` | Numeric(12,2) / Integer | worker handler | allowed − actual (negative = overrun) |
 | `task_closed_at` | tz datetime, **nullable (round 6)** | worker handler | copied from `task.closed_at`; NULL while the episode is not terminal |
-| `task_state_snapshot` | enum copy of task state (**round 6**; reuses PG type `task_state_enum`, `create_type=False`, ownership stays on `tasks.state` — R2-1 rule) | worker handler | the lifecycle boundary the row was last computed at (working \| ready \| resolved \| failed \| cancelled) |
+| `task_state_snapshot` | enum copy of task state, **NOT NULL** (**round 6**; reuses PG type `task_state_enum`, `create_type=False`, ownership stays on `tasks.state` — R2-1 rule) | worker handler | the lifecycle boundary the row was last computed at (working \| ready \| resolved \| failed \| cancelled); every §8B.2 recompute stamps it, so NULL is unrepresentable |
 | `computed_at` | tz datetime | worker handler | |
 | `created_at` (no soft delete) | | system | corrections happen by replay (recompute-and-SET), not edits |
 
