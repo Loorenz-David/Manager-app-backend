@@ -78,7 +78,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
-| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | CHANGES_REQUESTED | 2026-08-12 | reviewer (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10), fix-r2 prompt authored; reviewer handoff file was not deposited (content complete in this Review log — deviation recorded) |
+| 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | CHANGES_REQUESTED | 2026-08-12 | reviewer (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative |
 | 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | NOT_STARTED | 2026-08-12 | coordinator | all 9 tables + enums + partial uniques + CHECKs; round-6 result columns folded (§4.6 amended) |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
@@ -369,6 +369,19 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
 - **P-F (calculator monopoly):** every derived economic value is produced by
   `domain/item_economics/calculator.py`; no service computes money/rate/minutes
   arithmetic inline. Snapshots are written only from calculator outputs.
+- **P-G (review-r1 lesson 1):** when a criteria table carries rows whose expected
+  outcome is identical to a neighbour's (e.g. ADMIN mirroring MANAGER), the plan
+  names them **separately required** or collapses them explicitly — a row that
+  looks redundant is the row that gets sampled. Implementer prompts restate this
+  where such rows exist.
+- **P-H (review-r1 lesson 4):** a phase that redacts or reshapes an existing
+  payload carries a one-line **structural criterion** for the HTTP boundary — "no
+  `response_model` (or equivalent coercion) on the affected routes re-adds the
+  field" — because the query-level harness cannot observe it. Applies to phase 8's
+  worker status payload.
+- **Projection practice (review-r1 lesson 2):** projections enumerating breaking
+  tests grep the affected **payload keys** across the test tree, not only callers
+  of the changed symbol (D8 missed one of three this way).
 
 ## 10. Environment topology (VERIFIED 2026-08-12 in this workspace — update here if reality disagrees)
 
