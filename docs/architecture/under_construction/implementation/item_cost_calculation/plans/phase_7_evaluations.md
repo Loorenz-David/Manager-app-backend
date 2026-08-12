@@ -162,6 +162,10 @@ neither occurs on a failed commit.
   version resolution — a criterion here must exercise the delete-vs-commit race
   against the real commit path (the phase-4 test used an injected seam).
 
+- **Forward item (4B projection N-c):** §7C.2's missing-category REFUSAL on the
+  commit path needs a registered identity (`ITEM_COST_ITEM_MISSING_MAJOR_CATEGORY`
+  — propose to the coordinator before use); 4B ships only the status side.
+
 ## Review log
 
 (append-only)

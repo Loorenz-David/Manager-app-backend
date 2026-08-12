@@ -493,6 +493,94 @@ executor protocol).
 - Archgraph: any graph node contradicting the in-tree facts above is filed
   per the `archgraph-discrepancies` skill, never worked around silently.
 
+## Round-0 projection amendments (2026-08-12, coordinator-routed — GOVERNING where they conflict with the text above)
+
+The r0 projection's ledger (handoff `2026-08-12_phase4b_projection_r0_handoff.md`)
+is fully routed. Each entry below amends the named task/criterion in place.
+
+**Task 8 (L-1/L-2/L-3 — the fixture collisions the plan missed):**
+- `test_item_economics_schema.py::_foundation` (`:83`) — the group gains
+  `major_category=ItemMajorCategoryEnum.WOOD` (mechanical; ~13 test functions
+  depend on it and every one would `IntegrityError` on first flush otherwise).
+- The `sections_conflict`/`sections_removed` `second_group` (`:291-297`) takes
+  **SEAT** — same-category would violate INV-G3 outside any `pytest.raises`
+  (this is phase-2 B5's approved fixture; it must survive intact).
+- The `groups_conflict`/`groups_soft_deleted` second row takes **SEAT** so the
+  NAME index stays the sole cause (otherwise INV-G3 is a second sufficient cause
+  and widening/dropping the name index goes green). Companion (recommended):
+  assert the index name in the raised message — makes this collision class
+  self-reporting.
+- Task 8's list is FIVE named test changes + `_foundation` = six (N-a: items,
+  never counts); the Dependencies grep list gains `ProductionCostGroup(` (N-f —
+  the pattern that hides L-1; re-run all greps at implementer-prompt time, after
+  phase-4 fix r2 lands its ~54 rows).
+
+**Task 3(a) + C4(e) (L-5 — pin L5, ratified):** "present" means
+`request.major_category is not None`; an explicit JSON `null` is an accepted
+no-op, identical to absence (the PATCH route's `model_dump()` emits every field,
+so a name-only rename arrives with `major_category: None` — the field-set reading
+would break every rename of a versioned group through HTTP while command-level
+tests stayed green). C4(e) gains a **router-level row per P-R** (`TestClient`):
+a name-only PATCH against a versioned group succeeds through HTTP.
+
+**C3(b)/(d) (L-4 — option (i), P-S applied):** the INV-G3 DB-conflict path is
+covered by extending `test_integrity_translation_preserves_registered_and_unknown_paths`
+(the translation-unit row) plus this recorded reachability judgment: *the DB path
+is reachable in production only under genuine concurrency; proving it in-test
+requires the phase-4 C3 harness and is deliberately not built here.* The
+"seeded live-DB row" clause is struck (a seeded row is visible to the same-session
+pre-check under READ COMMITTED — the flush never reaches the index). The
+`INDEX_IDENTITIES` named mutation stands unchanged.
+
+**C5 preamble (L-6):** every unsaved `ProductionCostGroup` /
+`ProductionCostBasisVersion` / `CostModelVersion` fixture is constructed with an
+**explicit, distinct `client_id`** — `IdentityMixin` assigns ids at flush, so
+unsaved FKs join on `None == None → True` and V4's basis would read as applicable
+to the wrong group. Deleted-row fixtures set `is_deleted=True` explicitly
+(unsaved default is `None`).
+
+**C5 additions (L-11):** new row **V2b** — the only seat-category group is
+soft-deleted → `not_configured_no_cost_group`; named mutation: deleting the
+`is_deleted` filter from the active-group comprehension
+(`configuration.py:43`) must redden exactly V2b.
+
+**C2 (L-7):** every multi-group fixture differs in `name` (background invariant,
+P-K-audited); row (c) isolates `major_category` against row (a) (shared category,
+different name). Row (d) unaffected.
+
+**C4(a) (L-10):** assert the leading token AND both §6.4 message substrings —
+the group identifier and its current category — individually (P-O).
+
+**C1(a) (L-13 — harness named per P-R's spirit):**
+`MigrationContext.configure(sync_conn, opts={"compare_type": True})` +
+`compare_metadata(ctx, Base.metadata)`, **filtered to `production_cost_groups`**
+(4 pre-existing repo-wide diffs exist; unfiltered reddens on drift this phase
+does not own; the table itself is verified clean today).
+
+**Task 1 / C1(b) (L-15):** the pre-flight `RuntimeError` report names the
+uncategorizable group `client_id`s AND the dependent-table counts
+(`production_cost_group_sections`, `production_cost_basis_versions`,
+`item_cost_evaluations` — all RESTRICT FKs), because "delete and re-run" can
+itself fail on dependents. Report-never-guess extends to the repair. (Dev DB
+verified at 0 rows today; phase-4 fix-r2's committing rows are the only
+foreseeable residue source.)
+
+**Task 7 (L-12):** the doc target is
+`beyo_manager/models/tables/item_economics/README.md` (its reused-enum sentence
+gains `item_major_category_enum`), NOT `routers/README.md` (4B adds no route).
+Still a task, not a criterion (phase-4 S5 precedent).
+
+**Escape-hatch clause completed (N-h):** delete-and-recreate after a refused
+category flip also requires removing the group's active section memberships —
+the delete guard refuses on those too (`delete_production_cost_group.py:28-34`).
+
+**Delegations D-1…D-7 (granted in writing):** classifier decomposition (pure,
+date injected); pre-check ordering (recommended: shipped name check first in
+both commands); pre-flight wording (must carry counts + ids + dependent counts);
+`ITEM_MISSING_MAJOR_CATEGORY` declaration position (order carries no precedence;
+M3 guards); C7(d) rows at the command request model; test file layout mirrors
+the existing structure; C1(a) assertion shape per the named recipe.
+
 ## Review log
 
 (append-only)

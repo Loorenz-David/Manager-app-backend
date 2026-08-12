@@ -112,6 +112,11 @@ exactly one current; byte-identical re-read (no mutation on read).
   re-division from the basis inputs (fixture from the Q2-tie family where the
   two differ).
 
+- **Live-data note (4B projection N-d):** the dev DB holds 37 items with NULL
+  `item_major_category_snapshot` (225 wood / 193 seat) — `item_missing_major_category`
+  is a LIVE preview outcome, not a defence row; the preview's criteria include it
+  with P-B null-numerics.
+
 ## Review log
 
 (append-only)

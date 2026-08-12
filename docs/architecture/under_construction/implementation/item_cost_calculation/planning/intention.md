@@ -1019,6 +1019,10 @@ Complete over {no open row, open with NULL from, open with dated from} × {NULL,
 
 #### 7A.5 §7.4 selection — total enumeration of the failure modes
 
+*(Round 12: the group-resolution rows are SUPERSEDED by §7C.2 — resolution is by
+the item's major category; the zero/many refusal discipline and rows 3-6 survive
+per the selected group. Pointer only; no renumbering.)*
+
 Evaluated in this order; first match wins.
 
 | # | Workspace / group state | Outcome |
@@ -1708,6 +1712,10 @@ budget status is a **separate query service whose serializer has no monetary key
 all**, not a flag on the manager serializer (§11).
 
 #### 11A.4 `EconomicsStatusEnum` — one code-owned vocabulary, total and ordered
+
+*(Round 12: the vocabulary is amended by §7C.3 — `item_missing_major_category`
+joins group 2 and evaluates FIRST among its reasons; the list is now 12 values.
+Pointer only; §7C.3 governs.)*
 
 Used identically by the budget status query, the valuation endpoint's preview, and the
 auto-path log line. Evaluated in this order; first match wins.

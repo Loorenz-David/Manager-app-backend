@@ -323,7 +323,7 @@ required but did not name):
   `ITEM_COST_GROUP_CATEGORY_TAKEN` — INV-G3
   (`uix_production_cost_groups_major_category_active`), dual-path
   (`ValidationError` pre-check on create AND update-flip; `ConflictError` on the
-  DB conflict), message names the category value;
+  DB conflict), message names the category value **on the pre-check path only** (4B projection L-9: the DB-path translation emits the uniform conflict sentence per phase-4 N4);
   `ITEM_COST_GROUP_CATEGORY_IMMUTABLE` — `ValidationError`, §7C.4's refusal,
   message names the group and its current category. Audit vocabulary: NO 4B
   additions (event names unchanged; payloads only).
@@ -367,7 +367,7 @@ required but did not name):
   `enums.py`, `configuration.py` (pure §7A.5 ordered classifier over loaded rows →
   `EconomicsStatusEnum` / selection outcome; **also owns `is_applicable(version,
   on_date)` — §7A.3's resolution predicate, registered 2026-08-12 per phase-4
-  projection S3**; and `resolve_major_category(snapshot) -> ItemMajorCategoryEnum | None` (4B, ratified 2026-08-12 — the ONLY reader of the item's category-snapshot string; phases 5/7/8 call it, never the column directly; unknown strings → None → the `item_missing_major_category` outcome); precedence from an explicit ordered sequence, never enum
+  projection S3**; and `resolve_major_category(snapshot) -> ItemMajorCategoryEnum | None` (4B, ratified 2026-08-12; scope corrected per 4B projection L-8 — the only reader **within the item-economics domain**: no module under `domain/item_economics/` or `services/**/item_economics/` reads `item_major_category_snapshot` except through it (a structural row in 4B guards this; several legacy queries outside the domain read the column and are untouched); unknown strings → None → the `item_missing_major_category` outcome); precedence from an explicit ordered sequence, never enum
   iteration), `serializers.py` (config-surface serializers — phase 4 — plus manager
   evaluation / status serializers AND the worker status serializer — the worker one
   has **no monetary keys at all**, a separate function, per §11A.3; S8: this module
