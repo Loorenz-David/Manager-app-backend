@@ -436,6 +436,158 @@ def test_rederive_detects_a_changed_term_amount_on_the_same_orm_shape() -> None:
     ]
 
 
+def _valid_rederive_terms() -> list[ItemCostEvaluationTerm]:
+    return [
+        ItemCostEvaluationTerm(
+            workspace_id="ws_test",
+            evaluation_id="ice_test",
+            name="percentage allocation",
+            calculation_type=CostModelTermCalculationTypeEnum.PERCENTAGE_OF_EXPECTED_SALE_PRICE,
+            percent_value=Decimal("15.000"),
+            fixed_amount_minor=None,
+            amount_minor=600,
+        ),
+        ItemCostEvaluationTerm(
+            workspace_id="ws_test",
+            evaluation_id="ice_test",
+            name="fixed allocation",
+            calculation_type=CostModelTermCalculationTypeEnum.FIXED_AMOUNT,
+            percent_value=None,
+            fixed_amount_minor=1234,
+            amount_minor=1234,
+        ),
+    ]
+
+
+def test_rederive_malformed_evaluation_rate_returns_integrity_marker_and_cascade() -> None:
+    result = rederive(
+        _evaluation_for_rederive(cost_per_worker_minute_minor_snapshot=Decimal("0")),
+        _valid_rederive_terms(),
+    )
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "cost_per_worker_minute_minor_snapshot",
+                "rederived_value": Decimal("400.0000"),
+                "stored_value": Decimal("0"),
+            },
+            {
+                "field": "allowed_worker_minutes",
+                "rederived_value": None,
+                "stored_value": Decimal("5.42"),
+                "error": "ITEM_COST_RATE_UNDERFLOW: cannot calculate allowance with zero rate",
+            },
+        ],
+    }
+
+
+def test_rederive_malformed_term_shape_returns_integrity_marker() -> None:
+    terms = _valid_rederive_terms()
+    terms[0].percent_value = None
+
+    result = rederive(_evaluation_for_rederive(), terms)
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "term_snapshot",
+                "rederived_value": None,
+                "stored_value": None,
+                "error": "ITEM_COST_TERM_SHAPE_INVALID: percentage_of_expected_sale_price has an invalid percent_value/fixed_amount_minor shape",
+            }
+        ],
+    }
+
+
+def test_rederive_malformed_purchase_snapshot_returns_integrity_marker() -> None:
+    result = rederive(
+        _evaluation_for_rederive(purchase_cost_minor=None),
+        [
+            _term(
+                CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST,
+                amount_minor=1234,
+                name="purchase allocation",
+            )
+        ],
+    )
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "term_snapshot",
+                "rederived_value": None,
+                "stored_value": None,
+                "error": "ITEM_COST_PURCHASE_COST_REQUIRED: purchase_cost_minor is required",
+            }
+        ],
+    }
+
+
+def test_rederive_reports_production_budget_mismatch_payload() -> None:
+    result = rederive(
+        _evaluation_for_rederive(production_budget_minor=2165),
+        _valid_rederive_terms(),
+    )
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "production_budget_minor",
+                "rederived_value": 2166,
+                "stored_value": 2165,
+            }
+        ],
+    }
+
+
+def test_rederive_reports_allowed_worker_minutes_mismatch_payload() -> None:
+    result = rederive(
+        _evaluation_for_rederive(allowed_worker_minutes=Decimal("5.41")),
+        _valid_rederive_terms(),
+    )
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "allowed_worker_minutes",
+                "rederived_value": Decimal("5.42"),
+                "stored_value": Decimal("5.41"),
+            }
+        ],
+    }
+
+
+def test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload() -> None:
+    result = rederive(
+        _evaluation_for_rederive(
+            cost_per_worker_minute_minor_snapshot=Decimal("399.0000")
+        ),
+        _valid_rederive_terms(),
+    )
+
+    assert result == {
+        "marker": REDERIVE_MISMATCH,
+        "mismatches": [
+            {
+                "field": "cost_per_worker_minute_minor_snapshot",
+                "rederived_value": Decimal("400.0000"),
+                "stored_value": Decimal("399.0000"),
+            },
+            {
+                "field": "allowed_worker_minutes",
+                "rederived_value": Decimal("5.43"),
+                "stored_value": Decimal("5.42"),
+            },
+        ],
+    }
+
+
 def test_calculation_version_constant_and_docstring_pin_the_bump_lists() -> None:
     assert CALCULATION_VERSION == 1
     assert "§6A.10" in (calculator.__doc__ or "")
@@ -477,7 +629,7 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
         calculate_consumed_cost_minor(60, Decimal("24.5000")),
         calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
         calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
-        calculate_percent_consumed(Decimal("995.02"), Decimal("203.02")),
+        calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00")),
     )
     with localcontext() as ambient:
         ambient.rounding = ROUND_CEILING
@@ -490,6 +642,6 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
             calculate_consumed_cost_minor(60, Decimal("24.5000")),
             calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
             calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
-            calculate_percent_consumed(Decimal("995.02"), Decimal("203.02")),
+            calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00")),
         ) == baseline
     assert (getcontext().rounding, getcontext().prec) == original_context

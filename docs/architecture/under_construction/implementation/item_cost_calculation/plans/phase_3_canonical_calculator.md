@@ -426,6 +426,42 @@ harmless redundancy → next touch. N11 cosmetic indentation artifact at `calcul
 in `validate_currency_equality`'s comprehension gained four spaces); ruff-clean, zero behavioural effect
 → next touch. r1's optional N1/N5/N6 correctly not taken.
 
+### Implementer fix r3 — 2026-08-12 — Codex
+
+Resolved B3, S4, and S5 within the declared fix-cycle perimeter. `rederive` now converts
+calculation-path `AttributeError`, `TypeError`, `ValidationError`, and arithmetic guard failures
+into the `REDERIVE_MISMATCH` integrity marker, covering malformed evaluation snapshots, malformed
+term snapshots (including invalid shapes and NULL purchase cost), and the zero-rate allowance path.
+The rate-zero path preserves the rate mismatch and emits the pinned `allowed_worker_minutes`
+cascade entry. Added exact payload rows for `term[...].amount_minor`, `production_budget_minor`,
+`allowed_worker_minutes`, and `cost_per_worker_minute_minor_snapshot`, plus the rate cascade.
+Replaced both C9 `calculate_percent_consumed` fixtures with `(Decimal("0.01"), Decimal("100000.00"))`.
+
+Judgment calls: malformed-input entries use `field` values `evaluation_snapshot` or `term_snapshot`,
+null derived/stored values where no calculation completed, and the original guard identity in an
+`error` field; ordinary value disagreements retain the existing three-field payload. A rate mismatch
+forces the allowance entry to remain present, as required by R10-1, even when quantization would
+otherwise make the allowance value equal. Optional N9–N11 were not taken because the prompt routes
+them to a later touch.
+
+Verification: focused calculator suite **65 passed**; full `PYTHONPATH=. pytest -m 'not e2e'`
+**1749 passed / 23 failed / 1 deselected**, with the 23-failure set matching the established baseline;
+Ruff and `git diff --check` are clean. Named mutations were applied and reverted individually:
+B3 class (a) re-raise at the allowance seam → `test_rederive_malformed_evaluation_rate_returns_integrity_marker_and_cascade` red;
+B3 class (b) re-raise at the term-shape conversion branch →
+`test_rederive_malformed_term_shape_returns_integrity_marker` red;
+B3 class (c) re-raise at the NULL-purchase conversion branch →
+`test_rederive_malformed_purchase_snapshot_returns_integrity_marker` red;
+S4 remove the `calculate_percent_consumed` `localcontext()` wrapper →
+`test_all_quantization_sites_ignore_ambient_rounding_and_precision` red;
+S5 corrupt the term, budget, allowance, and rate field labels → each corresponding exact-payload
+row red; S5 invert the rate-cascade condition →
+`test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload` red. Final SHA-256:
+calculator `e5f42531d59c66a06e384f772f41c0971d63fa5990189f39276ff6d1d9611a49`;
+tests `d7251cdeed549a1ac663253f969a994e8cce1a428815afbeeddab0690497ba30`.
+Architecture Graph: zero delta; revision remains `671fd92a…`, 126 nodes / 161 edges, one pending
+`domain-item-economics` node held per owner card 3.
+
 **Lessons.** L5: R9-1 specified the *happy* mismatch path but not what `rederive` does when the snapshot
 is malformed rather than merely disagreeing — a "never raises" contract must enumerate the input classes
 it covers, or the implementer closes only the class the finding named (earned: B3). L6: when a fix

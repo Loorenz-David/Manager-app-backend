@@ -406,22 +406,46 @@ def rederive(
     with its stored derived values returns a ``REDERIVE_MISMATCH`` marker and
     the disagreeing fields.
     """
-    version = evaluation_row.calculation_version
-    if type(version) is not int:
-        raise _type_error("calculation_version", "an int", version)
+    def marker(
+        mismatches: list[dict[str, object]],
+        field: str,
+        error: Exception,
+        *,
+        stored_value: object = None,
+        rederived_value: object = None,
+    ) -> dict[str, object]:
+        mismatches.append(
+            {
+                "field": field,
+                "rederived_value": rederived_value,
+                "stored_value": stored_value,
+                "error": str(error),
+            }
+        )
+        return {"marker": REDERIVE_MISMATCH, "mismatches": mismatches}
+
+    mismatches: list[dict[str, object]] = []
+    try:
+        version = evaluation_row.calculation_version
+        if type(version) is not int:
+            raise _type_error("calculation_version", "an int", version)
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        return marker(mismatches, "evaluation_snapshot", error)
     if version != CALCULATION_VERSION:
         return REDERIVE_SKIPPED
 
-    rate = calculate_cost_per_worker_minute(
-        evaluation_row.fixed_monthly_cost_minor_snapshot,
-        evaluation_row.monthly_paid_hours_snapshot,
-        evaluation_row.planning_utilization_percent_snapshot,
-    )
-    stored_rate = _require_rate(
-        evaluation_row.cost_per_worker_minute_minor_snapshot,
-        "cost_per_worker_minute_minor_snapshot",
-    )
-    mismatches: list[dict[str, object]] = []
+    try:
+        rate = calculate_cost_per_worker_minute(
+            evaluation_row.fixed_monthly_cost_minor_snapshot,
+            evaluation_row.monthly_paid_hours_snapshot,
+            evaluation_row.planning_utilization_percent_snapshot,
+        )
+        stored_rate = _require_rate(
+            evaluation_row.cost_per_worker_minute_minor_snapshot,
+            "cost_per_worker_minute_minor_snapshot",
+        )
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        return marker(mismatches, "evaluation_snapshot", error)
     if rate != stored_rate:
         mismatches.append(
             {
@@ -431,18 +455,32 @@ def rederive(
             }
         )
 
-    expected_price = _require_money(
-        evaluation_row.expected_sale_price_minor,
-        "expected_sale_price_minor",
-        required_identity="ITEM_COST_EXPECTED_PRICE_REQUIRED",
-    )
-    amounts = calculate_term_amounts(
-        term_rows,
-        expected_price,
-        evaluation_row.purchase_cost_minor,
-    )
+    try:
+        expected_price = _require_money(
+            evaluation_row.expected_sale_price_minor,
+            "expected_sale_price_minor",
+            required_identity="ITEM_COST_EXPECTED_PRICE_REQUIRED",
+        )
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        return marker(mismatches, "evaluation_snapshot", error)
+
+    try:
+        amounts = calculate_term_amounts(
+            term_rows,
+            expected_price,
+            evaluation_row.purchase_cost_minor,
+        )
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        if str(error).startswith("ITEM_COST_PURCHASE_COST_REQUIRED:"):
+            return marker(mismatches, "term_snapshot", error)
+        if str(error).startswith("ITEM_COST_TERM_SHAPE_INVALID:"):
+            return marker(mismatches, "term_snapshot", error)
+        return marker(mismatches, "term_snapshot", error)
     for term_row, amount in zip(term_rows, amounts):
-        stored_amount = _require_money(term_row.amount_minor, "amount_minor")
+        try:
+            stored_amount = _require_money(term_row.amount_minor, "amount_minor")
+        except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+            return marker(mismatches, "term_snapshot", error)
         if amount != stored_amount:
             mismatches.append(
                 {
@@ -452,8 +490,12 @@ def rederive(
                 }
             )
 
-    budget = calculate_production_budget(expected_price, amounts)
-    stored_budget = _require_money(evaluation_row.production_budget_minor, "production_budget_minor")
+    try:
+        budget = calculate_production_budget(expected_price, amounts)
+        stored_budget_value = evaluation_row.production_budget_minor
+        stored_budget = _require_money(stored_budget_value, "production_budget_minor")
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        return marker(mismatches, "evaluation_snapshot", error)
     if budget != stored_budget:
         mismatches.append(
             {
@@ -462,12 +504,33 @@ def rederive(
                 "stored_value": stored_budget,
             }
         )
-    allowed = calculate_allowed_worker_minutes(budget, stored_rate)
-    stored_allowed = _require_rate(
-        evaluation_row.allowed_worker_minutes,
-        "allowed_worker_minutes",
-    )
-    if allowed != stored_allowed:
+    stored_allowed_value: object = None
+    try:
+        stored_allowed_value = evaluation_row.allowed_worker_minutes
+        stored_allowed = _require_rate(
+            stored_allowed_value,
+            "allowed_worker_minutes",
+        )
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        if rate != stored_rate:
+            return marker(
+                mismatches,
+                "allowed_worker_minutes",
+                error,
+                stored_value=stored_allowed_value,
+            )
+        return marker(mismatches, "evaluation_snapshot", error)
+
+    try:
+        allowed = calculate_allowed_worker_minutes(budget, stored_rate)
+    except (AttributeError, TypeError, ValidationError, ArithmeticError) as error:
+        return marker(
+            mismatches,
+            "allowed_worker_minutes",
+            error,
+            stored_value=stored_allowed,
+        )
+    if allowed != stored_allowed or rate != stored_rate:
         mismatches.append(
             {
                 "field": "allowed_worker_minutes",
