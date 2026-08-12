@@ -2918,6 +2918,50 @@ nodes:
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
     updatedAt: 2026-08-12T12:54:15.377Z
+  - id: domain-item-economics
+    type: domain
+    name: Item Economics
+    description: Item economics is the pure domain boundary that calculates item
+      cost allocations and production budgets from valuation, configuration, and
+      episode snapshots. It owns boundary validation, Q1–Q5, term shape,
+      budget/rate/allowance/consumption/variance, currency equality, and
+      closed-set rederivation; it performs no I/O or live configuration lookup.
+      Snapshot outputs must use Decimal local contexts, explicit HALF_EVEN
+      quantization, and calculation-version semantics so persisted values can be
+      rederived bit-for-bit.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: CALCULATION_VERSION
+          startLine: 1
+          endLine: 26
+          summary: The module declares itself as the pure canonical calculator, defines
+            the calculation-version contract, and exposes a named re-derivation
+            skip marker.
+          inferenceReason: The module boundary and version contract establish a distinct
+            item-economics domain responsibility separate from services and
+            persistence.
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_term_amount
+          startLine: 137
+          endLine: 212
+          summary: The calculator validates term shape and computes percentage, fixed, and
+            purchase-cost snapshot amounts through the canonical term functions.
+          inferenceReason: The term-shape and amount formulas are core item-cost business
+            rules owned by this domain.
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: rederive
+          startLine: 365
+          endLine: 425
+          summary: Re-derivation reads the evaluation and term snapshot fields, recomputes
+            rate, term amounts, budget, and allowance, and rejects mismatched
+            stored values without reading foreign keys.
+          inferenceReason: The closed-set re-derivation implementation proves the domain's
+            snapshot completeness and no-I/O boundary.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-12T13:58:28.708Z
+    updatedAt: 2026-08-12T13:58:28.708Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
