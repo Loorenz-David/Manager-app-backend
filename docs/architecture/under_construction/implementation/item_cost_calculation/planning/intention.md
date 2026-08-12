@@ -814,6 +814,20 @@ exists for it. A snapshot disagreeing with itself is a data-integrity event, not
 reader's mistake: calling services (phases 7–8) log/escalate the marker at error
 level and the read still renders. Same carrier family as `REDERIVE_SKIPPED`.
 
+**Input-class totality (round 10, R10-1 — owner card, phase-3 re-review; L5):**
+"never fails the read" is total over `rederive`'s input, enumerated:
+(i) **value disagreement** — stored derived value ≠ re-derived value;
+(ii) **malformed term snapshot** — an invalid type×column shape (incl. NULL typed
+values and duplicate `item_purchase_cost` rows);
+(iii) **malformed evaluation snapshot** — a zeroed/invalid stored rate or missing
+snapshot field.
+All three classes return the integrity marker result; **no `ValidationError`
+escapes `rederive` on any path** — the calculation-path guards (§6A.4, §6A.6)
+still raise for live calculation, but `rederive` catches/converts them into the
+marker payload. **Cascade pinned:** a mismatched stored rate also yields a derived
+`allowed_worker_minutes` entry (the allowance re-derives from the rate) — both
+entries are reported, by design.
+
 ---
 
 ## 7. Temporal semantics & mutation operations
@@ -2134,6 +2148,16 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   `≥ 0` range, not only presence/type; (b) a zero rate reaching the allowance
   (Q3) raises `ITEM_COST_RATE_UNDERFLOW` — defence-in-depth at a second site of
   §6A.6's identity. Both gain required test rows (fix r2).
+
+**Round 10 — 2026-08-12 (phase-3 re-review card answered; coordinator fold):**
+
+- **R10-1 (re-review card 1)** R9-1's "never fails the read" made **total over
+  input classes** (§6A.11 round-10 paragraph): value disagreement, malformed term
+  snapshot, malformed evaluation snapshot — all return the integrity marker; no
+  `ValidationError` escapes `rederive` on any path (the re-review proved three
+  escape routes, one opened by the fix's own refactor). Cascade pinned: a rate
+  mismatch also reports its derived allowance entry. Lesson L5 applied: a
+  "never raises" contract enumerates the input classes it covers.
 
 ---
 

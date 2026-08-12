@@ -351,3 +351,84 @@ reddened the system-`None` row; and the C8 right-value deletion reddened the
 incomplete message assertions. The absorbed guard rows and public-surface row
 are green. No architecture-graph change was made; the pending
 `domain-item-economics` node remains held per owner card 3.
+
+### Reviewer r2 (re-review, delta-scoped) — 2026-08-12 — Claude (plan-reviewer) — CHANGES_REQUESTED
+
+Perimeter **exact**: `git show 8378a1b` = the four allowed files only; declared hashes match
+byte-for-byte (calculator `1c9a75fa…eb5d20`, tests `971232312a…cc885b`); tree clean at start and end.
+Suite re-run: **1743 passed / 23 failed / 1 deselected**, +5 exactly, zero connectivity noise, failure
+set byte-identical to the phase-1 routed list (`diff` empty; N14 did not fire). Ruff clean. Graph
+read-only and unchanged — revision `671fd92a…`, 126 nodes / 161 edges, 1 pending item, zero
+diagnostics/stale: **zero delta**, as declared.
+
+**r1 findings verified closed.** **B1 CLOSED — structurally, not just by its test:** I swept *every*
+public callable under `prec=6, ROUND_CEILING` and all twelve are byte-identical to baseline, including
+the two that diverged in r1 (`calculate_remaining_worker_minutes` and `calculate_variance_worker_minutes`
+now both return `99999.67`, the exact r1 reproduction). Removing the wrapper reddens the C9 row.
+**B2 CLOSED:** the new row drives `calculate_variance_cost_minor(None, 100)` — a genuinely
+system-supplied parameter (no `required_identity`) — and the inferred-zero mutation that left 54/54
+green in r1 now reddens it. **S1 CLOSED:** the `or` is gone; the message-weakening mutation reddens
+**2 of 3** rows (the P-O bar; row 2 is structurally immune because both its surviving left-hand values
+are `swedish_krona`). **S2 CLOSED:** zero `ITEM_COST_SNAPSHOT_MISMATCH` anywhere in `app/`; `rederive`
+returns `{"marker": REDERIVE_MISMATCH, "mismatches": [...]}`; the C7 fixture asserts marker **and**
+exact payload, and its two-term fixture correctly reports only the disagreeing term (budget still
+reconciles because it is re-derived from the *re-derived* amounts). **S3 CLOSED as routed:** both the
+bump token (`term formula`) and the never-bump token (`renames`) bite when stripped from the module
+docstring. **Absorbed guards (R9-2) CLOSED:** all three rows exist and each reddens when its own guard
+branch is deleted. **N2 CLOSED:** `__all__` is exact and every name in it resolves.
+
+**B3 (blocking) — `rederive` still raises user-facing `ValidationError`s on corrupt snapshots,
+contravening R9-1.** Authority: intention §6A.11 as amended round 9 — a re-derivation disagreement
+"**never raises a `ValidationError`** and no user-facing error identity exists for it … the read still
+renders". Verified live on unsaved ORM instances, three classes:
+(a) stored `cost_per_worker_minute_minor_snapshot = 0` → **`ITEM_COST_RATE_UNDERFLOW`**. This is
+squarely a stored-value-disagrees case (stored `0` vs re-derived `400.0000`) and it is *this fix's*
+seam: the S2 refactor replaced the early raise at the rate-mismatch site with an appended entry, so
+execution now continues into `calculate_allowed_worker_minutes(budget, stored_rate)`
+(`calculator.py:465`) and dies there instead of returning the marker. The column is
+`Numeric(12,4) NOT NULL` with **no CHECK > 0** (`90cdd23a828e:204`), so the row is representable —
+and a zeroed snapshot is exactly the integrity event `rederive` exists to detect.
+(b) a corrupt snapshot term shape → `ITEM_COST_TERM_SHAPE_INVALID`; (c) a purchase term with NULL
+`purchase_cost_minor` → `ITEM_COST_PURCHASE_COST_REQUIRED`. (b) and (c) are pre-existing, in scope only
+because R9-1 is new. Correction: no path out of `rederive` may be a `ValidationError` — fold these into
+the `REDERIVE_MISMATCH` payload (or a sibling integrity marker), with one criterion row per class and a
+named mutation each. **Scope boundary is an owner call — see card 1.**
+
+**S4 (should-fix) — the `calculate_percent_consumed` row added to C9 is decoration.** Proven by
+mutation: removing `calculate_percent_consumed`'s `localcontext()` wrapper leaves **59/59 green**, so
+the row does not hold the wrapper it was added to guard (charter rule 11 / P-N). Its fixture
+`(995.02, 203.02)` is too small for `prec=6` to change the 2-dp result. The sibling rows are fine —
+removing `calculate_remaining_worker_minutes`'s wrapper *does* redden. Correction: swap the fixture in
+both C9 tuples to `calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00"))` — verified
+end-to-end: with the wrapper intact 59 pass; with the wrapper removed the row reddens (`InvalidOperation`
+at `prec=6`, the same mechanism as C9(b)'s Q3 row).
+
+**S5 (should-fix) — three of the four `REDERIVE_MISMATCH` field branches have no test.** Only
+`term[<name>].amount_minor` is asserted. I exercised all four: `production_budget_minor`,
+`allowed_worker_minutes` and `cost_per_worker_minute_minor_snapshot` each produce well-formed entries,
+so the code is right — the contract has no arbiter. Also unpinned: a rate mismatch *cascades* into a
+second `allowed_worker_minutes` entry (verified fields
+`['cost_per_worker_minute_minor_snapshot', 'allowed_worker_minutes']`), because the allowance is
+re-derived from the stored rate. Reasonable, but nobody decided it. Authority: charter rule 2
+(enumerate, never sample); §6A.11 R9-1 ("naming the disagreeing fields"). Correction: one row per
+field branch with its exact payload, and a row pinning the cascade.
+
+**Notes.** N8 `__all__` holds **19** names, not the "20" asserted in the fix handoff, the tracker note
+and probe R2-P5 — §6.5's enumerated surface is 16 + `EvaluationSnapshot` + `TermSnapshot` +
+`REDERIVE_MISMATCH` (`REDERIVE_SKIPPED` is already among the 16). **The code is right and knowingly so**
+(the implementer's own log records the dedup); only the prose count is wrong — a direct repeat of P-L.
+N9 the `CALCULATION_VERSION` constant's own docstring — which plan task 6 names as the contract carrier
+— has no arbiter: gutting it to `"""Version constant."""` leaves 59/59 green, because the test reads
+the *module* docstring (as R2-P5 directed). Two docstrings now carry the same two lists and can drift
+apart → next touch. N10 `calculate_variance_worker_minutes` wraps a `localcontext()` around a call that
+already wraps one (`calculator.py:357-359`); removing the outer wrapper changes nothing (59/59) —
+harmless redundancy → next touch. N11 cosmetic indentation artifact at `calculator.py:390` (the f-string
+in `validate_currency_equality`'s comprehension gained four spaces); ruff-clean, zero behavioural effect
+→ next touch. r1's optional N1/N5/N6 correctly not taken.
+
+**Lessons.** L5: R9-1 specified the *happy* mismatch path but not what `rederive` does when the snapshot
+is malformed rather than merely disagreeing — a "never raises" contract must enumerate the input classes
+it covers, or the implementer closes only the class the finding named (earned: B3). L6: when a fix
+extends a hostile-context criterion to new functions, each added row needs its own fixture chosen to
+*bite*, and the fix's mutation declaration must name the row it reddens per function — one blanket
+"hostile-context row red" hid an inert row among two live ones (earned: S4; extends P-I).

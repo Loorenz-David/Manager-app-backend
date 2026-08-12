@@ -309,3 +309,19 @@ identity). Folded as R9-2; both gain required test rows in fix r2.
 against final line numbers: coordinator promotes with corrected anchors
 (1–26 / 137–219 / 371–426, re-verified post-fix) after phase-3 approval, per the
 §8 standing flow.
+
+---
+
+# Phase-3 re-review card (round 2 → answered 2026-08-12)
+
+Card carried verbatim in
+`handoffs/reviewer/2026-08-12_phase3_rereview_r2_handoff.md`.
+
+## Re-review card 1 — How far does "re-derivation never fails the read" reach?
+
+**ANSWER (2026-08-12):** Recommendation accepted — **cover every malformed
+input**. Corrupt data is an audit function's input, not its crash: any bad stored
+row (value disagreement, malformed term shape, malformed evaluation snapshot —
+zeroed rate included) returns the integrity marker; the read always renders; no
+`ValidationError` escapes `rederive` on any path. Folded as R10-1 (§6A.11
+input-class enumeration per lesson L5).
