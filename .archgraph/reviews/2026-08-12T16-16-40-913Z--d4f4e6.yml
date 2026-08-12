@@ -1,0 +1,62 @@
+reviewId: 2026-08-12T16-16-40-913Z--d4f4e6
+reviewedItemIds:
+  - node:domain-item-economics
+decisions:
+  - itemId: node:domain-item-economics
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            symbol: CALCULATION_VERSION
+            startLine: 1
+            endLine: 26
+          to:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            startLine: 1
+            endLine: 52
+        - index: 1
+          from:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            symbol: calculate_term_amount
+            startLine: 137
+            endLine: 212
+          to:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            startLine: 131
+            endLine: 242
+        - index: 2
+          from:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            symbol: rederive
+            startLine: 365
+            endLine: 425
+          to:
+            path: app/beyo_manager/domain/item_economics/calculator.py
+            startLine: 375
+            endLine: 547
+    rationale: "Phase-3 card 3 (held for one post-approval adjudication, owner
+      2026-08-12): claims verified ACCURATE at review r1 (P3-7, code read before
+      claim) and unchanged through r2-r4; anchors corrected to the final
+      547-line file per the r4 reviewer's boundary-verified spans (1-52 module
+      boundary + version contract incl. __all__/markers; 131-242 term shape +
+      amount formulas incl. the duplicate-purchase guard; 375-547
+      validate_currency_equality + rederive complete). Phase 3 APPROVED at
+      re-review r4; owner standing authorization, master plan §8."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-12T16:16:40.913Z
+graphRevisionBefore: 671fd92a560fbaffda67e74f21eff8128c55cacfae807d98ab27fdf6e586319b
+graphRevisionAfter: e1d96eaf47843f3e614a29f8f79d84ec3ccba9de8e849c04a6664b648454e47b
+evidenceSummary: 3 evidence entries across 1 file; no drift detected
+humanInstruction: "Owner standing authorization (2026-08-12, master plan §8) +
+  phase-3 review card 3 (owner: hold, then adjudicate once with corrected
+  anchors after approval). Phase 3 APPROVED at re-review r4; anchors are the r4
+  reviewer's boundary-verified spans against the final file."
+reviewTokenCorrelation: b0e712fad2cf

@@ -577,3 +577,67 @@ were reverted before the final suite and hash capture. Final SHA-256: calculator
 Architecture Graph: zero delta; the graph remains read-only for this fix, at revision
 `671fd92a…`, 126 nodes / 161 edges, one pending `domain-item-economics` node, zero diagnostics and
 zero stale nodes. No owner decision is required.
+
+### Reviewer r4 (re-review, delta-scoped: S6/N14/N16) — 2026-08-12 — Claude (plan-reviewer) — APPROVED
+
+**Verdict: APPROVED.** All three routed corrections verify independently; zero new findings.
+
+Perimeter **exact**: `git show 71f137b` = the four expected files (+4 lines calculator, +20/−6 tests,
+tracker row, Review log); the handoff sits alone in its own deposit commit `3a80ee3`. Suite **1749
+passed / 23 failed / 1 deselected**, focused **65**, zero connectivity noise, failure set byte-identical
+to the phase-1 routed list (`diff` empty; N14's Shopify flake did not fire). Ruff clean. Graph read-only
+and unchanged — `671fd92a…`, 126 nodes / 161 edges, 1 pending item, zero diagnostics/stale: **zero
+delta**.
+
+**Main-worktree probe deviation — procedural only, resolved.** r4 ran its mutation probes in the main
+worktree rather than a disposable one. I verified the reversion claim three ways rather than accepting
+it: the working-tree sha256s equal the declared values (calculator
+`03389d0a…af8eb0`, tests `6733181e…5daa86`); those same values are the sha256 of the blobs **as
+committed in `71f137b`**; and `git diff 71f137b..HEAD -- app/` is empty with no commit after the
+checkpoint touching `app/` at all. No probe residue exists. Recorded as a process note, not a finding.
+
+**S6 CLOSED — the pin now has its arbiter.** Verified by hand first: `2166 / 399.5000 =
+5.421777…` → Q3 quantizes to **`5.42`**, exactly the stored allowance, so at the new fixture the
+allowance *agrees* and the cascade clause is the sole possible cause of the second entry (the old
+`399.0000` gave `5.43`, which was the second sufficient cause). Then by mutation: deleting
+`or rate != stored_rate` (`calculator.py:533`) reddens **exactly**
+`test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload` (1 failed / 64 passed) — where
+in r3 the same deletion left 65/65 green. r3's mis-declared `and` inversion is now moot: it reddens
+both the allowance row *and* the cascade row, because the new fixture makes the cascade row genuinely
+sensitive to the clause.
+
+**N14 CLOSED — payload shape homogeneous, and asserted per branch.** I exercised all eight entry
+shapes (plain: budget, allowance, term amount, rate+cascade; converted: zero rate, malformed term,
+NULL purchase, evaluation snapshot) — **every entry carries exactly
+`{field, rederived_value, stored_value, error}`**, so a caller may key `entry["error"]`
+unconditionally. Each of the four plain-entry `error: None` additions is live: corrupting the rate
+entry's value reddens its two rows; dropping the key entirely from the budget / allowance / term
+entries reddens their rows respectively (four separate probes, each observed).
+
+**N16 CLOSED.** An AST sweep of every `rederive` test confirms all six rows now construct
+`ItemCostEvaluationTerm` (directly or via `_valid_rederive_terms`); `_term()`/`SimpleNamespace`
+survives only in `test_duplicate_purchase_terms_vary_only_the_snapshot_term_rows`, a non-rederive shape
+test settled in r1. Charter rule 3 and C7's ORM pin hold across the whole rederive family.
+
+**Carry-forward dispositions** (approval with open notes — none may evaporate):
+
+| Item | Origin | Destination |
+|---|---|---|
+| N7 — C2's Q3 "consumes the persisted rate" cell cannot bite in a phase where the rate is a parameter | r1 | **phase 4/5** — the wiring arbiter belongs where the call site is built |
+| N15 — the `rederive` catch-all converts *programmer* errors into integrity markers; callers must not read the marker as proof of data corruption | r3 | **phase 7/8** — caller/escalation guidance |
+| N8 — `__all__` holds **19** names; the "20" in the r2 handoff/prompt/tracker prose double-counts `REDERIVE_SKIPPED` (code is right) | r2 | **coordinator** — prose-only correction (P-L) |
+| N9 — the `CALCULATION_VERSION` constant's own docstring (plan task 6's named carrier) has no arbiter; two docstrings duplicate the lists | r2 | next touch of `calculator.py` |
+| N10 — `calculate_variance_worker_minutes` double-wraps `localcontext()` | r2 | next touch |
+| N11 — indentation artifact in `validate_currency_equality`'s comprehension | r2 | next touch |
+| N12 — `term_row.name` is the one attribute read outside a `try` (unreachable for ORM rows) | r3 | next touch |
+| N13 — dead branching: two `if`s guarding three identical returns | r3 | next touch |
+| N1, N5, N6 — duplicate test, dead `required=False` parameter, collection-time C2 fixtures | r1 | next touch (declined as optional in r2, correctly) |
+
+**Card 3 anchors (for the coordinator's single held adjudication).** Final calculator is 547 lines.
+Suggested spans for `domain-item-economics`, matching the node's three evidence claims: **1–52**
+(module docstring, `CALCULATION_VERSION`, both markers, `__all__`), **131–242** (`_term_shape` through
+`calculate_term_amounts` — the whole term family, ending at a function boundary this time), and
+**375–547** (`validate_currency_equality` + `rederive` complete, including the final `return`).
+
+**Phase 3 closed:** B1, B2, B3 and S1–S6 all resolved and independently re-verified; four review rounds,
+zero findings outstanding.

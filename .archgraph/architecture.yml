@@ -2932,6 +2932,31 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/domain/item_economics/calculator.py
+          startLine: 1
+          endLine: 52
+          summary: The module declares itself as the pure canonical calculator, defines
+            the calculation-version contract, and exposes a named re-derivation
+            skip marker.
+          inferenceReason: The module boundary and version contract establish a distinct
+            item-economics domain responsibility separate from services and
+            persistence.
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          startLine: 131
+          endLine: 242
+          summary: The calculator validates term shape and computes percentage, fixed, and
+            purchase-cost snapshot amounts through the canonical term functions.
+          inferenceReason: The term-shape and amount formulas are core item-cost business
+            rules owned by this domain.
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          startLine: 375
+          endLine: 547
+          summary: Re-derivation reads the evaluation and term snapshot fields, recomputes
+            rate, term amounts, budget, and allowance, and rejects mismatched
+            stored values without reading foreign keys.
+          inferenceReason: The closed-set re-derivation implementation proves the domain's
+            snapshot completeness and no-I/O boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/domain/item_economics/calculator.py
           symbol: CALCULATION_VERSION
           startLine: 1
           endLine: 26
@@ -2941,6 +2966,7 @@ nodes:
           inferenceReason: The module boundary and version contract establish a distinct
             item-economics domain responsibility separate from services and
             persistence.
+          supersededAt: 2026-08-12T16:16:40.900Z
         - path: app/beyo_manager/domain/item_economics/calculator.py
           symbol: calculate_term_amount
           startLine: 137
@@ -2949,6 +2975,7 @@ nodes:
             purchase-cost snapshot amounts through the canonical term functions.
           inferenceReason: The term-shape and amount formulas are core item-cost business
             rules owned by this domain.
+          supersededAt: 2026-08-12T16:16:40.900Z
         - path: app/beyo_manager/domain/item_economics/calculator.py
           symbol: rederive
           startLine: 365
@@ -2958,10 +2985,11 @@ nodes:
             stored values without reading foreign keys.
           inferenceReason: The closed-set re-derivation implementation proves the domain's
             snapshot completeness and no-I/O boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-12T16:16:40.900Z
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-12T13:58:28.708Z
-    updatedAt: 2026-08-12T13:58:28.708Z
+    updatedAt: 2026-08-12T16:16:40.900Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
