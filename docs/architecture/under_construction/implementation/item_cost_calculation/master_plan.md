@@ -67,9 +67,11 @@ Self-retiring per charter (two consecutive empty ledgers).
 1. Re-emit the §5 contract resolution before coding (implementers).
 2. Archgraph: `archgraph_status` + orient on the phase's named nodes at start; record
    the phase's architectural delta at close in ONE batched `archgraph_apply_changes`
-   (accurate evidence spans; a delta of zero items is stated, not skipped). Never
-   adjudicate the 244 pending reviews. Planner-verified graph state 2026-08-12:
-   116 nodes / 157 edges, revision `b0702c3c…`, 0 stale, permissionMode `review`.
+   (accurate evidence spans; a delta of zero items is stated, not skipped). Sessions
+   never adjudicate pending reviews — the per-phase delta items are handled by the
+   §8 standing flow (reviewer verifies, coordinator confirms after approval).
+   *(State 2026-08-12 after the owner's backlog adjudication + the phase-2 delta:
+   125 nodes / 161 edges, revision `9476e89a…`, pending 15 = the phase-2 delta.)*
 3. Tests, tracker row, Review log, checkpoint commit per charter.
 
 ## 4. Progress tracker
@@ -79,7 +81,7 @@ Self-retiring per charter (two consecutive empty ledgers).
 | # | Phase | Plan file | Gate | State | Date | Actor | Note |
 |---|---|---|---|---|---|---|---|
 | 1 | Worker money redaction | `plans/phase_1_worker_money_redaction.md` | ⚑ (row 33) | **APPROVED** | 2026-08-12 | reviewer (Claude); Codex (fix r2); reviewer r2 (Claude) | review r1: leak closed correctly on all 8 endpoints, 8/8 mutations bite, zero regressions (P-R1 settled: 23 pre-existing failures, identical sets at `545e504` and `4416570`); 2 should-fix — 5 ADMIN criteria rows untested (S1), recorded baseline wrong (S2) — + 6 notes. Coordinator: findings routed (N1/N2→phase 9, baseline→§10, lessons→§9 P-G/P-H), fix-r2 prompt authored; reviewer handoff was deposited late (after the coordinator's sweep) — consumed, authoritative. Fix r2: S1 ADMIN rows added and asserted `== 4321`; S2 baseline correction and full 23-item list recorded; focused 39 passed, full run 1605 passed / 23 failed / 1 deselected. Coordinator: fix handoff consumed, perimeter exact vs `ed99e7e`, arithmetic reconciled (1624→1629 = the 5 rows); re-review r2 prompt authored (probes: reshaped worker assertions, baseline list match, new-row liveness). **Review r2: APPROVED** — perimeter exact (six files, zero production-code change), S1+S2 resolved, criteria now 26/26 (24/24 cells), rows 19/22 survived the reshaping and run twice, all four probes bite per-parameter plus an ADMIN-drop probe reddening exactly 9 ADMIN ids with zero collateral, baseline list set-identical to r1's, suite 1605/23/1 with the failure set byte-identical to baseline, archgraph zero delta. Open notes carried forward: N1/N2→phase 9, N7 (test naming)→next touch |
-| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | IMPLEMENTED | 2026-08-12 | coordinator; Codex | projection r0 AMENDMENTS_REQUIRED (16-row ledger, 4 blocking: name truncation, open name list, unfalsifiable C5, no disposable-DB harness) — fully routed: §6.2 closed CHECK list + named FKs, §6.1 citation fix, §10 disposable recipe, intention round 7 (icet columns), plan tasks/criteria rewritten (C1a/b, C2 per-clause, C3 12-row table, C5 migration-site, C6); implementer r1: nine models/migration and focused suite 23 passed; full suite 1628 passed / 23 known failures / 1 deselected; enum ownership mutations pass; C2 predicate mutations outstanding for review |
+| 2 | Schema, models & migration | `plans/phase_2_schema_models.md` | ⚑ (rows 1,3,8,11,12,15 — DDL side) | IMPLEMENTED | 2026-08-12 | coordinator; Codex | projection r0 AMENDMENTS_REQUIRED (16-row ledger, 4 blocking: name truncation, open name list, unfalsifiable C5, no disposable-DB harness) — fully routed: §6.2 closed CHECK list + named FKs, §6.1 citation fix, §10 disposable recipe, intention round 7 (icet columns), plan tasks/criteria rewritten (C1a/b, C2 per-clause, C3 12-row table, C5 migration-site, C6); implementer r1: nine models/migration and focused suite 23 passed; full suite 1628 passed / 23 known failures / 1 deselected; enum ownership mutations pass; C2 predicate mutations outstanding for review. Coordinator: handoff consumed — effective checkpoint is `8b3f9f7` (500dfbd was amended; one-line handoff diff); graph state committed (`ab2b71c`: owner backlog adjudication 243→15 pending + the phase-2 delta); §10 gained the migration-chain-stall caveat; review r1 prompt authored (probes P2-1 C2 mutations … P2-6 graph delta per-item) |
 | 3 | Canonical calculator | `plans/phase_3_canonical_calculator.md` | ⚑ (rows 1–14) | NOT_STARTED | 2026-08-11 | planner | pure module, §6A entire |
 | 4 | Configuration services | `plans/phase_4_configuration_services.md` | ⚑ (rows 15–20) | NOT_STARTED | 2026-08-11 | planner | groups, chains, guarded deletes, config status |
 | 5 | Valuation surface | `plans/phase_5_valuation_surface.md` | ⚑ (rows 15,16 — valuation chain; 34) | NOT_STARTED | 2026-08-11 | planner | ItemValuation chain command + preview |
@@ -502,6 +504,14 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   configured development database** (`.env` → `beyo_manager` @ 5433) — there is no
   built-in test-schema creation anywhere in `tests/` (no `create_all`, no alembic
   hook). Plans must say per criterion which database it runs against.
+  **Caveat (phase-2 implementer, 2026-08-12; reviewer to validate):** a from-scratch
+  `alembic upgrade head` on an empty disposable DB **stalls** after
+  `CREATE TABLE alembic_version` — a pre-existing defect somewhere in the 113-revision
+  chain, unrelated to this project. Interim recipe amendment: clone the development
+  schema into the disposable DB (e.g. `pg_dump --schema-only | psql`), stamp it, then
+  exercise the target revision's `downgrade → upgrade` there. Root-causing the chain
+  stall is OUT of this project's scope — candidate for the phase-9 drift batch or a
+  separate maintenance item.
 - **Error surface:** `run_service` (`services/run_service.py`) is the single error
   boundary; DomainError → `StatusOutcome(success=False, error=exc)`; identities per
   §6.4 travel in `error.message`.
