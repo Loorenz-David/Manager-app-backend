@@ -508,3 +508,49 @@ disposable database. The main working tree is clean and the configured developme
 database is at head `90cdd23a828e` with all 16 CHECKs intact — both verified at close.
 One stray `alembic` process from the stall reproduction was killed; it never reached the
 configured database.
+
+### 2026-08-12 — fix r2 (Codex)
+
+**State: IMPLEMENTED — all r1 findings resolved within the declared fix-cycle perimeter.**
+
+- **B1 / C2:** added explicit ORM-backed rows for every conflict and exclusion case in
+  the C2 table: all nine conflict rows plus the sixteen accepted rows represented by the
+  table's predicate and key-column variants. The plan prose says 22/13, while its table
+  enumerates 25 concrete cases; the implementation follows the enumerated table and
+  records the arithmetic discrepancy for the coordinator. Every row flushes production
+  ORM instances against the migrated schema. All fourteen predicate-clause mutations
+  were applied as direct DDL to the disposable clone and reverted; each reddened its
+  named accepted row: `groups_soft_deleted`, `sections_removed`, `basis_closed`,
+  `basis_soft_deleted`, `models_closed`, `models_soft_deleted`, `purchase_other_type`,
+  `purchase_soft_deleted`, `term_name_soft_deleted`, `evaluations_projection`,
+  `evaluations_superseded`, `evaluations_soft_deleted`, `valuations_superseded`, and
+  `valuations_soft_deleted`.
+- **B2 / C1(b):** the proxy now inspects `inspect.getsource(upgrade/downgrade)`;
+  it asserts the exact five new enum drops, excludes all three reused enum names, and
+  compares upgrade table creations with downgrade table drops. The three named source
+  mutations all reddened it: reused `task_state_enum` drop, omission of
+  `item_valuation_currency_enum` drop, and omission of `item_cost_results` drop.
+- **B3 / C3 basis rows:** expanded the boundary matrix to include every required reject
+  and accept value, closes the shared fixture's open basis version for these rows, and
+  matches each rejected row to its CHECK constraint name. Deleting each of the five
+  `ck_pcbv_*` constraints reddened the intended row(s) independently.
+- **B4 / C3 remaining rows:** added the percent CHECK boundaries, all D10 money pairs
+  and nullable accepts, both valuation negative rows plus cost-only and NULL-currency
+  cases, both effective-window chains, and valid row coverage for evaluation terms and
+  results. Deleting each of the nine previously untested CHECKs reddened its behavioral
+  test. The `percent_value` inventory now also pins the reflected database type to
+  `numeric(6,3)` (optional N2 taken).
+- **S1:** corrected the README to document four currency columns using three PG enum
+  types, with `item_cost_evaluations.currency` reusing the valuation type owned by
+  `item_valuations`.
+- **S2:** inventory now asserts all five new enum types, all three reused enum types,
+  and the declared `tasks` column bindings.
+- **S3:** replaced the overclaiming valuation test with named price-only, cost-only,
+  both-null, negative-amount, and NULL-currency cases.
+
+Verification: focused schema module **79 passed**; full non-e2e suite **1684 passed /
+23 failed / 1 deselected**, matching the recorded 23-failure baseline. The dev database
+remained at head and was not downgraded. The disposable schema clone was used for all
+DDL mutations, then dropped. The migration source SHA-256 after all source probes was
+`3fc5cd88367b8a7ba2c0dadc34a00ae878a4b586db0b913a055ca6816fda48d0`, byte-identical to
+the pre-probe value. Archgraph delta: **zero**; this cycle changed tests and README only.
