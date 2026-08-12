@@ -106,6 +106,12 @@ exactly one current; byte-identical re-read (no mutation on read).
 - Archgraph: delta = the valuation command/endpoint nodes; orient on
   `table-task-item` + phase-2 table nodes.
 
+- **Forward item (phase-4 projection, N7 consumption half):** the valuation
+  preview divides a budget by the rate — a criterion must prove it consumes the
+  PERSISTED `cost_per_worker_minute_minor` (quantized, 4 dp), never a raw
+  re-division from the basis inputs (fixture from the Q2-tie family where the
+  two differ).
+
 ## Review log
 
 (append-only)

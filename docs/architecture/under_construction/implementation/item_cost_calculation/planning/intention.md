@@ -637,6 +637,19 @@ arithmetic is the one way HC-6 can be violated invisibly, and the only routes in
 hand-built test fixture or an unparsed JSON body (charter rule 3 — the invariant is
 proven with the object types production holds).
 
+**Persisted configuration numerics (round 11, R11-1 — owner card, phase-4
+projection B1):** a request-borne numeric destined for a `Numeric` column is
+**canonicalized to the column's exact scale in the request model — quantized
+`ROUND_HALF_EVEN` (§6A.2's domain rule; the upholstery precedent quantizes but
+rounds HALF_UP and is NOT followed for rounding mode) — before ANY derivation reads
+it.** PostgreSQL rounds silently on scale overflow, so deriving from the unrounded
+request value stores a rate that disagrees with its own persisted inputs and
+falsifies §6A.11's theorem for that row (verified: `173.456` hours → stored
+`173.46`, but Q2 from the raw value gives `12.0107` vs `12.0105` from the stored).
+Owner decision: **round-then-derive** (never refuse over-precise entries); every
+derived value comes from the canonicalized inputs, so a stored basis and its stored
+rate agree by construction.
+
 #### 6A.2 Decimal context and rounding — explicit, never ambient
 
 Every quantization passes `rounding=ROUND_HALF_EVEN` **explicitly**. The module never
@@ -2165,6 +2178,17 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   homogeneous: every entry carries `field`/`rederived_value`/`stored_value`/`error`
   (`error = None` on plain disagreements) — half the entries carrying an extra key
   would make callers key defensively or crash on `entry["error"]`.
+
+**Round 11 — 2026-08-12 (phase-4 projection B1 + owner card; coordinator fold):**
+
+- **R11-1 (projection B1; owner card: round-then-derive)** §6A.1 gains the
+  persisted-configuration-numerics rule: request numerics are quantized to the
+  destination column's scale (ROUND_HALF_EVEN) in the request model before any
+  derivation — PostgreSQL's silent scale-rounding otherwise stores a rate that
+  disagrees with its own inputs (verified 173.456h → 12.0107 vs 12.0105),
+  silently falsifying HC-7's re-derivation theorem. Over-precise entries are
+  rounded, never refused (owner: the manager mid-setup is not blocked over a
+  payroll export's spare digit).
 
 ---
 

@@ -157,6 +157,11 @@ neither occurs on a failed commit.
 
 - **Forward note (phase-3 re-review r3, N15):** `REDERIVE_MISMATCH` conversions also swallow programmer errors (wrong-typed objects) by design — when this phase's services log/escalate the marker, the copy must say "integrity check failed", never assert "data corruption"; and callers rely on the R10-2 homogeneous payload shape (`error` key always present).
 
+- **Forward item (phase-4 projection, B5):** phase 4's `FOR UPDATE` delete guard
+  has no production counterparty until THIS phase ships §7B.1's `FOR SHARE`
+  version resolution — a criterion here must exercise the delete-vs-commit race
+  against the real commit path (the phase-4 test used an injected seam).
+
 ## Review log
 
 (append-only)
