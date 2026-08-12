@@ -290,14 +290,17 @@ async def test_partial_unique_indexes_enforce_conflicts_and_exclusions(db_sessio
 
     if case == "sections_conflict" or case == "sections_removed":
         section = WorkingSection(workspace_id=workspace.client_id, name=f"section {uuid4().hex}")
-        db_session.add(section)
+        second_group = ProductionCostGroup(
+            workspace_id=workspace.client_id, name=f"group {uuid4().hex}", created_by_id=user.client_id,
+        )
+        db_session.add_all([section, second_group])
         await db_session.flush()
         first = ProductionCostGroupSection(
             workspace_id=workspace.client_id, production_cost_group_id=group.client_id,
             working_section_id=section.client_id, added_by_id=user.client_id,
         )
         second = ProductionCostGroupSection(
-            workspace_id=workspace.client_id, production_cost_group_id=group.client_id,
+            workspace_id=workspace.client_id, production_cost_group_id=second_group.client_id,
             working_section_id=section.client_id, added_by_id=user.client_id,
             removed_at=now if case == "sections_removed" else None,
         )

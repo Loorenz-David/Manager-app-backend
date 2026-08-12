@@ -706,3 +706,25 @@ group too so it stays a one-clause delta from the corrected (a) row.
 - **L3 — `_foundation`-style shared fixtures are where second sufficient causes are
   born** (r1 B3, now B5). When a phase's tests hang off one factory, each row's cell
   should state which field of the shared fixture it varies.
+
+### 2026-08-12 — fix r3 (Codex)
+
+**State: IMPLEMENTED — reviewer r2's B5 resolved within the fix-cycle perimeter.**
+
+- Corrected the `sections_conflict` / `sections_removed` fixture branch so it creates
+  a second `ProductionCostGroup` in the same workspace and attaches the second
+  `ProductionCostGroupSection` to that group, while preserving the shared
+  `working_section_id`. The `sections_conflict` row now exercises the shipped
+  `(workspace_id, working_section_id)` arbiter; `sections_removed` remains its
+  one-clause `removed_at` variant.
+- Optional notes N12 and N13 were not taken; this cycle stayed limited to B5.
+
+Verification: the focused schema module passed **79 tests** on the configured
+development database and on the disposable database after restoration. B5's named
+DDL mutation widened `uix_production_cost_group_sections_active` to
+`(workspace_id, production_cost_group_id, working_section_id)` on the disposable
+database; exactly `sections_conflict` reddened (`DID NOT RAISE`), then the original
+`(workspace_id, working_section_id)` definition was restored and verified. The full
+non-e2e suite passed **1684 / 23 failed / 1 deselected**, with the same 23 known
+baseline failures. The configured development database remained at
+`90cdd23a828e` and the disposable database was dropped. Archgraph delta: **zero**.
