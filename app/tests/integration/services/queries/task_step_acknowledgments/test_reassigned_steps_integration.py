@@ -259,12 +259,15 @@ async def test_reassigned_list_payload_sections_order_and_filtered_pagination(db
 
 
 @pytest.mark.integration
-async def test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker(db_session):
+@pytest.mark.parametrize("role_name", ["manager", "admin"])
+async def test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_redact_worker(
+    db_session, role_name
+):
     workspace, worker, _, _, _, step = await _seed(db_session, suffix=uuid4().hex[:8])
 
     worker_reassigned = await list_reassigned_steps(_list_ctx(db_session, workspace, worker))
     manager_reassigned = await list_reassigned_steps(
-        _list_ctx(db_session, workspace, worker, role_name="manager")
+        _list_ctx(db_session, workspace, worker, role_name=role_name)
     )
     assert "total_cost_minor" not in worker_reassigned["steps_pagination"]["items"][0]
     assert manager_reassigned["steps_pagination"]["items"][0]["total_cost_minor"] == 4321
@@ -273,7 +276,7 @@ async def test_reassigned_and_pending_step_payloads_keep_money_for_manager_and_r
         _ctx(db_session, workspace.client_id, worker.client_id, limit=50, offset=0)
     )
     manager_pending = await list_pending_step_acknowledgments(
-        _ctx(db_session, workspace.client_id, worker.client_id, role_name="manager", limit=50, offset=0)
+        _ctx(db_session, workspace.client_id, worker.client_id, role_name=role_name, limit=50, offset=0)
     )
     assert worker_pending["acknowledgments"][0]["client_id"] == step.client_id
     assert "total_cost_minor" not in worker_pending["acknowledgments"][0]

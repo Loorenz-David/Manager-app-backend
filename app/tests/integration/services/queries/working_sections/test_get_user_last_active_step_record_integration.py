@@ -151,7 +151,10 @@ async def test_returns_non_deleted_step_when_deleted_task_has_newer_active_recor
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("role_name, expected_money", [("worker", False), ("manager", True)])
+@pytest.mark.parametrize(
+    "role_name, expected_money",
+    [("worker", False), ("manager", True), ("admin", True)],
+)
 async def test_last_active_step_payload_applies_role_money_boundary(db_session, role_name, expected_money):
     workspace, user = await _seed_workspace_and_user(db_session)
     step = await _seed_step_with_record(

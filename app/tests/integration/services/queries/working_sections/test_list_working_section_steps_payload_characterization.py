@@ -225,7 +225,7 @@ async def _seed_step(db_session) -> tuple[Workspace, User, WorkingSection, Uphol
 
 @pytest.mark.integration
 @pytest.mark.parametrize("group_by_upholstery", [False, True])
-@pytest.mark.parametrize("role_name", ["worker", "manager"])
+@pytest.mark.parametrize("role_name", ["worker", "manager", "admin"])
 async def test_list_working_section_steps_payload_key_sets_are_stable(
     db_session, group_by_upholstery, role_name
 ):
@@ -246,9 +246,9 @@ async def test_list_working_section_steps_payload_key_sets_are_stable(
     assert len(result["steps_pagination"]["items"]) == 1
 
     item = result["steps_pagination"]["items"][0]
-    expected_step_keys = _STEP_KEYS if role_name == "manager" else _STEP_KEYS - {"total_cost_minor"}
+    expected_step_keys = _STEP_KEYS if role_name in {"manager", "admin"} else _STEP_KEYS - {"total_cost_minor"}
     assert set(item) == expected_step_keys
-    if role_name == "manager":
+    if role_name in {"manager", "admin"}:
         assert item["total_cost_minor"] == 4321
     else:
         assert "total_cost_minor" not in item

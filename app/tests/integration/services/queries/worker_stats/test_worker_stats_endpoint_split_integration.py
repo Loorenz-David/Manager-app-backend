@@ -28,9 +28,15 @@ from beyo_manager.services.queries.worker_stats.list_workers_last_interacted_ste
 from beyo_manager.services.queries.worker_stats.list_workers_totals import list_workers_totals
 
 
-def _ctx(db_session, *, workspace_id: str, query_params: dict | None = None) -> ServiceContext:
+def _ctx(
+    db_session,
+    *,
+    workspace_id: str,
+    query_params: dict | None = None,
+    role_name: str = "manager",
+) -> ServiceContext:
     return ServiceContext(
-        identity={"workspace_id": workspace_id, "user_id": "usr_mgr", "role_name": "manager", "username": "mgr"},
+        identity={"workspace_id": workspace_id, "user_id": "usr_mgr", "role_name": role_name, "username": "mgr"},
         incoming_data={},
         query_params=query_params or {},
         session=db_session,
@@ -253,7 +259,8 @@ async def test_split_endpoints_share_roster_and_return_disjoint_shapes(db_sessio
 
 
 @pytest.mark.integration
-async def test_last_interacted_steps_keep_money_for_manager(db_session):
+@pytest.mark.parametrize("role_name", ["manager", "admin"])
+async def test_last_interacted_steps_keep_money_for_manager(db_session, role_name):
     ws = Workspace(client_id=f"ws_{uuid4().hex[:8]}", name="W")
     db_session.add(ws)
     await db_session.flush()
@@ -273,6 +280,8 @@ async def test_last_interacted_steps_keep_money_for_manager(db_session):
     step.latest_state_record_id = record.client_id
     await db_session.flush()
 
-    result = await list_workers_last_interacted_step(_ctx(db_session, workspace_id=ws.client_id))
+    result = await list_workers_last_interacted_step(
+        _ctx(db_session, workspace_id=ws.client_id, role_name=role_name)
+    )
     payload = result["workers"][0]["last_interacted_step"]
     assert payload["total_cost_minor"] == 4321

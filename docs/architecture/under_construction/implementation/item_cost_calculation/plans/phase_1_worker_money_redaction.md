@@ -194,6 +194,30 @@ M5's builder).
 - Key-set change record: working-section and reassigned-step worker payloads now omit `total_cost_minor`; manager/admin rows assert the seeded value `4321`. The site-5 and endpoint-8 manager/admin retention rows assert the same value.
 - Mutation probes: M1, M2, M3, M4, M5, M6, site-5 blanket-False, and shared-builder blanket-False all turned their named tests red and were reverted. Probe files: `app/beyo_manager/domain/tasks/serializers.py`, `app/beyo_manager/services/queries/tasks/tasks.py`, `app/beyo_manager/services/queries/tasks/list_task_steps.py`, `app/beyo_manager/services/queries/working_sections/steps_list_payload.py`, `app/beyo_manager/services/queries/working_sections/step_record_payload.py`, and `app/beyo_manager/services/queries/worker_stats/get_worker_daily_step_breakdown.py`.
 - Architecture Graph closeout: status remained valid at 116 nodes / 157 edges, revision `b0702c3c…`, zero stale nodes. The batched closeout apply recorded an exact duplicate of `table-task-step`, so `applied=[]`; architectural delta is explicitly zero.
+- **S2 correction — 2026-08-12 — fix r2:** The verified healthy-container baseline is `545e504` → **1578 passed / 23 failed / 1 deselected** and checkpoint `4416570` → **1600 passed / 23 failed / 1 deselected**; the failure sets are byte-identical. The complete 23-item pre-existing failure set, confirmed again at the fix-r2 working HEAD, is:
+  1. `tests/integration/services/commands/bootstrap/test_seed_working_sections_integration.py::test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections`
+  2. `tests/integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_rolls_back_when_any_item_is_missing`
+  3. `tests/integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_updates_all_items_creates_history_and_dispatches_events`
+  4. `tests/integration/services/commands/shopify/test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`
+  5. `tests/integration/services/commands/task_steps/test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task`
+  6. `tests/integration/services/commands/tasks/test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged`
+  7. `tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_promotes_expected_candidates`
+  8. `tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_demotes_low_priority_available_first`
+  9. `tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_noop_emits_no_events`
+  10. `tests/integration/services/commands/working_sections/test_batch_working_section_integration.py::test_batch_flag_round_trips_and_new_step_snapshots_follow_section_value`
+  11. `tests/integration/services/commands/working_sections/test_batch_working_section_integration.py::test_worker_working_sections_excludes_counts_for_deleted_parent_tasks`
+  12. `tests/integration/services/commands/working_sections/test_working_section_ordering_integration.py::test_reorder_rewrites_sort_order_and_worker_view_follows_it`
+  13. `tests/integration/services/commands/working_sections/test_working_section_ordering_integration.py::test_reorder_rejects_payload_not_matching_active_set`
+  14. `tests/integration/test_audit_log.py::test_write_audit_from_event_inserts_row`
+  15. `tests/integration/test_audit_log.py::test_detail_defaults_to_empty_dict`
+  16. `tests/unit/domain/shopify/test_dimension_migration.py::test_legacy_seat_height_without_height_maps_without_zero_values`
+  17. `tests/unit/domain/shopify/test_dimension_migration.py::test_legacy_multiline_rerun_is_idempotent_and_protects_existing_values`
+  18. `tests/unit/services/commands/auth/test_sign_in_user.py::test_sign_in_user_preserves_custom_workspace_role_name`
+  19. `tests/unit/services/queries/worker_stats/test_endpoint_split.py::test_split_services_return_disjoint_worker_shapes`
+  20. `tests/unit/test_case_type_serializers.py::test_serialize_case_type_entry_returns_contract_fields`
+  21. `tests/unit/test_items_router.py::test_route_delete_item_issues_forwards_ids`
+  22. `tests/unit/test_items_router.py::test_route_list_item_issues_forwards_client_id`
+  23. `tests/unit/test_upholstery_inventories_router.py::test_route_list_upholstery_inventories_passes_filter_query_params`
 
 ### Reviewer r1 — 2026-08-12 — Claude (plan-reviewer)
 
@@ -363,3 +387,11 @@ byte-identical after revert, worktree `git status` clean, both worktrees removed
 pruned. The primary tree was never modified (clean at `d457d84` before and after). DB
 side effects: none committed — the suite's `db_session` fixture rolls back; the
 configured database is left as found, at head.
+
+### Fixer r2 — 2026-08-12 — Codex
+
+- **S1 resolved:** added ADMIN to the existing role enumeration for the working-section list payload and last-active-step tests; parameterized the reassigned/pending payload test over MANAGER and ADMIN; and made the worker-stats `_ctx` accept `role_name`, running the last-interacted retention test for both MANAGER and ADMIN. Every added retained-money assertion is equality with the seeded `4321` value.
+- **S2 resolved:** added the correction above without rewriting the historical implementer r1 record. The full 23-item failure list was reproduced at this working HEAD with healthy PostgreSQL/Redis; it matches the verified baseline set. The full run changed from the r1 checkpoint's `1600 passed / 23 failed / 1 deselected` to `1605 passed / 23 failed / 1 deselected` (`1629` collected), with no new failures.
+- Focused verification: **39 passed** across the four changed integration modules.
+- Optional notes N3, N4, and N6 were not taken: none is required by S1/S2, and keeping the cycle limited preserves the finding-scoped perimeter.
+- No production code changed. Architecture Graph status remained valid at 116 nodes / 157 edges, zero stale nodes, revision `b0702c3c…`; no architectural delta was recorded.
