@@ -55,6 +55,19 @@
 | PATCH | /api/v1/images/{image_client_id}/annotations/{annotation_client_id} | images | update_annotation_route_api_v1_images__image_client_id__annotations__annotation_client_id__patch |
 | GET | /api/v1/images/{image_client_id}/download-url | images | image_download_url_route_api_v1_images__image_client_id__download_url_get |
 | GET | /api/v1/item-upholsteries | item-upholsteries | route_list_item_upholsteries_api_v1_item_upholsteries_get |
+| POST | /api/v1/item-economics/cost-groups | item-economics | route_create_production_cost_group_api_v1_item_economics_cost_groups_post |
+| GET | /api/v1/item-economics/cost-groups | item-economics | route_list_production_cost_groups_api_v1_item_economics_cost_groups_get |
+| PATCH | /api/v1/item-economics/cost-groups/{client_id} | item-economics | route_update_production_cost_group_api_v1_item_economics_cost_groups__client_id__patch |
+| DELETE | /api/v1/item-economics/cost-groups/{client_id} | item-economics | route_delete_production_cost_group_api_v1_item_economics_cost_groups__client_id__delete |
+| POST | /api/v1/item-economics/cost-groups/{client_id}/sections | item-economics | route_add_section_to_cost_group_api_v1_item_economics_cost_groups__client_id__sections_post |
+| DELETE | /api/v1/item-economics/cost-groups/{client_id}/sections/{working_section_client_id} | item-economics | route_remove_section_from_cost_group_api_v1_item_economics_cost_groups__client_id__sections__working_section_client_id__delete |
+| POST | /api/v1/item-economics/cost-groups/{client_id}/basis-versions | item-economics | route_create_production_cost_basis_version_api_v1_item_economics_cost_groups__client_id__basis_versions_post |
+| GET | /api/v1/item-economics/cost-groups/{client_id}/basis-versions | item-economics | route_list_production_cost_basis_versions_api_v1_item_economics_cost_groups__client_id__basis_versions_get |
+| DELETE | /api/v1/item-economics/basis-versions/{client_id} | item-economics | route_delete_production_cost_basis_version_api_v1_item_economics_basis_versions__client_id__delete |
+| POST | /api/v1/item-economics/cost-model-versions | item-economics | route_create_cost_model_version_api_v1_item_economics_cost_model_versions_post |
+| GET | /api/v1/item-economics/cost-model-versions | item-economics | route_list_cost_model_versions_api_v1_item_economics_cost_model_versions_get |
+| DELETE | /api/v1/item-economics/cost-model-versions/{client_id} | item-economics | route_delete_cost_model_version_api_v1_item_economics_cost_model_versions__client_id__delete |
+| GET | /api/v1/item-economics/configuration-status | item-economics | route_get_economics_configuration_status_api_v1_item_economics_configuration_status_get |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
 | POST | /api/v1/item-upholsteries/mark-ordered | item-upholsteries | route_mark_ordered_api_v1_item_upholsteries_mark_ordered_post |
 | POST | /api/v1/item-upholsteries/reallocate-stock | item-upholsteries | route_reallocate_stock_api_v1_item_upholsteries_reallocate_stock_post |
@@ -4179,5 +4192,5 @@ None
 | data | any | No |  |
 | warnings[] | string | Yes |  |
 
-Total endpoints documented: 125
+Total endpoints documented: 138
 Total schemas referenced: 79

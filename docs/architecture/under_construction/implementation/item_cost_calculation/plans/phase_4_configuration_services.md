@@ -4,7 +4,7 @@
 plan: phase 4
 role: phase plan
 date: 2026-08-11
-state: NOT_STARTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -268,3 +268,29 @@ row per command).
 ## Review log
 
 (append-only)
+
+### Implementer r1 — 2026-08-12 — Codex
+
+- Implemented the manager-facing configuration surface: group CRUD and section
+  membership, effective-dated basis/model chains, canonicalize-then-derive rate
+  persistence, typed model terms, index-discriminated conflict translation,
+  guarded version deletes with an injectable `after_lock` seam, the pure
+  explicit-precedence classifier, status and list queries, serializers, and 13
+  ADMIN/MANAGER FastAPI routes. Configuration commands intentionally emit no
+  workspace events.
+- Added the router OpenAPI field documentation for `percent_value` and the
+  README mirror rows. Added focused request, classifier, soft-deleted-open-row,
+  canonical rate, empty-term, and status coverage.
+- Verification: ruff clean; phase-focused suites 72 passed; router surface
+  probe found 13 registered routes, correct percent metadata, and no term
+  mutation route; full non-E2E suite 1755 passed / 23 established failures / 1
+  deselected, with the failure set unchanged from the 1749/23/1 baseline after
+  the six net phase tests were added.
+- Architecture Graph: one batched additive delta recorded from the phase-2
+  table anchors and `domain-item-economics`: 9 command nodes, 13 endpoint
+  nodes, and 25 relationships. No human-confirmed graph content was changed.
+- Reviewer follow-up perimeter: concurrency interleavings and the full C1–C11
+  matrix should be re-derived against the configured development database;
+  the implementation includes the required lock, conflict, and synchronization
+  seams, while the local focused suite is intentionally smaller than that
+  reviewer harness.
