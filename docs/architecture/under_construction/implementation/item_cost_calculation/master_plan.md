@@ -523,17 +523,16 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   configured development database** (`.env` → `beyo_manager` @ 5433) — there is no
   built-in test-schema creation anywhere in `tests/` (no `create_all`, no alembic
   hook). Plans must say per criterion which database it runs against.
-  **Caveat (phase-2 implementer, 2026-08-12; reviewer to validate):** a from-scratch
-  `alembic upgrade head` on an empty disposable DB **stalls** after
-  `CREATE TABLE alembic_version` — a pre-existing defect somewhere in the 113-revision
-  chain, unrelated to this project. Interim recipe amendment: clone the development
-  schema into the disposable DB (e.g. `pg_dump --schema-only | psql`), stamp it, then
-  exercise the target revision's `downgrade → upgrade` there. Root-causing the chain
-  stall is OUT of this project's scope. **Disposition (owner, 2026-08-12, phase-2
-  review card 1): owned NOW as a separate maintenance item** — prompt at
-  `prompts/maintenance/2026-08-12_migration-chain-stall_r1.md`; reviewer-verified
-  repro: the stall occurs targeting `7758ea23764e` (pre-phase-2), first statement
-  `CREATE TABLE alembic_version`, session `idle in transaction` / `ClientRead`.
+  **From-scratch recipe (verified 2026-08-12, maintenance r1):** create the named
+  disposable database with `PYTHONPATH=. APP_ENV=development DATABASE_URL=…
+  python3 -m scripts.create_db`, run the same `DATABASE_URL=…` prefix on
+  `PYTHONPATH=. APP_ENV=development alembic upgrade head`, then drop the database
+  with `docker compose exec -T postgres dropdb -U postgres --if-exists <name>`.
+  The migration environment repairs the historical revision-cycle shape in memory
+  and supplies the minimal cold-build catalog anchors without rewriting applied
+  migration files. Verified on `beyo_manager_stall_probe`: empty database to
+  `90cdd23a828e` in 1.80s, 106 public tables, then configured `make db-migrate`
+  no-op at head in 0.68s. The clone-and-stamp workaround is retired.
 - **Error surface:** `run_service` (`services/run_service.py`) is the single error
   boundary; DomainError → `StatusOutcome(success=False, error=exc)`; identities per
   §6.4 travel in `error.message`.
