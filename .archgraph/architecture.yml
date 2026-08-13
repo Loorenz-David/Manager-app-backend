@@ -3010,10 +3010,10 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-update-production-cost-group
     type: command
     name: update_production_cost_group
@@ -3026,6 +3026,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
           symbol: update_production_cost_group
+          startLine: 13
+          endLine: 34
+          summary: Renames a production-cost group with application and database
+            uniqueness guards and records the group-updated audit event.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+          symbol: update_production_cost_group
           startLine: 12
           endLine: 30
           summary: Renames a production-cost group with application and database
@@ -3033,10 +3043,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-delete-production-cost-group
     type: command
     name: delete_production_cost_group
@@ -3049,6 +3060,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
           symbol: delete_production_cost_group
+          startLine: 15
+          endLine: 41
+          summary: Soft-deletes a production-cost group only when non-deleted basis
+            versions and active memberships are absent.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
+          symbol: delete_production_cost_group
           startLine: 12
           endLine: 38
           summary: Soft-deletes a production-cost group only when non-deleted basis
@@ -3056,10 +3077,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-add-section-to-cost-group
     type: command
     name: add_section_to_cost_group
@@ -3072,6 +3094,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
           symbol: add_section_to_cost_group
+          startLine: 15
+          endLine: 49
+          summary: Adds an active working-section membership with workspace scoping,
+            duplicate admission protection, and audit recording.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
+          symbol: add_section_to_cost_group
           startLine: 12
           endLine: 48
           summary: Adds an active working-section membership with workspace scoping,
@@ -3079,10 +3111,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-remove-section-from-cost-group
     type: command
     name: remove_section_from_cost_group
@@ -3095,6 +3128,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
           symbol: remove_section_from_cost_group
+          startLine: 14
+          endLine: 32
+          summary: Soft-removes an active group-section membership and records the
+            membership removal audit event.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
+          symbol: remove_section_from_cost_group
           startLine: 12
           endLine: 33
           summary: Soft-removes an active group-section membership and records the
@@ -3102,10 +3145,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-create-production-cost-basis-version
     type: command
     name: create_production_cost_basis_version
@@ -3127,10 +3171,10 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-delete-production-cost-basis-version
     type: command
     name: delete_production_cost_basis_version
@@ -3143,6 +3187,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
           symbol: delete_production_cost_basis_version
+          startLine: 14
+          endLine: 37
+          summary: Locks a basis version, rechecks every evaluation reference inside the
+            lock, and soft-deletes only an unreferenced version.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
+          symbol: delete_production_cost_basis_version
           startLine: 13
           endLine: 38
           summary: Locks a basis version, rechecks every evaluation reference inside the
@@ -3150,10 +3204,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-create-cost-model-version
     type: command
     name: create_cost_model_version
@@ -3167,6 +3222,17 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
           symbol: create_cost_model_version
+          startLine: 15
+          endLine: 75
+          summary: Admits a complete replacement cost-model term set, closes the open
+            predecessor, validates typed term shapes, and discriminates
+            registered database conflicts.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+          symbol: create_cost_model_version
           startLine: 14
           endLine: 74
           summary: Admits a complete replacement cost-model term set, closes the open
@@ -3175,10 +3241,11 @@ nodes:
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: command-item-economics-delete-cost-model-version
     type: command
     name: delete_cost_model_version
@@ -3192,16 +3259,27 @@ nodes:
         - path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
           symbol: delete_cost_model_version
           startLine: 14
+          endLine: 36
+          summary: Locks a cost-model version, rechecks every evaluation reference inside
+            the lock, and soft-deletes only an unreferenced version.
+          inferenceReason: The phase-4 implementation defines this callable command as the
+            application boundary for the stated configuration mutation and its
+            persistence/audit behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
+          symbol: delete_cost_model_version
+          startLine: 14
           endLine: 37
           summary: Locks a cost-model version, rechecks every evaluation reference inside
             the lock, and soft-deletes only an unreferenced version.
           inferenceReason: The phase-4 implementation defines this callable command as the
             application boundary for the stated configuration mutation and its
             persistence/audit behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:02.603Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:02.603Z
   - id: endpoint-item-economics-post-cost-groups
     type: endpoint
     name: POST /api/v1/item-economics/cost-groups
@@ -3212,15 +3290,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 92
+          endLine: 98
+          summary: ADMIN/MANAGER route for creating a production-cost group.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 93
           endLine: 99
           summary: ADMIN/MANAGER route for creating a production-cost group.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-get-cost-groups
     type: endpoint
     name: GET /api/v1/item-economics/cost-groups
@@ -3232,16 +3318,25 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 101
+          endLine: 108
+          summary: ADMIN/MANAGER route for listing workspace-scoped production-cost groups
+            with limit-plus-one pagination.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 102
           endLine: 109
           summary: ADMIN/MANAGER route for listing workspace-scoped production-cost groups
             with limit-plus-one pagination.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-patch-cost-group
     type: endpoint
     name: PATCH /api/v1/item-economics/cost-groups/{client_id}
@@ -3252,15 +3347,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 111
+          endLine: 118
+          summary: ADMIN/MANAGER route for renaming a production-cost group.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 112
           endLine: 119
           summary: ADMIN/MANAGER route for renaming a production-cost group.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-delete-cost-group
     type: endpoint
     name: DELETE /api/v1/item-economics/cost-groups/{client_id}
@@ -3271,16 +3374,25 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 121
+          endLine: 127
+          summary: ADMIN/MANAGER route for guarded soft deletion of a production-cost
+            group.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 122
           endLine: 128
           summary: ADMIN/MANAGER route for guarded soft deletion of a production-cost
             group.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-post-section
     type: endpoint
     name: POST /api/v1/item-economics/cost-groups/{client_id}/sections
@@ -3291,15 +3403,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 130
+          endLine: 137
+          summary: ADMIN/MANAGER route for adding a working section to a group.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 131
           endLine: 138
           summary: ADMIN/MANAGER route for adding a working section to a group.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-delete-section
     type: endpoint
     name: DELETE
@@ -3311,15 +3431,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 140
+          endLine: 147
+          summary: ADMIN/MANAGER route for removing an active group-section membership.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 141
           endLine: 148
           summary: ADMIN/MANAGER route for removing an active group-section membership.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-post-basis
     type: endpoint
     name: POST /api/v1/item-economics/cost-groups/{client_id}/basis-versions
@@ -3330,15 +3458,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 150
+          endLine: 158
+          summary: ADMIN/MANAGER route for creating a production-cost basis version.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 151
           endLine: 159
           summary: ADMIN/MANAGER route for creating a production-cost basis version.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-get-basis
     type: endpoint
     name: GET /api/v1/item-economics/cost-groups/{client_id}/basis-versions
@@ -3349,15 +3485,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 161
+          endLine: 169
+          summary: ADMIN/MANAGER route for listing basis versions for a group.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 162
           endLine: 170
           summary: ADMIN/MANAGER route for listing basis versions for a group.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-delete-basis
     type: endpoint
     name: DELETE /api/v1/item-economics/basis-versions/{client_id}
@@ -3368,15 +3512,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 172
+          endLine: 178
+          summary: ADMIN/MANAGER route for guarded soft deletion of a basis version.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 173
           endLine: 179
           summary: ADMIN/MANAGER route for guarded soft deletion of a basis version.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-post-model
     type: endpoint
     name: POST /api/v1/item-economics/cost-model-versions
@@ -3387,15 +3539,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 181
+          endLine: 187
+          summary: ADMIN/MANAGER route for creating a complete cost-model version.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 182
           endLine: 188
           summary: ADMIN/MANAGER route for creating a complete cost-model version.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-get-model
     type: endpoint
     name: GET /api/v1/item-economics/cost-model-versions
@@ -3406,15 +3566,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 190
+          endLine: 197
+          summary: ADMIN/MANAGER route for listing cost-model versions and their terms.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 191
           endLine: 198
           summary: ADMIN/MANAGER route for listing cost-model versions and their terms.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-delete-model
     type: endpoint
     name: DELETE /api/v1/item-economics/cost-model-versions/{client_id}
@@ -3425,15 +3593,23 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 200
+          endLine: 206
+          summary: ADMIN/MANAGER route for guarded soft deletion of a cost-model version.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 201
           endLine: 207
           summary: ADMIN/MANAGER route for guarded soft deletion of a cost-model version.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
   - id: endpoint-item-economics-status
     type: endpoint
     name: GET /api/v1/item-economics/configuration-status
@@ -3444,16 +3620,25 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 209
+          endLine: 214
+          summary: ADMIN/MANAGER route for the pure ordered configuration-status
+            projection.
+          inferenceReason: The FastAPI route is registered on the item-economics surface
+            with the stated HTTP method, path, role gate, and service binding.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 210
           endLine: 215
           summary: ADMIN/MANAGER route for the pure ordered configuration-status
             projection.
           inferenceReason: The FastAPI route is registered on the item-economics surface
             with the stated HTTP method, path, role gate, and service binding.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:37:55.005Z
+    origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:37:55.005Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -5852,373 +6037,612 @@ edges:
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 209
+          endLine: 214
+          summary: The item-economics domain has a registered configuration-status
+            endpoint.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The item-economics domain has a registered configuration-status
             endpoint.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: endpoint-item-economics-post-cost-groups
     relationshipType: accepts
     targetNodeId: command-item-economics-create-production-cost-group
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 98
+          endLine: 98
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-patch-cost-group
     relationshipType: accepts
     targetNodeId: command-item-economics-update-production-cost-group
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 118
+          endLine: 118
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-delete-cost-group
     relationshipType: accepts
     targetNodeId: command-item-economics-delete-production-cost-group
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 127
+          endLine: 127
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-post-section
     relationshipType: accepts
     targetNodeId: command-item-economics-add-section-to-cost-group
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 137
+          endLine: 137
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-delete-section
     relationshipType: accepts
     targetNodeId: command-item-economics-remove-section-from-cost-group
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 147
+          endLine: 147
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-post-basis
     relationshipType: accepts
     targetNodeId: command-item-economics-create-production-cost-basis-version
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 157
+          endLine: 158
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-delete-basis
     relationshipType: accepts
     targetNodeId: command-item-economics-delete-production-cost-basis-version
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 178
+          endLine: 178
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-post-model
     relationshipType: accepts
     targetNodeId: command-item-economics-create-cost-model-version
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 187
+          endLine: 187
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-delete-model
     relationshipType: accepts
     targetNodeId: command-item-economics-delete-cost-model-version
     metadata:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 206
+          endLine: 206
+          summary: The route delegates to the registered configuration command.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The route delegates to the registered configuration command.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: command-item-economics-create-production-cost-group
     relationshipType: writes_to
     targetNodeId: table-production-cost-group
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/create_production_cost_group.py
+          startLine: 30
+          endLine: 32
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-update-production-cost-group
     relationshipType: writes_to
     targetNodeId: table-production-cost-group
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+          startLine: 27
+          endLine: 30
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-delete-production-cost-group
     relationshipType: writes_to
     targetNodeId: table-production-cost-group
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
+          startLine: 36
+          endLine: 39
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-add-section-to-cost-group
     relationshipType: writes_to
     targetNodeId: table-production-cost-group-section
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
+          startLine: 43
+          endLine: 45
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-remove-section-from-cost-group
     relationshipType: writes_to
     targetNodeId: table-production-cost-group-section
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
+          startLine: 28
+          endLine: 30
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-create-production-cost-basis-version
     relationshipType: writes_to
     targetNodeId: table-production-cost-basis-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/create_production_cost_basis_version.py
+          startLine: 33
+          endLine: 47
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-delete-production-cost-basis-version
     relationshipType: writes_to
     targetNodeId: table-production-cost-basis-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
+          startLine: 32
+          endLine: 35
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-create-cost-model-version
     relationshipType: writes_to
     targetNodeId: table-cost-model-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+          startLine: 53
+          endLine: 55
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: command-item-economics-delete-cost-model-version
     relationshipType: writes_to
     targetNodeId: table-cost-model-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
+          startLine: 31
+          endLine: 34
+          summary: The command mutates the corresponding configuration ORM table.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The command mutates the corresponding configuration ORM table.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:39:59.251Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:39:59.251Z
   - sourceNodeId: endpoint-item-economics-get-cost-groups
     relationshipType: reads_from
     targetNodeId: table-production-cost-group
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/list_production_cost_groups.py
+          startLine: 15
+          endLine: 23
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-get-basis
     relationshipType: reads_from
     targetNodeId: table-production-cost-basis-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/list_production_cost_basis_versions.py
+          startLine: 15
+          endLine: 27
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-get-model
     relationshipType: reads_from
     targetNodeId: table-cost-model-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/list_cost_model_versions.py
+          startLine: 16
+          endLine: 28
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-status
     relationshipType: reads_from
     targetNodeId: table-production-cost-group
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+          startLine: 12
+          endLine: 19
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-status
     relationshipType: reads_from
     targetNodeId: table-production-cost-basis-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+          startLine: 20
+          endLine: 27
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
   - sourceNodeId: endpoint-item-economics-status
     relationshipType: reads_from
     targetNodeId: table-cost-model-version
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+          startLine: 28
+          endLine: 35
+          summary: The query endpoint loads the workspace-scoped configuration rows.
+          inferenceReason: The implementation binds the item-economics route surface to
+            the configuration command or persistence boundary.
+      evidenceHistory:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 88
           endLine: 215
           summary: The query endpoint loads the workspace-scoped configuration rows.
           inferenceReason: The implementation binds the item-economics route surface to
             the configuration command or persistence boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-13T10:40:52.659Z
+    origin: human_confirmed
     confidence: 0.86
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-12T20:22:33.052Z
+    updatedAt: 2026-08-13T10:40:52.659Z
+  - sourceNodeId: command-item-economics-create-cost-model-version
+    relationshipType: writes_to
+    targetNodeId: table-cost-model-term
+    description: Creating a cost model version persists its term rows in the same
+      transaction.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+          startLine: 68
+          endLine: 69
+          summary: ctx.session.add_all(terms) followed by await ctx.session.flush()
+            inserts the CostModelTerm rows built for the new version.
+          inferenceReason: The command that creates a cost model version is the writer of
+            cost_model_terms; the edge was missing from the phase-4 delta
+            (re-review r2 finding N7).
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-13T10:41:23.113Z
+    updatedAt: 2026-08-13T10:41:23.113Z
+  - sourceNodeId: endpoint-item-economics-get-model
+    relationshipType: reads_from
+    targetNodeId: table-cost-model-term
+    description: The model-version list endpoint also reads the term rows to
+      serialize each version.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/list_cost_model_versions.py
+          startLine: 32
+          endLine: 32
+          summary: select(CostModelTerm) in the query module backing GET
+            /cost-model-versions.
+          inferenceReason: The endpoint's query selects from cost_model_terms in addition
+            to cost_model_versions; the reads_from edge was missing from the
+            phase-4 delta (re-review r2 finding N7).
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-13T10:41:23.113Z
+    updatedAt: 2026-08-13T10:41:23.113Z

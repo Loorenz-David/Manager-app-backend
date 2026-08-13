@@ -1,0 +1,199 @@
+reviewId: 2026-08-13T10-39-59-267Z--1a1a47
+reviewedItemIds:
+  - edge:command-item-economics-create-production-cost-group--writes_to-->table-production-cost-group
+  - edge:command-item-economics-update-production-cost-group--writes_to-->table-production-cost-group
+  - edge:command-item-economics-delete-production-cost-group--writes_to-->table-production-cost-group
+  - edge:command-item-economics-add-section-to-cost-group--writes_to-->table-production-cost-group-section
+  - edge:command-item-economics-remove-section-from-cost-group--writes_to-->table-production-cost-group-section
+  - edge:command-item-economics-create-production-cost-basis-version--writes_to-->table-production-cost-basis-version
+  - edge:command-item-economics-delete-production-cost-basis-version--writes_to-->table-production-cost-basis-version
+  - edge:command-item-economics-create-cost-model-version--writes_to-->table-cost-model-version
+  - edge:command-item-economics-delete-cost-model-version--writes_to-->table-cost-model-version
+  - edge:domain-item-economics--configured_by-->endpoint-item-economics-status
+decisions:
+  - itemId: edge:command-item-economics-create-production-cost-group--writes_to-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/create_production_cost_group.py
+            startLine: 30
+            endLine: 32
+    rationale: Claim true (r1); blanket router anchor was the wrong file for a write
+      — re-anchored to the add+flush site (re-read at adjudication).
+  - itemId: edge:command-item-economics-update-production-cost-group--writes_to-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+            startLine: 27
+            endLine: 30
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      mutation+flush site (re-read at adjudication).
+  - itemId: edge:command-item-economics-delete-production-cost-group--writes_to-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
+            startLine: 36
+            endLine: 39
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      soft-delete+flush site per r2 anchor service.
+  - itemId: edge:command-item-economics-add-section-to-cost-group--writes_to-->table-production-cost-group-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
+            startLine: 43
+            endLine: 45
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      add+flush site per r2 anchor service.
+  - itemId: edge:command-item-economics-remove-section-from-cost-group--writes_to-->table-production-cost-group-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
+            startLine: 28
+            endLine: 30
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      removal+flush site per r2 anchor service.
+  - itemId: edge:command-item-economics-create-production-cost-basis-version--writes_to-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/create_production_cost_basis_version.py
+            startLine: 33
+            endLine: 47
+    rationale: Claim true (r1); re-anchored to the add+flush site incl. the chain
+      closure at :33 (re-read at adjudication).
+  - itemId: edge:command-item-economics-delete-production-cost-basis-version--writes_to-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
+            startLine: 32
+            endLine: 35
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      soft-delete+flush site per r2 anchor service.
+  - itemId: edge:command-item-economics-create-cost-model-version--writes_to-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+            startLine: 53
+            endLine: 55
+    rationale: Claim true (r1); re-anchored from the blanket router span to the
+      add+flush site per r2 anchor service.
+  - itemId: edge:command-item-economics-delete-cost-model-version--writes_to-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
+            startLine: 31
+            endLine: 34
+    rationale: "Claim true (r1); re-anchored to the soft-delete+flush site (re-read
+      at adjudication: is_deleted/deleted_at/flush at 31-34)."
+  - itemId: edge:domain-item-economics--configured_by-->endpoint-item-economics-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 209
+            endLine: 214
+    rationale: Claim true (r1); anchor tightened from the stale blanket 88-215 to
+      the status route 209-214 (re-read at adjudication).
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T10:39:59.267Z
+graphRevisionBefore: c524d0468b5f997bd865142f3d7f750ab002b25a08563b55ebeecde0f45906b9
+graphRevisionAfter: b2155d93d2e4b1829128fd9b10e6037e1306bf3c6a84d48e7a3f1f87b0119fb7
+evidenceSummary: 10 evidence entries across 1 file; no drift detected
+humanInstruction: "Phase-4 post-approval batch 3/4 under master plan §8 standing
+  owner authorization. 9 writes_to edges + 1 configured_by: claims verified true
+  by review r1; the shared blanket anchor (router :88-215, wrong file for
+  writes) replaced with per-edge command write sites per re-review r2's anchor
+  service; three write sites re-read at adjudication (create group 30-32, delete
+  model version 31-34, basis create 33/45-47)."
+reviewTokenCorrelation: 9ee4f4a048cb

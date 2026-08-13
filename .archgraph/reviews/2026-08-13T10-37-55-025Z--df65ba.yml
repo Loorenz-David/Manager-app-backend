@@ -1,0 +1,247 @@
+reviewId: 2026-08-13T10-37-55-025Z--df65ba
+reviewedItemIds:
+  - node:endpoint-item-economics-post-cost-groups
+  - node:endpoint-item-economics-get-cost-groups
+  - node:endpoint-item-economics-patch-cost-group
+  - node:endpoint-item-economics-delete-cost-group
+  - node:endpoint-item-economics-post-section
+  - node:endpoint-item-economics-delete-section
+  - node:endpoint-item-economics-post-basis
+  - node:endpoint-item-economics-get-basis
+  - node:endpoint-item-economics-delete-basis
+  - node:endpoint-item-economics-post-model
+  - node:endpoint-item-economics-get-model
+  - node:endpoint-item-economics-delete-model
+  - node:endpoint-item-economics-status
+decisions:
+  - itemId: node:endpoint-item-economics-post-cost-groups
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 93
+            endLine: 99
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 92
+            endLine: 98
+    rationale: r1 verified exact; fix-r2 deleted a body field so the span shifted
+      -1; re-derived at 92-98 (decorator :92, _run :98).
+  - itemId: node:endpoint-item-economics-get-cost-groups
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 102
+            endLine: 109
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 101
+            endLine: 108
+    rationale: r1 verified exact; span shifted -1 by fix-r2; current 101-108 per r2
+      anchor service, r3 confirmed no production change since.
+  - itemId: node:endpoint-item-economics-patch-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 112
+            endLine: 119
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 111
+            endLine: 118
+    rationale: r1 verified exact; span shifted -1; current 111-118 (dispatch :118
+      re-read at adjudication).
+  - itemId: node:endpoint-item-economics-delete-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 122
+            endLine: 128
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 121
+            endLine: 127
+    rationale: r1 verified exact; span shifted -1; current 121-127 (dispatch :127
+      re-read at adjudication).
+  - itemId: node:endpoint-item-economics-post-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 131
+            endLine: 138
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 130
+            endLine: 137
+    rationale: r1 verified exact; span shifted -1; current 130-137 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-delete-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 141
+            endLine: 148
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 140
+            endLine: 147
+    rationale: r1 verified exact; span shifted -1; current 140-147 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-post-basis
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 151
+            endLine: 159
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 150
+            endLine: 158
+    rationale: r1 verified exact; span shifted -1 AND fix-r2 removed the
+      derived-rate input field this route advertised (review S1); current
+      150-158.
+  - itemId: node:endpoint-item-economics-get-basis
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 162
+            endLine: 170
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 161
+            endLine: 169
+    rationale: r1 verified exact; span shifted -1; current 161-169 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-delete-basis
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 173
+            endLine: 179
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 172
+            endLine: 178
+    rationale: r1 verified exact; span shifted -1; current 172-178 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-post-model
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 182
+            endLine: 188
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 181
+            endLine: 187
+    rationale: r1 verified exact; span shifted -1; current 181-187 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-get-model
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 191
+            endLine: 198
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 190
+            endLine: 197
+    rationale: r1 verified exact; span shifted -1; current 190-197 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-delete-model
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 201
+            endLine: 207
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 200
+            endLine: 206
+    rationale: r1 verified exact; span shifted -1; current 200-206 per r2 anchor service.
+  - itemId: node:endpoint-item-economics-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 210
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 209
+            endLine: 214
+    rationale: r1 verified exact; span shifted -1; current 209-214 (decorator :209,
+      dispatch :214 re-read at adjudication).
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T10:37:55.025Z
+graphRevisionBefore: bf6dad5b9264937b5950366affe9910dcaacf7abd68a42114bb52fa327e68262
+graphRevisionAfter: 12e26364cd86cd9da9e3856a729cd6e02d43ca1ff1af43f4a9992850c787c394
+evidenceSummary: 13 evidence entries across 1 file; no drift detected
+humanInstruction: "Phase-4 post-approval batch 1/4 under master plan §8 standing
+  owner authorization (owner: \"the reviewer should also review those and you
+  will confirm them\"). 13 endpoint nodes; claims verified by review r1 on code,
+  spans corrected -1 per re-review r2's anchor service, re-verified valid by
+  re-review r3 (zero production change since 4e19506), spot re-read at
+  adjudication."
+reviewTokenCorrelation: 34b1ce8ef504

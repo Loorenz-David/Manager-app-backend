@@ -1,0 +1,172 @@
+reviewId: 2026-08-13T10-39-02-617Z--91b078
+reviewedItemIds:
+  - node:command-item-economics-create-production-cost-group
+  - node:command-item-economics-create-production-cost-basis-version
+  - node:command-item-economics-create-cost-model-version
+  - node:command-item-economics-delete-cost-model-version
+  - node:command-item-economics-update-production-cost-group
+  - node:command-item-economics-delete-production-cost-group
+  - node:command-item-economics-add-section-to-cost-group
+  - node:command-item-economics-remove-section-from-cost-group
+  - node:command-item-economics-delete-production-cost-basis-version
+decisions:
+  - itemId: node:command-item-economics-create-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (13-36); unchanged through both fix cycles per r2
+      anchor service; r3 zero production change.
+  - itemId: node:command-item-economics-create-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (13-51); unchanged through both fix cycles per r2
+      anchor service; r3 zero production change.
+  - itemId: node:command-item-economics-create-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+            symbol: create_cost_model_version
+            startLine: 14
+            endLine: 74
+          to:
+            path: app/beyo_manager/services/commands/item_economics/create_cost_model_version.py
+            symbol: create_cost_model_version
+            startLine: 15
+            endLine: 75
+    rationale: "r1 verified exact at 14-74; fix-r2 added one import so 15-75
+      (re-read: async def :15, file is 75 lines)."
+  - itemId: node:command-item-economics-delete-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
+            symbol: delete_cost_model_version
+            startLine: 14
+            endLine: 37
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py
+            symbol: delete_cost_model_version
+            startLine: 14
+            endLine: 36
+    rationale: r1 verified exact at 14-37; fix-r2 removed a dead assignment so 14-36
+      per r2 anchor service.
+  - itemId: node:command-item-economics-update-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+            symbol: update_production_cost_group
+            startLine: 12
+            endLine: 30
+          to:
+            path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+            symbol: update_production_cost_group
+            startLine: 13
+            endLine: 34
+    rationale: "r1: claim true, stored span 12-30 imprecise; current 13-34 (re-read:
+      async def :13, return :34)."
+  - itemId: node:command-item-economics-delete-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
+            symbol: delete_production_cost_group
+            startLine: 12
+            endLine: 38
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py
+            symbol: delete_production_cost_group
+            startLine: 15
+            endLine: 41
+    rationale: "r1: claim true, stored span 12-38 imprecise; current 15-41 per r2
+      anchor service."
+  - itemId: node:command-item-economics-add-section-to-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
+            symbol: add_section_to_cost_group
+            startLine: 12
+            endLine: 48
+          to:
+            path: app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py
+            symbol: add_section_to_cost_group
+            startLine: 15
+            endLine: 49
+    rationale: "r1: claim true, stored span 12-48 imprecise; current 15-49 per r2
+      anchor service."
+  - itemId: node:command-item-economics-remove-section-from-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
+            symbol: remove_section_from_cost_group
+            startLine: 12
+            endLine: 33
+          to:
+            path: app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py
+            symbol: remove_section_from_cost_group
+            startLine: 14
+            endLine: 32
+    rationale: "r1: claim true, stored span 12-33 imprecise; current 14-32 per r2
+      anchor service."
+  - itemId: node:command-item-economics-delete-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
+            symbol: delete_production_cost_basis_version
+            startLine: 13
+            endLine: 38
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py
+            symbol: delete_production_cost_basis_version
+            startLine: 14
+            endLine: 37
+    rationale: "r1: claim true, stored span 13-38 imprecise; current 14-37 per r2
+      anchor service."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T10:39:02.617Z
+graphRevisionBefore: 12e26364cd86cd9da9e3856a729cd6e02d43ca1ff1af43f4a9992850c787c394
+graphRevisionAfter: c524d0468b5f997bd865142f3d7f750ab002b25a08563b55ebeecde0f45906b9
+evidenceSummary: 9 evidence entries across 9 files; no drift detected
+humanInstruction: "Phase-4 post-approval batch 2/4 under master plan §8 standing
+  owner authorization. 9 command nodes: 2 spans unchanged (plain promote), 7
+  re-anchored per re-review r2's anchor service (2 stale from fix-r2's own
+  edits, 5 r1-imprecise), symbols preserved; spot re-reads at adjudication
+  (update 13/27-30/34, create_cost_model_version 15/68-69/75)."
+reviewTokenCorrelation: b6216982b2e2

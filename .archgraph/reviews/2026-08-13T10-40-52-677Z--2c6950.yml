@@ -1,0 +1,288 @@
+reviewId: 2026-08-13T10-40-52-677Z--2c6950
+reviewedItemIds:
+  - edge:endpoint-item-economics-post-cost-groups--accepts-->command-item-economics-create-production-cost-group
+  - edge:endpoint-item-economics-patch-cost-group--accepts-->command-item-economics-update-production-cost-group
+  - edge:endpoint-item-economics-delete-cost-group--accepts-->command-item-economics-delete-production-cost-group
+  - edge:endpoint-item-economics-post-section--accepts-->command-item-economics-add-section-to-cost-group
+  - edge:endpoint-item-economics-delete-section--accepts-->command-item-economics-remove-section-from-cost-group
+  - edge:endpoint-item-economics-post-basis--accepts-->command-item-economics-create-production-cost-basis-version
+  - edge:endpoint-item-economics-delete-basis--accepts-->command-item-economics-delete-production-cost-basis-version
+  - edge:endpoint-item-economics-post-model--accepts-->command-item-economics-create-cost-model-version
+  - edge:endpoint-item-economics-delete-model--accepts-->command-item-economics-delete-cost-model-version
+  - edge:endpoint-item-economics-get-cost-groups--reads_from-->table-production-cost-group
+  - edge:endpoint-item-economics-get-basis--reads_from-->table-production-cost-basis-version
+  - edge:endpoint-item-economics-get-model--reads_from-->table-cost-model-version
+  - edge:endpoint-item-economics-status--reads_from-->table-production-cost-group
+  - edge:endpoint-item-economics-status--reads_from-->table-production-cost-basis-version
+  - edge:endpoint-item-economics-status--reads_from-->table-cost-model-version
+decisions:
+  - itemId: edge:endpoint-item-economics-post-cost-groups--accepts-->command-item-economics-create-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 98
+            endLine: 98
+    rationale: Claim true (r1); blanket anchor replaced with the route's _run
+      dispatch line (re-read :98).
+  - itemId: edge:endpoint-item-economics-patch-cost-group--accepts-->command-item-economics-update-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 118
+            endLine: 118
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line
+      (re-read :118).
+  - itemId: edge:endpoint-item-economics-delete-cost-group--accepts-->command-item-economics-delete-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 127
+            endLine: 127
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line
+      (re-read :127).
+  - itemId: edge:endpoint-item-economics-post-section--accepts-->command-item-economics-add-section-to-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 137
+            endLine: 137
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line per
+      r2 anchor service (:137).
+  - itemId: edge:endpoint-item-economics-delete-section--accepts-->command-item-economics-remove-section-from-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 147
+            endLine: 147
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line per
+      r2 anchor service (:147).
+  - itemId: edge:endpoint-item-economics-post-basis--accepts-->command-item-economics-create-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 157
+            endLine: 158
+    rationale: Claim true (r1); blanket anchor replaced with the two-line
+      payload+dispatch (re-read 157-158).
+  - itemId: edge:endpoint-item-economics-delete-basis--accepts-->command-item-economics-delete-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 178
+            endLine: 178
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line per
+      r2 anchor service (:178).
+  - itemId: edge:endpoint-item-economics-post-model--accepts-->command-item-economics-create-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 187
+            endLine: 187
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line per
+      r2 anchor service (:187).
+  - itemId: edge:endpoint-item-economics-delete-model--accepts-->command-item-economics-delete-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 206
+            endLine: 206
+    rationale: Claim true (r1); blanket anchor replaced with the dispatch line per
+      r2 anchor service (:206).
+  - itemId: edge:endpoint-item-economics-get-cost-groups--reads_from-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/list_production_cost_groups.py
+            startLine: 15
+            endLine: 23
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the SELECT
+      in the query module (re-read select :15).
+  - itemId: edge:endpoint-item-economics-get-basis--reads_from-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/list_production_cost_basis_versions.py
+            startLine: 15
+            endLine: 27
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the SELECT
+      in the query module (re-read 15/27).
+  - itemId: edge:endpoint-item-economics-get-model--reads_from-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/list_cost_model_versions.py
+            startLine: 16
+            endLine: 28
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the SELECT
+      in the query module (re-read 16/28).
+  - itemId: edge:endpoint-item-economics-status--reads_from-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+            startLine: 12
+            endLine: 19
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the groups
+      SELECT in the status query (re-read 12-19).
+  - itemId: edge:endpoint-item-economics-status--reads_from-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+            startLine: 20
+            endLine: 27
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the basis
+      SELECT in the status query (re-read 20-27).
+  - itemId: edge:endpoint-item-economics-status--reads_from-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 88
+            endLine: 215
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+            startLine: 28
+            endLine: 35
+    rationale: Claim true (r1); wrong-file blanket anchor replaced with the model
+      SELECT in the status query (re-read 28-35).
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T10:40:52.677Z
+graphRevisionBefore: b2155d93d2e4b1829128fd9b10e6037e1306bf3c6a84d48e7a3f1f87b0119fb7
+graphRevisionAfter: 2d4f62a4c0893846893323df396600a9e119d2a368014a7784922ea2c0f210c0
+evidenceSummary: 15 evidence entries across 1 file; no drift detected
+humanInstruction: Phase-4 post-approval batch 4/4 under master plan §8 standing
+  owner authorization. 9 accepts edges re-anchored to their _run dispatch lines
+  and 6 reads_from edges re-anchored to the SELECT sites in the query modules
+  (wrong-file blanket anchor retired), per re-review r2's anchor service;
+  dispatch and SELECT lines spot re-read at adjudication.
+reviewTokenCorrelation: 77827172ff7b
