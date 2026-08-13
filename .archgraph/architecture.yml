@@ -6664,10 +6664,10 @@ edges:
           inferenceReason: The command that creates a cost model version is the writer of
             cost_model_terms; the edge was missing from the phase-4 delta
             (re-review r2 finding N7).
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-13T10:41:23.113Z
-    updatedAt: 2026-08-13T10:41:23.113Z
+    updatedAt: 2026-08-13T16:05:40.468Z
   - sourceNodeId: endpoint-item-economics-get-model
     relationshipType: reads_from
     targetNodeId: table-cost-model-term
@@ -6683,7 +6683,7 @@ edges:
           inferenceReason: The endpoint's query selects from cost_model_terms in addition
             to cost_model_versions; the reads_from edge was missing from the
             phase-4 delta (re-review r2 finding N7).
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-13T10:41:23.113Z
-    updatedAt: 2026-08-13T10:41:23.113Z
+    updatedAt: 2026-08-13T16:05:40.468Z
