@@ -352,3 +352,29 @@ a separate item-domain decision, not this project's.
 
 Folded as R12-1 (new intention §7C; §7.4/§7A.5 superseded for group resolution;
 §11A.4 vocabulary grows to 12 ordered values; phase 4B inserted between 4 and 5).
+
+---
+
+# Phase 4B implement r1 — owner card (2026-08-13)
+
+## OD-1 — migration-environment scope exception (env.py)
+
+**Card (implementer, verbatim):** `app/migrations/env.py` gained a four-line
+comment plus `connection.rollback()` immediately after
+`_cold_build_workspace_callbacks(connection)`. That callback performs a
+read-only preflight query, which opens SQLAlchemy's implicit transaction before
+Alembic establishes its per-migration transaction. Without clearing that
+transaction, `alembic upgrade` appeared successful but did not persist the
+revision or DDL. The change was required for the requested migration to commit
+and for upgrade/downgrade verification to be meaningful, but `env.py` was
+outside the phase prompt's production-file fence. Retain it or route the
+transaction-boundary repair to the migration-infrastructure owner.
+
+**ANSWER (2026-08-13):** **Retain; the reviewer verifies.** Review r1 carries
+two probes: (i) reproduce the claimed silent non-persist by reverting the four
+lines on a DISPOSABLE database (the rationale must be demonstrated, not read —
+the maintenance session's earlier from-scratch runs succeeded without this
+rollback, so the claim needs independent evidence); (ii) re-run master plan
+§10's from-scratch recipe with the rollback in place to prove the cold-build
+machinery is unharmed. If (i) does not reproduce, the reviewer files it as a
+finding (unnecessary infra change, candidate for reversion), not a silent pass.
