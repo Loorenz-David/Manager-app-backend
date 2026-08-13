@@ -3002,14 +3002,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-12T13:58:28.708Z
-    updatedAt: 2026-08-13T13:21:39.160Z
+    updatedAt: 2026-08-13T15:39:28.987Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/configuration.py
         symbol: resolve_economics_configuration
-        startLine: 12
+        startLine: 44
         endLine: 82
         contentHash: e41ab910a3935d58ebadd8531a4bdefe5764d1e80d3cea77fe0659de8d57239e
-        linkedAt: 2026-08-13T13:21:39.160Z
+        linkedAt: 2026-08-13T15:39:28.987Z
   - id: command-item-economics-create-production-cost-group
     type: command
     name: create_production_cost_group

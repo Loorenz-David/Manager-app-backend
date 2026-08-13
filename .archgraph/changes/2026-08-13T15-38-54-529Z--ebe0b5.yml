@@ -1,0 +1,29 @@
+changeId: 2026-08-13T15-38-54-529Z--ebe0b5
+operations:
+  - itemId: node:domain-item-economics
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/domain/item_economics/configuration.py
+        symbol: resolve_economics_configuration
+        startLine: 12
+        endLine: 82
+    after: {}
+    rationale: "Review r1 N5: the link is labelled symbol
+      resolve_economics_configuration but spans configuration.py:12-82 (the
+      whole module: precedence tuple, resolve_major_category, is_applicable AND
+      the function). Unlinking to immediately re-record the function's exact
+      span 44-82."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T15:38:54.529Z
+graphRevisionBefore: 5e4f368df1e17bdbad477428f691e91ad15ece9bd9455b668ebe7bf95b4e76f0
+graphRevisionAfter: dfdad7021e265ee4da1239f4913fe8e3f431fd4493f57b9a297b6f52ee7195cf
+humanInstruction: "4B fix-r1 N5 ride-along, coordinator-performed under master
+  plan §8 standing authorization (Codex's MCP client rejected the graph write):
+  step 1 of 2 — remove the imprecise source link (symbol names the function,
+  span covers the whole module) so the exact 44-82 span can be recorded."
+changeTokenCorrelation: a3a2ce830b53

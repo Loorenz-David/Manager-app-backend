@@ -1,0 +1,29 @@
+changeId: 2026-08-13T15-39-29-004Z--3eccbc
+operations:
+  - itemId: node:domain-item-economics
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/domain/item_economics/configuration.py
+        symbol: resolve_economics_configuration
+        startLine: 44
+        endLine: 82
+      effect: add
+    rationale: "Review r1 N5, step 2 of 2: record the function's own exact span —
+      def resolve_economics_configuration at :44 through return
+      EconomicsStatusEnum.OK at :82, re-read in the working tree at fix-r1
+      checkpoint 8285cf1. Symbol and span now agree."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-13T15:39:29.004Z
+graphRevisionBefore: dfdad7021e265ee4da1239f4913fe8e3f431fd4493f57b9a297b6f52ee7195cf
+graphRevisionAfter: 5c60534df7a47584ed22a845b091b3ae1f2ce377c2a5380d16bb795ebfb3f9ff
+humanInstruction: "4B fix-r1 N5 ride-along, coordinator-performed under master
+  plan §8 standing authorization: step 2 of 2 — record the corrected source link
+  with the function's exact span (configuration.py:44-82, symbol
+  resolve_economics_configuration; span re-read at 8285cf1)."
+changeTokenCorrelation: c6511deeec56
