@@ -644,3 +644,45 @@ dropped (C3 deselected — it hangs); `Decimal(str(v))`→`Decimal(v)`; `gt=0`�
 the `ITEM_COST_GROUP_NAME_TAKEN` pre-check deleted. Reddening reviewer probes:
 `workspace_id` dropped from the model list; `is_deleted` dropped from the basis list
 (both → `test_c10_queries_scope_filter_order_and_limit_plus_one_for_all_three_lists`).
+
+### Implementer fix r3 — 2026-08-13 — Codex
+
+State: **IMPLEMENTED**. This fix cycle was test-side only; no production file was
+left changed. The coverage now maps every §7A.4 table row (10 rows × basis/model
+chains), including the live `effective_from IS NULL` open-row cases and the
+predecessor `effective_to` assertion. C3 asserts the exact registered identity
+token on the genuine two-session race and bounds both audit gates with a 0.3 s
+timeout. C10 gives each of the six list filters a sole-cause fixture, keeps the
+filtered row inside the `limit=1` slice, and covers both rename paths (422
+pre-check and translated DB race). C4 pins float parsing with `2.675`, and the
+request tests cover adjacent accepted/rejected numeric boundaries.
+
+Verification:
+
+- Focused phase/router suite: **139 passed**.
+- C3/C6 concurrency subset: **5 passed**, run twice.
+- Full non-e2e suite: **1892 passed, 23 failed, 1 deselected, 2 warnings**. The
+  23 failures are byte-identical to the recorded phase-1 baseline; no new
+  failure was introduced.
+- `ruff check` on both changed test files and `git diff --check`: clean.
+- Architecture Graph: read-only status before/after; revision unchanged,
+  148 nodes / 186 edges, 47 pending review items, zero delta.
+
+Mutation ledger (each mutant was applied with `apply_patch`, targeted, then
+reverted; final production files were byte-identical to their pre-probe hashes):
+
+| Finding | Mutation | Main sha256 → mutant sha256 | Observed red node |
+|---|---|---|---|
+| B1 | Remove `open_from is not None` guard | `3b594c367b535a0b74766f9435b390b85d928a561bc9bc14316cdaa94b018b0d` → `d8c41d1ad38725787d18085e1378eea499b6fd298c6eb01b52dace48fef70ba0` | `test_c1_admission_matrix_has_one_exact_outcome_per_chain[table-row-5-null-open-at-or-before-today-basis]`; same model node |
+| B2 | Drop group `workspace_id` filter | `75d81316163fc545764f63421d576775817095c518c668b636bb7711bfae7d4e` → `b04eab86683afefc954f38a782b6b7fd60639bf6d48b4ad61d7501d75c390c29` | `test_c10_each_list_filter_has_a_sole_cause_fixture[groups-workspace]` |
+| B2 | Drop group `is_deleted` filter | `75d81316163fc545764f63421d576775817095c518c668b636bb7711bfae7d4e` → `6c28c4173b394b37923e63562a4ee56f25f5db8f1d7149058b00f386bc870ec4` | `...test_c10_each_list_filter_has_a_sole_cause_fixture[groups-is-deleted]` |
+| B2 | Drop model `is_deleted` filter | `1841fae0987ff2b2daa316592ce4ab073a5e019e7f782041520902919312fa50` → `96daa161bd592512e12be620f0f29a7f3ef7f64d23c2a15eb46db5d7ea550552` | `...test_c10_each_list_filter_has_a_sole_cause_fixture[models-is-deleted]` |
+| B2 | Drop basis `workspace_id` filter | `e4b752498d303f91fc21a8332c2809775ab5f3e111edbebe95b9ccb08d356883` → `084e287d94de28dd338737c73fb3851506224bc93b36b358b513bce2d943efc5` | `...test_c10_each_list_filter_has_a_sole_cause_fixture[basis-workspace]` |
+| B2 | Delete rename pre-check | `9f4241643ba5db8a35478f82c795c3603a60cc09ddae00730beebb59c589f7ee` → `3e397be547b3c8947f1567ace90ee56e3173306ce913899ade723be4df485e8b` | `test_c10_group_rename_collision_precheck_is_a_validation_error` |
+| S1 | Translate basis race by model identity | `3b594c367b535a0b74766f9435b390b85d928a561bc9bc14316cdaa94b018b0d` → `71249f1a9c7c25351f24dc59a6c43ed758a7c28130e7c6948d76d9cd52a91d22` | `test_c3_real_concurrent_open_insert_translates_the_loser[basis]` |
+| S2 | Parse float with `Decimal(v)` | `904b635fcca7670729d2d3d470ea6b2f32cc82223bacdca852a653cbf5424860` → `66626dee8d48b1d2af6e8a3734d19df1a7fe28babed63b5fb739ca51d78794a8` | `test_basis_request_parses_float_as_decimal_text_before_quantization` |
+| S3 | Change fixed-cost `gt=0` to `ge=0` | `904b635fcca7670729d2d3d470ea6b2f32cc82223bacdca852a653cbf5424860` → `3de51c176775798c09fc58f5cee61c413c0e1a6497b226c80c947780050e9b8d` | `test_basis_request_rejects_each_out_of_range_numeric_field[fixed-zero]` |
+
+The two additional C10 filter rows (model workspace and basis `is_deleted`) remain
+covered by the existing combined ordering/limit+1 arbiter. Optional N4/N5/N6
+were not taken; they were documented as non-blocking notes in the handoff.

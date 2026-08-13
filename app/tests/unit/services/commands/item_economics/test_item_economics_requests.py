@@ -26,6 +26,20 @@ def test_basis_request_canonicalizes_numeric_columns_before_command_derivation()
     assert request.planning_utilization_percent == Decimal("80.00")
 
 
+def test_basis_request_parses_float_as_decimal_text_before_quantization():
+    request = parse_production_cost_basis_version_create_request(
+        {
+            "production_cost_group_id": "pcg_1",
+            "fixed_monthly_cost_minor": 100000,
+            "currency": "swedish_krona",
+            "monthly_paid_hours": 2.675,
+            "planning_utilization_percent": 80,
+        }
+    )
+
+    assert request.monthly_paid_hours == Decimal("2.68")
+
+
 def test_model_request_canonicalizes_percentage_terms_to_three_places():
     request = parse_cost_model_version_create_request(
         {
@@ -63,13 +77,13 @@ def test_integrity_translation_preserves_unknown_paths():
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("fixed_monthly_cost_minor", -1),
+        ("fixed_monthly_cost_minor", 0),
         ("monthly_paid_hours", -5),
         ("monthly_paid_hours", 0),
         ("planning_utilization_percent", 0),
-        ("planning_utilization_percent", 150),
+        ("planning_utilization_percent", 100.01),
     ],
-    ids=["fixed-negative", "hours-negative", "hours-zero", "util-zero", "util-over-100"],
+    ids=["fixed-zero", "hours-negative", "hours-zero", "util-zero", "util-over-100"],
 )
 def test_basis_request_rejects_each_out_of_range_numeric_field(field, value):
     payload = {
@@ -95,6 +109,64 @@ def test_term_request_rejects_each_out_of_range_numeric_field(field, value):
         "name": "allocation",
         "calculation_type": "percentage_of_expected_sale_price",
         "percent_value": 10,
+    }
+    term[field] = value
+
+    with pytest.raises(ValidationError, match=field):
+        parse_cost_model_version_create_request({"currency": "swedish_krona", "terms": [term]})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("fixed_monthly_cost_minor", 1),
+        ("monthly_paid_hours", 1),
+        ("planning_utilization_percent", 100),
+    ],
+    ids=["fixed-one", "hours-one", "util-one-hundred"],
+)
+def test_basis_request_accepts_each_included_numeric_boundary(field, value):
+    payload = {
+        "production_cost_group_id": "pcg_1",
+        "fixed_monthly_cost_minor": 1,
+        "currency": "swedish_krona",
+        "monthly_paid_hours": 1,
+        "planning_utilization_percent": 100,
+    }
+    payload[field] = value
+
+    assert parse_production_cost_basis_version_create_request(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("percent_value", 0), ("percent_value", 999.999), ("fixed_amount_minor", 0)],
+    ids=["percent-zero", "percent-max", "fixed-amount-zero"],
+)
+def test_term_request_accepts_each_included_numeric_boundary(field, value):
+    calculation_type = "fixed_amount" if field == "fixed_amount_minor" else "percentage_of_expected_sale_price"
+    term = {
+        "name": "allocation",
+        "calculation_type": calculation_type,
+        "percent_value": 10 if calculation_type == "percentage_of_expected_sale_price" else None,
+        "fixed_amount_minor": 0 if calculation_type == "fixed_amount" else None,
+    }
+    term[field] = value
+
+    assert parse_cost_model_version_create_request({"currency": "swedish_krona", "terms": [term]})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "calculation_type"),
+    [("percent_value", 1000, "percentage_of_expected_sale_price"), ("fixed_amount_minor", -1, "fixed_amount")],
+    ids=["percent-over-max", "fixed-amount-negative"],
+)
+def test_term_request_rejects_each_excluded_numeric_boundary(field, value, calculation_type):
+    term = {
+        "name": "allocation",
+        "calculation_type": calculation_type,
+        "percent_value": 10 if calculation_type == "percentage_of_expected_sale_price" else None,
+        "fixed_amount_minor": 1 if calculation_type == "fixed_amount" else None,
     }
     term[field] = value
 

@@ -104,22 +104,33 @@ async def _model(db_session, workspace: Workspace, user: User, *, effective_from
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("chain", ["basis", "model"])
+@pytest.mark.parametrize("chain", ["basis", "model"], ids=["basis", "model"])
 @pytest.mark.parametrize(
     ("case", "open_from", "requested_from", "expected"),
     [
-        ("none-open-none", None, "none", None),
-        ("none-open-today", None, "today", None),
-        ("none-open-past", None, "past", None),
-        ("none-open-future", None, "future", "_EFFECTIVE_FROM_FUTURE"),
-        ("open-null-required", "open", "none", "_EFFECTIVE_FROM_REQUIRED"),
-        ("open-future-rejected", "open", "future", "_EFFECTIVE_FROM_FUTURE"),
-        ("open-equal-rejected", "open", "open", "_EFFECTIVE_FROM_NOT_AFTER_OPEN"),
-        ("open-before-rejected", "open", "before", "_EFFECTIVE_FROM_NOT_AFTER_OPEN"),
-        ("open-after-accepted", "open", "after", None),
-        ("soft-deleted-open-treated-as-none", "soft-deleted", "none", None),
+        ("row-1-none-null-soft-deleted-open", "soft-deleted", "none", None),
+        ("row-2-none-at-or-before-today", "none", "today", None),
+        ("row-3-none-future", "none", "future", "_EFFECTIVE_FROM_FUTURE"),
+        ("row-4-null-open-null", "null", "none", "_EFFECTIVE_FROM_REQUIRED"),
+        ("row-5-null-open-at-or-before-today", "null", "past", None),
+        ("row-6-null-open-future", "null", "future", "_EFFECTIVE_FROM_FUTURE"),
+        ("row-7-dated-open-null", "dated", "none", "_EFFECTIVE_FROM_REQUIRED"),
+        ("row-8-dated-open-at-or-before-open", "dated", "open", "_EFFECTIVE_FROM_NOT_AFTER_OPEN"),
+        ("row-9-dated-open-after-open", "dated", "after", None),
+        ("row-10-dated-open-future", "dated", "future", "_EFFECTIVE_FROM_FUTURE"),
     ],
-    ids=lambda value: str(value),
+    ids=[
+        "table-row-1-none-null",
+        "table-row-2-none-at-or-before-today",
+        "table-row-3-none-future",
+        "table-row-4-null-open-null",
+        "table-row-5-null-open-at-or-before-today",
+        "table-row-6-null-open-future",
+        "table-row-7-dated-open-null",
+        "table-row-8-dated-open-at-or-before-open",
+        "table-row-9-dated-open-after-open",
+        "table-row-10-dated-open-future",
+    ],
 )
 async def test_c1_admission_matrix_has_one_exact_outcome_per_chain(
     db_session, chain, case, open_from, requested_from, expected
@@ -132,25 +143,30 @@ async def test_c1_admission_matrix_has_one_exact_outcome_per_chain(
         "past": today - timedelta(days=1),
         "future": today + timedelta(days=1),
         "open": today - timedelta(days=5),
-        "before": today - timedelta(days=6),
         "after": today - timedelta(days=4),
     }[requested_from]
-    open_from = today - timedelta(days=5) if open_from == "open" else open_from
     group_id = await _group(db_session, workspace, user) if chain == "basis" else None
+    predecessor_id = None
     if open_from == "soft-deleted":
         if chain == "basis":
-            existing_id = await _basis(db_session, workspace, user, group_id)
-            row = await db_session.get(ProductionCostBasisVersion, existing_id)
+            predecessor_id = await _basis(db_session, workspace, user, group_id)
+            row = await db_session.get(ProductionCostBasisVersion, predecessor_id)
         else:
-            existing_id = await _model(db_session, workspace, user)
-            row = await db_session.get(CostModelVersion, existing_id)
+            predecessor_id = await _model(db_session, workspace, user)
+            row = await db_session.get(CostModelVersion, predecessor_id)
         row.is_deleted = True
         await db_session.flush()
-    elif open_from is not None:
+    elif open_from == "null":
         if chain == "basis":
-            await _basis(db_session, workspace, user, group_id, effective_from=open_from)
+            predecessor_id = await _basis(db_session, workspace, user, group_id)
         else:
-            await _model(db_session, workspace, user, effective_from=open_from)
+            predecessor_id = await _model(db_session, workspace, user)
+    elif open_from == "dated":
+        dated_open = today - timedelta(days=5)
+        if chain == "basis":
+            predecessor_id = await _basis(db_session, workspace, user, group_id, effective_from=dated_open)
+        else:
+            predecessor_id = await _model(db_session, workspace, user, effective_from=dated_open)
 
     if chain == "basis":
         payload = _basis_data(group_id, effective_from=requested_from)
@@ -162,6 +178,12 @@ async def test_c1_admission_matrix_has_one_exact_outcome_per_chain(
     if expected is None:
         result = await command(_ctx(db_session, workspace.client_id, user.client_id, payload))
         assert result
+        if case == "row-5-null-open-at-or-before-today":
+            predecessor = await db_session.get(
+                ProductionCostBasisVersion if chain == "basis" else CostModelVersion,
+                predecessor_id,
+            )
+            assert predecessor.effective_to == requested_from
     else:
         with pytest.raises(ValidationError) as raised:
             await command(_ctx(db_session, workspace.client_id, user.client_id, payload))
@@ -222,7 +244,7 @@ async def test_c3_real_concurrent_open_insert_translates_the_loser(chain, db_ses
 
         async def gated_audit(*args, **kwargs):
             flush_complete.set()
-            await release.wait()
+            await asyncio.wait_for(release.wait(), timeout=0.3)
 
         monkeypatch.setattr(module, "audit", gated_audit)
         if chain == "basis":
@@ -232,13 +254,20 @@ async def test_c3_real_concurrent_open_insert_translates_the_loser(chain, db_ses
             payload = {"effective_from": date(2026, 8, 11), "currency": ItemCurrencyEnum.SWEDISH_KRONA, "terms": []}
             command = create_cost_model_version
         winner = asyncio.create_task(command(_ctx(session_one, workspace.client_id, user.client_id, payload)))
-        await flush_complete.wait()
+        await asyncio.wait_for(flush_complete.wait(), timeout=0.3)
         loser = asyncio.create_task(command(_ctx(session_two, workspace.client_id, user.client_id, payload)))
         await asyncio.sleep(0.05)
         release.set()
         outcomes = await asyncio.gather(winner, loser, return_exceptions=True)
         assert sum(isinstance(outcome, ConflictError) for outcome in outcomes) == 1, repr(outcomes)
         assert sum(isinstance(outcome, dict) for outcome in outcomes) == 1, repr(outcomes)
+        loser_outcome = next(outcome for outcome in outcomes if isinstance(outcome, ConflictError))
+        expected_identity = (
+            "ITEM_COST_CONCURRENT_BASIS_VERSION"
+            if chain == "basis"
+            else "ITEM_COST_CONCURRENT_MODEL_VERSION"
+        )
+        assert str(loser_outcome).startswith(f"{expected_identity}:"), repr(outcomes)
         if chain == "basis":
             open_count = await db_session.scalar(
                 select(func.count()).select_from(ProductionCostBasisVersion).where(
@@ -624,6 +653,241 @@ async def test_c8_status_query_enumerates_each_first_failure_and_success(db_sess
         assert status["first_failure"] == expected_failure, case
         assert status["evaluable"] is (expected_failure is None)
         await db_session.rollback()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("query_name", "filter_name"),
+    [
+        ("groups", "workspace"),
+        ("groups", "is_deleted"),
+        ("basis", "workspace"),
+        ("basis", "is_deleted"),
+        ("models", "workspace"),
+        ("models", "is_deleted"),
+    ],
+    ids=[
+        "groups-workspace",
+        "groups-is-deleted",
+        "basis-workspace",
+        "basis-is-deleted",
+        "models-workspace",
+        "models-is-deleted",
+    ],
+)
+async def test_c10_each_list_filter_has_a_sole_cause_fixture(db_session, query_name, filter_name):
+    workspace, user = await _actor(db_session, f"filter_{query_name}_{filter_name}")
+    expected_id = None
+
+    if query_name == "groups":
+        if filter_name == "workspace":
+            other_workspace, other_user = await _actor(db_session, "filter_other_group")
+            filtered_out = ProductionCostGroup(
+                workspace_id=other_workspace.client_id,
+                name="A",
+                created_by_id=other_user.client_id,
+            )
+            visible = ProductionCostGroup(
+                workspace_id=workspace.client_id,
+                name="Z",
+                created_by_id=user.client_id,
+            )
+        else:
+            filtered_out = ProductionCostGroup(
+                workspace_id=workspace.client_id,
+                name="A",
+                created_by_id=user.client_id,
+                is_deleted=True,
+            )
+            visible = ProductionCostGroup(
+                workspace_id=workspace.client_id,
+                name="Z",
+                created_by_id=user.client_id,
+            )
+        db_session.add_all([filtered_out, visible])
+        await db_session.flush()
+        expected_id = visible.client_id
+        result = await list_production_cost_groups(
+            _ctx(db_session, workspace.client_id, user.client_id, {}, {"limit": 1, "offset": 0})
+        )
+        rows = result["production_cost_groups"]
+        pagination = result["production_cost_groups_pagination"]
+    elif query_name == "basis":
+        if filter_name == "workspace":
+            other_workspace, other_user = await _actor(db_session, "filter_other_basis")
+            other_group_id = await _group(db_session, other_workspace, other_user, "A")
+            filtered_out = ProductionCostBasisVersion(
+                workspace_id=other_workspace.client_id,
+                production_cost_group_id=other_group_id,
+                effective_from=None,
+                fixed_monthly_cost_minor=100000,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                monthly_paid_hours=Decimal("160.00"),
+                planning_utilization_percent=Decimal("80.00"),
+                cost_per_worker_minute_minor=Decimal("13.0208"),
+                created_by_id=other_user.client_id,
+            )
+            own_group_id = await _group(db_session, workspace, user, "Z")
+            visible = ProductionCostBasisVersion(
+                workspace_id=workspace.client_id,
+                production_cost_group_id=own_group_id,
+                effective_from=today_utc(),
+                fixed_monthly_cost_minor=100000,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                monthly_paid_hours=Decimal("160.00"),
+                planning_utilization_percent=Decimal("80.00"),
+                cost_per_worker_minute_minor=Decimal("13.0208"),
+                created_by_id=user.client_id,
+            )
+        else:
+            own_group_id = await _group(db_session, workspace, user, "Main")
+            filtered_out = ProductionCostBasisVersion(
+                workspace_id=workspace.client_id,
+                production_cost_group_id=own_group_id,
+                effective_from=None,
+                fixed_monthly_cost_minor=100000,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                monthly_paid_hours=Decimal("160.00"),
+                planning_utilization_percent=Decimal("80.00"),
+                cost_per_worker_minute_minor=Decimal("13.0208"),
+                created_by_id=user.client_id,
+                is_deleted=True,
+            )
+            visible = ProductionCostBasisVersion(
+                workspace_id=workspace.client_id,
+                production_cost_group_id=own_group_id,
+                effective_from=today_utc(),
+                fixed_monthly_cost_minor=100000,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                monthly_paid_hours=Decimal("160.00"),
+                planning_utilization_percent=Decimal("80.00"),
+                cost_per_worker_minute_minor=Decimal("13.0208"),
+                created_by_id=user.client_id,
+            )
+        db_session.add_all([filtered_out, visible])
+        await db_session.flush()
+        expected_id = visible.client_id
+        result = await list_production_cost_basis_versions(
+            _ctx(db_session, workspace.client_id, user.client_id, {}, {"limit": 1, "offset": 0})
+        )
+        rows = result["production_cost_basis_versions"]
+        pagination = result["production_cost_basis_versions_pagination"]
+    else:
+        if filter_name == "workspace":
+            other_workspace, other_user = await _actor(db_session, "filter_other_model")
+            filtered_out = CostModelVersion(
+                workspace_id=other_workspace.client_id,
+                effective_from=None,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                created_by_id=other_user.client_id,
+            )
+            visible = CostModelVersion(
+                workspace_id=workspace.client_id,
+                effective_from=today_utc(),
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                created_by_id=user.client_id,
+            )
+        else:
+            filtered_out = CostModelVersion(
+                workspace_id=workspace.client_id,
+                effective_from=None,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                created_by_id=user.client_id,
+                is_deleted=True,
+            )
+            visible = CostModelVersion(
+                workspace_id=workspace.client_id,
+                effective_from=today_utc(),
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                created_by_id=user.client_id,
+            )
+        db_session.add_all([filtered_out, visible])
+        await db_session.flush()
+        expected_id = visible.client_id
+        result = await list_cost_model_versions(
+            _ctx(db_session, workspace.client_id, user.client_id, {}, {"limit": 1, "offset": 0})
+        )
+        rows = result["cost_model_versions"]
+        pagination = result["cost_model_versions_pagination"]
+
+    assert [row["client_id"] for row in rows] == [expected_id]
+    assert pagination["has_more"] is False
+
+
+@pytest.mark.integration
+async def test_c10_group_rename_collision_precheck_is_a_validation_error(db_session):
+    workspace, user = await _actor(db_session, "rename_precheck")
+    first_group = await _group(db_session, workspace, user, "First")
+    await _group(db_session, workspace, user, "Taken")
+
+    with pytest.raises(ValidationError) as raised:
+        await update_production_cost_group(
+            _ctx(db_session, workspace.client_id, user.client_id, {"client_id": first_group, "name": "Taken"})
+        )
+
+    assert raised.value.http_status == 422
+    assert str(raised.value).startswith("ITEM_COST_GROUP_NAME_TAKEN:")
+
+
+@pytest.mark.integration
+async def test_c10_group_rename_db_conflict_translates_the_registered_identity(db_session, monkeypatch):
+    workspace, user = await _actor(db_session, "rename_db_path")
+    workspace_id, user_id = workspace.client_id, user.client_id
+    first_group = await _group(db_session, workspace, user, "First")
+    second_group = await _group(db_session, workspace, user, "Second")
+    await db_session.commit()
+
+    session_one = database._session_factory()
+    session_two = database._session_factory()
+    winner = loser = None
+    release = asyncio.Event()
+    flush_complete = asyncio.Event()
+    try:
+        module = importlib.import_module(
+            "beyo_manager.services.commands.item_economics.update_production_cost_group"
+        )
+
+        async def gated_audit(*args, **kwargs):
+            flush_complete.set()
+            await asyncio.wait_for(release.wait(), timeout=0.3)
+
+        monkeypatch.setattr(module, "audit", gated_audit)
+        winner = asyncio.create_task(
+            update_production_cost_group(
+                _ctx(session_one, workspace_id, user_id, {"client_id": first_group, "name": "Merged"})
+            )
+        )
+        await asyncio.wait_for(flush_complete.wait(), timeout=0.3)
+        loser = asyncio.create_task(
+            update_production_cost_group(
+                _ctx(session_two, workspace_id, user_id, {"client_id": second_group, "name": "Merged"})
+            )
+        )
+        await asyncio.sleep(0.05)
+        assert not loser.done()
+        release.set()
+        outcomes = await asyncio.wait_for(
+            asyncio.gather(winner, loser, return_exceptions=True),
+            timeout=0.5,
+        )
+        assert sum(isinstance(outcome, dict) for outcome in outcomes) == 1, repr(outcomes)
+        conflicts = [outcome for outcome in outcomes if isinstance(outcome, ConflictError)]
+        assert len(conflicts) == 1, repr(outcomes)
+        assert str(conflicts[0]).startswith("ITEM_COST_GROUP_NAME_TAKEN:")
+        assert conflicts[0].http_status == 409
+    finally:
+        release.set()
+        tasks = [task for task in (winner, loser) if task is not None and not task.done()]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await session_one.close()
+        await session_two.close()
+        await db_session.rollback()
+        await db_session.execute(delete(AuditLog).where(AuditLog.workspace_id == workspace_id))
+        await db_session.execute(delete(ProductionCostGroup).where(ProductionCostGroup.workspace_id == workspace_id))
+        await db_session.execute(delete(User).where(User.client_id == user_id))
+        await db_session.execute(delete(Workspace).where(Workspace.client_id == workspace_id))
+        await db_session.commit()
 
 
 @pytest.mark.integration
