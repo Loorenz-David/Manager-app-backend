@@ -2764,7 +2764,20 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-12T10:54:05.436Z
-    updatedAt: 2026-08-12T12:54:37.728Z
+    updatedAt: 2026-08-13T13:21:39.160Z
+    sourceLinks:
+      - path: app/beyo_manager/models/tables/item_economics/production_cost_group.py
+        symbol: ProductionCostGroup
+        startLine: 21
+        endLine: 40
+        contentHash: 27d99ecb8b3a0e5ea5a84b4f214d60a94029308e4b2cb48d33875dea99e17b5f
+        linkedAt: 2026-08-13T13:21:39.160Z
+      - path: app/migrations/versions/5caae620088c_add_major_category_to_production_cost_groups.py
+        symbol: upgrade
+        startLine: 25
+        endLine: 58
+        contentHash: 312db2741d06afd6efb281deb389c7f9efae1fbd89dc71a8947d46ba5ea2f18e
+        linkedAt: 2026-08-13T13:21:39.160Z
   - id: table-production-cost-group-section
     type: table
     name: production_cost_group_sections
@@ -2989,7 +3002,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-12T13:58:28.708Z
-    updatedAt: 2026-08-12T16:16:40.900Z
+    updatedAt: 2026-08-13T13:21:39.160Z
+    sourceLinks:
+      - path: app/beyo_manager/domain/item_economics/configuration.py
+        symbol: resolve_economics_configuration
+        startLine: 12
+        endLine: 82
+        contentHash: e41ab910a3935d58ebadd8531a4bdefe5764d1e80d3cea77fe0659de8d57239e
+        linkedAt: 2026-08-13T13:21:39.160Z
   - id: command-item-economics-create-production-cost-group
     type: command
     name: create_production_cost_group
@@ -3013,7 +3033,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-13T10:39:02.603Z
+    updatedAt: 2026-08-13T13:21:39.160Z
+    sourceLinks:
+      - path: app/beyo_manager/services/commands/item_economics/create_production_cost_group.py
+        symbol: create_production_cost_group
+        startLine: 13
+        endLine: 47
+        contentHash: 51a7b3e37ba605648d0154f10f16543d6efa1c1fce9a2e31e3406206f6ca07e9
+        linkedAt: 2026-08-13T13:21:39.160Z
   - id: command-item-economics-update-production-cost-group
     type: command
     name: update_production_cost_group
@@ -3047,7 +3074,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-13T10:39:02.603Z
+    updatedAt: 2026-08-13T13:21:39.160Z
+    sourceLinks:
+      - path: app/beyo_manager/services/commands/item_economics/update_production_cost_group.py
+        symbol: update_production_cost_group
+        startLine: 14
+        endLine: 60
+        contentHash: 8763888f77ea8af1f2c0ddce3f31773bf805aae6c50db7dbabf227b4ce1a02e0
+        linkedAt: 2026-08-13T13:21:39.160Z
   - id: command-item-economics-delete-production-cost-group
     type: command
     name: delete_production_cost_group
@@ -3638,7 +3672,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-13T10:37:55.005Z
+    updatedAt: 2026-08-13T13:21:39.160Z
+    sourceLinks:
+      - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+        symbol: get_economics_configuration_status
+        startLine: 12
+        endLine: 64
+        contentHash: ce43ca5f132667b3bba598d8b97aa3bd4f51bc60f6ae7a5e9c38e1cd65144a62
+        linkedAt: 2026-08-13T13:21:39.160Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains

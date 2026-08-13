@@ -10,7 +10,7 @@ from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
 
 
 _ROUTES = [
-    ("POST", "/api/v1/item-economics/cost-groups", {"name": "Main"}),
+    ("POST", "/api/v1/item-economics/cost-groups", {"name": "Main", "major_category": "wood"}),
     ("GET", "/api/v1/item-economics/cost-groups", None),
     ("PATCH", "/api/v1/item-economics/cost-groups/pcg_1", {"name": "Renamed"}),
     ("DELETE", "/api/v1/item-economics/cost-groups/pcg_1", None),
@@ -98,3 +98,20 @@ def test_router_body_percent_field_carries_planning_allocation_documentation():
     assert description is not None
     assert "planning allocation" in description.lower()
     assert "never legally payable tax" in description.lower()
+
+
+def test_group_router_body_models_keep_category_fields_at_the_http_boundary(monkeypatch):
+    assert "major_category" in item_economics._CreateGroupBody.model_fields
+    assert item_economics._CreateGroupBody.model_fields["major_category"].is_required()
+    assert "major_category" in item_economics._UpdateGroupBody.model_fields
+    assert item_economics._UpdateGroupBody.model_fields["major_category"].is_required() is False
+
+    client, calls = _client(monkeypatch, "manager")
+    response = client.patch("/api/v1/item-economics/cost-groups/pcg_1", json={"name": "Renamed"})
+
+    assert response.status_code == 200
+    assert calls[0][1].incoming_data == {
+        "client_id": "pcg_1",
+        "name": "Renamed",
+        "major_category": None,
+    }

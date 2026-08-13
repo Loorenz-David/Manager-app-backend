@@ -15,7 +15,7 @@ from beyo_manager.domain.item_economics.enums import (
     CostModelTermCalculationTypeEnum,
     ItemCostEvaluationKindEnum,
 )
-from beyo_manager.domain.items.enums import ItemCurrencyEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.item_economics.cost_model_term import CostModelTerm
 from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
@@ -53,6 +53,7 @@ CHECK_NAMES = {
 }
 INDEX_NAMES = {
     "uix_production_cost_groups_name_active",
+    "uix_production_cost_groups_major_category_active",
     "uix_production_cost_group_sections_active",
     "uix_production_cost_basis_versions_open",
     "uix_cost_model_versions_open",
@@ -80,7 +81,12 @@ async def _foundation(db_session, *, basis_open=True, model_open=True):
         client_id=f"tsk_{token}", workspace_id=workspace.client_id, task_scalar_id=int(token[:8], 16) % 2_000_000_000,
         task_type=TaskTypeEnum.INTERNAL, created_by_id=user.client_id,
     )
-    group = ProductionCostGroup(workspace_id=workspace.client_id, name=f"group {token}", created_by_id=user.client_id)
+    group = ProductionCostGroup(
+        workspace_id=workspace.client_id,
+        name=f"group {token}",
+        major_category=ItemMajorCategoryEnum.WOOD,
+        created_by_id=user.client_id,
+    )
     db_session.add_all([item, task, group])
     await db_session.flush()
     basis = ProductionCostBasisVersion(
@@ -283,6 +289,7 @@ async def test_partial_unique_indexes_enforce_conflicts_and_exclusions(db_sessio
     if case == "groups_conflict" or case == "groups_soft_deleted":
         second = ProductionCostGroup(
             workspace_id=workspace.client_id, name=group.name, created_by_id=user.client_id,
+            major_category=ItemMajorCategoryEnum.SEAT,
             is_deleted=case == "groups_soft_deleted",
         )
         await _assert_c2_second(db_session, group, second, conflict=case == "groups_conflict")
@@ -292,6 +299,7 @@ async def test_partial_unique_indexes_enforce_conflicts_and_exclusions(db_sessio
         section = WorkingSection(workspace_id=workspace.client_id, name=f"section {uuid4().hex}")
         second_group = ProductionCostGroup(
             workspace_id=workspace.client_id, name=f"group {uuid4().hex}", created_by_id=user.client_id,
+            major_category=ItemMajorCategoryEnum.SEAT,
         )
         db_session.add_all([section, second_group])
         await db_session.flush()

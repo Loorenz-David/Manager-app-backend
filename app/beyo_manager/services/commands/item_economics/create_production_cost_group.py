@@ -22,9 +22,21 @@ async def create_production_cost_group(ctx: ServiceContext) -> dict:
         )
         if exists is not None:
             raise ValidationError("ITEM_COST_GROUP_NAME_TAKEN: group name is already used")
+        category_exists = await ctx.session.scalar(
+            select(ProductionCostGroup.client_id).where(
+                ProductionCostGroup.workspace_id == ctx.workspace_id,
+                ProductionCostGroup.major_category == request.major_category,
+                ProductionCostGroup.is_deleted.is_(False),
+            )
+        )
+        if category_exists is not None:
+            raise ValidationError(
+                f"ITEM_COST_GROUP_CATEGORY_TAKEN: active group already exists for {request.major_category.value}"
+            )
         group = ProductionCostGroup(
             workspace_id=ctx.workspace_id,
             name=request.name,
+            major_category=request.major_category,
             created_by_id=ctx.user_id,
         )
         ctx.session.add(group)

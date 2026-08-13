@@ -4,7 +4,7 @@
 plan: phase 4B
 role: phase plan
 date: 2026-08-12
-state: NOT_STARTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -620,3 +620,42 @@ task 1's pre-flight passes on the configured DB; migration head is
 ## Review log
 
 (append-only)
+
+### 2026-08-13 — implementer r1 (Codex)
+
+- Implementation complete across the scoped migration, `ProductionCostGroup`
+  model/README, category-aware request and command paths, pure classifier,
+  configuration-status query, serializer, and router body models. The migration
+  refuses any existing production-cost-group rows before DDL, reuses
+  `item_major_category_enum`, and creates the active workspace/category unique
+  index. Category flips are immutable once any basis row exists (including a
+  deleted row); equal-category and explicit-JSON-null updates remain no-ops.
+- The named 4B tests plus amended phase-4/phase-2 coverage pass: 256 focused
+  tests passed twice. Ruff passed on every changed production, migration, and
+  test file. The full non-e2e suite passed 1926 tests with 23 known failures and
+  1 deselected, twice; the failure set is byte-identical to the established
+  phase-1 baseline. The scoped economics residue check is zero rows in the
+  production-cost-group/basis/evaluation/cost-model tables and zero matching
+  economics audit rows; development Alembic is at `5caae620088c` (head).
+- C1 live checks used the configured database and a disposable database:
+  empty upgrade, seeded-row preflight refusal with ids and dependent counts,
+  downgrade, and upgrade again. The live enum is the single reused
+  `item_major_category_enum`; the index is unique on `(workspace_id,
+  major_category)` with `is_deleted = false`; filtered `compare_metadata`
+  reports no production-cost-group diffs.
+- Named mutation probes were executed, each with an observed pytest node or
+  live DDL failure, then reverted. Coverage includes migration refusal/default/
+  downgrade/type-key/predicate, category identity translation, basis-deleted
+  immutability, equal-category no-op, category/deleted-group classifier
+  filtering, missing-category precedence, per-category basis scope, HTTP
+  category fields, serializer category output, request validation, and the
+  create category pre-check. No pending Architecture Graph review item was
+  adjudicated. One batched additive graph delta added six source links to the
+  existing table, domain, status endpoint, and create/update command anchors;
+  graph revision is `5e4f368df1e17bdbad477428f691e91ad15ece9bd9455b668ebe7bf95b4e76f0`.
+- Scope exception for owner review: `app/migrations/env.py` gained a
+  transaction rollback after the cold-build preflight query. The existing
+  migration environment otherwise left Alembic's transaction open, so a
+  successful upgrade did not persist its revision; the one-line reset was
+  required for the requested migration to commit and for upgrade/downgrade
+  verification to be meaningful.

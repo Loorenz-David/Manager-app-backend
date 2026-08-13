@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.item_economics.enums import CostModelTermCalculationTypeEnum
-from beyo_manager.domain.items.enums import ItemCurrencyEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
@@ -33,11 +33,13 @@ router = APIRouter()
 class _CreateGroupBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: str
+    major_category: ItemMajorCategoryEnum
 
 
 class _UpdateGroupBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: str
+    major_category: ItemMajorCategoryEnum | None = None
 
 
 class _SectionBody(BaseModel):

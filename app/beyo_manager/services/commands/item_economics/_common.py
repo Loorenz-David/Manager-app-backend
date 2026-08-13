@@ -19,6 +19,7 @@ from beyo_manager.services.infra.audit.write_audit import write_audit
 
 INDEX_IDENTITIES = {
     "uix_production_cost_groups_name_active": "ITEM_COST_GROUP_NAME_TAKEN",
+    "uix_production_cost_groups_major_category_active": "ITEM_COST_GROUP_CATEGORY_TAKEN",
     "uix_production_cost_group_sections_active": "ITEM_COST_SECTION_ALREADY_GROUPED",
     "uix_production_cost_basis_versions_open": "ITEM_COST_CONCURRENT_BASIS_VERSION",
     "uix_cost_model_versions_open": "ITEM_COST_CONCURRENT_MODEL_VERSION",

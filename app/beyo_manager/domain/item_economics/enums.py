@@ -13,6 +13,7 @@ class ItemCostEvaluationKindEnum(enum.Enum):
 
 
 class EconomicsStatusEnum(enum.Enum):
+    ITEM_MISSING_MAJOR_CATEGORY = "item_missing_major_category"
     NOT_CONFIGURED_NO_COST_GROUP = "not_configured_no_cost_group"
     NOT_CONFIGURED_AMBIGUOUS_COST_GROUP = "not_configured_ambiguous_cost_group"
     NOT_CONFIGURED_NO_BASIS_VERSION = "not_configured_no_basis_version"

@@ -7,8 +7,32 @@ from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.services.commands.item_economics._common import translate_integrity_error
 from beyo_manager.services.commands.item_economics.requests import (
     parse_cost_model_version_create_request,
+    parse_production_cost_group_create_request,
+    parse_production_cost_group_update_request,
     parse_production_cost_basis_version_create_request,
 )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "Main"},
+        {"name": "Main", "major_category": "metal"},
+        {"name": "Main", "major_category": "WOOD"},
+    ],
+    ids=["missing-category", "unknown-category", "wrong-case-category"],
+)
+def test_group_create_request_rejects_missing_and_non_vocabulary_categories(payload):
+    with pytest.raises(ValidationError, match="major_category"):
+        parse_production_cost_group_create_request(payload)
+
+
+def test_group_requests_use_lowercase_enum_values_and_accept_explicit_update_null():
+    created = parse_production_cost_group_create_request({"name": "Main", "major_category": "wood"})
+    updated = parse_production_cost_group_update_request({"client_id": "pcg_1", "name": "Main", "major_category": None})
+
+    assert created.major_category.value == "wood"
+    assert updated.major_category is None
 
 
 def test_basis_request_canonicalizes_numeric_columns_before_command_derivation():
@@ -54,6 +78,7 @@ def test_model_request_canonicalizes_percentage_terms_to_three_places():
     ("index_name", "identity"),
     [
         ("uix_production_cost_groups_name_active", "ITEM_COST_GROUP_NAME_TAKEN"),
+        ("uix_production_cost_groups_major_category_active", "ITEM_COST_GROUP_CATEGORY_TAKEN"),
         ("uix_production_cost_group_sections_active", "ITEM_COST_SECTION_ALREADY_GROUPED"),
         ("uix_production_cost_basis_versions_open", "ITEM_COST_CONCURRENT_BASIS_VERSION"),
         ("uix_cost_model_versions_open", "ITEM_COST_CONCURRENT_MODEL_VERSION"),

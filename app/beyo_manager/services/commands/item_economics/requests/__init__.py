@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError, field_validator
 
 from beyo_manager.domain.item_economics.enums import CostModelTermCalculationTypeEnum
-from beyo_manager.domain.items.enums import ItemCurrencyEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.errors.validation import ValidationError
 
 
@@ -28,6 +28,7 @@ class _Request(BaseModel):
 
 class ProductionCostGroupCreateRequest(_Request):
     name: str
+    major_category: ItemMajorCategoryEnum
 
     @field_validator("name")
     @classmethod
@@ -41,6 +42,7 @@ class ProductionCostGroupCreateRequest(_Request):
 class ProductionCostGroupUpdateRequest(_Request):
     client_id: str
     name: str
+    major_category: ItemMajorCategoryEnum | None = None
 
     @field_validator("name")
     @classmethod

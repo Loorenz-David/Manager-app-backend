@@ -161,6 +161,10 @@ def _do_run_migrations(connection) -> None:
     # Postgres enum value commits before a later migration inserts a row using it
     # (Postgres forbids using a new enum value within the transaction that added it).
     ensure_cold_build_workspace, cleanup_cold_build_workspace = _cold_build_workspace_callbacks(connection)
+    # The callback above performs a preflight query, which opens SQLAlchemy's
+    # implicit transaction before Alembic can establish per-migration boundaries.
+    # Clear that read-only transaction so Alembic can commit the migration.
+    connection.rollback()
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

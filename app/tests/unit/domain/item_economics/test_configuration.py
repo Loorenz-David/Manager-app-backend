@@ -3,6 +3,9 @@ from types import SimpleNamespace
 
 from beyo_manager.domain.item_economics.configuration import is_applicable, resolve_economics_configuration
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
+from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
+from beyo_manager.models.tables.item_economics.production_cost_group import ProductionCostGroup
 
 
 def _row(**values):
@@ -10,12 +13,21 @@ def _row(**values):
 
 
 def test_configuration_classifier_uses_explicit_failure_order_and_same_basis_identity_for_gap():
-    group = _row(client_id="pcg_1")
-    assert resolve_economics_configuration([], [], [], date(2026, 8, 12)) is EconomicsStatusEnum.NOT_CONFIGURED_NO_COST_GROUP
-    assert resolve_economics_configuration([group, _row(client_id="pcg_2")], [], [], date(2026, 8, 12)) is EconomicsStatusEnum.NOT_CONFIGURED_AMBIGUOUS_COST_GROUP
-    assert resolve_economics_configuration([group], [], [], date(2026, 8, 12)) is EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION
-    deleted = _row(client_id="pcbv_1", production_cost_group_id="pcg_1", effective_from=None, effective_to=None, is_deleted=True)
-    assert resolve_economics_configuration([group], [deleted], [], date(2026, 8, 12)) is EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION
+    group = ProductionCostGroup(client_id="pcg_1", major_category=ItemMajorCategoryEnum.SEAT)
+    second = ProductionCostGroup(client_id="pcg_2", major_category=ItemMajorCategoryEnum.SEAT)
+    deleted = ProductionCostBasisVersion(
+        client_id="pcbv_1",
+        production_cost_group_id="pcg_1",
+        effective_from=None,
+        effective_to=None,
+        is_deleted=True,
+    )
+    today = date(2026, 8, 12)
+    assert resolve_economics_configuration(None, [], [], [], today) is EconomicsStatusEnum.ITEM_MISSING_MAJOR_CATEGORY
+    assert resolve_economics_configuration(ItemMajorCategoryEnum.SEAT, [], [], [], today) is EconomicsStatusEnum.NOT_CONFIGURED_NO_COST_GROUP
+    assert resolve_economics_configuration(ItemMajorCategoryEnum.SEAT, [group, second], [], [], today) is EconomicsStatusEnum.NOT_CONFIGURED_AMBIGUOUS_COST_GROUP
+    assert resolve_economics_configuration(ItemMajorCategoryEnum.SEAT, [group], [], [], today) is EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION
+    assert resolve_economics_configuration(ItemMajorCategoryEnum.SEAT, [group], [deleted], [], today) is EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION
 
 
 def test_is_applicable_is_half_open_and_excludes_deleted_versions():

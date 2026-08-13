@@ -16,7 +16,8 @@ schema boundary only: commands and the canonical calculator own their write rule
   inputs and outputs needed to explain a single task episode without re-reading live
   configuration.
 
-The four currency columns use three PostgreSQL enum types: `item_valuations.currency`
+The group category column reuses the PostgreSQL `item_major_category_enum` type owned by
+`item_categories.major_category`; it must use `create_type=False` here. The four currency columns use three PostgreSQL enum types: `item_valuations.currency`
 and `item_cost_evaluations.currency` share `item_valuation_currency_enum`, owned by
 `item_valuations`; `production_cost_basis_versions.currency` and
 `cost_model_versions.currency` own their respective types. Evaluation and result task

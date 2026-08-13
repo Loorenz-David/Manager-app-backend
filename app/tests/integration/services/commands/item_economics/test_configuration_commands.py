@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from beyo_manager.domain.items.enums import ItemCurrencyEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
@@ -30,7 +30,12 @@ async def test_configuration_commands_canonicalize_chain_and_status(db_session):
     await db_session.begin()
     db_session.add_all([workspace, user])
     await db_session.flush()
-    ctx = _ctx(db_session, workspace.client_id, user.client_id, {"name": "Main"})
+    ctx = _ctx(
+        db_session,
+        workspace.client_id,
+        user.client_id,
+        {"name": "Main", "major_category": ItemMajorCategoryEnum.WOOD},
+    )
     created = await create_production_cost_group(ctx)
     group_id = created["production_cost_group"]["client_id"]
 
@@ -63,12 +68,23 @@ async def test_configuration_commands_canonicalize_chain_and_status(db_session):
     assert model["cost_model_version"]["terms"] == []
     status = await get_economics_configuration_status(_ctx(db_session, workspace.client_id, user.client_id, {}))
     assert status == {
-        "group_count": 1,
-        "has_cost_group": True,
-        "has_open_basis_version": True,
+        "categories": {
+            "wood": {
+                "group_count": 1,
+                "has_cost_group": True,
+                "has_open_basis_version": True,
+                "evaluable": True,
+                "first_failure": None,
+            },
+            "seat": {
+                "group_count": 0,
+                "has_cost_group": False,
+                "has_open_basis_version": False,
+                "evaluable": False,
+                "first_failure": "not_configured_no_cost_group",
+            },
+        },
         "has_open_cost_model_version": True,
-        "evaluable": True,
-        "first_failure": None,
     }
     renamed = await update_production_cost_group(_ctx(db_session, workspace.client_id, user.client_id, {"client_id": group_id, "name": "Renamed"}))
     assert renamed["production_cost_group"]["name"] == "Renamed"
@@ -82,7 +98,14 @@ async def test_basis_admission_ignores_a_soft_deleted_open_row(db_session):
     await db_session.begin()
     db_session.add_all([workspace, user])
     await db_session.flush()
-    group = await create_production_cost_group(_ctx(db_session, workspace.client_id, user.client_id, {"name": "Main"}))
+    group = await create_production_cost_group(
+        _ctx(
+            db_session,
+            workspace.client_id,
+            user.client_id,
+            {"name": "Main", "major_category": ItemMajorCategoryEnum.WOOD},
+        )
+    )
     group_id = group["production_cost_group"]["client_id"]
     first = await create_production_cost_basis_version(
         _ctx(

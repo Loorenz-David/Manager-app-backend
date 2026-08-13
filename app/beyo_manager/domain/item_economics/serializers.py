@@ -18,6 +18,7 @@ def serialize_production_cost_group(group: object) -> dict:
         "client_id": group.client_id,
         "workspace_id": group.workspace_id,
         "name": group.name,
+        "major_category": group.major_category.value,
         "created_at": group.created_at.isoformat(),
         "created_by_id": group.created_by_id,
         "updated_at": group.updated_at.isoformat() if group.updated_at else None,

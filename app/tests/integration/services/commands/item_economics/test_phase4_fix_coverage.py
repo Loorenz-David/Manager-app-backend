@@ -13,7 +13,7 @@ from beyo_manager.domain.item_economics.calculator import (
     rederive,
 )
 from beyo_manager.domain.item_economics.enums import ItemCostEvaluationKindEnum
-from beyo_manager.domain.items.enums import ItemCurrencyEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models import database
@@ -68,8 +68,21 @@ async def _actor(db_session, label: str | None = None) -> tuple[Workspace, User]
     return workspace, user
 
 
-async def _group(db_session, workspace: Workspace, user: User, name: str = "Main") -> str:
-    result = await create_production_cost_group(_ctx(db_session, workspace.client_id, user.client_id, {"name": name}))
+async def _group(
+    db_session,
+    workspace: Workspace,
+    user: User,
+    name: str = "Main",
+    major_category: ItemMajorCategoryEnum = ItemMajorCategoryEnum.WOOD,
+) -> str:
+    result = await create_production_cost_group(
+        _ctx(
+            db_session,
+            workspace.client_id,
+            user.client_id,
+            {"name": name, "major_category": major_category},
+        )
+    )
     return result["production_cost_group"]["client_id"]
 
 
@@ -573,7 +586,7 @@ async def test_c6_interleaved_fk_insert_is_blocked_by_the_delete_row_lock_then_p
 async def test_c7_section_membership_identity_and_group_delete_guards(db_session):
     workspace, user = await _actor(db_session)
     first_group = await _group(db_session, workspace, user, "First")
-    second_group = await _group(db_session, workspace, user, "Second")
+    second_group = await _group(db_session, workspace, user, "Second", ItemMajorCategoryEnum.SEAT)
     section = WorkingSection(workspace_id=workspace.client_id, name="Assembly", created_by_id=user.client_id)
     db_session.add(section)
     await db_session.flush()
@@ -602,7 +615,6 @@ async def test_c8_status_query_enumerates_each_first_failure_and_success(db_sess
     today = today_utc()
     cases = [
         "no-cost-group",
-        "ambiguous-cost-group",
         "no-basis",
         "basis-not-applicable",
         "no-model",
@@ -610,7 +622,6 @@ async def test_c8_status_query_enumerates_each_first_failure_and_success(db_sess
     ]
     expected = [
         "not_configured_no_cost_group",
-        "not_configured_ambiguous_cost_group",
         "not_configured_no_basis_version",
         "not_configured_no_basis_version",
         "not_configured_no_cost_model_version",
@@ -620,10 +631,13 @@ async def test_c8_status_query_enumerates_each_first_failure_and_success(db_sess
         workspace, user = await _actor(db_session)
         group = None
         if case != "no-cost-group":
-            group = ProductionCostGroup(workspace_id=workspace.client_id, name="Main", created_by_id=user.client_id)
+            group = ProductionCostGroup(
+                workspace_id=workspace.client_id,
+                name="Main",
+                major_category=ItemMajorCategoryEnum.WOOD,
+                created_by_id=user.client_id,
+            )
             db_session.add(group)
-            if case == "ambiguous-cost-group":
-                db_session.add(ProductionCostGroup(workspace_id=workspace.client_id, name="Second", created_by_id=user.client_id))
             await db_session.flush()
         if case in {"basis-not-applicable", "no-model", "all-present"}:
             db_session.add(
@@ -650,8 +664,10 @@ async def test_c8_status_query_enumerates_each_first_failure_and_success(db_sess
             )
         await db_session.flush()
         status = await get_economics_configuration_status(_ctx(db_session, workspace.client_id, user.client_id, {}))
-        assert status["first_failure"] == expected_failure, case
-        assert status["evaluable"] is (expected_failure is None)
+        assert set(status) == {"categories", "has_open_cost_model_version"}, case
+        assert status["categories"]["wood"]["first_failure"] == expected_failure, case
+        assert status["categories"]["wood"]["evaluable"] is (expected_failure is None)
+        assert status["categories"]["seat"]["first_failure"] == "not_configured_no_cost_group", case
         await db_session.rollback()
 
 
@@ -685,23 +701,27 @@ async def test_c10_each_list_filter_has_a_sole_cause_fixture(db_session, query_n
             filtered_out = ProductionCostGroup(
                 workspace_id=other_workspace.client_id,
                 name="A",
+                major_category=ItemMajorCategoryEnum.WOOD,
                 created_by_id=other_user.client_id,
             )
             visible = ProductionCostGroup(
                 workspace_id=workspace.client_id,
                 name="Z",
+                major_category=ItemMajorCategoryEnum.SEAT,
                 created_by_id=user.client_id,
             )
         else:
             filtered_out = ProductionCostGroup(
                 workspace_id=workspace.client_id,
                 name="A",
+                major_category=ItemMajorCategoryEnum.SEAT,
                 created_by_id=user.client_id,
                 is_deleted=True,
             )
             visible = ProductionCostGroup(
                 workspace_id=workspace.client_id,
                 name="Z",
+                major_category=ItemMajorCategoryEnum.WOOD,
                 created_by_id=user.client_id,
             )
         db_session.add_all([filtered_out, visible])
@@ -818,7 +838,7 @@ async def test_c10_each_list_filter_has_a_sole_cause_fixture(db_session, query_n
 async def test_c10_group_rename_collision_precheck_is_a_validation_error(db_session):
     workspace, user = await _actor(db_session, "rename_precheck")
     first_group = await _group(db_session, workspace, user, "First")
-    await _group(db_session, workspace, user, "Taken")
+    await _group(db_session, workspace, user, "Taken", ItemMajorCategoryEnum.SEAT)
 
     with pytest.raises(ValidationError) as raised:
         await update_production_cost_group(
@@ -834,7 +854,7 @@ async def test_c10_group_rename_db_conflict_translates_the_registered_identity(d
     workspace, user = await _actor(db_session, "rename_db_path")
     workspace_id, user_id = workspace.client_id, user.client_id
     first_group = await _group(db_session, workspace, user, "First")
-    second_group = await _group(db_session, workspace, user, "Second")
+    second_group = await _group(db_session, workspace, user, "Second", ItemMajorCategoryEnum.SEAT)
     await db_session.commit()
 
     session_one = database._session_factory()
@@ -894,10 +914,10 @@ async def test_c10_group_rename_db_conflict_translates_the_registered_identity(d
 async def test_c10_queries_scope_filter_order_and_limit_plus_one_for_all_three_lists(db_session):
     workspace, user = await _actor(db_session, "query_a")
     other_workspace, other_user = await _actor(db_session, "query_b")
-    group_b = ProductionCostGroup(workspace_id=workspace.client_id, name="B", created_by_id=user.client_id)
-    group_a = ProductionCostGroup(workspace_id=workspace.client_id, name="A", created_by_id=user.client_id)
-    deleted_group = ProductionCostGroup(workspace_id=workspace.client_id, name="Deleted", created_by_id=user.client_id, is_deleted=True)
-    other_group = ProductionCostGroup(workspace_id=other_workspace.client_id, name="Other", created_by_id=other_user.client_id)
+    group_b = ProductionCostGroup(workspace_id=workspace.client_id, name="B", major_category=ItemMajorCategoryEnum.SEAT, created_by_id=user.client_id)
+    group_a = ProductionCostGroup(workspace_id=workspace.client_id, name="A", major_category=ItemMajorCategoryEnum.WOOD, created_by_id=user.client_id)
+    deleted_group = ProductionCostGroup(workspace_id=workspace.client_id, name="Deleted", major_category=ItemMajorCategoryEnum.SEAT, created_by_id=user.client_id, is_deleted=True)
+    other_group = ProductionCostGroup(workspace_id=other_workspace.client_id, name="Other", major_category=ItemMajorCategoryEnum.WOOD, created_by_id=other_user.client_id)
     db_session.add_all([group_b, group_a, deleted_group, other_group])
     await db_session.flush()
     basis_a = ProductionCostBasisVersion(

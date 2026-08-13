@@ -1,10 +1,15 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.models.base.base import Base
 from beyo_manager.models.base.identity import IdentityMixin
+from beyo_manager.models.base.sa_enum import configure_sa_enum_values
+
+
+SAEnum = configure_sa_enum_values(SAEnum)
 
 
 class ProductionCostGroup(IdentityMixin, Base):
@@ -13,6 +18,9 @@ class ProductionCostGroup(IdentityMixin, Base):
 
     workspace_id: Mapped[str] = mapped_column(String(64), ForeignKey("workspaces.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    major_category: Mapped[ItemMajorCategoryEnum] = mapped_column(
+        SAEnum(ItemMajorCategoryEnum, name="item_major_category_enum", create_type=False), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=lambda: datetime.now(timezone.utc))
@@ -21,4 +29,13 @@ class ProductionCostGroup(IdentityMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True)
 
-    __table_args__ = (Index("uix_production_cost_groups_name_active", "workspace_id", "name", unique=True, postgresql_where=text("is_deleted = false")),)
+    __table_args__ = (
+        Index("uix_production_cost_groups_name_active", "workspace_id", "name", unique=True, postgresql_where=text("is_deleted = false")),
+        Index(
+            "uix_production_cost_groups_major_category_active",
+            "workspace_id",
+            "major_category",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+    )
