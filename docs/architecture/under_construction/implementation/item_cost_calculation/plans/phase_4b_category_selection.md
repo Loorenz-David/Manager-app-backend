@@ -581,6 +581,42 @@ both commands); pre-flight wording (must carry counts + ids + dependent counts);
 M3 guards); C7(d) rows at the command request model; test file layout mirrors
 the existing structure; C1(a) assertion shape per the named recipe.
 
+## Prompt-time dependency re-verification (2026-08-13, coordinator — the N-f re-grep, GOVERNING for task 8)
+
+Phase 4 is APPROVED (`8ca2bf9`); the Dependencies greps were re-run against the
+final tree (post fix-r3, incl. `ProductionCostGroup(` per N-f). The fix cycles
+added ONE new touchpoint file — `tests/integration/services/commands/
+item_economics/test_phase4_fix_coverage.py` — and one payload row. Task 8's
+named-change list is now the six amendments-section items PLUS:
+
+- **T8-7 `_group` helper** (`test_phase4_fix_coverage.py:71-72`): gains a
+  `major_category` parameter defaulting `ItemMajorCategoryEnum.WOOD`; every
+  SECOND active group created in the same workspace (both rename tests, the
+  C10 fixtures) takes **SEAT** — same collision class as L-1/L-3.
+- **T8-8 C8 status enumeration**
+  (`test_phase4_fix_coverage.py::test_c8_status_query_enumerates_each_first_failure_and_success`,
+  `:601`): rewritten to the §7C.3 per-category shape (authority: §7C.3). Its
+  DB-built **ambiguous** case (`:623-626`, two active groups one workspace)
+  is no longer constructible under INV-G3 — that outcome is covered by C5's
+  V3 pure defence row; the DB-backed enumeration covers the four
+  `not_configured_*` values per category block.
+- **T8-9 direct `ProductionCostGroup(` fixtures**
+  (`test_phase4_fix_coverage.py:685-702` sole-cause filter rows, `:897-900`
+  ordering rows): every construction gains `major_category`; same-workspace
+  ACTIVE pairs take distinct categories (wood/seat) so INV-G3 never fires and
+  each C10 row's named sole cause (workspace scope, `is_deleted`, ordering)
+  is preserved — v1's list queries have no category filter (§5), so the
+  ordering assertions are unaffected.
+- **T8-10 router role-gate payload**
+  (`tests/unit/routers/api_v1/test_item_economics_router.py:13`): the
+  `POST /cost-groups` body row gains `"major_category": "wood"` so the C11
+  role rows keep testing the gate, not a 422 parse failure.
+
+Environment facts at prompt time: the dev DB's `production_cost_groups` is at
+**0 rows** (N3 residue purged at closeout, enumerated 20-row delete), so
+task 1's pre-flight passes on the configured DB; migration head is
+`90cdd23a828e` (implementer re-verifies at implementation time).
+
 ## Review log
 
 (append-only)
