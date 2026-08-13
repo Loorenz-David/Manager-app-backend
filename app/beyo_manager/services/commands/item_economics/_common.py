@@ -25,6 +25,7 @@ INDEX_IDENTITIES = {
     "uix_cost_model_versions_open": "ITEM_COST_CONCURRENT_MODEL_VERSION",
     "uix_cost_model_terms_purchase_cost": "ITEM_COST_PURCHASE_TERM_DUPLICATE",
     "uix_cost_model_terms_name_active": "ITEM_COST_TERM_NAME_TAKEN",
+    "uix_item_valuations_current": "ITEM_COST_CONCURRENT_VALUATION",
 }
 
 

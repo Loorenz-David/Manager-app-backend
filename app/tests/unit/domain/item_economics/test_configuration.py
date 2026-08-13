@@ -1,9 +1,20 @@
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
-from beyo_manager.domain.item_economics.configuration import is_applicable, resolve_economics_configuration
+import pytest
+
+from beyo_manager.domain.item_economics.enums import CostModelTermCalculationTypeEnum
+from beyo_manager.domain.item_economics.configuration import (
+    ITEM_READINESS_PRECEDENCE,
+    EconomicsSelection,
+    is_applicable,
+    resolve_economics_configuration,
+    resolve_economics_selection,
+    resolve_item_economics_status,
+)
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
-from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
+from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryEnum
 from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
 from beyo_manager.models.tables.item_economics.production_cost_group import ProductionCostGroup
 
@@ -37,3 +48,64 @@ def test_is_applicable_is_half_open_and_excludes_deleted_versions():
     assert not is_applicable(version, date(2026, 8, 13))
     version.is_deleted = True
     assert not is_applicable(version, date(2026, 8, 12))
+
+
+def test_selection_and_configuration_status_share_one_resolution():
+    group = _row(client_id="pcg_1", major_category=ItemMajorCategoryEnum.SEAT)
+    basis = _row(
+        client_id="pcbv_1", production_cost_group_id="pcg_1",
+        effective_from=None, effective_to=None, currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        cost_per_worker_minute_minor=Decimal("13.0208"),
+    )
+    model = _row(
+        client_id="cmv_1", effective_from=None, effective_to=None,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+    )
+    selection = resolve_economics_selection(
+        ItemMajorCategoryEnum.SEAT, [group], [basis], [model], date(2026, 8, 13)
+    )
+    assert isinstance(selection, EconomicsSelection)
+    assert selection.status is EconomicsStatusEnum.OK
+    assert resolve_economics_configuration(
+        ItemMajorCategoryEnum.SEAT, [group], [basis], [model], date(2026, 8, 13)
+    ) is selection.status
+
+
+def test_item_readiness_uses_registered_order_and_requires_a_purchase_term():
+    selection = EconomicsSelection(EconomicsStatusEnum.OK, _row(client_id="g"), _row(currency=ItemCurrencyEnum.SWEDISH_KRONA), _row(currency=ItemCurrencyEnum.SWEDISH_KRONA))
+    valuation = _row(expected_sale_price_minor=None, purchase_cost_minor=None, currency=ItemCurrencyEnum.SWEDISH_KRONA)
+    purchase_term = _row(calculation_type=CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST)
+    assert ITEM_READINESS_PRECEDENCE[0] is EconomicsStatusEnum.ITEM_UNVALUED
+    assert resolve_item_economics_status(None, selection, [purchase_term]) is EconomicsStatusEnum.ITEM_UNVALUED
+    assert resolve_item_economics_status(valuation, selection, []) is EconomicsStatusEnum.ITEM_MISSING_EXPECTED_PRICE
+    valuation.expected_sale_price_minor = 100
+    assert resolve_item_economics_status(valuation, selection, [purchase_term]) is EconomicsStatusEnum.ITEM_MISSING_PURCHASE_COST
+    valuation.expected_sale_price_minor = None
+    assert resolve_item_economics_status(valuation, selection, [purchase_term]) is EconomicsStatusEnum.ITEM_MISSING_EXPECTED_PRICE
+
+
+@pytest.mark.parametrize(
+    ("valuation_currency", "basis_currency", "model_currency"),
+    [
+        (ItemCurrencyEnum.EURO, ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.SWEDISH_KRONA),
+        (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO, ItemCurrencyEnum.SWEDISH_KRONA),
+        (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO),
+    ],
+    ids=["valuation-basis", "valuation-model", "basis-model"],
+)
+def test_item_readiness_rejects_each_currency_mismatch_pair(
+    valuation_currency, basis_currency, model_currency
+):
+    selection = EconomicsSelection(
+        EconomicsStatusEnum.OK,
+        _row(client_id="g"),
+        _row(currency=basis_currency),
+        _row(currency=model_currency),
+    )
+    valuation = _row(
+        expected_sale_price_minor=100,
+        purchase_cost_minor=50,
+        currency=valuation_currency,
+    )
+
+    assert resolve_item_economics_status(valuation, selection, []) is EconomicsStatusEnum.CURRENCY_MISMATCH

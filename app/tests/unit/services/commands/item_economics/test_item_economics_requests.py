@@ -7,6 +7,7 @@ from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.services.commands.item_economics._common import translate_integrity_error
 from beyo_manager.services.commands.item_economics.requests import (
     parse_cost_model_version_create_request,
+    parse_item_valuation_request,
     parse_production_cost_group_create_request,
     parse_production_cost_group_update_request,
     parse_production_cost_basis_version_create_request,
@@ -84,6 +85,7 @@ def test_model_request_canonicalizes_percentage_terms_to_three_places():
         ("uix_cost_model_versions_open", "ITEM_COST_CONCURRENT_MODEL_VERSION"),
         ("uix_cost_model_terms_purchase_cost", "ITEM_COST_PURCHASE_TERM_DUPLICATE"),
         ("uix_cost_model_terms_name_active", "ITEM_COST_TERM_NAME_TAKEN"),
+        ("uix_item_valuations_current", "ITEM_COST_CONCURRENT_VALUATION"),
     ],
 )
 def test_integrity_translation_preserves_each_registered_index_identity(index_name, identity):
@@ -97,6 +99,21 @@ def test_integrity_translation_preserves_unknown_paths():
     with pytest.raises(IntegrityError) as raised:
         translate_integrity_error(unknown)
     assert raised.value is unknown
+
+
+def test_valuation_request_requires_at_least_one_amount_after_pydantic_parse():
+    with pytest.raises(ValidationError, match=r"^ITEM_COST_VALUATION_AMOUNT_REQUIRED:"):
+        parse_item_valuation_request({"currency": "swedish_krona"})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("expected_sale_price_minor", -1), ("purchase_cost_minor", -1)],
+    ids=["negative-expected", "negative-purchase"],
+)
+def test_valuation_request_rejects_each_negative_amount_at_request_layer(field, value):
+    with pytest.raises(ValidationError, match=field):
+        parse_item_valuation_request({"currency": "swedish_krona", field: value})
 
 
 @pytest.mark.parametrize(

@@ -68,6 +68,9 @@
 | GET | /api/v1/item-economics/cost-model-versions | item-economics | route_list_cost_model_versions_api_v1_item_economics_cost_model_versions_get |
 | DELETE | /api/v1/item-economics/cost-model-versions/{client_id} | item-economics | route_delete_cost_model_version_api_v1_item_economics_cost_model_versions__client_id__delete |
 | GET | /api/v1/item-economics/configuration-status | item-economics | route_get_economics_configuration_status_api_v1_item_economics_configuration_status_get |
+| PUT | /api/v1/item-economics/items/{item_client_id}/valuation | item-economics | route_set_item_valuation_api_v1_item_economics_items__item_client_id__valuation_put |
+| GET | /api/v1/item-economics/items/{item_client_id}/valuations | item-economics | route_get_item_valuation_history_api_v1_item_economics_items__item_client_id__valuations_get |
+| DELETE | /api/v1/item-economics/items/{item_client_id}/valuation | item-economics | route_delete_item_valuation_api_v1_item_economics_items__item_client_id__valuation_delete |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
 | POST | /api/v1/item-upholsteries/mark-ordered | item-upholsteries | route_mark_ordered_api_v1_item_upholsteries_mark_ordered_post |
 | POST | /api/v1/item-upholsteries/reallocate-stock | item-upholsteries | route_reallocate_stock_api_v1_item_upholsteries_reallocate_stock_post |

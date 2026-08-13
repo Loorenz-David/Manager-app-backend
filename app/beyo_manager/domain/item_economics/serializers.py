@@ -91,3 +91,31 @@ def serialize_cost_model_version(
         "terms": [serialize_cost_model_term(term) for term in terms] if terms is not None else [],
     }
     return payload
+
+
+def serialize_item_valuation(valuation: object) -> dict:
+    return {
+        "client_id": valuation.client_id,
+        "workspace_id": valuation.workspace_id,
+        "item_id": valuation.item_id,
+        "expected_sale_price_minor": valuation.expected_sale_price_minor,
+        "purchase_cost_minor": valuation.purchase_cost_minor,
+        "currency": valuation.currency.value,
+        "superseded_at": valuation.superseded_at.isoformat() if valuation.superseded_at else None,
+        "superseded_by_id": valuation.superseded_by_id,
+        "created_at": valuation.created_at.isoformat(),
+        "created_by_id": valuation.created_by_id,
+    }
+
+
+def serialize_item_economics_preview(
+    status: object,
+    production_budget_minor: int | None = None,
+    allowed_worker_minutes: object | None = None,
+) -> dict:
+    status_value = status.value if hasattr(status, "value") else status
+    return {
+        "status": status_value,
+        "production_budget_minor": production_budget_minor,
+        "allowed_worker_minutes": _decimal(allowed_worker_minutes),
+    }

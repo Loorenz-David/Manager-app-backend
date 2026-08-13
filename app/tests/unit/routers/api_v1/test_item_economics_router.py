@@ -32,6 +32,9 @@ _ROUTES = [
     ("GET", "/api/v1/item-economics/cost-model-versions", None),
     ("DELETE", "/api/v1/item-economics/cost-model-versions/cmv_1", None),
     ("GET", "/api/v1/item-economics/configuration-status", None),
+    ("PUT", "/api/v1/item-economics/items/itm_1/valuation", {"expected_sale_price_minor": 100, "currency": "swedish_krona"}),
+    ("GET", "/api/v1/item-economics/items/itm_1/valuations", None),
+    ("DELETE", "/api/v1/item-economics/items/itm_1/valuation", None),
 ]
 
 
@@ -59,7 +62,7 @@ def _client(monkeypatch, role_name: str):
 
 @pytest.mark.parametrize("role_name", ["worker", "seller"])
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES, ids=[f"{method.lower()}-{path.split('/')[-1]}" for method, path, _ in _ROUTES])
-def test_every_configuration_route_rejects_worker_and_seller(method, path, body, role_name, monkeypatch):
+def test_every_item_economics_route_rejects_worker_and_seller(method, path, body, role_name, monkeypatch):
     client, calls = _client(monkeypatch, role_name)
 
     response = client.request(method, path, json=body)
@@ -70,7 +73,7 @@ def test_every_configuration_route_rejects_worker_and_seller(method, path, body,
 
 @pytest.mark.parametrize("role_name", ["admin", "manager"])
 @pytest.mark.parametrize(("method", "path", "body"), _ROUTES, ids=[f"{method.lower()}-{path.split('/')[-1]}" for method, path, _ in _ROUTES])
-def test_every_configuration_route_retains_admin_and_manager_access(method, path, body, role_name, monkeypatch):
+def test_every_item_economics_route_retains_admin_and_manager_access(method, path, body, role_name, monkeypatch):
     client, calls = _client(monkeypatch, role_name)
 
     response = client.request(method, path, json=body)

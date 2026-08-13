@@ -264,3 +264,13 @@ per phase-4 `_common.get_group` precedent.
 ## Review log
 
 (append-only)
+
+### 2026-08-13 — implementer r1 (Codex)
+
+- Implemented the valuation surface within the declared fence: selection/readiness resolvers, valuation serializers and request validation, set/delete commands, history query, three role-gated routes, router README rows, and focused unit/integration coverage.
+- Judgment: preview computation reads the persisted `cost_per_worker_minute_minor`; `resolve_economics_selection` is the single selection authority and the legacy status resolver delegates to it. DELETE returns the status-only `item_unvalued` preview; direct superseded-row deletion is rejected with the registered immutable identity.
+- The race harness uses two real sessions, bounded waits, and commits only its fixture; it exercises both no-current and current-row paths and asserts `ITEM_COST_CONCURRENT_VALUATION`. Cleanup scopes the five valuation-chain tables plus actor/workspace rows.
+- Focused valuation/unit/router suite: 111 passed. The valuation integration and race subset each passed twice. Ruff and `git diff --check` passed. Alembic reports development DB at `5caae620088c` (head).
+- Full suite: 1951 passed, 23 failed, 2 warnings. The 23-failure set is byte-identical to the established non-phase baseline; phase 5 added 24 collected tests relative to the recorded 1927 baseline. No phase-5 failure was present.
+- Reversible mutation probes: readiness precedence swap reddened `test_item_readiness_uses_registered_order_and_requires_a_purchase_term`; raw-rate substitution reddened `test_valuation_chain_preview_delete_and_history` (`76800.00` vs `76800.20`); history soft-delete-filter removal reddened the same integration test. All probes were reverted; probe-only touched files were `app/beyo_manager/domain/item_economics/configuration.py`, `app/beyo_manager/services/commands/item_economics/set_item_valuation.py`, and `app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py`.
+- Architecture Graph: one additive batch applied after duplicate preflight: 5 nodes and 7 relationships, revision `b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94`; no review decisions were made.

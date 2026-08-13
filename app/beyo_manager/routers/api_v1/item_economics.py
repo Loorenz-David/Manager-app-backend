@@ -16,15 +16,18 @@ from beyo_manager.services.commands.item_economics.create_cost_model_version imp
 from beyo_manager.services.commands.item_economics.create_production_cost_basis_version import create_production_cost_basis_version
 from beyo_manager.services.commands.item_economics.create_production_cost_group import create_production_cost_group
 from beyo_manager.services.commands.item_economics.delete_cost_model_version import delete_cost_model_version
+from beyo_manager.services.commands.item_economics.delete_item_valuation import delete_item_valuation
 from beyo_manager.services.commands.item_economics.delete_production_cost_basis_version import delete_production_cost_basis_version
 from beyo_manager.services.commands.item_economics.delete_production_cost_group import delete_production_cost_group
 from beyo_manager.services.commands.item_economics.remove_section_from_cost_group import remove_section_from_cost_group
+from beyo_manager.services.commands.item_economics.set_item_valuation import set_item_valuation
 from beyo_manager.services.commands.item_economics.update_production_cost_group import update_production_cost_group
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_economics_configuration_status import get_economics_configuration_status
 from beyo_manager.services.queries.item_economics.list_cost_model_versions import list_cost_model_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
+from beyo_manager.services.queries.item_economics.get_item_valuation_history import get_item_valuation_history
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -75,6 +78,13 @@ class _CostModelVersionBody(BaseModel):
     effective_from: date | None = None
     currency: ItemCurrencyEnum
     terms: list[_CostModelTermBody] = Field(default_factory=list)
+
+
+class _ItemValuationBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    currency: ItemCurrencyEnum
 
 
 def _ctx(claims: dict, session: AsyncSession, data: dict | None = None, query: dict | None = None) -> ServiceContext:
@@ -214,3 +224,46 @@ async def route_get_economics_configuration_status(
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(get_economics_configuration_status, claims, session)
+
+
+@router.put("/items/{item_client_id}/valuation")
+async def route_set_item_valuation(
+    item_client_id: str,
+    body: _ItemValuationBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_item_valuation,
+        claims,
+        session,
+        data={"item_client_id": item_client_id, **body.model_dump()},
+    )
+
+
+@router.get("/items/{item_client_id}/valuations")
+async def route_get_item_valuation_history(
+    item_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        get_item_valuation_history,
+        claims,
+        session,
+        data={"item_client_id": item_client_id},
+    )
+
+
+@router.delete("/items/{item_client_id}/valuation")
+async def route_delete_item_valuation(
+    item_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        delete_item_valuation,
+        claims,
+        session,
+        data={"item_client_id": item_client_id},
+    )

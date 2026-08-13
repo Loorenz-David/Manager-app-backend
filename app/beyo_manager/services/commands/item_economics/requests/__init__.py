@@ -112,6 +112,12 @@ class CostModelVersionCreateRequest(_Request):
     terms: list[CostModelTermRequest] = Field(default_factory=list)
 
 
+class ItemValuationRequest(_Request):
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    currency: ItemCurrencyEnum
+
+
 def _parse(model: type[BaseModel], data: dict) -> BaseModel:
     try:
         return model.model_validate(data)
@@ -147,3 +153,12 @@ def parse_production_cost_basis_version_create_request(data: dict) -> Production
 
 def parse_cost_model_version_create_request(data: dict) -> CostModelVersionCreateRequest:
     return _parse(CostModelVersionCreateRequest, data)  # type: ignore[return-value]
+
+
+def parse_item_valuation_request(data: dict) -> ItemValuationRequest:
+    request = _parse(ItemValuationRequest, data)
+    if request.expected_sale_price_minor is None and request.purchase_cost_minor is None:
+        raise ValidationError(
+            "ITEM_COST_VALUATION_AMOUNT_REQUIRED: expected_sale_price_minor or purchase_cost_minor is required"
+        )
+    return request  # type: ignore[return-value]

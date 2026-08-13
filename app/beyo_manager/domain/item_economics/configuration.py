@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
@@ -16,6 +17,25 @@ CONFIGURATION_FAILURE_PRECEDENCE = (
     EconomicsStatusEnum.NOT_CONFIGURED_AMBIGUOUS_COST_GROUP,
     EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION,
     EconomicsStatusEnum.NOT_CONFIGURED_NO_COST_MODEL_VERSION,
+)
+
+
+@dataclass(frozen=True)
+class EconomicsSelection:
+    """The selected configuration rows and the first configuration failure."""
+
+    status: EconomicsStatusEnum
+    selected_group: object | None
+    basis_version: object | None
+    cost_model_version: object | None
+
+
+ITEM_READINESS_PRECEDENCE = (
+    EconomicsStatusEnum.ITEM_UNVALUED,
+    EconomicsStatusEnum.ITEM_MISSING_EXPECTED_PRICE,
+    EconomicsStatusEnum.ITEM_MISSING_PURCHASE_COST,
+    EconomicsStatusEnum.CURRENCY_MISMATCH,
+    EconomicsStatusEnum.NOT_EVALUATED,
 )
 
 
@@ -48,35 +68,103 @@ def resolve_economics_configuration(
     cost_model_versions: Iterable[object],
     on_date: date,
 ) -> EconomicsStatusEnum:
-    """Classify the first configuration failure using the §7C.2 order.
+    return resolve_economics_selection(
+        major_category,
+        groups,
+        basis_versions,
+        cost_model_versions,
+        on_date,
+    ).status
 
-    The caller supplies already-loaded rows.  This function performs no I/O and
-    never chooses an arbitrary group when more than one active group exists.
-    """
+
+def resolve_economics_selection(
+    major_category: ItemMajorCategoryEnum | None,
+    groups: Iterable[object],
+    basis_versions: Iterable[object],
+    cost_model_versions: Iterable[object],
+    on_date: date,
+) -> EconomicsSelection:
+    """Select the category's group, basis and applicable model without I/O."""
+    group_rows = list(groups)
+    basis_rows = list(basis_versions)
+    model_rows = list(cost_model_versions)
+
     if major_category is None:
-        return CONFIGURATION_FAILURE_PRECEDENCE[0]
+        return EconomicsSelection(CONFIGURATION_FAILURE_PRECEDENCE[0], None, None, None)
 
     active_groups = [
         group
-        for group in groups
+        for group in group_rows
         if not getattr(group, "is_deleted", False)
         and getattr(group, "major_category", None) == major_category
     ]
     if not active_groups:
-        return CONFIGURATION_FAILURE_PRECEDENCE[1]
+        return EconomicsSelection(CONFIGURATION_FAILURE_PRECEDENCE[1], None, None, None)
     if len(active_groups) >= 2:
-        return CONFIGURATION_FAILURE_PRECEDENCE[2]
+        return EconomicsSelection(CONFIGURATION_FAILURE_PRECEDENCE[2], None, None, None)
 
-    group_id = active_groups[0].client_id
+    selected_group = active_groups[0]
+    group_id = selected_group.client_id
     applicable_basis = [
         version
-        for version in basis_versions
+        for version in basis_rows
         if getattr(version, "production_cost_group_id", None) == group_id
         and is_applicable(version, on_date)
     ]
     if not applicable_basis:
-        return CONFIGURATION_FAILURE_PRECEDENCE[3]
+        return EconomicsSelection(CONFIGURATION_FAILURE_PRECEDENCE[3], selected_group, None, None)
 
-    if not any(is_applicable(version, on_date) for version in cost_model_versions):
-        return CONFIGURATION_FAILURE_PRECEDENCE[4]
-    return EconomicsStatusEnum.OK
+    selected_basis = applicable_basis[0]
+    applicable_models = [version for version in model_rows if is_applicable(version, on_date)]
+    if not applicable_models:
+        return EconomicsSelection(CONFIGURATION_FAILURE_PRECEDENCE[4], selected_group, selected_basis, None)
+    return EconomicsSelection(
+        EconomicsStatusEnum.OK,
+        selected_group,
+        selected_basis,
+        applicable_models[0],
+    )
+
+
+def resolve_item_economics_status(
+    valuation: object | None,
+    selection: EconomicsSelection,
+    model_terms: Iterable[object],
+) -> EconomicsStatusEnum:
+    """Resolve item readiness after configuration selection using explicit precedence."""
+    if selection.status is not EconomicsStatusEnum.OK:
+        return selection.status
+
+    terms = list(model_terms)
+    has_purchase_term = any(
+        getattr(getattr(term, "calculation_type", None), "value", getattr(term, "calculation_type", None))
+        == "item_purchase_cost"
+        for term in terms
+    )
+    checks = {
+        EconomicsStatusEnum.ITEM_UNVALUED: valuation is None,
+        EconomicsStatusEnum.ITEM_MISSING_EXPECTED_PRICE: (
+            valuation is not None and getattr(valuation, "expected_sale_price_minor", None) is None
+        ),
+        EconomicsStatusEnum.ITEM_MISSING_PURCHASE_COST: (
+            valuation is not None
+            and has_purchase_term
+            and getattr(valuation, "purchase_cost_minor", None) is None
+        ),
+        EconomicsStatusEnum.CURRENCY_MISMATCH: (
+            valuation is not None
+            and selection.basis_version is not None
+            and selection.cost_model_version is not None
+            and (
+                getattr(valuation, "currency", None) != getattr(selection.basis_version, "currency", None)
+                or getattr(valuation, "currency", None) != getattr(selection.cost_model_version, "currency", None)
+                or getattr(selection.basis_version, "currency", None)
+                != getattr(selection.cost_model_version, "currency", None)
+            )
+        ),
+        EconomicsStatusEnum.NOT_EVALUATED: True,
+    }
+    for status in ITEM_READINESS_PRECEDENCE:
+        if checks[status]:
+            return status
+    raise AssertionError("ITEM_READINESS_PRECEDENCE must include a terminal status")

@@ -3680,6 +3680,98 @@ nodes:
         endLine: 64
         contentHash: ce43ca5f132667b3bba598d8b97aa3bd4f51bc60f6ae7a5e9c38e1cd65144a62
         linkedAt: 2026-08-13T13:21:39.160Z
+  - id: command-item-economics-set-item-valuation
+    type: command
+    name: set_item_valuation
+    description: Creates a versioned item valuation, supersedes the current row
+      before insertion, computes the preview from the selected persisted
+      configuration, and records the creation audit event.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          symbol: set_item_valuation
+          startLine: 102
+          endLine: 165
+          summary: The command scopes the item, closes the current valuation, inserts and
+            flushes a new valuation, computes preview values, and audits
+            item_valuation.created.
+          inferenceReason: This implementation establishes the valuation-write command and
+            its version-chain behavior.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - id: command-item-economics-delete-item-valuation
+    type: command
+    name: delete_item_valuation
+    description: Soft-deletes only the current item valuation, rejects superseded
+      rows as immutable, and records the deletion audit event.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+          symbol: delete_item_valuation
+          startLine: 17
+          endLine: 43
+          summary: The command resolves a workspace-scoped valuation, rejects superseded
+            rows, soft-deletes the current row, and audits
+            item_valuation.deleted.
+          inferenceReason: This implementation establishes the valuation deletion command
+            and superseded-row immutability boundary.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - id: endpoint-item-economics-put-valuation
+    type: endpoint
+    name: PUT /api/v1/item-economics/items/{item_client_id}/valuation
+    description: ADMIN/MANAGER route for creating a versioned item valuation and preview.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+          startLine: 229
+          endLine: 241
+          summary: The router exposes the PUT valuation path, applies ADMIN/MANAGER role
+            gates, and delegates to set_item_valuation.
+          inferenceReason: The route is the HTTP entry point for the valuation write command.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - id: endpoint-item-economics-get-valuations
+    type: endpoint
+    name: GET /api/v1/item-economics/items/{item_client_id}/valuations
+    description: ADMIN/MANAGER route for workspace-scoped item valuation history.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_item_valuation_history
+          startLine: 244
+          endLine: 256
+          summary: The router exposes the GET valuations path, applies ADMIN/MANAGER role
+            gates, and delegates to get_item_valuation_history.
+          inferenceReason: The route is the HTTP entry point for valuation history reads.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - id: endpoint-item-economics-delete-valuation
+    type: endpoint
+    name: DELETE /api/v1/item-economics/items/{item_client_id}/valuation
+    description: ADMIN/MANAGER route for soft-deleting the current item valuation.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_delete_item_valuation
+          startLine: 258
+          endLine: 269
+          summary: The router exposes the DELETE valuation path, applies ADMIN/MANAGER
+            role gates, and delegates to delete_item_valuation.
+          inferenceReason: The route is the HTTP entry point for current valuation deletion.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -6687,3 +6779,113 @@ edges:
     confidence: 0.9
     createdAt: 2026-08-13T10:41:23.113Z
     updatedAt: 2026-08-13T16:05:40.468Z
+  - sourceNodeId: endpoint-item-economics-put-valuation
+    relationshipType: accepts
+    targetNodeId: command-item-economics-set-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+          startLine: 229
+          endLine: 241
+          summary: The PUT route delegates to set_item_valuation.
+          inferenceReason: The endpoint accepts the valuation set command.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: endpoint-item-economics-delete-valuation
+    relationshipType: accepts
+    targetNodeId: command-item-economics-delete-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_delete_item_valuation
+          startLine: 258
+          endLine: 269
+          summary: The DELETE route delegates to delete_item_valuation.
+          inferenceReason: The endpoint accepts the valuation delete command.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: writes_to
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          symbol: set_item_valuation
+          startLine: 128
+          endLine: 159
+          summary: The command updates the current item_valuations row, inserts a new
+            ItemValuation, and links superseded_by_id.
+          inferenceReason: These write sites establish the command's persistence boundary.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: command-item-economics-delete-item-valuation
+    relationshipType: writes_to
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+          symbol: delete_item_valuation
+          startLine: 31
+          endLine: 42
+          summary: The command updates is_deleted and deletion metadata on
+            item_valuations.
+          inferenceReason: This write site establishes the deletion command's table boundary.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: endpoint-item-economics-get-valuations
+    relationshipType: reads_from
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+          symbol: get_item_valuation_history
+          startLine: 23
+          endLine: 33
+          summary: The history query selects workspace-scoped non-deleted ItemValuation
+            rows and orders them by created_at and client_id descending.
+          inferenceReason: The query implementation establishes the endpoint's read boundary.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: endpoint-item-economics-put-valuation
+    relationshipType: returns
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+          startLine: 229
+          endLine: 241
+          summary: The PUT route returns the command result containing the serialized item
+            valuation.
+          inferenceReason: The endpoint returns the newly persisted valuation representation.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
+  - sourceNodeId: endpoint-item-economics-get-valuations
+    relationshipType: returns
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+          symbol: get_item_valuation_history
+          startLine: 32
+          endLine: 33
+          summary: The history query serializes each selected ItemValuation into the
+            returned item_valuations collection.
+          inferenceReason: The endpoint returns valuation history entities.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-13T20:52:04.060Z
