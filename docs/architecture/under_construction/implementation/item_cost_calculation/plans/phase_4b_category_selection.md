@@ -4,7 +4,7 @@
 plan: phase 4B
 role: phase plan
 date: 2026-08-12
-state: IMPLEMENTED
+state: APPROVED
 ```
 
 ## Goal
@@ -889,3 +889,81 @@ bites over the reworked create route.
   observed red node
   `test_status_shared_model_failure_is_repeated_in_each_category_block`.
   All probes were reverted; final hashes match the originals.
+
+### 2026-08-13 — re-review r2 (Claude Opus 5) — **APPROVED**
+
+Delta-scoped per the charter's review protocol. Perimeter verified: `8285cf1`
+is exactly `env.py` + the two named test files + master plan + this plan;
+`git diff 8285cf1..HEAD -- app/` empty (the only later commits are the
+coordinator's `.archgraph` and docs commits); `git status --porcelain` clean at
+session start and end. Suite re-run twice by the re-reviewer: **1927 passed /
+23 failed / 1 deselected**, failure sets byte-identical to each other and to
+the phase-1 baseline list, zero connection noise. Arithmetic reconciles: 1926 →
+1927 = C1(e)'s one new row; the handoff's 7-file selector 200×2, review r1's
+broader 9-file selector 256 → 257. Ruff clean on the three changed `.py` files.
+Dev DB at head `5caae620088c`; economics residue flat at zero across both runs
+(same scope as r1's record). No production, migration or test file left
+modified.
+
+**All three findings CLOSED; zero new findings.**
+
+- **B1 CLOSED (C9).** From-scratch recipe on disposable `beyo_manager_4b_r2_a`
+  (1.77s): head `5caae620088c`, 106 tables, `major_category` present, and —
+  asserted by state queries, not exit code — `workspaces = 0`,
+  `pause_reasons = 0`, `mig_cold_build_workspace = 0`. Named mutation on
+  disposable `beyo_manager_4b_r2_b`: reverting the single `connection.commit()`
+  line reproduces the ghost exactly — `workspaces = 1`, `pause_reasons = 7`,
+  `mig_cold_build_workspace = 1`. The mutant hash is
+  `db98e1ee8c215861f346bbc69a4b29643f997dbc6721a7a028108a44280beae5`, byte-identical
+  to review r1's recorded pre-fix `env.py`, which independently proves the fix
+  is that one line and nothing else; restored `09261d91c7813483193fc93dd62e422719a956bb0694fda2af6eb586af4b4e13`.
+- **Failure-path depth on the changed seam (re-reviewer, not prompted).**
+  `connection.commit()` now runs in the `finally` on the failure path too, so
+  the C1(b) refusal was re-derived under the new transaction handling: with one
+  seeded group row, `alembic upgrade` raises the `RuntimeError` naming the
+  `client_id` and all three dependent counts, exits **1**, and leaves
+  `alembic_version = 90cdd23a828e`, no column, no index, the seeded row intact —
+  the commit does **not** publish partial DDL from a failed migration (Alembic's
+  per-migration transaction rolls back before the `finally` runs). Downgrade
+  also still persists (`5caae620088c` → `90cdd23a828e`, column dropped), and
+  after deleting the seeded row the upgrade succeeds and persists. C1(b)/(c)
+  therefore survive the B1 fix.
+- **S1 CLOSED (C1(e)).** Both probes that left 7/7 green in r1 now redden
+  exactly `test_phase4b_model_index_predicate_is_soft_delete_partial_unique`:
+  (i) deleting `postgresql_where` (mutant
+  `4f2076e1a7405a94f88c3515fad8370d706a53c95a6febe2c5597755eb439afa`);
+  (ii) flipping it to `is_deleted = true` (mutant
+  `ceb5248a80d8fa6f9a9c9a1457ce7a93cdf7854e3938e97c04e007fc47d99b52`). Both
+  mutant hashes reproduce the ledger exactly. Restored hash recomputed (the
+  ledger's is truncated, recorded defect — not re-filed):
+  `27d99ecb8b3a0e5ea5a84b4f214d60a94029308e4b2cb48d33875dea99e17b5f`. The
+  predicate now has three independent arbiters: live schema (C1(a)), model
+  (C1(e)), DDL site (C2(b)'s disposable mutation, settled r1).
+- **S2 CLOSED.** The row is a whole-payload exact-dict assertion carrying
+  `has_open_basis_version: true` inside a non-evaluable wood block, exactly as
+  C6(c) named. Review r1's Probe B — collapsing to
+  `has_open_basis and evaluable` (mutant
+  `a09aa514df16d8536a1f5545bf526d31e560eaecd9f4b7ab96de6bfa16e68bc0`, matching
+  the ledger) — now reddens it, where it left 256 green in r1. C6(b)'s collapse
+  is stated in the fix-r1 amendments block (P-G).
+- **N5 CLOSED.** `domain-item-economics`'s `configuration.py` source link reads
+  symbol `resolve_economics_configuration`, span 44–82; `:44` is the `def` and
+  `:82` the final `return` (the file is 82 lines) — exact. Graph revision
+  `5c60534df7a47584ed22a845b091b3ae1f2ce377c2a5380d16bb795ebfb3f9ff`,
+  148 nodes / 188 edges, 0 diagnostics, 0 stale, 2 pending (the N7 edges)
+  untouched; `contentHash` unchanged, so no code drift under the link.
+- **§10 history correction verified** — the corrected paragraph states the
+  mechanism, marks the maintenance-r2 claim as never true as stated, records
+  review L5 ("environment facts recorded from an exit code need a state
+  assertion behind them"), and carries fix-r1's verified end-state plus N6 as a
+  named open defect for the migration-infrastructure owner.
+
+**Note (housekeeping, no action owed by the implementer):** the tracker row's
+closing clause read "graph N5 anchor correction pending authorization"; N5 was
+in fact completed by the coordinator at `5d8b6a6` (revision `5c60534d…`)
+*before* the fix session, which the fix handoff states correctly. Corrected in
+the same tracker stamp as this verdict.
+
+**Carry-forward (unchanged from r1, none blocking):** N1 → whoever next touches
+`CONFIGURATION_FAILURE_PRECEDENCE`; N3 and N4 → phase 8's status rework;
+N6 → migration-infrastructure owner.
