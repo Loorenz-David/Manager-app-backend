@@ -494,3 +494,153 @@ written to the main worktree and were not included in the checkpoint.
 - Architecture Graph: read-only status/orientation only; initialized and valid,
   revision `bf6dad5b9264937b5950366affe9910dcaacf7abd68a42114bb52fa327e68262`,
   and **delta = zero**. No graph mutation was performed.
+
+### Re-review r2 — 2026-08-13 — Claude (CHANGES_REQUESTED)
+
+**Verified correct (independently re-derived).** Perimeter exact: `git show 4e19506`
+= 5 production + 3 test files + tracker row + Review log (10 files, 923 insertions);
+`git diff 4e19506..HEAD -- app/` empty; working tree clean. **Deviation resolved as
+procedural only** — all six declared "main" sha256 values equal the working-tree
+files AND the blobs as committed in `4e19506`, so the disposable-clone probes left
+zero residue. Suite re-run twice: **1875 passed / 23 failed / 1 deselected** both
+times, failure set byte-identical to the phase-1 baseline (23/23, `diff` clean);
+focused phase set **126 passed**; ruff clean on all changed phase files; dev DB at
+head (`90cdd23a828e`). Archgraph read-only: revision `bf6dad5b…`, 47 pending, valid,
+0 diagnostics, **zero delta**. Sampled mutations all bite — C6(b) drop `FOR UPDATE`
+reddens exactly `test_c6_interleaved_fk_insert_is_blocked_by_the_delete_row_lock_then_proceeds`;
+C8 precedence swap reddens `test_c8_status_query_enumerates_each_first_failure_and_success`
+**plus** the classifier unit row (stronger than declared); B2 `gt=0` drop reddens
+exactly `[fixed-negative]`; **C11 removing MANAGER from all 13 allow-lists reddens
+exactly the 13 MANAGER rows with zero collateral** (P-G's "every MANAGER row"
+satisfied — the ledger only declared the one-route version). Three reviewer-applied
+mutations hashed byte-identical to the ledger's declared mutated values (C8
+`a5de2350…`, B2 `22ea0125…`, C3 `71249f1a…`). **C8's structural B6 probe re-run:**
+reversing `EconomicsStatusEnum`'s declaration order changes nothing (126/126) — the
+precedence tuple is genuinely independent. **R2-P3 (races genuine):** `db_session` is
+a real `get_db()` session (not a nested-transaction wrapper), so C3/C6's
+`_session_factory()` sessions and commits are real; both tests run twice consecutively
+with **zero** new rows, and two consecutive full-suite runs also leave zero — rule 11½
+holds. **R2-P4 (B2 totality):** all eight r1-proven 500 cases now raise
+`ValidationError` → HTTP 422 naming the field (`_parse` converts pydantic errors to
+`"<field>: <msg>"`, `ValidationError.http_status = 422`); the five bounds mirror §6.2's
+CHECK list exactly in direction and strictness; R11-1 canonicalization rows still green
+and verified independent of the bound rows (P-U). **R2-P5 (trims):**
+`cost_per_worker_minute_minor` absent from `_BasisVersionBody.model_fields` (so absent
+from OpenAPI); `_common.reference_exists` and `get_group(for_update=)` gone; enum-member
+`is` comparisons in `create_cost_model_version`; the vestigial `version = None` gone.
+
+**B1 (blocking) — §7A.4's "open version with `effective_from IS NULL`" column is
+unenumerated (3 of 10 table rows × 2 chains).** C1 demands "all 10 rows × 2 chains =
+20 rows … No sampling". The shipped parametrization is 10 cases × 2 chains = 20, but
+the cases duplicate two table rows (`none-open-today` / `none-open-past` are both row
+2; `open-equal-rejected` / `open-before-rejected` are both row 8) and **omit rows 4, 5
+and 6 entirely** — the only `open_from` fixtures are `None`, a *dated* open row, and a
+*soft-deleted* one, so no live open row with `effective_from IS NULL` is ever
+constructed. Row 5 (`NULL`-open + `≤ today` → accept, closing the open row at that
+date) is the ordinary "supersede the unbounded-past first version" path. Verified:
+deleting the `open_from is not None` guard at `_common.py:52` leaves the entire C1
+matrix and C2 green (124 passed, C3 deselected). Correction: add rows 4/5/6 per chain
+with a live `effective_from IS NULL` open row; row 5 additionally asserts the
+predecessor's `effective_to == d`. Named mutation: "drop `open_from is not None` from
+`admission_error`'s comparison at its definition site" must redden row 5.
+
+**B2 (blocking) — C10's enumerated rows are largely decoration.** C10 demands, per
+each of the three list queries, a workspace-scoping row, an `is_deleted` row, an
+ordering row and a `limit + 1` row, plus `update_production_cost_group` happy path and
+`ITEM_COST_GROUP_NAME_TAKEN` on rename collision **on both paths**. All three list
+queries are folded into one node whose assertions are satisfied regardless of the
+filters, because `limit = 1` plus name/`effective_from` ordering keeps the extra rows
+out of the asserted slice and leaves `has_more` unchanged. Verified by mutation (each
+leaving **126/126 green**): drop `workspace_id` from `list_production_cost_groups`;
+drop `is_deleted` from `list_production_cost_groups`; drop `is_deleted` from
+`list_cost_model_versions`; drop `workspace_id` from
+`list_production_cost_basis_versions`. Only 2 of the 6 filter rows have an arbiter
+(basis `is_deleted`, model `workspace_id`). Separately, **no test anywhere calls
+`update_production_cost_group` with a colliding name**: deleting the entire
+`ITEM_COST_GROUP_NAME_TAKEN` pre-check (`update_production_cost_group.py:24-25`) leaves
+126/126 green, and with it gone a rename collision would surface as `ConflictError`/409
+from the index instead of `ValidationError`/422. Correction: give each filter row its
+own fixture where the filtered row would otherwise land inside the asserted slice
+(charter rule 2's sole-cause companion / P-K), and add the two name-taken rows.
+
+**S1 (should-fix) — C3's "loser's exact identity" has no arbiter on the real path.**
+The concurrency test asserts only `isinstance(outcome, ConflictError)`, not the
+registered token. Verified: mapping `uix_production_cost_basis_versions_open` to
+`ITEM_COST_CONCURRENT_MODEL_VERSION` reddens **only**
+`test_integrity_translation_preserves_each_registered_index_identity[…]` — the
+hand-built `IntegrityError` proxy the C3 harness block explicitly excludes — while
+both real two-session rows stay green (the fix's own ledger records this). Authority:
+plan C3 + intention §7A.2's criterion + the criteria header ("error identities
+asserted as exact leading message tokens + class"). Correction: assert
+`str(loser).startswith("ITEM_COST_CONCURRENT_BASIS_VERSION:" / "_MODEL_VERSION:")`.
+
+**S2 (should-fix) — C4's S4-forward row is still absent.** The criterion requires the
+`Decimal(str(v))` parse proven on a value where `Decimal(v)` would differ, *distinct
+from* the B1 canonicalization fixture. Both shipped fixtures (`173.456` → `173.46`,
+`12.01056` → `12.011`) quantize identically under either parse. Verified: replacing
+`Decimal(str(value))` with `Decimal(value)` at `requests/__init__.py:19` leaves
+126/126 green. Correction: use a fixture where the float repr straddles the rounding
+boundary (e.g. `monthly_paid_hours = 2.675` → `2.68` via `Decimal(str(v))`, `2.67` via
+`Decimal(v)`). Authority: §6A.1, phase-3 projection S4 forwarded here.
+
+**S3 (should-fix) — bound strictness and the accept side of every bound are
+unarbitrated.** All five bounds carry only reject rows drawn from r1's eight 500
+cases; there is no adjacent-pair row per bound. Verified: `Field(gt=0)` → `Field(ge=0)`
+on `fixed_monthly_cost_minor` leaves 126/126 green — yet with `ge=0` a
+`fixed_monthly_cost_minor = 0` request is admitted, violates
+`ck_pcbv_fixed_monthly_cost_minor_positive`, and 500s through
+`translate_integrity_error`: the exact defect B2 exists to prevent. Likewise nothing
+pins that `planning_utilization_percent = 100`, `percent_value = 0` and
+`percent_value = 999.999` are *accepted*, so tightening any bound would silently 422
+legal input. Correction: one adjacent-pair per bound (reject at the excluded value,
+accept at the included one) per charter rule 2.
+
+**S4 (should-fix) — C3's synchronization seam can hang the suite indefinitely.** The
+harness block requires "a hard timeout on the blocked statement … so a deadlock cannot
+hang the suite". C6 has one (`asyncio.wait_for(…, timeout=0.3)`); C3 has none — both
+`await flush_complete.wait()` and `await release.wait()` are unbounded, so any failure
+in the winner *before* it reaches the monkeypatched `audit` hangs forever instead of
+failing. Demonstrated live: the B1 probe above made the winner raise inside
+`admission_error`, and the focused suite hung until killed at 120 s. Correction: wrap
+both waits in `asyncio.wait_for` with an explicit timeout.
+
+**Notes.** N1 C2 omits §7A.3's theorem row as written ("the open row is the resolution
+for **today**") — the three boundaries are asserted at `second_day` (2026-08-12), not
+`today`; the property is covered transitively by C8's all-present fixture, so recorded,
+not filed. N2 two of the four command anchors r1 verified "exact" are now **stale**
+because this fix touched their files (`create_cost_model_version` 14-74 → **15-75**,
+one added import; `delete_cost_model_version` 14-37 → **14-36**, the removed
+`version = None`); corrected spans for every touched anchor are in the handoff. N3 the
+configured development database carries phase-4 residue from **interrupted** runs
+(3 workspaces, 2026-08-12 21:59 / 22:08 — the fix-r2 session): `ws_c73d3e66…`,
+`ws_f5002ad7…`, `ws_2739154…` with their groups/versions/evaluation. Not a teardown
+defect (proven: two full-suite runs and two C3/C6-only runs each leave zero new rows);
+a killed process simply skips the `finally`. Left in place — not this session's to
+delete. N4 C4's "exactly 4 dp" is asserted with `Decimal.__eq__`, which ignores
+exponent, so the persisted *scale* has no arbiter (the column pins it; low value).
+N5 C8's six fixtures are a `for` loop inside one node rather than parametrized rows —
+an early failure aborts the rest and the node id does not name the case (P-I/P-G(b)
+spirit). N6 C3's seam is a monkeypatched `audit`; it is a genuine pause seam (not the
+excluded hand-built `IntegrityError`) and satisfies the harness block's intent, but
+unlike C6's `after_lock` it is not declared in the plan as a designed test seam —
+recorded so it is not read as smuggled.
+
+**Mutations run (observed pytest node ids; disposable = main worktree, each applied
+and reverted, every file sha256-verified byte-identical to its pre-probe value).**
+Declared-ledger re-runs: C6(b) `for_update=True→False` → reddens exactly
+`test_c6_interleaved_fk_insert_is_blocked_by_the_delete_row_lock_then_proceeds`;
+C8 precedence swap (mutated `a5de2350…`) → `test_c8_status_query_enumerates_each_first_failure_and_success`
++ `test_configuration_classifier_uses_explicit_failure_order_and_same_basis_identity_for_gap`;
+C11 MANAGER removed from all 13 allow-lists → exactly the 13
+`test_every_configuration_route_retains_admin_and_manager_access[…-manager]` ids;
+B2 `gt=0` dropped (mutated `22ea0125…`) → `test_basis_request_rejects_each_out_of_range_numeric_field[fixed-negative]`;
+C3 basis index → model identity (mutated `71249f1a…`) → only
+`test_integrity_translation_preserves_each_registered_index_identity[uix_production_cost_basis_versions_open-ITEM_COST_CONCURRENT_BASIS_VERSION]`.
+Plan probe: `EconomicsStatusEnum` declaration order reversed → 126/126 unchanged.
+Reviewer probes leaving **126/126 green** (the gaps above): `open_from is not None`
+dropped (C3 deselected — it hangs); `Decimal(str(v))`→`Decimal(v)`; `gt=0`→`ge=0`;
+`workspace_id` dropped from the group list; `is_deleted` dropped from the group list;
+`is_deleted` dropped from the model list; `workspace_id` dropped from the basis list;
+the `ITEM_COST_GROUP_NAME_TAKEN` pre-check deleted. Reddening reviewer probes:
+`workspace_id` dropped from the model list; `is_deleted` dropped from the basis list
+(both → `test_c10_queries_scope_filter_order_and_limit_plus_one_for_all_three_lists`).
