@@ -136,6 +136,12 @@ satisfy these rows. For C6's in-lock window, the delete command accepts an
 injectable test-only synchronization seam (e.g. an optional `after_lock` awaitable
 parameter defaulting to None) — declared in the plan so the reviewer reads it as
 designed, not smuggled.
+**Seam declaration (r2 N6, recorded at closeout 2026-08-13):** C3's tests
+additionally monkeypatch the audit hook (`gated_audit`) to hold the winner's
+transaction open across the loser's INSERT — a test-only synchronization seam of
+the same family as C6's `after_lock`, bounded per P-T
+(`asyncio.wait_for(..., timeout=0.3)` on both gates). Declared here so future
+touches read it as designed harness, not production smuggling.
 
 **C1 — §7A.4 admission, both chains:** all 10 rows × 2 chains = 20 rows, each with
 its one exact outcome (accept, or the chain-qualified identity per registry §6.4).
@@ -686,3 +692,109 @@ reverted; final production files were byte-identical to their pre-probe hashes):
 The two additional C10 filter rows (model workspace and basis `is_deleted`) remain
 covered by the existing combined ordering/limit+1 arbiter. Optional N4/N5/N6
 were not taken; they were documented as non-blocking notes in the handoff.
+
+### Re-review r3 — 2026-08-13 — Claude (APPROVED)
+
+Delta-scoped per the charter's review protocol. **Verdict: APPROVED** — 0 blocking,
+0 should-fix, 4 notes. Every r2 gap (B1/B2/S1–S4) is closed and each closure was
+re-proven by an independently applied mutation; no new defect was found, and no
+production file changed this cycle.
+
+**Perimeter (verified).** `74b280b` = exactly `test_phase4_fix_coverage.py`,
+`test_item_economics_requests.py`, the tracker row and this Review log (4 files,
++405/−27). `c89354c` carries only the handoff; `c55c3de` only the tracker row and
+the re-review prompt. `git diff 2567fc7..HEAD -- app/beyo_manager/` is **empty** and
+`git diff 4e19506..HEAD -- app/` is the two test files alone — **zero production
+changes**. Working tree clean at open and close.
+
+**Consumption notes (pre-resolved, recorded).** (1) The handoff's probe-file paths
+are garbled (`services/commands/item_economics/queries/…` does not exist); all six
+declared "main" sha256 values match the real files at their real paths
+(`services/queries/item_economics/list_production_cost_groups.py` = `75d81316…`,
+`list_cost_model_versions.py` = `1841fae0…`, `list_production_cost_basis_versions.py`
+= `e4b75249…`, `_common.py` = `3b594c36…`, `requests/__init__.py` = `904b635f…`,
+`update_production_cost_group.py` = `9f424164…`) — the probes were real; the
+transcription is the defect. (2) **The focused +13 / suite +17 discrepancy is an
+artifact of two different focused sets, not a missing test.** Measured on one
+consistent set (`tests/integration/.../item_economics` +
+`tests/unit/.../item_economics` + `test_item_economics_router.py`): 124 → **141**
+= **+17**, exactly the full-suite collection delta (1898 → 1915). The implementer's
+139 excludes `test_configuration_commands.py` (2 tests); r2's 126 included two
+others.
+
+**R3-P1 — the r2 green mutations now bite.** All applied in the main worktree,
+reverted, sha256 re-verified byte-identical.
+
+| Mutation | Mutant sha256 | Observed |
+|---|---|---|
+| B1 drop `open_from is not None` (`_common.admission_error`) | `d8c41d1a…` = **declared** | reddens exactly `test_c1_admission_matrix_has_one_exact_outcome_per_chain[table-row-5-null-open-at-or-before-today-{basis,model}]` |
+| S1 basis index → model identity (`INDEX_IDENTITIES`) | `71249f1a…` = **declared** | reddens the **real** race row `test_c3_real_concurrent_open_insert_translates_the_loser[basis]` (r2's exact gap) + the translation proxy |
+| B2 six filter drops (all six run, not one) | — | each reddens its own `test_c10_each_list_filter_has_a_sole_cause_fixture[<query>-<filter>]` |
+| B2 delete rename pre-check | — | reddens exactly `test_c10_group_rename_collision_precheck_is_a_validation_error` |
+| S2 `Decimal(str(v))` → `Decimal(v)` | `66626dee…` = **declared** | reddens exactly `test_basis_request_parses_float_as_decimal_text_before_quantization` |
+| S3 `gt=0` → `ge=0` on `fixed_monthly_cost_minor` | `3de51c17…` = **declared** | reddens exactly `test_basis_request_rejects_each_out_of_range_numeric_field[fixed-zero]` |
+| C1's original named mutation: drop `is_deleted = false` from the basis open-row lookup | — | still reddens exactly `[table-row-1-none-null-basis]` (+ the pre-existing dedicated test) — the table rewrite did not lose this arbiter |
+
+**R3-P2 — table mapping (P-V).** The 20 collected ids are `table-row-1` …
+`table-row-10` × `{basis, model}`: no duplicates, no omissions. Each fixture's
+(open-row state, requested date) pair re-derived against §7A.4 — row 1 realized via
+a soft-deleted open row (C1's pin), rows 4/5/6 built on a **live** `effective_from
+IS NULL` open row, row 5 additionally asserting `predecessor.effective_to == d`,
+rows 8/9 straddling `d0` at `today−5`/`today−4`. Mapping is one-for-one.
+
+**R3-P3 — the two legacy-arbiter filters.** `models-workspace` and
+`basis-is_deleted` now redden **both** their own sole-cause row and the combined
+C10 arbiter under their respective filter drops.
+
+**R3-P4 — S4 and teardown.** Both C3 gates are bounded
+(`asyncio.wait_for(flush_complete.wait(), 0.3)`, `wait_for(release.wait(), 0.3)`).
+Proof: re-applying the B1 mutant with C3 **included** — the exact configuration that
+hung 120 s in r2 — now finishes in 3.35 s with the two C3 rows red. The concurrency
+subset (now 6 tests: C3 ×2, C6 ×3, and the new committing rename-DB-path row) ran
+twice, 6 passed each time, with economics row counts flat before and after
+(3 workspaces / 2 groups / 3 basis / 3 model / 1 evaluation / 116 audit rows — all
+r2's N3 residue, untouched). Rule 11½ holds for the new committing test too.
+
+**Suite.** 1892 passed / 23 failed / 1 deselected; the failure set `diff`s
+byte-identical against the phase-1 baseline list (23/23). Ruff clean on both changed
+test files. Configured DB at head (`90cdd23a828e`).
+
+**§6.4 conformance (spot-checked).** The rename dual path matches the registry
+exactly: `ITEM_COST_GROUP_NAME_TAKEN` as `ValidationError`/422 on the pre-check and
+`ConflictError`/409 on the DB conflict, per §6.4's "Config uniqueness conflicts" row.
+
+**Graph.** Read-only: revision `bf6dad5b9264937b5950366affe9910dcaacf7abd68a42114bb52fa327e68262`,
+148 nodes / 186 edges, 0 diagnostics, 0 stale, **47 pending, zero delta**. Because no
+production file changed since `4e19506`, r2's corrected anchor spans remain valid;
+two spot-checked exact — `endpoint-item-economics-post-cost-groups` **92-98**
+(92 = `@router.post("/cost-groups")`, 98 = the `_run` dispatch) and
+`command-…-create-cost-model-version` **15-75** (15 = `async def`, 75 = last line).
+
+**Notes (none blocking).**
+
+- **N8** — `test_basis_request_accepts_each_included_numeric_boundary`'s three rows
+  are one fixture with three names: the base payload already sits at all three
+  included boundaries (`fixed=1, hours=1, util=100`) and each row overwrites a field
+  with the value it already holds. Verified: tightening `monthly_paid_hours` to
+  `gt=1` reddens **all three** rows. The accept side is arbitrated (S3 is met), but
+  no per-row named mutation can be declared against them — same family as N5.
+- **N9** — `test_term_request_rejects_each_excluded_numeric_boundary[percent-over-max]`
+  duplicates the pre-existing
+  `test_term_request_rejects_each_out_of_range_numeric_field[percent-over-numeric-bound]`
+  (same field, same value `1000`, same calculation type). Harmless; low value.
+- **N10** — the new 0.3 s / 0.5 s `asyncio.wait_for` bounds are wall-clock limits on
+  real DB round trips. Strictly better than r2's unbounded waits, but they are the
+  first suspect if C3 or the rename-DB row ever flakes under load.
+- **N11 (passing glance, outside phase 4)** — a single full non-e2e run commits
+  substantial **non-economics** residue to the configured dev DB: +116 workspaces
+  (`shift-hook-*`, `Workspace <hex>`), +101 users, +19 tasks, +20 working sections.
+  Phase-4's own tests left **zero**. Pre-existing suite-wide behaviour; suggest a
+  maintenance row rather than a phase-4 item.
+
+**Carry-forward dispositions.** r2's N1 (C2 theorem row at `second_day`) — recorded,
+no destination. N3 (dev-DB economics residue, 3 workspaces) → phase-4 closeout purge.
+N4 (4-dp scale unasserted) + N5 (C8 loop not parametrized) + N8 + N9 → phase 5's
+touch of the same files. N6 (declare C3's audit seam in the plan's harness terms) →
+phase-4 closeout, documentation only. N7 (two missing `table-cost-model-term` edges)
++ the 47 pending items → the coordinator's single post-approval graph pass. N10 →
+phase 9's drift sweep if flakiness appears.

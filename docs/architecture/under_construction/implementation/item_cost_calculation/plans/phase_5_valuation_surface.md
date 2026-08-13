@@ -117,6 +117,17 @@ exactly one current; byte-identical re-read (no mutation on read).
   is a LIVE preview outcome, not a defence row; the preview's criteria include it
   with P-B null-numerics.
 
+- **Forward items (phase-4 re-reviews, same test files this phase touches):**
+  when this phase edits the item-economics request/status tests, close in
+  passing: (r2 N4) assert the persisted 4-dp **scale** (`Decimal.__eq__` treats
+  `5.4` == `5.40` — compare `str()` or `as_tuple().exponent`); (r2 N5)
+  parametrize C8's six looped fixtures into named rows (P-G(b)/P-I naming);
+  (r3 N8) the three accept-boundary rows are ONE fixture with three names —
+  give each row a payload that moves only its own field off the shared base;
+  (r3 N9) drop the duplicated `percent=1000` reject row
+  (`test_term_request_rejects_each_excluded_numeric_boundary[percent-over-max]`
+  duplicates `…_out_of_range_numeric_field[percent-over-numeric-bound]`).
+
 ## Review log
 
 (append-only)
