@@ -1748,6 +1748,29 @@ Ephemeral: computed by the same calculator, never persisted, given no `client_id
 carrying the same status vocabulary. A preview creates nothing and supersedes nothing —
 it is a pure function of the posted valuation plus the current configuration.
 
+**R13-1 lettered clauses (2026-08-13, owner cards — phase-5 projection r0):**
+
+- **(a) The preview lives under its own payload key** (`preview`), sibling to the
+  persisted valuation in the response envelope, and is never merged with
+  committed figures — no consumer may render a preview numeric as a decided one.
+- **(b) Numerics carve-out to §11A.4's closing rule:** the null-numerics rule
+  binds **non-computable** statuses. Inside the `preview` key, the computable
+  preview state (`not_evaluated` — configuration resolved, valuation present,
+  inputs sufficient) carries the fully computed `production_budget_minor` and
+  `allowed_worker_minutes`. Every other status in a preview carries `null`
+  numerics exactly as before — never 0, never a guess. Outside the `preview`
+  key, §11A.4's closing rule stands unmodified.
+- **(c) First save is version 1 — no confirmation:** the first
+  expected-sale-price save on an item auto-creates valuation version 1; no
+  confirm step exists anywhere in the flow. That version is the comparison
+  baseline. (Task/item creation remains money-free per R1-3/§10.2 — the
+  valuation endpoint is the only money surface.)
+- **(d) Deleted valuations are hidden from the history read (R13-2):** the
+  history query returns only non-deleted rows; deleting the current price is
+  the escape hatch for a mistaken entry, and superseded rows (true history)
+  are never deletable, so nothing real is lost. The DELETE response carries
+  the status-only preview (the item reads `item_unvalued`).
+
 ---
 
 ## 12. External-source strategy
@@ -2267,6 +2290,20 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   the final rule; the unshipped schema takes NOT NULL cleanly). §7.4's and
   §7A.5's single-group rows are superseded; §13's "multi-group basis selection
   rules" deferral is partially consumed (per-task-section rules stay deferred).
+
+**Round 13 — 2026-08-13 (phase-5 projection r0 owner cards; coordinator fold):**
+
+- **R13-1 (card 1)** The valuation endpoint's preview: dedicated `preview`
+  payload key, never merged with committed figures; the computable preview
+  state (`not_evaluated`) carries computed numerics INSIDE that key; all other
+  statuses stay null-numeric (§11A.5 lettered clauses (a)–(c); §11A.4's closing
+  rule refined to non-computable statuses; master §9 P-B refined to match).
+  Owner pin: the first expected-sale-price save auto-creates valuation
+  version 1 with no confirmation step — the comparison baseline.
+- **R13-2 (card 2)** Deleted valuations are hidden from the item's price
+  history (§11A.5 (d)); the history's "current" predicate is INV-V1's
+  (`superseded_at IS NULL AND is_deleted = false`), and its total order is
+  `created_at DESC, client_id DESC`.
 
 ---
 

@@ -411,3 +411,37 @@ DELETEs survive. Same standing exception shape as OD-1: **that file only, this
 cycle only**. The transaction-boundary repair is NOT routed out; N6
 (partial-target cold builds crashing in cleanup) still goes to the
 migration-infrastructure owner as separate work, not into this fix.
+
+---
+
+# Phase 5 projection r0 — owner cards (2026-08-13)
+
+## Card 1 — May the pricing screen show estimated numbers?
+
+**Question (projectionist, verbatim):** When a manager saves a price, should
+the response show the production budget and the worker-minute allowance, even
+though nobody has committed an evaluation for that item yet? (Full story-shaped
+card in `archive/plan_5/`'s projection handoff; branches: show the numbers
+under a preview-only key / keep them blank until an evaluation commits.)
+
+**ANSWER (2026-08-13, two parts, confirmed against a coordinator story):**
+(1) The first expected-sale-price save on an item **auto-creates valuation
+version 1 — no confirmation step exists anywhere in the flow**; that version is
+the baseline all later figures are compared from. (2) **Show the numbers**: the
+save response carries the computed estimate (production budget +
+worker-minutes) under a dedicated **`preview` payload key that never merges
+with committed figures**. Anything not honestly computable stays `null` with a
+plain status — never zero, never a guess. Consistent with R1-3 (the owner's
+round-1 wording already said the valuation endpoint "also returns the economic
+preview"). Folded as **R13-1**.
+
+## Card 2 — Does a deleted price stay in the item's history?
+
+**Question (projectionist, verbatim):** When a manager deletes an item's
+current price, should that price still appear in the item's price history
+afterwards? (Branches: hide deleted entries / show them marked.)
+
+**ANSWER (2026-08-13):** The recommendation is correct — **hide them**. The
+history reads as the true pricing story; deleting the current price is the
+documented escape hatch for a mistaken entry, and genuinely superseded prices
+can never be deleted at all, so nothing real is lost. Folded as **R13-2**.
