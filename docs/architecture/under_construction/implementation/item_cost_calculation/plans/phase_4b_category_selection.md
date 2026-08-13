@@ -4,7 +4,7 @@
 plan: phase 4B
 role: phase plan
 date: 2026-08-12
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 ```
 
 ## Goal
@@ -617,6 +617,47 @@ Environment facts at prompt time: the dev DB's `production_cost_groups` is at
 task 1's pre-flight passes on the configured DB; migration head is
 `90cdd23a828e` (implementer re-verifies at implementation time).
 
+## Fix r1 amendments (2026-08-13, coordinator-routed from review r1 — GOVERNING)
+
+Owner card 1 ANSWERED (OPTION ONE, `planning/owner_decisions.md`): the fix
+cycle is authorized for ONE more edit to `app/migrations/env.py` — commit the
+cold-build cleanup — same standing exception shape as OD-1: that file only,
+this cycle only. N6 (partial-target cold builds crashing in cleanup) is NOT in
+scope — it routes to the migration-infrastructure owner separately.
+
+**New criterion C9 — cold-build end-state (B1; the P-Z before/after property):**
+the property §10 always claimed: a from-scratch build ends CLEAN. On a
+disposable database, §10's recipe (empty → `alembic upgrade head`) ends at
+`alembic_version = 5caae620088c` with **zero `workspaces`, zero
+`pause_reasons`, zero `mig_cold_build_workspace` rows** — asserted by state
+queries, never by exit code (review L5). Manual disposable check recorded in
+the Review log (C1(b) precedent, charter rule-1 exemption). Named mutation
+(disposable): reverting the cleanup-commit edit must re-produce the ghost
+(workspaces = 1, pause_reasons = 7) — run, observed, reverted. The configured
+DB stays at head throughout (rule 7).
+
+**C1 gains row (e) — model-side predicate structural row (S1; P-X):** the
+named index in `ProductionCostGroup.__table__.indexes` carries
+`dialect_options["postgresql"]["where"]` textually equal to
+`is_deleted = false`. Named mutations (both r1-green probes must now bite):
+(i) deleting `postgresql_where` from `__table_args__` must redden this row;
+(ii) flipping the predicate to `is_deleted = true` must redden this row.
+Task 2's parenthetical is corrected: `compare_metadata` catches index
+presence/key/type drift but NOT the predicate clause (P-X) — this row is the
+predicate's arbiter.
+
+**C6 shape restatement (S2; P-Y):**
+`test_status_shared_model_failure_is_repeated_in_each_category_block` becomes
+an **exact-dict-equality assertion over the whole payload**, as C6(a)/(d)
+already are. Named mutation (the reviewer's r1-green Probe B): collapsing
+`has_open_basis_version` to `has_open_basis and evaluable` in
+`get_economics_configuration_status.py` must now redden this row — run,
+observed, reverted (no production change ships; the query is correct).
+**C6(b) collapse stated explicitly (P-G):** its content is discharged by
+C6(a)'s exact-dict seat block (the "nothing configured" block shape) plus the
+shared-model row's `has_open_cost_model_version: false` pin; no separate
+fixture is owed.
+
 ## Review log
 
 (append-only)
@@ -659,3 +700,150 @@ task 1's pre-flight passes on the configured DB; migration head is
   successful upgrade did not persist its revision; the one-line reset was
   required for the requested migration to commit and for upgrade/downgrade
   verification to be meaningful.
+
+### 2026-08-13 — reviewer r1 (Claude Opus 5) — **CHANGES_REQUESTED**
+
+Independent re-derivation against C1–C8, the §7C authorities and the 17-row
+ledger. Suite re-run twice by the reviewer: 1926 passed / 23 failed /
+1 deselected, failure set byte-identical between runs and to the phase-1
+baseline list, zero connection noise. Ruff clean on all 21 changed `.py` files.
+Dev DB at head `5caae620088c`. Economics residue flat at zero across both runs
+(scope: `production_cost_groups`, `production_cost_group_sections`,
+`production_cost_basis_versions`, `item_cost_evaluations`,
+`cost_model_versions`, `cost_model_terms`, plus `audit_logs` rows whose event
+matches `production_cost%` / `cost_model%` / `item_cost%` — §9 rule-11½ record).
+
+**OD-1 probes.**
+- **P4B-0a — REPRODUCED.** On a disposable database at `90cdd23a828e` with the
+  four `env.py` lines reverted, `alembic upgrade head` logs
+  `Running upgrade 90cdd23a828e -> 5caae620088c`, exits 0, and persists neither
+  the revision (`alembic_version` stays `90cdd23a828e`) nor the DDL
+  (`major_category` absent). Mechanism: the cold-build preflight `SELECT`
+  autobegins a transaction, so `context.configure()` sets Alembic's
+  `_in_external_transaction`, after which **every** `begin_transaction()`
+  returns `nullcontext()` and nothing is ever committed; the connection is
+  closed (rolled back) by `_run_async_migrations`. The maintenance session's
+  from-scratch runs succeeded only because two historical revisions
+  (`6787eabf4c32`, `7a3e91c4b2d8`) issue a raw `op.execute("COMMIT")` for
+  `CREATE INDEX CONCURRENTLY`; confirmed by adding one `op.execute("COMMIT")`
+  to `5caae620088c` — the same warm upgrade then persisted. OD-1's rationale is
+  sound and RETAIN is correct **for the migration path**.
+- **P4B-0b — FAILED.** See B1.
+
+**Findings.**
+
+- **B1 (blocking) — the retained `env.py` rollback leaves cold-build residue in
+  every freshly built database.** §10's from-scratch recipe (empty disposable
+  DB → `5caae620088c`) now ends with `workspaces = 1`
+  (`mig_cold_build_workspace`, "Migration workspace") and `pause_reasons = 7`
+  owned by it; with the four lines reverted the same build ends at 0 / 0.
+  Cause: `cleanup_cold_build_workspace()` runs in the `finally` block *after*
+  Alembic's per-migration transactions commit; its two `DELETE`s autobegin a
+  fresh implicit transaction that nothing commits, so they are discarded at
+  connection close. Before the change nothing persisted at all, so cleanup was
+  vacuously satisfied. Authority: master plan §10 ("deletes that workspace and
+  its anchor-owned rows before the command returns"), charter rule 7.
+  Correction: commit the cleanup (`connection.commit()` inside the `finally`,
+  or wrap the two DELETEs in `with connection.begin():`), and add a criterion
+  that re-runs §10's from-scratch recipe asserting zero `workspaces` /
+  `pause_reasons` / `mig_cold_build_workspace` rows. Requires a second edit to
+  the out-of-fence `env.py` — see owner card 1.
+
+- **S1 (should-fix) — C1(a)'s `compare_metadata` clause is blind to
+  partial-index predicate drift.** Deleting `postgresql_where=text("is_deleted
+  = false")` from the model's `__table_args__`, and separately flipping it to
+  `is_deleted = true`, each leave all 7 rows of
+  `test_phase4b_category_schema.py` GREEN, `compare_metadata` row included.
+  Removing the whole `Index(...)` *is* caught. So task 2's parenthetical
+  ("mirroring the migration exactly — autogenerate-drift is caught by C1's
+  `compare_metadata` row") is false for the predicate clause, which is exactly
+  what INV-G3's soft-delete escape hatch rests on. Authority: task 2 + C1(a),
+  P-J. Correction: add a model-side structural row asserting the named index in
+  `ProductionCostGroup.__table__.indexes` carries
+  `dialect_options["postgresql"]["where"]` equal to `is_deleted = false`, with
+  the named mutation "changing the model predicate must redden this row".
+
+- **S2 (should-fix) — C6(c) has no arbiter.** Rewriting the payload cell to
+  `"has_open_basis_version": has_open_basis and evaluable` leaves the entire
+  256-test focused suite green. C6(c) names `has_open_basis_version: true`
+  inside a block with `evaluable: false, first_failure:
+  not_configured_no_cost_model_version`;
+  `test_status_shared_model_failure_is_repeated_in_each_category_block`
+  asserts only the two `first_failure`s and `has_open_cost_model_version`, and
+  is not an exact-dict-equality row as C6 mandates. Authority: C6 preamble +
+  C6(c). Correction: make that test an exact-dict-equality assertion over the
+  whole payload, as C6(a)/(d) already are. (C6(b)'s content is discharged by
+  C6(a)'s exact-dict seat block plus the shared-model row; collapse it
+  explicitly per P-G rather than leaving it implicit.)
+
+- **N1 (note) — M2 declared 1 reddened node, 7 observed.** The ledger's
+  precedence-demotion mutant (SHA `22cc4294…`, reproduced exactly) reddens V1,
+  V2, V2b, P1, `test_configuration.py`'s classifier row,
+  `test_configuration_commands_canonicalize_chain_and_status` and
+  `test_c8_status_query_enumerates_each_first_failure_and_success` — not "P1 and
+  no value row" as C5's M2 predicted. Cause:
+  `resolve_economics_configuration` returns `CONFIGURATION_FAILURE_PRECEDENCE[i]`
+  positionally, so the tuple is a branch→identity map, not an independent
+  precedence declaration; permuting it changes returned identities, not order.
+  No live defect (P1/P3/P4 still arbitrate the order; M3 re-run by the reviewer
+  across all 256 focused tests confirms enum declaration order is irrelevant),
+  but P-I's per-row declaration was under-stated and C5's M2 wording is
+  unsatisfiable by this construction.
+
+- **N2 (note) — the router row's 63-char mutant SHA is a transcription error.**
+  Recomputed: original `8ad093a30d7f564c89221d888f2b66fb143572c7686ead57e85f0577e9ae9aee`
+  (exact match); mutant
+  `56a99ea50ab28480700e1dcde252b88f1f68044335df283e058e60ea5bee123c`. The
+  ledger transposes `ea`→`ae` near offset 54 and drops the trailing `c`. The
+  mutation itself reproduces and reddens the declared node.
+
+- **N3 (note) — the reported vacuous mutation is correctly reported; no
+  criterion row is owed.** Verified at the loader: the status query selects
+  basis versions with `is_deleted.is_(False)`, so the comprehension's
+  `and not version.is_deleted` is redundant; removing it leaves 256 green. Two
+  independent sufficient causes, both correct — defence in depth, not a gap.
+  C6(d)'s per-category-scope mutation covers the clause it was written for.
+  Carry forward to phase 8's status rework.
+
+- **N4 (note)** — `get_economics_configuration_status` computes
+  `evaluable = status.value == "ok"`; prefer `status is EconomicsStatusEnum.OK`.
+  Correct today, brittle to any enum-value edit.
+
+- **N5 (note)** — archgraph span imprecision: the `domain-item-economics` link
+  is labelled `symbol: resolve_economics_configuration` but spans
+  `configuration.py:12-82` (the precedence tuple, `resolve_major_category`,
+  `is_applicable` and the function). The migration link
+  (`5caae620088c…py:25-58`, `upgrade`) is exact. Nothing contradicts the code,
+  so no `archgraph-discrepancies` filing. Graph unchanged at 148 nodes /
+  188 edges / revision `5e4f368d…` / 2 pending (N7), not adjudicated.
+
+- **N6 (note, passing glance, pre-existing)** — a cold build targeting a
+  revision below the pause-reason migrations crashes in cleanup:
+  `alembic upgrade a1312183fdfb` on an empty database raises
+  `UndefinedTableError: relation "pause_reasons" does not exist` from
+  `cleanup_cold_build_workspace()`. Not introduced by 4B; route with B1.
+
+**Verified correct** (settled ground for the re-review): C1(a)–(d) including a
+reviewer-run disposable round-trip (upgrade → downgrade → upgrade; column
+dropped, `item_major_category_enum` survives at exactly one `pg_type` row) and
+a reviewer-run seeded-row refusal (2 rows, one soft-deleted → `RuntimeError`
+naming both `client_id`s and all three dependent counts, exit 1, no DDL,
+revision unchanged; after `DELETE` the upgrade succeeds) — confirming the
+pre-flight counts deleted rows too; C2(a)/(b) DDL-site mutations re-run on
+disposable state with mutant SHAs matching the ledger exactly (`0bb4461c…`,
+`10857fee…`), each reddening exactly its own row; C3(a)/(b)/(c) with the
+`INDEX_IDENTITIES` mutation reproducing `3b594c36…` and the L-4 reachability
+judgment recorded (P-S); C4's guard deletion reddening exactly (a)+(b) with
+(c)/(d)/(e) green, the breadth-narrowing reddening exactly (b), the
+inequality-drop (`dccb142c…`) reddening exactly (d), and C4(a) asserting the
+token plus both substrings individually (P-O); C5's V0–V6 + V2b + P1/P3/P4/P5
+on unsaved ORM instances with explicit distinct `client_id`s and explicit
+`is_deleted` (L-6), parametrize ids naming their authority rows (P-V), M1
+reproducing `c193c89f…` and reddening V2+V4 as declared, M3 re-run across all
+256 focused tests; C6(a)/(d) as true exact-dict-equality rows pinning top-level
+keys, the five block keys and `{wood, seat}`, with the per-category-scope
+mutation reddening (d); C7(a)/(c)/(d) with the body-model mutation re-run; C8
+— `audit(` in both reworked commands emits only the registered
+`production_cost_group.created` / `.updated`, no new event string appears
+anywhere in the phase's production diff, and the ADMIN-retention row still
+bites over the reworked create route.

@@ -188,6 +188,14 @@ inside their transaction (three rows).
 
 - **Forward note (phase-3 re-review r3, N15):** same N15 guidance as phase 7 — the rederive marker is an integrity signal, not proof of data corruption; escalation copy stays neutral; payload shape per R10-2.
 
+- **Forward notes (4B review r1, for this phase's touch of the status query):**
+  (N3) `get_economics_configuration_status`'s comprehension carries a redundant
+  `and not version.is_deleted` — the loader already filters deleted basis rows
+  (`is_deleted.is_(False)`); two sufficient causes, defence in depth, verified
+  not-a-gap — simplify or keep knowingly when reworking. (N4)
+  `evaluable = status.value == "ok"` compares a string literal — switch to
+  `status is EconomicsStatusEnum.OK` (brittle to any enum-value edit).
+
 ## Review log
 
 (append-only)

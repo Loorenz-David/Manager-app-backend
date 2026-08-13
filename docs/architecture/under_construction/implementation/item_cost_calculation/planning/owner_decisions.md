@@ -378,3 +378,36 @@ rollback, so the claim needs independent evidence); (ii) re-run master plan
 §10's from-scratch recipe with the rollback in place to prove the cold-build
 machinery is unharmed. If (i) does not reproduce, the reviewer files it as a
 finding (unnecessary infra change, candidate for reversion), not a silent pass.
+
+---
+
+# Phase 4B review r1 — owner card (2026-08-13)
+
+## Card 1 — a second edit to `app/migrations/env.py`
+
+**Question (reviewer, verbatim):** Authorize 4B's fix cycle to make one more
+edit to `app/migrations/env.py`, or route the whole migration
+transaction-boundary repair to the migration-infrastructure owner?
+
+**Story:** You stand up a database for a new workshop. The build reports
+success, but the fresh database already holds a workspace called "Migration
+workspace" and seven pause reasons under it — "Lunch break", "Coffee break",
+"Meeting", "Waiting for upholstery". Your first admin opens the app and sees
+two workspaces on day one, with nothing to say which is real. Every future
+fresh build ships the same ghost, and nobody notices until someone clocks a
+pause against it.
+
+**Branches:** (1) authorize the second edit — 4B's fix cycle adds one commit
+call plus a from-scratch criterion; the gate closes inside this phase.
+(2) route it out — 4B stays CHANGES_REQUESTED until the infrastructure owner
+lands the repair, and phase 5 waits behind it.
+
+**Recommendation:** authorize; the defect is one line away from the line
+already retained, and splitting it leaves the ghost live in the interval.
+
+**ANSWER (2026-08-13): OPTION ONE.** The 4B fix cycle is authorized to make a
+second edit to `app/migrations/env.py` — commit the cold-build cleanup so its
+DELETEs survive. Same standing exception shape as OD-1: **that file only, this
+cycle only**. The transaction-boundary repair is NOT routed out; N6
+(partial-target cold builds crashing in cleanup) still goes to the
+migration-infrastructure owner as separate work, not into this fix.
