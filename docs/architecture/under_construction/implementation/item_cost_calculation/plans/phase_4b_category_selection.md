@@ -4,7 +4,7 @@
 plan: phase 4B
 role: phase plan
 date: 2026-08-12
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -847,3 +847,45 @@ mutation reddening (d); C7(a)/(c)/(d) with the body-model mutation re-run; C8
 `production_cost_group.created` / `.updated`, no new event string appears
 anywhere in the phase's production diff, and the ADMIN-retention row still
 bites over the reworked create route.
+
+### 2026-08-13 — fix r1 (Codex)
+
+- B1: committed `cleanup_cold_build_workspace()`'s DELETE transaction as the
+  last statement of `_do_run_migrations()`'s `finally`. The timed disposable
+  cold build `beyo_manager_4b_fix_r1_verified` completed in 1.70s at head
+  `5caae620088c`; state queries, rather than exit status, showed zero
+  `workspaces` rows for `mig_cold_build_workspace`, zero owned `pause_reasons`,
+  and zero `mig_cold_build_workspace` rows. The database was dropped. Reverting
+  the edit in disposable `beyo_manager_4b_fix_r1_b1` reproduced `1 / 7 / 1`
+  rows; the edit was restored and that database was dropped. N6 remains out of
+  scope and routed to migration infrastructure.
+- S1: added the C1(e) model-side structural assertion that
+  `uix_production_cost_groups_major_category_active` carries the textual
+  predicate `is_deleted = false`.
+- S2: rewrote
+  `test_status_shared_model_failure_is_repeated_in_each_category_block` as a
+  whole-payload exact-dict assertion, including the wood block's
+  `has_open_basis_version: true` while the shared model failure remains the
+  first failure.
+- Focused Phase 4B set: 200 passed twice. Full non-e2e suite: 1927 passed,
+  23 known baseline failures, 1 deselected; ruff and `git diff --check` passed.
+  Configured `beyo_manager` remained at head with zero rows in the six
+  economics tables and zero matching economics audit rows.
+- Mutation ledger: B1 `app/migrations/env.py`,
+  `09261d91c7813483193fc93dd62e422719a956bb0694fda2af6eb586af4b4e13` →
+  `db98e1ee8c215861f346bbc69a4b29643f997dbc6721a7a028108a44280beae5`,
+  observed disposable state `1 / 7 / 1`, restored to the original hash;
+  S1 predicate deletion in
+  `app/beyo_manager/models/tables/item_economics/production_cost_group.py`,
+  `27d99ecb8b3a0e5ea5a84b4f214d60a94029308e4b2cb48d33875dea99e17b5f` →
+  `4f2076e1a7405a94f88c3515fad8370d706a53c95a6febe2c5597755eb439afa`,
+  observed red node `test_phase4b_model_index_predicate_is_soft_delete_partial_unique`;
+  S1 predicate inversion, same original hash →
+  `ceb5248a80d8fa6f9a9c9a1457ce7a93cdf7854e3938e97c04e007fc47d99b52`,
+  observed the same red node; S2 query collapse in
+  `app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py`,
+  `ce43ca5f132667b3bba598d8b97aa3bd4f51bc60f6ae7a5e9c38e1cd65144a62` →
+  `a09aa514df16d8536a1f5545bf526d31e560eaecd9f4b7ab96de6bfa16e68bc0`,
+  observed red node
+  `test_status_shared_model_failure_is_repeated_in_each_category_block`.
+  All probes were reverted; final hashes match the originals.

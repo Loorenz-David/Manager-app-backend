@@ -256,6 +256,22 @@ async def test_status_shared_model_failure_is_repeated_in_each_category_block(db
 
     status = await get_economics_configuration_status(_ctx(db_session, workspace.client_id, user.client_id, {}))
 
-    assert status["has_open_cost_model_version"] is False
-    assert status["categories"]["wood"]["first_failure"] == "not_configured_no_cost_model_version"
-    assert status["categories"]["seat"]["first_failure"] == "not_configured_no_basis_version"
+    assert status == {
+        "categories": {
+            "wood": {
+                "group_count": 1,
+                "has_cost_group": True,
+                "has_open_basis_version": True,
+                "evaluable": False,
+                "first_failure": "not_configured_no_cost_model_version",
+            },
+            "seat": {
+                "group_count": 1,
+                "has_cost_group": True,
+                "has_open_basis_version": False,
+                "evaluable": False,
+                "first_failure": "not_configured_no_basis_version",
+            },
+        },
+        "has_open_cost_model_version": False,
+    }

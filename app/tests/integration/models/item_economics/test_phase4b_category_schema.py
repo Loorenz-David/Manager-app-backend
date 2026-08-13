@@ -61,6 +61,16 @@ async def test_phase4b_live_schema_reuses_enum_and_matches_model(db_session):
     assert not any("production_cost_groups" in repr(diff) for diff in diffs)
 
 
+def test_phase4b_model_index_predicate_is_soft_delete_partial_unique():
+    index = next(
+        index
+        for index in ProductionCostGroup.__table__.indexes
+        if index.name == "uix_production_cost_groups_major_category_active"
+    )
+
+    assert str(index.dialect_options["postgresql"]["where"]) == "is_deleted = false"
+
+
 def test_phase4b_migration_has_report_first_preflight_and_enum_reuse():
     migration = importlib.import_module(
         "migrations.versions.5caae620088c_add_major_category_to_production_cost_groups"

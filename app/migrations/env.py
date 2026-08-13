@@ -177,6 +177,7 @@ def _do_run_migrations(connection) -> None:
             context.run_migrations()
     finally:
         cleanup_cold_build_workspace()
+        connection.commit()
 
 
 async def _run_async_migrations() -> None:
