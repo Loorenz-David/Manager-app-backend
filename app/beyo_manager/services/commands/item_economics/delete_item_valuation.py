@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.configuration import resolve_item_economics_status
+from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 from beyo_manager.domain.item_economics.serializers import serialize_item_economics_preview
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
@@ -50,7 +51,8 @@ async def delete_item_valuation(ctx: ServiceContext) -> dict:
             )
         )
         if item is None:
-            raise NotFound("Item not found.")
-        selection, terms = await _load_preview_inputs(ctx, item)
-        status = resolve_item_economics_status(None, selection, terms)
+            status = EconomicsStatusEnum.ITEM_UNVALUED
+        else:
+            selection, terms = await _load_preview_inputs(ctx, item)
+            status = resolve_item_economics_status(None, selection, terms)
     return {"preview": serialize_item_economics_preview(status)}

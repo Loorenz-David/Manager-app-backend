@@ -665,3 +665,63 @@ only-if-cheap ledger (routed).
   hand-written-literal rule, red-coverage flag). This GOVERNING fix block
   G1–G10; fix prompt
   `prompts/implementer/2026-08-14_phase8_fix_r1.md`.
+
+- **2026-08-15 — fix r1 IMPLEMENTED (Codex).** The preserved reviewer probe was
+  adopted verbatim at
+  `app/tests/integration/services/commands/item_economics/test_phase8_reviewer_r1_probe.py`:
+  891 lines, 19 rows, SHA256
+  `b5ac470c704e5f62be3d8752d7eb2b6f4e908469c5e944f764ee1a9d454abe3c`.
+  G2 replaced serializer echoes with producer-driven C7 rows; G3 added real
+  C2/C3/C4/C5/C6b coverage; G4–G8 delivered the five production corrections
+  and the soft-deleted-item regression; G7 added the structural
+  `response_model is None` guard. No migration or emission/handler/transition
+  production files were changed.
+
+  G9 mutation ledger — every row was applied, the named arbiter reddened, and
+  the mutation was reverted; zero deferrals:
+
+  | mutation | site | expected red arbiter |
+  | --- | --- | --- |
+  | M1 | manager committed-evaluation filter | `test_probe_c1_projection_isolation_with_a_discriminating_fixture` |
+  | M2 | worker committed-evaluation filter | `test_probe_c1_worker_service_filter_is_independent_and_projection_blind` |
+  | M3 | result-handler committed-evaluation filter | `test_probe_c1_projection_isolation_with_a_discriminating_fixture` |
+  | M4 | DELETE valuation re-resolution | `test_probe_a15_delete_valuation_reresolves_the_status` |
+  | M5 | READY-entry result emit | `test_probe_c6b_ready_entry_writes_ready_snapshot_with_null_closed_at` |
+  | M6 | READY reopen result emit | `test_probe_c6b_reopen_through_add_task_steps_flips_snapshot_to_working` |
+  | M7 | resolve terminal emit | `test_probe_c10_terminal_command_emits_exactly_one_result_task[C10-terminal-resolve]` |
+  | M8 | fail terminal emit | `test_probe_c10_terminal_command_emits_exactly_one_result_task[C10-terminal-fail]` |
+  | M9 | cancel terminal emit | `test_probe_c10_terminal_command_emits_exactly_one_result_task[C10-terminal-cancel]` |
+  | M10 | straggler terminal guard | `test_probe_c6_straggler_guard_emits_exactly_on_ready_and_terminal[C6-straggler-RESOLVED]` |
+  | M11 | straggler READY guard | `test_probe_c6_straggler_guard_emits_exactly_on_ready_and_terminal[C6-straggler-READY-half]` |
+  | M12 | C7 selection-status producer swap | `test_probe_c7_hazard_selection_ok_without_committed_evaluation_reads_not_evaluated` |
+  | M13 | economics `total_cost_minor` injection | `test_probe_c9_step_and_economics_money_key_sets_are_disjoint` |
+  | M14 | lifetime snapshot substitution | `test_probe_c11_lifetime_uses_evaluation_snapshot_not_the_live_task_field` |
+  | M15 | WORKER route authorization removal | `test_budget_status_route_is_available_to_all_roles[get-budget-status-worker]` |
+  | M16 | hand-written route-table budget row removal | `test_router_route_pairs_match_the_authoritative_route_table` |
+  | M17 | `computed_at` update removal | `test_c5_replay_updates_only_computed_at_and_converges` |
+  | M18 | worker route manager-payload substitution | `test_probe_c9_budget_status_endpoint_returns_no_money_for_worker_roles[route-worker]`, `[route-seller]` |
+  | G8 | soft-deleted item restored to `NotFound` | `test_g8_delete_valuation_on_soft_deleted_item_returns_item_unvalued` |
+
+  Restoration hashes (entry = exit) were re-verified for the mutation-only
+  files: `_task_state_transitions.py`
+  `728e7770ca669ec914c6a53190b956713bf06639e84a6ee27e46f890b45073c2`,
+  `process_step_transition.py`
+  `fe1091c68a5fdb72bad8eb7c2f225d2d44f81b85842dfafdf7a8b4cb21267e80`,
+  `resolve_task.py`
+  `f5d9e23fb1090fa81a44b924b28a32792a13d6ffbf385cf745ddae6a79944cb4`,
+  `fail_task.py`
+  `bceb07689f923a640d3b7977b135ecfddc9c844ef8b72f41f3abe0a4eccede9c`,
+  `cancel_task.py`
+  `97de30b2fdb435f0cb5e0e42f04d0f2ee2498c496226452b403e0d54a16ea438`,
+  and `process_item_cost_result.py`
+  `d57ca890d0ad9b14eb09bdda339e07cfe94e3a20475621ca640e61a11e2e5172`.
+  The adopted probe hash was also rechecked after the ledger and remains
+  identical to its preserved source.
+
+  Verification: focused phase-8 suite **146 passed**; full non-E2E suite
+  **2138 passed / 23 established baseline failures / 1 deselected**, with the
+  failure set unchanged; targeted `ruff check` passed; development database
+  reports Alembic head `c1d2e3f4a5b6`. A repository-wide ruff run still reports
+  123 pre-existing findings outside this fix perimeter (including the
+  verbatim probe's pre-existing unused import). Architecture Graph was read
+  only: no architectural delta was identified or applied.

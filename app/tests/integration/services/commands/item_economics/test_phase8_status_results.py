@@ -1,22 +1,32 @@
 import pytest
+from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy import delete, select
 
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.item_economics.commit_item_cost_evaluation import commit_item_cost_evaluation
 from beyo_manager.services.commands.item_economics.create_item_cost_projection import create_item_cost_projection
+from beyo_manager.services.commands.item_economics.delete_item_valuation import delete_item_valuation
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_item_lifetime_economics import get_item_lifetime_economics
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.tasks.analytics.process_item_cost_result import handle_process_item_cost_result
+from beyo_manager.services.tasks.analytics.process_step_transition import handle_process_step_transition
 
 from tests.integration.services.commands.item_economics.test_phase7_evaluations import (
     _cleanup_committed_fixture,
     _ctx,
     _fixture,
+)
+from tests.integration.services.commands.item_economics.test_phase8_reviewer_r1_probe import (
+    _cleanup as _cleanup_probe,
 )
 
 
@@ -204,3 +214,224 @@ async def test_c6b_non_admitted_states_write_nothing(db_session, state):
         assert await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)) is None
     finally:
         await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
+
+
+async def _run_analytics_transition(db_session, workspace, user, task, step, record):
+    await handle_process_step_transition(
+        {
+            "step_id": step.client_id,
+            "task_id": task.client_id,
+            "workspace_id": workspace.client_id,
+            "closing_record_id": record.client_id,
+            "closing_state": TaskStepStateEnum.WORKING.value,
+            "new_state": TaskStepStateEnum.COMPLETED.value,
+            "performed_by_user_id": user.client_id,
+            "credited_user_id": user.client_id,
+            "assigned_worker_id": None,
+            "working_section_id": step.working_section_id,
+            "working_section_name_snapshot": "phase8 analytics",
+            "entered_at": record.entered_at.isoformat(),
+            "exited_at": record.exited_at.isoformat(),
+            "step_task_id": task.client_id,
+        },
+        "phase8-g3",
+    )
+
+
+@pytest.mark.integration
+async def test_c2_rollup_separates_working_paused_ended_shift_and_marked_wrong(db_session):
+    """Each real ORM record drives exactly one production rollup bucket."""
+    workspace, user, _item, task, _basis = await _fixture(db_session)
+    from beyo_manager.models.tables.working_sections.working_section import WorkingSection
+
+    section = WorkingSection(
+        client_id=f"wsec_g3_{uuid4().hex}",
+        workspace_id=workspace.client_id,
+        name="phase8 analytics",
+    )
+    step = TaskStep(
+        client_id=f"tsp_g3_{uuid4().hex}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=section.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        readiness_status=TaskStepReadinessStatusEnum.READY,
+        total_dependencies=0,
+        completed_dependencies=0,
+        allows_batch_working=False,
+        created_by_id=user.client_id,
+    )
+    base = datetime(2026, 8, 14, 8, 0, tzinfo=timezone.utc)
+    records = [
+        StepStateRecord(
+            client_id=f"ssr_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            step_id=step.client_id, state=TaskStepStateEnum.WORKING,
+            entered_at=base, exited_at=base.replace(hour=9),
+            credited_user_id=user.client_id, created_by_id=user.client_id,
+        ),
+        StepStateRecord(
+            client_id=f"ssr_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            step_id=step.client_id, state=TaskStepStateEnum.PAUSED,
+            entered_at=base.replace(hour=9), exited_at=base.replace(hour=10),
+            credited_user_id=user.client_id, created_by_id=user.client_id,
+        ),
+        StepStateRecord(
+            client_id=f"ssr_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            step_id=step.client_id, state=TaskStepStateEnum.PAUSED,
+            transition_reason=TransitionReasonEnum.SHIFT_ENDED.value,
+            entered_at=base.replace(hour=10), exited_at=base.replace(hour=11),
+            credited_user_id=user.client_id, created_by_id=user.client_id,
+        ),
+        StepStateRecord(
+            client_id=f"ssr_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            step_id=step.client_id, state=TaskStepStateEnum.WORKING,
+            recorded_time_marked_wrong=True,
+            entered_at=base.replace(hour=11), exited_at=base.replace(hour=12),
+            credited_user_id=user.client_id, created_by_id=user.client_id,
+        ),
+    ]
+    db_session.add(section)
+    await db_session.flush()
+    db_session.add(step)
+    await db_session.flush()
+    db_session.add_all(records)
+    task.state = TaskStateEnum.WORKING
+    await db_session.commit()
+    try:
+        await _run_analytics_transition(db_session, workspace, user, task, step, records[0])
+        await db_session.refresh(step)
+        assert step.total_working_seconds == 3600
+        assert step.total_pause_seconds == 3600
+        assert step.total_ended_shift_seconds == 3600
+        assert step.inaccurate_working_seconds == 3600
+        assert step.total_working_count == 1
+        assert step.total_pause_count == 1
+        assert step.total_ended_shift_count == 1
+    finally:
+        await _cleanup_probe(db_session, workspace.client_id, user.client_id, task.client_id)
+
+
+@pytest.mark.integration
+async def test_c3_batch_rollup_dilutes_two_overlapping_steps_to_wall_clock(db_session):
+    workspace, user, _item, task, _basis = await _fixture(db_session)
+    from beyo_manager.models.tables.working_sections.working_section import WorkingSection
+
+    section = WorkingSection(
+        client_id=f"wsec_g3_{uuid4().hex}", workspace_id=workspace.client_id, name="batch"
+    )
+    steps = [
+        TaskStep(
+            client_id=f"tsp_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            task_id=task.client_id, working_section_id=section.client_id,
+            state=TaskStepStateEnum.COMPLETED, readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0, completed_dependencies=0, allows_batch_working=True,
+            created_by_id=user.client_id,
+        )
+        for _ in range(2)
+    ]
+    base = datetime(2026, 8, 14, 8, 0, tzinfo=timezone.utc)
+    records = [
+        StepStateRecord(
+            client_id=f"ssr_g3_{uuid4().hex}", workspace_id=workspace.client_id,
+            step_id=step.client_id, state=TaskStepStateEnum.WORKING,
+            entered_at=base, exited_at=base.replace(hour=9),
+            credited_user_id=user.client_id, created_by_id=user.client_id,
+        )
+        for step in steps
+    ]
+    db_session.add(section)
+    await db_session.flush()
+    db_session.add_all(steps)
+    await db_session.flush()
+    db_session.add_all(records)
+    task.state = TaskStateEnum.WORKING
+    await db_session.commit()
+    try:
+        await _run_analytics_transition(db_session, workspace, user, task, steps[0], records[0])
+        await _run_analytics_transition(db_session, workspace, user, task, steps[1], records[1])
+        for step in steps:
+            await db_session.refresh(step)
+        assert [step.total_working_seconds for step in steps] == [1800, 1800]
+        assert sum(step.total_working_seconds for step in steps) == 3600
+    finally:
+        await _cleanup_probe(db_session, workspace.client_id, user.client_id, task.client_id)
+
+
+@pytest.mark.integration
+async def test_c4_no_steps_coalesces_consumption_to_zero(db_session):
+    workspace, user, _item, task, _basis = await _fixture(db_session)
+    await commit_item_cost_evaluation(
+        _ctx(db_session, workspace.client_id, user.client_id, {"task_client_id": task.client_id})
+    )
+    task.state = TaskStateEnum.WORKING
+    await db_session.commit()
+    try:
+        await handle_process_item_cost_result(
+            {"workspace_id": workspace.client_id, "task_id": task.client_id}, "execution-task"
+        )
+        result = await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id))
+        assert result is not None
+        assert result.actual_worker_seconds == 0
+    finally:
+        await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
+
+
+@pytest.mark.integration
+async def test_c6b_reentry_recomputes_one_result_row_from_new_totals(db_session):
+    workspace, user, _item, task, _committed = await _prepared(db_session)
+    try:
+        task.state = TaskStateEnum.READY
+        await db_session.commit()
+        payload = {"workspace_id": workspace.client_id, "task_id": task.client_id}
+        await handle_process_item_cost_result(payload, "execution-task")
+        result = await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id))
+        assert result is not None
+        task.state = TaskStateEnum.WORKING
+        step = await db_session.scalar(select(TaskStep).where(TaskStep.task_id == task.client_id))
+        step.total_working_seconds = 240
+        await db_session.commit()
+        await handle_process_item_cost_result(payload, "execution-task")
+        await db_session.refresh(result)
+        assert result.task_state_snapshot is TaskStateEnum.WORKING
+        assert result.actual_worker_seconds == 240
+        assert await db_session.scalar(select(ItemCostResult.task_id).where(ItemCostResult.task_id == task.client_id)) == task.client_id
+    finally:
+        await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
+
+
+@pytest.mark.integration
+async def test_c5_config_supersession_after_close_preserves_snapshot_recompute(db_session):
+    workspace, user, _item, task, _committed = _prepared_result = await _prepared(db_session)
+    try:
+        payload = {"workspace_id": workspace.client_id, "task_id": task.client_id}
+        await handle_process_item_cost_result(payload, "execution-task")
+        first = await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id))
+        first_values = (first.evaluation_id, first.item_id, first.actual_worker_seconds, first.consumed_cost_minor, first.variance_cost_minor, first.calculation_version)
+        from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
+        version = await db_session.scalar(select(CostModelVersion).where(CostModelVersion.workspace_id == workspace.client_id))
+        version.is_deleted = True
+        await db_session.commit()
+        await handle_process_item_cost_result(payload, "execution-task")
+        await db_session.refresh(first)
+        assert (first.evaluation_id, first.item_id, first.actual_worker_seconds, first.consumed_cost_minor, first.variance_cost_minor, first.calculation_version) == first_values
+    finally:
+        await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
+
+
+@pytest.mark.integration
+async def test_g8_delete_valuation_on_soft_deleted_item_returns_item_unvalued(db_session):
+    workspace, user, item, _task, _basis = await _fixture(db_session)
+    item.is_deleted = True
+    await db_session.flush()
+    try:
+        result = await delete_item_valuation(
+            _ctx(
+                db_session,
+                workspace.client_id,
+                user.client_id,
+                {"item_client_id": item.client_id},
+            )
+        )
+        assert result["preview"]["status"] == "item_unvalued"
+    finally:
+        await _cleanup_committed_fixture(db_session, workspace.client_id, user.client_id)

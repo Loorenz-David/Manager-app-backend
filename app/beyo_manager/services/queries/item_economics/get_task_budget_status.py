@@ -124,46 +124,7 @@ async def get_task_budget_status(ctx: ServiceContext) -> TaskBudgetStatus:
         status = resolve_item_economics_status(valuation, selection, terms)
         return _empty_status(status, binding=binding, item_id=item.client_id)
 
-    actual_seconds = int(
-        await ctx.session.scalar(
-            select(func.coalesce(func.sum(TaskStep.total_working_seconds), 0)).where(
-                TaskStep.workspace_id == ctx.workspace_id,
-                TaskStep.task_id == task.client_id,
-                TaskStep.is_deleted.is_(False),
-            )
-        )
-        or 0
-    )
-    actual_minutes = calculate_actual_worker_minutes(actual_seconds)
-    allowed = Decimal(evaluation.allowed_worker_minutes)
-    status = EconomicsStatusEnum.INFEASIBLE if allowed <= 0 else EconomicsStatusEnum.OK
-    consumed = calculate_consumed_cost_minor(actual_seconds, evaluation.cost_per_worker_minute_minor_snapshot)
-    remaining = calculate_remaining_worker_minutes(allowed, actual_minutes)
-    percent = calculate_percent_consumed(allowed, actual_minutes)
-    variance_minutes = calculate_variance_worker_minutes(allowed, actual_minutes)
-    variance_cost = calculate_variance_cost_minor(evaluation.production_budget_minor, consumed)
-    result = await ctx.session.scalar(
-        select(ItemCostResult).where(
-            ItemCostResult.workspace_id == ctx.workspace_id,
-            ItemCostResult.task_id == task.client_id,
-        )
-    )
-    return TaskBudgetStatus(
-        status=status,
-        item_binding=binding,
-        actual_worker_seconds=actual_seconds,
-        actual_worker_minutes=actual_minutes,
-        remaining_worker_minutes=remaining,
-        percent_consumed=percent,
-        variance_worker_minutes=variance_minutes,
-        production_budget_minor=evaluation.production_budget_minor,
-        allowed_worker_minutes=allowed,
-        consumed_cost_minor=consumed,
-        variance_cost_minor=variance_cost,
-        evaluation_id=evaluation.client_id,
-        item_id=evaluation.item_id,
-        result=result,
-    )
+    return await _build_evaluated_status(ctx, task, item, evaluation, binding)
 
 
 async def _build_evaluated_status(

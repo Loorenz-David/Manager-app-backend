@@ -174,6 +174,51 @@ def test_router_route_pairs_match_the_authoritative_route_table():
     assert actual == expected
 
 
+def test_budget_status_route_declares_no_response_model():
+    route = next(
+        route for route in item_economics.router.routes
+        if route.path == "/tasks/{task_client_id}/budget-status"
+    )
+
+    assert route.response_model is None
+
+
+async def test_budget_status_audience_predicate_fails_closed_for_unknown_role(monkeypatch):
+    calls = []
+
+    async def fake_run_service(command, _context):
+        calls.append(command)
+        return SimpleNamespace(
+            success=True,
+            error=None,
+            data=TaskBudgetStatus(
+                status=EconomicsStatusEnum.NOT_EVALUATED,
+                item_binding="detached",
+                actual_worker_seconds=None,
+                actual_worker_minutes=None,
+                remaining_worker_minutes=None,
+                percent_consumed=None,
+                variance_worker_minutes=None,
+                production_budget_minor=None,
+                allowed_worker_minutes=None,
+                consumed_cost_minor=None,
+                variance_cost_minor=None,
+                evaluation_id=None,
+                item_id=None,
+                result=None,
+            ),
+        )
+
+    monkeypatch.setattr(item_economics, "run_service", fake_run_service)
+    await item_economics._run_budget_status(
+        {"role_name": "future_role", "workspace_id": "ws", "user_id": "usr"},
+        object(),
+        "tsk",
+    )
+
+    assert calls == [item_economics.get_task_budget_status_worker]
+
+
 def test_router_body_percent_field_carries_planning_allocation_documentation():
     description = item_economics._CostModelTermBody.model_fields["percent_value"].description
 

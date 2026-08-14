@@ -10,6 +10,7 @@ from beyo_manager.domain.item_economics.enums import ItemCostEvaluationKindEnum
 from beyo_manager.domain.item_economics.serializers import (
     serialize_item_cost_evaluation,
     serialize_item_cost_result,
+    serialize_item_lifetime_economics,
 )
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
@@ -96,18 +97,16 @@ async def get_item_lifetime_economics(ctx: ServiceContext) -> dict:
             total_variance_minutes += Decimal(result.variance_worker_minutes)
             total_variance_cost += result.variance_cost_minor
 
-    return {
-        "episodes": episodes,
-        "totals": {
+    return serialize_item_lifetime_economics(
+        episodes,
+        {
             "actual_worker_seconds": total_seconds,
             "actual_worker_minutes": str(total_minutes),
             "consumed_cost_minor": total_consumed,
             "variance_worker_minutes": str(total_variance_minutes),
             "variance_cost_minor": total_variance_cost,
         },
-        "episodes_pagination": {
-            "has_more": has_more,
-            "limit": limit,
-            "offset": offset,
-        },
-    }
+        limit=limit,
+        offset=offset,
+        has_more=has_more,
+    )

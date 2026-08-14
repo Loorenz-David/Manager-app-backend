@@ -42,6 +42,7 @@ from beyo_manager.services.run_service import run_service
 from beyo_manager.domain.item_economics.serializers import (
     serialize_task_budget_status,
 )
+from beyo_manager.domain.tasks.serializers import include_monetary_step_fields
 
 router = APIRouter()
 
@@ -124,14 +125,13 @@ def _ctx(claims: dict, session: AsyncSession, data: dict | None = None, query: d
         session=session,
     )
 
-
 async def _run(function, claims: dict, session: AsyncSession, *, data: dict | None = None, query: dict | None = None):
     outcome = await run_service(function, _ctx(claims, session, data, query))
     return build_err(outcome.error) if not outcome.success else build_ok(outcome.data)
 
 
 async def _run_budget_status(claims: dict, session: AsyncSession, task_client_id: str):
-    worker_view = claims.get("role_name") in {WORKER, SELLER}
+    worker_view = not include_monetary_step_fields(claims.get("role_name"))
     function = get_task_budget_status_worker if worker_view else get_task_budget_status
     outcome = await run_service(
         function,
@@ -398,12 +398,3 @@ async def route_get_item_lifetime_economics(
         data={"item_client_id": item_client_id},
         query={"limit": limit, "offset": offset},
     )
-
-
-# Route ownership is explicit so the all-role budget endpoint cannot silently
-# inherit the manager-only table when this router grows.
-_ALL_ROLE_ROUTES = frozenset({"/tasks/{task_client_id}/budget-status"})
-_MANAGER_ONLY_ROUTES = frozenset(
-    route.path for route in router.routes if route.path not in _ALL_ROLE_ROUTES
-)
-_ROUTES = _MANAGER_ONLY_ROUTES | _ALL_ROLE_ROUTES
