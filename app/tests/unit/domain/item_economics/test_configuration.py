@@ -94,6 +94,7 @@ def test_item_readiness_uses_registered_order_and_requires_a_purchase_term():
         (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO, ItemCurrencyEnum.SWEDISH_KRONA),
         (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO),
     ],
+    # [basis-model] proves valuation != basis; [valuation-basis] proves basis != model.
     ids=["basis-model", "valuation-model", "valuation-basis"],
 )
 def test_item_readiness_rejects_each_currency_mismatch_pair(
@@ -152,5 +153,13 @@ def test_item_major_category_snapshot_is_read_only_by_the_registered_resolver():
     set_source = set_path.read_text()
     assert "resolve_major_category(" in set_source
     assert "resolve_major_category(item.item_major_category_snapshot)" in set_source
-    assert "ItemMajorCategoryEnum(" not in set_source
     assert any(path == set_path and "item_major_category_snapshot" in source for path, source in module_sources)
+    unmediated = {}
+    for path, source in module_sources:
+        extra = (
+            source.count("item_major_category_snapshot")
+            - source.count("resolve_major_category(item.item_major_category_snapshot)")
+        )
+        if extra:
+            unmediated[path.name] = extra
+    assert unmediated == {}, unmediated

@@ -554,3 +554,35 @@ current numbering in id examples (P-V); (L3) a reused mutation name needs a
 mutant hash beside each red set (P-I ext); (L4) process — a reviewer's
 background suite run must not overlap its own probes (my first run reported a
 24th failure that was my own mutant; re-run foreground on a clean tree).
+
+### 2026-08-14 — fix r2 (Codex) — IMPLEMENTED
+
+- S1: `test_item_major_category_snapshot_is_read_only_by_the_registered_resolver`
+  now quantifies over all `module_sources`; every in-scope occurrence of
+  `item_major_category_snapshot` must be the registered resolver argument, with
+  `unmediated == {}`. The non-generalizing `ItemMajorCategoryEnum(` assertion
+  was removed. N3's currency-parametrize comment names the clause arbitrated by
+  the equal-pair ids.
+- Baselines: `test_configuration.py` **9 passed**; focused phase selector
+  **363 passed**; full `PYTHONPATH=. pytest -m 'not e2e'` **1968 passed / 23
+  failed / 1 deselected / 2 warnings**. The 23-failure set is byte-identical
+  to the established baseline. Targeted Ruff and `git diff --check` passed.
+- Mutation ledger (governing hashes copied from the re-review handoff; restored
+  file hashes verified locally): M4a inline preview chain,
+  `df1f79b3a23081cf21cc785f6660999fdc3648d786fd074167bcb074cbfb7c88` →
+  `05587c2b331a341df9234d670507320dc63d4859966fa53ada68017e7655bda8`, red
+  `test_item_major_category_snapshot_is_read_only_by_the_registered_resolver`;
+  M4b second same-module reader,
+  `e1ca06250fc7d8924e6e2d935bda00b9a03ece4bafdfee117afd013b88d3c6c0` →
+  `05587c2b331a341df9234d670507320dc63d4859966fa53ada68017e7655bda8`, red
+  same node; M4c reader helper in `delete_item_valuation.py`,
+  `88c9f5aa59adca10e948fdc2c29acb12b77dce7eb491b615e73ff853d5f628ae` →
+  `ab9aebbe6c5047264f051510ba4961f075e6cf8daf8504db6922274214bb3fc1`, red
+  same node. Local equivalent probe hashes were
+  `e818fa2b74af93c79e1e0709c93e5281d17f3fb1ff5ffb1fddf2306a80fcfad7`,
+  `c4abb17d4135df01e9e1029fc01a7ca905a66ff0b382570762fa41b8ff975332`, and
+  `ead1b99984188576209f01abbf97603d93f1e07562788742532be009ef0dd65f`,
+  respectively; each equivalent probe reddened the guard and was reverted.
+- Database check: `5caae620088c` (head). Architecture Graph was read-only,
+  revision `b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94`,
+  153 nodes / 195 edges / 12 pending, zero delta.
