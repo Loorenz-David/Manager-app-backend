@@ -202,7 +202,8 @@ async def _commit_item_cost_evaluation_in_session(
     """Run the nine-step procedure and gate committed-only effects by ``kind``.
 
     ``kind`` gates the chain S1 close scope, ``committed_at``, the valuation
-    mirror, the history record, the audit row, and the pending event.
+    mirror, the history record, and the pending event; the audit row runs on
+    every path under the caller-supplied ``audit_event``.
     """
     task, _primary, item = await _load_task_and_primary(session, workspace_id, task_id)
     if source_evaluation is None:

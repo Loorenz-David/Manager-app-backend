@@ -4,7 +4,7 @@
 plan: phase 7
 role: phase plan
 date: 2026-08-11
-state: IMPLEMENTED
+state: APPROVED
 ```
 
 ## Goal
@@ -355,9 +355,14 @@ with an override differing from the current valuation writes **no** valuation
 row — assert the current valuation row's `client_id` and figures unchanged AND
 exactly one valuation row exists. Named mutation: removing the kind gate at
 the mirror's definition site must redden exactly this row. **P-AB applies
-retroactively:** the helper's `kind` parameter now gates, enumerated: chain S1
-close scope (line 268), `committed_at`, the MIRROR, the history record, the
-audit row, the pending event. Anything else it comes to gate is a finding.
+retroactively:** the helper's `kind` parameter now gates, enumerated
+(CORRECTED at closeout per re-review R2-S1 — the enumeration is read off the
+parameter's occurrences, not the author's model): chain S1 close scope,
+`committed_at`, the MIRROR, the history record, the pending event — FIVE
+effects; **the audit row is NOT kind-gated**: it runs on every path under the
+caller-supplied `audit_event` (`.committed`/`.projected`/`.promoted` are
+distinct registered §6.4 events, so projections MUST write audit rows).
+Anything else `kind` comes to gate is a finding.
 
 ### F2 — B2: the probe rows become the phase's real rows
 
@@ -608,3 +613,64 @@ is routed to phase 8.
   rows. Architecture Graph was read-only with zero delta; no review decision
   was adjudicated. Production final hashes are recorded in the implementer
   handoff.
+
+- **2026-08-14 — re-review r2 (Claude Opus 5): APPROVED.** 0 blocking, 1
+  should-fix (routed, not blocking the gate), 3 notes. Handoff:
+  `handoffs/reviewer/2026-08-14_phase7_rereview_r2_handoff.md`.
+
+  **Perimeter verified:** `bb233db` = 10 files exactly as declared;
+  `git diff bb233db..HEAD -- app/` empty; all five declared final hashes match
+  the tree incl. the router's unchanged baseline `87fcb318…`; the single F4
+  delegation (+1 line into the existing request-translation unit file) is
+  present and correct. Production diff read hunk by hunk: F1 gate, P-AB
+  docstring, N2 docstring, F7 branch deletion, N1 validator deletion, N8
+  whitespace — nothing else, no migration.
+
+  **All 13 r1 findings closed, each verified by re-running the arbiter that was
+  green-or-absent in r1 and is red-or-present now.** B1: C5 row 7 passes on the
+  shipped tree (r1's exact 2000-vs-1000 scenario) and the F1 mutation reddens
+  exactly that node. B2: line-by-line diff of both adopted files against the
+  preserved sources — **zero assertions weakened or deleted**; the only removals
+  are a rename, one assertion split into three stronger ones, and the
+  F4-authorised C2 deletion with its dead imports; integration nodes 4 → 42, ids
+  name authority rows per P-V. B3: C8 now reads all columns incl. `updated_at`
+  from a freshly created second session before and after the promote, and it
+  BITES (M10). S1: direct-INSERT direction deleted, translation row present and
+  discriminating (M8). S2/S3: corrected observables, M1/M2 bite. S4: my numbers
+  match the declaration exactly. S5: dead branch gone, cross-workspace row
+  present. N1–N4, N7, N8 all applied; N7 verified biting (M9). N5/N6 correctly
+  held/routed.
+
+  **Mutation ledger — five of seven declared mutant hashes reproduce
+  BYTE-FOR-BYTE** from independent application of the named mutation (F1, M1,
+  M2, M3, M4, M5, M7; M6 differs in mutant text only and was verified
+  behaviourally). Each reddened exactly its named row — M3/M4 row 1 only per
+  chain, no row-2 red. Three reviewer-authored mutations (M8 registry-key
+  corruption, M9 wrong-successor back-link, M10 promote dirties the source row)
+  each reddened the row the fix cycle ADDED, answering P-I's "do the new rows
+  bite?" rather than assuming it. All reverted; `git diff -- app/` empty.
+
+  **Numbers (P-L, third round of the class — now clean):** full non-E2E
+  **2076 / 23 / 1** matching the declaration; failure set byte-identical to the
+  phase-1 list (23/23); **+39 reconciled exactly** = +38 phase-7 integration
+  nodes (4 → 42) + 1 request-translation row; concurrency subset 5 passed twice;
+  phase-5 surface 55. Ruff clean; DB at head; economics tables 0 rows before and
+  after; `workspaces` +116 over one full run = the known non-economics class.
+  Graph READ-ONLY, zero delta, 166/239, 52 pending, rev `0a71061…`.
+
+  **Open, routed (do not lose):** **R2-S1 (should-fix)** — the P-AB effect
+  enumeration in the helper docstring (`commit_item_cost_evaluation.py:202-206`)
+  AND in plan F1 lists "the audit row" among the `kind`-gated effects; it is NOT
+  gated (`audit(...)` at line 379 runs on every path under a caller-supplied
+  `audit_event`, and §6.4 registers `.projected`/`.promoted`, so projections
+  MUST write audit rows). Verified gated set is five: chain S1 close scope
+  (272–292), `committed_at` (319), the mirror (346), the history record (361),
+  the pending event (386). Correction = drop the phrase in both places and add
+  "the audit row is written on every path under a caller-supplied
+  `audit_event`" → **phase-7 closeout commit**. **R2-N1** anchor drift: the F1
+  docstring shifted lines ≥203 in `commit_item_cost_evaluation.py` by +4, so the
+  12 edges anchored `203–355` become `207–359` and the command node `187–388`
+  becomes `187–392` → **the held post-approval graph pass** (with N5).
+  **R2-N2** the C10 visibility assertion is loop-guarded and would go vacuous if
+  the `evaluation_id` extra key were renamed → **phase 8** (with N6).
+  **R2-N3** N8 over-applied (zero blank lines) — recorded only.
