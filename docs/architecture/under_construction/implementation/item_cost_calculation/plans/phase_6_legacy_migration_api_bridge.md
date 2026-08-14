@@ -161,6 +161,127 @@ BOTH new migrations on a scratch schema; fresh metadata-create succeeds post-dro
   identical `created_at` and assert the `client_id DESC` order in the history
   read. Carry it as a criterion row here.
 
+## Round-0 projection amendments (2026-08-14, coordinator-routed — GOVERNING where they conflict with the text above)
+
+The r0 ledger (23 rows, handoff `2026-08-14_phase6_projection_r0_handoff.md`)
+is fully routed. Owner cards 1–2 were ANSWERED in-session and are folded as
+**intention round 14** (R14-1…R14-4: the D1 carrier correction, the D3
+post-condition restatement, P3 + the skip-deleted clause, the D15/D16/D6
+evidence and router corrections) — read §10A.1–§10A.3 AS AMENDED; they
+supersede this plan's older prose wherever they differ.
+
+**Live-data census (the criterion arithmetic's pre-counts, measured):** 479
+items / 61 workspaces, ALL legacy money columns at 0 non-NULL — every §10A.1
+post-condition is vacuous on the live DB (D17). Therefore C1/C2/C3 run on
+SEEDED DISPOSABLE databases with non-vacuity arbiters (P-J third ext: a row
+proving the seeded eligible set is non-empty), and the §10 recipe is named per
+criterion. D18: ZERO test dependents exist for the three keys (grep across
+`app/tests/` = 0 files) — a green suite is NOT evidence; C5's mutations are
+the only arbiters this surface will ever have.
+
+**D1 (BLOCKER, folded upstream):** the bridge validator raises
+`beyo_manager.errors.validation.ValidationError` — never a pydantic
+`ValueError` (mangled leading token: executed table in the handoff) and never
+a FastAPI-body validator (wrong envelope). C4 asserts the EXACT full message
+`ITEM_MONEY_MOVED: item money fields moved to the item-valuation endpoint`
+and the `{"error", "ok": false}` envelope at 422.
+
+**D3 (BLOCKER, folded upstream):** C2 gains (i) the run-twice row — second
+pass a no-op WITHOUT aborting; (ii) the collision row — item with legacy
+money AND a current valuation → journaled, `valuation_client_id` NULL,
+valuation untouched. C2/C3's prose clauses are TABULATED, one row per
+post-condition (D23).
+
+**D4 (BLOCKER) — C5 is the NINE-row census, not "five payloads":** the
+handoff's two tables are the authority — 6 endpoints through
+`domain/tasks/serializers.py::serialize_item` (list_tasks, get_task,
+coordination threads, 2 upholstery reads, pending-seat-tasks) + 3 through
+`domain/items/serializers.py::_serialize_item_base` (list_items, get_item,
+and **customer detail's `linked_items[]`** — the never-before-named ninth).
+One key-set assertion per endpoint on production serializer output;
+parametrize ids name the endpoint; TWO named mutations (re-add the three keys
+per serializer function), each declaring its FULL observed red set (the base
+mutation should redden rows 7–9 together — design information).
+
+**D5 (BLOCKER):** C4's create_task mutation becomes a PAIR — one per
+validator definition site (tasks-file and items-file), both red sets
+declared; the create_task fixture pins the no-identifier branch (no
+`article_number`/`sku` → `create_item_in_session` directly) AND a second row
+takes the find-or-create branch. N named mutations = N ledger rows.
+
+**D6 (BLOCKER):** the four FastAPI router bodies (`_CreateItemBody`
+`items.py:68-70`, `_UpdateItemBody` `:91-93`, `_FindOrCreateItemBody`
+`:113-115`, `_TaskItemInputBody` `tasks.py:105-107`) are ADDED to Files
+expected to change with the instruction: the three keys are **RETAINED**
+there this release. One C4 row proves a non-NULL value SURVIVES the router
+body into the command validator (the only layer that can silently drop it).
+
+**D7/D2 (owner):** eligibility predicate verbatim per §10A.1(c); P3 rows in
+C1 (refusal) and C2 (empty offender set post-condition).
+
+**D8 (delegated):** client_ids minted Python-side (`generate_id("ival")` per
+row, executemany) — Postgres cannot produce ULIDs; the eligibility predicate
+stays in the SELECT. Precedent `5caae620088c:26-46`.
+
+**D9:** C6's "fresh metadata-create" clause is REPLACED by the two shipped
+harnesses: the pg_type/pg_attribute structural row (enum survives with
+exactly ONE remaining column user — `item_upholstery_requirements.currency`,
+2 → 1) and the FILTERED `compare_metadata` row (P-X caveat stated). The
+upgrade→downgrade→upgrade round-trip stays.
+
+**D10:** downgrade re-adds `item_currency` via
+`postgresql.ENUM(..., create_type=False)` (exemplar `5caae620088c:20-22`);
+`op.drop_column` does not drop the type — the criterion ASSERTS retention.
+C3 names its exact revision pair and direction (BOTH downgrades: drop's
+re-adds columns NULL, data migration's repopulates from the journal); end
+states by STATE QUERIES (L5).
+
+**D11:** the column mapping, written: `item_value_minor →
+expected_sale_price_minor`, `item_cost_minor → purchase_cost_minor`,
+`item_currency → currency`. C1's byte-equality row names all three pairs
+individually (P-O).
+
+**D12 (delegated):** migrated rows emit NO audit events — the journal is the
+record; stated so the reviewer does not file the absence.
+
+**D13:** C4's 422 rows run through the shipped TestClient harness
+(`test_item_economics_router.py:41-60` precedent — FastAPI() +
+include_router + dependency_overrides), named per P-R.
+
+**D14:** the tie-breaker criterion (phase-5 N2) stays but is relabeled a
+SYNTHETIC fixture (two rows, explicit identical `created_at`, assert
+`client_id DESC`) — the migration writes at most one valuation per item and
+cannot produce the tie.
+
+**D16:** on the create-item schema, "key absent" and "key present null"
+traverse the identical code path (`model_dump()` without `exclude_unset`
+materialises every key) — collapse explicitly per P-G or name why separate.
+
+**D19:** the archgraph note is corrected: `node:table-item` EXISTS (pending,
+with the reads_from edge beside it); this phase's delta is ONE node edit
+(its description's "until phase 6's migration" sentence) — recorded by the
+implementer as an additive note for the coordinator's pass, never
+adjudicated.
+
+**D20 (favourable facts, cite don't re-derive):** `env.py` hides `*_journal`
+tables from autogenerate BY NAME (a rename forfeits protection — one plan
+line); `transaction_per_migration=True` + the 4B rollback make "P1/P2/P3
+before any write" structurally true.
+
+**D22:** in scope: `app/beyo_manager/routers/README.md` (12 mirror rows at
+the four cited blocks). The frontend doc mirrors
+(`frontend/docs/architecture/backend/...`) are OUT of scope → phase-9 drift
+batch (recorded there).
+
+**D23:** parametrize ids name the authority row in its CURRENT numbering
+(e.g. `10A2-row3-amount-null-currency-refuses-p1`,
+`10A3-create-task-present-nonnull-422`); C1's fixture audit per rule 2
+(the journal+valuation row must not also satisfy the skip predicate).
+
+**Read-first addition:** exemplar `5caae620088c` (report-first pre-flight
+with dependent counts; `create_type=False` at both sites) — the closest
+in-tree precedent, previously uncited.
+
 ## Review log
 
 (append-only)

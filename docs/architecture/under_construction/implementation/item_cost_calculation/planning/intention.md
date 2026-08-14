@@ -1553,6 +1553,34 @@ Post-conditions asserted inside `upgrade` (exemplar discipline):
 Idempotent by predicate: the copy INSERT excludes items that already have a current
 valuation, so re-execution affects zero rows.
 
+**R14 lettered clauses (2026-08-14, phase-6 projection r0; owner answers folded):**
+
+- **(a) Post-condition 2 restated over the journal (D3):** created-valuation
+  count == count of journal rows with `valuation_client_id IS NOT NULL` ==
+  count of ELIGIBLE non-deleted items with ≥ 1 amount that had **no current
+  valuation at entry**. The original pc2 contradicted the idempotency clause
+  (a re-run creates 0 where pc2 expected N and aborts). C2 additionally runs
+  the copy TWICE and asserts the second pass is a no-op **without aborting**;
+  and one C1 row covers the phase-5 collision (item with legacy money AND a
+  current valuation → journaled, `valuation_client_id` NULL, existing
+  valuation untouched).
+- **(b) Attribution — P3 pre-flight (owner, 2026-08-14):** migrated valuations
+  carry the **item's own `created_by_id`**; where an item holds an amount with
+  a NULL `created_by_id` (legal, `item.py:55`), the migration **refuses before
+  any write** with a row report naming the offending `client_id`s (P3, beside
+  P1/P2). No system user is invented; nothing is guessed. Owner context: the
+  valuation functionality is unshipped and every write-path check measures the
+  legacy population empty — P3 is totality armor, unreachable on any known
+  database.
+- **(c) Deliberately deleted prices stay deleted (owner, 2026-08-14):** an
+  item whose only valuation is soft-deleted is **not** re-valued (the deletion
+  is a decision somebody made; §11A.5(d)/R13-2's intent). Eligibility
+  predicate, verbatim: `NOT EXISTS (… item_id = i.client_id AND is_deleted =
+  false)`; INV-V1's full predicate remains what the index enforces — state
+  both. The migration only ever writes the FIRST row of a chain, so §7A.1's
+  S1 close does not apply and `superseded_by_id` is never set (stated so a
+  reviewer does not hunt the missing S1).
+
 #### 10A.2 Pre-flight — total over (amounts × currency)
 
 | `item_value_minor` | `item_cost_minor` | `item_currency` | Outcome |
@@ -1564,6 +1592,9 @@ valuation, so re-execution affects zero rows.
 | ≥ 1 set, all ≥ 0 | | set | journaled + one current `ItemValuation` (non-deleted items) / journaled only (soft-deleted items) |
 
 P1 and P2 both run **before any write**, each reporting its offending `client_id`s.
+**R14: the table gains P3** — ≥ 1 amount set (any) with the item's
+`created_by_id` NULL → **REFUSE — P3**, row report, before any write
+(attribution is never guessed; §10A.1(b)).
 
 #### 10A.3 API bridge — the removal must be loud, not silent
 
@@ -1573,17 +1604,34 @@ Verified: no item or task request model sets `extra="forbid"` (the repo's only
 (`services/commands/items/requests/__init__.py:195-197, 246-248, 460-462`;
 `services/commands/tasks/requests/__init__.py:36-38`) means a client that still sends a
 price receives **200 with the money silently discarded** — the precise failure mode this
-domain exists to remove. And a blanket "key present ⇒ reject" breaks task creation on
-day one, because the manager app sends `item_value_minor: null` on every task creation
-(`use-create-task.ts:84-85`).
+domain exists to remove. **R14 evidence correction (D15):** the earlier claim that "the
+manager app sends `item_value_minor: null` on every task creation
+(`use-create-task.ts:84-85`)" was a misread — those lines are the optimistic cache
+entry, not the request body. The real body builder
+(`normalize-task-form-payload.ts:88-101`, `buildItemFields`) **omits both amounts
+entirely** and serialises `item_currency` as an absent key; no component renders a
+currency input. Production task creation sends all three keys ABSENT. The
+reject-iff-present-and-non-NULL shape stays (it is strictly safer); the real recorded
+risk is: if a currency input is ever mounted, task creation 422s the moment a user
+picks one.
 
 Contract: for one release the four schemas keep a validator that raises
-`ValidationError` ("item money moved to the item-valuation endpoint") **iff a removed
-key is present with a non-NULL value**; present-with-null and absent both pass and are
-ignored. `model_fields_set` distinguishes the two (existing precedent
-`update_item.py:57,73`). The validator is deleted together with the keys in the phase
-that ships after the frontend stops sending them — a sequencing note the planner owns,
-not a permanent shape.
+**`beyo_manager.errors.validation.ValidationError`** (the repo's `DomainError` — R14/D1:
+NEVER a pydantic-side `ValueError`, whose message reaches the client mangled by the
+parse helpers' field-locator prefix; the DomainError propagates unwrapped through
+pydantic, reaches `run_service`, and `build_err` emits
+`{"error": "ITEM_MONEY_MOVED: …", "ok": false}` at 422 with the identity as the exact
+leading token) **iff a removed key is present with a non-NULL value**; present-with-null
+and absent both pass and are ignored. R14/D16: `model_fields_set` is inert for this
+purpose (both non-reject outcomes pass, and the create-item route materialises every
+key via `model_dump()` without `exclude_unset`) — the predicate is simply
+`value is not None`. R14/D6: the four FastAPI ROUTER body models **retain** the three
+keys for this release (deleting them there silently drops a client's price at the HTTP
+boundary under pydantic's default `ignore` — the exact silent failure again); one
+criterion row proves a non-NULL value SURVIVES the router body into the command
+validator. The validator is deleted together with the keys in the phase that ships
+after the frontend stops sending them — a sequencing note the planner owns, not a
+permanent shape.
 
 Criterion — three rows, exact outcomes: key absent ⇒ 200 and no write; key present and
 null ⇒ 200 and no write; key present and non-null ⇒ 422 with the named message.
@@ -2304,6 +2352,25 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   history (§11A.5 (d)); the history's "current" predicate is INV-V1's
   (`superseded_at IS NULL AND is_deleted = false`), and its total order is
   `created_at DESC, client_id DESC`.
+
+**Round 14 — 2026-08-14 (phase-6 projection r0; two owner cards answered in-session):**
+
+- **R14-1 (D1)** The §10A.3 bridge identity is raised as the repo's
+  `beyo_manager.errors.validation.ValidationError`, never a pydantic-side
+  `ValueError` (the parse helpers mangle the leading token); exact full
+  message asserted. §6.4's carrier wording corrected to match.
+- **R14-2 (D3)** §10A.1 post-condition 2 restated over the journal; re-run =
+  no-op without aborting; the phase-5 collision row added (§10A.1(a)).
+- **R14-3 (owner cards 1–2)** Attribution: the item's own `created_by_id`,
+  with the new **P3** pre-flight refusal for amount-with-NULL-creator rows
+  (§10A.1(b), §10A.2); deliberately deleted prices are NOT re-valued
+  (§10A.1(c)). Both unreachable on any known database (the valuation surface
+  is unshipped and the legacy population measures empty everywhere) — totality
+  armor, not behavior.
+- **R14-4 (D15/D16/D6)** §10A.3's frontend evidence corrected (the request
+  body omits the money keys; the cited lines were the optimistic cache);
+  `model_fields_set` dropped as inert; the router body models retain the keys
+  with a survival criterion row.
 
 ---
 

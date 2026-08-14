@@ -114,6 +114,14 @@ recorded in the Review log.
   in the item_economics models → `Mapped[Decimal]`/`| None` per
   `user_work_profile.py:33` precedent — annotation-only, no runtime change).
 
+- **Forward note (phase-6 projection r0, D22):** the frontend doc mirrors
+  carrying the legacy money keys
+  (`frontend/docs/architecture/backend/routers_endpoints/README.md:1918-1920,
+  1976-1978, 2078-2080, 2475-2477`;
+  `frontend/docs/architecture/backend/tables/README.md:437,467,469` — :469
+  also mirrors the `create_type=True` flag phase 6 flips) are OUTSIDE phase
+  6's perimeter by decision, not oversight — this drift batch owns them.
+
 ## Review log
 
 (append-only)

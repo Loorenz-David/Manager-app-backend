@@ -445,3 +445,34 @@ afterwards? (Branches: hide deleted entries / show them marked.)
 history reads as the true pricing story; deleting the current price is the
 documented escape hatch for a mistaken entry, and genuinely superseded prices
 can never be deleted at all, so nothing real is lost. Folded as **R13-2**.
+
+---
+
+# Phase 6 projection r0 — owner cards (2026-08-14, ANSWERED in-session)
+
+Both cards were raised by the projectionist and answered by the owner the same
+day, inside the projection session; the cards are retained verbatim in the
+projection handoff (`archive/plan_6/…_phase6_projection_r0_handoff.md` after
+closeout). The answer, in the owner's substance: *this is a new implementation
+where no price has ever been written — the functionality is not shipped yet —
+so there is no worry about the author of the price during migration; and after
+this implementation ships the migrations will be squashed to start fresh.*
+
+## Card 1 — Whose name goes on a price the system moves by itself?
+
+**ANSWER (2026-08-14):** No attribution decision is needed (no prices exist
+anywhere; write-path evidence corroborates on every database). Folded as the
+**P3 pre-flight rule** (R14-3): migrated valuations carry the item's own
+`created_by_id`; an amount with a NULL creator REFUSES before any write with a
+row report. No system user is invented.
+
+## Card 2 — Should a deliberately deleted price come back?
+
+**ANSWER (2026-08-14):** Skip them — a deletion is a decision somebody made
+about that item; the upgrade knows less than they did. Folded as the
+eligibility clause in §10A.1(c) (R14-3).
+
+**Squash consequence recorded (owner disclosure):** after this implementation
+the migrations will be squashed; the squashed baseline must DROP or EXCLUDE
+`item_valuation_migration_journal` (env.py's `_journal` filter hides it from
+autogenerate, so nothing else will flag it). Routed to the squash seed.

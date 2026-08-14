@@ -135,6 +135,17 @@ lesson P-Z / L5 below.
 - **Charter rule 7:** destructive verification on disposable databases only;
   the configured/production DB is never the test bench.
 
+### Finding 6 — the phase-6 journal table must be dropped/excluded at squash
+(added 2026-08-14, phase-6 projection r0)
+
+Phase 6 ships `item_valuation_migration_journal` solely to make its data
+migration reversible. After the squash the data-migration file is gone and the
+journal has no reader — the squashed baseline must **drop or exclude** it, and
+nothing else will flag it: `env.py`'s `_MIGRATION_BOOKKEEPING_SUFFIX` filter
+(`:30`, `:33-48`) deliberately hides `*_journal` tables from autogenerate (a
+rename would also silently forfeit that protection). Until the squash lands,
+the journal is the only recovery path for legacy amounts.
+
 ## Suggested opening move (when the owner starts this)
 
 Author a **mechanism-inventory prompt** citing this document and the three
