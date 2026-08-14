@@ -106,6 +106,31 @@ def test_valuation_request_requires_at_least_one_amount_after_pydantic_parse():
         parse_item_valuation_request({"currency": "swedish_krona"})
 
 
+def test_valuation_request_rejects_missing_currency_at_request_layer():
+    with pytest.raises(ValidationError, match="currency"):
+        parse_item_valuation_request({"expected_sale_price_minor": 100})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"expected_sale_price_minor": 100, "currency": "swedish_krona"},
+        {"purchase_cost_minor": 50, "currency": "swedish_krona"},
+        {"expected_sale_price_minor": 100, "purchase_cost_minor": 50, "currency": "swedish_krona"},
+    ],
+    ids=["expected-only", "cost-only", "both"],
+)
+def test_valuation_request_accepts_each_amount_shape(payload):
+    request = parse_item_valuation_request(payload)
+
+    assert request.currency.value == "swedish_krona"
+
+
+# Phase 2 DB-CHECK authority for the six request-layer companion rows:
+# node:table-item-valuation (negative expected, negative purchase, both-null,
+# price-only, cost-only, and NULL currency).
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("expected_sale_price_minor", -1), ("purchase_cost_minor", -1)],

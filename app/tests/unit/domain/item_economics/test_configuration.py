@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +11,7 @@ from beyo_manager.domain.item_economics.configuration import (
     ITEM_READINESS_PRECEDENCE,
     EconomicsSelection,
     is_applicable,
+    resolve_major_category,
     resolve_economics_configuration,
     resolve_economics_selection,
     resolve_item_economics_status,
@@ -91,7 +94,7 @@ def test_item_readiness_uses_registered_order_and_requires_a_purchase_term():
         (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO, ItemCurrencyEnum.SWEDISH_KRONA),
         (ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.SWEDISH_KRONA, ItemCurrencyEnum.EURO),
     ],
-    ids=["valuation-basis", "valuation-model", "basis-model"],
+    ids=["basis-model", "valuation-model", "valuation-basis"],
 )
 def test_item_readiness_rejects_each_currency_mismatch_pair(
     valuation_currency, basis_currency, model_currency
@@ -109,3 +112,45 @@ def test_item_readiness_rejects_each_currency_mismatch_pair(
     )
 
     assert resolve_item_economics_status(valuation, selection, []) is EconomicsStatusEnum.CURRENCY_MISMATCH
+
+
+def test_item_readiness_purchase_cost_precedes_currency_mismatch():
+    selection = EconomicsSelection(
+        EconomicsStatusEnum.OK,
+        _row(client_id="g"),
+        _row(currency=ItemCurrencyEnum.SWEDISH_KRONA),
+        _row(currency=ItemCurrencyEnum.SWEDISH_KRONA),
+    )
+    valuation = _row(
+        expected_sale_price_minor=100,
+        purchase_cost_minor=None,
+        currency=ItemCurrencyEnum.EURO,
+    )
+    purchase_term = _row(calculation_type=CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST)
+
+    assert resolve_item_economics_status(valuation, selection, [purchase_term]) is EconomicsStatusEnum.ITEM_MISSING_PURCHASE_COST
+
+
+def test_item_major_category_snapshot_is_read_only_by_the_registered_resolver():
+    app_root = Path(__file__).resolve().parents[4]
+    package_roots = (
+        app_root / "beyo_manager" / "domain" / "item_economics",
+        app_root / "beyo_manager" / "services",
+    )
+    module_sources = []
+    for root in package_roots:
+        paths = root.rglob("*.py") if root.name == "services" else root.glob("*.py")
+        for path in paths:
+            if root.name == "services" and path.parent.name != "item_economics":
+                continue
+            module_sources.append((path, path.read_text()))
+
+    resolver_source = inspect.getsource(resolve_major_category)
+    assert "snapshot" in resolver_source
+
+    set_path = app_root / "beyo_manager" / "services" / "commands" / "item_economics" / "set_item_valuation.py"
+    set_source = set_path.read_text()
+    assert "resolve_major_category(" in set_source
+    assert "resolve_major_category(item.item_major_category_snapshot)" in set_source
+    assert "ItemMajorCategoryEnum(" not in set_source
+    assert any(path == set_path and "item_major_category_snapshot" in source for path, source in module_sources)

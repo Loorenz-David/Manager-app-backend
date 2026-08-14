@@ -27,6 +27,7 @@ async def delete_item_valuation(ctx: ServiceContext) -> dict:
             statement = statement.where(
                 ItemValuation.item_id == ctx.incoming_data.get("item_client_id"),
                 ItemValuation.superseded_at.is_(None),
+                ItemValuation.is_deleted.is_(False),
             )
         valuation = await ctx.session.scalar(statement)
         if valuation is None or valuation.is_deleted:

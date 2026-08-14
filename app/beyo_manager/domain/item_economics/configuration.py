@@ -157,7 +157,6 @@ def resolve_item_economics_status(
             and selection.cost_model_version is not None
             and (
                 getattr(valuation, "currency", None) != getattr(selection.basis_version, "currency", None)
-                or getattr(valuation, "currency", None) != getattr(selection.cost_model_version, "currency", None)
                 or getattr(selection.basis_version, "currency", None)
                 != getattr(selection.cost_model_version, "currency", None)
             )
