@@ -476,3 +476,26 @@ eligibility clause in §10A.1(c) (R14-3).
 the migrations will be squashed; the squashed baseline must DROP or EXCLUDE
 `item_valuation_migration_journal` (env.py's `_journal` filter hides it from
 autogenerate, so nothing else will flag it). Routed to the squash seed.
+
+---
+
+# Phase 6 review r1 — owner card (2026-08-14)
+
+## Card 1 — When an item's price was deleted on purpose, should the migration bring it back?
+
+**Question (reviewer, verbatim):** Should the legacy-money migration re-create
+a price for an item whose only saved price was deleted by a person — yes, or
+leave it deleted? (Story: the chest of drawers whose wrong imported price a
+colleague deleted reappears on migration night, attributed to whoever created
+the item.)
+
+**ANSWER (2026-08-14): the recommendation is the correct solution — LEAVE
+DELETED PRICES DELETED.** This re-confirms the round-14 card-2 decision; the
+defect was in the folded predicate, not the decision. Folded as **R15-1**: the
+§10A.1(c) verbatim predicate is corrected to
+`NOT EXISTS (SELECT 1 FROM item_valuations v WHERE v.item_id = i.client_id)`
+— an item with ANY valuation row (current, superseded, or deleted) has entered
+the new system and is never re-valued by the migration; only never-valued
+items are eligible. This makes the heading, the predicate, and the owner's
+decision agree, and it resolves both of B2's rows (soft-deleted-only → skip;
+superseded-only → skip).

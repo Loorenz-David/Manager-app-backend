@@ -1572,14 +1572,19 @@ valuation, so re-execution affects zero rows.
   valuation functionality is unshipped and every write-path check measures the
   legacy population empty — P3 is totality armor, unreachable on any known
   database.
-- **(c) Deliberately deleted prices stay deleted (owner, 2026-08-14):** an
-  item whose only valuation is soft-deleted is **not** re-valued (the deletion
-  is a decision somebody made; §11A.5(d)/R13-2's intent). Eligibility
-  predicate, verbatim: `NOT EXISTS (… item_id = i.client_id AND is_deleted =
-  false)`; INV-V1's full predicate remains what the index enforces — state
-  both. The migration only ever writes the FIRST row of a chain, so §7A.1's
-  S1 close does not apply and `superseded_by_id` is never set (stated so a
-  reviewer does not hunt the missing S1).
+- **(c) Deliberately deleted prices stay deleted (owner, 2026-08-14;
+  predicate CORRECTED R15-1, 2026-08-14):** an item whose only valuation is
+  soft-deleted is **not** re-valued (the deletion is a decision somebody made;
+  §11A.5(d)/R13-2's intent). The clause as first folded contradicted itself —
+  its predicate (`NOT EXISTS (… AND is_deleted = false)`) made exactly those
+  items ELIGIBLE (phase-6 review B2, executed). Corrected eligibility
+  predicate, verbatim: **`NOT EXISTS (SELECT 1 FROM item_valuations v WHERE
+  v.item_id = i.client_id)`** — an item with ANY valuation row (current,
+  superseded, or deleted) has entered the new system and is never re-valued;
+  only never-valued items are eligible. INV-V1's full predicate remains what
+  the index enforces — state both. The migration only ever writes the FIRST
+  row of a chain, so §7A.1's S1 close does not apply and `superseded_by_id`
+  is never set.
 
 #### 10A.2 Pre-flight — total over (amounts × currency)
 
@@ -2371,6 +2376,16 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   body omits the money keys; the cited lines were the optimistic cache);
   `model_fields_set` dropped as inert; the router body models retain the keys
   with a survival criterion row.
+
+**Round 15 — 2026-08-14 (phase-6 review r1 card 1; coordinator fold):**
+
+- **R15-1 (owner)** The §10A.1(c) eligibility predicate is corrected to
+  `NOT EXISTS (any item_valuations row for the item)` — the round-14 folding
+  carried a predicate that contradicted the clause's own heading and would
+  have re-valued deliberately deleted prices (review B2, executed on a
+  seeded disposable). The owner re-confirmed: leave deleted prices deleted;
+  never-valued items only. Review L3 (a clause whose prose and verbatim
+  predicate disagree is undischargeable) becomes projection practice.
 
 ---
 

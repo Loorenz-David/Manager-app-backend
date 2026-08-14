@@ -282,6 +282,66 @@ batch (recorded there).
 with dependent counts; `create_type=False` at both sites) — the closest
 in-tree precedent, previously uncited.
 
+## Fix r1 amendments (2026-08-14, coordinator-routed from review r1 — GOVERNING)
+
+Review r1: 2 blocking, 4 should-fix, 11 notes; owner card 1 ANSWERED (leave
+deleted prices deleted — **R15-1**, the corrected eligibility predicate in
+§10A.1(c) as amended). The reviewer executed the corrections; resolve, don't
+relitigate.
+
+**B1 — the pc2 guard becomes real (P-J fourth ext):** `_assert_postconditions`
+compares independently-constructed sides per R14(a): created-valuation count ==
+count of ELIGIBLE items measured at entry (not a count derived from the same
+rows the copy produced). The reviewer's verified correction is executed and
+hash-recorded in the Review log (R9: shipped tests stay green; R10: the
+skip-one mutant aborts with `left 1 eligible item(s) unmigrated` and rolls
+back to `5caae620088c`). Named mutation: the `rows[1:]` skip must ABORT the
+upgrade (it exited 0 in r1).
+
+**B2 — the eligibility predicate per R15-1:** `NOT EXISTS (any
+item_valuations row for the item)` — never-valued items only. C1 gains one
+sole-predicate row PER VALUATION STATE: never-valued (migrated),
+current-valued (collision row — journaled only, exists), soft-deleted-only
+(SKIPPED — was re-valued in r1), superseded-only (SKIPPED — state the
+judgment that this state is command-unreachable but the predicate covers it).
+
+**S1 — the census rows become real (P-V third ext):** each of the nine rows
+consumes its `endpoint_id` and asserts through a distinct expression (the
+reviewer's R3 probe — inline re-exposure at `upholstery_orders_query.py:496`
+— must redden its row; it left all 27 green). Fixtures are ORM `Item`
+instances, never `SimpleNamespace` (charter rule 3 / phase-3 N16).
+
+**S2 — row-report content (L4):** each refusal test asserts the offending
+`client_id`s appear in the report AND asserts its OWN class's identity in a
+message that carries only that class (or asserts the class-specific line).
+The reviewer's R2 probe (strip the ids) must redden.
+
+**S3 — three more harness rows:** `PUT /items`, `PATCH /items/{id}`,
+`POST /items/find-or-create` each get the end-to-end 422 row through the
+TestClient harness (the reviewer already proved the behavior correct — ship
+the evidence).
+
+**S4 — parametrize the case tables:** the migration test file's for-loops
+become parametrized rows with D23 authority-naming ids; first-failure masking
+ends.
+
+**Notes taken this cycle:** N2 the plan/D9 text corrects to "enum users at
+head = 2 (incl. the journal's snapshot column); 1 only after the squash" —
+the structural row asserts 2 at head; N4 the idempotency row loses its second
+sufficient cause and re-runs the post-conditions on the second pass; N5 the
+manual-valuation survival row asserts IDENTITY (client_id), not count; N6 an
+intermediate state assertion lands between the two downgrades; N7 the tie row
+gets its own labeled test (synthetic, per D14); N8 the drop migration's
+docstring names its real parent and `print()` becomes a logger call.
+**Not this cycle:** N3 (metadata.create_all broken repo-wide) → only-if-cheap
+ledger at approval; N9 (deploy ordering) → phase 9; the `node:table-item`
+description+summary edits → coordinator's post-approval pass.
+
+**Ledger rule:** probes 1–2 of the r1 ledger were declared against
+PRE-checkpoint baselines and probe 1's red set was incomplete — this cycle
+re-declares every row against the FINAL committed hashes with full observed
+red sets (P-I fifth/sixth/seventh ext).
+
 ## Review log
 
 (append-only)
@@ -352,3 +412,216 @@ authorized maintenance pass, as required by D19.
 
 Checkpoint and handoff follow the implementation commit. No owner decisions
 are required from this implementer session.
+
+### 2026-08-14 — reviewer r1 (Claude Opus 5) — CHANGES_REQUESTED
+
+**2 blocking, 4 should-fix, 11 notes, 1 owner card.** Perimeter verified against
+`b940309` (21 files; tree clean before and after every probe). Suite re-run
+foreground **1997 passed / 23 failed / 1 deselected** — the 23 are the phase-1
+baseline set, byte-identical, one-for-one. Ruff clean on the phase-6 perimeter
+(the 131 repo-wide errors live outside it and predate this phase). Configured DB
+at `be9dfe42a035 (head)`, journal 0 rows, legacy columns 0, zero
+`beyo_manager_phase6_*` databases. Graph read-only: 7 pending (1 new + 6 prior),
+zero adjudications.
+
+**B1 (blocking) — §10A.1 post-condition 2 is a tautology; a partial copy passes
+and the drop then destroys the money.** `_assert_postconditions`
+(`5420acc6a7b3:161-182`) compares `count(journal WHERE valuation_client_id IS NOT
+NULL)` against `count(items JOIN journal WHERE <eligibility> AND
+j.valuation_client_id IS NOT NULL)`. Both sides range over the same rows by
+construction, so the check cannot fail. R14(a)/D3 restated pc2 precisely as
+"count of ELIGIBLE non-deleted items with ≥ 1 amount that had no current
+valuation at entry" — the shipped form drops the eligible-item side entirely.
+EXECUTED on disposable `beyo_manager_rev_p6_pc2`: one eligible seeded item
+(5000/2500/euro, non-deleted, attributed), `_copy_eligible_valuations` mutated to
+`for row in rows[1:]` (baseline `bdf89d8e…`, mutant `e6ff898b…`) →
+**`alembic upgrade 5420acc6a7b3` exits 0**, journal 1 row, `item_valuations`
+**0 rows**, version advanced. `be9dfe42a035` then drops the columns and the
+amounts exist nowhere but the journal. Authority: intention §10A.1 as amended
+R14(a); plan C2; charter rule 6. **Verified correction** (executed): add an
+eligible-but-unmigrated counter to `_assert_postconditions` —
+`count(items i LEFT JOIN journal j … WHERE i.is_deleted = false AND
+{_LEGACY_AMOUNT} AND i.item_currency IS NOT NULL AND {_NON_NEGATIVE_AMOUNTS} AND
+i.created_by_id IS NOT NULL AND j.valuation_client_id IS NULL AND NOT EXISTS
+(SELECT 1 FROM item_valuations v WHERE v.item_id = i.client_id AND
+v.is_deleted = false AND v.client_id IS DISTINCT FROM j.valuation_client_id))`
+must be 0. Corrected file `8f5bf7ce…` → shipped migration tests **2 passed**
+(collision, soft-deleted and currency-only rows all still pass); corrected +
+skip mutation `6086956b…` → **exit 1**, `item money migration left 1 eligible
+item(s) unmigrated`, version rolled back to `5caae620088c`, 0 valuations. C2
+gains the row that names this mutation.
+
+**B2 (blocking) — the eligibility predicate is neither "no current valuation" nor
+"no valuation", and §10A.1(c)'s two untested rows both come out wrong.**
+`_NO_CURRENT_VALUATION` (`5420acc6a7b3:27-34`) filters on `is_deleted = false`
+only. EXECUTED on disposable `beyo_manager_rev_p6_elig` (unmutated shipped
+migration, exit 0):
+(a) an item with legacy money whose ONLY valuation is **soft-deleted** →
+journaled AND a **new current valuation created** (`ival_01M0030HRDXR8F…`). That
+is the exact outcome §10A.1(c) forbids in its own heading — "Deliberately deleted
+prices stay deleted … is **not** re-valued (the deletion is a decision somebody
+made)" — while matching the verbatim predicate printed two lines below it. The
+clause contradicts itself; see owner card 1.
+(b) an item with legacy money whose ONLY valuation is **superseded and live** →
+journaled, `valuation_client_id` NULL, **no valuation created**. The item has no
+*current* valuation (INV-V1: `superseded_at IS NULL AND is_deleted = false`), so
+§10A.1(a)'s "no current valuation at entry" makes it eligible; the shipped
+predicate treats a superseded row as blocking. Its legacy money never reaches the
+valuation surface and `be9dfe42a035` then removes it from `items`.
+Neither row exists in C1's fixture set — the shipped seed is {all-null,
+currency-only, valid, soft-deleted-item, collision}, and the prompt's own C1 list
+named "a soft-deleted-valuation item per (c)". Authority: intention §10A.1(a)/(c);
+plan C1; charter rule 2. Correction: owner card 1 settles which reading governs,
+then C1 gains one sole-predicate row per valuation state (none / current /
+superseded-only / soft-deleted-only) and the predicate is written to match.
+
+**S1 (should-fix) — C5's nine-row census is one assertion wearing nine labels.**
+`test_phase6_serializers.py:68` takes `endpoint_id` and never uses it: six rows
+call `serialize_item(_item())` with identical input. The items file's
+`customer-detail-linked-items` row calls the same `serialize_item_list` as
+`items-list`. Nothing ties a row to its endpoint. EXECUTED: re-exposing all three
+keys inline at `upholstery_orders_query.py:496` (baseline `b34e8e0e…`, mutant
+`99a34732…`) leaves **all 9 serializer rows and all 27 phase-6 unit nodes green**.
+D18 records that zero other tests depend on these keys, so these rows are the only
+arbiters this read surface will ever have. Authority: plan D4; charter rules 2, 3.
+Secondary: the fixture is a `SimpleNamespace`, not an `Item` ORM instance
+(rule 3). Correction: each row exercises its endpoint's own serialization
+expression (or asserts structurally that the module delegates to the serializer),
+and the fixture holds an ORM `Item`.
+*(Verified separately: the census itself is factually right — six `serialize_item`
+call sites plus `serialize_item_list` at `items.py:88` and
+`customers/serializers.py:35` plus `serialize_item_detail` at `items.py:144` = 9,
+and no production module references the three keys any more.)*
+
+**S2 (should-fix) — the three refusal rows never assert the row report, and the
+shared message makes the token assertion non-discriminating.** The `RuntimeError`
+(`5420acc6a7b3:206-212`) always contains all three of `P1`, `P2`, `P3`, so
+`assert "P2" in result.stderr` is satisfied by a P1-only refusal. EXECUTED:
+stripping every offending `client_id` from the message (baseline `bdf89d8e…`,
+mutant `0911d0d8…`) leaves both migration tests **green** — §10A.2's "each
+reporting its offending `client_id`s" and C1's "row report names the `client_id`"
+have no arbiter. Correction: each refusal row asserts its own seeded `client_id`
+appears in the report and that the other two predicates report empty.
+
+**S3 (should-fix) — C4's 12 rows are schema-level; 1 of 4 surfaces is proven
+end-to-end.** D13 and the review prompt put C4's rows through the TestClient
+harness with the `{"error", "ok": false}` envelope at 422; only
+`test_create_task_router_preserves_nonnull_money_into_domain_validator` does. The
+other 11 rows call `schema.model_validate` directly. Independently verified by
+reviewer probe (read-only, `scratchpad/probe_items_routes.py`): `PUT /items`,
+`PATCH /items/{id}` and `POST /items/find-or-create` all return **422** with
+exactly `{"error": "ITEM_MONEY_MOVED: item money fields moved to the
+item-valuation endpoint", "ok": false}`, and absent / present-null both pass the
+validator into the command — **no defect, missing evidence**. Correction: three
+more harness rows.
+
+**S4 (should-fix) — the enumerated case tables are for-loops inside two
+monolithic tests (D23).** `test_phase6_legacy_migration.py` has no `parametrize`
+at all: the three refusals are a `for` loop in one function and C1/C2/C3 share one
+303-line function. No id names an authority row (D23 asked for
+`10A2-row3-amount-null-currency-refuses-p1` and the like), and the first failing
+assertion masks every later row. Authority: D23; plan C1 "one fixture per row";
+charter rule 2; phase-5 P-V ext ("a monolithic test cannot discharge an
+enumerated criterion").
+
+**Notes.** N1 (P6-B) — 2 of 5 ledger baseline hashes do not match the checkpointed
+files: tasks-requests declared `9dccde99…` / actual `20cc5054…`, items-requests
+declared `0f3b5a79…` / actual `bf132dd0…`; those two records are unverifiable
+against the shipped code. Re-run here: probe 1 (delete task validator,
+`20cc5054…` → `f09c3682…`) reddens **two** nodes, not one — the declared
+`[create-task-nested-item-present-nonnull]` **plus**
+`test_create_task_router_preserves_nonnull_money_into_domain_validator`, so its
+red set is incomplete. Probe 2 (`bf132dd0…` → `c8515e21…`) reproduces its declared
+six-node red set exactly. Probes 3 (`b7fa431a…` → `808aef95…`, 3 nodes) and 5
+(`aafc1f53…` → `2d541c16…`, 1 node) reproduce **byte-identically**, hashes and red
+sets both. Added by the reviewer: neutering the shared helper
+(`bf132dd0…` → `1d9eec24…`) reddens all 8 bridge-behaviour nodes — D5's items-file
+definition-site half.
+N2 — D9's "exactly ONE remaining column user (2 → 1)" is arithmetically wrong at
+head: cold build empty → head on `beyo_manager_rev_p6_cold` (exit 0, version
+`be9dfe42a035`, 0 legacy columns) shows **two** users of `item_currency_enum`,
+`item_upholstery_requirements.currency` and the journal's `item_currency`
+snapshot. The shipped test asserts only that the upholstery user exists; it never
+enumerates the set. Plan lesson: the criterion should read "exactly one
+non-journal user".
+N3 — `Base.metadata.create_all` cannot complete on a fresh database repo-wide
+(`DuplicateTableError: relation "ix_shopify_integration_events_severity" already
+exists`) — pre-existing and unrelated to phase 6, and it vindicates D9's
+replacement of C6's "fresh metadata-create" clause. Route to the only-if-cheap
+ledger.
+N4 — the idempotency row satisfies two independent sufficient causes
+(`j.valuation_client_id IS NULL` and `_NO_CURRENT_VALUATION`), so it cannot fail
+when one breaks (charter rule 2 companion); and the second pass re-runs only
+`_copy_eligible_valuations`, never `_assert_postconditions`, so the restated pc2's
+survival across a re-run — D3's whole reason for restating it — is unexercised.
+N5 — C3's "a manually created valuation SURVIVES" is asserted as
+`count(*) == 2`, not by identity; assert `ival_manual` is present.
+N6 — C3 never asserts the intermediate state after downgrading only the drop
+migration (three columns present and NULL on every row).
+N7 — the D14 tie fixture genuinely ties (two rows, one explicit `created_at`,
+`ival_tie_z` before `ival_tie_a`) and the query orders
+`created_at DESC, client_id DESC`; but it is appended to
+`test_valuation_chain_preview_delete_and_history` rather than being its own row,
+and carries no "synthetic" label — the prompt asked for both.
+N8 — `be9dfe42a035`'s docstring says `Revises: 5caae620088c` while
+`down_revision = "5420acc6a7b3"`; and its journal count goes to `print()` rather
+than a logger. Cosmetic, but misleading inside a destructive migration.
+N9 — deploy ordering is unstated anywhere: `be9dfe42a035` drops columns the
+previous release's ORM still selects, so an old process surviving the migration
+500s on every item read. One operations line, phase 9.
+N10 — the journal node carries no edges (no `writes_to item_valuations`, no
+`reads_from items`); additive-minimal is defensible, but the read/write boundary
+that phase-5 review r1 N6 filed for `set_item_valuation` is absent here too.
+N11 (P6-C, reconciled) — 29 new collected nodes = 18 bridge + 9 serializer + 2
+migration; the phase-5 tie row is an assertion inside an existing test and adds 0
+to collection, which reconciles "29 focused + 1 tie-breaker" with "+29 collected";
+1991 + 29 = 2020 selected ✓. `items` 479 → 480 → **481** after the reviewer's own
+full-suite run — the known suite-wide residue class (master plan §10), not
+phase-6 tests.
+
+**Verified correct (specifically).** P6-A: the `item_upholstery_requirement.py`
+change is exactly the R2-1 `create_type` flip (one line, `False` → `True`) and it
+is now the only model declaring the type; the drop migration's downgrade re-adds
+`item_currency` with `create_type=False`; cold build empty → head exits 0 with the
+enum intact and the journal present at 0 rows. The five write-path files beyond
+the prompt fence remove only the three-key writes (verified line by line) and
+`Item.__table__` no longer carries the columns. The bridge raises
+`beyo_manager.errors.validation.ValidationError`, a `DomainError(Exception)` and
+not a `ValueError`, so pydantic cannot wrap it — D1 is met by construction, and
+all four surfaces produce the exact message and envelope end-to-end. All four
+router bodies retain the three keys (D6). Pre-flight P1/P2/P3 all abort before any
+write and persist nothing (journal absent, 0 valuations) — structurally, the
+refusals precede `_create_journal`. Downgrade restores all three columns
+byte-identically on all four journaled rows including the soft-deleted and
+collision ones; the journal is dropped afterwards. The collision row is journaled
+with `valuation_client_id` NULL and its existing valuation untouched. The mapping
+is byte-equal on all three pairs. `routers/README.md` has zero residual mentions.
+Graph: the journal node's two evidence spans (45-75, 200-243) are exact and every
+claim holds in both directions; all five prior edge spans still land exactly
+(39-44 / 47-52 / 55-60 / 72-78 / 106-110 — `set_item_valuation.py` untouched this
+phase, last modified at `8b4ac06`); the `node:table-item` description edit is
+correctly LEFT to the coordinator per D19.
+
+**Anchor-spans service (7 pending items, for the coordinator's post-approval
+pass).** All exact and unchanged except one summary drift:
+`node:table-item-valuation-migration-journal` — 45-75 and 200-243, both exact.
+`node:table-item` — span `item.py:1-60` still valid, but the summary's "category
+snapshot at :51" drifted to **:46** (the five removed lines) and the phrase
+"legacy money columns" is now false; both belong to the same §8 maintenance edit
+as the "until phase 6's migration" sentence.
+The five `set_item_valuation` edges — `table-production-cost-group` 39-44,
+`table-production-cost-basis-version` 47-52, `table-cost-model-version` 55-60,
+`table-cost-model-term` 72-78, `table-item` 106-110: all re-verified exact.
+
+**Lessons for the plans.** (i) A post-condition whose two sides are built from the
+same construction is a tautology — a criterion mandating an in-migration
+post-condition owes a row naming the mutation that must abort it (extends P-J's
+non-vacuity rule from tests to production guards). (ii) A parametrize id is a
+label, not a probe: when the parameter is not consumed by the test body, N rows
+are one row (P-V ext) — an enumerated census criterion should require that each
+row's expression differ. (iii) An intention clause whose prose and its own
+"verbatim" predicate disagree cannot be discharged by "follow it verbatim"; the
+projection's decidability pass should reject a clause where the stated intent and
+the given predicate produce different rows. (iv) A refusal criterion naming a row
+report owes an assertion on the report's contents, not on its identity token —
+especially when one message carries every identity.
