@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 from beyo_manager.domain.item_economics.serializers import (
     serialize_item_cost_result,
@@ -68,3 +70,59 @@ def test_budget_status_worker_surface_excludes_money() -> None:
     assert "variance_cost_minor" not in payload
     assert "evaluation_id" not in payload
     assert "item_id" not in payload
+
+
+@pytest.mark.parametrize(
+    ("authority_row", "status"),
+    [
+        ("P-V-major-category", EconomicsStatusEnum.ITEM_MISSING_MAJOR_CATEGORY),
+        ("P-V-no-cost-group", EconomicsStatusEnum.NOT_CONFIGURED_NO_COST_GROUP),
+        ("P-V-ambiguous-cost-group", EconomicsStatusEnum.NOT_CONFIGURED_AMBIGUOUS_COST_GROUP),
+        ("P-V-no-basis-version", EconomicsStatusEnum.NOT_CONFIGURED_NO_BASIS_VERSION),
+        ("P-V-no-cost-model-version", EconomicsStatusEnum.NOT_CONFIGURED_NO_COST_MODEL_VERSION),
+        ("P-V-item-unvalued", EconomicsStatusEnum.ITEM_UNVALUED),
+        ("P-V-expected-price", EconomicsStatusEnum.ITEM_MISSING_EXPECTED_PRICE),
+        ("P-V-purchase-cost", EconomicsStatusEnum.ITEM_MISSING_PURCHASE_COST),
+        ("P-V-currency", EconomicsStatusEnum.CURRENCY_MISMATCH),
+        ("P-V-not-evaluated", EconomicsStatusEnum.NOT_EVALUATED),
+        ("P-V-infeasible", EconomicsStatusEnum.INFEASIBLE),
+        ("P-V-ok", EconomicsStatusEnum.OK),
+    ],
+    ids=[
+        "P-V-major-category",
+        "P-V-no-cost-group",
+        "P-V-ambiguous-cost-group",
+        "P-V-no-basis-version",
+        "P-V-no-cost-model-version",
+        "P-V-item-unvalued",
+        "P-V-expected-price",
+        "P-V-purchase-cost",
+        "P-V-currency",
+        "P-V-not-evaluated",
+        "P-V-infeasible",
+        "P-V-ok",
+    ],
+)
+def test_c7_serializes_each_shipped_status_exactly(authority_row, status) -> None:
+    assert authority_row.startswith("P-V-")
+    payload = serialize_task_budget_status(
+        SimpleNamespace(
+            status=status,
+            item_binding="detached",
+            actual_worker_seconds=None,
+            actual_worker_minutes=None,
+            remaining_worker_minutes=None,
+            percent_consumed=None,
+            variance_worker_minutes=None,
+            production_budget_minor=None,
+            allowed_worker_minutes=None,
+            consumed_cost_minor=None,
+            variance_cost_minor=None,
+            evaluation_id=None,
+            item_id=None,
+            result=None,
+        ),
+        include_monetary=False,
+    )
+
+    assert payload["status"] == status.value

@@ -507,3 +507,19 @@ state assertion, never exit codes).
   them), and the R2-N2 hardening file untouched despite being in the
   fence. r1b prompt:
   `prompts/implementer/2026-08-14_phase8_implement_r1b.md`.
+
+- **2026-08-14 — implementation-executor / phase 8 implementer r1b: IMPLEMENTED.**
+  Added the single head migration `c1d2e3f4a5b6` for the native
+  `task_type_enum` label and upgraded the configured development database.
+  The `pg_enum` state query returned `process_item_cost_result`, and Alembic
+  reports `c1d2e3f4a5b6 (head)`. Added migration-state, result lifecycle,
+  projection-isolation, replay/upsert, lifetime-total, total-admission,
+  vocabulary, and worker/route wiring coverage; the phase-7 R2-N2 assertion
+  now checks exactly one evaluation-committed event. The final foreground
+  non-E2E run was 2111 passed / 23 failed / 1 deselected; the 23 failure IDs
+  are the phase-1 baseline set. The graph was read-only this cycle as required;
+  the migration architecture note is recorded in the handoff rather than
+  changing the held graph delta. `alembic check` still reports the three
+  pre-existing metadata drift operations for unrelated indexes/constraint.
+  Mutation probes are recorded individually as deferred in the handoff because
+  this session did not safely execute them in a disposable worktree.

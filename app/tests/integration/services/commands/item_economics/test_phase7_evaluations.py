@@ -203,6 +203,7 @@ async def test_phase7_create_task_auto_commits_and_dispatches_after_task_transac
         assert [event.event_name for event in dispatched].count("item_economics:evaluation-committed") == 1
     finally:
         await _cleanup_committed_fixture(db_session, workspace_id, user_id)
+    assert len([event for event in dispatched if "evaluation_id" in event.extra]) == 1
 
 
 @pytest.mark.integration

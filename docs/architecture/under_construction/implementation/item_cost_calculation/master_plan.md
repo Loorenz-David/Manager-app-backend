@@ -911,14 +911,17 @@ Charter rules 1–11½ imported wholesale. Project-specific additions:
   pre-existing failures are enumerated in the phase-1 Review log (S2 correction);
   later phases compare against that list, not the implementer's original
   sandbox-invalidated numbers.
-- **Current head (updated at phase-7 closeout, 2026-08-14):** `be9dfe42a035`
-  — UNCHANGED by phase 7 (the phase adds no migration; chain … →
-  `5caae620088c` (4B) → `5420acc6a7b3` (data migration) → `be9dfe42a035`).
+- **Current head (updated at phase-8 r1b, 2026-08-14):** `c1d2e3f4a5b6`
+  — phase 8 r1b adds the enum-label migration after `be9dfe42a035`:
+  `c1d2e3f4a5b6_add_process_item_cost_result_task_type.py`.
   **Suite baseline at phase-7 closeout: 2076 / 23 (byte-identical phase-1
   list) / 1 deselected = 2099 selected** (reviewer-measured foreground, +39
   over phase-6's 2012/23/1 = 2035, reconciled exactly: +38 phase-7
   integration + 1 translation row). Earlier head/baseline mentions in this
   section are historical records.
+- **Phase-8 r1b foreground:** 2111 passed / 23 failed / 1 deselected = 2135
+  selected, with the 23 failure IDs matching the phase-1 baseline list; the
+  added phase-8 tests account for the increase from the phase-7 baseline.
 - **Migrations:** `APP_ENV=development alembic upgrade head` (= `make db-migrate`);
   autogenerate via `APP_ENV=development alembic revision --autogenerate -m "<msg>"`
   then hand-fix per `30_migrations` (partial uniques via `postgresql_where`, idiom
