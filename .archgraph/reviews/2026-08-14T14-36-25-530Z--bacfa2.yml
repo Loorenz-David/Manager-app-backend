@@ -1,0 +1,97 @@
+reviewId: 2026-08-14T14-36-25-530Z--bacfa2
+reviewedItemIds:
+  - node:table-item-valuation-migration-journal
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-production-cost-group
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-production-cost-basis-version
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-cost-model-version
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-cost-model-term
+  - node:table-item
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-item
+decisions:
+  - itemId: node:table-item-valuation-migration-journal
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+            symbol: _create_journal/_journal_legacy_rows
+            startLine: 45
+            endLine: 75
+          to:
+            path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+            symbol: _create_journal/_journal_legacy_rows
+            startLine: 44
+            endLine: 74
+        - index: 1
+          from:
+            path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+            symbol: upgrade/downgrade
+            startLine: 200
+            endLine: 243
+          to:
+            path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+            symbol: upgrade/downgrade
+            startLine: 203
+            endLine: 246
+    rationale: Recorded by the phase-6 implementer; both evidence claims verified in
+      both migration directions by reviews r1 AND r2; spans shifted by fix-r1's
+      +23 lines — corrected per the r2 anchor service (44-74, 203-246), re-read
+      at adjudication.
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Phase-5 r1 N6 read-surface delta; span 39-44 verified exact by
+      phase-5 r1/r3 and re-verified by phase-6 r1 (file untouched since
+      8b4ac06).
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Same verification chain; span 47-52 exact, file untouched.
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Same verification chain; span 55-60 exact, file untouched.
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-cost-model-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Same verification chain; span 72-78 exact, file untouched.
+  - itemId: node:table-item
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: The claim was accurate when recorded, but phase 6 dropped the legacy
+      money columns and moved the category snapshot to :46 — the node's
+      immutable evidence SUMMARY is now factually false ('legacy money columns',
+      ':51'). Rejecting to re-record with accurate post-phase-6 evidence in the
+      same pass (both reviewers routed the description+summary correction to
+      this pass; summaries cannot be edited).
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-item
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: Incident to the rejected node; the read claim itself is true (span
+      106-110 verified) and is re-recorded against the re-recorded node in the
+      same pass.
+retiredItemIds:
+  - node:table-item
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-item
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T14:36:25.530Z
+graphRevisionBefore: 4eb1d8d0d2ba50466e1c54e9f0b76f5d268e7773e3cab802b0499b33438ccc9e
+graphRevisionAfter: 218ade7733404017c73ee6585e4d7785671e4abc0c42ba54079a533fa157cc4d
+evidenceSummary: 8 evidence entries across 3 files; no drift detected
+humanInstruction: "Phase-6 post-approval pass under master plan §8 standing
+  owner authorization: journal node promoted with the r2-corrected spans
+  (symbols preserved); the four config-table read edges promoted
+  (double-verified, files untouched); table-item + its read edge REJECTED
+  because the node's immutable evidence summary is now factually false post-drop
+  — both re-recorded with accurate evidence in the same pass."
+reviewTokenCorrelation: 65eb1df583fa

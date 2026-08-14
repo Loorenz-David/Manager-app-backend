@@ -3794,27 +3794,6 @@ nodes:
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
     updatedAt: 2026-08-14T10:11:46.136Z
-  - id: table-item
-    type: table
-    name: items
-    description: "The legacy item row: identity, category snapshots
-      (item_major_category_snapshot String(64) nullable), position, and — until
-      phase 6's migration — the legacy money columns (item_value_minor,
-      item_cost_minor, item_currency) that ItemValuation supersedes."
-    metadata:
-      evidence:
-        - path: app/beyo_manager/models/tables/items/item.py
-          startLine: 1
-          endLine: 60
-          summary: "The Item model: identity, category snapshot at :51 (String(64),
-            nullable), legacy money columns."
-          inferenceReason: The item-economics domain reads this table (valuation
-            attachment, category snapshot); phase 6's legacy migration rewrites
-            its money columns — the node is needed to record both.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
   - id: table-item-valuation-migration-journal
     type: table
     name: item_valuation_migration_journal
@@ -3831,6 +3810,28 @@ nodes:
       evidence:
         - path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
           symbol: _create_journal/_journal_legacy_rows
+          startLine: 44
+          endLine: 74
+          summary: The migration creates item_valuation_migration_journal with the legacy
+            amount/currency fields and valuation_client_id, then inserts every
+            item with any non-null legacy money field using an idempotent
+            conflict guard.
+          inferenceReason: A dedicated table with the legacy snapshot and
+            created-valuation identity is an architectural persistence boundary
+            for reversible migration state, not ordinary application data.
+        - path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+          symbol: upgrade/downgrade
+          startLine: 203
+          endLine: 246
+          summary: Upgrade performs preflight refusals before journal writes, copies
+            eligible valuations, and downgrade restores item money from the
+            journal, deletes only journal-linked valuations, and drops the
+            journal.
+          inferenceReason: The ordered upgrade/downgrade behavior establishes the journal
+            as the authoritative rollback mechanism for this migration window.
+      evidenceHistory:
+        - path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
+          symbol: _create_journal/_journal_legacy_rows
           startLine: 45
           endLine: 75
           summary: The migration creates item_valuation_migration_journal with the legacy
@@ -3840,6 +3841,7 @@ nodes:
           inferenceReason: A dedicated table with the legacy snapshot and
             created-valuation identity is an architectural persistence boundary
             for reversible migration state, not ordinary application data.
+          supersededAt: 2026-08-14T14:36:25.513Z
         - path: app/migrations/versions/5420acc6a7b3_migrate_item_money_to_valuations.py
           symbol: upgrade/downgrade
           startLine: 200
@@ -3850,10 +3852,35 @@ nodes:
             journal.
           inferenceReason: The ordered upgrade/downgrade behavior establishes the journal
             as the authoritative rollback mechanism for this migration window.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T14:36:25.513Z
+    origin: human_confirmed
     confidence: 0.98
     createdAt: 2026-08-14T11:38:21.965Z
-    updatedAt: 2026-08-14T11:38:21.965Z
+    updatedAt: 2026-08-14T14:36:25.513Z
+  - id: table-item
+    type: table
+    name: items
+    description: "The item row: identity, category snapshots
+      (item_major_category_snapshot String(64) nullable at :46), position and
+      lifecycle fields. Carries NO money columns — phase 6 (migration
+      `be9dfe42a035`) dropped the legacy item_value_minor / item_cost_minor /
+      item_currency; item money lives exclusively in item_valuations (R1-3,
+      §10.2)."
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/items/item.py
+          startLine: 1
+          endLine: 87
+          summary: "The Item model post-phase-6: identity, category snapshot at :46
+            (String(64), nullable), no money columns."
+          inferenceReason: The item-economics domain reads this table (valuation
+            attachment, category snapshot); re-recorded at phase-6 closeout
+            because the prior node's evidence described the pre-drop shape
+            (money columns, snapshot at :51).
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T14:36:42.726Z
+    updatedAt: 2026-08-14T14:36:42.726Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -6989,25 +7016,6 @@ edges:
     updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: command-item-economics-set-item-valuation
     relationshipType: reads_from
-    targetNodeId: table-item
-    description: The valuation set command resolves the target item (and its
-      category snapshot) before writing.
-    metadata:
-      evidence:
-        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
-          startLine: 106
-          endLine: 110
-          summary: select(Item) by workspace + item client_id resolves the item the
-            valuation attaches to.
-          inferenceReason: "Phase-5 review r1 N6: the command's read boundary was
-            invisible in the recorded delta; the preview computation reads five
-            tables."
-    origin: ai_inferred
-    confidence: 0.92
-    createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
-  - sourceNodeId: command-item-economics-set-item-valuation
-    relationshipType: reads_from
     targetNodeId: table-production-cost-group
     description: The preview loader reads the workspace's active cost groups for
       §7C.2 selection.
@@ -7020,10 +7028,10 @@ edges:
             _load_preview_inputs.
           inferenceReason: "Review r1 N6: the preview's read surface was missing from the
             delta."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T14:36:25.513Z
   - sourceNodeId: command-item-economics-set-item-valuation
     relationshipType: reads_from
     targetNodeId: table-production-cost-basis-version
@@ -7037,10 +7045,10 @@ edges:
           summary: select(ProductionCostBasisVersion) in _load_preview_inputs.
           inferenceReason: "Review r1 N6: the preview's read surface was missing from the
             delta."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T14:36:25.513Z
   - sourceNodeId: command-item-economics-set-item-valuation
     relationshipType: reads_from
     targetNodeId: table-cost-model-version
@@ -7053,10 +7061,10 @@ edges:
           summary: select(CostModelVersion) in _load_preview_inputs.
           inferenceReason: "Review r1 N6: the preview's read surface was missing from the
             delta."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T14:36:25.513Z
   - sourceNodeId: command-item-economics-set-item-valuation
     relationshipType: reads_from
     targetNodeId: table-cost-model-term
@@ -7071,7 +7079,26 @@ edges:
             _load_preview_inputs.
           inferenceReason: "Review r1 N6: the preview's read surface was missing from the
             delta; §11A.4 row 8 requires the term rows."
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T10:12:40.934Z
-    updatedAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T14:36:25.513Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-item
+    description: The valuation set command resolves the target item (and its
+      category snapshot) before writing.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 106
+          endLine: 110
+          summary: select(Item) by workspace + item client_id resolves the item the
+            valuation attaches to.
+          inferenceReason: Re-recorded with the re-recorded table-item node at phase-6
+            closeout; span verified by phase-5 r1/r3 and phase-6 r1 (file
+            untouched since 8b4ac06).
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T14:36:42.726Z
+    updatedAt: 2026-08-14T14:36:42.726Z
