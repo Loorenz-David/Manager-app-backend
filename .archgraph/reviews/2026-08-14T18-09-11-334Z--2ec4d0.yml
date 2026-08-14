@@ -1,0 +1,122 @@
+reviewId: 2026-08-14T18-09-11-334Z--2ec4d0
+reviewedItemIds:
+  - node:endpoint-item-economics-commit-evaluation
+  - edge:endpoint-item-economics-commit-evaluation--accepts-->command-item-economics-commit-item-cost-evaluation
+  - edge:endpoint-item-economics-commit-evaluation--returns-->table-item-cost-evaluation
+  - node:endpoint-item-economics-list-evaluations
+  - edge:endpoint-item-economics-list-evaluations--accepts-->command-item-economics-list-task-evaluations
+  - edge:endpoint-item-economics-list-evaluations--returns-->table-item-cost-evaluation
+  - node:endpoint-item-economics-create-projection
+  - edge:endpoint-item-economics-create-projection--accepts-->command-item-economics-create-item-cost-projection
+  - edge:endpoint-item-economics-create-projection--returns-->table-item-cost-evaluation
+  - node:endpoint-item-economics-delete-projection
+  - edge:endpoint-item-economics-delete-projection--accepts-->command-item-economics-delete-item-cost-projection
+  - edge:endpoint-item-economics-delete-projection--returns-->table-item-cost-evaluation
+  - node:endpoint-item-economics-promote-projection
+  - edge:endpoint-item-economics-promote-projection--accepts-->command-item-economics-promote-item-cost-projection
+  - edge:endpoint-item-economics-promote-projection--returns-->table-item-cost-evaluation
+decisions:
+  - itemId: node:endpoint-item-economics-commit-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 'Route verified:
+      @router.post("/tasks/{task_client_id}/evaluations/commit") at :295,
+      handler :296; ADMIN/MANAGER gate per the C13-arbitrated _ROUTES table;
+      router file byte-identical to the implement baseline (87fcb318…).'
+  - itemId: edge:endpoint-item-economics-commit-evaluation--accepts-->command-item-economics-commit-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches commit_item_cost_evaluation via run_service;
+      verified at :295-307.
+  - itemId: edge:endpoint-item-economics-commit-evaluation--returns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Returns the serialized evaluation envelope
+      (serialize_item_cost_evaluation over the committed row).
+  - itemId: node:endpoint-item-economics-list-evaluations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 'Route verified: @router.get("/tasks/{task_client_id}/evaluations")
+      at :310, handler :311; in _ROUTES with both role gates.'
+  - itemId: edge:endpoint-item-economics-list-evaluations--accepts-->command-item-economics-list-task-evaluations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches list_task_evaluations; verified at :310-321.
+      Target node retyped `projection` in batch 3 (id unchanged).
+  - itemId: edge:endpoint-item-economics-list-evaluations--returns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Returns {evaluations, projections} — both lists are serialized
+      item_cost_evaluations rows.
+  - itemId: node:endpoint-item-economics-create-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 'Route verified: @router.post("/tasks/{task_client_id}/projections")
+      at :324, handler :325; in _ROUTES.'
+  - itemId: edge:endpoint-item-economics-create-projection--accepts-->command-item-economics-create-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches create_item_cost_projection; verified at :324-336.
+  - itemId: edge:endpoint-item-economics-create-projection--returns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Returns the serialized projection row (an item_cost_evaluations row,
+      kind=projection).
+  - itemId: node:endpoint-item-economics-delete-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 'Route verified: @router.delete("/projections/{client_id}") at :339,
+      handler :340; in _ROUTES.'
+  - itemId: edge:endpoint-item-economics-delete-projection--accepts-->command-item-economics-delete-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches delete_item_cost_projection; verified at :339-345.
+  - itemId: edge:endpoint-item-economics-delete-projection--returns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Returns the soft-deleted projection's serialized row.
+  - itemId: node:endpoint-item-economics-promote-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Route verified: @router.post(\"/projections/{client_id}/promote\")
+      at :348, handler :349, file ends :354 (r1 reviewer's sampled item,
+      re-confirmed); in _ROUTES."
+  - itemId: edge:endpoint-item-economics-promote-projection--accepts-->command-item-economics-promote-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches promote_item_cost_projection with {client_id} only
+      (the dead task_client_id read was deleted in fix r1); verified at
+      :348-354.
+  - itemId: edge:endpoint-item-economics-promote-projection--returns-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Returns the newly committed evaluation's serialized row.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T18:09:11.334Z
+graphRevisionBefore: 4ddb874ee7b6d3367ad27bdfcc9079e9695f58e7ab3d3bdf6928b9a11bd7c6e9
+graphRevisionAfter: eacd8d34596fb2738b6d45fe2d21164f1e7e4f0a219a3b0ea9d565b5cb24b5f9
+evidenceSummary: 15 evidence entries across 1 file; no drift detected
+humanInstruction: "Phase-7 post-approval graph pass, batch 4/5: the five
+  endpoint nodes and their accepts/returns edges, promoted after route-by-route
+  verification against the router file (byte-identical to the implement
+  baseline)."
+reviewTokenCorrelation: dfce78ca8bb9

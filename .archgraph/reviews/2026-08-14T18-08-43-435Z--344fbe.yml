@@ -1,0 +1,187 @@
+reviewId: 2026-08-14T18-08-43-435Z--344fbe
+reviewedItemIds:
+  - node:command-item-economics-promote-item-cost-projection
+  - edge:command-item-economics-promote-item-cost-projection--reads_from-->table-task
+  - edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation
+  - edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+  - edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-valuation
+  - edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation
+  - edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+  - edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-valuation
+  - node:command-item-economics-list-task-evaluations
+decisions:
+  - itemId: node:command-item-economics-promote-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 19
+            endLine: 57
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 19
+            endLine: 54
+    rationale: "Re-derived from the full file (now 54 lines; fix r1 deleted the dead
+      3-line task_client_id branch): loads a live PROJECTION, calls the shared
+      helper with its terms, promoted_from_id, audit_event=.promoted, default
+      kind=COMMITTED — so promotion IS the commit procedure (admission, locks,
+      mirror). Old anchor end (57) exceeded EOF; corrected 19-54."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Via the helper's _load_task_and_primary (task FOR UPDATE admission).
+      Body span re-set 20-54 after the -3 deletion.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Projection lookup (kind=PROJECTION, is_deleted=false,
+      workspace-scoped). Span 20-54.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Source terms loaded ordered before the helper call. Span 20-54.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Helper resolves the current valuation FOR UPDATE for the mirror
+      (kind=COMMITTED on promotion). Span 20-54.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Helper S1/S2/S3 on the committed chain with promoted_from_id. Span 20-54.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Helper writes the promoted evaluation's term snapshots. Span 20-54.
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 22
+            endLine: 50
+          to:
+            path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+            symbol: promote_item_cost_projection
+            startLine: 20
+            endLine: 54
+    rationale: Promotion mirrors changed figures (kind=COMMITTED passes the F1 gate)
+      — r1 reviewer verified this edge's claim independently. Span 20-54.
+  - itemId: node:command-item-economics-list-task-evaluations
+    decision: edit
+    editedFields:
+      type: projection
+    rationale: "Review-r1 N5 adjudicated: this is a read service under
+      services/queries/; the graph already types read models as `projection`
+      (projection-list-workers-totals, projection-worker-daily-step-breakdown),
+      so `command` was the inconsistent choice. Type corrected; promote follows
+      in the next batch."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T18:08:43.435Z
+graphRevisionBefore: 7be88d41cc794b169552336378b3a99f2ed65b727c30e81a224a0f5c8a791a2f
+graphRevisionAfter: 4ddb874ee7b6d3367ad27bdfcc9079e9695f58e7ab3d3bdf6928b9a11bd7c6e9
+evidenceSummary: 9 evidence entries across 2 files; no drift detected
+humanInstruction: "Phase-7 post-approval graph pass, batch 3/5:
+  promote-projection items with post-deletion anchor corrections (node end
+  exceeded EOF), plus the N5 adjudication — list_task_evaluations retyped to
+  `projection` matching the graph's existing read-model convention."
+reviewTokenCorrelation: c97ae291874a

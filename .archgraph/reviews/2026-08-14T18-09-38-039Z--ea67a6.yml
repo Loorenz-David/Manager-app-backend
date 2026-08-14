@@ -1,0 +1,87 @@
+reviewId: 2026-08-14T18-09-38-039Z--ea67a6
+reviewedItemIds:
+  - node:event-item-economics-evaluation-committed
+  - node:command-item-economics-list-task-evaluations
+  - edge:command-item-economics-list-task-evaluations--reads_from-->table-task
+  - edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation
+  - edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation-term
+  - node:table-item
+  - edge:command-item-economics-set-item-valuation--reads_from-->table-item
+decisions:
+  - itemId: node:event-item-economics-evaluation-committed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Event exists and matches the registered §6.5 name: built via
+      build_workspace_event(\"item_economics:evaluation-committed\") in the
+      kind-gated block (commit_item_cost_evaluation.py:386-392), dispatched
+      after the transaction by the explicit commands and via create_task's
+      pending_events on the auto path (R16-4)."
+  - itemId: node:command-item-economics-list-task-evaluations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived from the full file (89 lines): task existence check,
+      committed chain (committed_at DESC, client_id DESC), projections
+      (created_at DESC, client_id DESC), terms grouped (created_at ASC,
+      client_id ASC), per-row rederive with ERROR 'integrity check failed' log
+      and the read still rendering — exactly the §6.5 D15/D16 pins. Type
+      corrected to `projection` in the prior batch (read-model convention)."
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: select(Task) existence/workspace check at the top of the read;
+      verified in-file.
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Two selects (committed + projections), workspace/task/kind/is_deleted
+      filtered, pinned orderings; verified in-file.
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Terms loaded in one IN() query, ordered (evaluation_id, created_at,
+      client_id); verified in-file.
+  - itemId: node:table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-record from phase-6 closeout, re-verified today: item.py is 87
+      lines, carries NO money columns post-drop, item_major_category_snapshot at
+      :46; file untouched by phase 7."
+  - itemId: edge:command-item-economics-set-item-valuation--reads_from-->table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+            startLine: 106
+            endLine: 110
+          to:
+            path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+            startLine: 55
+            endLine: 65
+    rationale: Claim holds; address moved by the phase-7 D19 extraction (file now 89
+      lines, old anchor 106-110 past EOF). The select(Item) by workspace +
+      client_id + is_deleted=false now sits at set_item_valuation.py:55-65;
+      verified by reading the shipped file.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T18:09:38.039Z
+graphRevisionBefore: eacd8d34596fb2738b6d45fe2d21164f1e7e4f0a219a3b0ea9d565b5cb24b5f9
+graphRevisionAfter: b0f9127d0a0b6c48f57afe5795afa46a71384b665645ddfffa856f7fbbf8c6f2
+evidenceSummary: 7 evidence entries across 4 files; no drift detected
+humanInstruction: "Phase-7 post-approval graph pass, batch 5/5: event node, the
+  retyped evaluations read + its edges, and the two phase-6 re-records — the
+  set-item-valuation edge promoted with its anchor moved to the post-refactor
+  select site (:55-65)."
+reviewTokenCorrelation: 85fcebde03cd

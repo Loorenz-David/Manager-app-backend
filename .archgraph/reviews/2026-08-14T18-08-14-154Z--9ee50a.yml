@@ -1,0 +1,83 @@
+reviewId: 2026-08-14T18-08-14-154Z--9ee50a
+reviewedItemIds:
+  - node:command-item-economics-create-item-cost-projection
+  - edge:command-item-economics-create-item-cost-projection--reads_from-->table-task
+  - edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation
+  - edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+  - edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation
+  - edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+  - node:command-item-economics-delete-item-cost-projection
+  - edge:command-item-economics-delete-item-cost-projection--reads_from-->table-item-cost-evaluation
+  - edge:command-item-economics-delete-item-cost-projection--writes_to-->table-item-cost-evaluation
+decisions:
+  - itemId: node:command-item-economics-create-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived from the full file (82 lines, untouched by fix r1):
+      parses source mode (committed|projection|scratch), loads source
+      evaluation+terms per mode, calls the shared helper with kind=PROJECTION +
+      audit_event=.projected; post-F1 the mirror cannot fire for it (kind gate
+      verified)."
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: The shared helper's _load_task_and_primary runs for every call (task
+      admission), so projection creation reads tasks; select in the same call
+      chain.
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Source lookup: select(ItemCostEvaluation) for committed (current,
+      superseded_at IS NULL) and projection modes; verified in-file."
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Source terms loaded ordered (created_at, client_id) when a source row
+      exists; verified in-file.
+  - itemId: edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Helper S2 inserts the kind=PROJECTION row (S1/S3 skipped under the
+      kind gate); verified.
+  - itemId: edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Helper writes the projection's term snapshot rows; verified.
+  - itemId: node:command-item-economics-delete-item-cost-projection
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived from the full file (35 lines, untouched): loads a live
+      PROJECTION row, soft-deletes (is_deleted/deleted_at/deleted_by_id), audits
+      item_cost_evaluation.deleted; never touches committed rows (kind filter in
+      the select)."
+  - itemId: edge:command-item-economics-delete-item-cost-projection--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: select(ItemCostEvaluation) filtered kind=PROJECTION,
+      is_deleted=false; verified.
+  - itemId: edge:command-item-economics-delete-item-cost-projection--writes_to-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Soft-delete field writes + flush on the projection row; verified.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T18:08:14.154Z
+graphRevisionBefore: a6c6a58ef66a87cf5e5a0ddf70dd01794696b04a938c0cdf5d4e24970c73eacb
+graphRevisionAfter: 7be88d41cc794b169552336378b3a99f2ed65b727c30e81a224a0f5c8a791a2f
+evidenceSummary: 9 evidence entries across 2 files; no drift detected
+humanInstruction: "Phase-7 post-approval graph pass, batch 2/5: create/delete
+  projection commands + edges, promoted after full-file re-derivation (files
+  untouched by fix r1; anchors verified current)."
+reviewTokenCorrelation: fa206e9cb588

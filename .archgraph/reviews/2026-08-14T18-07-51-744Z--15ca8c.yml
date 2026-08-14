@@ -1,0 +1,279 @@
+reviewId: 2026-08-14T18-07-51-744Z--15ca8c
+reviewedItemIds:
+  - node:command-item-economics-commit-item-cost-evaluation
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task-item
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item-valuation
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-group
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-basis-version
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-version
+  - edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-term
+  - edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation
+  - edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation-term
+  - edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-valuation
+  - edge:command-item-economics-commit-item-cost-evaluation--produces-->event-item-economics-evaluation-committed
+decisions:
+  - itemId: node:command-item-economics-commit-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 187
+            endLine: 388
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 187
+            endLine: 393
+    rationale: "Re-derived: helper def at :187, returns (evaluation, pending_events)
+      at :393; locks task FOR UPDATE (:111-ff via _load_task_and_primary),
+      valuation FOR UPDATE, config FOR SHARE; calculator before writes;
+      S1/S2/S3; kind-gated mirror/history/event (post-fix gate verified).
+      Description accurate for the commit path. Anchor +5 (fix docstring +4,
+      closeout R2-S1 +1)."
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Body calls _load_task_and_primary (select Task FOR UPDATE at :106-ff
+      of same file). Span shifted +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: PRIMARY TaskItem resolved in _load_task_and_primary, called from the
+      span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Item row loaded via _load_task_and_primary from the span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: _load_current_valuation (FOR UPDATE, R16-2) called at step 4 within
+      the span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: _load_live_inputs loads groups for selection, called from the span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Basis versions loaded FOR SHARE (read=True at :149-region) via
+      _load_live_inputs. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Model versions loaded FOR SHARE via _load_live_inputs. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Model terms loaded via _load_live_inputs for calculator input +
+      purchase-term presence. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: S1 close (:272-292 region), S2 insert (:298-ff), S3 back-link inside
+      the span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Term snapshot rows inserted from calculator outputs inside the span. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 203
+            endLine: 355
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 208
+            endLine: 360
+    rationale: Mirror write via write_item_valuation_chain_in_session at :347-360,
+      NOW kind-gated (COMMITTED only, fix r1 F1) — commit carries kind=COMMITTED
+      so the edge holds. +5.
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--produces-->event-item-economics-evaluation-committed
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 381
+            endLine: 387
+          to:
+            path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+            symbol: _commit_item_cost_evaluation_in_session
+            startLine: 386
+            endLine: 392
+    rationale: pending_events.append(build_workspace_event(... evaluation-committed
+      ...)) at :386-392, kind-gated COMMITTED; dispatched by the caller after
+      the transaction. +5.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T18:07:51.744Z
+graphRevisionBefore: 0a71061554fa2123d7e2fba7ff853c328fb1405676194dd0d2cc7f067938266c
+graphRevisionAfter: a6c6a58ef66a87cf5e5a0ddf70dd01794696b04a938c0cdf5d4e24970c73eacb
+evidenceSummary: 13 evidence entries across 1 file; no drift detected
+humanInstruction: "Phase-7 post-approval graph pass, batch 1/5: the 13
+  commit-file items, promoted with the +5 span correction (fix-r1 docstring +4,
+  closeout R2-S1 +1) under the owner's standing post-approval authorization
+  (master plan §8)."
+reviewTokenCorrelation: 790b326806c7

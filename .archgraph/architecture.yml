@@ -3877,10 +3877,10 @@ nodes:
             attachment, category snapshot); re-recorded at phase-6 closeout
             because the prior node's evidence described the pre-drop shape
             (money columns, snapshot at :51).
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T14:36:42.726Z
-    updatedAt: 2026-08-14T14:36:42.726Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - id: command-item-economics-commit-item-cost-evaluation
     type: command
     name: commit_item_cost_evaluation
@@ -3893,6 +3893,17 @@ nodes:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
           startLine: 187
+          endLine: 393
+          summary: The shared procedure locks the task and valuation/configuration inputs,
+            calculates before writes, performs evaluation S1/S2/S3, mirrors
+            changed valuation figures, writes TASK history/audit, and builds the
+            committed event.
+          inferenceReason: The procedure is the transactional command boundary for the
+            committed economic decision and its required side effects.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 187
           endLine: 388
           summary: The shared procedure locks the task and valuation/configuration inputs,
             calculates before writes, performs evaluation S1/S2/S3, mirrors
@@ -3900,10 +3911,11 @@ nodes:
             committed event.
           inferenceReason: The procedure is the transactional command boundary for the
             committed economic decision and its required side effects.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - id: command-item-economics-create-item-cost-projection
     type: command
     name: create_item_cost_projection
@@ -3921,10 +3933,10 @@ nodes:
             new projection.
           inferenceReason: The source-aware command is the write boundary for speculative
             evaluation rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - id: command-item-economics-delete-item-cost-projection
     type: command
     name: delete_item_cost_projection
@@ -3941,10 +3953,10 @@ nodes:
             row deleted, flushes, and audits the deletion.
           inferenceReason: The command is the projection-only deletion boundary; committed
             rows have no delete path.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - id: command-item-economics-promote-item-cost-projection
     type: command
     name: promote_item_cost_projection
@@ -3955,6 +3967,17 @@ nodes:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
           startLine: 19
+          endLine: 54
+          summary: The command validates workspace/liveness and optional task ownership,
+            loads frozen terms, invokes the shared committed procedure with
+            promoted_from_id, and dispatches the resulting event after the
+            transaction.
+          inferenceReason: Promotion is the committed decision boundary for a projection
+            and must share admission/locking/chain semantics.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 19
           endLine: 57
           summary: The command validates workspace/liveness and optional task ownership,
             loads frozen terms, invokes the shared committed procedure with
@@ -3962,12 +3985,13 @@ nodes:
             transaction.
           inferenceReason: Promotion is the committed decision boundary for a projection
             and must share admission/locking/chain semantics.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - id: command-item-economics-list-task-evaluations
-    type: command
+    type: projection
     name: list_task_evaluations
     description: Reads a task's committed evaluations and live projections in
       separate deterministic orders, loads immutable term snapshots, and renders
@@ -3982,10 +4006,10 @@ nodes:
             independently, rederives each snapshot, logs integrity failures, and
             returns separate evaluations/projections envelopes.
           inferenceReason: The read service is the phase-7 evaluation history/query boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - id: endpoint-item-economics-commit-evaluation
     type: endpoint
     name: POST /api/v1/item-economics/tasks/{task_client_id}/evaluations/commit
@@ -3999,10 +4023,10 @@ nodes:
           summary: The route applies the ADMIN/MANAGER gate and delegates the task path
             plus optional overrides/label to commit_item_cost_evaluation.
           inferenceReason: This is the HTTP entry point for the committed evaluation command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - id: endpoint-item-economics-list-evaluations
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/evaluations
@@ -4017,10 +4041,10 @@ nodes:
           summary: The route applies the ADMIN/MANAGER gate and delegates the task id to
             list_task_evaluations.
           inferenceReason: This is the HTTP entry point for the evaluation history query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - id: endpoint-item-economics-create-projection
     type: endpoint
     name: POST /api/v1/item-economics/tasks/{task_client_id}/projections
@@ -4034,10 +4058,10 @@ nodes:
           summary: The route applies the ADMIN/MANAGER gate and delegates source, source
             projection, overrides, and label to create_item_cost_projection.
           inferenceReason: This is the HTTP entry point for projection creation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - id: endpoint-item-economics-delete-projection
     type: endpoint
     name: DELETE /api/v1/item-economics/projections/{client_id}
@@ -4051,10 +4075,10 @@ nodes:
           summary: The route applies the ADMIN/MANAGER gate and delegates the projection
             client id to delete_item_cost_projection.
           inferenceReason: This is the HTTP entry point for projection deletion.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - id: endpoint-item-economics-promote-projection
     type: endpoint
     name: POST /api/v1/item-economics/projections/{client_id}/promote
@@ -4069,10 +4093,10 @@ nodes:
           summary: The route applies the ADMIN/MANAGER gate and delegates the projection
             client id to promote_item_cost_projection.
           inferenceReason: This is the HTTP entry point for projection promotion.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - id: event-item-economics-evaluation-committed
     type: event
     name: item_economics:evaluation-committed
@@ -4090,10 +4114,10 @@ nodes:
             the outer transaction boundary.
           inferenceReason: The event is the post-commit notification for the new economic
             decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:38.020Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -7304,6 +7328,15 @@ edges:
     metadata:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 55
+          endLine: 65
+          summary: select(Item) by workspace + item client_id resolves the item the
+            valuation attaches to.
+          inferenceReason: Re-recorded with the re-recorded table-item node at phase-6
+            closeout; span verified by phase-5 r1/r3 and phase-6 r1 (file
+            untouched since 8b4ac06).
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
           startLine: 106
           endLine: 110
           summary: select(Item) by workspace + item client_id resolves the item the
@@ -7311,10 +7344,11 @@ edges:
           inferenceReason: Re-recorded with the re-recorded table-item node at phase-6
             closeout; span verified by phase-5 r1/r3 and phase-6 r1 (file
             untouched since 8b4ac06).
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:09:38.020Z
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T14:36:42.726Z
-    updatedAt: 2026-08-14T14:36:42.726Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - sourceNodeId: endpoint-item-economics-commit-evaluation
     relationshipType: accepts
     targetNodeId: command-item-economics-commit-item-cost-evaluation
@@ -7326,10 +7360,10 @@ edges:
           endLine: 307
           summary: The route delegates directly to the phase-7 service.
           inferenceReason: The endpoint accepts the corresponding phase-7 command/query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-list-evaluations
     relationshipType: accepts
     targetNodeId: command-item-economics-list-task-evaluations
@@ -7341,10 +7375,10 @@ edges:
           endLine: 321
           summary: The route delegates directly to the phase-7 service.
           inferenceReason: The endpoint accepts the corresponding phase-7 command/query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-create-projection
     relationshipType: accepts
     targetNodeId: command-item-economics-create-item-cost-projection
@@ -7356,10 +7390,10 @@ edges:
           endLine: 336
           summary: The route delegates directly to the phase-7 service.
           inferenceReason: The endpoint accepts the corresponding phase-7 command/query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-delete-projection
     relationshipType: accepts
     targetNodeId: command-item-economics-delete-item-cost-projection
@@ -7371,10 +7405,10 @@ edges:
           endLine: 345
           summary: The route delegates directly to the phase-7 service.
           inferenceReason: The endpoint accepts the corresponding phase-7 command/query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-promote-projection
     relationshipType: accepts
     targetNodeId: command-item-economics-promote-item-cost-projection
@@ -7386,10 +7420,10 @@ edges:
           endLine: 354
           summary: The route delegates directly to the phase-7 service.
           inferenceReason: The endpoint accepts the corresponding phase-7 command/query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-commit-evaluation
     relationshipType: returns
     targetNodeId: table-item-cost-evaluation
@@ -7401,10 +7435,10 @@ edges:
           endLine: 307
           summary: The route returns the serialized evaluation/projection result.
           inferenceReason: The endpoint exposes the persisted evaluation representation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-create-projection
     relationshipType: returns
     targetNodeId: table-item-cost-evaluation
@@ -7416,10 +7450,10 @@ edges:
           endLine: 336
           summary: The route returns the serialized evaluation/projection result.
           inferenceReason: The endpoint exposes the persisted evaluation representation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-delete-projection
     relationshipType: returns
     targetNodeId: table-item-cost-evaluation
@@ -7431,10 +7465,10 @@ edges:
           endLine: 345
           summary: The route returns the serialized evaluation/projection result.
           inferenceReason: The endpoint exposes the persisted evaluation representation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-promote-projection
     relationshipType: returns
     targetNodeId: table-item-cost-evaluation
@@ -7446,10 +7480,10 @@ edges:
           endLine: 354
           summary: The route returns the serialized evaluation/projection result.
           inferenceReason: The endpoint exposes the persisted evaluation representation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: endpoint-item-economics-list-evaluations
     relationshipType: returns
     targetNodeId: table-item-cost-evaluation
@@ -7462,15 +7496,24 @@ edges:
           summary: The route returns the evaluation history envelope produced by the
             query.
           inferenceReason: The endpoint exposes committed and projection evaluation rows.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:11.311Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-task
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
@@ -7479,10 +7522,11 @@ edges:
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-task-item
@@ -7490,16 +7534,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-item
@@ -7507,21 +7561,13 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
-          startLine: 203
-          endLine: 355
+          startLine: 208
+          endLine: 360
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
-  - sourceNodeId: command-item-economics-commit-item-cost-evaluation
-    relationshipType: reads_from
-    targetNodeId: table-item-valuation
-    metadata:
-      evidence:
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
@@ -7530,10 +7576,38 @@ edges:
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
+  - sourceNodeId: command-item-economics-commit-item-cost-evaluation
+    relationshipType: reads_from
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 203
+          endLine: 355
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-production-cost-group
@@ -7541,16 +7615,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-production-cost-basis-version
@@ -7558,16 +7642,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-cost-model-version
@@ -7575,16 +7669,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: reads_from
     targetNodeId: table-cost-model-term
@@ -7592,16 +7696,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure loads task admission, PRIMARY item binding, live
+            valuation, and selected configuration rows.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure loads task admission, PRIMARY item binding, live
             valuation, and selected configuration rows.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation
@@ -7609,16 +7723,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure advances the evaluation/term chain and mirrors
+            changed valuation figures in the same transaction.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
           endLine: 355
           summary: The commit procedure advances the evaluation/term chain and mirrors
             changed valuation figures in the same transaction.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation-term
@@ -7626,21 +7750,13 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
-          startLine: 203
-          endLine: 355
+          startLine: 208
+          endLine: 360
           summary: The commit procedure advances the evaluation/term chain and mirrors
             changed valuation figures in the same transaction.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
-  - sourceNodeId: command-item-economics-commit-item-cost-evaluation
-    relationshipType: writes_to
-    targetNodeId: table-item-valuation
-    metadata:
-      evidence:
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
           startLine: 203
@@ -7649,10 +7765,38 @@ edges:
             changed valuation figures in the same transaction.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
+  - sourceNodeId: command-item-economics-commit-item-cost-evaluation
+    relationshipType: writes_to
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+          summary: The commit procedure advances the evaluation/term chain and mirrors
+            changed valuation figures in the same transaction.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 203
+          endLine: 355
+          summary: The commit procedure advances the evaluation/term chain and mirrors
+            changed valuation figures in the same transaction.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
   - sourceNodeId: command-item-economics-create-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-task
@@ -7666,10 +7810,10 @@ edges:
             evaluation/term snapshots.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-create-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -7683,10 +7827,10 @@ edges:
             evaluation/term snapshots.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-create-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation-term
@@ -7700,10 +7844,10 @@ edges:
             evaluation/term snapshots.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-create-item-cost-projection
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation
@@ -7717,10 +7861,10 @@ edges:
             snapshots.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-create-item-cost-projection
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation-term
@@ -7734,10 +7878,10 @@ edges:
             snapshots.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-delete-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -7750,10 +7894,10 @@ edges:
           summary: Projection deletion selects the active projection before soft deletion.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-delete-item-cost-projection
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation
@@ -7766,10 +7910,10 @@ edges:
           summary: Projection deletion soft-deletes the selected projection row.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:14.135Z
   - sourceNodeId: command-item-economics-promote-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-task
@@ -7777,16 +7921,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+          summary: Promotion loads task admission, the live projection and its frozen
+            terms, then locks current valuation inputs.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
           startLine: 22
           endLine: 50
           summary: Promotion loads task admission, the live projection and its frozen
             terms, then locks current valuation inputs.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - sourceNodeId: command-item-economics-promote-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -7794,16 +7948,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+          summary: Promotion loads task admission, the live projection and its frozen
+            terms, then locks current valuation inputs.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
           startLine: 22
           endLine: 50
           summary: Promotion loads task admission, the live projection and its frozen
             terms, then locks current valuation inputs.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - sourceNodeId: command-item-economics-promote-item-cost-projection
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation-term
@@ -7811,21 +7975,13 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
-          startLine: 22
-          endLine: 50
+          startLine: 20
+          endLine: 54
           summary: Promotion loads task admission, the live projection and its frozen
             terms, then locks current valuation inputs.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
-  - sourceNodeId: command-item-economics-promote-item-cost-projection
-    relationshipType: reads_from
-    targetNodeId: table-item-valuation
-    metadata:
-      evidence:
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
           startLine: 22
@@ -7834,10 +7990,38 @@ edges:
             terms, then locks current valuation inputs.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
+  - sourceNodeId: command-item-economics-promote-item-cost-projection
+    relationshipType: reads_from
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+          summary: Promotion loads task admission, the live projection and its frozen
+            terms, then locks current valuation inputs.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 22
+          endLine: 50
+          summary: Promotion loads task admission, the live projection and its frozen
+            terms, then locks current valuation inputs.
+          inferenceReason: The command/query loads this table as an input to its phase-7
+            behavior.
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - sourceNodeId: command-item-economics-promote-item-cost-projection
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation
@@ -7845,16 +8029,26 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+          summary: Promotion creates the committed evaluation chain and any required
+            valuation mirror.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
           startLine: 22
           endLine: 50
           summary: Promotion creates the committed evaluation chain and any required
             valuation mirror.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - sourceNodeId: command-item-economics-promote-item-cost-projection
     relationshipType: writes_to
     targetNodeId: table-item-cost-evaluation-term
@@ -7862,21 +8056,13 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
-          startLine: 22
-          endLine: 50
+          startLine: 20
+          endLine: 54
           summary: Promotion creates the committed evaluation chain and any required
             valuation mirror.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
-    confidence: 0.9
-    createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
-  - sourceNodeId: command-item-economics-promote-item-cost-projection
-    relationshipType: writes_to
-    targetNodeId: table-item-valuation
-    metadata:
-      evidence:
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
           symbol: promote_item_cost_projection
           startLine: 22
@@ -7885,10 +8071,38 @@ edges:
             valuation mirror.
           inferenceReason: The command has a direct persistence operation for this
             architectural table.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
+  - sourceNodeId: command-item-economics-promote-item-cost-projection
+    relationshipType: writes_to
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+          summary: Promotion creates the committed evaluation chain and any required
+            valuation mirror.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 22
+          endLine: 50
+          summary: Promotion creates the committed evaluation chain and any required
+            valuation mirror.
+          inferenceReason: The command has a direct persistence operation for this
+            architectural table.
+          supersededAt: 2026-08-14T18:08:43.415Z
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:08:43.415Z
   - sourceNodeId: command-item-economics-list-task-evaluations
     relationshipType: reads_from
     targetNodeId: table-task
@@ -7902,10 +8116,10 @@ edges:
             terms.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - sourceNodeId: command-item-economics-list-task-evaluations
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -7919,10 +8133,10 @@ edges:
             terms.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - sourceNodeId: command-item-economics-list-task-evaluations
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation-term
@@ -7936,10 +8150,10 @@ edges:
             terms.
           inferenceReason: The command/query loads this table as an input to its phase-7
             behavior.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:09:38.020Z
   - sourceNodeId: command-item-economics-commit-item-cost-evaluation
     relationshipType: produces
     targetNodeId: event-item-economics-evaluation-committed
@@ -7947,12 +8161,21 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
           symbol: _commit_item_cost_evaluation_in_session
+          startLine: 386
+          endLine: 392
+          summary: The procedure creates the after-transaction workspace event for
+            committed evaluations.
+          inferenceReason: The command produces the phase-7 committed-evaluation event.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
           startLine: 381
           endLine: 387
           summary: The procedure creates the after-transaction workspace event for
             committed evaluations.
           inferenceReason: The command produces the phase-7 committed-evaluation event.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T18:07:51.720Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-14T16:05:14.002Z
-    updatedAt: 2026-08-14T16:05:14.002Z
+    updatedAt: 2026-08-14T18:07:51.720Z
