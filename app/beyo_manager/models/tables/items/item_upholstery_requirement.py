@@ -41,7 +41,7 @@ class ItemUpholsteryRequirement(IdentityMixin, Base):
     amount_meters: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     value_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[ItemCurrencyEnum | None] = mapped_column(
-        SAEnum(ItemCurrencyEnum, name="item_currency_enum", create_type=False), nullable=True
+        SAEnum(ItemCurrencyEnum, name="item_currency_enum", create_type=True), nullable=True
     )
     source: Mapped[ItemUpholsteryRequirementSourceEnum] = mapped_column(
         SAEnum(

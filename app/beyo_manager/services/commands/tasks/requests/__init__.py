@@ -21,6 +21,7 @@ from beyo_manager.services.commands.tasks.requests.send_customer_coordination_em
 from beyo_manager.services.commands.tasks.requests.send_customer_coordination_reply_request import (
 	SendCustomerCoordinationReplyRequest,
 )
+from beyo_manager.services.commands.items.requests import reject_legacy_item_money_values
 
 
 class FindOrCreateItemInput(BaseModel):
@@ -43,6 +44,12 @@ class FindOrCreateItemInput(BaseModel):
 	external_source: str | None = None
 	external_order_id: str | None = None
 	can_have_upholstery: bool = True
+
+	@model_validator(mode="after")
+	def reject_legacy_money(self):
+		return reject_legacy_item_money_values(self)
+
+
 
 
 class ItemIssueInput(BaseModel):

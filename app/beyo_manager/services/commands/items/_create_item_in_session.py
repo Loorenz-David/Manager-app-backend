@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemStateEnum
+from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.items.location_push import normalize_zone
 from beyo_manager.domain.sku_templates.events import SkuTemplateEvent
 from beyo_manager.domain.tasks.enums import TaskTypeEnum
@@ -35,9 +35,6 @@ async def create_item_in_session(
     height_in_cm: int | None = None,
     width_in_cm: int | None = None,
     depth_in_cm: int | None = None,
-    item_value_minor: int | None = None,
-    item_cost_minor: int | None = None,
-    item_currency: ItemCurrencyEnum | None = None,
     item_position: str | None = None,
     item_zone: str | None = None,
     external_id: str | None = None,
@@ -114,9 +111,6 @@ async def create_item_in_session(
         height_in_cm=height_in_cm,
         width_in_cm=width_in_cm,
         depth_in_cm=depth_in_cm,
-        item_value_minor=item_value_minor,
-        item_cost_minor=item_cost_minor,
-        item_currency=item_currency,
         item_position=item_position,
         item_zone=item_zone,
         external_id=external_id,

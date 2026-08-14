@@ -285,3 +285,70 @@ in-tree precedent, previously uncited.
 ## Review log
 
 (append-only)
+### 2026-08-14 — implementer r1 (Codex) — IMPLEMENTED
+
+Implementation completed under the phase-6 prompt. The write perimeter is the
+three-column removal from `items`, the `item_currency_enum` ownership correction
+at upholstery requirements, the five command write paths, four retained router
+request bodies, four request-schema validators, two serializers, the router
+README mirror rows, two migrations, the phase-6 API/serializer/migration tests,
+the phase-5 synthetic history tie fixture, and the required tracker/review/
+handoff artifacts. No frontend files were changed.
+
+Judgments recorded: the shared request helper raises
+`beyo_manager.errors.validation.ValidationError` with the exact
+`ITEM_MONEY_MOVED: item money fields moved to the item-valuation endpoint`
+message only when a retained field is present and non-null; absent and explicit
+null use the same accepted path. Router bodies remain unchanged intentionally
+so legacy payloads cannot be silently dropped. The migration follows the
+verbatim D7 no-current-valuation predicate, runs all P1/P2/P3 refusals before
+any write, uses Python-side `generate_id("ival")`, emits no audit events, and
+keeps the rollback journal through the column-drop revision. D14's equal-
+`created_at` ordering is a synthetic fixture because the migration creates at
+most one valuation per item.
+
+Evidence: phase-specific API and serializer tests plus the disposable-database
+migration lifecycle are **29 passed**; the phase-5 history test is **1 passed**
+against the configured development profile. The full non-e2e suite is
+**1997 passed / 23 established failures / 1 deselected**, with the established
+failure set unchanged; ruff and `git diff --check` pass. The configured database
+is at `be9dfe42a035` head: `items=480`, migration journal `=0`, legacy `items`
+columns `=0`, and the only remaining non-journal `item_currency_enum` user is
+`item_upholstery_requirements.currency` (the journal's snapshot column is also
+present by design at head). Four generated databases with the
+`beyo_manager_phase6_*` prefix were dropped by the migration tests; a final
+catalog query found **0** remaining.
+
+Mutation ledger (each named probe was applied, observed, and reverted):
+
+1. Delete the task request validator: baseline
+   `9dccde991cde595c8be2fbbfdb8579e43f933f5d73d93b698cd27eea71ffbfac`, mutant
+   `945586f71f73e537531f9524569fe80e3e14275a47f4791f946ad521d5706f43`;
+   `test_bridge_is_reject_iff_present_and_nonnull[create-task-nested-item-present-nonnull]`
+   failed.
+2. Delete all three item request validators: baseline
+   `0f3b5a79882eaae919996b1aa5e8136e7c2f4c3772154413743a77ca8b98aff8`, mutant
+   `c78f68dc15e52f20839b46c31c23f47d73a52b0a4ae96616e6fb486b515b5d0e`;
+   exactly six API bridge nodes failed (three non-null schema rows and the
+   three per-key rows).
+3. Re-add the three item serializer keys: baseline
+   `b7fa431a17cd6d69906873771a4c64748b3ff298dffaced962713996d4142104`, mutant
+   `808aef9533a525f4642665423fe50ba42baa6ca706c321ddac388ebf9f4abfad`;
+   exactly three item serializer nodes failed.
+4. Re-add the three task serializer keys: baseline
+   `b2ab4e8b5388f21e2b3a69d2da5d3c83c2a423d494387a0131284876c1f77fa4`, mutant
+   `2617b8775f0044b4201f8a7322f73674f1a9fc65e68167015f7b9641a0aa68c9`;
+   exactly six task/upholstery serializer nodes failed.
+5. Remove `item_cost_minor` from the task router body: baseline
+   `aafc1f53946b8076fd9a00297343a2c09aa16aa6660021b2da696410313fbd1a`, mutant
+   `2d541c16b09a77d9360e221be52df41e52ae2ffc60b547f0df3cf125b7297bef`;
+   the router-retention test failed with the expected missing-field assertion.
+
+Architecture Graph closeout: one additive node was recorded,
+`table-item-valuation-migration-journal`, with migration evidence; no pending
+review item was promoted, edited, rejected, or otherwise adjudicated. The
+existing `node:table-item` wording remains pending for the coordinator's
+authorized maintenance pass, as required by D19.
+
+Checkpoint and handoff follow the implementation commit. No owner decisions
+are required from this implementer session.

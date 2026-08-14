@@ -1,10 +1,20 @@
 """Request models for item upholstery lifecycle commands."""
 
 from decimal import Decimal
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemUpholsterySourceEnum
 from beyo_manager.domain.tasks.enums import TaskTypeEnum
 from beyo_manager.errors.validation import ValidationError
+
+
+_LEGACY_ITEM_MONEY_FIELDS = ("item_value_minor", "item_cost_minor", "item_currency")
+_ITEM_MONEY_MOVED_MESSAGE = "ITEM_MONEY_MOVED: item money fields moved to the item-valuation endpoint"
+
+
+def reject_legacy_item_money_values(model):
+    if any(getattr(model, field_name) is not None for field_name in _LEGACY_ITEM_MONEY_FIELDS):
+        raise ValidationError(_ITEM_MONEY_MOVED_MESSAGE)
+    return model
 
 
 class CreateItemUpholsteryRequest(BaseModel):
@@ -202,8 +212,14 @@ class CreateItemRequest(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool = True
+
+    @model_validator(mode="after")
+    def reject_legacy_money(self):
+        return reject_legacy_item_money_values(self)
+
     item_issues: list[ItemIssueCreateInput] | None = None
     item_upholstery: ItemUpholsteryCreateInput | None = None
+
 
     @field_validator("article_number", "sku", mode="before")
     @classmethod
@@ -253,6 +269,12 @@ class UpdateItemRequest(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool | None = None
+
+    @model_validator(mode="after")
+    def reject_legacy_money(self):
+        return reject_legacy_item_money_values(self)
+
+
 
     @field_validator("quantity")
     @classmethod
@@ -467,6 +489,12 @@ class FindOrCreateItemRequest(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool = True
+
+    @model_validator(mode="after")
+    def reject_legacy_money(self):
+        return reject_legacy_item_money_values(self)
+
+
 
     @field_validator("article_number", "sku", mode="before")
     @classmethod

@@ -2079,9 +2079,6 @@ None
 | height_in_cm | integer | No |  |
 | width_in_cm | integer | No |  |
 | depth_in_cm | integer | No |  |
-| item_value_minor | integer | No |  |
-| item_cost_minor | integer | No |  |
-| item_currency | string | Yes | `swedish_krona`, `danish_krona`, `euro` |
 | item_position | string | No |  |
 | external_id | string | No |  |
 | external_url | string | No |  |
@@ -2137,9 +2134,6 @@ None
 | height_in_cm | integer | No |  |
 | width_in_cm | integer | No |  |
 | depth_in_cm | integer | No |  |
-| item_value_minor | integer | No |  |
-| item_cost_minor | integer | No |  |
-| item_currency | string | Yes | `swedish_krona`, `danish_krona`, `euro` |
 | item_position | string | No |  |
 | external_id | string | No |  |
 | external_url | string | No |  |
@@ -2239,9 +2233,6 @@ None
 | height_in_cm | integer | No |  |
 | width_in_cm | integer | No |  |
 | depth_in_cm | integer | No |  |
-| item_value_minor | integer | No |  |
-| item_cost_minor | integer | No |  |
-| item_currency | string | Yes | `swedish_krona`, `danish_krona`, `euro` |
 | item_position | string | No |  |
 | external_id | string | No |  |
 | external_url | string | No |  |
@@ -2666,9 +2657,6 @@ None
 | item.height_in_cm | integer | No |  |
 | item.width_in_cm | integer | No |  |
 | item.depth_in_cm | integer | No |  |
-| item.item_value_minor | integer | No |  |
-| item.item_cost_minor | integer | No |  |
-| item.item_currency | string | Yes | `swedish_krona`, `danish_krona`, `euro` |
 | item.item_position | string | No |  |
 | item.external_id | string | No |  |
 | item.external_url | string | No |  |

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -364,6 +365,42 @@ async def test_valuation_chain_preview_delete_and_history(db_session):
             ItemValuation.is_deleted.is_(False),
         )
     ) == 1
+
+    tie_time = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+    db_session.add_all(
+        [
+            ItemValuation(
+                client_id="ival_tie_a",
+                workspace_id=workspace.client_id,
+                item_id=item.client_id,
+                expected_sale_price_minor=801,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                superseded_at=tie_time,
+                created_at=tie_time,
+                created_by_id=user.client_id,
+            ),
+            ItemValuation(
+                client_id="ival_tie_z",
+                workspace_id=workspace.client_id,
+                item_id=item.client_id,
+                expected_sale_price_minor=802,
+                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                superseded_at=tie_time,
+                created_at=tie_time,
+                created_by_id=user.client_id,
+            ),
+        ]
+    )
+    await db_session.flush()
+    tie_history = await get_item_valuation_history(
+        _ctx(db_session, workspace.client_id, user.client_id, {"item_client_id": item.client_id})
+    )
+    tie_ids = [
+        row["client_id"]
+        for row in tie_history["item_valuations"]
+        if row["client_id"] in {"ival_tie_a", "ival_tie_z"}
+    ]
+    assert tie_ids == ["ival_tie_z", "ival_tie_a"]
 
     with pytest.raises(ValidationError, match=r"^ITEM_COST_VALUATION_SUPERSEDED_IMMUTABLE:"):
         await delete_item_valuation(
