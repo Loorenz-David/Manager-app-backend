@@ -130,6 +130,13 @@ recorded in the Review log.
   — one-line correction + the fix-r1 record correction is already in the r2
   Review log entry.
 
+- **Forward note (phase-8 projection r0, L17 — deferred 4B N3):**
+  `get_economics_configuration_status.py:38,:47` carry a redundant
+  `and not version.is_deleted` (the loader already filters deleted rows) —
+  two sufficient causes, verified not-a-gap; simplify or keep KNOWINGLY with
+  a comment. Phase 8 took only N4 (the `status is EconomicsStatusEnum.OK`
+  swap) with a declared one-file extension; the N3 clause is this phase's.
+
 ## Review log
 
 (append-only)

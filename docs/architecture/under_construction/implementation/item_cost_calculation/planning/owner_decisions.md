@@ -535,3 +535,45 @@ card's "costs one small database change" branch assumed a new
 unnecessary (the cheaper mechanism delivers exactly the chosen branch). The
 audit half is the registered `write_audit` rows (`item_cost_evaluation.*`,
 master plan §6.4).
+
+---
+
+# Phase 8 projection r0 — owner cards (2026-08-14)
+
+## Card 1 — Should the live budget screen show "result" figures before the task is closed?
+
+**Question (projectionist, verbatim):** When a task has reached READY (work
+finished) but nobody has resolved it yet, should the budget screen show the
+stored result figures, or hide them until the task is formally closed?
+(Story: the chair finishes Monday, READY that afternoon, 214 minutes used
+against 180 allowed; the resolving manager is away until Thursday — for
+three days the real overrun either shows, or sits invisible in the
+database.)
+
+**ANSWER (2026-08-14): the recommendation is correct — SHOW IT ALWAYS,
+labelled with its boundary.** READY is when the item is finished working, so
+it counts as resolved from this item-cost perspective. Folded as **R17-1**:
+§8A.6's pre-round-6 "when the episode is closed" clause is corrected — the
+result block renders whenever a result row exists, carrying the boundary it
+was computed at.
+
+## Card 2 — What status should the screen show right after a price is deleted, in a workspace that isn't configured yet?
+
+**Question (projectionist, verbatim):** After deleting an item's price,
+should the response say "unpriced", or say the more basic thing that is also
+wrong (e.g. "no cost group set up")?
+
+**ANSWER (2026-08-14): "I don't want to drift — if we already have a rule we
+should keep it. Because not having placed a price from the beginning on an
+item should give the same 'warning' as removing the item valuation and
+leaving it empty."**
+
+**Coordinator reading (recorded):** this selects the RE-RESOLVE branch — the
+§11A.4 ordering/resolver IS the existing rule, and the hardcoded literal is
+the drift. Only re-resolution makes a never-priced item and a deleted-price
+item produce the SAME status (in an unconfigured workspace both read the
+missing-setup reason; in a configured workspace both read `item_unvalued` —
+nothing changes for normal use). Folded as **R17-2**: §11A.5(d)'s DELETE
+response status is re-resolved through `resolve_item_economics_status`,
+never hand-written; the `delete_item_valuation.py:44` literal is corrected
+in phase 8 (phase-5 review N2 lands here).

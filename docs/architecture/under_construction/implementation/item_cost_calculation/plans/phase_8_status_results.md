@@ -214,6 +214,229 @@ inside their transaction (three rows).
   touches the same resolver — add the structural pin (one shared predicate
   or an equality property row over the two loaders).
 
+## Amendments (projection r0, 2026-08-14) — GOVERNING
+
+Where this block contradicts the sections above, THIS BLOCK WINS. Routed from
+`handoffs/reviewer/2026-08-14_phase8_projection_r0_handoff.md` (7 blocking /
+12 should-fix / 6 notes; owner cards 1–2 answered → intention round 17,
+R17-1/R17-2).
+
+### A1 (L1) — C7 restated: twelve members, two producers, the composition row
+
+C7 enumerates the SHIPPED `EconomicsStatusEnum` — **twelve** members incl.
+`item_missing_major_category` — one parametrize id per member naming its
+§11A.4-as-amended-by-§7C.3 authority row, each row's EXPRESSION differing
+(P-V 3rd ext). Per row, C7 states WHICH producer it exercises:
+`resolve_item_economics_status` terminates at `NOT_EVALUATED` and never emits
+`ok`/`infeasible`; those two come ONLY from the committed-evaluation branch
+(evaluation present → `infeasible` iff `allowed_worker_minutes <= 0` else
+`ok`). One dedicated hazard row: config fully resolved
+(`selection.status is OK`) + NO committed evaluation → payload
+`not_evaluated`, never `ok` — the leak of the resolver's OK into the payload
+is the silent failure this criterion exists for. The priority row stays.
+
+### A2 (L2/L3) — task 5 pinned, criterion C11 added
+
+The lifetime read (`get_item_lifetime_economics.py`,
+`GET /items/<item_client_id>/economics`) is pinned on all five axes
+(coordinator delegations, recorded):
+1. **Which evaluations:** the CURRENT committed row per task (§11's
+   "per-task committed evaluation", singular, wins over the plan's plural —
+   summing a superseded chain double-counts every re-commit).
+2. **Shape:** per-task rows (task id, its current committed evaluation's
+   figures, its result figures when a result row exists) PLUS a totals block
+   summing RESULT rows only; a task with an evaluation but no result row
+   appears with `result: null` and contributes NOTHING to the totals (R-9:
+   no inferred zeros).
+3. **Ordering/pagination:** episodes are unbounded per item → the shipped
+   `limit + 1` / `has_more` list idiom; ordered `committed_at DESC,
+   client_id DESC`.
+4. **Role gate:** ADMIN/MANAGER (§6.5) — this is a money surface; C11
+   carries the P-G retention rows and the P-H structural row.
+5. **Snapshots:** `task_type_snapshot` / `return_source_snapshot` read from
+   the EVALUATION row, never joined live task fields. C11's named mutation:
+   replacing a snapshot read with the live task field must redden exactly
+   that row.
+C11 enumerates all five + the route's row in the completeness arbiter table.
+
+### A3 (L4) — the reopen hook's signature and fence
+
+`maybe_reopen_task_to_working` becomes
+`async def maybe_reopen_task_to_working(session, task, *, workspace_id, now,
+updated_by_id)` (mirroring its sibling `maybe_evaluate_task_ready`). Files
+list += `services/commands/task_steps/add_task_steps.py` (the one production
+call site, `:182`, becomes `await` — no logic change) and
+`tests/unit/test_task_state_transitions.py` (two sync calls updated). §9 P-E
+is AMENDED accordingly (master plan, 2026-08-14). Criterion: the reopen emit
+fires from the `add_task_steps` path; named mutation = delete the emit at
+its DEFINITION site in `_task_state_transitions.py` (charter rule 11).
+The emit lives inside the helper — every caller inherits (§8B.1); the
+call-site alternative is REJECTED and recorded.
+
+### A4 (L5) — the terminal emit is OUTSIDE the notification conditional
+
+Task 3 restated: the `create_instant_task(... PROCESS_ITEM_COST_RESULT ...)`
+line sits inside `maybe_begin`, AFTER the notification block, **never inside
+`if target_user_ids:`** — otherwise a task resolved by its only participant
+never gets a final result row. C10's three terminal rows each use a fixture
+with **ZERO notification targets**, stated in the criterion (two-sufficient-
+causes guard: a fixture with targets passes with the emit in the wrong
+block).
+
+### A5 (L6) — the upsert enumerated
+
+`INSERT … ON CONFLICT DO UPDATE` with
+`constraint="uq_item_cost_results_task_id"` (verified live: a UNIQUE
+constraint, not a partial index; named constraint chosen over
+index_elements — decided). The SET list IS §8A.4's replay-identity set as
+extended by §8B.2, plus `computed_at`: `evaluation_id`, `item_id`,
+`actual_worker_seconds`, `actual_worker_minutes`, `consumed_cost_minor`,
+`variance_worker_minutes`, `variance_cost_minor`, `task_closed_at`,
+`task_state_snapshot`, `calculation_version`, `computed_at`. NOT in it:
+`client_id`, `task_id`, `created_at`, `workspace_id` (invariant per task —
+stated exclusion, not an accident). Dialect import:
+`sqlalchemy.dialects.postgresql.insert` — first use in the repo, no
+precedent to copy (recorded so the reviewer expects it).
+
+### A6 (L7) — the router table split
+
+`_ROUTES` splits: `_MANAGER_ONLY_ROUTES` (the 21 shipped + this phase's
+manager-only additions; both existing role-gate tests parametrize over it)
+and `_ALL_ROLE_ROUTES` (`GET /tasks/<task_client_id>/budget-status`;
+asserts 200 for ALL FOUR roles). The completeness arbiter compares the
+router surface against the UNION. P-G mutations, both directions: removing
+WORKER from the budget-status allow-list reddens its worker row; moving
+budget-status into the manager-only table reddens the same row.
+
+### A7 (L8/L20) — three filter sites, three mutations
+
+`get_task_budget_status_worker` is an INDEPENDENT service with its own
+literal `kind='committed' AND superseded_at IS NULL AND is_deleted=false`
+filter (L20 decided: no wrapping — wrapping collapses C1's mutation sites
+and softens the money boundary). C1 gains the third row + third named
+mutation (the worker service's filter deletion). Inline-literal is the
+established shape; NO extraction (it would collapse the per-site
+mutations).
+
+### A8 (L9) — C6b total
+
+C6b += the ASSIGNED and STALLED refusal rows (replayed event, committed
+evaluation present, nothing written, log emitted) — §8B.2 is total over
+eight states and a sampled table over a total contract is the classic
+charter-rule-2 defect.
+
+### A9 (L11) — the worker result block's key set
+
+The worker status payload's result block carries EXACTLY:
+`actual_worker_minutes`, `variance_worker_minutes`, `percent_consumed`,
+`task_state_snapshot`, `computed_at` — no `consumed_cost_minor`, no
+`variance_cost_minor`, no `*_minor` key of any kind. C9's zero-monetary-keys
+assertion is over this DECLARED set (P-H needs a set to be structural
+about); dropping the block entirely does NOT satisfy C9 (the worker sees
+minutes/percent — card 4's point).
+
+### A10 (L12) — the loader pin: equality property row
+
+Decided: the status query consumes `_load_preview_inputs` where it stands
+(no move — no P-Z cost; the command/query import crossing is accepted and
+recorded for this read-only consumer). The N6 pin is an EQUALITY PROPERTY
+row: one fixture, `_load_preview_inputs` vs `_load_live_inputs`, selections
+equal field-for-field — reddening on exactly the divergence N6 describes.
+`get_economics_configuration_status` (per-category, workspace-wide) is the
+STATED exclusion, with a non-vacuity row proving the compared pair is
+non-empty (P-J 3rd ext). No blanket "no unmediated loader" structural
+property is attempted.
+
+### A11 (L13) — C9's families enumerated
+
+Step family: `serialize_step` (`domain/tasks/serializers.py:158`) + the two
+shared builders of §11A.2's census. Economics family: the public functions
+of `domain/item_economics/serializers.py` (ten shipped + this phase's
+status serializers). The disjointness test QUANTIFIES over both enumerated
+surfaces (P-J 2nd ext). Named mutation unchanged (definition site).
+
+### A12 (L14) — C2's buckets named as constructions
+
+The ended-shift bucket is `PAUSED` + `transition_reason == SHIFT_ENDED`
+(`bucket_for`, `domain/analytics/time_buckets.py:23-34`; `ENDED_SHIFT` is
+NOT an enum member — deleted by `2645b4327b17`). The marked-wrong bucket
+lands in `inaccurate_working_seconds`, never `total_working_seconds`. C2's
+fixtures name these constructions (P-Q 4th ext).
+
+### A13 (L15) — C5's whole-row variant non-vacuous
+
+C5 observes `computed_at` ADVANCE between the two handler runs (sleep-free:
+compare, not just assert-different — the second run's value strictly
+greater). Without the observation the whole-row clause proves nothing.
+
+### A14 (L16/L17) — perimeter notes
+
+Files list += `tests/integration/services/commands/item_economics/test_phase7_evaluations.py`
+(R2-N2 hardening: count the checked events, `assert checked == 1` — a
+declared one-file phase-7-test touch, NOT out-of-fence) and
+`services/queries/item_economics/get_economics_configuration_status.py`
+(4B N4 ONLY: `status is EconomicsStatusEnum.OK` replaces the string
+compare — declared one-file extension). 4B N3 (redundant deleted clause) is
+DEFERRED to phase 9's drift batch (routed there this round).
+
+### A15 (L18/R17-2) — the DELETE status re-resolution
+
+`delete_item_valuation.py:44`'s hardcoded `ITEM_UNVALUED` is replaced by
+re-resolution through `resolve_item_economics_status` over the post-delete
+state (loading what the resolver needs — the workspace config via
+`_load_preview_inputs` and the now-absent current valuation). Criterion
+rows: configured workspace + delete → `item_unvalued` (unchanged for normal
+use); UNCONFIGURED workspace + delete → the missing-setup reason (the
+§11A.4 ordering's first false row), asserted equal to what a never-priced
+item in the same workspace reads (the owner's same-warning property,
+asserted literally as equality of the two statuses).
+
+### A16 (L19) — the three contradicted graph nodes
+
+`infra-queue-analytics` ("Only PROCESS_STEP_TRANSITION routes here"),
+`infra-analytics-worker` (HANDLER_MAP binding), and
+`analytics-process-step-transition` (four-effect enumeration; the §8A.5
+re-emit is a fifth) become factually false when this phase lands. The
+implementer FILES three discrepancy reports per the archgraph-discrepancies
+Reporter role (ledger `open/` directory, observations with path:line,
+separate from conclusions) and records them in the handoff; the coordinator
+handles them in the post-approval pass. Never silently worked around.
+
+### A17 (L21/L22/L23/L24) — reuse, harnesses, mechanics, counts
+
+- Route service selection reuses `include_monetary_step_fields(role_name)`
+  (`domain/tasks/serializers.py:150-155`) — one audience, one definition
+  (L21 decided).
+- Harnesses named (P-R): `test_item_economics_router.py::_client`
+  (monkeypatched `run_service` captures `(command, ctx)` — service
+  selection is `calls[0][0] is get_task_budget_status_worker`); the P-H
+  structural row is `route.response_model is None` over
+  `item_economics.router.routes` (verified green today — regression-only,
+  which is its job).
+- Re-emit mechanics (L23, implementation-determining): no TaskStep lookup —
+  `StepTransitionPayload` carries `task_id`; ONE new `Task` SELECT after
+  `_recompute_step_time_totals` (`process_step_transition.py:73`) and
+  before the handler's commit (`:121`), atomic with the totals; the branch
+  is gated on `payload.credited_user_id` AND
+  `closing_state in TIME_BEARING_STATES` — C6's fixtures must credit a
+  user.
+- L24: a ready-making transition produces TWO result events by design
+  (READY-entry hook + straggler re-emit). C6/C10 assert EXACT counts per
+  scenario — never "at least one".
+
 ## Review log
 
 (append-only)
+
+- **2026-08-14 — projection r0 (Claude Opus 5): AMENDMENTS_REQUIRED.**
+  7 blocking / 12 should-fix / 6 notes, 2 owner cards. Handoff:
+  `handoffs/reviewer/2026-08-14_phase8_projection_r0_handoff.md`.
+  Environment re-verified: head `be9dfe42a035`, NO migration needed
+  (`item_cost_results` live with `uq_item_cost_results_task_id` as a UNIQUE
+  constraint), collection 2099/2100 reconciles the §10 baseline exactly,
+  payload-key greps zero hits, graph 166/239 all human_confirmed rev
+  `b0f9127d…`. Coordinator routed all 25 rows same day: cards → R17-1
+  (result shows from READY, boundary-labelled) and R17-2 (DELETE status
+  re-resolved — one rule, no drift); §9 P-E amended (L4); this GOVERNING
+  block A1–A17; 4B N3 → phase 9. Gate CLEARED; implementer prompt
+  `prompts/implementer/2026-08-14_phase8_implement_r1.md`.

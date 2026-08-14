@@ -1399,7 +1399,12 @@ repair path), and §14 test 18 builds the branch-A row.
 
 Read-time only; nothing stored (§8.1). Returns: the `EconomicsStatusEnum` (§11A.4), the
 committed evaluation's snapshot values, live consumption (§6A.8), `item_binding`
-(7B.3), and — when the episode is closed and a result row exists — the result. Every
+(7B.3), and — **whenever a result row exists** — the result, labelled with the
+boundary it was computed at (`task_state_snapshot` + `computed_at`). (Corrected
+round 17, R17-1, owner card 1: the earlier "when the episode is closed" clause
+predated round 6 — READY is when the item is finished working, so the figures
+show from the first READY entry, days before the manual resolution; "final" stays
+distinguishable through the boundary label.) Every
 operational read carries the literal filter `kind = 'committed' AND superseded_at IS
 NULL AND is_deleted = false` (HC-2); §14 test 4's named mutation is the deletion of that
 filter at its call site.
@@ -1859,7 +1864,14 @@ it is a pure function of the posted valuation plus the current configuration.
   history query returns only non-deleted rows; deleting the current price is
   the escape hatch for a mistaken entry, and superseded rows (true history)
   are never deletable, so nothing real is lost. The DELETE response carries
-  the status-only preview (the item reads `item_unvalued`).
+  the status-only preview, whose status is **RE-RESOLVED through
+  `resolve_item_economics_status` / the §11A.4 ordering — never hand-written**
+  (corrected round 17, R17-2, owner card 2: one rule, no drift — a
+  never-priced item and a deleted-price item must show the SAME status, so in
+  an unconfigured workspace both read the missing-setup reason and in a
+  configured workspace both read `item_unvalued`; the shipped
+  `delete_item_valuation.py:44` literal is the drift and phase 8 corrects it,
+  landing phase-5 review N2).
 
 ---
 
@@ -2451,6 +2463,19 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   `pending_events` append after the savepoint exits normally, per the
   subordinate-command event rule. The plan's "savepoint block only" file fence
   is amended accordingly (spirit kept: no existing statement moves).
+
+**Round 17 — 2026-08-14 (phase-8 projection r0; two owner cards answered):**
+
+- **R17-1 (owner, card 1)** §8A.6's result clause corrected: the result block
+  renders **whenever a result row exists**, labelled with its computed-at
+  boundary — the "when the episode is closed" wording predated round 6.
+  Owner: "READY is when the item is finished working, so it counts as
+  resolved from this item-cost perspective."
+- **R17-2 (owner, card 2)** §11A.5(d)'s DELETE status is re-resolved through
+  the §11A.4 ordering, never hand-written. Owner: one rule, no drift — a
+  never-priced item and a deleted-price item give the same warning. The
+  shipped hardcoded `item_unvalued` (phase-5 review N2) is corrected in
+  phase 8.
 
 ---
 
