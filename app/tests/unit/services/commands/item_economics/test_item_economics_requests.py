@@ -86,6 +86,7 @@ def test_model_request_canonicalizes_percentage_terms_to_three_places():
         ("uix_cost_model_terms_purchase_cost", "ITEM_COST_PURCHASE_TERM_DUPLICATE"),
         ("uix_cost_model_terms_name_active", "ITEM_COST_TERM_NAME_TAKEN"),
         ("uix_item_valuations_current", "ITEM_COST_CONCURRENT_VALUATION"),
+        ("uix_item_cost_evaluations_current", "ITEM_COST_CONCURRENT_COMMIT"),
     ],
 )
 def test_integrity_translation_preserves_each_registered_index_identity(index_name, identity):

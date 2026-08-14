@@ -134,11 +134,6 @@ class CreateItemCostProjectionRequest(_Request):
     purchase_cost_minor: int | None = Field(default=None, ge=0)
     label: str | None = Field(default=None, max_length=255)
 
-    @field_validator("source_projection_id")
-    @classmethod
-    def validate_source_projection_id(cls, value: str | None) -> str | None:
-        return value
-
 
 def _parse(model: type[BaseModel], data: dict) -> BaseModel:
     try:

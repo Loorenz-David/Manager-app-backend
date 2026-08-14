@@ -4,7 +4,7 @@
 plan: phase 7
 role: phase plan
 date: 2026-08-11
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -563,3 +563,48 @@ is routed to phase 8.
   adjudicated; 5 sampled items' anchors verified accurate. Every mutation
   reverted — `git diff -- app/beyo_manager/` empty; economics tables 0 rows
   before and after; DB at head `be9dfe42a035`.
+
+- **2026-08-14 — fix r1 (Codex): IMPLEMENTED.** The B1 mirror write is now
+  gated on `kind is COMMITTED`; projection overrides leave the valuation chain
+  and valuation row unchanged. The reviewer probes were adopted byte-for-byte
+  into `test_phase7_criteria.py` and `test_phase7_concurrency.py` (source
+  hashes `a26f11c178d39f000d08c5080cf8b5dfbc1e451848a3d205182e386f2170f9e4`
+  and `e42d59d35a395f09ae1155c2bd628a38da1b76338ca1691d2715a7aa58c9035e`),
+  then the required parameter IDs and fix-cycle assertions were added. The
+  direct INSERT C2 fixture was removed as prescribed; the conflict translation
+  unit test now includes `uix_item_cost_evaluations_current` →
+  `ITEM_COST_CONCURRENT_COMMIT`. C8 now commits the fixture and compares every
+  projection column, including `updated_at`, through a fresh second session.
+  C9 asserts the literal `no_primary_item`; C10 asserts exactly one event and
+  second-session visibility; P-Z asserts each superseded predecessor's exact
+  successor. The dead promotion `task_client_id` branch, no-op request
+  validator, and stray blank line were removed; the helper docstring now lists
+  its kind-gated effects.
+
+  Mutation ledger, all restored to the final hashes: F1 mutant
+  `cea28666827471fc7e8e5b1d42c14a0522a4777e0c189e8681772e1cb11b9f24` reddened
+  C5 row 7; M1 `50e207f5be14b8fe1568065339973962a0158f18a409d58b0fc19c0a0215850f`
+  reddened C11; M2
+  `893be91da0d81a0f12b8d1b8ad3a35adb44776f4d25d47a85c7de4231f47d188`
+  reddened C5r6; M3 BASIS `read=True`
+  `a8e12a29ca62d8903655b17cece82f66c3d4e3b4e0b966d69725cbdc5d7664ba`
+  reddened C12 row 1 BASIS; M4 MODEL `read=True`
+  `3b29a3c7c149aa7d90885e4ea2459b86c685661cd31a43be61554c22100d8b26`
+  reddened C12 row 1 MODEL; M5 snapshot-source
+  `40f8718250d50a329fc35a458fb1d8b01e3e6f71877be6c4130ea3e7e9fa4007`
+  reddened the projection and C1 immutability tests; M6 extra route
+  `412b3d462de146247cf88ae2f31103b14cd357208ffd7b602e05af30b85c96f5`
+  reddened the route-table test; M7 savepoint
+  `999788369bcfe2aa961a4c376577e70139d6e04460d4c057f4dffe2d0cff7fec`
+  reddened the overflow rollback test with `PendingRollbackError`. M3/M4
+  were run on the named row-1 BASIS/MODEL cases only.
+
+  Final evidence: phase-7 focused surface 82 passed; concurrency subset 5
+  passed twice; phase-5 valuation/request surface 55 passed (the former 54
+  plus the new translation row); full non-E2E 2076 passed / 23 established
+  baseline failures / 1 deselected, with the failure IDs set-identical to the
+  phase-1 list. Ruff and `git diff --check` passed. The configured DB is at
+  `be9dfe42a035` head and all eight inspected economics tables contain zero
+  rows. Architecture Graph was read-only with zero delta; no review decision
+  was adjudicated. Production final hashes are recorded in the implementer
+  handoff.

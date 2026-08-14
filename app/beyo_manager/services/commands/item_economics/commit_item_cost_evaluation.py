@@ -199,7 +199,11 @@ async def _commit_item_cost_evaluation_in_session(
     audit_event: str = "item_cost_evaluation.committed",
     kind: ItemCostEvaluationKindEnum = ItemCostEvaluationKindEnum.COMMITTED,
 ) -> tuple[ItemCostEvaluation, list]:
-    """Run the nine-step commit procedure inside an already-open transaction."""
+    """Run the nine-step procedure and gate committed-only effects by ``kind``.
+
+    ``kind`` gates the chain S1 close scope, ``committed_at``, the valuation
+    mirror, the history record, the audit row, and the pending event.
+    """
     task, _primary, item = await _load_task_and_primary(session, workspace_id, task_id)
     if source_evaluation is None:
         groups, selection, live_terms = await _load_live_inputs(session, workspace_id, item)
@@ -339,7 +343,7 @@ async def _commit_item_cost_evaluation_in_session(
             .values(superseded_by_id=evaluation.client_id)
         )
 
-    if valuation is not None and (
+    if kind is ItemCostEvaluationKindEnum.COMMITTED and valuation is not None and (
         (expected_price, purchase_cost)
         != (valuation.expected_sale_price_minor, valuation.purchase_cost_minor)
     ):
@@ -421,7 +425,7 @@ async def auto_commit_item_cost_evaluation_in_session(
     task: Task,
     item: Item | None,
 ) -> list:
-    """Best-effort subordinate commit used by create_task; never raises."""
+    """Run the best-effort subordinate commit used by ``create_task``; it raises."""
     if item is None:
         logger.info(
             "item_economics.auto_commit_skipped | task_id=%s item_id=%s status=%s",

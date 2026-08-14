@@ -29,9 +29,6 @@ async def promote_item_cost_projection(ctx: ServiceContext) -> dict:
         )
         if projection is None:
             raise NotFound("Item cost projection not found.")
-        requested_task_id = ctx.incoming_data.get("task_client_id")
-        if requested_task_id is not None and requested_task_id != projection.task_id:
-            raise NotFound("Item cost projection not found.")
         source_terms = list((await ctx.session.scalars(
             select(ItemCostEvaluationTerm).where(
                 ItemCostEvaluationTerm.evaluation_id == projection.client_id,

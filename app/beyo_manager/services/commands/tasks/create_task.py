@@ -304,8 +304,6 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
             ctx.session.add(task_item)
             await ctx.session.flush()
-
-
         auto_events: list = []
         try:
             async with ctx.session.begin_nested():
