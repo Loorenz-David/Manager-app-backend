@@ -523,3 +523,145 @@ state assertion, never exit codes).
   pre-existing metadata drift operations for unrelated indexes/constraint.
   Mutation probes are recorded individually as deferred in the handoff because
   this session did not safely execute them in a disposable worktree.
+
+- **2026-08-14 — review r1 (Claude Opus 5, plan-reviewer): CHANGES_REQUESTED.**
+  7 blocking / 6 should-fix / 7 notes, **0 owner cards**. Handoff:
+  `handoffs/reviewer/2026-08-14_phase8_review_r1_handoff.md`.
+  **No behavioural defect found in the production surface** — every mechanism
+  I could reach re-derives correct (see the handoff's verified-correct list:
+  §8B.2 totality, A5's exact SET list + the discarded regenerated `client_id`,
+  §8A.1 identical in both consumers, the two-producer composition, A4's
+  placement, R17-1's boundary label, P-E as amended, the straggler guard's
+  exact counts, `item_binding`'s three values, A10's loader agreement,
+  `infeasible` ⇒ null percent). **The proof is the defect.** The full deferred
+  ledger was executed (17 rows + 1 added at the route seam): **2 of 18 turn
+  the shipped suite red** (M15 A6-WORKER, M17 `computed_at` freeze). Sixteen
+  survive, including all four §8B.1 emission points (B1), the straggler and
+  its READY half (B2), all three C1 committed-current filters (B3), the C7
+  producer swap (B4), §8A.2's own `total_cost_minor` mutation AND serving a
+  WORKER the full manager money payload (B5), A15's re-resolution (B6), and
+  C11's snapshot substitution. C2 and C3 carry zero rows from anyone (B7).
+  M16 is unbiteable by construction — A6's production route table is dead,
+  tautological code (S2). Reviewer probes: **19 rows, all green on the
+  shipped tree, 16 of 18 mutations now bite exactly one row each**, preserved
+  with sha256 at `probes/reviewer_r1_phase8/` for verbatim adoption.
+  Numbers reproduced independently: **2111 / 23 / 1**, failure set
+  **byte-identical** to the phase-1 list (sorted diff), **+35** collection
+  reconciled exactly (27 new-file + 8 router parametrize). All 19 declared
+  hashes recomputed byte-identical at entry and exit. Disposable round-trip
+  run (r1b skipped it): cold build → head in 1.70s, label present by state
+  query, downgrade succeeds and correctly leaves the label — matching the
+  migration's honest docstring and the `f2c3d4e5f6a7` precedent. The three
+  `alembic check` drifts predate the phase structurally (no model file was
+  touched) → only-if-cheap ledger. Configured DB left at head
+  `c1d2e3f4a5b6`, zero item-economics residue by state query. Graph
+  read-only, zero delta: 172/254, rev `c74eb913…`, 21 pending held.
+
+## Amendments (fix r1, routed from review r1, 2026-08-14) — GOVERNING
+
+Where this block contradicts anything above, THIS BLOCK WINS. Routed from
+`handoffs/reviewer/2026-08-14_phase8_review_r1_handoff.md` (7 blocking /
+6 should-fix / 6 notes, 0 owner cards). The reviewer's 19-row probe file is
+preserved at
+`docs/architecture/under_construction/implementation/item_cost_calculation/probes/reviewer_r1_phase8/test_reviewer_r1_phase8_probe.py`
+(sha256 `b5ac470c704e5f62be3d8752d7eb2b6f4e908469c5e944f764ee1a9d454abe3c`,
+891 lines, ALL GREEN on the shipped tree) — **the fix cycle ADOPTS it
+VERBATIM** (adoption-fidelity rule; every row is the arbiter for a named
+mutation, and every weakening in the review ledger is exactly the shape
+that let the shipped rows pass).
+
+### G1 (B1/B2/B3/B4-partial/B5-partial/B6) — adopt the probe file
+
+Copy the probe file back to
+`app/tests/integration/services/commands/item_economics/` under a phase-8
+name, align ids per P-V, keep its `_cleanup` teardown whole. This alone
+gives arbiters to: the five emission points (READY entry, reopen through
+`add_task_steps`, three terminals with zero-notification fixtures), the
+three straggler rows with EXACT counts, both C1 discriminating rows + the
+worker third site, the C7 hazard + priority rows, C8's three binding
+values, A10's loader equality + non-vacuity, A15's both R17-2 rows, C11's
+snapshot row, C9's quantified disjointness and the two route-money rows.
+
+### G2 (B4) — C7 rebuilt per the call-graph rule
+
+The twelve serializer-echo rows are REPLACED: each row drives its REAL
+producer (`resolve_item_economics_status` for the ten readiness members;
+the committed-evaluation branch for `ok`/`infeasible`) — no two rows share
+a call graph. The probe's hazard row (M12's arbiter) and priority row are
+the templates.
+
+### G3 (B7 + gaps) — the rows built from scratch
+
+C2 (four buckets — A12's `PAUSED`+`SHIFT_ENDED` construction; marked-wrong
+→ `inaccurate_working_seconds` only), C3 (batch dilution: two batchable
+steps, full overlap, each episode = half the wall clock, Σ = wall clock),
+C6b re-entry convergence (§8B.3), C5 config-supersession-after-close →
+recompute byte-identical, and C4's no-steps → 0 COALESCE row. These need
+the analytics time pipeline stood up in fixtures — a build task the
+reviewer correctly did not absorb.
+
+### G4 (S1) — fail-closed audience predicate
+
+The route's inline `role_name in {WORKER, SELLER}` deny-list is REPLACED by
+the mandated `include_monetary_step_fields(role_name)` allow-list (A17-L21)
+— the shipped shape grants full money to any non-canonical role name and
+only `require_roles` masks it. One definition, fail-closed. Criterion: a
+fabricated role name gets the WORKER payload (probe-able through the
+service-selection seam).
+
+### G5 (S2) — the dead route tables are DELETED
+
+`item_economics.py:405-409`'s `_MANAGER_ONLY_ROUTES` / `_ALL_ROLE_ROUTES` /
+`_ROUTES` production block is deleted (zero references; derived from
+`router.routes` so tautological — the hand-written-literal rule). The TEST
+module's hand-written tables are the arbiters; M16's "move" mutation
+re-targets the test table and must redden the all-roles row.
+
+### G6 (S3/S4) — one definition each
+
+`get_item_lifetime_economics` CALLS `serialize_item_lifetime_economics`
+(deleting its inline duplicate dict — charter 4's zero-caller finding);
+`get_task_budget_status.py`'s verbatim copy of `_build_evaluated_status`
+is deleted and both services call the ONE helper — A7's three mutation
+sites are the FILTERS (which stay per-service literals); the money
+computation was never meant to be duplicated (charter 5).
+
+### G7 (S5) — the structural row
+
+`route.response_model is None` asserted over `item_economics.router.routes`
+in the router test (P-H; regression-only is its job).
+
+### G8 (S6) — soft-deleted item on DELETE valuation
+
+The A15 re-resolution's item load raises `NotFound` for a soft-deleted
+item, aborting a delete that succeeded before this phase (unsanctioned
+regression). Corrected per the review's recommendation: when the item is
+soft-deleted (or absent), resolve the preview to `ITEM_UNVALUED` rather
+than refusing — restoring pre-phase behaviour. New criterion row +
+mutation (revert to the raising load → row reds).
+
+### G9 — the mutation pass, NO deferrals
+
+All 18 review-ledger mutations re-run against the adopted+built rows, plus
+G8's. **The deferral cap binds: zero deferrals this cycle** — every
+mutation now has an in-tree arbiter. Per row: site → expected red node id
+(L2's template), sha256 pairs copy-pasted, observed reds, reversion
+proven. M15/M17's already-biting rows are regression re-runs.
+
+### G10 — notes recorded
+
+N1: the reopen touch point's only prior integration coverage is baseline
+failure #5 — the adopted reopen probe row is the mandatory green (L6).
+N2: the worker key-set arbiter sits on `serialize_item_cost_result_worker`
+whose production path is `_serialize_result` — after G6's dedupe, verify
+the arbiter guards the production path. N6/N7 recorded as intended
+behaviour (unreachable today; premise noted). alembic-check drifts →
+only-if-cheap ledger (routed).
+
+- **2026-08-14 — review r1 CONSUMED by the coordinator.** Perimeter exact
+  (probe artifact + 3 docs; app/ byte-identical to `6c1da6b`; probe hash
+  re-verified `b5ac470c…`). Lessons L1–L6 folded into §9 (deferral cap,
+  expected-red rule, call-graph rule, endpoint-boundary rule,
+  hand-written-literal rule, red-coverage flag). This GOVERNING fix block
+  G1–G10; fix prompt
+  `prompts/implementer/2026-08-14_phase8_fix_r1.md`.
