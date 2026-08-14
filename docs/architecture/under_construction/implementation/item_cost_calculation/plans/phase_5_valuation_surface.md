@@ -165,7 +165,11 @@ committed figures.
 
 **L4 — C5 rewritten as the 12-value enumeration (P-V):** one row per §11A.4
 value with an exact outcome or a recorded reachability judgment, parametrize
-ids naming the authority row (`status-row-7-missing-purchase-cost`), each
+ids naming the authority row (example CORRECTED per re-review r2 N1 to §7C.3's
+current numbering: `status-row-8-missing-purchase-cost`; the full order is
+1 major-category, 2 no-group, 3 ambiguous, 4 no-basis, 5 no-model, 6 unvalued,
+7 missing-expected, 8 missing-purchase, 9 currency-mismatch, 10 not-evaluated,
++11/12 group-1), each
 fixture sole-predicate. Judgments to record, not test: `ok`/`infeasible` are
 task-scoped group-1 values (out of the item-scoped preview — state it);
 `not_configured_ambiguous_cost_group` is INV-G3-unreachable via the DB (pure
@@ -342,6 +346,33 @@ ZERO (the fix touches no route/command surface the graph models; N6's five
 reads_from edges and N7's re-link belong to the coordinator's post-approval
 pass).
 
+## Fix r2 amendments (2026-08-14, coordinator-routed from re-review r2 — GOVERNING)
+
+Re-review r2: 0 blocking, 1 should-fix, 7 notes. Everything else CLOSED and
+settled. One test-side item ships this cycle:
+
+**S1 — the L15 guard quantifies over its module set (P-J second ext):** replace
+the single-member assertion with the reviewer's executed correction — every
+in-scope occurrence of `item_major_category_snapshot` must be a
+`resolve_major_category(...)` argument, asserted over ALL of `module_sources`
+(`unmediated == {}`). Expected: `test_configuration.py` at 9 passed baseline;
+mutations M4a (inline chain), M4b (second reader, same module) and M4c (reader
+in another in-scope module) EACH redden it — M4b/M4c left 363 green in r2. The
+`ItemMajorCategoryEnum(` absence check may be dropped (does not generalise);
+the `set_source` string asserts may stay or go.
+
+**N3 ride-along (same file):** one comment above the currency parametrize
+naming which CLAUSE each row arbitrates (`[basis-model]` proves
+`valuation ≠ basis`; `[valuation-basis]` proves `basis ≠ model`) — the
+equal-pair naming is correct but inverts under a casual read.
+
+**Next-touch (NOT this cycle):** N1's C5 id renumbering to §7C.3 (L4's example
+corrected above); N6's pytest-node-id citation. **Phase-6 forward note:** N2 —
+the `client_id DESC` tie-breaker has no arbiter because no fixture ties
+`created_at`; phase 6's bulk valuation creation is when it becomes
+load-bearing (verified correction: two rows with identical `created_at`,
+assert the id order).
+
 ## Review log
 
 (append-only)
@@ -443,3 +474,83 @@ evidence (extends P-V).
 - S5/N1: request validation covers missing currency plus expected-only, cost-only, and both-value acceptance; the persisted-rate fixture uses `13.0000` and expects `76923.08`.
 - Mutation ledger: B1-revert `23cfe90f65bf7b4c1ba536bbf86304e22ba65ccf3cafffac792d2b71ed75e365` → `ab9aebbe6c5047264f051510ba4961f075e6cf8daf8504db6922274214bb3fc1` (red: chain); M4 `e818fa2b74af93c79e1e0709c93e5281d17f3fb1ff5ffb1fddf2306a80fcfad7` → `05587c2b331a341df9234d670507320dc63d4859966fa53ada68017e7655bda8` (red: C5 non-trivial statuses, missing basis/model, chain); M5.a `ee22880184daa7b86ffc367b02fcc1563261cb61f5d9bf1869ecd1544790a957` → `75087586aae405c57117f6417720743102fbc4003336ce2e6e25689800d68bde` (red: basis-model); M5.c `796ad66ee15e530ac57751ea87c9e5de2c9bd15d2ee43fb74427c2de57f0716b` → same (red: valuation-basis); M3.2 `bf241b9d507a70a250224ee5b71558ca216bdf128cab055b25d3ee17247548cf` → same (red: purchase-cost precedence); M8 `8847d378bfb0cae10b324b0e0365125cd78f13311b7e64f72217722c3db87ef2` → `6f586d0f4d086abf5a5c035fe4ca07c99ee1d34723b12b871efb2f717cd4e16c` (red: chain); M8b `f663c2536dcc446baf777a6208d1ac413e185e80f91982c57b8c770428f98f48` → same (red: chain); M9 `ce760b82e31bd56748d8dfddd348df22f8cd9f9fba5af1ce75a16ec658b22bb2` → same (red: chain); M10 `6cc9084f18ae23e360ec56446ff3af4dc4c48b6a3212c844ffa081bf3e964664` → `05587c2b331a341df9234d670507320dc63d4859966fa53ada68017e7655bda8` (red: persisted-rate value); M10b `f20f70d6a3eaa8e188a867b202cd9cb94a8dc316c999a6af16e65fb9a7994b7e` → same (red: persisted-rate value); M7a `f8bc46fc9397e03c64b4e6153df21b87dd5135f10c38e3b16dd276d9130f89ee` → same (red: audit sequence); M7b `c15fbe56688c06767f7d73fb629913ffab66d64bf3e6bac5a489576d056bd58f` → same (red: audit sequence); M11 `e0f6b2551d39b9a255fdebd4c860d48f4ba1be5a73508476483d1da4183a71b3` → same (red: chain back-link); M12 insert-before-close probe → same (red: chain and race). Probe-only files were `set_item_valuation.py`, `configuration.py`, `get_item_valuation_history.py`, and `delete_item_valuation.py`; all were restored before the checkpoint.
 - Focused phase suite: 62 passed. Race subset: 1 passed twice. Full non-e2e: 1968 passed / 23 failed / 1 deselected / 2 warnings; the 23 failures are the established baseline set and no phase-5 test failed. Targeted Ruff and `git diff --check` passed; repository-wide Ruff remains red on 122 pre-existing findings. Alembic: `5caae620088c` (head). Architecture Graph: read-only, zero delta, revision `b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94`.
+
+### 2026-08-14 — re-review r2 (Claude Opus 5) — CHANGES_REQUESTED
+
+Handoff: `handoffs/reviewer/2026-08-14_phase5_rereview_r2_handoff.md` (probe
+declaration with sha256 pairs, corrected anchor spans, write perimeter).
+
+Delta-scoped. Perimeter exact (7 files; tree clean; `git diff a0cebde..HEAD --
+app/` empty; all five declared final hashes match). Production diff is exactly
+two lines, and **both production files are byte-identical to the ones review r1
+produced during correction verification** (`ab9aebbe…`, `75087586…`) — the fix
+shipped the verified corrections and only those. Ruff clean. Suite re-run by me
+on a hash-verified-clean tree: **1968 passed / 23 failed / 1 deselected**,
+collection 1991+1, failure set byte-identical to the phase-1 baseline. Focused
+selector 363 (r1: 345). DB at head `5caae620088c`. Graph read-only, zero delta.
+
+**All four blocking and all five should-fix findings from r1 are CLOSED**, each
+re-proven with a mutation that was green in r1 and reddens now; every declared
+mutant hash reproduced byte-identically:
+- **B1** — the B1-revert mutant (`23cfe90f…`, byte-identical to the old unfixed
+  file) reddens the chain row; the delete-then-reset-then-delete fixture asserts
+  2 open rows / exactly 1 live, then the INV-V1 count.
+- **B2** — 12 parametrize ids map one-for-one onto §11A.4-as-amended (no
+  duplicates/omissions); 3 recorded reachability judgments; sole-predicate
+  verified on 5 sampled rows; every executed row asserts `item_cost_evaluations`
+  unchanged and the owed null numerics.
+- **B3** — M4a (r1's mutant `df1f79b3…`) now reddens the new structural row.
+- **B4/S1** — both currency clause drops (`ee228801…`, `796ad66e…`) and the
+  precedence swap (`bf241b9d…`) each redden exactly their own row; the drop of
+  `val≠basis` gains a second arbiter at the C5 layer; the reduction did not
+  weaken the three fixtures.
+- **S2/S3** — M8 and M8b (both r1-green) now redden; byte-identical re-read,
+  ordered id list against an independently-ordered expectation, INV-V1 count.
+- **S4** — path (i) asserts its blocking observable (`close rowcounts == [0,1]`)
+  and both blocks count INV-V1 `== 1`. Race subset twice + the whole file twice:
+  ten tables flat.
+- **S5/N1** — missing-currency + three accept rows; the `13.0000` fixture makes
+  **M10 (L12's *named* mutation, inert in r1) redden**, alongside M10b.
+
+**1 should-fix: S1 — the L15 structural guard asserts a weaker property than the
+one it constructs.** The test builds `module_sources` over exactly L15's two
+roots (24 modules, verified) and then never asserts the guard against it; the
+only use asserts the string IS present in one file. Executed: keeping the
+resolver call and adding a second unmediated snapshot read in the same module
+(`e1ca0625…`) or adding a snapshot-classifying helper to
+`delete_item_valuation.py` (`88c9f5aa…`) each leave **363 green**. The literal
+amendment is met by M4a; the property it states is not tested, and catching the
+reader added later is the only job a structural row has (P-J). Verified
+correction (executed, 6 lines): count in-scope occurrences minus
+`resolve_major_category(item.item_major_category_snapshot)` occurrences per
+module and assert the remainder is empty — baseline 9 passed, and M4a/M4b/M4c
+each redden it.
+
+**7 notes.** N1 C5's row numbers are a hybrid of the pre-round-12 and post-§7C.3
+numberings and map to no single authority (the plan's own L4 example is
+pre-round-12) → next touch + plan correction; N2 dropping `client_id DESC` alone
+leaves 363 green — no fixture ties `created_at`; not reachable today but
+load-bearing once **phase 6** bulk-creates valuations → phase-6 forward note;
+N3 the renamed currency ids name the pair held EQUAL while the clause each row
+arbitrates is the other one (r1's own wording) — one comment closes the
+misreading trap; N4 two different M4 mutants shipped under one label and the
+ledger's red set belongs to the one that did not exercise the row under review
+(P-I ext); N5 race path (ii) has no rowcount observable (gate-guaranteed, low
+value); N6 the phase-2 citation is prose, not a pytest node id; N7 r1's
+carry-forwards unchanged.
+
+**Graph:** revision `b5e6fe09…`, 153/195, 12 pending, zero delta. Two anchor
+spans moved (+1 in `delete_item_valuation.py`): node
+`command-…-delete-item-valuation` **17–44**, edge `--writes_to-->`
+**39–42**. All other r1 spans re-verified unchanged; the stale
+`domain-item-economics` link is unmoved (`resolve_economics_configuration`
+64–77; recommended re-link `resolve_economics_selection` **80–126**).
+
+**Lessons:** (L1) a structural guard is graded on the reader added *later*, not
+the call replaced *now* — a criterion stating a property over a module set must
+quantify over that set (P-J ext); (L2) parametrize row numbers must cite a
+numbering scheme that still exists, and plans should quote the authority's
+current numbering in id examples (P-V); (L3) a reused mutation name needs a
+mutant hash beside each red set (P-I ext); (L4) process — a reviewer's
+background suite run must not overlap its own probes (my first run reported a
+24th failure that was my own mutant; re-run foreground on a clean tree).

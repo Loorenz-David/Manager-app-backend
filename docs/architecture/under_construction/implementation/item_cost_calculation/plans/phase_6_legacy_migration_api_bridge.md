@@ -152,6 +152,15 @@ BOTH new migrations on a scratch schema; fresh metadata-create succeeds post-dro
   item-money exposure deliberately survives phases 1–5 and ends here, by column
   removal. This phase's projection verifies no interim redaction was assumed anywhere.
 
+- **Forward note (phase-5 re-review r2, N2):** the history query's
+  `client_id DESC` tie-breaker has NO arbiter today because every
+  `set_item_valuation` call stamps its own `created_at` — no fixture ties.
+  THIS phase's legacy money migration bulk-creates valuation rows, plausibly
+  sharing one timestamp: that is when the clause becomes load-bearing.
+  Verified correction (reviewer-supplied): build two rows with an explicit
+  identical `created_at` and assert the `client_id DESC` order in the history
+  read. Carry it as a criterion row here.
+
 ## Review log
 
 (append-only)
