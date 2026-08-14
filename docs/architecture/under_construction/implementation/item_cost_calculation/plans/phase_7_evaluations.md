@@ -4,7 +4,7 @@
 plan: phase 7
 role: phase plan
 date: 2026-08-11
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 ```
 
 ## Goal
@@ -334,6 +334,122 @@ The list above gains:
   vocabulary is 12 — `item_missing_major_category` missing).
 - §7B.1 step 9's `resolve_task.py` citation narrowed to `:102-104` (round 16).
 
+## Amendments (fix r1, routed from review r1, 2026-08-14) — GOVERNING
+
+Where this block contradicts A1–A5 or the base criteria, THIS BLOCK WINS.
+Routed from `handoffs/reviewer/2026-08-14_phase7_review_r1_handoff.md`
+(3 blocking / 5 should-fix / 8 notes, 0 owner cards). The reviewer's probe
+files are preserved at
+`docs/architecture/under_construction/implementation/item_cost_calculation/probes/reviewer_r1/`
+(sha256 `a26f11c1…` general 484 lines / `e42d59d3…` concurrency 343 lines) —
+**the fix cycle ADOPTS them** (B2), it does not re-derive them.
+
+### F1 — B1: the mirror is gated on `kind is COMMITTED`
+
+The mirror block in `_commit_item_cost_evaluation_in_session`
+(`commit_item_cost_evaluation.py:342-355`) gains the same
+`kind is ItemCostEvaluationKindEnum.COMMITTED` gate that already guards the
+history/audit/event blocks below it. Promotion is unaffected (it carries
+`kind=COMMITTED` and SHOULD mirror). **C5 row 7 (new):** a projection created
+with an override differing from the current valuation writes **no** valuation
+row — assert the current valuation row's `client_id` and figures unchanged AND
+exactly one valuation row exists. Named mutation: removing the kind gate at
+the mirror's definition site must redden exactly this row. **P-AB applies
+retroactively:** the helper's `kind` parameter now gates, enumerated: chain S1
+close scope (line 268), `committed_at`, the MIRROR, the history record, the
+audit row, the pending event. Anything else it comes to gate is a finding.
+
+### F2 — B2: the probe rows become the phase's real rows
+
+Both probe files are adopted into
+`tests/integration/services/commands/item_economics/` (renamed
+`test_phase7_criteria.py` / `test_phase7_concurrency.py` or equivalent),
+with parametrize ids naming the authority rows per P-V's standing form.
+Mutation checks per P-I are run per ROW where the plan names one (F1's kind
+gate; M1/M2 under the corrected observables F4/F5; M3/M4 row-1-only; M5;
+M6/M7 as regression re-runs). The concurrency file keeps its committing
+harness, per-test `try/finally` teardown, and 0.4 s bounded waits.
+
+### F3 — B3: C8's byte-unchanged check on a committing two-session harness
+
+The check is rebuilt on `database._session_factory()` (phase-4 recipe,
+`test_phase4_fix_coverage.py:508-582`): read every column of the projection's
+row from a second session before and after the promote; equal on ALL columns
+including `updated_at`. The same-session assertion is deleted.
+
+### F4 — S1: C2's DB-conflict row restated (the prescribed fixture is
+empirically unbuildable)
+
+The direct-INSERT fixture direction is DELETED — the intruder's own FK
+`KEY SHARE` on the task row conflicts with the commit's step-1 `FOR UPDATE`,
+so the commit blocks BEFORE S1 and later supersedes the intruder normally
+(reviewer-observed: two rows, one current, no error). P-S judgment
+re-recorded in the stronger form: `ITEM_COST_CONCURRENT_COMMIT` is
+unreachable from every phase-7 surface AND from the prescribed test shape.
+Discharge = the recorded note + the `INDEX_IDENTITIES` registration + **one
+unit row**: feed `translate_integrity_error` a constructed `IntegrityError`
+carrying `uix_item_cost_evaluations_current` → the exact identity with the
+uniform conflict sentence (the translation's only buildable arbiter).
+
+### F5 — S2: C11's counterparty names its lock MODE (P-T third ext)
+
+C11's observable is restated: the counterparty holds
+`SELECT … FROM tasks … FOR NO KEY UPDATE` (the mode FK `KEY SHARE` does NOT
+conflict with, and `FOR UPDATE` does). With that counterparty the M1 mutation
+(delete `.with_for_update()` in `_load_task_and_primary`) bites:
+`DID NOT RAISE TimeoutError`. The naive `FOR UPDATE`-counterparty observable
+and the two-concurrent-commits observable are recorded as NON-arbiters (the
+evaluation INSERT's own FK lock masks the deletion). Adopt the reviewer's
+working observable from the concurrency probe.
+
+### F6 — S3: C5 row 6's fixture pinned (no override on the blocking commit)
+
+The commit used to prove the step-4 valuation lock carries **no price
+override** — with an override, the commit's own mirror UPDATE re-acquires a
+conflicting lock and masks the M2 deletion. Only the lock observable is
+buildable without a pause seam; the semantic half (manager's figures win
+under both orderings) is discharged by the lock observable + the recorded
+§7B.4 round-16 analysis. Adopt the reviewer's corrected observable.
+
+### F7 — S5: promotion's dead cross-task branch is DELETED (decided)
+
+`promote_item_cost_projection.py:32-34`'s `task_client_id` read is dead —
+the route sends only `{"client_id": …}` and the command promotes onto
+`projection.task_id` (charter rule 4). Delete the branch. C8's cross-task
+row is restated as the REACHABLE guard: cross-WORKSPACE promote → `NotFound`
+(the workspace filter arbitrates), plus the recorded P-S note that cross-task
+is structurally unreachable through the projection-keyed URL.
+
+### F8 — notes taken in this cycle (N1–N4, N7, N8)
+
+- N1: delete the no-op `validate_source_projection_id` validator (the real
+  check lives in the parse helper).
+- N2: correct `auto_commit_item_cost_evaluation_in_session`'s docstring — it
+  raises; the savepoint + handler live in `create_task.py`.
+- N3 (decided): the no-PRIMARY-item skip line's status field carries the
+  literal token **`no_primary_item`** — it is NOT an `EconomicsStatusEnum`
+  member and none is added (§11A.4 is item-readiness vocabulary; the no-item
+  state is task-shaped). C9's tenth row asserts the literal; registered in
+  §6.5 beside the log lines.
+- N4 (decided): C10's which-module-dispatched discrimination claim is
+  DELETED — `event_bus` is a shared module object, so the patch is global by
+  construction. The seam asserts (a) the event fires exactly once and (b)
+  after-commit visibility (the fake dispatch reads the row from a second
+  session). The subordinate-path discipline stays proven by R16-4's
+  structural shape (the append site, inside `create_task`).
+- N7: the P-Z property row additionally asserts `superseded_by_id` points at
+  the actual successor's `client_id` (not merely non-NULL).
+- N8: remove the double blank line at `create_task.py:308-309`.
+
+### F9 — record corrections (S4, already applied by the coordinator)
+
+Tracker row 7's implementer figures annotated as wrong (focused 92, full
+2037/23/1 per the reviewer's foreground runs); §9 gains L1–L6 as P-T 3rd
+ext, P-Q 4th ext, P-R 2nd ext, P-AB, the deferral rule, and P-L 2nd ext.
+N5 (graph node type of `list_task_evaluations`) is HELD for the post-approval
+graph pass; N6 (`_load_preview_inputs` vs `_load_live_inputs` structural pin)
+is routed to phase 8.
+
 ## Review log
 
 (append-only)
@@ -382,3 +498,68 @@ The list above gains:
   the former value and the same test passed. Other named concurrency mutations were
   not run in this implementer session; the corresponding behavioral rows and
   route completeness arbiter are present for the reviewer’s mutation pass.
+
+- **2026-08-14 — review r1 (Claude Opus 5): CHANGES_REQUESTED.** 3 blocking, 5
+  should-fix, 8 notes. Handoff:
+  `handoffs/reviewer/2026-08-14_phase7_review_r1_handoff.md`.
+
+  **B1 (blocking)** — `commit_item_cost_evaluation.py:342-355` runs the §7B.4
+  mirror write without gating on `kind`, and `create_item_cost_projection`
+  routes through the same helper with `kind=PROJECTION`: a projection carrying a
+  price override advances the VALUATION chain, permanently superseding the
+  item's real price with a speculative figure (§7.3, §7B.1 s9, §7B.4, HC-2, C8).
+  Irreversible — deleting the projection does not restore the price and
+  superseded valuations are never deletable (§7.5). Correction: gate on
+  `kind is COMMITTED`; add **C5 row 7** (projection with an override writes no
+  valuation row) with named mutation "removing the `kind is COMMITTED` guard
+  must redden exactly this row". Corroborated by the graph delta, which records
+  `writes_to → item_valuations` for commit and promote but not for projection
+  creation.
+  **B2 (blocking)** — ~52 of ~60 amended C1–C14 rows have no arbiter; 4
+  integration tests + 21 router nodes stand in for the whole phase (charter rule
+  2; P-V 2nd/3rd ext; P-I 6th ext). Reviewer built and ran the missing rows: all
+  pass except B1's, so this is a proof gap, not a correctness gap. Probes
+  preserved for adoption.
+  **B3 (blocking)** — C8's byte-unchanged check reads before/after through the
+  same `db_session` identity map, which A3/C8 explicitly forbids; the shipped
+  fixture never commits, so the criterion is unsatisfiable without phase-4's
+  committing two-session harness.
+  **S1** — A3/C2's prescribed DB-conflict fixture cannot raise the identity: the
+  direct INSERT's FK `KEY SHARE` lock conflicts with step 1's `FOR UPDATE`, so
+  the commit serialises and supersedes normally. P-S judgment confirmed and
+  strengthened; delete the fixture direction.
+  **S2** — C11's named mutation is inert unless the counterparty holds
+  `FOR NO KEY UPDATE` (FK `KEY SHARE` masks it otherwise).
+  **S3** — C5 row 6's named mutation is inert unless the blocking commit carries
+  no override (its own mirror UPDATE re-takes the lock).
+  **S4** — tracker row 7's suite numbers wrong on both figures; reviewer's own
+  foreground runs: focused 92, create_task integration 29, phase-5 valuation 54,
+  full **2037 passed / 23 failed / 1 deselected**, failure set byte-identical to
+  the phase-1 list (23/23), delta +25 reconciled.
+  **S5** — promotion's cross-task guard keys on `task_client_id`, which the
+  projection-keyed route never sends; C8's "another task" row is unreachable
+  through the real surface (P-R/P-S).
+  **N1–N8** — no-op request validator; misleading "never raises" docstring;
+  `no_primary_item` is not an enum token; the C10 event seam patches the shared
+  `event_bus` module, not per-module; graph types `list_task_evaluations` as a
+  command (human adjudication); two unlocked/locked config loaders that must not
+  diverge (routed to phase 8); weak P-Z back-link assertion; stray blank line.
+
+  **Verified correct (settled ground for the re-review):** §7B.1's nine-step
+  order and calculator-before-writes; the resolver gate and all ten §6.4
+  translations; C1 immutability + rederive bit-for-bit; C1 row 1b (the row EXISTS
+  — fixture rate 99.9999 vs derived 13.0208 — and its mutation reddens it; it was
+  merely missing from both ledger lists); all nine C3 rows; C5 rows 1–4 incl.
+  `None == None`; C8 promotion byte-stability and refusals; C9's savepoint and
+  both verbatim log lines; C10's TASK-linked history reaching
+  `get_task_flow_records` with no flow-service change (R16-1 confirmed) and
+  nothing firing on a failed commit; C13's five routes, both role gates and the
+  completeness arbiter; all four C14 ordering pins incl. the equal-`created_at`
+  tie-break and the "integrity check failed" marker; P-Z single definitions and a
+  behaviour-preserving `set_item_valuation` refactor; and all three lock classes
+  (task/valuation `FOR UPDATE`, both chains `FOR SHARE`) proven live by bounded
+  two-session probes with per-clause mutations reddening row 1 only, per chain.
+  Graph read-only, zero delta, revision `0a71061…`, 166/239, 52 pending, nothing
+  adjudicated; 5 sampled items' anchors verified accurate. Every mutation
+  reverted — `git diff -- app/beyo_manager/` empty; economics tables 0 rows
+  before and after; DB at head `be9dfe42a035`.

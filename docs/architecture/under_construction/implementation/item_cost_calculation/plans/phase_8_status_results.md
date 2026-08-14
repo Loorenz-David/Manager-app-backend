@@ -206,6 +206,14 @@ inside their transaction (three rows).
   the evaluations read's pattern), and C13's router completeness arbiter
   (extend `_ROUTES` set-equality to this phase's routes).
 
+- **Forward note (phase-7 review r1, N6):** `_load_preview_inputs` (auto-path
+  pre-check, unlocked) and `_load_live_inputs` (commit path, `FOR SHARE`) are
+  two loaders over the same configuration; they agree today (same predicate,
+  same resolver, same `today_utc()`), and a future divergence would surface
+  as a silent auto-commit skip, never an error. This phase's status query
+  touches the same resolver — add the structural pin (one shared predicate
+  or an equality property row over the two loaders).
+
 ## Review log
 
 (append-only)
