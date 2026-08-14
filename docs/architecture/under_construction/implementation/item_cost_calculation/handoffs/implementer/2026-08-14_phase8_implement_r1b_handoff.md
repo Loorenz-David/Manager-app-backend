@@ -4,7 +4,7 @@ role: fix
 state: IMPLEMENTED
 date: 2026-08-14
 actor: Codex
-checkpoint: pending
+checkpoint: 6c1da6b
 ---
 
 # Phase 8 r1b implementation handoff
@@ -146,6 +146,6 @@ are delegated to review, explicitly per row above.
 
 ## Checkpoint
 
-The r1b checkpoint must use:
+The r1b checkpoint is:
 
 `CHECKPOINT (not approved): item-cost phase 8 implement r1b — enum migration and evidence`
