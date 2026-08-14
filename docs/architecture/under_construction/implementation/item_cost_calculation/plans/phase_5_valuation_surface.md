@@ -586,3 +586,68 @@ background suite run must not overlap its own probes (my first run reported a
 - Database check: `5caae620088c` (head). Architecture Graph was read-only,
   revision `b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94`,
   153 nodes / 195 edges / 12 pending, zero delta.
+
+### 2026-08-14 — re-review r3 (Claude Opus 5) — APPROVED
+
+Handoff: `handoffs/reviewer/2026-08-14_phase5_rereview_r3_handoff.md` (probe
+declaration with sha256 pairs, final anchor-spans table, carry-forwards).
+
+Delta-scoped to r2's single should-fix. Perimeter exact (3 files; one code file,
+`test_configuration.py` +11 lines, final `da1c4e28…` matching the declaration;
+tree clean; `git diff e71b5b4..HEAD -- app/` empty; **zero production change** —
+the three production files are byte-identical to r2's approved state). Ruff
+clean. Suite re-run foreground on a hash-verified-clean tree: **1968 passed /
+23 failed / 1 deselected**, collection 1991+1, failure set byte-identical to the
+phase-1 baseline. Focused 363; `test_configuration.py` 9. DB at head
+`5caae620088c`. Graph read-only, zero delta (`b5e6fe09…`, 153/195, 12 pending).
+
+**S1 CLOSED.** The guard now quantifies over all of `module_sources` — verified
+to resolve to **24 modules** covering both L15 roots (`domain/item_economics/*.py`;
+every file whose parent is an `item_economics` package under `services/`, i.e.
+both `commands/` and `queries/`), with exactly one mediated reader today, so the
+assertion is satisfiable rather than trivially true. All three probe shapes
+redden **exactly** the guard with zero collateral: M4a `df1f79b3…` (red in r2),
+**M4b `1309a947…`** and **M4c `e02b028e…`** (both 363-green in r2). Byte
+provenance stated honestly — M4a reproduces r2's hash exactly; M4b/M4c are the
+same mutations with different bytes (comment line omitted this round). The r2
+removal of the `ItemMajorCategoryEnum(` string check is correct — it never
+generalised and the quantifier subsumes it.
+
+**Vacuity checked (not owed by the prompt):** a `for`-loop over an empty walk
+followed by `assert unmediated == {}` would pass silently; breaking the root
+resolution (mutant `fd389abf…`) instead dies on `FileNotFoundError` at
+`set_path.read_text()`, so the unconditional read plus the membership assertion
+are load-bearing non-vacuity arbiters.
+
+**N3 comment verified accurate** against r2's executed mutations
+(`[basis-model]` proves `valuation ≠ basis`; `[valuation-basis]` proves
+`basis ≠ model`).
+
+**0 blocking, 0 should-fix, 1 new note. N1:** the `services` filter is
+`path.parent.name != "item_economics"`, so one file under an `item_economics`
+package is outside the walk —
+`services/commands/item_economics/requests/__init__.py`. Executed (M4d
+`a5261ce8…`): a snapshot read there leaves 363 green. Note, not a finding — that
+module holds pydantic request models that never hold an `Item` ORM row, so the
+defect has no route there. Verified one-predicate correction
+(`"item_economics" not in path.parts`): reddens M4d, clean tree stays at 9.
+→ next touch.
+
+**Anchor spans: r2's table stands unchanged** (test-only cycle). Final for the
+coordinator's post-approval pass: set node 102–168; delete node 17–44; endpoints
+229–241 / 244–256 / 258–269; set `writes_to` 128–159; delete `writes_to` 39–42;
+history `reads_from` 23–31 and `returns` 32–33; the three router-anchored edges
+229–241 / 229–241 / 258–269. Stale `domain-item-economics` link unmoved —
+re-link `resolve_economics_selection` **80–126**.
+
+**Lessons:** (L1) a criterion mandating a property over a *discovered* set also
+owes a row proving the set is non-empty — `assert x == {}` over an empty walk is
+a silent pass (P-J ext); (L2) a scope predicate should use the wording's
+semantics — L15 writes `services/**/item_economics/`, the test reads "immediate
+parent is `item_economics`", and the two differ on exactly one file.
+
+**Phase 5 closed.** Across four rounds: B1 (a real, reproduced data-access
+defect), B2, B3, B4 and S1–S5 all resolved and independently re-verified; every
+governing round-0 amendment L1–L16 now has a live arbiter; zero findings
+outstanding. Carry-forwards routed in the r3 handoff (r3 N1 + r2 N1/N2/N4/N6 +
+r1 N2/N4/N5/N6/N7).
