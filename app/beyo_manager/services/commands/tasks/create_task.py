@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, text
@@ -42,6 +43,9 @@ from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _resolve_worker_for_section,
 )
 from beyo_manager.services.commands.tasks.note_writes import write_task_note
+from beyo_manager.services.commands.item_economics.commit_item_cost_evaluation import (
+    auto_commit_item_cost_evaluation_in_session,
+)
 from beyo_manager.services.commands.tasks.requests import parse_create_task_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -57,6 +61,7 @@ from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent,
 
 _SELLER_ROLES = {"seller"}
 _SHOPIFY_PREORDER_ROLES = {"admin", "manager", "seller"}
+logger = logging.getLogger(__name__)
 
 
 async def create_task(ctx: ServiceContext) -> dict:
@@ -73,6 +78,7 @@ async def create_task(ctx: ServiceContext) -> dict:
 
     shopify_preorder_result: dict | None = None
     sku_events: list = []
+    economic_pending_events: list = []
     async with maybe_begin(ctx.session):
         task_kwargs: dict[str, str] = {}
         if request.client_id is not None:
@@ -299,6 +305,25 @@ async def create_task(ctx: ServiceContext) -> dict:
             ctx.session.add(task_item)
             await ctx.session.flush()
 
+
+        auto_events: list = []
+        try:
+            async with ctx.session.begin_nested():
+                auto_events = await auto_commit_item_cost_evaluation_in_session(
+                    ctx,
+                    task=task,
+                    item=resolved_item,
+                )
+        except Exception as exc:
+            logger.warning(
+                "item_economics.auto_commit_failed | task_id=%s item_id=%s error=%s",
+                task.client_id,
+                resolved_item.client_id if resolved_item is not None else None,
+                type(exc).__name__,
+            )
+        else:
+            economic_pending_events.extend(auto_events)
+
         if request.shopify_preorder is not None:
             shopify_preorder_result = await _create_preorder_sync_item_in_session(
                 ctx,
@@ -484,6 +509,7 @@ async def create_task(ctx: ServiceContext) -> dict:
             extra={"working_section_ids": [step.working_section_id for step in created_steps]},
         ),
         *sku_events,
+        *economic_pending_events,
     ]
     if created_steps:
         pending_events.append(

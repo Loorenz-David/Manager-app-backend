@@ -35,6 +35,11 @@ _ROUTES = [
     ("PUT", "/api/v1/item-economics/items/itm_1/valuation", {"expected_sale_price_minor": 100, "currency": "swedish_krona"}),
     ("GET", "/api/v1/item-economics/items/itm_1/valuations", None),
     ("DELETE", "/api/v1/item-economics/items/itm_1/valuation", None),
+    ("POST", "/api/v1/item-economics/tasks/tsk_1/evaluations/commit", {}),
+    ("GET", "/api/v1/item-economics/tasks/tsk_1/evaluations", None),
+    ("POST", "/api/v1/item-economics/tasks/tsk_1/projections", {}),
+    ("DELETE", "/api/v1/item-economics/projections/ice_1", None),
+    ("POST", "/api/v1/item-economics/projections/ice_1/promote", None),
 ]
 
 
@@ -93,6 +98,32 @@ def test_router_surface_has_no_term_mutation_and_no_derived_rate_input():
         for path, methods in route_pairs
     )
     assert "cost_per_worker_minute_minor" not in item_economics._BasisVersionBody.model_fields
+
+
+def test_router_route_pairs_match_the_authoritative_route_table():
+    def template(path):
+        for value, placeholder in (
+            ("pcg_1", "{client_id}"),
+            ("wsec_1", "{working_section_client_id}"),
+            ("pcbv_1", "{client_id}"),
+            ("cmv_1", "{client_id}"),
+            ("itm_1", "{item_client_id}"),
+            ("tsk_1", "{task_client_id}"),
+            ("ice_1", "{client_id}"),
+        ):
+            path = path.replace(value, placeholder)
+        return path.removeprefix("/api/v1/item-economics")
+
+    expected = {
+        (method, template(path))
+        for method, path, _ in _ROUTES
+    }
+    actual = {
+        (method, route.path)
+        for route in item_economics.router.routes
+        for method in (route.methods or ())
+    }
+    assert actual == expected
 
 
 def test_router_body_percent_field_carries_planning_allocation_documentation():

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal, ROUND_HALF_EVEN
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError, field_validator
 
@@ -118,6 +119,27 @@ class ItemValuationRequest(_Request):
     currency: ItemCurrencyEnum
 
 
+class CommitItemCostEvaluationRequest(_Request):
+    task_client_id: str
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    label: str | None = Field(default=None, max_length=255)
+
+
+class CreateItemCostProjectionRequest(_Request):
+    task_client_id: str
+    source: Literal["committed", "projection", "scratch"] = "scratch"
+    source_projection_id: str | None = None
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    label: str | None = Field(default=None, max_length=255)
+
+    @field_validator("source_projection_id")
+    @classmethod
+    def validate_source_projection_id(cls, value: str | None) -> str | None:
+        return value
+
+
 def _parse(model: type[BaseModel], data: dict) -> BaseModel:
     try:
         return model.model_validate(data)
@@ -161,4 +183,17 @@ def parse_item_valuation_request(data: dict) -> ItemValuationRequest:
         raise ValidationError(
             "ITEM_COST_VALUATION_AMOUNT_REQUIRED: expected_sale_price_minor or purchase_cost_minor is required"
         )
+    return request  # type: ignore[return-value]
+
+
+def parse_commit_item_cost_evaluation_request(data: dict) -> CommitItemCostEvaluationRequest:
+    return _parse(CommitItemCostEvaluationRequest, data)  # type: ignore[return-value]
+
+
+def parse_create_item_cost_projection_request(data: dict) -> CreateItemCostProjectionRequest:
+    request = _parse(CreateItemCostProjectionRequest, data)
+    if request.source == "projection" and not request.source_projection_id:
+        raise ValidationError("source_projection_id: required when source is projection")
+    if request.source != "projection" and request.source_projection_id is not None:
+        raise ValidationError("source_projection_id: only valid when source is projection")
     return request  # type: ignore[return-value]

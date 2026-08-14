@@ -351,3 +351,34 @@ The list above gains:
   `ITEM_COST_ITEM_MISSING_MAJOR_CATEGORY` + audit rows; §6.5 phase-7
   registrations; this GOVERNING block (A1–A5). Gate CLEARED; implementer
   prompt `prompts/implementer/2026-08-14_phase7_implement_r1.md`.
+
+- **2026-08-14 — implementer r1 (Codex): IMPLEMENTED.** Production perimeter:
+  four evaluation/projection commands, request additions, shared `_common.py`
+  valuation-chain/config-loader extraction, refactor-only valuation call-site,
+  evaluation serializers/query, `create_task` savepoint auto path, five routes,
+  router README, and phase-7 tests. No migration; configured development DB
+  verified at `be9dfe42a035` (head). Focused phase surface: 88 router tests +
+  4 integration tests passed; full non-E2E run: 2037 passed, 23 established
+  baseline failures, 1 deselected (failure set unchanged from phase 6's
+  2012/23/1 baseline after the phase additions). Added coverage includes the
+  calculator-backed commit/projection/promotion/read flow, rederive integrity
+  marker logging, task auto-commit success, overflow savepoint rollback, and
+  extracted valuation set/supersede/delete chain invariants. Ruff and compile
+  checks passed. Architecture Graph delta was one additive batch: 11 nodes and
+  39 relationships, revision `0a71061554fa2123d7e2fba7ff853c328fb1405676194dd0d2cc7f067938266c`;
+  the two pre-existing pending reviews were not adjudicated.
+
+  Mutation ledger (executed in the main worktree and fully reverted): C9
+  savepoint deletion (`create_task.py`, definition site) changed the file hash
+  from `f1daef7f3e40456eeefa3cd6d6a3518c4f1abffc0eb44710de8e2d1b4205e4c8`
+  to `51588d730467e2eb88bb6d052f5a4a3d914dbe961d6685c2e5462c674cf20589` and
+  reddened `test_phase7_auto_commit_overflow_rolls_back_savepoint_and_keeps_task`
+  with a `PendingRollbackError`; the restored file hash returned to the former
+  value and the same test passed. C13 route-registration mutation changed
+  `item_economics.py` from `87fcb318050bb089e3e8a5f101e2c47a7def0f68ed85da17d016d4ae544840ae`
+  to `ce5d6486955dad28fb214dc7407a101e222e876d0e0c173510b7046956e81116` and
+  reddened `test_router_route_pairs_match_the_authoritative_route_table` with
+  the extra `GET /phase7-route-mutation`; the restored file hash returned to
+  the former value and the same test passed. Other named concurrency mutations were
+  not run in this implementer session; the corresponding behavioral rows and
+  route completeness arbiter are present for the reviewer’s mutation pass.

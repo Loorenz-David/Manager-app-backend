@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,12 +17,16 @@ from beyo_manager.services.commands.item_economics.add_section_to_cost_group imp
 from beyo_manager.services.commands.item_economics.create_cost_model_version import create_cost_model_version
 from beyo_manager.services.commands.item_economics.create_production_cost_basis_version import create_production_cost_basis_version
 from beyo_manager.services.commands.item_economics.create_production_cost_group import create_production_cost_group
+from beyo_manager.services.commands.item_economics.commit_item_cost_evaluation import commit_item_cost_evaluation
+from beyo_manager.services.commands.item_economics.create_item_cost_projection import create_item_cost_projection
 from beyo_manager.services.commands.item_economics.delete_cost_model_version import delete_cost_model_version
 from beyo_manager.services.commands.item_economics.delete_item_valuation import delete_item_valuation
+from beyo_manager.services.commands.item_economics.delete_item_cost_projection import delete_item_cost_projection
 from beyo_manager.services.commands.item_economics.delete_production_cost_basis_version import delete_production_cost_basis_version
 from beyo_manager.services.commands.item_economics.delete_production_cost_group import delete_production_cost_group
 from beyo_manager.services.commands.item_economics.remove_section_from_cost_group import remove_section_from_cost_group
 from beyo_manager.services.commands.item_economics.set_item_valuation import set_item_valuation
+from beyo_manager.services.commands.item_economics.promote_item_cost_projection import promote_item_cost_projection
 from beyo_manager.services.commands.item_economics.update_production_cost_group import update_production_cost_group
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_economics_configuration_status import get_economics_configuration_status
@@ -28,6 +34,7 @@ from beyo_manager.services.queries.item_economics.list_cost_model_versions impor
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
 from beyo_manager.services.queries.item_economics.get_item_valuation_history import get_item_valuation_history
+from beyo_manager.services.queries.item_economics.list_task_evaluations import list_task_evaluations
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -85,6 +92,22 @@ class _ItemValuationBody(BaseModel):
     expected_sale_price_minor: int | None = Field(default=None, ge=0)
     purchase_cost_minor: int | None = Field(default=None, ge=0)
     currency: ItemCurrencyEnum
+
+
+class _CommitEvaluationBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    label: str | None = Field(default=None, max_length=255)
+
+
+class _ProjectionBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    source: Literal["committed", "projection", "scratch"] = "scratch"
+    source_projection_id: str | None = None
+    expected_sale_price_minor: int | None = Field(default=None, ge=0)
+    purchase_cost_minor: int | None = Field(default=None, ge=0)
+    label: str | None = Field(default=None, max_length=255)
 
 
 def _ctx(claims: dict, session: AsyncSession, data: dict | None = None, query: dict | None = None) -> ServiceContext:
@@ -267,3 +290,65 @@ async def route_delete_item_valuation(
         session,
         data={"item_client_id": item_client_id},
     )
+
+
+@router.post("/tasks/{task_client_id}/evaluations/commit")
+async def route_commit_item_cost_evaluation(
+    task_client_id: str,
+    body: _CommitEvaluationBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        commit_item_cost_evaluation,
+        claims,
+        session,
+        data={"task_client_id": task_client_id, **body.model_dump(exclude_unset=True)},
+    )
+
+
+@router.get("/tasks/{task_client_id}/evaluations")
+async def route_list_task_evaluations(
+    task_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        list_task_evaluations,
+        claims,
+        session,
+        data={"task_client_id": task_client_id},
+    )
+
+
+@router.post("/tasks/{task_client_id}/projections")
+async def route_create_item_cost_projection(
+    task_client_id: str,
+    body: _ProjectionBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        create_item_cost_projection,
+        claims,
+        session,
+        data={"task_client_id": task_client_id, **body.model_dump(exclude_unset=True)},
+    )
+
+
+@router.delete("/projections/{client_id}")
+async def route_delete_item_cost_projection(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(delete_item_cost_projection, claims, session, data={"client_id": client_id})
+
+
+@router.post("/projections/{client_id}/promote")
+async def route_promote_item_cost_projection(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(promote_item_cost_projection, claims, session, data={"client_id": client_id})

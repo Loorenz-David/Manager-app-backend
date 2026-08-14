@@ -119,3 +119,66 @@ def serialize_item_economics_preview(
         "production_budget_minor": production_budget_minor,
         "allowed_worker_minutes": _decimal(allowed_worker_minutes),
     }
+
+
+def serialize_item_cost_evaluation_term(term: object) -> dict:
+    """Serialize one immutable term snapshot without reading its live model."""
+    calculation_type = getattr(term.calculation_type, "value", term.calculation_type)
+    return {
+        "client_id": term.client_id,
+        "workspace_id": term.workspace_id,
+        "evaluation_id": term.evaluation_id,
+        "name": term.name,
+        "calculation_type": calculation_type,
+        "percent_value": _decimal(term.percent_value),
+        "fixed_amount_minor": term.fixed_amount_minor,
+        "amount_minor": term.amount_minor,
+        "created_at": term.created_at.isoformat(),
+    }
+
+
+def serialize_item_cost_evaluation(
+    evaluation: object,
+    terms: Iterable[object] | None = None,
+    *,
+    error: dict | None = None,
+) -> dict:
+    """Serialize committed and projection rows with a homogeneous error field."""
+    kind = getattr(evaluation.kind, "value", evaluation.kind)
+    currency = getattr(evaluation.currency, "value", evaluation.currency)
+    task_type = getattr(evaluation.task_type_snapshot, "value", evaluation.task_type_snapshot)
+    return {
+        "client_id": evaluation.client_id,
+        "workspace_id": evaluation.workspace_id,
+        "task_id": evaluation.task_id,
+        "item_id": evaluation.item_id,
+        "kind": kind,
+        "label": evaluation.label,
+        "task_type_snapshot": task_type,
+        "return_source_snapshot": (
+            evaluation.return_source_snapshot.value
+            if evaluation.return_source_snapshot is not None
+            else None
+        ),
+        "expected_sale_price_minor": evaluation.expected_sale_price_minor,
+        "purchase_cost_minor": evaluation.purchase_cost_minor,
+        "currency": currency,
+        "cost_model_version_id": evaluation.cost_model_version_id,
+        "production_cost_group_id": evaluation.production_cost_group_id,
+        "production_cost_basis_version_id": evaluation.production_cost_basis_version_id,
+        "monthly_paid_hours_snapshot": _decimal(evaluation.monthly_paid_hours_snapshot),
+        "planning_utilization_percent_snapshot": _decimal(evaluation.planning_utilization_percent_snapshot),
+        "fixed_monthly_cost_minor_snapshot": evaluation.fixed_monthly_cost_minor_snapshot,
+        "cost_per_worker_minute_minor_snapshot": _decimal(evaluation.cost_per_worker_minute_minor_snapshot),
+        "production_budget_minor": evaluation.production_budget_minor,
+        "allowed_worker_minutes": _decimal(evaluation.allowed_worker_minutes),
+        "calculation_version": evaluation.calculation_version,
+        "committed_at": evaluation.committed_at.isoformat() if evaluation.committed_at else None,
+        "superseded_at": evaluation.superseded_at.isoformat() if evaluation.superseded_at else None,
+        "superseded_by_id": evaluation.superseded_by_id,
+        "promoted_from_id": evaluation.promoted_from_id,
+        "created_at": evaluation.created_at.isoformat(),
+        "created_by_id": evaluation.created_by_id,
+        "terms": [serialize_item_cost_evaluation_term(term) for term in (terms or [])],
+        "error": error,
+    }
