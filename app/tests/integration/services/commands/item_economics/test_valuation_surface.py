@@ -366,7 +366,44 @@ async def test_valuation_chain_preview_delete_and_history(db_session):
         )
     ) == 1
 
+    with pytest.raises(ValidationError, match=r"^ITEM_COST_VALUATION_SUPERSEDED_IMMUTABLE:"):
+        await delete_item_valuation(
+            _ctx(db_session, workspace.client_id, user.client_id, {"client_id": rows[0].client_id})
+        )
+
+    audit_events = (
+        await db_session.execute(
+            select(AuditLog.event).where(
+                AuditLog.workspace_id == workspace.client_id,
+                AuditLog.event.in_(("item_valuation.created", "item_valuation.deleted")),
+            ).order_by(AuditLog.created_at.asc(), AuditLog.client_id.asc())
+        )
+    ).scalars().all()
+    assert audit_events == [
+        "item_valuation.created",
+        "item_valuation.created",
+        "item_valuation.deleted",
+        "item_valuation.created",
+        "item_valuation.deleted",
+        "item_valuation.created",
+        "item_valuation.created",
+        "item_valuation.created",
+        "item_valuation.created",
+    ]
+
+
+@pytest.mark.integration
+async def test_synthetic_history_tie_breaker_uses_client_id_desc(db_session):
+    """Synthetic phase-5 tie: phase 6 bulk inserts can share created_at."""
+    token = uuid4().hex
+    workspace = Workspace(client_id=f"ws_tie_{token}", name=f"tie {token}")
+    user = User(client_id=f"usr_tie_{token}", username=f"tie_{token}", email=f"tie_{token}@example.test", password="test")
+    item = Item(client_id=f"itm_tie_{token}", workspace_id=workspace.client_id, created_by_id=user.client_id)
     tie_time = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+    db_session.add_all([workspace, user])
+    await db_session.flush()
+    db_session.add(item)
+    await db_session.flush()
     db_session.add_all(
         [
             ItemValuation(
@@ -392,40 +429,12 @@ async def test_valuation_chain_preview_delete_and_history(db_session):
         ]
     )
     await db_session.flush()
-    tie_history = await get_item_valuation_history(
+    history = await get_item_valuation_history(
         _ctx(db_session, workspace.client_id, user.client_id, {"item_client_id": item.client_id})
     )
-    tie_ids = [
-        row["client_id"]
-        for row in tie_history["item_valuations"]
-        if row["client_id"] in {"ival_tie_a", "ival_tie_z"}
-    ]
-    assert tie_ids == ["ival_tie_z", "ival_tie_a"]
-
-    with pytest.raises(ValidationError, match=r"^ITEM_COST_VALUATION_SUPERSEDED_IMMUTABLE:"):
-        await delete_item_valuation(
-            _ctx(db_session, workspace.client_id, user.client_id, {"client_id": rows[0].client_id})
-        )
-
-    audit_events = (
-        await db_session.execute(
-            select(AuditLog.event).where(
-                AuditLog.workspace_id == workspace.client_id,
-                AuditLog.event.in_(("item_valuation.created", "item_valuation.deleted")),
-            ).order_by(AuditLog.created_at.asc(), AuditLog.client_id.asc())
-        )
-    ).scalars().all()
-    assert audit_events == [
-        "item_valuation.created",
-        "item_valuation.created",
-        "item_valuation.deleted",
-        "item_valuation.created",
-        "item_valuation.deleted",
-        "item_valuation.created",
-        "item_valuation.created",
-        "item_valuation.created",
-        "item_valuation.created",
-    ]
+    assert [
+        row["client_id"] for row in history["item_valuations"] if row["client_id"] in {"ival_tie_a", "ival_tie_z"}
+    ] == ["ival_tie_z", "ival_tie_a"]
 
 
 @pytest.mark.integration

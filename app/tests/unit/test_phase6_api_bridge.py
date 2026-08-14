@@ -131,3 +131,42 @@ def test_create_task_router_preserves_nonnull_money_into_domain_validator(monkey
 
     assert response.status_code == 422
     assert response.json() == {"error": _MESSAGE, "ok": False}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("endpoint_id", "method", "path"),
+    [
+        ("create-item-router", "put", "/items"),
+        ("patch-item-router", "patch", "/items/itm_1"),
+        ("find-or-create-router", "post", "/items/find-or-create"),
+    ],
+    ids=lambda value: value if isinstance(value, str) and value.endswith("router") else None,
+)
+def test_item_router_surfaces_reject_present_nonnull_money(endpoint_id, method, path, monkeypatch):
+    del endpoint_id
+    app = FastAPI()
+    app.include_router(items_router.router, prefix="/items")
+
+    async def fake_get_db():
+        yield object()
+
+    async def fake_run_service(command, context):
+        try:
+            data = await command(context)
+        except DomainError as exc:
+            return SimpleNamespace(success=False, data=None, error=exc)
+        return SimpleNamespace(success=True, data=data, error=None)
+
+    app.dependency_overrides[get_db] = fake_get_db
+    app.dependency_overrides[get_jwt_claims] = lambda: {
+        "role_name": "manager",
+        "workspace_id": "ws_test",
+        "user_id": "usr_test",
+    }
+    monkeypatch.setattr(items_router, "run_service", fake_run_service)
+
+    response = getattr(TestClient(app), method)(path, json={"item_currency": "swedish_krona"})
+
+    assert response.status_code == 422
+    assert response.json() == {"error": _MESSAGE, "ok": False}

@@ -24,12 +24,11 @@ _NON_NEGATIVE_AMOUNTS = """
     (i.item_value_minor IS NULL OR i.item_value_minor >= 0)
     AND (i.item_cost_minor IS NULL OR i.item_cost_minor >= 0)
 """
-_NO_CURRENT_VALUATION = """
+_NO_VALUATION = """
     NOT EXISTS (
         SELECT 1
         FROM item_valuations existing_valuation
         WHERE existing_valuation.item_id = i.client_id
-          AND existing_valuation.is_deleted = false
     )
 """
 
@@ -94,7 +93,7 @@ def _copy_eligible_valuations(bind) -> None:
               AND {_NON_NEGATIVE_AMOUNTS}
               AND i.created_by_id IS NOT NULL
               AND j.valuation_client_id IS NULL
-              AND {_NO_CURRENT_VALUATION}
+              AND {_NO_VALUATION}
             ORDER BY i.client_id
             """
         )
@@ -158,10 +157,7 @@ def _assert_postconditions(bind) -> None:
             f"item money migration journal count mismatch: {journal_count} != {expected_journal_count}"
         )
 
-    created_count = bind.execute(
-        sa.text(f"SELECT count(*) FROM {_JOURNAL} WHERE valuation_client_id IS NOT NULL")
-    ).scalar_one()
-    expected_created_count = bind.execute(
+    unmigrated_eligible_count = bind.execute(
         sa.text(
             f"""
             SELECT count(*)
@@ -172,13 +168,20 @@ def _assert_postconditions(bind) -> None:
               AND i.item_currency IS NOT NULL
               AND {_NON_NEGATIVE_AMOUNTS}
               AND i.created_by_id IS NOT NULL
-              AND j.valuation_client_id IS NOT NULL
+              AND j.valuation_client_id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM item_valuations v
+                  WHERE v.item_id = i.client_id
+                    AND v.client_id IS DISTINCT FROM j.valuation_client_id
+              )
             """
         )
     ).scalar_one()
-    if created_count != expected_created_count:
+    if unmigrated_eligible_count:
         raise RuntimeError(
-            f"item money migration valuation count mismatch: {created_count} != {expected_created_count}"
+            "item money migration left "
+            f"{unmigrated_eligible_count} eligible item(s) unmigrated"
         )
 
     invalid_created = bind.execute(

@@ -225,8 +225,10 @@ stays in the SELECT. Precedent `5caae620088c:26-46`.
 
 **D9:** C6's "fresh metadata-create" clause is REPLACED by the two shipped
 harnesses: the pg_type/pg_attribute structural row (enum survives with
-exactly ONE remaining column user — `item_upholstery_requirements.currency`,
-2 → 1) and the FILTERED `compare_metadata` row (P-X caveat stated). The
+exactly ONE non-journal column user — `item_upholstery_requirements.currency`;
+there are 2 users at head when the journal snapshot column is included, and
+the count becomes 1 only after the journal is squashed) and the FILTERED
+`compare_metadata` row (P-X caveat stated). The
 upgrade→downgrade→upgrade round-trip stays.
 
 **D10:** downgrade re-adds `item_currency` via
@@ -625,3 +627,45 @@ projection's decidability pass should reject a clause where the stated intent an
 the given predicate produce different rows. (iv) A refusal criterion naming a row
 report owes an assertion on the report's contents, not on its identity token —
 especially when one message carries every identity.
+
+### 2026-08-14 — implementer fix r1 (Codex) — IMPLEMENTED
+
+Resolved the review-r1 B1/B2 blockers and S1–S4 findings within the declared
+fix-cycle perimeter. The migration now uses the R15-1 no-valuation predicate
+(any valuation row, including soft-deleted and superseded rows, blocks
+re-creation), and `_assert_postconditions` fails closed on an independently
+constructed eligible-but-unmigrated count. The drop migration docstring names
+the actual parent revision and reports its journal count through a logger.
+
+The migration test harness now has authority-named parametrized rows for the
+P1/P2/P3 refusals, all five C1 totality cases, all four valuation states, the
+run-twice/post-condition path, the intermediate drop-only downgrade state, the
+manual valuation identity-survival check, and the head enum-user count (2
+including the journal snapshot, 1 non-journal user). The nine serializer rows
+use ORM `Item` fixtures and endpoint-specific source expressions; the three
+missing item-router cases run through TestClient; and the phase-5 tie arbiter
+is a separate synthetic test.
+
+Judgments: the superseded-only valuation state is command-unreachable under
+the current valuation-chain commands, but is covered explicitly because the
+migration predicate must still fail closed for it; the static endpoint
+expression checks are the smallest direct arbiter for the six query surfaces
+whose surrounding services require large database graphs, and the R3 inline
+re-exposure probe reddens exactly its upholstery-orders row. No graph
+mutation was made: the pending journal node remains pending, and the D19
+`node:table-item` description/summary maintenance edit remains coordinator
+owned.
+
+Mutation ledger against final hashes:
+
+1. B1/R10: migration baseline `a3228a851997a90c6fdc7239da42370864b8149c5e27fbf79988ef93e7562160`; append `[1:]` at the `_copy_eligible_valuations` call site produced mutant `0190fb19d5fd3b9c57adaf1b9c53a8d2bb5889c8cc7f68dd7021ac37246c3365`; the valid non-deleted authority row reddened with `RuntimeError: item money migration left 1 eligible item(s) unmigrated`, and the disposable transaction rolled back. Reverted.
+2. R2: the same migration baseline; replacing all three refusal ID lists with `[]` produced mutant `e55201f36717ec948e6e261db30af75d3bdceaff5b32c7ae1779db2715d181f6`; all three refusal rows reddened because each seeded client ID was absent. Reverted.
+3. R3: upholstery-orders baseline `b34e8e0ef0446f62c84781621f66cecabea6ccc0eb73e5dbe5f3ef3e81d5f746`; inline legacy-key re-exposure produced mutant `296b29395c5382a6580b569f256eff30ab03546b2953ae21060f0a9646dce7ca`; exactly the `upholstery-orders` serializer row reddened and the other eight stayed green. Reverted.
+
+Evidence: focused phase-6 plus phase-5 tie set **58 passed**; full
+non-e2e suite **2012 passed / 23 established baseline failures / 1
+deselected**; the failure set is the known 23-item baseline; ruff and
+`git diff --check` pass. Configured DB state is `be9dfe42a035 (head)`, journal
+rows 0, legacy item columns 0, and disposable phase-6/reviewer databases 0.
+The final production hashes are migration `a3228a851997a90c6fdc7239da42370864b8149c5e27fbf79988ef93e7562160`
+and drop migration `65f93a2153c1ca81abccd256da4addef08b77398e7af3eb62ce426756b103995`.

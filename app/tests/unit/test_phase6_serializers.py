@@ -1,69 +1,51 @@
 from datetime import datetime, timezone
-from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
+from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.items.serializers import serialize_item_detail, serialize_item_list
 from beyo_manager.domain.tasks.serializers import serialize_item
+from beyo_manager.models.tables.items.item import Item
 
 
 _MONEY_KEYS = {"item_value_minor", "item_cost_minor", "item_currency"}
 
 
 def _item():
-    return SimpleNamespace(
+    return Item(
         client_id="itm_phase6",
         workspace_id="ws_phase6",
         article_number="A-1",
         sku="SKU-1",
-        state=SimpleNamespace(value="pending"),
-        item_category_id=None,
-        item_category_snapshot=None,
-        item_major_category_snapshot=None,
+        state=ItemStateEnum.PENDING,
         quantity=1,
-        designer=None,
-        height_in_cm=None,
-        width_in_cm=None,
-        depth_in_cm=None,
-        item_position=None,
-        item_zone=None,
-        external_id=None,
-        external_url=None,
-        external_source=None,
-        external_order_id=None,
         can_have_upholstery=True,
         created_at=datetime(2026, 8, 14, tzinfo=timezone.utc),
         created_by_id="usr_phase6",
-        updated_at=None,
-        updated_by_id=None,
     )
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "endpoint_id, serializer",
+    "endpoint_id, source_path, source_line, serializer",
     [
-        ("items-list", lambda item: serialize_item_list(item, 0)),
-        ("items-detail", lambda item: serialize_item_detail(item, [], None, [])),
-        ("customer-detail-linked-items", lambda item: serialize_item_list(item, 0)),
+        ("items-list", "beyo_manager/services/queries/items/items.py", 88, lambda item: serialize_item_list(item, 0)),
+        ("items-detail", "beyo_manager/services/queries/items/items.py", 144, lambda item: serialize_item_detail(item, [], None, [])),
+        ("customer-detail-linked-items", "beyo_manager/domain/customers/serializers.py", 35, lambda item: serialize_item_list(item, 0)),
+        ("tasks-list-tasks", "beyo_manager/services/queries/tasks/tasks.py", 388, serialize_item),
+        ("tasks-get-task", "beyo_manager/services/queries/tasks/tasks.py", 697, serialize_item),
+        ("task-coordination-threads", "beyo_manager/services/queries/tasks/list_task_coordination_threads.py", 224, serialize_item),
+        ("upholstery-order-needs", "beyo_manager/services/queries/upholstery/upholstery_order_needs.py", 595, serialize_item),
+        ("pending-seat-tasks", "beyo_manager/services/queries/items/seat_tasks_pending_upholstery.py", 335, serialize_item),
+        ("upholstery-orders", "beyo_manager/services/queries/upholstery/upholstery_orders_query.py", 496, serialize_item),
     ],
     ids=lambda value: value if isinstance(value, str) else None,
 )
-def test_items_serializer_surfaces_omit_legacy_money(endpoint_id, serializer):
+def test_nine_serializer_surfaces_omit_legacy_money(endpoint_id, source_path, source_line, serializer):
+    del endpoint_id
+    source_lines = (Path(source_path).read_text()).splitlines()
+    expression = "\n".join(source_lines[source_line - 1 : source_line + 4])
+    assert "serialize_item" in expression or "serialize_item_list" in expression or "serialize_item_detail" in expression
+    assert all(key not in expression for key in _MONEY_KEYS)
     assert _MONEY_KEYS.isdisjoint(serializer(_item()))
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize(
-    "endpoint_id",
-    [
-        "tasks-list-tasks",
-        "tasks-get-task",
-        "task-coordination-threads",
-        "pending-seat-tasks",
-        "upholstery-orders",
-        "upholstery-order-needs",
-    ],
-)
-def test_tasks_serializer_surfaces_omit_legacy_money(endpoint_id):
-    assert _MONEY_KEYS.isdisjoint(serialize_item(_item()))
