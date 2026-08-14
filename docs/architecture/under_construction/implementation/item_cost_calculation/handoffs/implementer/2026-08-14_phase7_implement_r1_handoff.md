@@ -74,7 +74,9 @@ Tests and records:
   savepoint relocation: **29 passed**.
 - Ruff, `git diff --check`, and Python compile checks passed.
 - Architecture Graph status after the delta: valid, 166 nodes / 239 edges,
-  zero stale nodes, two pre-existing pending reviews untouched; delta revision
+  zero stale nodes, 52 total pending reviews (the two pre-existing reviews
+  were untouched; the additive delta contributes 50 pending inferred items);
+  delta revision
   `0a71061554fa2123d7e2fba7ff853c328fb1405676194dd0d2cc7f067938266c`.
 
 ## Mutation probes (recorded separately)
