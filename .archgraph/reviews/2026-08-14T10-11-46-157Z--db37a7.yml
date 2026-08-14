@@ -1,0 +1,149 @@
+reviewId: 2026-08-14T10-11-46-157Z--db37a7
+reviewedItemIds:
+  - node:endpoint-item-economics-put-valuation
+  - node:endpoint-item-economics-get-valuations
+  - node:endpoint-item-economics-delete-valuation
+  - edge:command-item-economics-set-item-valuation--writes_to-->table-item-valuation
+  - edge:endpoint-item-economics-get-valuations--returns-->table-item-valuation
+  - edge:endpoint-item-economics-put-valuation--returns-->table-item-valuation
+  - edge:endpoint-item-economics-put-valuation--accepts-->command-item-economics-set-item-valuation
+  - edge:endpoint-item-economics-delete-valuation--accepts-->command-item-economics-delete-item-valuation
+  - node:command-item-economics-set-item-valuation
+  - node:command-item-economics-delete-item-valuation
+  - edge:command-item-economics-delete-item-valuation--writes_to-->table-item-valuation
+  - edge:endpoint-item-economics-get-valuations--reads_from-->table-item-valuation
+decisions:
+  - itemId: node:endpoint-item-economics-put-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (229-241); unchanged through both fix cycles; r3
+      final table.
+  - itemId: node:endpoint-item-economics-get-valuations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (244-256); unchanged; r3 final table.
+  - itemId: node:endpoint-item-economics-delete-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (258-269); unchanged; r3 final table.
+  - itemId: edge:command-item-economics-set-item-valuation--writes_to-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (S1-S2-S3 write chain 128-159, anchored in the
+      command file per the phase-4 lesson); unchanged; r3 final.
+  - itemId: edge:endpoint-item-economics-get-valuations--returns-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (32-33); unchanged; r3 final.
+  - itemId: edge:endpoint-item-economics-put-valuation--returns-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (229-241); unchanged; r3 final.
+  - itemId: edge:endpoint-item-economics-put-valuation--accepts-->command-item-economics-set-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (229-241); unchanged; r3 final.
+  - itemId: edge:endpoint-item-economics-delete-valuation--accepts-->command-item-economics-delete-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: r1 verified exact (258-269); unchanged; r3 final.
+  - itemId: node:command-item-economics-set-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+            symbol: set_item_valuation
+            startLine: 102
+            endLine: 165
+          to:
+            path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+            symbol: set_item_valuation
+            startLine: 102
+            endLine: 168
+    rationale: "r1: claim true, declared span 3 lines short (cut mid-dict); r1-r3
+      final 102-168, coordinator re-read (async def :102, return :168)."
+  - itemId: node:command-item-economics-delete-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+            symbol: delete_item_valuation
+            startLine: 17
+            endLine: 43
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+            symbol: delete_item_valuation
+            startLine: 17
+            endLine: 44
+    rationale: r1 exact at 17-43; fix-r1's B1 line moved the end +1; r2/r3 final
+      17-44, coordinator re-read (async def :17, return :44, file 44 lines).
+  - itemId: edge:command-item-economics-delete-item-valuation--writes_to-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+            symbol: delete_item_valuation
+            startLine: 31
+            endLine: 42
+          to:
+            path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+            startLine: 39
+            endLine: 42
+    rationale: "r1: declared span WIDE (started at a SELECT, ended in the audit
+      write); narrowed to the soft-delete write site, shifted +1 by fix-r1;
+      final 39-42 re-read (is_deleted=True :39, flush :42)."
+  - itemId: edge:endpoint-item-economics-get-valuations--reads_from-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+            symbol: get_item_valuation_history
+            startLine: 23
+            endLine: 33
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+            startLine: 23
+            endLine: 31
+    rationale: "r1: declared span wide by 2 (included the return); final 23-31
+      re-read (execute :23, scalars :31); the return lines belong to the returns
+      edge."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T10:11:46.157Z
+graphRevisionBefore: b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94
+graphRevisionAfter: 6164ed69a2a6e743f51b98ff0db18e7cc29d206e8b372fcbcb9dab221fc83e5f
+evidenceSummary: 12 evidence entries across 4 files; no drift detected
+humanInstruction: "Phase-5 post-approval batch under master plan §8 standing
+  owner authorization: 12 items — all claims verified TRUE by review r1 with the
+  anchor service, spans re-verified by re-reviews r2/r3 (final table), four
+  re-anchored (set node +3 mid-dict cut; delete node/writes_to shifted by
+  fix-r1's one-line B1 fix; history reads narrowed off the return lines), all
+  spans re-read by the coordinator at adjudication."
+reviewTokenCorrelation: 2ecf8a6a61a7

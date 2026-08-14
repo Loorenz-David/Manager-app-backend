@@ -3002,14 +3002,14 @@ nodes:
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-12T13:58:28.708Z
-    updatedAt: 2026-08-13T15:39:28.987Z
+    updatedAt: 2026-08-14T10:13:19.132Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/configuration.py
-        symbol: resolve_economics_configuration
-        startLine: 44
-        endLine: 82
-        contentHash: e41ab910a3935d58ebadd8531a4bdefe5764d1e80d3cea77fe0659de8d57239e
-        linkedAt: 2026-08-13T15:39:28.987Z
+        symbol: resolve_economics_selection
+        startLine: 80
+        endLine: 126
+        contentHash: 75087586aae405c57117f6417720743102fbc4003336ce2e6e25689800d68bde
+        linkedAt: 2026-08-14T10:13:19.132Z
   - id: command-item-economics-create-production-cost-group
     type: command
     name: create_production_cost_group
@@ -3691,16 +3691,27 @@ nodes:
         - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
           symbol: set_item_valuation
           startLine: 102
+          endLine: 168
+          summary: The command scopes the item, closes the current valuation, inserts and
+            flushes a new valuation, computes preview values, and audits
+            item_valuation.created.
+          inferenceReason: This implementation establishes the valuation-write command and
+            its version-chain behavior.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          symbol: set_item_valuation
+          startLine: 102
           endLine: 165
           summary: The command scopes the item, closes the current valuation, inserts and
             flushes a new valuation, computes preview values, and audits
             item_valuation.created.
           inferenceReason: This implementation establishes the valuation-write command and
             its version-chain behavior.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T10:11:46.136Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - id: command-item-economics-delete-item-valuation
     type: command
     name: delete_item_valuation
@@ -3711,16 +3722,27 @@ nodes:
         - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
           symbol: delete_item_valuation
           startLine: 17
+          endLine: 44
+          summary: The command resolves a workspace-scoped valuation, rejects superseded
+            rows, soft-deletes the current row, and audits
+            item_valuation.deleted.
+          inferenceReason: This implementation establishes the valuation deletion command
+            and superseded-row immutability boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+          symbol: delete_item_valuation
+          startLine: 17
           endLine: 43
           summary: The command resolves a workspace-scoped valuation, rejects superseded
             rows, soft-deletes the current row, and audits
             item_valuation.deleted.
           inferenceReason: This implementation establishes the valuation deletion command
             and superseded-row immutability boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T10:11:46.136Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - id: endpoint-item-economics-put-valuation
     type: endpoint
     name: PUT /api/v1/item-economics/items/{item_client_id}/valuation
@@ -3734,10 +3756,10 @@ nodes:
           summary: The router exposes the PUT valuation path, applies ADMIN/MANAGER role
             gates, and delegates to set_item_valuation.
           inferenceReason: The route is the HTTP entry point for the valuation write command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - id: endpoint-item-economics-get-valuations
     type: endpoint
     name: GET /api/v1/item-economics/items/{item_client_id}/valuations
@@ -3751,10 +3773,10 @@ nodes:
           summary: The router exposes the GET valuations path, applies ADMIN/MANAGER role
             gates, and delegates to get_item_valuation_history.
           inferenceReason: The route is the HTTP entry point for valuation history reads.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - id: endpoint-item-economics-delete-valuation
     type: endpoint
     name: DELETE /api/v1/item-economics/items/{item_client_id}/valuation
@@ -3768,10 +3790,31 @@ nodes:
           summary: The router exposes the DELETE valuation path, applies ADMIN/MANAGER
             role gates, and delegates to delete_item_valuation.
           inferenceReason: The route is the HTTP entry point for current valuation deletion.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
+  - id: table-item
+    type: table
+    name: items
+    description: "The legacy item row: identity, category snapshots
+      (item_major_category_snapshot String(64) nullable), position, and — until
+      phase 6's migration — the legacy money columns (item_value_minor,
+      item_cost_minor, item_currency) that ItemValuation supersedes."
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/items/item.py
+          startLine: 1
+          endLine: 60
+          summary: "The Item model: identity, category snapshot at :51 (String(64),
+            nullable), legacy money columns."
+          inferenceReason: The item-economics domain reads this table (valuation
+            attachment, category snapshot); phase 6's legacy migration rewrites
+            its money columns — the node is needed to record both.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -6790,10 +6833,10 @@ edges:
           endLine: 241
           summary: The PUT route delegates to set_item_valuation.
           inferenceReason: The endpoint accepts the valuation set command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: endpoint-item-economics-delete-valuation
     relationshipType: accepts
     targetNodeId: command-item-economics-delete-item-valuation
@@ -6805,10 +6848,10 @@ edges:
           endLine: 269
           summary: The DELETE route delegates to delete_item_valuation.
           inferenceReason: The endpoint accepts the valuation delete command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: command-item-economics-set-item-valuation
     relationshipType: writes_to
     targetNodeId: table-item-valuation
@@ -6821,15 +6864,22 @@ edges:
           summary: The command updates the current item_valuations row, inserts a new
             ItemValuation, and links superseded_by_id.
           inferenceReason: These write sites establish the command's persistence boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: command-item-economics-delete-item-valuation
     relationshipType: writes_to
     targetNodeId: table-item-valuation
     metadata:
       evidence:
+        - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
+          startLine: 39
+          endLine: 42
+          summary: The command updates is_deleted and deletion metadata on
+            item_valuations.
+          inferenceReason: This write site establishes the deletion command's table boundary.
+      evidenceHistory:
         - path: app/beyo_manager/services/commands/item_economics/delete_item_valuation.py
           symbol: delete_item_valuation
           startLine: 31
@@ -6837,15 +6887,23 @@ edges:
           summary: The command updates is_deleted and deletion metadata on
             item_valuations.
           inferenceReason: This write site establishes the deletion command's table boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T10:11:46.136Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: endpoint-item-economics-get-valuations
     relationshipType: reads_from
     targetNodeId: table-item-valuation
     metadata:
       evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+          startLine: 23
+          endLine: 31
+          summary: The history query selects workspace-scoped non-deleted ItemValuation
+            rows and orders them by created_at and client_id descending.
+          inferenceReason: The query implementation establishes the endpoint's read boundary.
+      evidenceHistory:
         - path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
           symbol: get_item_valuation_history
           startLine: 23
@@ -6853,10 +6911,11 @@ edges:
           summary: The history query selects workspace-scoped non-deleted ItemValuation
             rows and orders them by created_at and client_id descending.
           inferenceReason: The query implementation establishes the endpoint's read boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-14T10:11:46.136Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: endpoint-item-economics-put-valuation
     relationshipType: returns
     targetNodeId: table-item-valuation
@@ -6869,10 +6928,10 @@ edges:
           summary: The PUT route returns the command result containing the serialized item
             valuation.
           inferenceReason: The endpoint returns the newly persisted valuation representation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
   - sourceNodeId: endpoint-item-economics-get-valuations
     relationshipType: returns
     targetNodeId: table-item-valuation
@@ -6885,7 +6944,95 @@ edges:
           summary: The history query serializes each selected ItemValuation into the
             returned item_valuations collection.
           inferenceReason: The endpoint returns valuation history entities.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-13T20:52:04.060Z
-    updatedAt: 2026-08-13T20:52:04.060Z
+    updatedAt: 2026-08-14T10:11:46.136Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-item
+    description: The valuation set command resolves the target item (and its
+      category snapshot) before writing.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 106
+          endLine: 110
+          summary: select(Item) by workspace + item client_id resolves the item the
+            valuation attaches to.
+          inferenceReason: "Phase-5 review r1 N6: the command's read boundary was
+            invisible in the recorded delta; the preview computation reads five
+            tables."
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-production-cost-group
+    description: The preview loader reads the workspace's active cost groups for
+      §7C.2 selection.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 39
+          endLine: 44
+          summary: select(ProductionCostGroup) scoped to the workspace in
+            _load_preview_inputs.
+          inferenceReason: "Review r1 N6: the preview's read surface was missing from the
+            delta."
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-production-cost-basis-version
+    description: The preview loader reads basis versions for the selected group's
+      applicable rate.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 47
+          endLine: 52
+          summary: select(ProductionCostBasisVersion) in _load_preview_inputs.
+          inferenceReason: "Review r1 N6: the preview's read surface was missing from the
+            delta."
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-cost-model-version
+    description: The preview loader reads cost model versions for the applicable model.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 55
+          endLine: 60
+          summary: select(CostModelVersion) in _load_preview_inputs.
+          inferenceReason: "Review r1 N6: the preview's read surface was missing from the
+            delta."
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z
+  - sourceNodeId: command-item-economics-set-item-valuation
+    relationshipType: reads_from
+    targetNodeId: table-cost-model-term
+    description: The preview loader reads the selected model's non-deleted terms
+      (the item_missing_purchase_cost predicate needs them).
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          startLine: 72
+          endLine: 78
+          summary: select(CostModelTerm) for the selected model version in
+            _load_preview_inputs.
+          inferenceReason: "Review r1 N6: the preview's read surface was missing from the
+            delta; §11A.4 row 8 requires the term rows."
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-14T10:12:40.934Z
+    updatedAt: 2026-08-14T10:12:40.934Z

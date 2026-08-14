@@ -1,0 +1,28 @@
+changeId: 2026-08-14T10-13-02-144Z--77a875
+operations:
+  - itemId: node:domain-item-economics
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/domain/item_economics/configuration.py
+        symbol: resolve_economics_configuration
+        startLine: 44
+        endLine: 82
+    after: {}
+    rationale: "Phase-5 r1 N7 (re-verified r3): L1's rework moved
+      resolve_economics_configuration to 64-77 (now a 14-line delegating
+      wrapper); the stored 44-82 span is stale. Unlinking to re-record onto the
+      selection authority in the next change set."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T10:13:02.144Z
+graphRevisionBefore: fe76aa7a200832654fde7cdcb12f7905d75b458c98fb8468f1e9869e91166b4b
+graphRevisionAfter: 63f9eed4c3aec119d97acd8fedd1d2f3e29023d0c4f1c977049b9120cb1d424f
+humanInstruction: "Phase-5 closeout graph pass, §8 standing authorization: step
+  1 of 2 — remove the stale domain-item-economics source link (L1's rework
+  reduced resolve_economics_configuration to a wrapper at 64-77; stored span
+  44-82 no longer matches)."
+changeTokenCorrelation: 77ea0d751da4

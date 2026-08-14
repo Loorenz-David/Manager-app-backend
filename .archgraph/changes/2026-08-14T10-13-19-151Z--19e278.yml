@@ -1,0 +1,29 @@
+changeId: 2026-08-14T10-13-19-151Z--19e278
+operations:
+  - itemId: node:domain-item-economics
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/domain/item_economics/configuration.py
+        symbol: resolve_economics_selection
+        startLine: 80
+        endLine: 126
+      effect: add
+    rationale: "Step 2 of 2: re-record onto the §7C.2 resolution authority after
+      phase-5 L1 — resolve_economics_selection at 80-126 (span verified by
+      reviews r1/r2/r3, unmoved by the fix cycles);
+      resolve_economics_configuration is now a delegating wrapper over it."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-14T10:13:19.151Z
+graphRevisionBefore: 63f9eed4c3aec119d97acd8fedd1d2f3e29023d0c4f1c977049b9120cb1d424f
+graphRevisionAfter: bd72c36d79c6ec26e75019fcbb4b29ab8d463c4a76c89e47e963e900fc52325e
+humanInstruction: "Phase-5 closeout graph pass, §8 standing authorization: step
+  2 of 2 — record the domain source link onto resolve_economics_selection
+  (configuration.py:80-126), the §7C.2 resolution authority; span verified by
+  three review rounds and re-read at closeout."
+changeTokenCorrelation: 22094d0a6d40
