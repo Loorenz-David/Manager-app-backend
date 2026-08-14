@@ -402,6 +402,33 @@ Reporter role (ledger `open/` directory, observations with path:line,
 separate from conclusions) and records them in the handoff; the coordinator
 handles them in the post-approval pass. Never silently worked around.
 
+### A18 (implement-r1 consumption, 2026-08-14) — the phase DOES need a migration
+
+**Projection-record correction (records are evidence):** L25's "no migration
+needed ✔ confirmed against the live schema" and A5's "NO migration" were
+WRONG — the projection verified `item_cost_results` exists but missed that
+`TaskType` is a native PG enum (`task_type_enum`, `create_type=False`).
+Adding `PROCESS_ITEM_COST_RESULT` to the Python enum without
+`ALTER TYPE task_type_enum ADD VALUE 'process_item_cost_result'` makes EVERY
+emit fail at INSERT — coordinator-reproduced: the full suite reads
+2065/47/1, and all 24 non-established failures are task-boundary paths dying
+on `invalid input value for enum task_type_enum` (force-ready ×6,
+ended-shift-bucket ×5, finalize-pending-completion ×4, worker-shift ×1, +8).
+The implement-r1 handoff's "dirty database / duplicate seeded rows"
+diagnosis is CORRECTED in the record: roles = 4 rows / 4 distinct names, no
+working-section duplicates, and the audit-log/router/unit failures it saw
+are established baseline members #14–23.
+
+**The fix (r1b):** one migration on head `be9dfe42a035` —
+`ALTER TYPE task_type_enum ADD VALUE 'process_item_cost_result'` — slug
+`add_process_item_cost_result_task_type`, following the in-tree precedent
+`f2c3d4e5f6a7_add_shopify_process_products_task_type.py` (PG 18.4; five
+precedents exist). §10's head entry moves to the new revision at r1b
+checkpoint. Criterion: the C6/C10 emission rows run against the migrated
+disposable AND the configured dev DB at the new head; the enum member is
+asserted present via a state query (L5 discipline: environment facts by
+state assertion, never exit codes).
+
 ### A17 (L21/L22/L23/L24) — reuse, harnesses, mechanics, counts
 
 - Route service selection reuses `include_monetary_step_fields(role_name)`
@@ -455,3 +482,28 @@ handles them in the post-approval pass. Never silently worked around.
   6 nodes and 15 relationships (one duplicate relationship skipped), revision
   `c74eb913…`. Named mutation probes were not run in this implementation session
   and remain an explicit review follow-up; no probe artifacts were altered.
+
+- **2026-08-14 — implement r1 CONSUMED by the coordinator: INCOMPLETE —
+  routed back as r1b, NOT to review.** Checkpoint `ae12f23` (29 files;
+  perimeter matches the fence; the three A16 discrepancy filings present;
+  graph +6 nodes/+15 edges, 21 pending, rev `c74eb913…`; `git diff
+  ae12f23..HEAD -- app/` empty). Production surface delivered BUT:
+  (1) **confirmed production defect** — `TaskType.PROCESS_ITEM_COST_RESULT`
+  added to the Python enum with NO `ALTER TYPE` migration; the coordinator
+  reproduced the full suite foreground at **2065 / 47 / 1** and root-caused
+  ALL 24 non-established failures to `invalid input value for enum
+  task_type_enum: "process_item_cost_result"` raised by the new emits on
+  every task-boundary path (force-ready ×6, ended-shift-bucket ×5,
+  finalize-pending-completion ×4, worker-shift ×1, +8). The r1 handoff's
+  "dirty database / duplicate seeded role and working-section rows"
+  diagnosis is CORRECTED in the record: measured roles = 4 rows / 4
+  distinct names, zero working-section duplicates, and every failure the
+  handoff called environmental is an established baseline member (#14–23
+  of the phase-1 list — audit-log's `ws_test` FK included). A18 governs
+  the fix. (2) Proof nearly absent: 5 unit tests against ~60 amended rows
+  (no integration criterion built), NO mutation ledger (a blanket
+  deferral, against §9's deferral rule which requires per-row deferral in
+  the ledger), NO final hashes cited (first handoff since phase 3 without
+  them), and the R2-N2 hardening file untouched despite being in the
+  fence. r1b prompt:
+  `prompts/implementer/2026-08-14_phase8_implement_r1b.md`.
