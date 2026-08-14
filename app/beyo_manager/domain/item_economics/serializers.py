@@ -182,3 +182,104 @@ def serialize_item_cost_evaluation(
         "terms": [serialize_item_cost_evaluation_term(term) for term in (terms or [])],
         "error": error,
     }
+
+
+def _enum_value(value: object) -> object:
+    return getattr(value, "value", value)
+
+
+def _serialize_result(
+    result: object,
+    *,
+    include_monetary: bool,
+    percent_consumed: object | None = None,
+) -> dict:
+    if not include_monetary:
+        # This is deliberately an enumerated worker surface. Do not add a
+        # monetary field here as a convenience; the worker contract is minutes
+        # and percentage only.
+        return {
+            "actual_worker_minutes": _decimal(result.actual_worker_minutes),
+            "variance_worker_minutes": _decimal(result.variance_worker_minutes),
+            "percent_consumed": _decimal(percent_consumed),
+            "task_state_snapshot": _enum_value(result.task_state_snapshot),
+            "computed_at": result.computed_at.isoformat(),
+        }
+    return {
+        "actual_worker_seconds": result.actual_worker_seconds,
+        "actual_worker_minutes": _decimal(result.actual_worker_minutes),
+        "consumed_cost_minor": result.consumed_cost_minor,
+        "variance_worker_minutes": _decimal(result.variance_worker_minutes),
+        "variance_cost_minor": result.variance_cost_minor,
+        "task_state_snapshot": _enum_value(result.task_state_snapshot),
+        "task_closed_at": result.task_closed_at.isoformat() if result.task_closed_at else None,
+        "calculation_version": result.calculation_version,
+        "computed_at": result.computed_at.isoformat(),
+    }
+
+
+def serialize_item_cost_result(result: object) -> dict:
+    return _serialize_result(result, include_monetary=True)
+
+
+def serialize_item_cost_result_worker(result: object) -> dict:
+    return _serialize_result(result, include_monetary=False)
+
+
+def serialize_task_budget_status(
+    status: object,
+    *,
+    include_monetary: bool,
+) -> dict:
+    """Serialize the manager or worker budget-status view."""
+    payload = {
+        "status": _enum_value(status.status),
+        "item_binding": status.item_binding,
+        "actual_worker_seconds": status.actual_worker_seconds,
+        "actual_worker_minutes": _decimal(status.actual_worker_minutes),
+        "remaining_worker_minutes": _decimal(status.remaining_worker_minutes),
+        "percent_consumed": _decimal(status.percent_consumed),
+        "variance_worker_minutes": _decimal(status.variance_worker_minutes),
+        "result": (
+            _serialize_result(
+                status.result,
+                include_monetary=include_monetary,
+                percent_consumed=status.percent_consumed,
+            )
+            if status.result is not None
+            else None
+        ),
+    }
+    if include_monetary:
+        payload.update(
+            {
+                "production_budget_minor": status.production_budget_minor,
+                "allowed_worker_minutes": _decimal(status.allowed_worker_minutes),
+                "consumed_cost_minor": status.consumed_cost_minor,
+                "variance_cost_minor": status.variance_cost_minor,
+                "evaluation_id": status.evaluation_id,
+                "item_id": status.item_id,
+            }
+        )
+    else:
+        payload["allowed_worker_minutes"] = _decimal(status.allowed_worker_minutes)
+    return payload
+
+
+def serialize_item_lifetime_economics(
+    episodes: list[dict],
+    totals: dict,
+    *,
+    limit: int,
+    offset: int,
+    has_more: bool,
+) -> dict:
+    return {
+        "episodes": episodes,
+        "totals": totals,
+        "episodes_pagination": {
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+        },
+    }

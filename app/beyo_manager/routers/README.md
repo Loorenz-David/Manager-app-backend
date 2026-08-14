@@ -76,6 +76,8 @@
 | POST | /api/v1/item-economics/tasks/{task_client_id}/projections | item-economics | route_create_item_cost_projection_api_v1_item_economics_tasks__task_client_id__projections_post |
 | DELETE | /api/v1/item-economics/projections/{client_id} | item-economics | route_delete_item_cost_projection_api_v1_item_economics_projections__client_id__delete |
 | POST | /api/v1/item-economics/projections/{client_id}/promote | item-economics | route_promote_item_cost_projection_api_v1_item_economics_projections__client_id__promote_post |
+| GET | /api/v1/item-economics/tasks/{task_client_id}/budget-status | item-economics | route_get_task_budget_status_api_v1_item_economics_tasks__task_client_id__budget_status_get |
+| GET | /api/v1/item-economics/items/{item_client_id}/economics | item-economics | route_get_item_lifetime_economics_api_v1_item_economics_items__item_client_id__economics_get |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
 | POST | /api/v1/item-upholsteries/mark-ordered | item-upholsteries | route_mark_ordered_api_v1_item_upholsteries_mark_ordered_post |
 | POST | /api/v1/item-upholsteries/reallocate-stock | item-upholsteries | route_reallocate_stock_api_v1_item_upholsteries_reallocate_stock_post |

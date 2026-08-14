@@ -1,6 +1,7 @@
 """WORKER-1: Process step state transition events — update analytics stats tables."""
 
 import logging
+from dataclasses import asdict
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -9,14 +10,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.execution.payloads.step_transition import StepTransitionPayload
-from beyo_manager.domain.task_steps.constants import TIME_BEARING_STATES
+from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.execution.payloads.item_cost_result import ItemCostResultPayload
+from beyo_manager.domain.task_steps.constants import TERMINAL_TASK_STATES, TIME_BEARING_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.tables.items.item_issue import ItemIssue
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.services.infra.execution.db import task_db_session
+from beyo_manager.services.infra.execution.task_factory import create_instant_task
 from beyo_manager.services.queries.analytics.averaged_time import compute_record_contributions
 from beyo_manager.services.queries.analytics.reconcile_user_time import (
     apply_completion_reconcile_deltas,
@@ -71,6 +77,24 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
                 credited_user_display_name, work_date, now, result,
             )
             await _recompute_step_time_totals(session, payload.workspace_id, payload.step_id, now)
+            task = await session.scalar(
+                select(Task).where(
+                    Task.workspace_id == payload.workspace_id,
+                    Task.client_id == payload.task_id,
+                    Task.is_deleted.is_(False),
+                )
+            )
+            if task is not None and (
+                task.state == TaskStateEnum.READY or task.state in TERMINAL_TASK_STATES
+            ):
+                await create_instant_task(
+                    session=session,
+                    task_type=TaskType.PROCESS_ITEM_COST_RESULT,
+                    payload=asdict(ItemCostResultPayload(
+                        workspace_id=payload.workspace_id,
+                        task_id=payload.task_id,
+                    )),
+                )
             logger.info(
                 "step_time_recomputed | workspace_id=%s user_id=%s step_id=%s work_date=%s closing_state=%s",
                 payload.workspace_id, payload.credited_user_id, payload.step_id, work_date, closing_state.value,
@@ -303,4 +327,3 @@ async def _fetch_task_step(session: AsyncSession, step_id: str, workspace_id: st
         )
     )
     return result.scalar_one_or_none()
-

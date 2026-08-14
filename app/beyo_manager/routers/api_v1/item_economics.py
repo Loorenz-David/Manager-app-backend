@@ -12,7 +12,7 @@ from beyo_manager.domain.items.enums import ItemCurrencyEnum, ItemMajorCategoryE
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.commands.item_economics.add_section_to_cost_group import add_section_to_cost_group
 from beyo_manager.services.commands.item_economics.create_cost_model_version import create_cost_model_version
 from beyo_manager.services.commands.item_economics.create_production_cost_basis_version import create_production_cost_basis_version
@@ -30,12 +30,18 @@ from beyo_manager.services.commands.item_economics.promote_item_cost_projection 
 from beyo_manager.services.commands.item_economics.update_production_cost_group import update_production_cost_group
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_economics_configuration_status import get_economics_configuration_status
+from beyo_manager.services.queries.item_economics.get_item_lifetime_economics import get_item_lifetime_economics
+from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
+from beyo_manager.services.queries.item_economics.get_task_budget_status_worker import get_task_budget_status_worker
 from beyo_manager.services.queries.item_economics.list_cost_model_versions import list_cost_model_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
 from beyo_manager.services.queries.item_economics.get_item_valuation_history import get_item_valuation_history
 from beyo_manager.services.queries.item_economics.list_task_evaluations import list_task_evaluations
 from beyo_manager.services.run_service import run_service
+from beyo_manager.domain.item_economics.serializers import (
+    serialize_task_budget_status,
+)
 
 router = APIRouter()
 
@@ -122,6 +128,20 @@ def _ctx(claims: dict, session: AsyncSession, data: dict | None = None, query: d
 async def _run(function, claims: dict, session: AsyncSession, *, data: dict | None = None, query: dict | None = None):
     outcome = await run_service(function, _ctx(claims, session, data, query))
     return build_err(outcome.error) if not outcome.success else build_ok(outcome.data)
+
+
+async def _run_budget_status(claims: dict, session: AsyncSession, task_client_id: str):
+    worker_view = claims.get("role_name") in {WORKER, SELLER}
+    function = get_task_budget_status_worker if worker_view else get_task_budget_status
+    outcome = await run_service(
+        function,
+        _ctx(claims, session, data={"task_client_id": task_client_id}),
+    )
+    if not outcome.success:
+        return build_err(outcome.error)
+    return build_ok(
+        serialize_task_budget_status(outcome.data, include_monetary=not worker_view)
+    )
 
 
 @router.post("/cost-groups")
@@ -321,6 +341,15 @@ async def route_list_task_evaluations(
     )
 
 
+@router.get("/tasks/{task_client_id}/budget-status", response_model=None)
+async def route_get_task_budget_status(
+    task_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run_budget_status(claims, session, task_client_id)
+
+
 @router.post("/tasks/{task_client_id}/projections")
 async def route_create_item_cost_projection(
     task_client_id: str,
@@ -352,3 +381,29 @@ async def route_promote_item_cost_projection(
     session: AsyncSession = Depends(get_db),
 ):
     return await _run(promote_item_cost_projection, claims, session, data={"client_id": client_id})
+
+
+@router.get("/items/{item_client_id}/economics")
+async def route_get_item_lifetime_economics(
+    item_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return await _run(
+        get_item_lifetime_economics,
+        claims,
+        session,
+        data={"item_client_id": item_client_id},
+        query={"limit": limit, "offset": offset},
+    )
+
+
+# Route ownership is explicit so the all-role budget endpoint cannot silently
+# inherit the manager-only table when this router grows.
+_ALL_ROLE_ROUTES = frozenset({"/tasks/{task_client_id}/budget-status"})
+_MANAGER_ONLY_ROUTES = frozenset(
+    route.path for route in router.routes if route.path not in _ALL_ROLE_ROUTES
+)
+_ROUTES = _MANAGER_ONLY_ROUTES | _ALL_ROLE_ROUTES

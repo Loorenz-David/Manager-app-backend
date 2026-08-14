@@ -1,15 +1,19 @@
 from datetime import datetime
+from dataclasses import asdict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES, TERMINAL_TASK_STATES
+from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.execution.payloads.item_cost_result import ItemCostResultPayload
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.tasks._reconcile_task_side_effects import (
     reconcile_task_side_effects,
 )
+from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
 def maybe_advance_task_to_working(
@@ -27,9 +31,11 @@ def maybe_advance_task_to_working(
     return True
 
 
-def maybe_reopen_task_to_working(
+async def maybe_reopen_task_to_working(
+    session: AsyncSession,
     task: Task,
     *,
+    workspace_id: str,
     now: datetime,
     updated_by_id: str,
 ) -> bool:
@@ -37,7 +43,8 @@ def maybe_reopen_task_to_working(
 
     This is intentionally a separate transition from ``ASSIGNED -> WORKING``:
     adding a new task step reopens a task that had already reached ``READY``.
-    Callers own the transaction and any domain-event dispatch.
+    The result task is created here so every sanctioned reopen inherits the
+    boundary emission while retaining the caller's transaction.
     """
     if task.state != TaskStateEnum.READY:
         return False
@@ -45,6 +52,11 @@ def maybe_reopen_task_to_working(
     task.state = TaskStateEnum.WORKING
     task.updated_at = now
     task.updated_by_id = updated_by_id
+    await create_instant_task(
+        session=session,
+        task_type=TaskType.PROCESS_ITEM_COST_RESULT,
+        payload=asdict(ItemCostResultPayload(workspace_id=workspace_id, task_id=task.client_id)),
+    )
     return True
 
 
@@ -98,5 +110,10 @@ async def maybe_evaluate_task_ready(
         workspace_id=workspace_id,
         now=now,
         user_id=updated_by_id,
+    )
+    await create_instant_task(
+        session=session,
+        task_type=TaskType.PROCESS_ITEM_COST_RESULT,
+        payload=asdict(ItemCostResultPayload(workspace_id=workspace_id, task_id=task.client_id)),
     )
     return True

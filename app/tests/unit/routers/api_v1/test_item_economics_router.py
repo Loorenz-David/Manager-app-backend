@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.api_v1 import item_economics
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
+from beyo_manager.services.queries.item_economics.get_task_budget_status import TaskBudgetStatus
+from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 
 
 _ROUTES = [
@@ -40,6 +42,11 @@ _ROUTES = [
     ("POST", "/api/v1/item-economics/tasks/tsk_1/projections", {}),
     ("DELETE", "/api/v1/item-economics/projections/ice_1", None),
     ("POST", "/api/v1/item-economics/projections/ice_1/promote", None),
+    ("GET", "/api/v1/item-economics/items/itm_1/economics", None),
+]
+
+_ALL_ROLE_ROUTES = [
+    ("GET", "/api/v1/item-economics/tasks/tsk_1/budget-status", None),
 ]
 
 
@@ -53,7 +60,29 @@ def _client(monkeypatch, role_name: str):
 
     async def fake_run_service(command, context):
         calls.append((command, context))
-        return SimpleNamespace(success=True, data={"ok": "test"}, error=None)
+        if command in {
+            item_economics.get_task_budget_status,
+            item_economics.get_task_budget_status_worker,
+        }:
+            data = TaskBudgetStatus(
+                status=EconomicsStatusEnum.NOT_EVALUATED,
+                item_binding="detached",
+                actual_worker_seconds=None,
+                actual_worker_minutes=None,
+                remaining_worker_minutes=None,
+                percent_consumed=None,
+                variance_worker_minutes=None,
+                production_budget_minor=None,
+                allowed_worker_minutes=None,
+                consumed_cost_minor=None,
+                variance_cost_minor=None,
+                evaluation_id=None,
+                item_id=None,
+                result=None,
+            )
+        else:
+            data = {"ok": "test"}
+        return SimpleNamespace(success=True, data=data, error=None)
 
     app.dependency_overrides[get_db] = fake_get_db
     app.dependency_overrides[get_jwt_claims] = lambda: {
@@ -87,6 +116,25 @@ def test_every_item_economics_route_retains_admin_and_manager_access(method, pat
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize("role_name", ["admin", "manager", "worker", "seller"])
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    _ALL_ROLE_ROUTES,
+    ids=[f"{method.lower()}-{path.split('/')[-1]}" for method, path, _ in _ALL_ROLE_ROUTES],
+)
+def test_budget_status_route_is_available_to_all_roles(method, path, body, role_name, monkeypatch):
+    client, calls = _client(monkeypatch, role_name)
+
+    response = client.request(method, path, json=body)
+
+    assert response.status_code == 200
+    assert len(calls) == 1
+    if role_name in {"worker", "seller"}:
+        assert calls[0][0] is item_economics.get_task_budget_status_worker
+    else:
+        assert calls[0][0] is item_economics.get_task_budget_status
+
+
 def test_router_surface_has_no_term_mutation_and_no_derived_rate_input():
     route_pairs = {(route.path, tuple(sorted(route.methods or ()))) for route in item_economics.router.routes}
 
@@ -116,7 +164,7 @@ def test_router_route_pairs_match_the_authoritative_route_table():
 
     expected = {
         (method, template(path))
-        for method, path, _ in _ROUTES
+        for method, path, _ in [*_ROUTES, *_ALL_ROLE_ROUTES]
     }
     actual = {
         (method, route.path)

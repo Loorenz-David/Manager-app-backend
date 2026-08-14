@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -10,11 +11,20 @@ from beyo_manager.services.commands.tasks._task_state_transitions import (
 
 
 @pytest.mark.unit
-def test_maybe_reopen_task_to_working_moves_ready_task_to_working() -> None:
-    task = SimpleNamespace(state=TaskStateEnum.READY, updated_at=None, updated_by_id=None)
+@pytest.mark.asyncio
+async def test_maybe_reopen_task_to_working_moves_ready_task_to_working() -> None:
+    task = SimpleNamespace(client_id="tsk_ready", state=TaskStateEnum.READY, updated_at=None, updated_by_id=None)
     now = datetime.now(timezone.utc)
+    session = Mock()
+    session.flush = AsyncMock()
 
-    changed = maybe_reopen_task_to_working(task, now=now, updated_by_id="usr_actor")
+    changed = await maybe_reopen_task_to_working(
+        session,
+        task,
+        workspace_id="wsp_test",
+        now=now,
+        updated_by_id="usr_actor",
+    )
 
     assert changed is True
     assert task.state == TaskStateEnum.WORKING
@@ -23,11 +33,18 @@ def test_maybe_reopen_task_to_working_moves_ready_task_to_working() -> None:
 
 
 @pytest.mark.unit
-def test_maybe_reopen_task_to_working_does_not_change_non_ready_task() -> None:
+@pytest.mark.asyncio
+async def test_maybe_reopen_task_to_working_does_not_change_non_ready_task() -> None:
     task = SimpleNamespace(state=TaskStateEnum.ASSIGNED, updated_at=None, updated_by_id=None)
     now = datetime.now(timezone.utc)
 
-    changed = maybe_reopen_task_to_working(task, now=now, updated_by_id="usr_actor")
+    changed = await maybe_reopen_task_to_working(
+        Mock(),
+        task,
+        workspace_id="wsp_test",
+        now=now,
+        updated_by_id="usr_actor",
+    )
 
     assert changed is False
     assert task.state == TaskStateEnum.ASSIGNED

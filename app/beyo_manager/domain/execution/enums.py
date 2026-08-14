@@ -41,6 +41,7 @@ class TaskType(enum.Enum):
 
     # Analytics — step state transition event
     PROCESS_STEP_TRANSITION = "process_step_transition"
+    PROCESS_ITEM_COST_RESULT = "process_item_cost_result"
 
     # Email
     EMAIL_INBOX_SYNC = "email_inbox_sync"

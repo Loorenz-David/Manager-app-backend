@@ -179,8 +179,10 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
             reason_by_step_id[step.client_id] = step_input.reason
 
         if created_steps:
-            task_reopened = maybe_reopen_task_to_working(
+            task_reopened = await maybe_reopen_task_to_working(
+                ctx.session,
                 task,
+                workspace_id=ctx.workspace_id,
                 now=now,
                 updated_by_id=ctx.user_id,
             )

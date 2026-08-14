@@ -1,6 +1,7 @@
 from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.configuration import resolve_economics_configuration
+from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
 from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
@@ -50,7 +51,7 @@ async def get_economics_configuration_status(ctx: ServiceContext) -> dict:
             )
         )
         status = resolve_economics_configuration(category, category_groups, basis_versions, model_versions, today)
-        evaluable = status.value == "ok"
+        evaluable = status is EconomicsStatusEnum.OK
         categories[category.value] = {
             "group_count": len(category_groups),
             "has_cost_group": bool(category_groups),

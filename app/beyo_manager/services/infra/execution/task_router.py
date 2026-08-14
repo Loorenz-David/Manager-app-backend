@@ -32,6 +32,7 @@ QUEUE_MAP: dict[TaskType, str] = {
     TaskType.RECORD_VIEW_START:          "queue:presence",
     TaskType.RECORD_VIEW_END:            "queue:presence",
     TaskType.PROCESS_STEP_TRANSITION:    "queue:analytics",
+    TaskType.PROCESS_ITEM_COST_RESULT:   "queue:analytics",
     TaskType.EMAIL_INBOX_SYNC:           "queue:tasks",
     TaskType.EMAIL_SYNC_TARGETED:        "queue:tasks",
     TaskType.SEND_COORDINATION_EMAIL_BATCH: "queue:tasks",

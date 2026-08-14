@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from beyo_manager.domain.execution.enums import TaskType
 from beyo_manager.domain.execution.payloads.notification import NotificationPayload
+from beyo_manager.domain.execution.payloads.item_cost_result import ItemCostResultPayload
 from beyo_manager.domain.history.enums import HistoryRecordChangeTypeEnum, HistoryRecordEntityTypeEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.domain.tasks.notification_labels import resolve_item_label_for_task
@@ -98,6 +99,11 @@ async def resolve_task(ctx: ServiceContext) -> dict:
                     exclude_viewing=[{"entity_type": "task", "entity_client_id": task.client_id}],
                 )),
             )
+        await create_instant_task(
+            session=ctx.session,
+            task_type=TaskType.PROCESS_ITEM_COST_RESULT,
+            payload=asdict(ItemCostResultPayload(workspace_id=ctx.workspace_id, task_id=task.client_id)),
+        )
 
     await event_bus.dispatch([
         build_workspace_event(task, "task:state-changed", extra={"new_state": TaskStateEnum.RESOLVED.value}),

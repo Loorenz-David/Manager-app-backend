@@ -4,12 +4,13 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
+from beyo_manager.domain.item_economics.configuration import resolve_item_economics_status
 from beyo_manager.domain.item_economics.serializers import serialize_item_economics_preview
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.item_economics.item_valuation import ItemValuation
-from beyo_manager.services.commands.item_economics._common import audit
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.services.commands.item_economics._common import _load_preview_inputs, audit
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 
@@ -41,4 +42,15 @@ async def delete_item_valuation(ctx: ServiceContext) -> dict:
         valuation.deleted_by_id = ctx.user_id
         await ctx.session.flush()
         await audit(ctx, "item_valuation.deleted", "item_valuation", valuation.client_id)
-    return {"preview": serialize_item_economics_preview(EconomicsStatusEnum.ITEM_UNVALUED)}
+        item = await ctx.session.scalar(
+            select(Item).where(
+                Item.workspace_id == ctx.workspace_id,
+                Item.client_id == valuation.item_id,
+                Item.is_deleted.is_(False),
+            )
+        )
+        if item is None:
+            raise NotFound("Item not found.")
+        selection, terms = await _load_preview_inputs(ctx, item)
+        status = resolve_item_economics_status(None, selection, terms)
+    return {"preview": serialize_item_economics_preview(status)}

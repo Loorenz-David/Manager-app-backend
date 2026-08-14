@@ -4,7 +4,7 @@
 plan: phase 8
 role: phase plan
 date: 2026-08-11
-state: NOT_STARTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -440,3 +440,18 @@ handles them in the post-approval pass. Never silently worked around.
   re-resolved — one rule, no drift); §9 P-E amended (L4); this GOVERNING
   block A1–A17; 4B N3 → phase 9. Gate CLEARED; implementer prompt
   `prompts/implementer/2026-08-14_phase8_implement_r1.md`.
+
+- **2026-08-14 — implementation-executor / phase 8 implementer r1: IMPLEMENTED.**
+  Added the task budget-status and item lifetime projections, the asynchronous
+  item-cost-result payload/handler and queue wiring, READY/reopen/terminal/result
+  emission boundaries, role-specific serializers, router surface, README entries,
+  and phase-8 unit coverage. No migration was required. Focused phase-8 additions
+  passed 5 tests; the focused router/state suite passed 98 tests; phase-7
+  evaluation regression passed 6 tests. Full non-E2E execution observed 2060
+  passed / 47 failed / 1 deselected because the configured database was dirty
+  (duplicate seeded role/working-section rows); the 7 unit failures are the
+  established unrelated baseline failures. Three graph discrepancy reports were
+  filed under the open maintenance directory. The additive graph batch applied
+  6 nodes and 15 relationships (one duplicate relationship skipped), revision
+  `c74eb913…`. Named mutation probes were not run in this implementation session
+  and remain an explicit review follow-up; no probe artifacts were altered.
