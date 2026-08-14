@@ -122,6 +122,14 @@ recorded in the Review log.
   also mirrors the `create_type=True` flag phase 6 flips) are OUTSIDE phase
   6's perimeter by decision, not oversight — this drift batch owns them.
 
+- **Forward notes (phase-6 reviews):** (r1 N9) deploy ordering for the column
+  drop is unstated — an old ORM selecting the dropped columns during a rolling
+  deploy errors; document the required order (deploy code first, migrate
+  second) in the living-docs page. (r2 N1) the drop migration's docstring
+  still reads `Revises: 5caae620088c` while `down_revision = "5420acc6a7b3"`
+  — one-line correction + the fix-r1 record correction is already in the r2
+  Review log entry.
+
 ## Review log
 
 (append-only)

@@ -669,3 +669,146 @@ deselected**; the failure set is the known 23-item baseline; ruff and
 rows 0, legacy item columns 0, and disposable phase-6/reviewer databases 0.
 The final production hashes are migration `a3228a851997a90c6fdc7239da42370864b8149c5e27fbf79988ef93e7562160`
 and drop migration `65f93a2153c1ca81abccd256da4addef08b77398e7af3eb62ce426756b103995`.
+
+### 2026-08-14 — re-reviewer r2 (Claude Opus 5) — APPROVED
+
+**0 blocking, 0 should-fix, 4 notes, 0 owner cards.** Delta-scoped per the charter's
+re-review protocol; r1's "Verified correct" list untouched.
+
+**Perimeter — exact.** 8 files in `51d8b7c`, every one declared in the fix handoff;
+`git diff 51d8b7c..HEAD -- app/` **empty**; tree clean before and after every probe;
+the two production files hash to the declared finals (`a3228a85…`, `65f93a21…`).
+The fix prompt's perimeter LINE named one production file while its item list named
+N8 on the drop migration — the implementer's resolution (edit both) matches the
+items, is recorded by the coordinator, and is not a finding.
+
+**Environment.** Suite re-run foreground on a hash-verified-clean tree:
+**2012 passed / 23 failed / 1 deselected** — the 23 are the phase-1 baseline set,
+one-for-one identical to r1's run. Collection +15 over r1 (43 nodes in the three
+phase-6 files, up from 29, plus N7's extracted tie test) — exact. Ruff clean on the
+fix perimeter. Configured DB at `be9dfe42a035 (head)`, journal 0 rows, legacy
+columns 0; zero `beyo_manager_%` databases other than `beyo_manager`. Graph
+read-only, revision `4eb1d8d0…` **byte-identical to r1**, 155/200, 7 pending.
+
+**B1 — CLOSED.** The tautological pc2 is replaced by `unmigrated_eligible_count`
+(`5420acc6a7b3:157-183`), built from the items/valuations side and compared against
+zero — an independent construction from the journal side. R2-P1 EXECUTED: the same
+`rows[1:]` skip mutation that exited 0 in r1 (baseline `a3228a85…`, mutant
+`6c8ce6e7ab4c5db9f3f1c5b52ee4926f2776b4900a7ac339055ed9efb7c0f2f0`, one eligible
+seeded item on `beyo_manager_rev_p6_r2pc2`) now **exits 1** with
+`RuntimeError: item money migration left 1 eligible item(s) unmigrated`, and the
+transaction rolls back — journal table absent, 0 valuations, `alembic_version` back
+at `5caae620088c`. Not over-tight: all 13 migration rows green at baseline. The
+guard's `NOT EXISTS (… v.client_id IS DISTINCT FROM j.valuation_client_id)` reduces
+to "still never valued" under the outer `j.valuation_client_id IS NULL`, so it
+correctly exempts the collision, soft-deleted-only and superseded-only rows.
+
+**B2 — CLOSED.** `_NO_CURRENT_VALUATION` → `_NO_VALUATION` = `NOT EXISTS (any
+item_valuations row)`, matching R15-1 verbatim (intention §10A.1(c) as corrected,
+verified folded). R2-P2 EXECUTED independently on `beyo_manager_rev_p6_r2elig` with
+the **unmutated** shipped migration, four sole-predicate seeds, state queries:
+
+| seeded state | journaled | `valuation_client_id` | new valuations | r1 behaviour |
+|---|---|---|---|---|
+| never-valued (`itm_C`) | yes | `ival_01M005W80S…` | **1** | (non-vacuity arbiter) |
+| current-valued (`itm_D`) | yes | NULL | 0 — and `ival_D_current` still reads **777** (identity) | same |
+| soft-deleted-only (`itm_A`) | yes | NULL | **0** | **was re-valued** |
+| superseded-only (`itm_B`) | yes | NULL | **0** | same (recorded unreachable) |
+
+The shipped `test_phase6_eligibility_is_solely_no_valuation_at_entry` carries the
+same four rows with `10A1-row1…row4` ids.
+
+**S1 — CLOSED.** The nine census rows now each carry `(endpoint_id, source_path,
+source_line)`, read the real call expression at those coordinates, assert it names a
+serializer and contains no money key, and assert the serializer's output key set —
+on an ORM `Item` (charter rule 3), not a `SimpleNamespace`. R2-P3 EXECUTED: the
+identical inline re-exposure at `upholstery_orders_query.py:496` (baseline
+`b34e8e0e…`, mutant `99a34732…` — byte-identical to r1's mutant) reddens **exactly**
+`[upholstery-orders-…-496-serialize_item]`, the other eight green. In r1 the same
+mutant left all 27 phase-6 nodes green.
+
+**S2 — CLOSED.** Each refusal row asserts its own seeded `client_id` appears in the
+report **and** that the other two classes report `client_ids=[]` — per-class identity,
+so the shared message can no longer satisfy a foreign row. R2-P4 EXECUTED: emptying
+all three id lists (mutant `ebb503d84ebe9c85617b171035de1f59e3629332a28690fcf5cbdd98a63606f6`)
+reddens **all three** refusal rows; the same class of mutation left both r1 tests green.
+
+**S3 — CLOSED.** `test_item_router_surfaces_reject_present_nonnull_money` adds the
+three missing TestClient rows (`PUT /items`, `PATCH /items/{id}`,
+`POST /items/find-or-create`), each asserting 422 and the exact
+`{"error": "ITEM_MONEY_MOVED: …", "ok": false}` envelope — the same three surfaces
+r1 verified by reviewer probe now have shipped arbiters.
+
+**S4 — CLOSED.** Three parametrized tests with authority-naming ids
+(`10A2-row3-amount-null-currency-refuses-p1`, `10A1-row3-soft-deleted-only-skipped`,
+`10A2-row8-current-valuation-collision-journaled-only`, …); collection confirms 12
+independent nodes where r1 had two for-loops. No masking.
+
+**r1 notes:** N5 CLOSED (the post-downgrade assertion is now the identity set
+`{ival_existing, ival_manual}`); N6 CLOSED (drop-only downgrade asserts 3 columns
+present and 0 rows non-NULL); N7 CLOSED
+(`test_synthetic_history_tie_breaker_uses_client_id_desc` is its own node with a
+docstring naming it synthetic and why); N2 and N4 partially closed and N8 partially
+closed — see the four notes below. N1 (ledger accuracy) CLOSED: all three fix-r1
+ledger rows are declared against the FINAL committed hashes, and the migration
+baseline `a3228a85…` reproduces exactly.
+
+**Adversarial depth on the changed seam (unbidden).** R2-P6: deleting the journal
+back-link UPDATE from `_copy_eligible_valuations` (mutant
+`69b9398060ec58f4669bfc40b7b7cf2218f163e700c84e12386fa37f252a0ab3`) creates a
+valuation the journal never records, which the new guard alone would NOT catch
+(`NOT EXISTS(any valuation)` is false once the row exists) — but the round-trip
+test's N5 identity set bites, because the orphan survives downgrade: **1 failed, 12
+passed**. The property is guarded; the labour is divided between the migration guard
+and the round-trip row.
+
+**Notes.**
+N1 — **r1's N8 is half closed and the record says otherwise.** The logger replaced
+`print()` ✓, but the drop migration's docstring still reads `Revises: 5caae620088c`
+while `down_revision = "5420acc6a7b3"`
+(`be9dfe42a035_drop_legacy_item_money_columns.py:4` vs `:15`). The fix-r1 Review log
+entry above and the fix handoff both state "the drop migration docstring names the
+actual parent revision" — that claim is inaccurate; this entry is the correction.
+One-line fix; carried to phase 9's drift batch.
+N2 — the head enum-user assertion has an SQL precedence bug
+(`test_phase6_legacy_migration.py:451-466`): `AND` binds tighter than `OR`, so the
+journal branch is constrained by neither `t.typname` nor `NOT a.attisdropped`.
+EXECUTED read-only against the dev DB: the query as written returns 2; substituting a
+**bogus** typname still returns **1** (it should return 0); the parenthesised form
+returns 2. The asserted property (two users at head) still holds and still reddens if
+the journal disappears — correction is one pair of parentheses.
+N3 — `AND j.valuation_client_id IS NULL` in the copy SELECT is now redundant: R2-P7
+EXECUTED (mutant `ca90691fcc382f3b9fc2607b54dd6b7459a2a8b6fc3fb47fc16d7ff27bc54931`)
+removes it and all **13 rows stay green**, because `_NO_VALUATION` alone excludes an
+already-migrated item. So r1's N4 single-cause half is not closed — the run-twice row
+still has two sufficient causes — though the post-conditions ARE now re-run on pass 2
+(`:377-385`), which was N4's substantive half. No defect: `_NO_VALUATION` is the
+load-bearing guard.
+N4 — `test_phase6_serializers.py:47` resolves `Path(source_path)` relative to the
+CWD, while its sibling `test_phase6_api_bridge.py` uses
+`_APP_ROOT = Path(__file__).parents[2]`. Running pytest from the repo root errors all
+nine rows instead of failing meaningfully. The five-line source windows are also
+line-number pinned and will drift as those query files change (loudly, via the
+`serialize_item` assertion — but they will drift).
+
+**Lessons for the plans.** (i) A fix cycle's own record is evidence and gets verified
+like any other claim — this round's only finding is a record that asserts a closure
+that did not happen (extends r1's P-I hash lesson from ledger rows to prose claims).
+(ii) A structural assertion built from `OR`ed branches needs its precedence checked
+the same way a predicate does; the cheap arbiter is to re-run it with one conjunct
+falsified and confirm the count drops. (iii) When a fix replaces a predicate, the
+clauses the old predicate needed may become dead weight — a fix criterion can ask
+whether each surviving conjunct still has a case that depends on it.
+
+**Carry-forward dispositions.**
+
+| Item | Destination |
+|---|---|
+| r2 N1 — drop-migration docstring parent + this record correction | phase 9 drift batch |
+| r2 N2 — enum-user assertion precedence | next touch of `test_phase6_legacy_migration.py` |
+| r2 N3 — redundant `j.valuation_client_id IS NULL`; run-twice row dual-cause | next touch of the migration; no action required |
+| r2 N4 — CWD-relative fixture path + line-pinned windows | next touch of `test_phase6_serializers.py` |
+| r1 N3 — `Base.metadata.create_all` broken repo-wide (pre-existing) | only-if-cheap ledger |
+| r1 N9 — deploy ordering (old ORM selects dropped columns) | phase 9 docs |
+| r1 N10 — journal node carries no edges | coordinator's post-approval graph pass |
+| `node:table-item` description **and** evidence summary (`:51` → `:46`) | coordinator's post-approval graph pass (D19) |
