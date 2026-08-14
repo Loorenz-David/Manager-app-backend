@@ -499,3 +499,39 @@ the new system and is never re-valued by the migration; only never-valued
 items are eligible. This makes the heading, the predicate, and the owner's
 decision agree, and it resolves both of B2's rows (soft-deleted-only → skip;
 superseded-only → skip).
+
+---
+
+# Phase 7 projection r0 — owner card (2026-08-14)
+
+## Card 1 — Should a committed budget show up in the task's activity history?
+
+**Question (projectionist, verbatim):** When someone commits an economic
+decision for a task, should that appear in the task's activity history (the
+timeline the whole team reads), or only in the admin audit log?
+
+**Story (projectionist, verbatim):** Anna commits a budget for chair #412 on
+Monday: 4 000 kr sale price, 92 allowed worker-minutes. On Thursday the chair
+has overrun and Björn opens the task to find out what happened. If the
+commitment is in the activity history he sees "Anna set the production budget,
+Monday 09:14" between the assignment and the first step, and the conversation
+is over in ten seconds. If it lives only in the audit log, the task's timeline
+shows the chair moving through production with no trace of the decision that
+constrained it, and someone has to ask an admin.
+
+**ANSWER (2026-08-14): ACTIVITY HISTORY (+ audit).** The record appears for
+all the team, and the place where that part of history is extracted is
+together on the same router obtaining the current "flow" of all that is
+valuable to observe as history — the service
+`services/queries/tasks/task_flow_records.py` centralizes this.
+
+**Coordinator fold (R16-1):** the owner's requirement is satisfied by a
+TASK-linked `HistoryRecord` (`entity_type = TASK`, `entity_client_id = the
+task`, precedent `resolve_task.py:61`) — `get_task_flow_records`'s history
+query carries an always-on TASK condition, so the record enters the team flow
+with NO enum migration, NO flow-service change, and NO new serializer. The
+card's "costs one small database change" branch assumed a new
+`history_record_entity_type_enum` member; that mechanism is dissolved as
+unnecessary (the cheaper mechanism delivers exactly the chosen branch). The
+audit half is the registered `write_audit` rows (`item_cost_evaluation.*`,
+master plan §6.4).

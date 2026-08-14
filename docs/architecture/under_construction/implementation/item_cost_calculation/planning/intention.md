@@ -1058,15 +1058,25 @@ One transaction. Steps 6–8 are 7A.1's S1/S2/S3.
 2. Resolve the active PRIMARY `TaskItem` (7B.3).
 3. Resolve the cost model version and the basis version (7A.3, 7A.5) with `FOR SHARE`
    (7A.6).
-4. Resolve the item's current valuation, the inputs, and the currency (6A.9).
+4. Resolve the item's current valuation **`FOR UPDATE`** (round 16, D4 — the row
+   lock is held for the whole transaction: a concurrent `set_item_valuation`
+   blocks at its own S1 until this commit ends, then supersedes the mirror row,
+   so the manager's figures win under both orderings; see 7B.4's corrected race
+   clause), the inputs, and the currency (6A.9).
 5. Run the calculator (§6A); nothing is written before this point.
 6. **S1** — close the task's current committed evaluation, if any.
 7. **S2** — insert the evaluation (`kind = committed`, `committed_at = now`) and its
    term snapshot rows; flush.
 8. **S3** — set the previous row's `superseded_by_id`.
-9. Mirror rule (7B.4); history record; `item_economics:evaluation-committed` event
-   dispatched **after** the transaction (repo convention: `event_bus.dispatch` outside
-   `maybe_begin`, e.g. `resolve_task.py:53-104`).
+9. Mirror rule (7B.4); history record (round 16, R16-1: a **TASK-linked**
+   `HistoryRecord` — `entity_type = TASK`, `entity_client_id = task.client_id`,
+   `change_type = UPDATED`, precedent `resolve_task.py:61` — so the commit appears
+   in the team task flow via `get_task_flow_records`'s always-on TASK condition
+   with **no** flow-service change, no enum migration, and no new serializer;
+   `from_value`/`to_value` carry the superseded/new figures);
+   `item_economics:evaluation-committed` event dispatched **after** the
+   transaction (repo convention: `event_bus.dispatch` outside `maybe_begin`,
+   e.g. `resolve_task.py:102-104` — span narrowed round 16).
 
 #### 7B.2 Task admission — total over `TaskStateEnum` (all 8 values)
 
@@ -1121,10 +1131,19 @@ at step 4. Let `E` be the evaluation being committed.
 - **On the auto path the predicate is false by construction** (the inputs came from
   `V`): no mirror row is written at task creation. Stated so no implementer writes a
   "helpful" duplicate.
-- **Race:** a concurrent valuation write is arbitrated by INV-V1 (7A.2); the losing
-  transaction is the whole commit, which fails with `ITEM_COST_CONCURRENT_VALUATION`.
-  A commit never half-applies — there is no state in which an evaluation exists without
-  its mirror row, or vice versa.
+- **Race (corrected round 16, D4 — two orderings exist at READ COMMITTED):**
+  a valuation writer still **uncommitted** when the mirror's S1 runs is arbitrated
+  by INV-V1 (7A.2); the losing transaction is the whole commit, which fails with
+  `ITEM_COST_CONCURRENT_VALUATION`. A writer that **commits between step 4's read
+  and step 9** is NOT arbitrated by the index: the mirror's S1 predicate would
+  re-evaluate against the committed state, silently close the manager's brand-new
+  row, and supersede it with figures derived from the *older* valuation — no error
+  on either side. That ordering is closed by step 4's `FOR UPDATE` on `V`: the
+  concurrent `set_item_valuation` blocks at its own S1 until this transaction
+  ends, then supersedes the mirror row afterwards — the manager's price wins under
+  both orderings and "the current valuation always shows the currently-operative
+  figures" (§7.2 step 4) is true again. A commit never half-applies — there is no
+  state in which an evaluation exists without its mirror row, or vice versa.
 
 #### 7B.5 The auto path inside `create_task` — savepoint, not try/except
 
@@ -1134,16 +1153,34 @@ creation" (§7.2) is therefore **unimplementable with a bare `try/except`** — 
 the handler runs, the transaction is already poisoned and the task INSERT will not
 commit either.
 
-- **Pre-checks first, exceptions never as control flow.** The auto path runs only when
-  all of 7A.5's rows 1–5 pass *and* the item has a current valuation with a non-NULL
-  expected price *and* (iff the model carries an `item_purchase_cost` term) a non-NULL
-  purchase cost. Any pre-check false ⇒ no evaluation, no error, task created; the reason
-  is the `EconomicsStatusEnum` value (§11A.4) and is recomputable later from the status
-  query.
+- **Pre-checks first, exceptions never as control flow (restated round 16, D7 —
+  total by construction).** The auto path runs **iff** the task has an active
+  PRIMARY item **and**
+  `resolve_item_economics_status(valuation, selection, model_terms) is
+  EconomicsStatusEnum.NOT_EVALUATED` — the same registered resolver the phase-5
+  preview and the phase-8 status query consume, whose `ITEM_READINESS_PRECEDENCE`
+  ends in `NOT_EVALUATED`, making the pre-check total over every §11A.4 state.
+  (The round-3 enumeration omitted `currency_mismatch` and the no-item case; both
+  fell through into the exception path this clause forbids.) Any pre-check false
+  ⇒ no evaluation, no error, task created; the reason is the `EconomicsStatusEnum`
+  value, logged verbatim (round 16, D17 — the §11A.4 auto-path status line) as
+  `"item_economics.auto_commit_skipped | task_id=%s item_id=%s status=%s"` at
+  INFO, and recomputable later from the status query.
 - **Execution** is wrapped in `async with ctx.session.begin_nested():` (SAVEPOINT —
   precedent `services/commands/users/reconcile_worker_shift_state.py:278`). Any
-  exception rolls back the savepoint only, is logged at WARNING with `task_id`,
-  `item_id` and the exception class, and is not re-raised.
+  exception rolls back the savepoint only, is logged (round 16, D17 — verbatim
+  shape, repo pipe-delimited idiom) as
+  `"item_economics.auto_commit_failed | task_id=%s item_id=%s error=%s"` at
+  WARNING with the exception class as `error`, and is not re-raised.
+- **Event and history on the auto path (round 16, D9).** A subordinate command
+  must NOT dispatch events (`06_commands_local` subordinate-command event rule),
+  so the auto path appends `item_economics:evaluation-committed` to
+  `create_task`'s `pending_events` **only after the savepoint block exits
+  normally** — the parent dispatches after its own transaction, and a rolled-back
+  savepoint can never leave a queued event behind. The TASK-linked history record
+  (7B.1 step 9's form) is written inside the savepoint. No existing statement in
+  `create_task` moves; the file's additions are the savepoint block plus this
+  conditional append.
 - **Named mutation** (charter rule 11): replacing `session.begin_nested()` with a plain
   `try/except` around the same body in
   `services/commands/tasks/create_task.py` (definition site) must turn red a test in
@@ -2386,6 +2423,34 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   seeded disposable). The owner re-confirmed: leave deleted prices deleted;
   never-valued items only. Review L3 (a clause whose prose and verbatim
   predicate disagree is undischargeable) becomes projection practice.
+
+**Round 16 — 2026-08-14 (phase-7 projection r0; one owner card answered):**
+
+- **R16-1 (owner, card 1)** A committed evaluation appears in the **task's
+  activity history the whole team reads** (plus the admin audit trail), and the
+  extraction surface is the existing flow read
+  (`services/queries/tasks/task_flow_records.py` centralizes it). Coordinator
+  mechanism fold: satisfied by a **TASK-linked** `HistoryRecord`
+  (`entity_type = TASK`, precedent `resolve_task.py:61`) — the flow query's
+  always-on TASK condition picks it up with zero migration, zero flow-service
+  change, zero new serializer; the projection card's "small database change"
+  branch (a new `history_record_entity_type_enum` member) is dissolved as
+  unnecessary. §7B.1 step 9 amended.
+- **R16-2 (D4)** The mirror race clause was false for the committed-mid-flight
+  ordering at READ COMMITTED (a manager's corrected price could be silently
+  superseded by figures from the older valuation). §7B.1 step 4 now takes the
+  current valuation `FOR UPDATE`; §7B.4's race clause restated over both
+  orderings.
+- **R16-3 (D7/D17)** §7B.5's pre-check enumeration replaced by the registered
+  resolver (`resolve_item_economics_status … is NOT_EVALUATED` + active PRIMARY
+  item) — total by construction; the round-3 list omitted `currency_mismatch`
+  and the no-item case. Both auto-path log lines pinned verbatim
+  (`item_economics.auto_commit_skipped` INFO /
+  `item_economics.auto_commit_failed` WARNING).
+- **R16-4 (D9)** The auto path never dispatches its own event: conditional
+  `pending_events` append after the savepoint exits normally, per the
+  subordinate-command event rule. The plan's "savepoint block only" file fence
+  is amended accordingly (spirit kept: no existing statement moves).
 
 ---
 

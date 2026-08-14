@@ -196,6 +196,16 @@ inside their transaction (three rows).
   `evaluable = status.value == "ok"` compares a string literal — switch to
   `status is EconomicsStatusEnum.OK` (brittle to any enum-value edit).
 
+- **Forward note (phase-7 projection r0, D23 — MUST be routed before this
+  phase's own projection):** this plan's C7 says "**all eleven values**
+  enumerated" — the vocabulary is **12** since §7C.3 (round 12) and the
+  shipped `EconomicsStatusEnum` has 12 members; `item_missing_major_category`
+  is missing from C7's list. Re-enumerate against the shipped enum with a
+  parametrize id per member (P-V). Also inherited from phase 7: the rederive
+  marker's ERROR-escalation discipline (§6.5 D16 — the status query follows
+  the evaluations read's pattern), and C13's router completeness arbiter
+  (extend `_ROUTES` set-equality to this phase's routes).
+
 ## Review log
 
 (append-only)
