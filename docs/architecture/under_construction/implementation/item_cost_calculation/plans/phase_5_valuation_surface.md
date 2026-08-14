@@ -261,6 +261,87 @@ transaction — implementer's choice, stated in the handoff; S1 optionally
 preceded by a SELECT of the current row; unknown item client_id → `NotFound`
 per phase-4 `_common.get_group` precedent.
 
+## Fix r1 amendments (2026-08-14, coordinator-routed from review r1 — GOVERNING)
+
+Review r1: 4 blocking, 5 should-fix, 7 notes; zero owner cards (rounds 13
+settled the semantics). Every correction below was EXECUTED by the reviewer —
+resolve, don't relitigate. Two production files change (B1 one line, B4 the
+clause reduction); everything else is test-side.
+
+**B1 (production, one line):** `delete_item_valuation.py` item-scoped branch
+gains `ItemValuation.is_deleted.is_(False)` — INV-V1's full predicate. The
+delete-then-reset state legitimately holds two `superseded_at IS NULL` rows and
+the unfiltered `scalar()` can return the ghost (`NotFound` on a live current
+row; reachable through PUT→DELETE→PUT→DELETE). Reviewer-verified: with the
+line, the probe passes, 346/0 focused.
+
+**The shared fixture (B1/S3/S2/L13 — build ONCE):** set → delete → set:
+two `superseded_at IS NULL` rows, exactly ONE INV-V1-current row; then
+(S3/C4) the re-set current row deletes successfully; (C6/L13) history over a
+three-supersession chain returns all non-deleted rows ordered
+`created_at DESC, client_id DESC`, byte-identical re-read. Named mutations
+(all reviewer-run, all currently green — must redden): M8 drop `order_by`,
+M8b reverse to ASC, plus reverting B1's line reddens the delete row.
+
+**B2 (C5 rebuilt as the 12-value enumeration, L4 as written):** one
+parametrized row per §11A.4 value, ids naming the authority row
+(`status-row-…`), sole-predicate fixtures; recorded judgments for
+`ok`/`infeasible` (task-scoped) and ambiguous (INV-G3 defence); the six
+missing rows built (`item_missing_major_category` live,
+`not_configured_no_cost_group` / `…_no_basis_version` /
+`…_no_cost_model_version`, `item_missing_purchase_cost`,
+`currency_mismatch`); EVERY preview row asserts `null` numerics where owed
+AND `item_cost_evaluations` count unchanged. The reviewer's two disposable
+probes already passed — production is right; ship the evidence.
+
+**B3 (L15 structural row):** `inspect.getsource` over every module under
+`domain/item_economics/` and `services/**/item_economics/`, asserting
+`item_major_category_snapshot` appears only inside
+`configuration.py:resolve_major_category`. Named mutation M4 (inline the
+read in `set_item_valuation._load_preview_inputs`) must redden — it left
+345/345 green in r1.
+
+**B4 (production + tests, P-AA):** the three-way currency check reduces to
+the TWO independent clauses (`valuation ≠ basis` OR `basis ≠ model`) — the
+middle clause is provably redundant (transitivity) and can never have an
+arbiter. Rename the parametrize ids to the STATE each fixture holds (which
+pair is equal), keeping the three existing fixtures. Reviewer-verified: 7/7
+green under the 2-clause form; dropping clause 1 reds exactly
+`[valuation-basis]`, clause 2 exactly `[basis-model]`.
+
+**S1:** new readiness row — purchase-cost term present, `purchase_cost_minor`
+NULL, expected price set, valuation currency ≠ basis = model → expects
+`item_missing_purchase_cost`. Passes today; reds exactly under M3.2
+(precedence swap 2↔3, green in r1).
+
+**S4:** both race blocks assert `select(func.count())` over INV-V1's full
+predicate `== 1` (not `is not None` on a scalar), and path (i) asserts its
+distinguishing observable (loser blocks on the row lock / rowcount 0 after
+the winner commits — L11's wording).
+
+**S5:** C3 gains the missing request-layer rows: missing currency
+(`ValidationError` naming `currency`) + the three accept rows
+(expected-only / cost-only / both); the file cites phase-2's six DB-CHECK
+node ids per L10.
+
+**N1 (L12 fixture corrected — P-Q ext):** the preview fixture's persisted
+`cost_per_worker_minute_minor` becomes `13.0000` (≠ the calculator's
+`13.0208` for the same inputs), expected allowance `76923.08`
+(hand-computed). BOTH mutation forms must then redden: M10 (the plan's named
+`calculate_cost_per_worker_minute(...)` swap — inert in r1) and M10b (raw
+re-division). The ledger row states which form ran.
+
+**Ledger rule (P-I sixth ext):** this prompt names its mutations; the ledger
+carries ONE ROW PER NAMED MUTATION — B1-revert, M4, M5.a/M5.c (2-clause
+forms), M3.2, M8, M8b, M10, M10b, plus re-runs of any row whose file changed.
+Full observed red sets; divergences flagged; hashes copy-pasted.
+
+**Not in scope:** N2 (phase 8), N4 (closeout purge — `ws_765225a0…`), N5
+(phase 9), N6/N7 (coordinator's graph pass). The graph delta this cycle is
+ZERO (the fix touches no route/command surface the graph models; N6's five
+reads_from edges and N7's re-link belong to the coordinator's post-approval
+pass).
+
 ## Review log
 
 (append-only)
@@ -274,3 +355,80 @@ per phase-4 `_common.get_group` precedent.
 - Full suite: 1951 passed, 23 failed, 2 warnings. The 23-failure set is byte-identical to the established non-phase baseline; phase 5 added 24 collected tests relative to the recorded 1927 baseline. No phase-5 failure was present.
 - Reversible mutation probes: readiness precedence swap reddened `test_item_readiness_uses_registered_order_and_requires_a_purchase_term`; raw-rate substitution reddened `test_valuation_chain_preview_delete_and_history` (`76800.00` vs `76800.20`); history soft-delete-filter removal reddened the same integration test. All probes were reverted; probe-only touched files were `app/beyo_manager/domain/item_economics/configuration.py`, `app/beyo_manager/services/commands/item_economics/set_item_valuation.py`, and `app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py`.
 - Architecture Graph: one additive batch applied after duplicate preflight: 5 nodes and 7 relationships, revision `b5e6fe094caee2191414a297bb1ab63507ebda8ee4ee54c26cc612a5d940fc94`; no review decisions were made.
+
+### 2026-08-13 — review r1 (Claude Opus 5) — CHANGES_REQUESTED
+
+Handoff: `handoffs/reviewer/2026-08-13_phase5_review_r1_handoff.md` (full probe
+declaration with sha256 pairs, anchor-spans table, write perimeter).
+
+Perimeter exact (16 files; `git diff 8b4ac06..HEAD -- app/` empty; tree clean;
+all three declared restored hashes byte-identical). Ruff clean. Suite
+**1950 passed / 23 failed / 1 deselected**, collection 1973+1, failure set
+byte-identical to the phase-1 baseline (+23 tests, not the handoff's +24) —
+**P5-A: the handoff's "1951 passed" is derived-not-read, off by one**.
+**P5-B: seven owed mutations run; four do not bite.** DB at head `5caae620088c`.
+
+**4 blocking.**
+- **B1** `delete_item_valuation.py:27-33` omits `is_deleted = false` from the
+  current-row predicate (INV-V1 is both clauses; S1's own close statement uses
+  both). After delete-then-reset the item holds two `superseded_at IS NULL` rows
+  and the unordered `scalar()` can return the deleted one → `NotFound`; the live
+  valuation becomes permanently undeletable through the shipped route. Executed
+  and reproduced; verified correction (one clause) makes the probe pass with
+  346/0 and zero regressions.
+- **B2** C5's 12-value enumeration (routed L4) not built: 3 statuses in one
+  monolithic test, no P-V ids, no reachability judgments, and no row asserts
+  `item_cost_evaluations` unchanged. Reviewer probes for two missing rows pass —
+  the code is right, the evidence is absent.
+- **B3** the L15 structural row does not exist: inlining an
+  `item_major_category_snapshot` read in the preview leaves 345/345 green
+  (master §6.5 says the row ships in phase 5).
+- **B4** the three-way currency equality has no per-clause arbiter — dropping any
+  one of the three comparisons leaves 345/345 green, and the ids misname their
+  pairs. Equality is transitive, so `val≠basis or val≠model or basis≠model` ≡
+  `val≠basis or basis≠model`: the middle clause is provably redundant. Verified
+  correction (2-clause form) gives both clauses sole-cause arbiters with the
+  existing fixtures.
+
+**5 should-fix.** S1 the `item_missing_purchase_cost` ↔ `currency_mismatch`
+adjacent pair has no arbiter (swap leaves 345 green; verified fixture supplied);
+S2 C6 essentially unbuilt — dropping *and* reversing the history `order_by` both
+leave 345 green (the only assertion is a one-element list), no three-supersession
+row, no INV-V1 count, no byte-identical re-read; S3 C4's "re-set after delete"
+row absent (the row that would have caught B1); S4 C2 asserts `remaining is not
+None` instead of counting INV-V1's predicate, and neither race path's observable
+is asserted (P-T); S5 C3 missing the request-layer missing-currency row and the
+three accept rows.
+
+**8 notes.** N1 L12's *named* mutation is inert (the calculator quantizes to the
+persisted value — only raw re-division bites; verified fixture `13.0000` →
+`76923.08`); N2 DELETE's hardcoded `item_unvalued` will disagree with phase 8's
+status query in an unconfigured workspace → phase 8; N3 envelope not exact-dict
+(preview is); N4 pre-checkpoint dev-DB residue `ws_765225a0…` → closeout purge
+(not a teardown defect — subset run twice, ten tables flat); N5 valuation payload
+field list → phase 9; N6 five missing `reads_from` edges in the graph delta; N7
+`domain-item-economics` source link now stale, undeclared; N8 L21 verified benign.
+
+**Verified correct:** chain order (insert-before-close reddens both rows; S3
+back-link reddens), race identity on the real DB-conflict path (index-identity
+removal reddens both the unit row and the race; bounded waits; `finally`
+teardown; subset twice, flat), L1 delegation genuine (wrapper divergence reddens
+12 nodes), L2(i) structural independence (enum order reversed → 345 green), L7
+exact leading token (naive pydantic impl reproduces the projection's
+`': Value error, …'` and reddens), L9 both audit events, P-R role gates (MANAGER
+drop reds exactly 3 rows, zero collateral), R13-2 history filter, L12 arithmetic
+(`76800.20` vs `76800.00` hand-derived), L5/L6/L18/L20.
+
+**Graph:** read-only, zero delta; revision `b5e6fe09…`, 153/195, 12 pending. All
+12 claims TRUE; 9 spans exact, 3 corrected (set-command node → 102–168; delete
+`writes_to` → 38–41; history `reads_from` → 23–31); plus the undeclared stale
+`domain-item-economics` link (`configuration.py:44-82` → re-link
+`resolve_economics_selection` 80–126).
+
+**Lessons:** (L1) a routed amendment naming a test row needs a ledger row — a
+missing declaration *is* the finding (extends P-I); (L2) a transitive relation is
+enumerated by *state*, not by *clause*, and the implementation carries only the
+independent clauses; (L3) a named mutation must be checked against the
+implementation it will meet (extends P-Q); (L4) a monolithic integration test
+cannot discharge an enumerated criterion — the parametrize id is the mapping
+evidence (extends P-V).
