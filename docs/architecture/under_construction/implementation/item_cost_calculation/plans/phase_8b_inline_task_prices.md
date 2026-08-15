@@ -288,3 +288,152 @@ phase-9 R18-2 scope block.
   database at `c1d2e3f4a5b6` head; no migration. The complete mutation
   ledger, per-row expected reds, mutant/restored hashes, graph revision,
   and write perimeter are recorded in the implementer handoff.
+
+- **2026-08-15 — review r1 (Claude): CHANGES_REQUESTED** — 2 should-fix, 3
+  notes, zero blocking. Handoff:
+  `handoffs/reviewer/2026-08-15_phase8b_review_r1_handoff.md`. The mechanism
+  is CORRECT on every branch re-derived, including the two shapes no test
+  reaches; both findings are test-integrity, not behaviour.
+
+  - **S1 (should-fix, B4 second sub-row missing) — the `superseded_at IS
+    NULL` conjunct of the refusal predicate is uncovered.** Deleting
+    `ItemValuation.superseded_at.is_(None)` from `create_task.py:331` leaves
+    the whole 66-node focused scope GREEN (reviewer mutation M6). B4 required
+    TWO branch-B sub-rows ("deleted **or superseded**-only"); only the
+    deleted-only row (C4 row 3) shipped, and it exercises the `is_deleted`
+    conjunct alone (M7 reddens it — that conjunct IS covered). The state is
+    reachable through three shipped commands — `set_item_valuation` ×2 then
+    `delete_item_valuation` leaves v1 superseded + v2 deleted and NO current
+    valuation — and §7B.6(b) requires ACCEPT-and-grow there. A reviewer probe
+    built exactly that state: shipped code accepts and writes v3 (PASS);
+    under M6 it raises `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` (FAIL). The
+    R15-1-adjacent hazard the prompt named is real and currently unguarded.
+    Correction: add the missing sub-row to C4 (seed through the production
+    commands, not hand-built rows — charter rule 3), and name M6 as its
+    expected-red mutation.
+  - **S2 (should-fix, charter rule 11½) — C4 rows 2 and 3 leak committed rows
+    on their own failure path.** Both call
+    `_cleanup_committed_workspace(db_session, workspace.client_id,
+    user.client_id)` from `finally`; when the body raises, the owning
+    `maybe_begin` has already rolled back and EXPIRED those ORM instances, so
+    evaluating `workspace.client_id` triggers a lazy reload that raises before
+    a single DELETE is issued. Reproduced deterministically under M2: the
+    named C4 rows redden and every seeded workspace survives (8 leaked across
+    this review's probes, removed by hand). C4 row 1 is immune — it captures
+    `workspace_id` / `user_id` into locals BEFORE the `try`. Correction: give
+    rows 2 and 3 row 1's shape (capture the ids first); the helper itself is
+    fine.
+  - **N1 (note)** — the implementer handoff states the inverted-predicate
+    mutant's four `phase8b` workspaces "were removed by the owning test
+    teardown helper after the probe". Not reproducible: the teardown raises
+    before deleting (S2). The rows were evidently removed some other way. 4B
+    review L5 stands — a state claim needs a state assertion behind it.
+  - **N2 (note, graph — READ-ONLY, human-adjudicated)** — the pending
+    `command-task-create` node's anchors are partly inaccurate. Node evidence
+    `create_task.py:69-580` starts three lines above the function (`:69` is
+    the module-level `logger =`; `async def create_task` is `:72`). Edge
+    `writes_to table-task` cites `:105-139`, which EXCLUDES the
+    `ctx.session.add(task)` / `flush()` at `:182-183` that the edge's own
+    summary asserts (`task = Task(` is `:113`). The two edges recording 8B's
+    NEW behaviour are exact (`table-item-valuation` `:317-353`,
+    `table-task-item` `:307-315`). Corrected spans for the human's
+    post-approval pass: node `:72-580`; `writes_to table-task` `:113-183`.
+  - **N3 (note, ledger discipline)** — mutant M1's declared "1 failure" is the
+    named node only; re-run over the focused scope the same deletion reddens
+    9 nodes. Four of five declared mutant hashes reproduced BYTE-IDENTICALLY
+    from their descriptions (M2 `f0776418…`, M3 `f4670bde…`, M4 `dbfe1548…`,
+    M5 `aafc1f53…`); M1's did not, because "delete the write at its
+    definition site" does not pin the deletion boundary. Ledgers should state
+    the run scope behind "observed red" and pin deletion boundaries by line.
+
+  **Verified correct (settled — cheap for the re-review):** all seven final
+  hashes recomputed byte-identical and `git status` clean; suite re-run in
+  foreground 2183/23/1, 2207 collected, sorted failure IDs byte-identical to
+  the phase-1 list (zero regressions); +45 reconciled exactly by
+  `--collect-only` (phase file 21; bridge 21→45 = +24); focused 66 passed;
+  ruff clean on all five touched Python files; DB at `c1d2e3f4a5b6` head;
+  zero `phase8b` residue by state query after restoration. All five declared
+  mutations re-run and every named expected-red node observed red. §7B.5/B8(ii)
+  verified LIVE, not only by construction: a reviewer probe that writes an
+  evaluation inside the savepoint then raises leaves the task created, the
+  evaluation gone and the inline valuation intact (4200, `superseded_at IS
+  NULL`). Effect set matches the PUT path exactly (chain write + one
+  `item_valuation.created` audit; no history record, no workspace event, no
+  preview persisted). Refusal identity, message shape and §6.4 registry entry
+  match. Bridge unsoftened: legacy tokens absent from `create_task.py`, the
+  phase-6 structural guard green, C3 rows 1–3 exact incl. the documented
+  `ge=0`-beats-bridge precedence. C5.3's sole-predicate form is non-vacuous
+  (adding `currency is not None` to `inline_price_requested` reddens it).
+  `get_db` yields an untransacted session, so `maybe_begin` OWNS in
+  production — B4's owning harness is production-faithful and C4 row 1's
+  `designer` assertion tests production's rollback. README carries exactly the
+  three `item.*` rows under `PUT /api/v1/tasks`. Graph read-only, zero delta,
+  174/260 rev `53fdbc78…`, 5 pending HELD.
+
+  **Residual coverage observation (no action):** every inline-price row routes
+  through `find_or_create_item`; the `create_item_in_session` branch (no
+  article_number, no sku) is never exercised with the trio. B7 deliberately
+  made the write site shared and post-branch, so both paths converge — noted,
+  not a finding.
+
+## Amendments (fix r2, routed from review r1, 2026-08-15) — GOVERNING
+
+Routed from `handoffs/reviewer/2026-08-15_phase8b_review_r1_handoff.md`
+(0 blocking / 2 should-fix / 3 notes, 0 owner cards — both should-fixes
+TEST-SIDE, local to `test_phase8b_inline_task_prices.py`).
+
+### F1 (S1) — C4 row 4: the superseded-only sub-row B4 required
+
+Seed the state through PRODUCTION COMMANDS (charter rule 3, the reviewer's
+probe is the recipe): `set_item_valuation` (v1) → `set_item_valuation`
+(v2 supersedes v1) → `delete_item_valuation` (v2). Assert the pre-state
+has NO current valuation (v1 superseded-not-deleted; v2 deleted-not-
+superseded), then `create_task` with the trio ACCEPTS and the chain GREW
+to three rows with the new row current (§7B.6(b)). **Expected-red
+mutation M6:** delete `ItemValuation.superseded_at.is_(None)` at
+`create_task.py:331` (definition site, that line exactly) → this row
+reddens. (Reviewer-verified: shipped code passes the probe; M6 flips it to
+the refusal — the conjunct is correct and was merely unguarded.)
+
+### F2 (S2) — C4 rows 2/3 adopt row 1's capture-locals shape
+
+Capture `workspace.client_id` / `user.client_id` (and any other instance
+attribute the assertions or cleanup need) into PLAIN LOCALS before the
+`try` — the rollback on the failure path expires the ORM instances and
+the `finally` currently raises inside attribute loading before a single
+DELETE runs (reviewer-reproduced under M2: residue grew 2→8 workspaces;
+hand-cleaned). `_cleanup_committed_workspace` itself is correct.
+Verification: after the fix, run row 2 once under the M2 mutant and
+assert-by-state-query ZERO `phase8b` residue after the red (the 11½
+second-failure-mode check, done once and recorded).
+
+### F3 (N1/N3) — ledger discipline (record-side, ride-along)
+
+The fix handoff's ledger: deletion mutations pinned by LINE RANGE
+(P-I 10th ext — M1's unpinned boundary was the one non-reproducing hash);
+"observed red" states its SCOPE (M1's true focused-scope blast radius is
+9 nodes); any environment/state claim carries a state query, never an
+inference from what the harness should have done (N1, 4B L5).
+
+### F4 (N2) — held for the post-approval pass (no fix-cycle action)
+
+Corrected spans for the 5 pending graph items, recorded for the
+coordinator: node `command-task-create` → `:72-580` (def line, not the
+logger); `writes_to table-task` → `:113-183` (the add/flush the summary
+asserts); `reads_from table-item` acceptable-loose (`:236-248` is the
+precise core); the two 8B-behaviour edges exact as recorded. The phase-7
+`item_valuations` residue row (`ival_01M012JEV…`) routes to the existing
+rule-11½ maintenance record — NOT this phase's.
+
+## Review log addendum
+
+- **2026-08-15 — review r1 CONSUMED by the coordinator.** Perimeter exact
+  (2 docs + handoff; app/+archgraph byte-identical to `513856d`).
+  Production verified correct on every branch incl. two no-test-reaches
+  shapes; the §7B.5 survival property now has a LIVE observation; effect
+  set diffed against the PUT path (exact); M2–M5 byte-reproduced, M1
+  boundary unpinned (P-I 10th ext born); reviewer mutations M6–M9 mapped
+  the predicate's conjunct coverage precisely. §9 += per-alternative
+  rule, rule-11½ capture-locals mode, P-I 10th ext, birth-anchor rule.
+  Fix r2 = F1+F2 (+F3 record discipline), test-side only; prompt
+  `prompts/implementer/2026-08-15_phase8b_fix_r2.md`.
