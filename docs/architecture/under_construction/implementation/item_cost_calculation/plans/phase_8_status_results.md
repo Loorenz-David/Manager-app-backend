@@ -725,3 +725,152 @@ only-if-cheap ledger (routed).
   123 pre-existing findings outside this fix perimeter (including the
   verbatim probe's pre-existing unused import). Architecture Graph was read
   only: no architectural delta was identified or applied.
+
+- **2026-08-15 — re-review r2 (Claude Opus 5, plan-reviewer): CHANGES_REQUESTED.**
+  **2 blocking / 3 should-fix / 6 notes, 0 owner cards.** Handoff:
+  `handoffs/reviewer/2026-08-15_phase8_rereview_r2_handoff.md`.
+  **Twelve of thirteen r1 findings CLOSED, each by the arbiter that was
+  absent-or-green in r1**: all 19 declared mutations bite their named row (M5–M9
+  emissions; M10 both straggler rows / M11 the READY half only; M1/M2/M3 the
+  three filters; M4 A15; M13 the disjointness row PLUS both route rows; M18 both
+  route rows; M16 now reddens the hand-written route-table arbiter; M17; G8;
+  and G7's `response_model` row verified to bite under `response_model=dict`).
+  Fifteen unchanged production files' mutant hashes REPRODUCE r1's byte-for-byte;
+  the four changed files' necessarily differ. Perimeter exact (4 production + 4
+  test + 2 docs; `git diff 0c85707..HEAD -- app/` empty; 15 files byte-identical
+  to my r1 entry record); adopted probe hash-identical to the preserved source,
+  19 collected, 19 green, all parametrize ids intact. Numbers reproduced:
+  **2138/23/1**, failure set BYTE-identical to the phase-1 list, **+27**
+  reconciled exactly (19 probe + 6 integration + 2 router + 0 serializer net).
+  Graph zero-delta claim independently checked and CORRECT (G5 deleted dead code
+  that was never a node; G6 is an intra-node refactor). DB at head, zero
+  item-economics residue.
+  **Two blockers remain, both found by mutations the reviewer added (neither is
+  a shipped defect; both are one-fixture fixes):**
+  **B1** C7's `ok`/`infeasible` rows are STILL hand-built serializer echoes —
+  the r1 B4 shape preserved for exactly the two members A1 names as coming only
+  from the committed-evaluation branch; MX2 (replace
+  `INFEASIBLE if allowed <= 0 else OK` with a constant `OK`) SURVIVES, and the
+  "`infeasible` ⇒ `percent_consumed` null" clause rides the same unarbitrated
+  object. **B2** §8A.1's "`total_pause_seconds` / `total_ended_shift_seconds` /
+  `inaccurate_*` are never read" (R-5) has NO discriminating fixture — every
+  phase-8 consumption fixture carries zero in all three columns; MX1 (sum
+  `total_working_seconds + total_pause_seconds` in the handler) SURVIVES, which
+  would bill paused time against the production budget silently. C2 AS WORDED is
+  satisfied — the new bucket row proves each ORM record lands in its own rollup
+  column (A12's `PAUSED`+`SHIFT_ENDED` and the marked-wrong split both asserted);
+  what is missing is the step from those columns into the phase-8 read.
+  **Should-fix:** **S1** the adopted C1 probe row is INTERMITTENTLY RED on a
+  clean tree (3 reds in ~25 wide-scope runs; reproduced: the committed row came
+  back first from an unordered heap scan, firing the reviewer's own non-vacuity
+  guard) — a defect in the r1 probe the fix adopted verbatim exactly as G1
+  instructed; it fails SAFE (M1/M3 redden the row in both heap orders) but a
+  flaky row corrodes the byte-identical baseline discipline (phase-2 N14 class);
+  fix = assert over the candidate SET, not an unordered `scalar()` pick (same
+  guard in the worker sibling row). **S2** the C5 config-supersession row CANNOT
+  FAIL — it soft-deletes a `CostModelVersion` while the handler's call graph
+  reads Task/ItemCostEvaluation/TaskStep and NO configuration table (grep-verified);
+  it also does not exercise supersession (a soft delete is the delete path).
+  **S3** C3 puts both batchable steps on ONE task, not the criterion's two — the
+  dilution arithmetic is proven, the per-episode flow-through is not.
+  **Notes:** N1 C6b re-entry's single-row claim uses `scalar()` (can't see a
+  second row; UNIQUE makes it true anyway); N2 G7's row covers the budget-status
+  route only, not all router routes as A17 worded it; N3 the fix ledger cites no
+  per-row mutant hashes (P-I 9th) — behaviourally re-confirmed by the reviewer;
+  N4 r1's N2 arbiter-placement question resolved by the route-money rows;
+  N5 probe ids intact; N6 the 881 `user_section_daily_work_stats` rows are the
+  known wider-suite class, zero orphaned, phase-8 rows clean their own.
+  Lessons: (1) "rebuild every row on real producers" needs a per-row tick-list
+  in the fix prompt — the two hardest rows stayed decorative; (2) criteria about
+  a pipeline need a row at EACH end (C2 stopped one step short of the money);
+  (3) non-vacuity applies to "nothing changed" rows too; (4) a fixture that
+  depends on physical row order is not a fixture (earned against the reviewer's
+  own probe); (5) per-row mutant hashes are what make a ledger re-derivable.
+
+## Amendments (fix r2, routed from re-review r2, 2026-08-15) — GOVERNING
+
+Where this block contradicts anything above, THIS BLOCK WINS. Routed from
+`handoffs/reviewer/2026-08-15_phase8_rereview_r2_handoff.md` (2 blocking /
+3 should-fix / 6 notes, 0 owner cards — ALL test-side; no production file
+changes this cycle). The row list below is EXHAUSTIVE and each item is
+ticked in the fix handoff (row-list tick rule).
+
+### H1 (r2 B1) — C7's `ok`/`infeasible` rows drive the real producer
+
+Two integration rows through `get_task_budget_status` against a COMMITTED
+evaluation: `allowed_worker_minutes <= 0` → `status is INFEASIBLE` AND
+`percent_consumed is None`; the `> 0` counterpart → `OK`. The
+SimpleNamespace echo rows are deleted. The reviewer's MX2 mutation
+(producer collapsed to constant `OK`,
+`5f89e29b…bde8` → `57c4591f8d21fbdb5940cc9262012d0d41f33465e47a05c96ffd98ec23d2c140`)
+must redden the INFEASIBLE row. The probe's `_committed_fixture` is the
+scaffolding.
+
+### H2 (r2 B2) — §8A.1's excluded-columns clause gets its discriminating fixture
+
+Extend one consumption row's step with NONZERO `total_pause_seconds`,
+`total_ended_shift_seconds` and `inaccurate_working_seconds`; assert
+`result.actual_worker_seconds` equals the WORKING seconds alone. The
+reviewer's MX1 mutation (pause seconds summed in,
+`d57ca890…5172` → `fdae3c4106686398559c4c50574b9653d4b0a5d26f80e430f42dfa9f87b490b7`)
+must redden it. One fixture edit — this is the row that stops paused time
+being billed as consumption.
+
+### H3 (r2 S1) — the two C1 probe rows made order-independent
+
+AUTHORIZED verbatim-adoption deviation (the defect is the r1 reviewer's
+own, specified by them): in
+`test_probe_c1_projection_isolation_with_a_discriminating_fixture` and
+`test_probe_c1_worker_service_filter_is_independent_and_projection_blind`,
+replace the order-dependent `scalar()` pick + guard with a CANDIDATE-SET
+assertion (the unfiltered predicate admits both rows; the literal
+committed-current predicate admits exactly the committed row), keeping the
+behavioural assertion on `status.evaluation_id`. M1/M2/M3 must still bite.
+This closes the observed clean-tree flake (3 reds in ~25 runs — the
+set-assertion rule).
+
+### H4 (r2 S2) — the C5 supersession row rebuilt non-vacuously
+
+Replace the soft-delete scenario: COMMIT a superseding basis/model version
+with a DIFFERENT rate after the close; re-run the handler; assert the
+§8A.4 column set byte-identical; PLUS the non-vacuity assertion that the
+new live configuration would have produced a different number (P-J 5th
+ext). The soft-delete row is deleted (it exercised the phase-4/5 delete
+path, not §8.4 supersession, and the handler's call graph reads no config
+table).
+
+### H5 (r2 S3) — C3's second step moves to a second task
+
+Second step on a SECOND task with its own committed evaluation; assert
+EACH episode's `actual_worker_seconds` == 1800 and Σ == wall clock — the
+flow-through into two episodes is the criterion's point.
+
+### H6 (notes taken) — cheap ride-alongs
+
+- N1: C6b re-entry's single-row claim uses a COUNT, not `scalar()`.
+- N2: widen G7's structural row to quantify over
+  `item_economics.router.routes` (A17's wording) — it bites today on the
+  one route; the widening is one comprehension.
+- N3/L5: the fix handoff's mutation ledger carries the PER-ROW MUTANT HASH
+  as a required column (P-I 9th restated) — for the re-run rows, state
+  reproduces/differs vs the r2 ledger's hashes.
+
+### H7 — scope
+
+TEST-SIDE ONLY. Zero production edits (the re-review proved all fifteen
+untouched production files byte-identical and the four changed ones
+correct; MX1/MX2 are proof gaps, not defects). Any production edit is
+stop-and-report.
+
+- **2026-08-15 — re-review r2 CONSUMED by the coordinator.**
+  CHANGES_REQUESTED — 2/3/6, 0 cards. Twelve of thirteen r1 findings
+  CLOSED (19/19 declared mutations bite; 11 mutant hashes reproduce r1's
+  byte-for-byte, the rest differ only where the pre-image changed); the
+  two new blockers are reviewer-ADDED mutations surviving (MX1 pause-bill,
+  MX2 producer-constant) — the same echo/pipeline shapes as r1, caught one
+  layer deeper; S1 is the reviewer's own probe flake, honestly attributed
+  and specified. Reviewer perimeter exact (3 docs; app/ clean). §9 += five
+  r2 rules (row-list tick, pipeline-ends, P-J 5th ext stability
+  non-vacuity, set-assertion, P-I 9th as hard ledger field). This
+  GOVERNING block H1–H7; fix r2 prompt
+  `prompts/implementer/2026-08-15_phase8_fix_r2.md`.
