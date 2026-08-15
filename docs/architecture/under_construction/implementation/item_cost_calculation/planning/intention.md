@@ -2547,6 +2547,17 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   mirror" gloss was false against shipped code) and (b) the branch-B
   clause; §4.7A writers list += create_task; §11A.5(c) corrected.
 
+**Round 19 — 2026-08-15 (phase-9 projection r0; one owner card answered):**
+
+- **R19-1 (owner, card 1)** The R18-2 frontend handoff becomes TWO
+  documents covering ALL twenty-three shipped endpoints: an OPERATIONAL
+  handoff (the ten routes + the 8B flow + the removals) and a
+  CONFIGURATION handoff (the thirteen setup routes + the category
+  contract + the setup narrative) — the split mirrors the owner's
+  two-stage frontend build. A handoff without the setup routes cannot
+  meet R18-2's build-from-the-handoff-alone goal (the projectionist's
+  story: every price screen reads "no cost group set up").
+
 ---
 
 ## 17. Open decisions ledger

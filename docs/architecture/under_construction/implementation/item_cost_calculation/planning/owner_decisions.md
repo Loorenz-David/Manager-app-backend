@@ -645,3 +645,36 @@ manager-typed act, deliberately DISTINCT from R15-1's migration rule
 (which resurrects nothing and stays untouched). Refusal identity adapted
 for branch B: **`ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`** (registered
 §6.4; the projection's proposed name described branch A's semantics).
+
+---
+
+# Phase 9 projection r0 — owner card (2026-08-15)
+
+## Card 1 — Should the frontend handoff also cover the thirteen setup endpoints?
+
+**Question (projectionist, verbatim):** Does the frontend handoff document
+only the ten endpoints you listed, or all twenty-three the project shipped?
+(Story: the frontend developer builds every price screen from the handoff,
+then hits the FIRST screen a manager actually needs — the settings page
+creating cost groups, bases, and model terms — and nothing describes those
+endpoints; meanwhile every built screen shows "no cost group set up".)
+
+**ANSWER (2026-08-15): all twenty-three, as TWO documents** — "we will make
+one handoff for the current outline 10 endpoints and another document for
+the endpoints for configuration, that way i can split the build at the
+frontend in two also."
+
+**Folded as R19-1:** the R18-2 deliverable becomes TWO handoff documents
+under `docs/handoff/to_frontend/`:
+1. **Operational handoff** — the ten routes (valuation ×3, evaluations ×5,
+   budget-status, lifetime), the 8B inline-pricing flow, the removals, the
+   twelve-status vocabulary, the flow narratives (incl. the two-call
+   create→budget-status flow and quantity-is-per-item).
+2. **Configuration handoff** — the thirteen setup routes (cost-groups CRUD
+   + sections ×6, basis-versions ×3, cost-model-versions ×3,
+   configuration-status ×1), their request shapes, identities (incl. the
+   dual-path conflict identities), the category contract (one group per
+   major category), and the setup flow narrative (what a manager must do
+   before any price screen works).
+Both carry the same grep-accuracy arbiter; the split mirrors the owner's
+two-stage frontend build.

@@ -165,3 +165,14 @@ Phase 8 added one migration AFTER the drop head:
 cannot drop enum values). The squashed baseline must create
 `task_type_enum` WITH this label included; the chain to collapse now ends
 at `c1d2e3f4a5b6`, not `be9dfe42a035`.
+
+## Finding 8 (2026-08-15, phase-9 projection F11)
+
+Phase-2 review N4 wanted `checkfirst=True` removed from the five enum
+creations in `90cdd23a828e_item_economics_schema.py:53-57` so a pre-existing
+type fails loudly instead of being silently adopted. UNDISCHARGEABLE on the
+live chain (applied migration; charter rule 7; the five types already
+exist, so the posture can never fire again). Closed WONTFIX in phase 9's
+Review log. **Squash consequence:** the squashed baseline creates the enum
+types WITHOUT `checkfirst=True` — the loud-failure posture N4 wanted is
+free at squash time.
