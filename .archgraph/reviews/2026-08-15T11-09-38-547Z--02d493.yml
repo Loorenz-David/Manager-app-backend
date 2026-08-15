@@ -1,0 +1,31 @@
+reviewId: 2026-08-15T11-09-38-547Z--02d493
+reviewedItemIds:
+  - node:decision-money-audience-admin-manager-only
+decisions:
+  - itemId: node:decision-money-audience-admin-manager-only
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "The one architectural fact that lived only in prose, now carried:
+      the ADMIN/MANAGER-only money audience. All four evidence spans re-read by
+      the phase-9 reviewer AND re-verified at this pass:
+      include_monetary_step_fields serializers.py:150-155 (the single positive
+      allow-list), :158-160 (keyword-only no-default), _run_budget_status
+      item_economics.py:133-144 (role-split service selection), the money-free
+      worker result :197-207. Type `decision` verified right (records the
+      rejected defaulted-flag alternative and the contested SELLER scope).
+      Satisfies §13's archgraph clause; phase-1 N2 lands."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T11:09:38.547Z
+graphRevisionBefore: 7dcdb9b01f03611f0605b77622963e205e9073ecf0cca7f3d988e31a2fb3c36f
+graphRevisionAfter: 465c8a10cdb9afebc74154238379bc26e0291216b856758bf0c35a2494597d4f
+evidenceSummary: 4 evidence entries across 3 files; no drift detected
+humanInstruction: "Phase-9 post-approval graph pass (v1 closure): the
+  money-audience decision node promoted after two independent re-derivations
+  (the phase-9 reviewer's and this pass's), under the owner's standing
+  post-approval authorization."
+reviewTokenCorrelation: 572573de30d9

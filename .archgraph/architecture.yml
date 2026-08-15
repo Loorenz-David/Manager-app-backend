@@ -3679,15 +3679,15 @@ nodes:
     origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-15T06:32:15.835Z
+    updatedAt: 2026-08-15T11:10:14.643Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
         symbol: get_economics_configuration_status
         startLine: 12
         endLine: 64
-        contentHash: ce9fc62dbe372af5e74385530f4ec1306bc3da5dc56314b312d0517fb6c442b2
+        contentHash: d81cb4938c3d80415b6111bfa6860350a171398f6b03a095d068fe23e88efdcd
         linkedAt: 2026-08-13T13:21:39.160Z
-        acknowledgedAt: 2026-08-15T06:32:15.835Z
+        acknowledgedAt: 2026-08-15T11:10:14.643Z
   - id: command-item-economics-set-item-valuation
     type: command
     name: set_item_valuation
@@ -4433,10 +4433,10 @@ nodes:
           inferenceReason: An enumerated money-free surface, rather than a filtered copy
             of the manager payload, shows the boundary is implemented by
             construction and not by subtraction.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-15T09:55:54.174Z
-    updatedAt: 2026-08-15T09:55:54.174Z
+    updatedAt: 2026-08-15T11:09:38.530Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains

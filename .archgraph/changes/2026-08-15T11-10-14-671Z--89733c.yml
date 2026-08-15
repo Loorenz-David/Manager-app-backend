@@ -1,0 +1,30 @@
+changeId: 2026-08-15T11-10-14-671Z--89733c
+operations:
+  - itemId: node:endpoint-item-economics-status
+    kind: link
+    before:
+      sourceLink: &a1
+        path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+        symbol: get_economics_configuration_status
+        startLine: 12
+        endLine: 64
+    after:
+      sourceLink: *a1
+      effect: re-accept
+    rationale: Re-accept after phase-9's declared 4B-N3 edit (the two redundant `and
+      not version.is_deleted` clauses removed at :39/:49, inside the span) —
+      content drift only; the mapping is unchanged and the function is :13-64.
+      Clears the 1 stale link; safe per the reviewer's verification that all
+      three loaders already filter is_deleted.
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T11:10:14.671Z
+graphRevisionBefore: 465c8a10cdb9afebc74154238379bc26e0291216b856758bf0c35a2494597d4f
+graphRevisionAfter: b80b31a73834b3a639bcd8ac3608db85c2215fa250252d63623548e7d6e6a704
+humanInstruction: "v1-closure maintenance: the config-status source link
+  re-accepted after phase-9's declared N3 edit (content drift inside an
+  unchanged mapping)."
+changeTokenCorrelation: 3254dcc12978
