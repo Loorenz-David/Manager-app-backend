@@ -36,7 +36,7 @@ async def get_economics_configuration_status(ctx: ServiceContext) -> dict:
         )
     ).scalars().all()
     today = today_utc()
-    has_open_model = any(version.effective_to is None and not version.is_deleted for version in model_versions)
+    has_open_model = any(version.effective_to is None for version in model_versions)
     categories = {}
     for category in ItemMajorCategoryEnum:
         category_groups = [group for group in groups if group.major_category == category]
@@ -46,7 +46,6 @@ async def get_economics_configuration_status(ctx: ServiceContext) -> dict:
             and any(
                 version.production_cost_group_id == selected_group.client_id
                 and version.effective_to is None
-                and not version.is_deleted
                 for version in basis_versions
             )
         )

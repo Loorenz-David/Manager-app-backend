@@ -493,9 +493,20 @@ async def test_c6b_reentry_recomputes_one_result_row_from_new_totals(db_session)
 async def test_c5_config_supersession_after_close_preserves_snapshot_recompute(db_session):
     workspace, user, _item, task, committed = await _prepared(db_session)
     try:
+        # Close BEFORE the first run, not between the runs: both lifecycle columns
+        # then carry real closed values, so "after close" is genuinely reached and
+        # the ten-column equality below still holds. Resolving between the runs
+        # would flip task_state_snapshot and task_closed_at and redden it.
+        # RESOLVED is an admitted state, so the first run still writes.
+        task.state = TaskStateEnum.RESOLVED
+        task.closed_at = datetime.now(timezone.utc)
+        await db_session.commit()
+
         payload = {"workspace_id": workspace.client_id, "task_id": task.client_id}
         await handle_process_item_cost_result(payload, "execution-task")
         first = await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id))
+        # Ten columns: §8A.4's replay-identity set plus task_state_snapshot.
+        # That extra column is deliberate and stricter, not an oversight.
         first_values = {
             field: getattr(first, field)
             for field in (

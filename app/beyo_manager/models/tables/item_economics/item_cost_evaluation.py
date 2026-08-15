@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,12 +31,12 @@ class ItemCostEvaluation(IdentityMixin, Base):
     cost_model_version_id: Mapped[str] = mapped_column(String(64), ForeignKey("cost_model_versions.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     production_cost_group_id: Mapped[str] = mapped_column(String(64), ForeignKey("production_cost_groups.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     production_cost_basis_version_id: Mapped[str] = mapped_column(String(64), ForeignKey("production_cost_basis_versions.client_id", ondelete="RESTRICT"), nullable=False, index=True)
-    monthly_paid_hours_snapshot: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)
-    planning_utilization_percent_snapshot: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    monthly_paid_hours_snapshot: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    planning_utilization_percent_snapshot: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     fixed_monthly_cost_minor_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
-    cost_per_worker_minute_minor_snapshot: Mapped[float] = mapped_column(Numeric(12, 4), nullable=False)
+    cost_per_worker_minute_minor_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     production_budget_minor: Mapped[int] = mapped_column(Integer, nullable=False)
-    allowed_worker_minutes: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    allowed_worker_minutes: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     calculation_version: Mapped[int] = mapped_column(Integer, nullable=False)
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

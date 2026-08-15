@@ -173,10 +173,13 @@ async def test_process_shopify_products_fans_out_to_all_active_workspace_shops_a
     # without re-querying by metadata. Compared as a set: the command returns them in
     # target order, while this query has no ORDER BY.
     assert set(result.pop("event_client_ids")) == {event.client_id for event in events}
+    # Same reason as the events assertion above: the command returns the sync items
+    # in target order while this query has no ORDER BY, so an ordered comparison is
+    # a flake waiting for a different heap order.
+    assert set(result.pop("sync_item_client_ids")) == {row.client_id for row in rows}
     assert result == {
         "queued": True,
         "task_id": "task_shopify_products_1",
-        "sync_item_client_ids": [row.client_id for row in rows],
         "target_count": 2,
     }
     assert len(rows) == 2

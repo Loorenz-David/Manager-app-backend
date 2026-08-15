@@ -5,7 +5,6 @@
 | File | Table | Prefix | Purpose |
 |---|---|---|---|
 | `task.py` | `tasks` | `tsk` | Core task aggregate (operational work order) |
-| `task_history_record.py` | `task_history_records` | `thr` | Immutable task lifecycle change lineage |
 | `task_event.py` | `task_events` | `tev` | Domain-significant operational event lineage |
 | `task_note.py` | `task_notes` | `tno` | User and system notes attached to tasks |
 | `task_item.py` | `task_items` | `tim` | Bridge: items attached to a task (with roles) |
@@ -21,8 +20,8 @@
 When reconstructing past state, use this order of authority:
 
 1. **Append-only lineage tables** (authoritative):
-   - `task_history_records` — task lifecycle progression
    - `task_events` — domain-significant operational events
+   - `history_records` — cross-entity change lineage, including task lifecycle progression (`models/tables/history/`)
    - `step_state_records` — step lifecycle intervals and transitions
    - `task_step_assignment_records` — assignment intervals and removal history
    - `task_step_dependencies` — durable prerequisite edges
@@ -32,17 +31,16 @@ When reconstructing past state, use this order of authority:
    - `tasks` scalar columns (latest pointers, counters, snapshots)
    - `task_steps` scalar columns (aggregates, latest pointer, readiness, counters)
 
-**Latest pointer fields (`latest_history_record_id`, `latest_event_id`, `latest_state_record_id`) are convenience shortcuts only.** Replay-safe reconstruction must always traverse lineage, not rely on latest pointers alone.
+**Latest pointer fields (`latest_event_id`, `latest_state_record_id`) are convenience shortcuts only.** Replay-safe reconstruction must always traverse lineage, not rely on latest pointers alone.
 
 ---
 
 ## `tasks` — key rules for commands
 
-### Circular FKs (`use_alter=True`)
-- `latest_history_record_id` → `task_history_records.client_id`
+### Circular FK (`use_alter=True`)
 - `latest_event_id` → `task_events.client_id`
 
-Both use `use_alter=True` to resolve DDL ordering. Pointer updates must be **transactionally coupled** with the lineage append.
+It uses `use_alter=True` to resolve DDL ordering. Pointer updates must be **transactionally coupled** with the lineage append.
 
 ### Task type enum
 `task_type` uses Postgres type name `business_task_type_enum` (not `task_type_enum`) to avoid collision with the bootstrap execution domain's `task_type_enum`. The Python enum class is `TaskTypeEnum` in `domain/tasks/enums.py`. **Do not rename it back.**
@@ -89,6 +87,21 @@ Terminal states: `COMPLETED`, `SKIPPED`, `FAILED`, `CANCELLED`.
   *why* it stopped is `transition_reason` (the system) or `pause_reason_id` (the worker's
   choice), never the state. Work resumes next shift by transitioning back to `WORKING`.
 - `BLOCKED` means a dependency is unmet.
+
+### A terminal task does not close its steps
+
+`transition_step_state` guards only on the **step** being terminal
+(`transition_step_state.py:150`). Nothing forbids transitioning a step whose **task** is
+already terminal, and the three terminal task commands (`resolve_task`, `fail_task`,
+`cancel_task`) do not close open step records. So a worker who finishes a straggling step
+after the task was resolved legitimately changes `task_steps.total_working_seconds`.
+
+That is deliberate, and the consequence is handled rather than prevented: the analytics
+step-transition handler re-emits `PROCESS_ITEM_COST_RESULT` whenever the step's task is
+READY or terminal, so the item-economics result row converges on the settled time instead
+of disagreeing with a live recompute forever. Do not "fix" the missing guard without
+reading `docs/domains/item_economics/states.md` first — the open window is what makes late
+time countable at all.
 
 ### Aggregate metrics mixins
 `TaskStep` inherits from all four aggregate metrics mixins:
@@ -143,12 +156,12 @@ analytics and operational transparency.
 
 ---
 
-## `task_events` and `task_history_records` — key rules for commands
+## `task_events` — key rules for commands
 
-- Both are **append-only lineage tables**. Do not update existing rows.
+- **Append-only lineage table.** Do not update existing rows.
 - `task_events.event_lifecycle_state` (`TaskDomainEventLifecycleStateEnum`): `RECORDED`, `SUPERSEDED`, `COMPENSATED`, `IGNORED`. Compensating records append rather than mutate.
-- `task_history_records.state_from` / `state_to` capture the before/after state for the transition.
 - `snapshot_payload` should capture durable task state at the time of the event.
+- Task lifecycle change lineage lives in the shared `history_records` table (`models/tables/history/`), not in this folder.
 
 ---
 

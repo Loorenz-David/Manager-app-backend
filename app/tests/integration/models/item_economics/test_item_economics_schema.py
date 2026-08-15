@@ -201,6 +201,12 @@ def test_downgrade_static_proxy_is_exact():
     }
     dropped_enum_variables = set(re.findall(r"(_[a-z0-9_]+_enum)\.drop\(", downgrade_source))
     dropped_enum_names = {getattr(migration, variable).name for variable in dropped_enum_variables}
+    # A raw-SQL drop bypasses the SAEnum variables entirely, so the variable regex
+    # above cannot see it — and dropping a REUSED type that way is exactly the
+    # failure the reuse assertion below exists to catch.
+    dropped_enum_names |= set(
+        re.findall(r"drop\s+type\s+(?:if\s+exists\s+)?\"?([a-z0-9_]+)", downgrade_source, re.IGNORECASE)
+    )
     assert dropped_enum_names == new_types
     assert not {migration._business_task_type_enum.name, migration._task_return_source_enum.name, migration._task_state_enum.name} & dropped_enum_names
     assert set(re.findall(r"op\.drop_table\(\s*['\"]([^'\"]+)", downgrade_source)) == set(

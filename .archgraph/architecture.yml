@@ -4366,6 +4366,77 @@ nodes:
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
     updatedAt: 2026-08-15T08:40:24.816Z
+  - id: decision-money-audience-admin-manager-only
+    type: decision
+    name: "Money audience: ADMIN/MANAGER only"
+    description: "Monetary fields are served to ADMIN and MANAGER identities only;
+      WORKER and SELLER are both excluded, everywhere, in every payload family.
+      Excluding SELLER alongside WORKER was the contested half — a seller
+      previously saw the step cost number on task detail and no longer does. Two
+      mechanisms were rejected in favour of the shipped ones: a role check
+      inside each serializer, and a single serializer with a defaulted
+      include-money flag; both fail open as soon as a new call site appears.
+      What must stay true: a withheld monetary key is ABSENT from the payload,
+      never null, because a null key still discloses that a cost exists; the
+      step serializer's include_monetary parameter stays keyword-only with NO
+      default, so an unconverted call site raises rather than leaking; the flag
+      is derived from the request identity once inside each shared payload
+      builder, so endpoints riding a builder inherit the redaction; and the
+      worker-facing budget status stays a SEPARATE query service with a
+      serializer carrying no monetary keys at all, rather than becoming a flag
+      on the manager serializer. This boundary spans two payload families and is
+      not owned by one domain: task-step cost belongs to worker compensation,
+      item-economics figures to item economics."
+    tags:
+      - security-boundary
+      - roles
+      - money
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: include_monetary_step_fields
+          startLine: 150
+          endLine: 155
+          summary: A single predicate answers whether a role may receive a step's monetary
+            fields, admitting exactly RoleNameEnum.ADMIN and
+            RoleNameEnum.MANAGER and nothing else.
+          inferenceReason: One named predicate enumerating the admitted roles is the
+            audience policy itself, not a caller of it — every redacting site
+            derives its flag from this function.
+        - path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: serialize_step
+          startLine: 158
+          endLine: 160
+          summary: serialize_step declares include_monetary as keyword-only with no
+            default value.
+          inferenceReason: "A required keyword-only flag is the fail-closed construction
+            the policy specifies: a call site that omits it raises TypeError
+            instead of silently emitting money."
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: _run_budget_status
+          startLine: 133
+          endLine: 144
+          summary: The budget-status route resolves the caller's role through
+            include_monetary_step_fields and dispatches to
+            get_task_budget_status_worker or get_task_budget_status accordingly,
+            then serializes with the matching include_monetary value.
+          inferenceReason: The same audience predicate selects an entirely different query
+            service rather than a field filter, which is the separate-serializer
+            half of the policy applied to this domain's own payloads.
+        - path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: _serialize_result
+          startLine: 197
+          endLine: 207
+          summary: The non-monetary result branch returns an enumerated key set carrying
+            only minutes, percentage, lifecycle snapshot and timestamp, with an
+            inline instruction not to add a monetary field to it.
+          inferenceReason: An enumerated money-free surface, rather than a filtered copy
+            of the manager payload, shows the boundary is implemented by
+            construction and not by subtraction.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-15T09:55:54.174Z
+    updatedAt: 2026-08-15T09:55:54.174Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains

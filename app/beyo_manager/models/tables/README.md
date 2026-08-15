@@ -11,6 +11,8 @@
 - [cases](#cases)
 - [content_mention_links](#content-mention-links)
 - [content_mentions](#content-mentions)
+- [cost_model_terms](item_economics/README.md)
+- [cost_model_versions](item_economics/README.md)
 - [customers](#customers)
 - [delayed_schedulers](#delayed-schedulers)
 - [execution_payloads](#execution-payloads)
@@ -25,13 +27,20 @@
 - [issue_severities](#issue-severities)
 - [issue_types](#issue-types)
 - [item_categories](#item-categories)
+- [item_cost_evaluation_terms](item_economics/README.md)
+- [item_cost_evaluations](item_economics/README.md)
+- [item_cost_results](item_economics/README.md)
 - [item_issues](#item-issues)
 - [item_upholsteries](#item-upholsteries)
 - [item_upholstery_requirements](#item-upholstery-requirements)
+- [item_valuations](item_economics/README.md)
 - [items](#items)
 - [notification_pins](#notification-pins)
 - [notifications](#notifications)
 - [pending_uploads](#pending-uploads)
+- [production_cost_basis_versions](item_economics/README.md)
+- [production_cost_group_sections](item_economics/README.md)
+- [production_cost_groups](item_economics/README.md)
 - [push_subscriptions](#push-subscriptions)
 - [recurring_schedulers](#recurring-schedulers)
 - [roles](#roles)
@@ -435,7 +444,7 @@
 | upholstery_inventory_id | `str | None` | `String(64)` |
 | amount_meters | `Decimal | None` | `Numeric(12, 3)` |
 | value_minor | `int | None` | `Integer` |
-| currency | `ItemCurrencyEnum | None` | `SAEnum(ItemCurrencyEnum, name='item_currency_enum', create_type=False)` |
+| currency | `ItemCurrencyEnum | None` | `SAEnum(ItemCurrencyEnum, name='item_currency_enum', create_type=True)` |
 | source | `ItemUpholsteryRequirementSourceEnum` | `SAEnum(ItemUpholsteryRequirementSourceEnum, name='item_upholstery_requirement_source_enum', create_type=True)` |
 | state | `ItemUpholsteryRequirementStateEnum` | `SAEnum(ItemUpholsteryRequirementStateEnum, name='item_upholstery_requirement_state_enum', create_type=True)` |
 | created_at | `datetime` | `DateTime(timezone=True)` |
@@ -465,9 +474,6 @@
 | height_in_cm | `int | None` | `Integer` |
 | width_in_cm | `int | None` | `Integer` |
 | depth_in_cm | `int | None` | `Integer` |
-| item_value_minor | `int | None` | `Integer` |
-| item_cost_minor | `int | None` | `Integer` |
-| item_currency | `ItemCurrencyEnum | None` | `SAEnum(ItemCurrencyEnum, name='item_currency_enum', create_type=True)` |
 | item_position | `str | None` | `String(255)` |
 | external_id | `str | None` | `String(255)` |
 | external_url | `str | None` | `String(1024)` |

@@ -163,7 +163,7 @@ The example below shows one item with every key populated; `data` is the object 
           "total_ended_shift_count": 0,
           "total_issues_count": 0,
           "total_issues_resolved_count": 0,
-          "total_cost_minor": null,
+          "total_cost_minor": null,   // ADMIN/MANAGER only — this key is ABSENT (not null) for WORKER and SELLER
           "recorded_time_marked_wrong": false,
 
           "updated_at": null,
@@ -390,7 +390,7 @@ The step level is `serialize_step` — 22 keys — plus the enrichment keys belo
 | `total_ended_shift_count` | int | no | |
 | `total_issues_count` | int | no | |
 | `total_issues_resolved_count` | int | no | |
-| `total_cost_minor` | int | **yes** | **minor currency units** (öre/cents), not major |
+| `total_cost_minor` | int | **yes** | **minor currency units** (öre/cents), not major. **Not always present:** the key is emitted for ADMIN and MANAGER identities only and is **absent from the object entirely** — not null — for WORKER and SELLER. Read the presence of the key, never its value, to decide whether to render a cost. |
 | `recorded_time_marked_wrong` | bool | no | |
 | `updated_at` | ISO datetime | **yes** | |
 | `created_by` | user object (§5.5) | **yes** | |

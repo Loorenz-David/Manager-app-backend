@@ -466,3 +466,177 @@ row; (3) all five formerly-UNROUTED census rows end in a task (rows 7, 8,
   P1–P22. Gate CLEARED; implementer prompt
   `prompts/implementer/2026-08-15_phase9_implement_r1.md` (intended for a
   Claude-model implementer per the owner's choice — documentation-heavy).
+
+- **2026-08-15 — implement r1 (Claude Opus 5): IMPLEMENTED** — P1–P22 of the
+  GOVERNING block discharged. Suite **2249 passed / 23 failed / 1 deselected
+  = 2272 selected**, measured in one foreground run from `backend/app/`; the
+  23-failure set is **byte-identical** to the phase-1 baseline list (sorted
+  `diff` of both 23-row sets: empty). +65 over the 2184 baseline, reconciled
+  exactly: 8 (C1 docs) + 3 (P3 structural) + 4 (C4 route mirror) + 50
+  (handoff/docs accuracy arbiter). `ruff check` clean on all fifteen touched
+  Python files. DB left at head `c1d2e3f4a5b6` — no migration ran; the only
+  migration touch is P10's docstring line. Archgraph: **one** additive node,
+  175/260, revision `7dcdb9b01f03611f0605b77622963e205e9073ecf0cca7f3d988e31a2fb3c36f`,
+  1 pending (that node), 1 stale (see drift below).
+
+  **What was built.** P1 the `docs/domains/item_economics/` folder
+  (`README.md` / `api.md` / `events.md` / `states.md`) plus the `docs/README.md`
+  domain-map row; P2 `tests/unit/docs/test_item_economics_docs.py` on the
+  `parents[4]` anchor; P3 the compiled-statement filter arbiter over the three
+  recorded sites; P4's allow-list in full (the eleven annotations, 4B N3's two
+  clauses, the migration docstring, the downgrade-proxy regex, N14's `:179`,
+  P7's C5 repair, P17's two-line edit); P5 the tables-index batch; P6 the TWO
+  frontend handoffs (13 configuration routes + 10 operational routes, 23
+  together) with a hand-written accuracy arbiter; P9 the items/tasks README
+  batch incl. the D-4 line; P10 both applied-migration items; P11 the nine
+  prefix-map rows; P12 the frontend mirrors; P13 both Application_contracts
+  edits; P14 the money-audience node; P15 the routers/README.md work; P18 the
+  old handoff correction; P19 the deploy-ordering runbook; P20 both contract
+  amendments.
+
+  **Mutation ledger (P3 — three named, all executed; expected-red node ids
+  were written down BEFORE the runs).** Scope of every observed red set:
+  `tests/unit` (`-m 'not e2e' -p no:randomly`, 1366 passed / 8 pre-existing
+  failures), diffed against a baseline capture of that scope.
+
+  | # | Site (line-pinned) | Mutant sha256 | Restored sha256 | Expected red | Observed |
+  |---|---|---|---|---|---|
+  | M1 | `get_task_budget_status.py` delete `:107` (`ItemCostEvaluation.superseded_at.is_(None),`) | `b66a7fce09a6…dd63392b` | `5f89e29b695e…0a68bde8` | `…test_phase9_committed_filter_structure.py::test_committed_current_filter_is_present_in_the_compiled_select[get_task_budget_status.py:106-108]` | exactly that node; zero collateral; zero baseline failures disappeared |
+  | M2 | `get_task_budget_status_worker.py` delete `:31` | `258873a603b1…9b30b7150a` | `011cf2ae76dd…8951970f00` | `…[get_task_budget_status_worker.py:30-32]` | exactly that node; zero collateral |
+  | M3 | `get_item_lifetime_economics.py` delete `:47` | `89a4d32613b1…9af953d6e1` | `1f26eecaaeeb…d0e7cf315e` | `…[get_item_lifetime_economics.py:46-48]` | exactly that node; zero collateral |
+
+  Per-site red only, as the plan predicted: the worker service carries its own
+  copy of the filter (a deliberate phase-8 decision), so M1 cannot reach it.
+
+  **Self-chosen probes (4, all reverted; declared because the new arbiters
+  would otherwise reach the reviewer unfalsified).** (a) delete
+  `routers/README.md:70` → `test_readme_quick_index_mirrors_every_shipped_route`
+  red (mutant `cd7bf852cfb4…d743f757`, restored `fc67aabfe64b…6ce562be`);
+  (b) drop `WORKER` from the budget-status gate at
+  `routers/api_v1/item_economics.py:347` →
+  `test_router_source_matches_the_hand_written_route_and_role_set` red (mutant
+  `f9bfed706789…a324e89`, restored `799d205d4324…31739dc15a`); (c) rename one
+  identity in the operational handoff →
+  `test_no_document_names_an_unregistered_error_identity[operational]` red
+  (mutant `98c52885957f…e7fb413b`, restored `f3b036ba7dcc…3711c9188d`);
+  (d) re-add `consumed_cost_minor` to the worker
+  branch of `_serialize_result` → **two** nodes red
+  (`test_the_documented_budget_status_keys_are_the_shipped_keys[budget-status-worker-shape]`
+  and `test_the_worker_budget_status_carries_no_monetary_key`) (mutant
+  `881b5ea368de…368f0964`, restored `12d6e36a7a04…7ce2a53f88`).
+
+  **P10 — phase-2 N4 (`checkfirst=True`) closed WONTFIX.** The only site is
+  `90cdd23a828e_item_economics_schema.py:53-57`, an **applied** migration four
+  revisions below head. Charter rule 7 forbids rewriting it, and a follow-up
+  revision cannot restore the posture N4 wants: the five enum types already
+  exist on every database in this chain, so a `checkfirst=False` creation could
+  never fire again except to fail on a fresh build for reasons unrelated to the
+  defect N4 was guarding. The posture is carried forward as squash-seed Finding
+  8, which is where a rebuilt initial migration can actually adopt it. Recorded
+  here rather than left as an open drift item, which is the evaporation the
+  census axis exists to prevent.
+
+  **P10 — phase-6 r2 N1 (docstring) TAKEN, with the rule-7 exemption stated.**
+  `be9dfe42a035_drop_legacy_item_money_columns.py:4` read `Revises: 5caae620088c`
+  while `:15` reads `down_revision = "5420acc6a7b3"`. The edit changes **prose
+  only**: Alembic derives the revision graph from `down_revision`, never from
+  the docstring, and no operation, no `revision`/`down_revision` value and no
+  upgrade/downgrade body was touched. Rule 7 protects the applied *behaviour* of
+  a migration; a wrong parent named in a comment inside a destructive migration
+  is a hazard to the next human reading it, and correcting it changes nothing
+  Alembic executes.
+
+  **Judgment calls.**
+  1. *P16's publication order.* P16 and F20 read slightly differently on where
+     `infeasible`/`ok` go. Followed P16 (the GOVERNING block): the twelve values
+     are verbatim from `enums.py:15-27`, and the **evaluated branch is stated
+     separately** (branch A: a current committed evaluation exists → `infeasible`
+     if the allowance ≤ 0 else `ok`) from the ten-row readiness precedence
+     (branch B: `item_missing_major_category` → … → `not_evaluated`). This is
+     also what §11A.4/§7C.3 actually define — group 1 is a branch condition, not
+     a precedence step — so both readings are satisfied. Published identically in
+     `states.md` and in the operational handoff's §6, and the accuracy arbiter
+     asserts the §6 tables name exactly the twelve enum values and nothing else.
+  2. *P5(a)'s index rows.* The nine new rows link to
+     `item_economics/README.md` (the existing folder guide) rather than to a
+     `#anchor`, because P5 records that the per-table column sections are NOT
+     added this phase and an anchor link would resolve to nothing. Index is now
+     71 rows (62 + 9).
+  3. *P12's frontend mirrors.* All four cited ranges are **request-body** rows on
+     the four bridge-carrying endpoints, so the three keys are still accepted and
+     still rejected — deleting the rows would have been wrong. Annotated all
+     twelve rows "present, always rejected with 422 `ITEM_MONEY_MOVED`", matching
+     the treatment P15 mandates for the backend's own PUT `/api/v1/tasks` table.
+  4. *P4 item 7 (N14).* Repairing the ordered comparison at `:179` needs the
+     `pop`-and-compare-as-set idiom the file already uses one line above for the
+     event ids; that is one assertion converted, net +2/−1 lines in one
+     contiguous region rather than a literal one-line edit.
+  5. *P9's `:61` timing paragraph.* Deleted the `### Timing fields` heading with
+     its paragraph — deleting only the paragraph leaves a heading with no body.
+  6. *P15's `shopify_preorder`.* Documented as nested leaf rows
+     (`shopify_preorder.product.*`, `shopify_preorder.inventory[].*`) following
+     the table's own `item_upholstery.*` convention for a nested model, rather
+     than one bare `object` row.
+  7. *P19's generic ordering rule.* The revision-naming operations line lives in
+     `docs/deploy/RUNBOOK_20260815_item_money_column_drop_ordering.md`. The
+     domain doc's generic sentence (no revision named) sits in `api.md`, in the
+     section that already discusses the removed money keys — the only place in
+     the folder where a reader meets the topic.
+  8. *P14's node type.* `decision`, not `infrastructure`. The money audience is
+     an architectural policy with a rejected alternative (a defaulted
+     include-money flag on one shared serializer) and a contested scope (SELLER
+     excluded alongside WORKER); `infrastructure` describes something that
+     provides a runtime capability, which this does not.
+  9. *The eleven annotations needed an import.* Each of the five model modules
+     gained `from decimal import Decimal` (line 2, matching the
+     `user_work_profile.py:2` precedent) — these modules have no
+     `from __future__ import annotations`, so `Mapped[Decimal]` is evaluated at
+     class creation. No other runtime or ruff change: `ruff check` clean on all
+     five and `import beyo_manager.models` succeeds.
+
+  **Drift found and FILED, not fixed (all outside the P-enumerations).**
+  (i) `endpoint-item-economics-status`'s archgraph source link over
+  `get_economics_configuration_status.py:12-64` is now **stale** — expected, and
+  caused by P4 item 4's own two-clause edit inside that span. The span is still
+  correct (the function is `:13-64`); only the content hash moved. Anchor
+  acknowledgement belongs to the human-authorized maintenance channel.
+  (ii) `tests/integration/services/commands/item_economics/test_phase8_reviewer_r1_probe.py:22`
+  carries a **pre-existing** ruff `F401` (`ItemMajorCategoryEnum` unused);
+  verified untouched by this phase (`git diff --name-only` excludes it).
+  (iii) `routers/README.md`'s PUT `/api/v1/tasks` table marks `return_source`,
+  `item_location`, `return_method`, `fulfillment_method` and `priority`
+  Required=**Yes** while all five have defaults or are `| None = None`
+  (`tasks.py:182-189`); and `notes[].content` is typed `object` while the model
+  declares `list`. Pre-existing, outside F16's enumeration.
+  (iv) The same README omits the three legacy money rows from the **items**
+  endpoints' request tables (`PUT /api/v1/items`,
+  `POST /api/v1/items/find-or-create`, `PATCH /api/v1/items/{client_id}`) — the
+  same drift F16 enumerated for the tasks endpoint, which P15 scoped to tasks
+  only.
+  (v) `Application_contracts/planning/item/item_models.md` still lists
+  `item_value_minor` / `item_cost_minor` / `item_currency` as live columns at
+  `:29-31`, still documents `item_currency_enum` at `:58-63`, still asks the
+  open question at `:203`, and still says `STALL` at `:54,:97`. P13 enumerated
+  `:104-107` only.
+  (vi) `models/tables/tasks/README.md`'s file table omits
+  `task_customer_coordination.py`, `task_post_handling.py` and
+  `task_step_acknowledgment.py`. Pre-existing.
+  (vii) `models/tables/README.md:24` still indexes `issue_category_configs`
+  (dropped by `99accdeba8b9`) — recorded as out of scope by P5 and untouched.
+  (viii) `client_id_prefix_map.md:56-62` keeps the pre-existing
+  StaticCost/SkuTemplate/Shopify\* ordering violation — recorded by P11 and
+  untouched.
+
+  **P22 closure checklist — what this session can already tick.**
+  (1) §13's must-ship rows: the living-docs deliverable ships as the
+  contract-mandated folder and the archgraph clause is satisfied by the P14
+  node, in this same change. (2) Post-v1 handoffs are recorded, not dropped —
+  the squash seed now carries Finding 8's `checkfirst` posture (this entry),
+  master plan §11 carries F14's four uncovered filter sites and the N11 residue
+  research, §7:560-564 carries the bridge-validator removal, and the phase-7
+  ival residue row stands. (3) All five formerly-UNROUTED census rows ended in a
+  task: row 7 → P5, row 8 → P4 item 8, row 30 → P20, with rows 10 and 11
+  dispositioned by P21 and P1 respectively. (4) The projection gate did not
+  demote (the r0 ledger was not empty) — moot on the last phase, recorded here.
+  Items (2)'s ledger placement and the v1 gate itself remain the coordinator's
+  at closeout.

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,9 +21,9 @@ class ItemCostResult(IdentityMixin, Base):
     item_id: Mapped[str] = mapped_column(String(64), ForeignKey("items.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     evaluation_id: Mapped[str] = mapped_column(String(64), ForeignKey("item_cost_evaluations.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     actual_worker_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
-    actual_worker_minutes: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    actual_worker_minutes: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     consumed_cost_minor: Mapped[int] = mapped_column(Integer, nullable=False)
-    variance_worker_minutes: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    variance_worker_minutes: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     variance_cost_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     task_closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     task_state_snapshot: Mapped[TaskStateEnum] = mapped_column(SAEnum(TaskStateEnum, name="task_state_enum", create_type=False), nullable=False)

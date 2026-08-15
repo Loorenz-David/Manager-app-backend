@@ -26,12 +26,8 @@
 - `article_number` and `sku` are **workspace-unique when non-null** via partial unique indexes (`WHERE article_number IS NOT NULL`, `WHERE sku IS NOT NULL`). Two items in the same workspace cannot share the same article number or sku.
 - `external_id`, `external_url`, `external_source`, `external_order_id` are interoperability metadata only — not synchronization authority.
 
-### Monetary fields
-- `item_value_minor` and `item_cost_minor` store money as **integer minor units** (e.g. öre or cents). **Never float.**
-- `item_currency` (`ItemCurrencyEnum`) is workspace-bounded: `SWEDISH_KRONA`, `DANISH_KRONA`, `EURO`.
-
 ### State
-- `ItemStateEnum`: `PENDING`, `STALL`, `FIXING`, `READY`.
+- `ItemStateEnum`: `PENDING`, `STALLED`, `FIXING`, `READY`.
 - State transitions are enforced by domain guards, not DB constraints.
 
 ---
@@ -50,15 +46,11 @@ Do not collapse BLOCKED, DEFERRED, and SKIPPED into a single meaning.
 
 ### Snapshot on creation
 When creating an issue, **snapshot immediately**:
-- `issue_name_snapshot` ← current `issue_types.name`
-- `severity_name_snapshot` ← current `issue_severities.name`
-- `base_time_seconds` ← resolved value from `issue_category_configs` at creation time
-- `time_multiplier` ← from `issue_severities.time_multiplier` at creation time
+- `issue_type_snapshot` ← current `issue_types.name` (not null)
+- `issue_mode_snapshot` ← the mode the issue was raised under
+- `placement_of_issue_snapshot` ← where on the item the issue sits
 
-Future config changes must not retroactively alter historical issue timing.
-
-### Timing fields
-`base_time_seconds` and `time_multiplier` are **timing inputs**, not runtime execution telemetry. Elapsed runtime counters belong to future execution/audit projection systems.
+Future config changes must not retroactively alter historical issue records.
 
 ### Multiple issues per item
 Multiple active issues of the same `issue_type_id` may coexist for the same item unless future domain guards explicitly restrict duplication.
@@ -108,7 +100,7 @@ Set each timestamp atomically with the corresponding state transition:
 - `failed_at` when entering `FAILED`
 
 ### `item_currency_enum` Postgres type
-This file uses `create_type=False` for `item_currency_enum` — the type is created by `item.py`. Import order in `models/__init__.py` must keep `item.py` before `item_upholstery_requirement.py`.
+This file **owns** `item_currency_enum` (`create_type=True`, `item_upholstery_requirement.py:44`). `item.py` has no currency column at all — its only `create_type=True` is `item_state_enum`. There is no import-order constraint between the two files for this type.
 
 ---
 

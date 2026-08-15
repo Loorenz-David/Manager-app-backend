@@ -15,6 +15,7 @@ are; the code tells you how, but not why or what else depends on it.
 | Domain | Owns | Docs |
 |---|---|---|
 | **Worker shifts** | Clock in/out, declared off-task states, the worker's daily timeline | [domains/worker_shifts/](domains/worker_shifts/) |
+| **Item economics** | Item valuations, production cost configuration, committed evaluations and projections, the worker-minute allowance and the episode's actuals | [domains/item_economics/](domains/item_economics/) |
 | Tasks & steps | Tasks, task steps, step state transitions, working-section routing | *not yet documented* |
 | Items | Items, issues, categories, SKU templates | *not yet documented* |
 | Upholstery | Requirements, inventory, orders, order needs | *not yet documented* |

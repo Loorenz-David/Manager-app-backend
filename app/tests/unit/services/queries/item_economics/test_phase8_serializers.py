@@ -11,7 +11,8 @@ from beyo_manager.domain.item_economics.serializers import (
     serialize_item_cost_result,
     serialize_item_cost_result_worker,
     serialize_task_budget_status,
-        )
+)
+
 
 def _result() -> SimpleNamespace:
     return SimpleNamespace(

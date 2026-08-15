@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +20,7 @@ class CostModelTerm(IdentityMixin, Base):
     cost_model_version_id: Mapped[str] = mapped_column(String(64), ForeignKey("cost_model_versions.client_id", ondelete="RESTRICT"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     calculation_type: Mapped[CostModelTermCalculationTypeEnum] = mapped_column(SAEnum(CostModelTermCalculationTypeEnum, name="cost_model_term_calculation_type_enum", create_type=True), nullable=False)
-    percent_value: Mapped[float | None] = mapped_column(Numeric(6, 3), nullable=True)
+    percent_value: Mapped[Decimal | None] = mapped_column(Numeric(6, 3), nullable=True)
     fixed_amount_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=False, index=True)

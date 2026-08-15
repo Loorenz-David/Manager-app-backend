@@ -1,7 +1,7 @@
 """Drop legacy item money columns after the journaled valuation migration.
 
 Revision ID: be9dfe42a035
-Revises: 5caae620088c
+Revises: 5420acc6a7b3
 Create Date: 2026-08-14 13:19:29.068765
 """
 import logging
