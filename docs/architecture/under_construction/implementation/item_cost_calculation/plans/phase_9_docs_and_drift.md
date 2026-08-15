@@ -152,6 +152,39 @@ recorded in the Review log.
   dropped blank line from the fix-r2 row deletion — cosmetic, ruff-silent,
   fold into this phase's formatting sweep.
 
+## Scope addition (round 18, R18-2, 2026-08-15) — GOVERNING
+
+**Frontend handoff deliverable (owner request, verbatim in
+`planning/owner_decisions.md`):** this phase authors
+`docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_item_economics_<date>.md`
+covering, for the frontend team to build the capability from the handoff
+alone:
+
+1. **The ten new routes** (valuation set/history/delete ×3; evaluations
+   commit/list/projections/delete/promote ×5; budget-status; lifetime) —
+   method, path, role gate, request body, response envelope (verbatim
+   keys), pagination where present, and the error identities each can
+   return (leading-token contract, §6.4).
+2. **The phase-8B inline flow** (this phase is BLOCKED on 8B): the
+   task-creation item block's valuation trio, the one-call
+   born-with-prices path, the existing-item refusal.
+3. **The changed existing endpoints — prominently the REMOVALS:** item and
+   task payloads REJECT the legacy money keys (422 `ITEM_MONEY_MOVED`,
+   exact message); the nine read surfaces that no longer carry the three
+   keys (phase-6 census); worker/seller payloads carry NO monetary keys
+   anywhere (the budget-status role split); the twelve-member status
+   vocabulary verbatim with the null-numerics rule.
+4. **Flow narratives** (frontend-facing): pricing an item, committing a
+   budget, what-if projections + promotion, the team task-flow history
+   entry, the budget screen from READY (R17-1's boundary label).
+
+**Accuracy arbiter:** same harness as the living-docs page — every route,
+key, identity, and enum member in the handoff greps to the shipped
+artifact; the projection hardens this criterion.
+
+**Dependency change: phase 9 is BLOCKED on phase 8B** (the handoff and the
+living-docs page document the post-8B flow).
+
 ## Review log
 
 (append-only)

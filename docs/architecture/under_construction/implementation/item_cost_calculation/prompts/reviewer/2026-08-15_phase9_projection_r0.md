@@ -7,6 +7,17 @@ date: 2026-08-15
 
 # Session prompt — phase 9 projection, round 0
 
+> **HOLD — do not run until phase 8B is APPROVED.** Round 18 (2026-08-15)
+> added two things after this prompt was first authored: phase 9 now
+> carries the FRONTEND HANDOFF deliverable (R18-2 — see the plan's
+> "Scope addition" block, GOVERNING) and is BLOCKED on phase 8B (inline
+> task prices, R18-1), because the handoff and the living-docs page must
+> document the post-8B flow. When you run: add the handoff's accuracy
+> arbiters and its completeness (all ten routes + 8B's trio + the
+> removals) to your axes, and re-verify the environment facts below
+> against post-8B reality (head, baseline, graph revision will all have
+> moved).
+
 You are the **projectionist** for phase 9 — the final phase: the living-docs
 page and the accumulated drift batch. The plan was written 2026-08-11,
 BEFORE all eight mechanism phases shipped and seventeen decision rounds

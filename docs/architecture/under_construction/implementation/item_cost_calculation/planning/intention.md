@@ -1187,6 +1187,31 @@ commit either.
   which the evaluation INSERT itself raises (the 7A.2 conflict path, or a patched
   calculator) and which asserts the task row is committed and readable afterwards.
 
+#### 7B.6 Inline valuation at item birth (round 18, R18-1 — ships as phase 8B)
+
+The task-creation item block (`FindOrCreateItemInput`) accepts the VALUATION
+vocabulary: `expected_sale_price_minor`, `purchase_cost_minor`, `currency` —
+mirroring `ItemValuationRequest` exactly (ge=0 amounts; currency required
+whenever either amount is present). The legacy names
+(`item_value_minor`/`item_cost_minor`/`item_currency`) remain REJECTED with
+`ITEM_MONEY_MOVED` — the new names are the only accepted carriers.
+
+- **On a NEWLY CREATED item** with any of the trio present: valuation
+  version 1 is written through the registered chain writer
+  (`write_item_valuation_chain_in_session`, `_common.py`) inside
+  `create_task`'s transaction, BEFORE the §7B.5 auto-commit savepoint — the
+  existing pre-check then sees the valuation and the task is priced in one
+  call. R13-1 applies (first save IS version 1, no confirmation);
+  `created_by_id` = the creating user; the valuation audit event fires as
+  on the PUT path.
+- **On a MATCHED EXISTING item**, inline prices REFUSE (conservative
+  default: the explicit PUT is the price-change surface; a task creation
+  must not silently supersede an item's price) — identity to be registered
+  at the 8B projection's consumption. The 8B projection may card this
+  default if the owner's story reads otherwise.
+- No new status, no new read surface, no schema change: the mechanism is
+  request vocabulary + one guarded write reusing shipped machinery.
+
 ### 7C. Category-driven group selection (round 12 — supersedes §7.4's and §7A.5's group-resolution rows)
 
 Owner decision (2026-08-12): the workspace's cost groups are resolved by the
@@ -2476,6 +2501,21 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   never-priced item and a deleted-price item give the same warning. The
   shipped hardcoded `item_unvalued` (phase-5 review N2) is corrected in
   phase 8.
+
+**Round 18 — 2026-08-15 (owner scope additions, direct conversation):**
+
+- **R18-1 (owner card)** Task creation accepts the valuation vocabulary
+  inline (§7B.6 NEW): on a newly created item, valuation v1 via the
+  registered chain writer before the auto-commit savepoint — priced in one
+  call; on a matched existing item, REFUSE (conservative default, 8B
+  projection may card). Legacy money keys stay rejected. Ships as
+  **phase 8B** before phase 9. (The coordinator surfaced that the shipped
+  system rejected inline prices by the owner's own earlier design; the
+  owner chose to add the mechanism rather than document the two-step flow.)
+- **R18-2 (owner)** Phase 9 gains the frontend-handoff deliverable: the ten
+  new routes + the CHANGED existing endpoints (the money-key removals
+  prominently), so the frontend can build the capability from the handoff
+  alone.
 
 ---
 

@@ -577,3 +577,45 @@ nothing changes for normal use). Folded as **R17-2**: §11A.5(d)'s DELETE
 response status is re-resolved through `resolve_item_economics_status`,
 never hand-written; the `delete_item_valuation.py:44` literal is corrected
 in phase 8 (phase-5 review N2 lands here).
+
+---
+
+# Round 18 — owner scope additions (2026-08-15, direct conversation)
+
+## Request 1 — frontend handoff docs
+
+**Owner (verbatim):** "we should also create the frontend handoffs for using
+the new endpoints, so that i can bring them to the frontend later on to
+build the frontend for this new capability. the modifications to the
+endpoints that already existed should also be documented."
+
+**Folded as R18-2:** phase 9 gains the frontend-handoff deliverable
+(`docs/handoff/to_frontend/`, precedent in-tree): the ten new routes
+(valuation ×3, evaluations ×5, budget-status, lifetime), envelopes, role
+gates, the twelve-status vocabulary, error identities, AND the changed
+existing endpoints — prominently the REMOVALS (item/task payloads reject
+the legacy money keys with 422 `ITEM_MONEY_MOVED`; nine read surfaces no
+longer carry the three keys; worker payloads carry no money).
+
+## Card — should task creation accept prices inline?
+
+**Context surfaced by the coordinator:** the owner described task creation
+as "now accepts users to pass the item purchase price and expected sold
+price" — the shipped system deliberately REJECTS those (phase 6, rounds
+1/14): money lives only on valuations, and the auto-commit prices a task
+at creation only when the item ALREADY carries a valuation. A brand-new
+item's task starts `item_unvalued`.
+
+**ANSWER (2026-08-15): ADD INLINE PRICES (the recommendation).** Folded as
+**R18-1**: the task-creation item block gains the VALUATION vocabulary —
+`expected_sale_price_minor`, `purchase_cost_minor`, `currency` (mirroring
+`ItemValuationRequest`; never the legacy names, which stay rejected). When
+present on a NEWLY CREATED item, valuation version 1 is written through
+the registered chain writer inside `create_task`'s transaction, BEFORE the
+auto-commit savepoint — so the existing §7B.5 pre-check sees the valuation
+and the task is priced in one call (R13-1's first-save-is-v1 applies; no
+confirmation). Ships as **phase 8B** (small mechanism phase, 4B precedent)
+BEFORE phase 9, so the frontend handoff documents the final flow.
+Conservative default for the matched-EXISTING-item row: inline prices
+REFUSE (an explicit PUT is the price-change surface) — the 8B projection
+may card this if the story looks wrong.
