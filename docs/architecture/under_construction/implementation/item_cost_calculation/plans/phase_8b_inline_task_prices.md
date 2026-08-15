@@ -437,3 +437,19 @@ rule-11½ maintenance record — NOT this phase's.
   rule, rule-11½ capture-locals mode, P-I 10th ext, birth-anchor rule.
   Fix r2 = F1+F2 (+F3 record discipline), test-side only; prompt
   `prompts/implementer/2026-08-15_phase8b_fix_r2.md`.
+
+- **2026-08-15 — fix r2 (Codex): IMPLEMENTED** — F1 added the superseded-only
+  C4 row using `set_item_valuation` ×2 → `delete_item_valuation`, with explicit
+  superseded/deleted pre-state and a three-row chain-growth assertion. The M6
+  deletion of `ItemValuation.superseded_at.is_(None)` at
+  `create_task.py:331` reddened exactly that row over the full phase-file
+  scope (1 failed / 21 passed; mutant SHA-256
+  `98dc2c252e8f5bdac1ea7ecc5aeff0391fd6fd081f684d45dbf86ada718174bd`). F2
+  captured rollback-safe plain locals in C4 rows 2/3; the M2 inversion at
+  `create_task.py:337` (`f0776418c7cdc77faf76907bc47545ce70d244106e35d6e88ba9f09940cb2f95`)
+  reddened exactly row 2 in its one-row scope, and the post-run state query
+  returned zero `phase8b` workspaces/users/categories/audits/valuations. Clean
+  focused scope: 22 passed; full non-E2E: 2184 passed / 23 established
+  failures / 1 deselected; DB `c1d2e3f4a5b6` head; ruff clean; architecture
+  graph read-only with zero delta. Final test-file SHA-256:
+  `12c6ad5bd81c03f668dbd9a8a2716c7eec2020e7fadaac748f99b5bf090daf39`.

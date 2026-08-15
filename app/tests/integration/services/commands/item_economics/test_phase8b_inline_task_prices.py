@@ -33,6 +33,12 @@ from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
 from beyo_manager.services.commands.item_economics.commit_item_cost_evaluation import (
     commit_item_cost_evaluation,
 )
+from beyo_manager.services.commands.item_economics.delete_item_valuation import (
+    delete_item_valuation,
+)
+from beyo_manager.services.commands.item_economics.set_item_valuation import (
+    set_item_valuation,
+)
 from beyo_manager.services.commands.tasks.create_task import create_task
 from beyo_manager.services.commands.tasks.requests import parse_create_task_request
 from beyo_manager.services.context import ServiceContext
@@ -509,29 +515,33 @@ async def test_c4_row_1_current_valuation_refusal_rolls_back_item_mutation_and_t
 async def test_c4_row_2_never_valued_existing_item_accepts_inline_price(db_session, monkeypatch):
     await _disable_event_dispatch(monkeypatch)
     workspace, user, item, _category = await _seed_economic_workspace(db_session)
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
     await db_session.commit()
     try:
         result = await create_task(
             _ctx(
                 db_session,
-                workspace.client_id,
-                user.client_id,
+                workspace_id,
+                user_id,
                 {
                     "task_type": "return",
                     "item": {
-                        "article_number": item.article_number,
+                        "article_number": item_article_number,
                         "expected_sale_price_minor": 1200,
                         "currency": "swedish_krona",
                     },
                 },
             )
         )
-        assert result["item_id"] == item.client_id
-        valuations = await _current_valuations(db_session, item.client_id)
+        assert result["item_id"] == item_id
+        valuations = await _current_valuations(db_session, item_id)
         assert len(valuations) == 1
         assert valuations[0].expected_sale_price_minor == 1200
     finally:
-        await _cleanup_committed_workspace(db_session, workspace.client_id, user.client_id)
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
 
 
 @pytest.mark.integration
@@ -540,7 +550,11 @@ async def test_c4_row_3_deleted_only_existing_item_accepts_and_grows_chain(
 ):
     await _disable_event_dispatch(monkeypatch)
     workspace, user, item, _category = await _seed_economic_workspace(db_session, valuation=True)
-    old = await db_session.scalar(select(ItemValuation).where(ItemValuation.item_id == item.client_id))
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    old = await db_session.scalar(select(ItemValuation).where(ItemValuation.item_id == item_id))
     old.is_deleted = True
     await db_session.flush()
     await db_session.commit()
@@ -548,26 +562,105 @@ async def test_c4_row_3_deleted_only_existing_item_accepts_and_grows_chain(
         await create_task(
             _ctx(
                 db_session,
-                workspace.client_id,
-                user.client_id,
+                workspace_id,
+                user_id,
                 {
                     "task_type": "return",
                     "item": {
-                        "article_number": item.article_number,
+                        "article_number": item_article_number,
                         "purchase_cost_minor": 300,
                         "currency": "swedish_krona",
                     },
                 },
             )
         )
-        valuations = await _current_valuations(db_session, item.client_id)
+        valuations = await _current_valuations(db_session, item_id)
         assert len(valuations) == 2
         assert valuations[0].is_deleted is True
         assert valuations[1].purchase_cost_minor == 300
         assert valuations[1].superseded_at is None
         assert valuations[1].is_deleted is False
     finally:
-        await _cleanup_committed_workspace(db_session, workspace.client_id, user.client_id)
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
+
+
+@pytest.mark.integration
+async def test_c4_row_4_superseded_only_existing_item_accepts_and_grows_chain(
+    db_session, monkeypatch
+):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(db_session)
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    first = await set_item_valuation(
+        _ctx(
+            db_session,
+            workspace_id,
+            user_id,
+            {
+                "item_client_id": item_id,
+                "expected_sale_price_minor": 1100,
+                "currency": "swedish_krona",
+            },
+        )
+    )
+    second = await set_item_valuation(
+        _ctx(
+            db_session,
+            workspace_id,
+            user_id,
+            {
+                "item_client_id": item_id,
+                "expected_sale_price_minor": 1200,
+                "currency": "swedish_krona",
+            },
+        )
+    )
+    await delete_item_valuation(
+        _ctx(db_session, workspace_id, user_id, {"item_client_id": item_id})
+    )
+    first_row = await db_session.get(ItemValuation, first["item_valuation"]["client_id"])
+    second_row = await db_session.get(ItemValuation, second["item_valuation"]["client_id"])
+    assert first_row.superseded_at is not None
+    assert first_row.is_deleted is False
+    assert second_row.superseded_at is None
+    assert second_row.is_deleted is True
+    assert await db_session.scalar(
+        select(ItemValuation).where(
+            ItemValuation.item_id == item_id,
+            ItemValuation.superseded_at.is_(None),
+            ItemValuation.is_deleted.is_(False),
+        )
+    ) is None
+    await db_session.commit()
+    try:
+        result = await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "expected_sale_price_minor": 1300,
+                        "currency": "swedish_krona",
+                    },
+                },
+            )
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        assert result["item_id"] == item_id
+        assert len(valuations) == 3
+        assert valuations[0].client_id == first_row.client_id
+        assert valuations[1].client_id == second_row.client_id
+        assert valuations[2].expected_sale_price_minor == 1300
+        assert valuations[2].superseded_at is None
+        assert valuations[2].is_deleted is False
+    finally:
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
 
 
 @pytest.mark.integration
