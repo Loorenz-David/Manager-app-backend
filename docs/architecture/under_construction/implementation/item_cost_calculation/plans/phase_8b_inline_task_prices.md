@@ -453,3 +453,64 @@ rule-11½ maintenance record — NOT this phase's.
   failures / 1 deselected; DB `c1d2e3f4a5b6` head; ruff clean; architecture
   graph read-only with zero delta. Final test-file SHA-256:
   `12c6ad5bd81c03f668dbd9a8a2716c7eec2020e7fadaac748f99b5bf090daf39`.
+
+- **2026-08-15 — re-review r2 (Claude): APPROVED.** Zero findings; both r1
+  should-fixes verified dead at the seam. Handoff:
+  `handoffs/reviewer/2026-08-15_phase8b_rereview_r2_handoff.md`.
+
+  **Perimeter (charter re-review clause 1).** `git diff 2719941..4369a27`
+  touches exactly one `app/` path — the phase test file (+117/−13). All five
+  other production/graph artifacts recomputed byte-identical to their
+  implement-r1 finals (`create_task.py` `e9c2ccc1…`, `requests/__init__.py`
+  `2bc2b7bb…`, `tasks.py` `6a3654dd…`, `README.md` `291aae65…`,
+  `test_phase6_api_bridge.py` `68a34b62…`, `.archgraph/architecture.yml`
+  `53fdbc78…`). ZERO production change, as declared. Nothing outside the
+  fence.
+
+  **S1 dead (F1).** C4 row 4 seeds through the three production commands
+  (`set_item_valuation` ×2 → `delete_item_valuation`), asserts the pre-state
+  at DB truth (v1 superseded-not-deleted, v2 deleted-not-superseded, and a
+  real `SELECT` proving NO current valuation), then asserts accept + chain
+  grown to three with v3 current AND rows 0/1 pinned to the ORIGINAL
+  client_ids — stronger than the reviewer probe it was built from, because
+  identity-pinning rules out resurrection directly rather than by DB-constraint
+  argument. **M6 re-run from its declared bytes:** deleting
+  `ItemValuation.superseded_at.is_(None)` at `create_task.py:331` reproduces
+  mutant `98dc2c252e8f5bdac1ea7ecc5aeff0391fd6fd081f684d45dbf86ada718174bd`
+  **byte-identically**, and reddens **exactly** `test_c4_row_4_superseded_only_
+  existing_item_accepts_and_grows_chain` — 1 failed / 21 passed over the full
+  phase-file scope, matching the fix's declared figure exactly. The conjunct
+  that survived the entire r1 suite now has a guard.
+
+  **S2 dead (F2).** Rows 2/3 capture `workspace_id` / `user_id` / `item_id` /
+  `item_article_number` into plain locals before the `try` (row 1's shape),
+  and row 4 was built that way from the start; every `finally` now passes
+  locals, so no expired-instance dereference can precede the DELETEs.
+  **Direct regression proof:** the same M2 inversion that in r1 leaked rows
+  (2→8 workspaces, hand-cleaned) was re-run here — all FOUR committing C4 rows
+  redden (rows 1–4; 4 failed / 18 passed) and the state query returns
+  `workspaces 0 · users 0 · categories 0 · audits 0 · orphan items 0`. Cleanup
+  now runs on the path that matters.
+
+  **Numbers, re-measured in foreground.** Full non-E2E: **2184 passed / 23
+  failed / 1 deselected** in 122.49s; the 23 sorted failure IDs `diff`-empty
+  against the phase-1 S2 baseline. Collection **2208** (2207 selected + 1
+  deselected) — **+1** over r1's 2207, reconciled exactly by the single new
+  node (phase file 21 → 22 by `--collect-only`). Focused phase+bridge scope:
+  67 passed. Ruff clean on the test file. DB at `c1d2e3f4a5b6 (head)`, no
+  migration. Graph read-only: 174/260, revision `53fdbc78…`, 0 stale, 5
+  pending, 0 diagnostics — zero delta. Tree byte-identical to `4369a27` at
+  close; `git status` empty.
+
+  **F3 / P-I 10th ext: satisfied.** Both fix mutations are pinned by line
+  ("line 331 only", "line 337") and both hashes reproduced byte-identically
+  from their descriptions alone — the empirical payoff of the rule born from
+  M1's unpinned boundary. Both "observed red" cells state their scope. One
+  observation, not a finding: M2's cell states the one-row scope honestly, but
+  over the full phase file that inversion reddens 4 rows; a full-scope figure
+  carries more information at the same cost.
+
+  **Not re-run (settled in r1, per the re-review's declared scope):** M1/M3/M4/M5
+  against byte-identical production files; the r1 row-coverage map's passing
+  rows; the mechanism re-derivations; reviewer probes M7/M9. Nothing seen wrong
+  in passing.
