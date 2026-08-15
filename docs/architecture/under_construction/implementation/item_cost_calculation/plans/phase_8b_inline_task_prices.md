@@ -115,3 +115,162 @@ drops client money — survival row) and OpenAPI advertises them.
 ## Review log
 
 (append-only)
+
+## Amendments (projection r0, 2026-08-15) — GOVERNING
+
+Where this block contradicts the sections above, THIS BLOCK WINS. Routed
+from `handoffs/reviewer/2026-08-15_phase8b_projection_r0_handoff.md`
+(18 rows; owner card 1 → **R18-3, branch B**). Intention §7B.6 carries the
+lettered corrections (a) trio shape and (b) branch B; §4.7A and §11A.5(c)
+corrected upstream (L10); `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`
+registered (§6.4, L11 adapted for B).
+
+### B1 (L1) — the trio's shape (supersedes "mirroring exactly")
+
+All three fields OPTIONAL; `ge=0` on both amounts; `currency` required
+**iff** either amount is present. Deliberate divergence from
+`ItemValuationRequest` (whose `currency` is unconditionally required),
+recorded in §7B.6(a).
+
+### B2 (L2, decided) — C5 replaced by five exact rows
+
+C5.1 expected+no-currency → 422 `item.currency`; C5.2 purchase+no-currency
+→ 422; C5.3 **currency alone → 200, task created, ZERO rows in
+`item_valuations` for the item (sole-predicate: zero, not "no current"),
+status `item_unvalued`**; C5.4/C5.5 negative amounts → 422 `ge=0`. A
+zero-amount price with currency is VALID (not a C5 row; optional C1 row —
+implementer's call, declared either way).
+
+### B3 (L3) — C1 replaced by six enumerated rows
+
+The five reachable trio shapes (expected+purchase+currency with
+purchase-term model → commits; expected+currency, no purchase term →
+commits; expected+currency WITH purchase-term model →
+`item_missing_purchase_cost` skip; purchase+currency →
+`item_missing_expected_price` skip; full trio with mismatched currency →
+`currency_mismatch` skip) + the unconfigured-workspace row. EVERY row: the
+valuation row EXISTS (the phase's shared claim); skip rows assert the
+verbatim `item_economics.auto_commit_skipped | … status=<value>` literal;
+no status disjunctions; parametrize ids name these rows; rows 2 vs 3
+differ ONLY in the model's terms (state it per P-M). Named mutation
+(unchanged from the base plan): delete the valuation write at its
+definition site → expected red = the C1 row-1 node id, stated in the
+implementer's ledger BEFORE the run.
+
+### B4 (L4 + R18-3) — C4 rebuilt on the owning harness, branch-B rows
+
+- Harness: the fixture COMMITS before calling `create_task` so
+  `maybe_begin` OWNS the transaction (precedent
+  `test_phase7_evaluations.py:167`); `try/finally` teardown (rule 11½).
+- Row 1 (refusal): matched item WITH a current valuation + trio →
+  `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`, NO task row, NO TaskItem, NO
+  valuation change, and **the matched item byte-unchanged** — send a
+  different `designer` alongside the prices and assert the stored value is
+  the ORIGINAL (find_or_create mutates the item before the refusal can be
+  decided; the rollback must cover it).
+- Row 2 (branch-B accept): matched item with NO current valuation + trio →
+  task created, valuation written (v1 if never-valued; NEXT version if
+  deleted/superseded-only — two sub-rows, the second asserting the chain
+  grew rather than resurrected), auto-commit per the B3 rows.
+- Named mutation: invert the current-valuation predicate at the refusal's
+  definition site → row 1 and row 2 both redden (state both expected ids).
+
+### B5 (L5) — C3 replaced by three exact rows + the validator-order pin
+
+`reject_legacy_money` stays FIRST in definition order. (a) legacy + valid
+trio → `ITEM_MONEY_MOVED`; (b) legacy + amount-without-currency →
+`ITEM_MONEY_MOVED` (the order pin makes this deterministic); (c) legacy +
+negative amount → pydantic's `ge=0` field error ALWAYS wins (field
+constraints precede after-validators) — documented as accepted precedence,
+not bridge failure. Named mutations, expected-red ids stated: (i) move the
+currency-iff-amount validator ABOVE `reject_legacy_money` → row (b)
+reddens; (ii) delete `reject_legacy_money` from `FindOrCreateItemInput` →
+the three shipped `create-task-nested-item-present-nonnull` retention
+nodes redden (`test_phase6_api_bridge.py:33-60` — extend that
+parametrization, never duplicate).
+
+### B6 (L6) — C6's two harnesses named; the OpenAPI clause DROPPED
+
+(i) Field-presence introspection (`model_fields`, precedent
+`test_item_economics_router.py:225-231`) on `_TaskItemInputBody`
+(`routers/api_v1/tasks.py:95-114`, `extra="ignore"` — the silent-discard
+hazard); (ii) endpoint survival (precedent
+`test_phase6_api_bridge.py:105-133`): the trio survives
+`PUT /api/v1/tasks` (:329-342, `exclude_unset=True`) to the domain
+validator — the endpoint-boundary rule's row. The "OpenAPI advertises
+them" clause is DELETED (no in-tree precedent; P-R). Named mutation:
+delete the three fields from `_TaskItemInputBody` (definition site) → the
+survival row reddens (expected id stated).
+
+### B7 (L7) — the insertion point, pinned
+
+ONE write site serving both item paths: after the TaskItem flush
+(`create_task.py:306`) and before the savepoint (`try` at :308,
+`begin_nested()` at :309), each branch setting a local newness/current-
+valuation flag (`create_item_in_session` path :195-227 always creates;
+`find_or_create_item` path :228-296 returns `was_created` :238). The
+refusal check runs at the same site (it needs the resolved item).
+
+### B8 (L8/L9) — the two stability sentences
+
+(i) A failed birth write refuses the WHOLE request — safe by construction
+(the item is new in this transaction, so no concurrent
+`uix_item_valuations_current` holder exists; the CHECK is prevented at the
+request boundary by B2) — stated so nobody wraps it in a savepoint. (ii)
+The §7B.5 interaction rows hold by construction (projection L9, verified
+against shipped code): pre-check sees the flushed valuation; savepoint
+rollback leaves it; the auto path cannot mirror (inputs ARE the
+valuation's). The C1 no-mirror assertion carries its P-J-5th-ext
+non-vacuity companion: one explicit-commit row where an override DOES
+mirror.
+
+### B9 (L12/L13/L14/L17) — reality pins
+
+- Archgraph: there is NO `create_task` node — 8B's delta is a **NEW node**
+  (`command-task-create`) + edges (writes_to table-item-valuation via the
+  chain; reads/writes it already had are recorded at the node's birth with
+  accurate spans), one additive batch at checkpoint; never a delta to a
+  node that doesn't exist.
+- Citations: `FindOrCreateItemInput` class at :27; savepoint try/:308,
+  begin_nested :309, block ends :324; §10A.3's cite is :37-39; the §6.5
+  "inline chain writer" note is historical (extracted in phase 7,
+  `_common.py:117-169`).
+- README: the route section is **`PUT /api/v1/tasks`** (:2627). 8B adds
+  its three `item.*` rows there and NOTHING else — the table's
+  pre-existing drift (missing item_zone/can_have_upholstery/notes/steps/
+  shopify_preorder rows; six phantom item_issues fields) routes to phase
+  9's R18-2 deliverable. NO regeneration attempt (no generator exists
+  in-tree despite the banner).
+- Phase-6 structural guard: `test_phase6_api_bridge.py:87-97` asserts the
+  legacy tokens appear nowhere in `create_task.py` — never name a local
+  `item_currency`.
+
+### B10 (L15/L16/L18) — routed to R18-2 (phase 9), no 8B logic
+
+`quantity` does not participate in economics (a valuation is per-item;
+1000 stays 1000 at quantity 5) — a handoff sentence, no code. Multi-item
+is moot (the payload carries ONE item, always PRIMARY). The create
+response carries no priced-or-not signal — the handoff documents the
+two-call flow (create → GET budget-status). All three added to the
+phase-9 R18-2 scope block.
+
+## Review log
+
+(append-only)
+
+- **2026-08-15 — projection r0 (Claude): AMENDMENTS_REQUIRED** — 18 rows
+  (5 H, 6 M, 7 L), 1 owner card. Handoff:
+  `handoffs/reviewer/2026-08-15_phase8b_projection_r0_handoff.md`. Standouts:
+  the "exact mirror" gloss was false against shipped code (PUT's currency
+  is unconditionally required); C1's "auto-commit fires" was false for 3
+  of 5 reachable shapes; C4's atomicity needed the maybe_begin OWNER
+  harness + the item-byte-unchanged row (find_or_create mutates before
+  the refusal); the mixed-payload row had a definition-order coin flip;
+  currency-alone decided accepted-and-ignored (a currency-only row is
+  impossible at the DB and 422 reproduces §10A.3's hazard). L9 verified
+  the savepoint interaction by construction. Coordinator routed all 18
+  same day: owner card → R18-3 (branch B); §7B.6 lettered (a)/(b);
+  §4.7A + §11A.5(c) corrected; `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`
+  registered; this GOVERNING block B1–B10. Gate holds (non-empty ledger —
+  no self-retirement); implementer prompt
+  `prompts/implementer/2026-08-15_phase8b_implement_r1.md`.

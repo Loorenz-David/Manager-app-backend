@@ -619,3 +619,29 @@ BEFORE phase 9, so the frontend handoff documents the final flow.
 Conservative default for the matched-EXISTING-item row: inline prices
 REFUSE (an explicit PUT is the price-change surface) — the 8B projection
 may card this if the story looks wrong.
+
+## Card — phase-8B projection r0, card 1: re-used item + typed price (2026-08-15)
+
+**Question (projectionist, verbatim):** Refuse always, refuse only when the
+item already has a price, or accept and let the new price replace the old
+one? (Story: the manager makes a return task for a restored chair, the
+system finds the existing chair, they type 4 500 kr out of habit — under
+refuse-always that's a red error and a retry; meanwhile most older chairs
+exist but have never had a price, and those are exactly the ones a manager
+most wants to price while making the task.)
+
+**ANSWER (2026-08-15): "the recommendation (option B) is the correct
+solution."** Folded as **R18-3**: a matched existing item that CARRIES A
+CURRENT PRICE refuses inline prices (a task creation never changes a
+standing price); a matched item with NO current price accepts them — the
+unpriced back catalogue gets priced in the same call.
+
+**Coordinator predicate (decidability rule — prose and predicate agree):**
+"carries a current price" = a CURRENT valuation exists (`superseded_at IS
+NULL AND is_deleted = false`, the INV-V1 predicate). A never-valued item
+writes version 1 (R13-1); an item whose prices were all deleted or
+superseded writes the NEXT version through the chain — an explicit
+manager-typed act, deliberately DISTINCT from R15-1's migration rule
+(which resurrects nothing and stays untouched). Refusal identity adapted
+for branch B: **`ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`** (registered
+§6.4; the projection's proposed name described branch A's semantics).

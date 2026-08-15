@@ -482,8 +482,10 @@ Table CHECK: at least one of the two amounts is non-NULL.
 **INV-V2 (immutability):** rows never change after creation; every edit is a
 superseding row — an append-only price history, answering raw §21's auditability
 questions structurally where the legacy columns' history was lossy (§2.1).
-Writers: the specialized valuation command (§11), the §7.2 mirror step, and the §10.2
-data migration. An item with no current valuation is simply **unvalued** — the common
+Writers: the specialized valuation command (§11), the §7.2 mirror step, the §10.2
+data migration, **and (round 18, R18-1/§7B.6) `create_task`'s inline birth write —
+the fourth writer, through the same registered chain**. An item with no current
+valuation is simply **unvalued** — the common
 creation state (card 2's answer) — and is never inferred as zero (R-9).
 
 ### 4.8 State dimensions
@@ -1190,11 +1192,21 @@ commit either.
 #### 7B.6 Inline valuation at item birth (round 18, R18-1 — ships as phase 8B)
 
 The task-creation item block (`FindOrCreateItemInput`) accepts the VALUATION
-vocabulary: `expected_sale_price_minor`, `purchase_cost_minor`, `currency` —
-mirroring `ItemValuationRequest` exactly (ge=0 amounts; currency required
-whenever either amount is present). The legacy names
+vocabulary: `expected_sale_price_minor`, `purchase_cost_minor`, `currency`.
+**(a) Shape corrected (8B projection L1 — the original "mirroring
+`ItemValuationRequest` exactly" was false: on the PUT surface `currency` is
+unconditionally required; here the whole block is optional):** all three
+fields OPTIONAL; `ge=0` on both amounts; `currency` required **iff** either
+amount is present. This deliberately DIVERGES from `ItemValuationRequest` —
+the PUT block IS the request, this one is an optional sub-block. A
+currency alone (no amounts) is accepted and ignored: 200, NO valuation row
+(the DB CHECK `ck_item_valuations_amount_present` makes a currency-only
+row impossible, and a 422 would reproduce §10A.3's recorded
+currency-input hazard); nothing is inferred, P-B holds. The legacy names
 (`item_value_minor`/`item_cost_minor`/`item_currency`) remain REJECTED with
-`ITEM_MONEY_MOVED` — the new names are the only accepted carriers.
+`ITEM_MONEY_MOVED` — the new names are the only accepted carriers, and the
+bridge validator stays FIRST in definition order (never shadowed by the
+new vocabulary's own validation).
 
 - **On a NEWLY CREATED item** with any of the trio present: valuation
   version 1 is written through the registered chain writer
@@ -1204,11 +1216,17 @@ whenever either amount is present). The legacy names
   call. R13-1 applies (first save IS version 1, no confirmation);
   `created_by_id` = the creating user; the valuation audit event fires as
   on the PUT path.
-- **On a MATCHED EXISTING item**, inline prices REFUSE (conservative
-  default: the explicit PUT is the price-change surface; a task creation
-  must not silently supersede an item's price) — identity to be registered
-  at the 8B projection's consumption. The 8B projection may card this
-  default if the owner's story reads otherwise.
+- **(b) On a MATCHED EXISTING item (CORRECTED by owner card, R18-3 —
+  branch B):** inline prices REFUSE **iff the item carries a CURRENT
+  valuation** (`superseded_at IS NULL AND is_deleted = false`, INV-V1) —
+  a task creation never changes a standing price; the registered identity
+  is `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` and the refusal aborts the
+  WHOLE request (nothing persists — task, item mutations, TaskItem all
+  roll back). A matched item with NO current valuation ACCEPTS them: a
+  never-valued item writes version 1 (R13-1); an item whose prices were
+  all deleted or superseded writes the NEXT version through the chain —
+  an explicit manager-typed act, deliberately distinct from R15-1's
+  migration rule, which stays untouched.
 - No new status, no new read surface, no schema change: the mechanism is
   request vocabulary + one guarded write reusing shipped machinery.
 
@@ -1883,8 +1901,11 @@ it is a pure function of the posted valuation plus the current configuration.
 - **(c) First save is version 1 — no confirmation:** the first
   expected-sale-price save on an item auto-creates valuation version 1; no
   confirm step exists anywhere in the flow. That version is the comparison
-  baseline. (Task/item creation remains money-free per R1-3/§10.2 — the
-  valuation endpoint is the only money surface.)
+  baseline. (AMENDED round 18, R18-1: task creation now carries the OPTIONAL
+  inline valuation trio per §7B.6 — the birth write flows through the same
+  chain and R13-1 applies unchanged; the legacy money keys stay rejected,
+  and the valuation ENDPOINT remains the only surface that can CHANGE an
+  existing price.)
 - **(d) Deleted valuations are hidden from the history read (R13-2):** the
   history query returns only non-deleted rows; deleting the current price is
   the escape hatch for a mistaken entry, and superseded rows (true history)
@@ -2516,6 +2537,15 @@ objects; exact expected outcomes; named mutations at named sites; teardown disci
   new routes + the CHANGED existing endpoints (the money-key removals
   prominently), so the frontend can build the capability from the handoff
   alone.
+- **R18-3 (owner, 8B projection card 1 — branch B)** A matched existing
+  item with a CURRENT valuation refuses inline prices
+  (`ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`, whole request aborts); one
+  with NO current valuation accepts them (never-valued → v1 per R13-1;
+  deleted/superseded-only → next version — explicit act, distinct from
+  R15-1). §7B.6 lettered corrections (a) trio shape (all optional,
+  currency-iff-amount, currency-alone accepted-and-ignored — the "exact
+  mirror" gloss was false against shipped code) and (b) the branch-B
+  clause; §4.7A writers list += create_task; §11A.5(c) corrected.
 
 ---
 
