@@ -640,3 +640,80 @@ row; (3) all five formerly-UNROUTED census rows end in a task (rows 7, 8,
   demote (the r0 ledger was not empty) — moot on the last phase, recorded here.
   Items (2)'s ledger placement and the v1 gate itself remain the coordinator's
   at closeout.
+
+- **2026-08-15 — review r1 (Claude Opus 5): APPROVED** — 0 blocking / 4 should-fix /
+  7 notes / 1 owner card. The prose holds: all four `docs/domains/item_economics/`
+  files and BOTH handoffs read in full against shipped behaviour, and every
+  load-bearing claim re-derived — the twelve-value vocabulary and its branch structure
+  (P16/JC1 correct; §11A.4's group 1 is a branch condition, so P16 and F20 do not
+  conflict), the ten-row precedence against `CONFIGURATION_FAILURE_PRECEDENCE` /
+  `ITEM_READINESS_PRECEDENCE`, the handler's admission table total over all eight
+  `TaskStateEnum` members, the four emission points and their guards, the event
+  payload / `build_workspace_event` shape and the twelve-name audit vocabulary, EVERY
+  payload key catalog field-by-field against `domain/item_economics/serializers.py`,
+  the 23-route census and the single four-role gate, §11A.2's eight-endpoint census,
+  the exact `ITEM_MONEY_MOVED` and `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` messages,
+  the savepoint semantics behind §9.1's rollback and §9.2's six silent outcomes, the
+  two-call flow, `quantity`'s absence from the domain, every configuration-handoff
+  field constraint (a frontend dev CAN build the settings screen from it alone), both
+  contract divergences against the real canonical text, and the deploy-ordering hazard.
+
+  **Numbers re-measured independently:** suite 2249/23/1 = 2272 selected; the
+  23-failure set diffed against the phase-1 recorded list
+  (`plans/phase_1_worker_money_redaction.md:270-282`) — **empty**; +65 counted per
+  file (8+50+4+3); `alembic check` reports **exactly three** pre-existing drifts, no
+  fourth ⇒ the eleven annotations are INERT (all eleven sites carry explicit
+  `Numeric(p,s)`; no module carries `from __future__ import annotations`, so JC9's
+  five imports are genuinely required); ruff clean on all 15; DB at head; perimeter
+  exact (34 paths = 33 declared + `.archgraph/architecture.yml`), nothing outside
+  P4's allow-list.
+
+  **Mutations:** M1/M2/M3 re-run from the declared mutant bytes — all three mutant AND
+  restored hashes match, each reddening exactly its own row with zero collateral. P-c
+  reproduces exactly. P-d reddens **three** nodes, not the two declared (N1). FIVE
+  reviewer-added probes on the previously unfalsified arbiters: heading-path
+  corruption (R-e), status-value rename (R-f), C1 reword-bites / rewrap-passes
+  (R-g1/R-g2), and **R-h** — a raw-SQL `DROP TYPE` injected into
+  `90cdd23a828e.downgrade` reddens the proxy, proving P4 item 6 (phase-2 N8) live
+  rather than decoration. All reverted byte-identical.
+
+  **The 65-node suite read hard:** the identity census is exactly right by hand
+  against §6.4 (30 literal + 6 composed; audit names and the pre-flight `RuntimeError`
+  correctly excluded); 13+10 = the real 23; heading equality is exact-set in both
+  directions; `parents[4]` resolves correctly (run, not assumed); the filter arbiter
+  carries a non-vacuity guard and selects by compiled text, never by call ordinal.
+
+  **4 should-fix.** **S1** the frontend mirror's four `item_currency` rows read
+  Required=**Yes** while the models declare `| None = None`
+  (`items/requests/__init__.py:207,264,484`; `tasks/requests/__init__.py:39`), and the
+  twelve "present, always rejected" annotations stand without the non-null clarifier
+  the backend README carries at `:2722` — the rows this phase rewrote now contradict
+  both the code and the backend's own corrected row (`routers/README.md:2670`); the
+  frontend files are still UNCOMMITTED, so this is fixable at zero cost inside the
+  closeout — **owner card 1**. **S2** `get_item_lifetime_economics.py:88` serializes
+  every episode's evaluation with `terms=[]`, documented nowhere, while operational §4.1
+  tells the frontend to render terms as the drill-down. **S3**
+  `05_errors_local.md:114`'s "pydantic validators raise `DomainError`, not
+  `ValueError`" is unqualified and contradicts ~20 request modules of correct practice
+  — the file's own `:77-86` supplies the missing "carries an identity" qualifier.
+  **S4** `item_models.md` is now self-contradicting after P13's fenced rewrite
+  (`:29-31`, `:58-63`, `:203`, `:54`/`:97` vs the new `:104-107`) — the implementer's
+  fence discipline was right, the fence was not (lesson L1).
+
+  **7 notes.** N1 P-d's declaration misses a third red (charter L8); N2/N3 citation and
+  enumeration nits in `05_errors_local.md`; N4 drift-7's `:24` has shifted to `:26` by
+  P5's own insertion; **N5 JC10 assessed and ACCEPTED** (the `//` sits in a *response*
+  example, a copy-paste fails loudly, and `:393` carries the full statement); N6 the
+  identity arbiter is one-way by design — recorded so a later phase does not read it as
+  completeness (S2 is what slipped through the unguarded direction); N7 the squash
+  seed's Findings 1–8 have no consolidated home.
+
+  **All 8 filed drift items independently verified REAL.** All P22 ticks hold except
+  N7's ledger placement, which the implementer had already routed to the coordinator.
+  Graph read-only: 175/260, rev `7dcdb9b0…`, 1 pending + 1 stale left exactly as found
+  for human adjudication; P14's four evidence spans re-read and accurate; JC 2–9 all
+  verified correct. Carry-forward dispositions table and the owner card in
+  `handoffs/reviewer/2026-08-15_phase9_review_r1_handoff.md`. Lessons **L1** (fence a
+  rewrite-in-place to its contradiction set), **L2** (name the columns, and give
+  mirrored contracts an arbiter), **L3** (a one-directional arbiter declares its
+  direction), **L4** (a new contract file is grepped against the tree it will govern).

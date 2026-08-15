@@ -111,7 +111,11 @@ returns `StatusOutcome(success=False, error=exc)`; the router calls `build_err`.
 and queries raise; they never build responses, never catch their own domain errors to
 reshape them, and never return an error dict.
 
-**Pydantic-side validators raise the repo's `DomainError`, not `ValueError`.** A
+**An error a client must BRANCH ON — one carrying an IDENTITY — is raised as the
+repo's `DomainError`, never as a `ValueError` inside a pydantic validator.** A plain
+schema `ValueError` remains correct for a non-branchable field error ("name must
+not be blank", "currency is required when an inline price is provided") — the
+tree carries ~20 such modules and none is a defect. The rule guards identities: a
 `ValueError` raised inside a pydantic validator reaches the client mangled by pydantic's
 field-locator prefix, which destroys the leading-token contract. A `DomainError` raised
 there propagates unwrapped through pydantic to `run_service` and surfaces exactly as

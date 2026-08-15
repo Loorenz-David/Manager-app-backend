@@ -464,6 +464,10 @@ which boundary the numbers describe — `working`/`ready` means still converging
 
 ### 5.2 `GET /items/{item_client_id}/economics` — lifetime
 
+> Each episode's `evaluation` carries `terms: []` on this read — do NOT build
+> the §4.1 drill-down from it; fetch `GET /tasks/{task_client_id}/evaluations`
+> for the term breakdown.
+
 **Auth:** ADMIN, MANAGER · query `limit` (1–200, default 50), `offset` (≥ 0)
 
 ```json

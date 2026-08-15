@@ -630,5 +630,7 @@ results are never merged across tasks.
 ```
 
 Episodes are the item's **current committed** evaluations, newest first. `result` is
+Each episode's `evaluation` carries `terms: []` on this read — fetch
+`GET /tasks/{task_client_id}/evaluations` for the term breakdown.
 `null` for an episode whose result row has not been written. Totals sum only the episodes
 that have one.
