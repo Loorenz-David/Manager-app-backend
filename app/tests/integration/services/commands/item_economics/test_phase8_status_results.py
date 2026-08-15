@@ -1,18 +1,28 @@
-import pytest
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+import pytest
+from sqlalchemy import delete, func, select
 
+from beyo_manager.domain.item_economics.calculator import calculate_consumed_cost_minor
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
-from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
+from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
+from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.item_economics.commit_item_cost_evaluation import commit_item_cost_evaluation
 from beyo_manager.services.commands.item_economics.create_item_cost_projection import create_item_cost_projection
+from beyo_manager.services.commands.item_economics.create_production_cost_basis_version import (
+    create_production_cost_basis_version,
+)
+from beyo_manager.services.commands.item_economics._common import today_utc
 from beyo_manager.services.commands.item_economics.delete_item_valuation import delete_item_valuation
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_item_lifetime_economics import get_item_lifetime_economics
@@ -76,6 +86,37 @@ async def _prepared(db_session):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize(
+    ("allowed_worker_minutes", "expected_status"),
+    [
+        (Decimal("0.00"), "infeasible"),
+        (Decimal("10.00"), "ok"),
+    ],
+    ids=["P-V-infeasible", "P-V-ok"],
+)
+async def test_c7_committed_evaluation_branch_drives_evaluated_status(
+    db_session, allowed_worker_minutes, expected_status
+):
+    workspace, user, _item, task, committed = await _prepared(db_session)
+    try:
+        evaluation = await db_session.get(ItemCostEvaluation, committed["client_id"])
+        evaluation.allowed_worker_minutes = allowed_worker_minutes
+        await db_session.commit()
+
+        status = await get_task_budget_status(
+            _read_ctx(db_session, workspace.client_id, user.client_id, {"task_client_id": task.client_id})
+        )
+
+        assert status.status.value == expected_status
+        if expected_status == "infeasible":
+            assert status.percent_consumed is None
+        else:
+            assert status.percent_consumed is not None
+    finally:
+        await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
+
+
+@pytest.mark.integration
 async def test_c1_projection_is_invisible_to_status_and_result_handler(db_session):
     workspace, user, item, task, committed = await _prepared(db_session)
     try:
@@ -108,6 +149,9 @@ async def test_c4_consumption_excludes_deleted_steps_but_counts_skipped_steps(db
     workspace, user, _item, task, _committed = await _prepared(db_session)
     try:
         step = await db_session.scalar(select(TaskStep).where(TaskStep.task_id == task.client_id))
+        step.total_pause_seconds = 30
+        step.total_ended_shift_seconds = 40
+        step.inaccurate_working_seconds = 50
         deleted = TaskStep(
             client_id=f"tsp_deleted_{task.client_id}",
             workspace_id=workspace.client_id,
@@ -316,18 +360,46 @@ async def test_c3_batch_rollup_dilutes_two_overlapping_steps_to_wall_clock(db_se
     workspace, user, _item, task, _basis = await _fixture(db_session)
     from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 
+    second_task = Task(
+        client_id=f"tsk_g3_{uuid4().hex}",
+        workspace_id=workspace.client_id,
+        task_scalar_id=2,
+        task_type=task.task_type,
+        state=TaskStateEnum.PENDING,
+        created_by_id=user.client_id,
+    )
+    db_session.add(second_task)
+    await db_session.flush()
+    db_session.add(
+        TaskItem(
+            workspace_id=workspace.client_id,
+            task_id=second_task.client_id,
+            item_id=_item.client_id,
+            role=TaskItemRoleEnum.PRIMARY,
+            created_by_id=user.client_id,
+        )
+    )
+    await db_session.flush()
+    await commit_item_cost_evaluation(
+        _ctx(db_session, workspace.client_id, user.client_id, {"task_client_id": task.client_id})
+    )
+    await commit_item_cost_evaluation(
+        _ctx(db_session, workspace.client_id, user.client_id, {"task_client_id": second_task.client_id})
+    )
+
     section = WorkingSection(
         client_id=f"wsec_g3_{uuid4().hex}", workspace_id=workspace.client_id, name="batch"
     )
     steps = [
         TaskStep(
             client_id=f"tsp_g3_{uuid4().hex}", workspace_id=workspace.client_id,
-            task_id=task.client_id, working_section_id=section.client_id,
+            task_id=(task.client_id if index == 0 else second_task.client_id),
+            working_section_id=section.client_id,
             state=TaskStepStateEnum.COMPLETED, readiness_status=TaskStepReadinessStatusEnum.READY,
             total_dependencies=0, completed_dependencies=0, allows_batch_working=True,
             created_by_id=user.client_id,
         )
-        for _ in range(2)
+        for index in range(2)
     ]
     base = datetime(2026, 8, 14, 8, 0, tzinfo=timezone.utc)
     records = [
@@ -345,14 +417,28 @@ async def test_c3_batch_rollup_dilutes_two_overlapping_steps_to_wall_clock(db_se
     await db_session.flush()
     db_session.add_all(records)
     task.state = TaskStateEnum.WORKING
+    second_task.state = TaskStateEnum.WORKING
     await db_session.commit()
     try:
         await _run_analytics_transition(db_session, workspace, user, task, steps[0], records[0])
-        await _run_analytics_transition(db_session, workspace, user, task, steps[1], records[1])
+        await _run_analytics_transition(db_session, workspace, user, second_task, steps[1], records[1])
         for step in steps:
             await db_session.refresh(step)
         assert [step.total_working_seconds for step in steps] == [1800, 1800]
         assert sum(step.total_working_seconds for step in steps) == 3600
+        await handle_process_item_cost_result(
+            {"workspace_id": workspace.client_id, "task_id": task.client_id}, "execution-task"
+        )
+        await handle_process_item_cost_result(
+            {"workspace_id": workspace.client_id, "task_id": second_task.client_id}, "execution-task"
+        )
+        results = (
+            await db_session.scalars(
+                select(ItemCostResult).where(ItemCostResult.task_id.in_([task.client_id, second_task.client_id]))
+            )
+        ).all()
+        assert {result.actual_worker_seconds for result in results} == {1800}
+        assert sum(result.actual_worker_seconds for result in results) == 3600
     finally:
         await _cleanup_probe(db_session, workspace.client_id, user.client_id, task.client_id)
 
@@ -394,26 +480,66 @@ async def test_c6b_reentry_recomputes_one_result_row_from_new_totals(db_session)
         await db_session.refresh(result)
         assert result.task_state_snapshot is TaskStateEnum.WORKING
         assert result.actual_worker_seconds == 240
-        assert await db_session.scalar(select(ItemCostResult.task_id).where(ItemCostResult.task_id == task.client_id)) == task.client_id
+        assert await db_session.scalar(
+            select(func.count())
+            .select_from(ItemCostResult)
+            .where(ItemCostResult.task_id == task.client_id)
+        ) == 1
     finally:
         await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
 
 
 @pytest.mark.integration
 async def test_c5_config_supersession_after_close_preserves_snapshot_recompute(db_session):
-    workspace, user, _item, task, _committed = _prepared_result = await _prepared(db_session)
+    workspace, user, _item, task, committed = await _prepared(db_session)
     try:
         payload = {"workspace_id": workspace.client_id, "task_id": task.client_id}
         await handle_process_item_cost_result(payload, "execution-task")
         first = await db_session.scalar(select(ItemCostResult).where(ItemCostResult.task_id == task.client_id))
-        first_values = (first.evaluation_id, first.item_id, first.actual_worker_seconds, first.consumed_cost_minor, first.variance_cost_minor, first.calculation_version)
-        from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
-        version = await db_session.scalar(select(CostModelVersion).where(CostModelVersion.workspace_id == workspace.client_id))
-        version.is_deleted = True
+        first_values = {
+            field: getattr(first, field)
+            for field in (
+                "evaluation_id",
+                "item_id",
+                "actual_worker_seconds",
+                "actual_worker_minutes",
+                "consumed_cost_minor",
+                "variance_worker_minutes",
+                "variance_cost_minor",
+                "task_closed_at",
+                "task_state_snapshot",
+                "calculation_version",
+            )
+        }
+        basis = await db_session.scalar(
+            select(ProductionCostBasisVersion).where(
+                ProductionCostBasisVersion.workspace_id == workspace.client_id,
+                ProductionCostBasisVersion.effective_to.is_(None),
+            )
+        )
+        new_basis = await create_production_cost_basis_version(
+            _ctx(
+                db_session,
+                workspace.client_id,
+                user.client_id,
+                {
+                    "production_cost_group_id": basis.production_cost_group_id,
+                    "effective_from": today_utc(),
+                    "fixed_monthly_cost_minor": 200000,
+                    "currency": basis.currency,
+                    "monthly_paid_hours": basis.monthly_paid_hours,
+                    "planning_utilization_percent": basis.planning_utilization_percent,
+                },
+            )
+        )
         await db_session.commit()
+        new_rate = Decimal(new_basis["production_cost_basis_version"]["cost_per_worker_minute_minor"])
+        assert new_rate != Decimal(str(committed["cost_per_worker_minute_minor_snapshot"]))
+        assert calculate_consumed_cost_minor(first.actual_worker_seconds, new_rate) != first.consumed_cost_minor
+
         await handle_process_item_cost_result(payload, "execution-task")
         await db_session.refresh(first)
-        assert (first.evaluation_id, first.item_id, first.actual_worker_seconds, first.consumed_cost_minor, first.variance_cost_minor, first.calculation_version) == first_values
+        assert {field: getattr(first, field) for field in first_values} == first_values
     finally:
         await _cleanup_phase8(db_session, workspace.client_id, user.client_id)
 

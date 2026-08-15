@@ -174,13 +174,8 @@ def test_router_route_pairs_match_the_authoritative_route_table():
     assert actual == expected
 
 
-def test_budget_status_route_declares_no_response_model():
-    route = next(
-        route for route in item_economics.router.routes
-        if route.path == "/tasks/{task_client_id}/budget-status"
-    )
-
-    assert route.response_model is None
+def test_item_economics_routes_declare_no_response_model():
+    assert all(route.response_model is None for route in item_economics.router.routes)
 
 
 async def test_budget_status_audience_predicate_fails_closed_for_unknown_role(monkeypatch):

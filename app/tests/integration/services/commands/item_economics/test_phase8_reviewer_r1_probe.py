@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import delete, func, select
 
 from beyo_manager.domain.execution.enums import TaskType
-from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
+from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
 from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
@@ -452,8 +452,6 @@ async def test_probe_c1_projection_isolation_with_a_discriminating_fixture(db_se
     workspace, user, _item, task, _basis = await _fixture(db_session)
     await db_session.commit()
     try:
-        # the PROJECTION is inserted FIRST, so an unfiltered read (the C1 mutation)
-        # reaches it before the committed row — this is what makes the row bite.
         projection = await create_item_cost_projection(
             _ctx(
                 db_session,
@@ -508,10 +506,21 @@ async def test_probe_c1_projection_isolation_with_a_discriminating_fixture(db_se
                 select(ItemCostEvaluation).where(ItemCostEvaluation.task_id == task.client_id)
             )
         ).all()
-        assert len(unfiltered) == 2
-        assert unfiltered[0].client_id == projection["evaluation"]["client_id"], (
-            "fixture must place the PROJECTION first so an UNFILTERED read picks it"
-        )
+        assert {row.client_id for row in unfiltered} == {
+            projection["evaluation"]["client_id"],
+            committed["client_id"],
+        }
+        committed_candidates = (
+            await db_session.scalars(
+                select(ItemCostEvaluation).where(
+                    ItemCostEvaluation.task_id == task.client_id,
+                    ItemCostEvaluation.kind == ItemCostEvaluationKindEnum.COMMITTED,
+                    ItemCostEvaluation.superseded_at.is_(None),
+                    ItemCostEvaluation.is_deleted.is_(False),
+                )
+            )
+        ).all()
+        assert {row.client_id for row in committed_candidates} == {committed["client_id"]}
 
         status = await get_task_budget_status(
             _read_ctx(
@@ -754,7 +763,21 @@ async def test_probe_c1_worker_service_filter_is_independent_and_projection_blin
                 select(ItemCostEvaluation).where(ItemCostEvaluation.task_id == tsk_id)
             )
         ).all()
-        assert unfiltered[0].client_id == projection["evaluation"]["client_id"]
+        assert {row.client_id for row in unfiltered} == {
+            projection["evaluation"]["client_id"],
+            committed["client_id"],
+        }
+        committed_candidates = (
+            await db_session.scalars(
+                select(ItemCostEvaluation).where(
+                    ItemCostEvaluation.task_id == task.client_id,
+                    ItemCostEvaluation.kind == ItemCostEvaluationKindEnum.COMMITTED,
+                    ItemCostEvaluation.superseded_at.is_(None),
+                    ItemCostEvaluation.is_deleted.is_(False),
+                )
+            )
+        ).all()
+        assert {row.client_id for row in committed_candidates} == {committed["client_id"]}
 
         status = await get_task_budget_status_worker(
             _read_ctx(db_session, ws_id, usr_id, {"task_client_id": tsk_id})

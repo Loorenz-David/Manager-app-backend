@@ -874,3 +874,29 @@ stop-and-report.
   non-vacuity, set-assertion, P-I 9th as hard ledger field). This
   GOVERNING block H1–H7; fix r2 prompt
   `prompts/implementer/2026-08-15_phase8_fix_r2.md`.
+
+- **2026-08-15 — fix r2 IMPLEMENTED (Codex / implementation-executor).** H1–H6
+  are complete and H7 is satisfied: test-side only, with zero production edits,
+  migrations, or Architecture Graph writes. H1 now drives both status rows
+  through the real `get_task_budget_status` producer; H2 makes pause, ended-shift,
+  and inaccurate seconds nonzero while asserting WORKING-only consumption; H3
+  uses candidate-set assertions in both C1 probes and passed 10/10 consecutive
+  runs; H4 commits a real superseding basis version with a different rate and
+  proves the closed-task result snapshot is byte-identical and non-vacuous; H5
+  uses two tasks with one committed evaluation each and proves 1800 seconds per
+  episode and 3600 seconds in aggregate; H6 changes the re-entry check to a
+  count and quantifies `response_model is None` over every
+  `item_economics.router.routes`. The three SimpleNamespace C7 echo rows were
+  removed. Focused phase scope: 146 passed; the H3 pair was 2 passed on each of
+  10 runs (20 passes). Full `not e2e`: 2138 passed / 23 established failures /
+  1 deselected; the sorted failure set is byte-identical to the phase-1
+  baseline. Ruff passes on the three non-adopted changed test files; the adopted
+  probe retains its pre-existing unused `ItemMajorCategoryEnum` import. Database
+  head is `c1d2e3f4a5b6`; direct state checks report zero
+  `item_cost_evaluations`, zero `item_cost_results`, and zero
+  `execution_tasks` of `process_item_cost_result`. Mutation ledger: MX1 and
+  MX2 reddened their exact H2/H1 rows; M1, M2, M3, and M17 reddened their exact
+  probe/replay rows; every temporary production mutation was reverted and all
+  three touched production hashes restored. Final test hashes are recorded in
+  the fix handoff. Tracker moved to IMPLEMENTED; checkpoint and handoff follow
+  the closing protocol.

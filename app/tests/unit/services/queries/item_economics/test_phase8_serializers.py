@@ -11,8 +11,7 @@ from beyo_manager.domain.item_economics.serializers import (
     serialize_item_cost_result,
     serialize_item_cost_result_worker,
     serialize_task_budget_status,
-)
-
+        )
 
 def _result() -> SimpleNamespace:
     return SimpleNamespace(
@@ -128,34 +127,3 @@ def test_c7_readiness_producer_drives_each_status_exactly(authority_row, selecti
                 "percent_consumed", "variance_worker_minutes", "allowed_worker_minutes",
             )
         )
-
-
-@pytest.mark.parametrize(
-    ("authority_row", "status"),
-    [("P-V-infeasible", EconomicsStatusEnum.INFEASIBLE), ("P-V-ok", EconomicsStatusEnum.OK)],
-    ids=["P-V-infeasible", "P-V-ok"],
-)
-def test_c7_committed_evaluation_branch_drives_evaluated_status(authority_row, status) -> None:
-    committed = SimpleNamespace(
-        status=status,
-        item_binding="bound",
-        actual_worker_seconds=120,
-        actual_worker_minutes="2.00",
-        remaining_worker_minutes=None if status is EconomicsStatusEnum.INFEASIBLE else "8.00",
-        percent_consumed=None if status is EconomicsStatusEnum.INFEASIBLE else "20.00",
-        variance_worker_minutes=None if status is EconomicsStatusEnum.INFEASIBLE else "-8.00",
-        production_budget_minor=100,
-        allowed_worker_minutes="0.00" if status is EconomicsStatusEnum.INFEASIBLE else "10.00",
-        consumed_cost_minor=30,
-        variance_cost_minor=70,
-        evaluation_id="eval",
-        item_id="item",
-        result=None,
-    )
-    payload = serialize_task_budget_status(committed, include_monetary=True)
-
-    assert authority_row.startswith("P-V-")
-    assert payload["status"] == status.value
-    assert payload["production_budget_minor"] == 100
-    if status is EconomicsStatusEnum.INFEASIBLE:
-        assert payload["percent_consumed"] is None
