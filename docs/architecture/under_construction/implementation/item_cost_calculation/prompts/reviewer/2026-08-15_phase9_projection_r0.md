@@ -7,16 +7,22 @@ date: 2026-08-15
 
 # Session prompt — phase 9 projection, round 0
 
-> **HOLD — do not run until phase 8B is APPROVED.** Round 18 (2026-08-15)
-> added two things after this prompt was first authored: phase 9 now
-> carries the FRONTEND HANDOFF deliverable (R18-2 — see the plan's
-> "Scope addition" block, GOVERNING) and is BLOCKED on phase 8B (inline
-> task prices, R18-1), because the handoff and the living-docs page must
-> document the post-8B flow. When you run: add the handoff's accuracy
-> arbiters and its completeness (all ten routes + 8B's trio + the
-> removals) to your axes, and re-verify the environment facts below
-> against post-8B reality (head, baseline, graph revision will all have
-> moved).
+> **HOLD LIFTED (2026-08-15) — phase 8B is APPROVED and closed.** Round
+> 18's additions are in force: phase 9 carries the FRONTEND HANDOFF
+> deliverable (R18-2 — the plan's "Scope addition" block, GOVERNING, incl.
+> the 8B-routed sentences: README drift, quantity-is-per-item, the
+> two-call flow) and documents the POST-8B flow (§7B.6 inline pricing,
+> branch B's refusal, the C1 six-shape auto-commit table). Add the
+> handoff's accuracy arbiters and completeness (ten routes + the 8B trio
+> + the removals) to your axes. **Environment facts SUPERSEDING the ones
+> below:** head `c1d2e3f4a5b6` (unchanged — 8B added no migration); suite
+> baseline **2184 / 23 / 1 = 2207 selected (2208 collected)**; graph
+> **174 nodes / 260 edges, ALL human_confirmed, 0 pending, 0 stale,
+> revision `452befdb…`**; archive now includes `plan_8b/`; the phase-8B
+> forward items for you: the r3-N1 structural filter arbiter now covers
+> THREE status-query sites plus nothing new from 8B (its predicate has
+> its own M6 guard); the phase-7 `item_valuations` residue row rides the
+> existing maintenance record.
 
 You are the **projectionist** for phase 9 — the final phase: the living-docs
 page and the accumulated drift batch. The plan was written 2026-08-11,
