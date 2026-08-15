@@ -46,6 +46,16 @@ Workspace: `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/
   flake-free; full **2138 / 23 / 1**, sorted failure IDs = the phase-1
   set. Graph untouched: 172/254, rev `c74eb913…`, 21 pending held.
 
+## Explicitly OUT of scope (do not re-run)
+
+The other 15 ledger rows (M4–M16, M18, G7/G8) were proven biting in r2
+against production files that are byte-identical today — re-running them
+is manufactured scope. The settled r1/r2 mechanism re-derivations stand.
+One full-suite foreground run suffices (plus the H3 subset loop). Expected
+session shape: the four probes below + one suite run + two fixture reads —
+if you find yourself past that, it should be because you FOUND something,
+and then depth is right.
+
 ## Probes (minimum)
 
 - **R3-P1 — MX1/MX2 re-run from YOUR mutant bytes:** apply your own r2
@@ -57,8 +67,10 @@ Workspace: `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/
   carries all three nonzero excluded columns.
 - **R3-P2 — the S1 flake is dead:** read the two repaired C1 probe rows —
   candidate-SET assertions, no order dependence; run the pair yourself
-  ≥10×; M1/M2/M3 regression re-runs (the fix's ledger shows all three
-  biting — sample at least M1 and M2 from your r2 mutant bytes).
+  ≥10× (a 2-test subset — seconds per run); regression-sample **M1 and M2
+  only** from your r2 mutant bytes (the fix's ledger shows M3/M17 biting
+  too — do NOT re-run them; their production files are byte-unchanged
+  since your r2 pass).
 - **R3-P3 — H4/H5 read hard:** the rebuilt C5 supersession row commits a
   real superseding basis version with a different rate (non-vacuity
   assertion present — the new rate WOULD change the number; P-J 5th ext);
