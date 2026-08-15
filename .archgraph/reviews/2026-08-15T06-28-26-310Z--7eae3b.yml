@@ -1,0 +1,178 @@
+reviewId: 2026-08-15T06-28-26-310Z--7eae3b
+reviewedItemIds:
+  - node:projection-item-economics-task-budget-status
+  - node:projection-item-economics-lifetime
+  - node:command-process-item-cost-result
+  - node:event-process-item-cost-result
+  - node:endpoint-item-economics-task-budget-status
+  - node:endpoint-item-economics-lifetime
+  - edge:endpoint-item-economics-task-budget-status--accepts-->projection-item-economics-task-budget-status
+  - edge:endpoint-item-economics-lifetime--accepts-->projection-item-economics-lifetime
+  - edge:projection-item-economics-task-budget-status--reads_from-->table-task
+  - edge:projection-item-economics-task-budget-status--reads_from-->table-item-cost-evaluation
+  - edge:projection-item-economics-task-budget-status--reads_from-->table-task-step
+decisions:
+  - itemId: node:projection-item-economics-task-budget-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            symbol: get_task_budget_status
+            startLine: 100
+            endLine: 161
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            symbol: get_task_budget_status
+            startLine: 100
+            endLine: 177
+    rationale: "Re-derived: manager status read at :100-127 + the shared
+      _build_evaluated_status :130-177 (fix-r1 dedupe — both services call ONE
+      builder; per-service filters stay separate). Committed-current filter
+      :103-113; §8A.1 consumption :140-148; result attached whenever present
+      (R17-1). Anchor re-set 100-177 after the dedupe (likely the 1 stale
+      item)."
+  - itemId: node:projection-item-economics-lifetime
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_item_lifetime_economics.py
+            symbol: get_item_lifetime_economics
+            startLine: 24
+            endLine: 107
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_item_lifetime_economics.py
+            symbol: get_item_lifetime_economics
+            startLine: 25
+            endLine: 112
+    rationale: "Re-derived: item check :28, current-committed chain with limit+1
+      pagination :42-56, results by task :64-67, result-only totals (no inferred
+      zeros), serializer call (G6). Anchor 25-112 (file grew +17 at fix r1)."
+  - itemId: node:command-process-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived: frozen payload rehydrated :41, task+admitted-state guard
+      (:30-36 _ADMITTED_STATES = the 5-state set, complement asserted in tests),
+      committed-current evaluation :63-70, §8A.1 consumption :78-82,
+      recompute-and-SET upsert on uq_item_cost_results_task_id :131-137. File
+      unchanged since recording (hash d57ca890 stable r1b→now)."
+  - itemId: node:event-process-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/domain/execution/payloads/item_cost_result.py
+            symbol: ItemCostResultPayload
+            startLine: 1
+            endLine: 10
+          to:
+            path: app/beyo_manager/domain/execution/payloads/item_cost_result.py
+            symbol: ItemCostResultPayload
+            startLine: 1
+            endLine: 11
+    rationale: Frozen dataclass with exactly workspace_id + task_id, nothing else
+      (§8A.3 pin). Anchor extended to the full 11-line file.
+  - itemId: node:endpoint-item-economics-task-budget-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Route verified at :344 (with explicit response_model=None), handler
+      :345-383; all-roles with role-split via include_monetary_step_fields (G4,
+      fail-closed); in the hand-written _ALL_ROLE test table with both P-G
+      mutations biting.
+  - itemId: node:endpoint-item-economics-lifetime
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_item_lifetime_economics
+            startLine: 386
+            endLine: 403
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_item_lifetime_economics
+            startLine: 386
+            endLine: 400
+    rationale: Route verified at :386, handler :387, file ends :400 (G5 deleted the
+      dead tables below — old anchor end 403 exceeded EOF). ADMIN/MANAGER,
+      limit/offset params.
+  - itemId: edge:endpoint-item-economics-task-budget-status--accepts-->projection-item-economics-task-budget-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Handler dispatches the manager service (or worker service per role)
+      via run_service; verified :344-383.
+  - itemId: edge:endpoint-item-economics-lifetime--accepts-->projection-item-economics-lifetime
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 386
+            endLine: 403
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            startLine: 386
+            endLine: 400
+    rationale: Handler dispatches get_item_lifetime_economics; verified :386-400.
+  - itemId: edge:projection-item-economics-task-budget-status--reads_from-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: select(Task) workspace-scoped at :53-58, region unchanged by the fix;
+      recorded span still contains it.
+  - itemId: edge:projection-item-economics-task-budget-status--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Committed-current literal filter select at :103-113 (M1's mutation
+      site); span valid.
+  - itemId: edge:projection-item-economics-task-budget-status--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            startLine: 127
+            endLine: 137
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            startLine: 130
+            endLine: 150
+    rationale: The §8A.1 consumption read moved into _build_evaluated_status by the
+      fix-r1 dedupe — COALESCE sum at :140-148; re-anchored.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T06:28:26.310Z
+graphRevisionBefore: c74eb91304146d284be10e7eb88dbb26ddfa709daca9849bab0d489c7a966166
+graphRevisionAfter: 6bbb80572482f2d4ad87e9dfdd8096e6e5e6d39277306d7e7a44d4f52cb165fe
+evidenceSummary: 11 evidence entries across 5 files; no drift detected
+humanInstruction: "Phase-8 post-approval graph pass, batch 1/2: the six nodes +
+  five edges, promoted after independent re-derivation; anchors corrected where
+  fix-r1's dedupe/deletions moved spans (two had ends past EOF), under the
+  owner's standing post-approval authorization."
+reviewTokenCorrelation: e7a3406557e6

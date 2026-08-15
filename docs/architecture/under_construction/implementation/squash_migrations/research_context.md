@@ -155,3 +155,13 @@ assumptions), decide the baseline strategy (single baseline revision +
 `alembic stamp` on existing DBs vs. keep-tail-squash-head), and decide the
 squashed `env.py`'s deliberate transaction shape. Gate: the item-cost
 pipeline is COMPLETE and stable, per the timing decision above.
+
+## Finding 7 (2026-08-15, phase-8 closeout)
+
+Phase 8 added one migration AFTER the drop head:
+`c1d2e3f4a5b6_add_process_item_cost_result_task_type.py`
+(`ALTER TYPE task_type_enum ADD VALUE IF NOT EXISTS
+'process_item_cost_result'`; downgrade is an honest no-op — PostgreSQL
+cannot drop enum values). The squashed baseline must create
+`task_type_enum` WITH this label included; the chain to collapse now ends
+at `c1d2e3f4a5b6`, not `be9dfe42a035`.

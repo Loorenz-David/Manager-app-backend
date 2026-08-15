@@ -1821,8 +1821,10 @@ nodes:
   - id: infra-queue-analytics
     type: infrastructure
     name: Redis queue:analytics
-    description: Redis list carrying execution task ids for analytics work. Only
-      PROCESS_STEP_TRANSITION routes here. Ids only — payloads stay in Postgres.
+    description: "Redis list carrying execution task ids for analytics work. Two
+      task types route here since phase 8: PROCESS_STEP_TRANSITION and
+      PROCESS_ITEM_COST_RESULT (task_router.py maps both to queue:analytics).
+      Ids only — payloads stay in Postgres."
     metadata:
       evidence:
         - path: app/beyo_manager/services/infra/execution/task_router.py
@@ -1834,7 +1836,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-12T10:36:48.424Z
+    updatedAt: 2026-08-15T06:32:15.835Z
   - id: infra-queue-notifications
     type: infrastructure
     name: Redis queue:notifications
@@ -1892,8 +1894,10 @@ nodes:
     type: infrastructure
     name: Analytics Worker
     description: Consumes queue:analytics. Its HANDLER_MAP binds
-      PROCESS_STEP_TRANSITION to handle_process_step_transition. The only
-      consumer of step transition events.
+      PROCESS_STEP_TRANSITION to handle_process_step_transition and, since phase
+      8, PROCESS_ITEM_COST_RESULT to handle_process_item_cost_result
+      (analytics_worker.py:11-14). The only consumer of step transition and
+      item-cost-result events.
     tags:
       - core
     metadata:
@@ -1908,7 +1912,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:42:30.238Z
-    updatedAt: 2026-08-12T10:36:48.424Z
+    updatedAt: 2026-08-15T06:32:15.835Z
   - id: infra-notification-worker
     type: infrastructure
     name: Notification Worker
@@ -2003,14 +2007,17 @@ nodes:
   - id: analytics-process-step-transition
     type: command
     name: handle_process_step_transition (WORKER-1)
-    description: "THE analytics entry point. Rehydrates StepTransitionPayload, then:
-      (1) if closing_state is time-bearing AND credited_user_id is set,
-      reconciles the user's day totals and recomputes step time totals; (2)
-      reconciles worker shift state on every credited transition regardless of
-      closing_state; (3) if new_state == COMPLETED, applies completion and issue
-      counters; (4) emits a shift realtime event only when the reconcile reports
-      a change. Note the two gates are independent — a transition can trigger
-      one, both or neither."
+    description: "THE analytics entry point for step transitions. Rehydrates
+      StepTransitionPayload, then: (1) if closing_state is time-bearing AND
+      credited_user_id is set, reconciles the user's day totals and recomputes
+      step time totals; (2) reconciles worker shift state on every credited
+      transition regardless of closing_state; (3) if new_state == COMPLETED,
+      applies completion and issue counters; (4) emits a shift realtime event
+      only when the reconcile reports a change; (5) since phase 8, inside the
+      time-bearing branch after the recompute, enqueues one
+      PROCESS_ITEM_COST_RESULT for the step's task iff the task state is READY
+      or terminal (the §8A.5 straggler re-emit). The gates are independent — a
+      transition can trigger any subset."
     tags:
       - core
       - analytics
@@ -2029,7 +2036,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-12T10:37:15.606Z
+    updatedAt: 2026-08-15T06:32:15.835Z
   - id: analytics-recompute-step-time-totals
     type: projection
     name: _recompute_step_time_totals
@@ -3672,14 +3679,15 @@ nodes:
     origin: human_confirmed
     confidence: 0.91
     createdAt: 2026-08-12T20:22:33.052Z
-    updatedAt: 2026-08-13T13:21:39.160Z
+    updatedAt: 2026-08-15T06:32:15.835Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
         symbol: get_economics_configuration_status
         startLine: 12
         endLine: 64
-        contentHash: ce43ca5f132667b3bba598d8b97aa3bd4f51bc60f6ae7a5e9c38e1cd65144a62
+        contentHash: ce9fc62dbe372af5e74385530f4ec1306bc3da5dc56314b312d0517fb6c442b2
         linkedAt: 2026-08-13T13:21:39.160Z
+        acknowledgedAt: 2026-08-15T06:32:15.835Z
   - id: command-item-economics-set-item-valuation
     type: command
     name: set_item_valuation
@@ -4129,16 +4137,27 @@ nodes:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
           symbol: get_task_budget_status
           startLine: 100
+          endLine: 177
+          summary: The query loads a task's current committed evaluation, derives binding
+            and readiness status, aggregates non-deleted task-step seconds,
+            computes budget/consumption/variance, and loads the result row.
+          inferenceReason: This service is a distinct item-economics task-budget read
+            model with explicit current-evaluation and live-time boundaries.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+          symbol: get_task_budget_status
+          startLine: 100
           endLine: 161
           summary: The query loads a task's current committed evaluation, derives binding
             and readiness status, aggregates non-deleted task-step seconds,
             computes budget/consumption/variance, and loads the result row.
           inferenceReason: This service is a distinct item-economics task-budget read
             model with explicit current-evaluation and live-time boundaries.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - id: projection-item-economics-lifetime
     type: projection
     name: Item Lifetime Economics Projection
@@ -4149,6 +4168,16 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_item_lifetime_economics.py
           symbol: get_item_lifetime_economics
+          startLine: 25
+          endLine: 112
+          summary: The query scopes current committed evaluations to an item, applies
+            limit+1 pagination, attaches result rows by task, serializes
+            evaluation/result episodes, and computes result-only totals.
+          inferenceReason: The service establishes a separate item-lifetime projection
+            boundary rather than merging task histories or live estimates.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_item_lifetime_economics.py
+          symbol: get_item_lifetime_economics
           startLine: 24
           endLine: 107
           summary: The query scopes current committed evaluations to an item, applies
@@ -4156,10 +4185,11 @@ nodes:
             evaluation/result episodes, and computes result-only totals.
           inferenceReason: The service establishes a separate item-lifetime projection
             boundary rather than merging task histories or live estimates.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - id: command-process-item-cost-result
     type: command
     name: Process Item Cost Result
@@ -4179,10 +4209,10 @@ nodes:
             SET columns.
           inferenceReason: This function is the write-side command boundary for durable
             task economics results.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - id: event-process-item-cost-result
     type: event
     name: Process Item Cost Result Task
@@ -4193,15 +4223,31 @@ nodes:
         - path: app/beyo_manager/domain/execution/payloads/item_cost_result.py
           symbol: ItemCostResultPayload
           startLine: 1
+          endLine: 11
+          summary: The payload is a frozen dataclass with exactly workspace_id and
+            task_id.
+          inferenceReason: The payload defines the stable asynchronous contract between
+            task producers, the analytics queue, and the result handler.
+      evidenceHistory:
+        - path: app/beyo_manager/domain/execution/payloads/item_cost_result.py
+          symbol: ItemCostResultPayload
+          startLine: 1
           endLine: 10
           summary: The payload is a frozen dataclass with exactly workspace_id and
             task_id.
           inferenceReason: The payload defines the stable asynchronous contract between
             task producers, the analytics queue, and the result handler.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:30:00.148Z
+    sourceLinks:
+      - path: app/migrations/versions/c1d2e3f4a5b6_add_process_item_cost_result_task_type.py
+        startLine: 1
+        endLine: 28
+        contentHash: 877f71a849f954032774c5b814a0e7a1af264f92ddf7cb611be17a9a62e9049a
+        linkedAt: 2026-08-15T06:30:00.148Z
   - id: endpoint-item-economics-task-budget-status
     type: endpoint
     name: GET task budget status
@@ -4219,10 +4265,10 @@ nodes:
             view.
           inferenceReason: The route is the external endpoint boundary for the new task
             budget projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - id: endpoint-item-economics-lifetime
     type: endpoint
     name: GET item lifetime economics
@@ -4233,15 +4279,50 @@ nodes:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           symbol: route_get_item_lifetime_economics
           startLine: 386
+          endLine: 400
+          summary: The route accepts manager/admin roles, passes limit/offset query
+            parameters to the item lifetime query, and returns its projection.
+          inferenceReason: The route is the external endpoint boundary for the new item
+            lifetime projection.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_item_lifetime_economics
+          startLine: 386
           endLine: 403
           summary: The route accepts manager/admin roles, passes limit/offset query
             parameters to the item lifetime query, and returns its projection.
           inferenceReason: The route is the external endpoint boundary for the new item
             lifetime projection.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
+  - id: projection-item-economics-task-budget-status-worker
+    type: projection
+    name: get_task_budget_status_worker
+    description: "Worker/seller face of the task budget-status read: an INDEPENDENT
+      service with its own literal committed-current evaluation filter (A7 — a
+      separate mutation site from the manager service), delegating the evaluated
+      computation to the shared _build_evaluated_status; its serializer path
+      carries no monetary keys (§11A.3)."
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          symbol: get_task_budget_status_worker
+          startLine: 22
+          endLine: 53
+          summary: The worker service loads the task, applies its own kind='committed' AND
+            superseded_at IS NULL AND is_deleted=false evaluation filter
+            (:27-ff), and returns _build_evaluated_status's shared read model.
+          inferenceReason: The phase-8 inferred delta recorded the manager service and
+            lifetime read but omitted this third registered service (§6.5); the
+            route's role split dispatches WORKER/SELLER here, so the surface is
+            incomplete without it.
+    origin: human_confirmed
+    confidence: 0.95
+    createdAt: 2026-08-15T06:30:00.148Z
+    updatedAt: 2026-08-15T06:30:26.394Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -8314,10 +8395,10 @@ edges:
           summary: The budget-status endpoint delegates to the task budget query and
             serializer.
           inferenceReason: The endpoint accepts the corresponding projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - sourceNodeId: endpoint-item-economics-lifetime
     relationshipType: accepts
     targetNodeId: projection-item-economics-lifetime
@@ -8325,13 +8406,20 @@ edges:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           startLine: 386
+          endLine: 400
+          summary: The lifetime endpoint delegates to the item lifetime query.
+          inferenceReason: The endpoint accepts the corresponding projection.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 386
           endLine: 403
           summary: The lifetime endpoint delegates to the item lifetime query.
           inferenceReason: The endpoint accepts the corresponding projection.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - sourceNodeId: projection-item-economics-task-budget-status
     relationshipType: reads_from
     targetNodeId: table-task
@@ -8342,10 +8430,10 @@ edges:
           endLine: 58
           summary: The query loads the task and its primary item binding.
           inferenceReason: Task identity and state are direct inputs to the projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - sourceNodeId: projection-item-economics-task-budget-status
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -8357,40 +8445,56 @@ edges:
           summary: The query filters the current committed evaluation for the task.
           inferenceReason: The current evaluation snapshot supplies the budget, allowance,
             rate, and status boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - sourceNodeId: projection-item-economics-task-budget-status
     relationshipType: reads_from
     targetNodeId: table-task-step
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+          startLine: 130
+          endLine: 150
+          summary: The query sums non-deleted task-step total_working_seconds for the
+            task.
+          inferenceReason: Live step time is a direct input to the budget projection.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
           startLine: 127
           endLine: 137
           summary: The query sums non-deleted task-step total_working_seconds for the
             task.
           inferenceReason: Live step time is a direct input to the budget projection.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:26.290Z
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:26.290Z
   - sourceNodeId: projection-item-economics-task-budget-status
     relationshipType: reads_from
     targetNodeId: table-item-cost-result
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+          startLine: 157
+          endLine: 166
+          summary: The query loads the durable result row for the task.
+          inferenceReason: The result boundary is included in the returned task budget
+            projection.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
           startLine: 150
           endLine: 156
           summary: The query loads the durable result row for the task.
           inferenceReason: The result boundary is included in the returned task budget
             projection.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:53.471Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: projection-item-economics-lifetime
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -8402,10 +8506,10 @@ edges:
           summary: The query lists current committed evaluations scoped to the item.
           inferenceReason: Committed evaluation episodes are the lifetime projection's
             primary source.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: projection-item-economics-lifetime
     relationshipType: reads_from
     targetNodeId: table-item-cost-result
@@ -8417,10 +8521,10 @@ edges:
           summary: The query attaches result rows by task and totals only attached
             results.
           inferenceReason: Durable result rows are the only source for lifetime totals.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-item-economics-task-budget-status
@@ -8428,20 +8532,37 @@ edges:
       evidence:
         - path: app/beyo_manager/domain/item_economics/serializers.py
           startLine: 229
+          endLine: 268
+          summary: The item-economics serialization module defines manager and worker
+            budget-status representations.
+          inferenceReason: The projection is an item-economics read boundary represented
+            by the existing serializer family.
+      evidenceHistory:
+        - path: app/beyo_manager/domain/item_economics/serializers.py
+          startLine: 229
           endLine: 273
           summary: The item-economics serialization module defines manager and worker
             budget-status representations.
           inferenceReason: The projection is an item-economics read boundary represented
             by the existing serializer family.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:53.471Z
+    origin: human_confirmed
     confidence: 0.82
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-item-economics-lifetime
     metadata:
       evidence:
+        - path: app/beyo_manager/domain/item_economics/serializers.py
+          startLine: 269
+          endLine: 285
+          summary: The item-economics serializer family defines the lifetime projection
+            envelope.
+          inferenceReason: The projection is part of the item-economics read boundary
+            represented by the serializer family.
+      evidenceHistory:
         - path: app/beyo_manager/domain/item_economics/serializers.py
           startLine: 276
           endLine: 291
@@ -8449,24 +8570,32 @@ edges:
             envelope.
           inferenceReason: The projection is part of the item-economics read boundary
             represented by the serializer family.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:53.471Z
+    origin: human_confirmed
     confidence: 0.82
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: command-process-item-cost-result
     relationshipType: consumes
     targetNodeId: event-process-item-cost-result
     metadata:
       evidence:
         - path: app/beyo_manager/services/tasks/analytics/process_item_cost_result.py
+          startLine: 39
+          endLine: 43
+          summary: The handler rehydrates ItemCostResultPayload from the task payload.
+          inferenceReason: The command consumes the frozen result-task payload.
+      evidenceHistory:
+        - path: app/beyo_manager/services/tasks/analytics/process_item_cost_result.py
           startLine: 32
           endLine: 34
           summary: The handler rehydrates ItemCostResultPayload from the task payload.
           inferenceReason: The command consumes the frozen result-task payload.
-    origin: ai_inferred
+          supersededAt: 2026-08-15T06:28:53.471Z
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: command-process-item-cost-result
     relationshipType: writes_to
     targetNodeId: table-item-cost-result
@@ -8478,10 +8607,10 @@ edges:
           summary: The handler upserts the durable item_cost_results row using the task
             unique constraint.
           inferenceReason: The result table is the command's persisted output.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: command-process-item-cost-result
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -8492,10 +8621,10 @@ edges:
           endLine: 70
           summary: The handler resolves the current committed evaluation for the task.
           inferenceReason: The current evaluation snapshot supplies the computation inputs.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: command-process-item-cost-result
     relationshipType: reads_from
     targetNodeId: table-task-step
@@ -8507,10 +8636,10 @@ edges:
           summary: The handler sums non-deleted task-step working seconds at execution
             time.
           inferenceReason: Current persisted task-step totals are a computation input.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
   - sourceNodeId: infra-analytics-worker
     relationshipType: calls
     targetNodeId: command-process-item-cost-result
@@ -8522,7 +8651,47 @@ edges:
           summary: The analytics worker maps PROCESS_ITEM_COST_RESULT to the result
             handler.
           inferenceReason: The worker dispatches the queue task to this command.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-14T20:19:54.506Z
+    updatedAt: 2026-08-15T06:28:53.471Z
+  - sourceNodeId: endpoint-item-economics-task-budget-status
+    relationshipType: accepts
+    targetNodeId: projection-item-economics-task-budget-status-worker
+    description: The all-roles budget-status route selects the worker service for
+      identities outside include_monetary_step_fields (WORKER/SELLER and any
+      non-canonical role — fail-closed since G4).
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          startLine: 344
+          endLine: 383
+          summary: route_get_task_budget_status computes worker_view = not
+            include_monetary_step_fields(role_name) at :134-region of the
+            handler body and dispatches get_task_budget_status_worker for
+            worker_view.
+          inferenceReason: Role-split service selection is the endpoint's load-bearing
+            behaviour (card 4/§11A.1); M15/M18 mutations bite its rows.
+    origin: human_confirmed
+    confidence: 0.95
+    createdAt: 2026-08-15T06:30:00.148Z
+    updatedAt: 2026-08-15T06:30:26.394Z
+  - sourceNodeId: projection-item-economics-task-budget-status-worker
+    relationshipType: reads_from
+    targetNodeId: table-item-cost-evaluation
+    description: The worker service's OWN committed-current literal filter — the
+      third of C1's three mutation sites (M2).
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          startLine: 27
+          endLine: 40
+          summary: select(ItemCostEvaluation) filtered kind=COMMITTED, superseded_at IS
+            NULL, is_deleted=false, task-scoped.
+          inferenceReason: A7 mandated an independent filter per service so each site
+            carries its own mutation; M2 deletes exactly this filter and reddens
+            the worker probe row.
+    origin: human_confirmed
+    confidence: 0.95
+    createdAt: 2026-08-15T06:30:00.148Z
+    updatedAt: 2026-08-15T06:30:26.394Z

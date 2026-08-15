@@ -1,0 +1,132 @@
+reviewId: 2026-08-15T06-28-53-490Z--9ffff1
+reviewedItemIds:
+  - edge:projection-item-economics-task-budget-status--reads_from-->table-item-cost-result
+  - edge:projection-item-economics-lifetime--reads_from-->table-item-cost-evaluation
+  - edge:projection-item-economics-lifetime--reads_from-->table-item-cost-result
+  - edge:domain-item-economics--contains-->projection-item-economics-task-budget-status
+  - edge:domain-item-economics--contains-->projection-item-economics-lifetime
+  - edge:command-process-item-cost-result--consumes-->event-process-item-cost-result
+  - edge:command-process-item-cost-result--writes_to-->table-item-cost-result
+  - edge:command-process-item-cost-result--reads_from-->table-item-cost-evaluation
+  - edge:command-process-item-cost-result--reads_from-->table-task-step
+  - edge:infra-analytics-worker--calls-->command-process-item-cost-result
+decisions:
+  - itemId: edge:projection-item-economics-task-budget-status--reads_from-->table-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            startLine: 150
+            endLine: 156
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+            startLine: 157
+            endLine: 166
+    rationale: select(ItemCostResult) moved to :157-165 by the fix-r1 dedupe (loaded
+      whenever present — R17-1, boundary-labelled); re-anchored.
+  - itemId: edge:projection-item-economics-lifetime--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Current-committed chain select at :42-56 with limit+1; recorded span
+      contains it.
+  - itemId: edge:projection-item-economics-lifetime--reads_from-->table-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Results-by-task select at :64-67; recorded span contains it.
+  - itemId: edge:domain-item-economics--contains-->projection-item-economics-task-budget-status
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/domain/item_economics/serializers.py
+            startLine: 229
+            endLine: 273
+          to:
+            path: app/beyo_manager/domain/item_economics/serializers.py
+            startLine: 229
+            endLine: 268
+    rationale: serialize_task_budget_status at serializers.py:229-268 (the next def,
+      lifetime, starts :269); re-anchored to the actual function extent.
+  - itemId: edge:domain-item-economics--contains-->projection-item-economics-lifetime
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/domain/item_economics/serializers.py
+            startLine: 276
+            endLine: 291
+          to:
+            path: app/beyo_manager/domain/item_economics/serializers.py
+            startLine: 269
+            endLine: 285
+    rationale: serialize_item_lifetime_economics at :269-285 (file ends :285 — old
+      anchor end 291 exceeded EOF); called by the query since G6.
+  - itemId: edge:command-process-item-cost-result--consumes-->event-process-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/tasks/analytics/process_item_cost_result.py
+            startLine: 32
+            endLine: 34
+          to:
+            path: app/beyo_manager/services/tasks/analytics/process_item_cost_result.py
+            startLine: 39
+            endLine: 43
+    rationale: ItemCostResultPayload(**raw) rehydrated at :41 inside the handler def
+      :39; old anchor 32-34 pointed at the _ADMITTED_STATES block — re-anchored
+      to the parse site.
+  - itemId: edge:command-process-item-cost-result--writes_to-->table-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: insert(ItemCostResult).on_conflict_do_update(constraint=uq_item_cost_results_task_id)
+      at :131-137, the A5-enumerated SET list (M17's computed_at row bites);
+      span valid.
+  - itemId: edge:command-process-item-cost-result--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Committed-current select at :63-70 (M3's mutation site); span valid.
+  - itemId: edge:command-process-item-cost-result--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: §8A.1 COALESCE consumption sum at :78-82 (MX1/MX1b/MX1c's
+      discriminated exclusions); span valid.
+  - itemId: edge:infra-analytics-worker--calls-->command-process-item-cost-result
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: HANDLER_MAP binds TaskType.PROCESS_ITEM_COST_RESULT →
+      handle_process_item_cost_result at analytics_worker.py:11-14; span valid.
+      (The node's own stale description is A16 filing territory, not this
+      edge's.)
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T06:28:53.490Z
+graphRevisionBefore: 6bbb80572482f2d4ad87e9dfdd8096e6e5e6d39277306d7e7a44d4f52cb165fe
+graphRevisionAfter: 173dc275f81c79a297a19b3ac0e78393773c94584e48a80f5a5f5680fc8de8c8
+evidenceSummary: 10 evidence entries across 5 files; no drift detected
+humanInstruction: "Phase-8 post-approval graph pass, batch 2/2: the remaining
+  ten edges, promoted after re-derivation with anchor corrections where the
+  fix-r1 dedupe moved spans."
+reviewTokenCorrelation: dc754c5b2865

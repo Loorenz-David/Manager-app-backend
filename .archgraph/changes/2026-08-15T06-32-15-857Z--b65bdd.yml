@@ -1,0 +1,85 @@
+changeId: 2026-08-15T06-32-15-857Z--b65bdd
+operations:
+  - itemId: node:endpoint-item-economics-status
+    kind: link
+    before:
+      sourceLink: &a1
+        path: app/beyo_manager/services/queries/item_economics/get_economics_configuration_status.py
+        symbol: get_economics_configuration_status
+        startLine: 12
+        endLine: 64
+    after:
+      sourceLink: *a1
+      effect: re-accept
+    rationale: "Re-accept after phase-8's declared one-file change (4B N4: `status
+      is EconomicsStatusEnum.OK` replaces the string compare at :53) — the
+      mapping is unchanged; only the content hash moved. Clears the 1 stale
+      link."
+  - itemId: node:infra-queue-analytics
+    kind: edit
+    before:
+      description: Redis list carrying execution task ids for analytics work. Only
+        PROCESS_STEP_TRANSITION routes here. Ids only — payloads stay in
+        Postgres.
+    after:
+      description: "Redis list carrying execution task ids for analytics work. Two
+        task types route here since phase 8: PROCESS_STEP_TRANSITION and
+        PROCESS_ITEM_COST_RESULT (task_router.py maps both to queue:analytics).
+        Ids only — payloads stay in Postgres."
+    rationale: "A16 discrepancy filing: 'Only PROCESS_STEP_TRANSITION routes here'
+      was true when recorded and became false when phase 8 landed the second
+      analytics task type — read from task_router.py this session."
+  - itemId: node:infra-analytics-worker
+    kind: edit
+    before:
+      description: Consumes queue:analytics. Its HANDLER_MAP binds
+        PROCESS_STEP_TRANSITION to handle_process_step_transition. The only
+        consumer of step transition events.
+    after:
+      description: Consumes queue:analytics. Its HANDLER_MAP binds
+        PROCESS_STEP_TRANSITION to handle_process_step_transition and, since
+        phase 8, PROCESS_ITEM_COST_RESULT to handle_process_item_cost_result
+        (analytics_worker.py:11-14). The only consumer of step transition and
+        item-cost-result events.
+    rationale: "A16 discrepancy filing: the single-handler claim became false at
+      phase 8 — HANDLER_MAP read at :11-14 this session."
+  - itemId: node:analytics-process-step-transition
+    kind: edit
+    before:
+      description: "THE analytics entry point. Rehydrates StepTransitionPayload, then:
+        (1) if closing_state is time-bearing AND credited_user_id is set,
+        reconciles the user's day totals and recomputes step time totals; (2)
+        reconciles worker shift state on every credited transition regardless of
+        closing_state; (3) if new_state == COMPLETED, applies completion and
+        issue counters; (4) emits a shift realtime event only when the reconcile
+        reports a change. Note the two gates are independent — a transition can
+        trigger one, both or neither."
+    after:
+      description: "THE analytics entry point for step transitions. Rehydrates
+        StepTransitionPayload, then: (1) if closing_state is time-bearing AND
+        credited_user_id is set, reconciles the user's day totals and recomputes
+        step time totals; (2) reconciles worker shift state on every credited
+        transition regardless of closing_state; (3) if new_state == COMPLETED,
+        applies completion and issue counters; (4) emits a shift realtime event
+        only when the reconcile reports a change; (5) since phase 8, inside the
+        time-bearing branch after the recompute, enqueues one
+        PROCESS_ITEM_COST_RESULT for the step's task iff the task state is READY
+        or terminal (the §8A.5 straggler re-emit). The gates are independent — a
+        transition can trigger any subset."
+    rationale: "A16 discrepancy filing: the four-effect enumeration gained a fifth
+      at phase 8 (the guarded re-emit, read at process_step_transition.py this
+      session); P-AB-style enumeration corrected by reading the code, not the
+      model of it."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T06:32:15.857Z
+graphRevisionBefore: 20c749267e3db17e4f6121cdafde5ea1e1eeaa347fc08a17af9e20764f27c03e
+graphRevisionAfter: 45b721965a174fdf2e506bdb847ea26a496f803c7eb182fb6d6f0f598f3815a4
+humanInstruction: "Phase-8 post-approval maintenance: the three A16 discrepancy
+  filings resolved by description edits (facts read from source this session),
+  and the stale config-status source link re-accepted after the declared N4
+  one-line change."
+changeTokenCorrelation: 4f434aaa6d04

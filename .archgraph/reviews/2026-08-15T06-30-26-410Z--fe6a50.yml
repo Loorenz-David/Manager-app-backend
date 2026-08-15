@@ -1,0 +1,40 @@
+reviewId: 2026-08-15T06-30-26-410Z--fe6a50
+reviewedItemIds:
+  - node:projection-item-economics-task-budget-status-worker
+  - edge:endpoint-item-economics-task-budget-status--accepts-->projection-item-economics-task-budget-status-worker
+  - edge:projection-item-economics-task-budget-status-worker--reads_from-->table-item-cost-evaluation
+decisions:
+  - itemId: node:projection-item-economics-task-budget-status-worker
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Recorded THIS session from a direct read of the 53-line file
+      (read-first order: code before claim); the worker service's independent
+      filter (:27-40) and shared-builder delegation (:53) verified; registered
+      in §6.5 (A7). Completes the phase-8 surface the inferred delta omitted."
+  - itemId: edge:endpoint-item-economics-task-budget-status--accepts-->projection-item-economics-task-budget-status-worker
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Role-split dispatch verified in the route handler (G4's fail-closed
+      include_monetary_step_fields); the M15/M18 route rows arbitrate it.
+  - itemId: edge:projection-item-economics-task-budget-status-worker--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: The worker's own committed-current literal select at :27-40 — C1's
+      third mutation site; M2 reddens its probe row (verified in three review
+      rounds).
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T06:30:26.410Z
+graphRevisionBefore: 0ca486adba9024bee959c3470b30c6c263dfc3d84b806eb1f3729bc5334ac7f7
+graphRevisionAfter: 20c749267e3db17e4f6121cdafde5ea1e1eeaa347fc08a17af9e20764f27c03e
+evidenceSummary: 3 evidence entries across 2 files; no drift detected
+humanInstruction: "Phase-8 graph pass, completion batch: the worker-service node
+  + 2 edges added and promoted (read-first, code before claim), completing the
+  surface the inferred delta omitted."
+reviewTokenCorrelation: fe81c9f7aeb6
