@@ -1,0 +1,96 @@
+reviewId: 2026-08-15T08-40-24-835Z--195810
+reviewedItemIds:
+  - node:command-task-create
+  - edge:command-task-create--writes_to-->table-task
+  - edge:command-task-create--reads_from-->table-item
+  - edge:command-task-create--writes_to-->table-item-valuation
+  - edge:command-task-create--writes_to-->table-task-item
+decisions:
+  - itemId: node:command-task-create
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 69
+            endLine: 580
+          to:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 72
+            endLine: 580
+    rationale: "Re-derived across the 8B rounds: create_task is the task-creation
+      command owning the two item paths, the round-16 auto-commit savepoint, and
+      (8B) the inline birth-valuation write + branch-B refusal. Anchor corrected
+      per re-review F4: `async def create_task` is :72 (recorded :69 was the
+      module logger); end :580 correct."
+  - itemId: edge:command-task-create--writes_to-->table-task
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 105
+            endLine: 139
+          to:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 113
+            endLine: 183
+    rationale: Task construction at :113 with the session add/flush at :182-183 —
+      the recorded span (:105-139) excluded the add/flush its own summary
+      asserts; corrected per F4.
+  - itemId: edge:command-task-create--reads_from-->table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 228
+            endLine: 248
+          to:
+            path: app/beyo_manager/services/commands/tasks/create_task.py
+            symbol: create_task
+            startLine: 236
+            endLine: 248
+    rationale: find_or_create_item + session.get(Item) at :236-248 — narrowed per F4
+      (the recorded :228-248's first lines belonged to the other branch).
+  - itemId: edge:command-task-create--writes_to-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: The 8B inline birth write through the registered chain + audit at
+      :317-353 — reviewer-verified EXACT (one of the two 8B-behaviour edges);
+      the branch-B refusal and the M6-guarded INV-V1 predicate live inside the
+      span.
+  - itemId: edge:command-task-create--writes_to-->table-task-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: PRIMARY TaskItem construction/add/flush at :307-315 —
+      reviewer-verified EXACT.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-15T08:40:24.835Z
+graphRevisionBefore: 53fdbc785621c38a295ae90ac09c67339ca654563d0b2f6480d034fc11868fd1
+graphRevisionAfter: 452befdba995e4d01bb88223b0adbaa63214151d8d038b27ec7db152841713dd
+evidenceSummary: 5 evidence entries across 1 file; no drift detected
+humanInstruction: "Phase-8B post-approval graph pass: the command-task-create
+  node + 4 edges promoted with the re-review's F4 span corrections (symbols
+  preserved), under the owner's standing post-approval authorization."
+reviewTokenCorrelation: 78c25b1ec454
