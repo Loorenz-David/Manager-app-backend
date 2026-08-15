@@ -900,3 +900,83 @@ stop-and-report.
   three touched production hashes restored. Final test hashes are recorded in
   the fix handoff. Tracker moved to IMPLEMENTED; checkpoint and handoff follow
   the closing protocol.
+
+- **2026-08-15 — re-review r3 (Claude Opus 5, plan-reviewer): APPROVED.**
+  **0 blocking / 0 should-fix / 4 notes, 0 owner cards.** Handoff:
+  `handoffs/reviewer/2026-08-15_phase8_rereview_r3_handoff.md`. Delta-scoped per
+  the r3 prompt; the 15 ledger rows proven biting in r2 against byte-identical
+  production files were NOT re-run (declared out of scope).
+  **Perimeter exact:** `git diff 6988364..HEAD -- app/` empty; all seven declared
+  hashes recomputed identical (3 production pre-images `d57ca890…`, `5f89e29b…`,
+  `011cf2ae…`; 4 test files incl. adopted probe `7df683f7…`).
+  **Both r2 blockers CLOSED, each by a mutation re-applied from the reviewer's own
+  r2 bytes:** MX1 (`fdae3c41…b490b7`, hash reproduces) reddens
+  `test_c4_consumption_excludes_deleted_steps_but_counts_skipped_steps` with
+  `assert 150 == 120`; MX2 (`57c4591f…d2c140`, reproduces) reddens
+  `test_c7_committed_evaluation_branch_drives_evaluated_status[P-V-infeasible]`
+  with `assert 'ok' == 'infeasible'`. H1's rows drive the REAL
+  `get_task_budget_status` against a committed evaluation (no hand-built object);
+  the three SimpleNamespace echo rows are gone. **Three reviewer-added mutations
+  this round also bite** (strengthening, not findings): MX1b ended-shift summed
+  → `assert 160 == 120`; MX1c inaccurate summed → `assert 170 == 120` (so each of
+  H2's three nonzero excluded columns discriminates INDEPENDENTLY, beyond the one
+  named mutation); MX3 `calculate_percent_consumed` returning `0.00` instead of
+  `None` for a non-positive allowance → `assert Decimal('0.00') is None`, closing
+  the second half of r2 B1 (the `infeasible` ⇒ null-percent clause) on the
+  production path. **C7 now enumerates all TWELVE shipped `EconomicsStatusEnum`
+  members with BOTH producers real** — ten `resolve_item_economics_status` ids +
+  `P-V-infeasible`/`P-V-ok` through the committed-evaluation branch (A1 satisfied
+  for the first time). **S1 CLOSED structurally:** zero order-dependent picks
+  remain in the probe (both rows assert candidate SETS); the pair ran 10x2 green;
+  M1 (`3a659e93…`) and M2 (`783698f8…`) reproduce and redden their named rows in
+  62/62 row-executions across focused (25 runs) and wide (6 runs, 35-test) scope.
+  **S2 CLOSED:** the rebuilt C5 row commits a REAL superseding basis version
+  (`create_production_cost_basis_version` closes the open version,
+  `effective_to = effective_from` — verified in the command, not assumed) at a
+  different rate, with two non-vacuity assertions (new rate != snapshot rate;
+  recomputing at the new rate WOULD change `consumed_cost_minor`). **S3 CLOSED:**
+  C3's second step sits on a second task with its own committed evaluation; each
+  episode's `actual_worker_seconds` is 1800 and the sum is 3600. **H6 CLOSED:**
+  re-entry asserts `func.count() == 1`; `response_model is None` quantifies over
+  all `item_economics.router.routes` and BITES on a non-budget-status route
+  (probed on `/configuration-status`), which is what N2's widening was for.
+  **Numbers re-derived independently:** full non-E2E foreground **2138 / 23 / 1**
+  (123.18s); failure set sorted-diffed **BYTE-IDENTICAL** to the phase-1 23-item
+  list, zero drift; collection **net 0** reconciled exactly (serializers 15→13,
+  status_results 14→16, probe 19 and router 98 unchanged; 2161 selected / 2162
+  collected). Ruff clean on the perimeter except the declared pre-existing F401 in
+  the adopted probe (correctly untouched — H3 authorized only two rows). DB left
+  at head `c1d2e3f4a5b6`; zero item-economics residue (evaluations 0, results 0,
+  `process_item_cost_result` execution-tasks 0); the 2 configuration rows present
+  are pre-existing non-orphaned dev data from 2026-08-14. Graph read-only, zero
+  delta: 172/254, rev `c74eb913…`, stale 1, 21 pending held.
+  **Notes (all carried forward, none blocking):** **N1** C1's mutation bite is now
+  order-CONTINGENT — the repair removed the fixture guard, so M1/M2/M3 redden only
+  via `status.evaluation_id`, which depends on which row the mutated (unfiltered)
+  `scalar()` returns; empirically 62/62 today, but r2 recorded the alternate heap
+  order occurring on a clean tree, under which the mutation would silently
+  survive. This is a limitation of the r2 reviewer's own H3 specification, not of
+  the fix (H3's stated acceptance condition — M1/M2/M3 still bite — is verified);
+  the order-free repair is a STRUCTURAL arbiter asserting the three services'
+  compiled evaluation SELECT carries the three literal filter clauses. **N2** the
+  C5 row's "after close" premise is not exercised — `_prepared` leaves the task
+  WORKING, so `task_closed_at` (None) and `task_state_snapshot` (WORKING) are
+  trivially equal on both sides of the ten-column comparison; the money invariant
+  proven is closure-independent and C6b separately arbitrates both columns for
+  terminal states (probe `:232-233`, `:266-267`), so no defect hides here — close
+  the task before the second handler run, or rename the row. **N3** record
+  quality: the fix handoff says "three SimpleNamespace C7 echo rows were removed";
+  it was TWO (one parametrized function, ids `P-V-infeasible`/`P-V-ok`) — the
+  collection reconciles at -2/+2. **N4** cosmetic: the serializer test's import
+  block closing paren was re-indented to a stray `        )` and one of the two
+  blank lines before `_result()` was dropped — an edit artifact in a file whose
+  only intended change was row deletion; passes ruff (default rules exclude
+  E1/E3), inconsistent with the rest of the perimeter.
+  Lessons: (1) a filter-deletion mutation whose correct row REMAINS in the
+  candidate set cannot be arbitrated order-independently by a behavioural
+  assertion alone — such criteria want a structural arbiter over the compiled
+  statement; (2) "prove the excluded columns are excluded" is stronger with
+  DISTINCT nonzero values per column (30/40/50 → 150/160/170 identifies WHICH
+  column leaked, where one shared value would only say "something leaked");
+  (3) a stability row's fixture must also satisfy the SCENARIO the criterion
+  names, not just its mechanism — "after close" needs a closed task.

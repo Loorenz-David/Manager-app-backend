@@ -137,6 +137,21 @@ recorded in the Review log.
   a comment. Phase 8 took only N4 (the `status is EconomicsStatusEnum.OK`
   swap) with a declared one-file extension; the N3 clause is this phase's.
 
+- **Forward notes (phase-8 re-review r3, routed at approval):**
+  (N1) the three C1 filter-deletion mutations' bite is order-CONTINGENT
+  (62/62 empirically, but the alternate heap order was observed on clean
+  trees in r2) — this phase, as the first to touch the status queries, adds
+  the STRUCTURAL arbiter: assert each of the three services' compiled
+  evaluation `SELECT` carries the three literal filter clauses
+  (`kind='committed'`, `superseded_at IS NULL`, `is_deleted = false`),
+  which no heap order affects (§9 structural-filter rule). (N2) the C5
+  supersession row never closes its task, so "after close" is untested and
+  2 of 10 compared columns are vacuous — resolve the task before the
+  second handler run, or rename the row (§9 scenario-fixture rule). (N4)
+  `test_phase8_serializers.py` carries a stray re-indented `)` and a
+  dropped blank line from the fix-r2 row deletion — cosmetic, ruff-silent,
+  fold into this phase's formatting sweep.
+
 ## Review log
 
 (append-only)
