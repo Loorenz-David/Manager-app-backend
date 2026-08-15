@@ -37,6 +37,9 @@ class FindOrCreateItemInput(BaseModel):
 	item_value_minor: int | None = None
 	item_cost_minor: int | None = None
 	item_currency: ItemCurrencyEnum | None = None
+	expected_sale_price_minor: int | None = Field(default=None, ge=0)
+	purchase_cost_minor: int | None = Field(default=None, ge=0)
+	currency: ItemCurrencyEnum | None = None
 	item_position: str | None = None
 	item_zone: str | None = None
 	external_id: str | None = None
@@ -48,6 +51,15 @@ class FindOrCreateItemInput(BaseModel):
 	@model_validator(mode="after")
 	def reject_legacy_money(self):
 		return reject_legacy_item_money_values(self)
+
+	@model_validator(mode="after")
+	def require_currency_for_amounts(self):
+		if (
+			(self.expected_sale_price_minor is not None or self.purchase_cost_minor is not None)
+			and self.currency is None
+		):
+			raise ValueError("item.currency is required when an inline item price is provided")
+		return self
 
 
 

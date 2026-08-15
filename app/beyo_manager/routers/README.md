@@ -2664,6 +2664,9 @@ None
 | item.height_in_cm | integer | No |  |
 | item.width_in_cm | integer | No |  |
 | item.depth_in_cm | integer | No |  |
+| item.expected_sale_price_minor | integer | No |  |
+| item.purchase_cost_minor | integer | No |  |
+| item.currency | string | No | `swedish_krona`, `danish_krona`, `euro` |
 | item.item_position | string | No |  |
 | item.external_id | string | No |  |
 | item.external_url | string | No |  |

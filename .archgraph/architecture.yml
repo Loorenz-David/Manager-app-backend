@@ -4323,6 +4323,35 @@ nodes:
     confidence: 0.95
     createdAt: 2026-08-15T06:30:00.148Z
     updatedAt: 2026-08-15T06:30:26.394Z
+  - id: command-task-create
+    type: command
+    name: create_task
+    description: Creates a task and its PRIMARY item binding, resolving or creating
+      the item inside the caller-owned transaction. When the request carries an
+      inline amount, it refuses a matched item with a current valuation and
+      otherwise creates the next item valuation chain row before the auto-commit
+      savepoint. It delegates chain advancement to the shared item valuation
+      writer and records the item_valuation.created audit event. The same
+      command then runs best-effort item-cost auto-commit against the task and
+      resolved item.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 69
+          endLine: 580
+          summary: The command creates and flushes Task and PRIMARY TaskItem rows,
+            resolves or creates the item, writes an inline valuation through
+            write_item_valuation_chain_in_session before the begin_nested
+            savepoint, and then invokes
+            auto_commit_item_cost_evaluation_in_session.
+          inferenceReason: This implementation is the task-creation command's
+            architectural boundary for task/item birth and the new inline
+            valuation write.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-15T07:35:40.252Z
+    updatedAt: 2026-08-15T07:35:40.252Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -8695,3 +8724,71 @@ edges:
     confidence: 0.95
     createdAt: 2026-08-15T06:30:00.148Z
     updatedAt: 2026-08-15T06:30:26.394Z
+  - sourceNodeId: command-task-create
+    relationshipType: writes_to
+    targetNodeId: table-item-valuation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 317
+          endLine: 353
+          summary: The inline-price block calls write_item_valuation_chain_in_session and
+            audits the resulting item valuation before the auto-commit
+            savepoint.
+          inferenceReason: The command directly persists the valuation chain through the
+            shared writer.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-15T07:35:40.252Z
+    updatedAt: 2026-08-15T07:35:40.252Z
+  - sourceNodeId: command-task-create
+    relationshipType: writes_to
+    targetNodeId: table-task
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 105
+          endLine: 139
+          summary: The command constructs a Task, adds it to the session, and flushes it
+            inside maybe_begin.
+          inferenceReason: The task-creation command owns the task row birth.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-15T07:35:40.252Z
+    updatedAt: 2026-08-15T07:35:40.252Z
+  - sourceNodeId: command-task-create
+    relationshipType: writes_to
+    targetNodeId: table-task-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 307
+          endLine: 315
+          summary: The command constructs the PRIMARY TaskItem binding, adds it to the
+            session, and flushes it before inline valuation handling.
+          inferenceReason: The command owns the task-to-item binding birth.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-15T07:35:40.252Z
+    updatedAt: 2026-08-15T07:35:40.252Z
+  - sourceNodeId: command-task-create
+    relationshipType: reads_from
+    targetNodeId: table-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 228
+          endLine: 248
+          summary: The command resolves an existing item through find_or_create_item and
+            loads the resolved Item before applying the inline-price refusal
+            predicate.
+          inferenceReason: The command reads the item identity and current state to decide
+            whether inline valuation is permitted.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-15T07:35:40.252Z
+    updatedAt: 2026-08-15T07:35:40.252Z

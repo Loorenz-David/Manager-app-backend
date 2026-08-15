@@ -4,7 +4,7 @@
 plan: phase 8B
 role: phase plan (coordinator-authored, round 18; the projection gates it)
 date: 2026-08-15
-state: NOT_STARTED
+state: IMPLEMENTED
 ```
 
 ## Goal
@@ -274,3 +274,17 @@ phase-9 R18-2 scope block.
   registered; this GOVERNING block B1–B10. Gate holds (non-empty ledger —
   no self-retirement); implementer prompt
   `prompts/implementer/2026-08-15_phase8b_implement_r1.md`.
+
+- **2026-08-15 — implementer r1 (Codex): IMPLEMENTED** — shipped the
+  optional inline valuation trio and currency-iff-amount validation, the
+  pre-savepoint valuation-chain birth write, current-valuation refusal for
+  matched items, router boundary fields, and the three task-route README
+  rows. Added the 21-node phase harness (C1–C6, C3 validator order, C4
+  owning teardown, and B8 explicit-commit companion) and expanded the
+  existing bridge parametrization by 24 retained-key nodes. Focused phase
+  plus retention scope: **66 passed**. Full non-E2E foreground: **2183
+  passed / 23 established failures / 1 deselected**, 2207 collected; the
+  sorted failure IDs match the established 23-item baseline. Ruff clean;
+  database at `c1d2e3f4a5b6` head; no migration. The complete mutation
+  ledger, per-row expected reds, mutant/restored hashes, graph revision,
+  and write perimeter are recorded in the implementer handoff.

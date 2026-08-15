@@ -105,6 +105,9 @@ class _TaskItemInputBody(BaseModel):
     item_value_minor: int | None = None
     item_cost_minor: int | None = None
     item_currency: ItemCurrencyEnum | None = None
+    expected_sale_price_minor: int | None = None
+    purchase_cost_minor: int | None = None
+    currency: ItemCurrencyEnum | None = None
     item_position: str | None = None
     item_zone: str | None = None
     external_id: str | None = None

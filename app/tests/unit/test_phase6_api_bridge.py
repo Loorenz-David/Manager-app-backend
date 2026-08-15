@@ -27,29 +27,32 @@ _SCHEMAS = (
     ("create-task-nested-item", FindOrCreateItemInput, {"article_number": "A-1"}),
 )
 _MONEY_KEYS = ("item_value_minor", "item_cost_minor", "item_currency")
+_BRIDGE_CASES = [
+    (schema_id, schema, base, field_name, money_case)
+    for schema_id, schema, base in _SCHEMAS
+    for field_name in _MONEY_KEYS
+    for money_case in ("absent", "present-null", "present-nonnull")
+]
 _APP_ROOT = Path(__file__).parents[2]
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("schema_id", "schema", "base", "money_case"),
-    [
-        (schema_id, schema, base, money_case)
-        for schema_id, schema, base in _SCHEMAS
-        for money_case in ("absent", "present-null", "present-nonnull")
+    ("schema_id", "schema", "base", "field_name", "money_case"),
+    _BRIDGE_CASES,
+    ids=[
+        f"{schema_id}-{field_name}-{money_case}"
+        for schema_id, _, _, field_name, money_case in _BRIDGE_CASES
     ],
-    ids=[f"{schema_id}-{money_case}" for schema_id, _, _, money_case in [
-        (schema_id, schema, base, money_case)
-        for schema_id, schema, base in _SCHEMAS
-        for money_case in ("absent", "present-null", "present-nonnull")
-    ]],
 )
-def test_bridge_is_reject_iff_present_and_nonnull(schema_id, schema, base, money_case):
+def test_bridge_is_reject_iff_present_and_nonnull(
+    schema_id, schema, base, field_name, money_case
+):
     payload = dict(base)
     if money_case == "present-null":
-        payload["item_currency"] = None
+        payload[field_name] = None
     elif money_case == "present-nonnull":
-        payload["item_currency"] = "swedish_krona"
+        payload[field_name] = "swedish_krona" if field_name == "item_currency" else 1
 
     if money_case == "present-nonnull":
         with pytest.raises(ValidationError) as exc_info:
@@ -57,7 +60,7 @@ def test_bridge_is_reject_iff_present_and_nonnull(schema_id, schema, base, money
         assert str(exc_info.value) == _MESSAGE
     else:
         parsed = schema.model_validate(payload)
-        assert getattr(parsed, "item_currency") is None
+        assert getattr(parsed, field_name) is None
 
 
 @pytest.mark.unit
