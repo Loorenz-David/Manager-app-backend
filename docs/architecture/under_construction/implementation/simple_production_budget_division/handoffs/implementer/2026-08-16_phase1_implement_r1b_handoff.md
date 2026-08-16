@@ -24,8 +24,8 @@ No production behavior was changed.
 
 Checkpoint subject: `CHECKPOINT (not approved): plan1 implement r1b — mirror fix + mutation ledger`
 
-Checkpoint hash: pending until the r1b checkpoint is created; this line is
-patched in the metadata follow-up after commit.
+Checkpoint hash: `d4d51af` (the implementation checkpoint; this handoff hash
+correction is recorded in the following metadata commit).
 
 ## Fix perimeter
 
