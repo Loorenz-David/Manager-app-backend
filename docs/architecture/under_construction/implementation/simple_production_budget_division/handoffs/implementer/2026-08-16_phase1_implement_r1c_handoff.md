@@ -28,8 +28,8 @@ production behavior or Architecture Graph state changed.
 
 Checkpoint subject: `CHECKPOINT (not approved): plan1 implement r1c — mutation ledger closed`
 
-Checkpoint hash: pending commit below; this handoff will receive the final hash in
-the immediate metadata follow-up commit.
+Checkpoint hash: `fb48d13` (this handoff hash correction is recorded in the
+immediate metadata follow-up commit).
 
 ## Write perimeter
 

@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED (r1c) | 2026-08-16 | Codex | r1c closed every exposed ledger row: new M1 group/window/continuous-half-even/filter/threshold fixtures and M2/50-ID boundary fixtures turn all non-equivalent named mutations red; C13b-door2 and C20 are recorded equivalence STOPs. Production complied with M1/M2; no production or graph change. Suite: 2286 passed, 26 failed, 1 deselected. Checkpoints `0b85701`, `d4d51af`, pending r1c checkpoint |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED (r1c) | 2026-08-16 | Codex | r1c closed every exposed ledger row: new M1 group/window/continuous-half-even/filter/threshold fixtures and M2/50-ID boundary fixtures turn all non-equivalent named mutations red; C13b-door2 and C20 are recorded equivalence STOPs. Production complied with M1/M2; no production or graph change. Suite: 2286 passed, 26 failed, 1 deselected. Checkpoints `0b85701`, `d4d51af`, `fb48d13` |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.
