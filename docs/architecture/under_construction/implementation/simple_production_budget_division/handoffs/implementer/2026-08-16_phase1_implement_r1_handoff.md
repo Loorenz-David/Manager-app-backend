@@ -23,7 +23,8 @@ derived state, or monetary payload field was added.
 
 Checkpoint subject: `CHECKPOINT (not approved): plan1 implement r1 — budget division surfaces`
 
-Checkpoint hash: `0366402`.
+Checkpoint hash: `0b85701` (the implementation checkpoint; this handoff hash
+correction is recorded in the following metadata commit).
 
 ## Full write perimeter
 
