@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-16 | Codex | Implementer r1 complete; focused phase suite 28 passed; full non-E2E suite 2272 passed, 27 failed, 1 deselected (failures outside this phase surface; see handoff) |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED (r1b) | 2026-08-16 | Codex | Fixed the second route mirror; focused fix suite 131 passed; full suite 2277 passed, 26 failed, 1 deselected = 23 baseline + 3 foreign bootstrap failures. Complete mutation ledger and criterion map are in the r1b handoff; C13b was already present at checkpoint. |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.

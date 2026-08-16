@@ -237,3 +237,15 @@ samples, median `2800` ≠ `4200` — still bites):
   surface and are listed in the implementer handoff. Architecture Graph delta
   applied in one batch: 5 nodes and 9 relationships, revision
   `ab1a4935ea94bc00544837222cc0cf638e3054898157de4985765805537f3a6c`.
+- **Round 1b (implementer fix, 2026-08-16, Codex)** — IMPLEMENTED. Added the
+  E2 row to the fourth authorized route mirror, including its required query
+  parameter and service assertion; added the C20 all-excluded unit fixture.
+  The requested C13b service-invoking test was already present at checkpoint
+  `0b85701`, so it was verified and not duplicated. Focused fix suite: 131
+  passed. Full suite: 2277 passed, 26 failed, 1 deselected; the failure set is
+  exactly the 23 v1 baseline IDs plus the 3 foreign bootstrap-seeding IDs.
+  The r1b handoff records every attempted named mutation, including surviving
+  mutations as STOP items, and maps every C1–C21 row to an exact test node or
+  an explicit NOT COVERED — STOP item. No production behavior was changed and
+  no Architecture Graph mutation was made; the r1 graph delta remains the
+  authoritative graph state.

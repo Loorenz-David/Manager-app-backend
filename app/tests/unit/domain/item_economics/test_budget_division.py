@@ -130,6 +130,19 @@ def test_no_budget_and_zero_typicals():
     assert sum(row["allowance_seconds"] for row in allocated_rows(zero)) == 60
 
 
+def test_all_excluded_steps_return_task_figures_without_division():
+    result = divide_production_budget(
+        Decimal("10.00"),
+        [step("skipped", "skipped", worked=120), step("failed", "failed", worked=60)],
+        {"section": 1},
+    )
+    assert result["budget_seconds"] == 600
+    assert result["charged_seconds"] == 180
+    assert result["distributable_seconds"] == 420
+    assert [row["share_state"] for row in result["steps"]] == ["excluded", "excluded"]
+    assert all(row["allowance_seconds"] is None for row in result["steps"])
+
+
 def test_half_even_budget_seconds_quantization():
     result = divide_production_budget(
         Decimal("195.01"), [step("a", typical=1), step("b", typical=1), step("c", typical=1)], {"section": 1}
