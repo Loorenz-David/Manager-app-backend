@@ -249,3 +249,17 @@ samples, median `2800` ≠ `4200` — still bites):
   an explicit NOT COVERED — STOP item. No production behavior was changed and
   no Architecture Graph mutation was made; the r1 graph delta remains the
   authoritative graph state.
+
+- **Round 1c (implementer, 2026-08-16, Codex)** — IMPLEMENTED (test-only).
+  Added padded, teardown-owned M1 fixtures for per-(task, section) aggregation,
+  group-level latest-close admission, continuous median plus half-even rounding,
+  independent completed/accurate predicates, and the five-group boundary. Added
+  M2 fixtures showing that all live non-excluded states participate and that a
+  deleted skipped step is outside the universe while a live skipped step is charged.
+  Corrected the 50-ID route test to execute the command rather than bypass it.
+  The W2/W3 fixtures confirm production complies with M1, so no production changes
+  were needed. Mutations for C6, C9b–d, C10, C11, and C16 now turn red. C13b-door2
+  and C20 are formal equivalence STOPs: both mutations are downstream-redundant of
+  the live-step partition, with identical observable results. Focused tests: 30
+  passed. Full non-E2E suite: 2286 passed, 26 failed, 1 deselected (23 v1 baseline
+  + 3 foreign bootstrap-seeding failures). No Architecture Graph mutation was made.

@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.api_v1 import item_economics, working_sections
 from beyo_manager.routers.utils.jwt_dep import get_jwt_claims
-from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
 
 
 def _client(monkeypatch, role_name: str, data=None):
@@ -75,11 +74,41 @@ def test_budget_allocations_rejects_more_than_fifty_ids_with_registered_identity
 
 
 def test_budget_allocations_at_fifty_calls_the_service(monkeypatch):
-    client, calls = _client(monkeypatch, "worker", {"budget_allocations": []})
+    app = FastAPI()
+    app.include_router(item_economics.router, prefix="/api/v1/item-economics")
+
+    class EmptyResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return []
+
+        def __iter__(self):
+            return iter(())
+
+    class EmptySession:
+        async def execute(self, statement):
+            return EmptyResult()
+
+    async def fake_db():
+        yield EmptySession()
+
+    async def fake_run_service(command, context):
+        try:
+            data = await command(context)
+        except Exception as error:
+            return SimpleNamespace(success=False, data=None, error=error)
+        return SimpleNamespace(success=True, data=data, error=None)
+
+    app.dependency_overrides[get_db] = fake_db
+    app.dependency_overrides[get_jwt_claims] = lambda: {"role_name": "worker", "workspace_id": "ws", "user_id": "usr"}
+    monkeypatch.setattr(item_economics, "run_service", fake_run_service)
+    client = TestClient(app)
     query = "&".join(f"task_ids=tsk_{index}" for index in range(50))
     response = client.get(f"/api/v1/item-economics/tasks/budget-allocations?{query}")
     assert response.status_code == 200
-    assert calls[0][0] is get_task_budget_allocations
+    assert response.json()["data"] == {"budget_allocations": []}
 
 
 def test_time_payload_serializers_have_exact_money_free_key_sets():

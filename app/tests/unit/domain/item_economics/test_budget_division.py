@@ -100,6 +100,48 @@ def test_live_step_set_redivides_and_removed_steps_are_not_in_universe():
     assert {row["step_id"] for row in deleted["steps"]} == {"b"}
 
 
+def test_live_partition_includes_working_paused_and_completed_steps():
+    live = [
+        step("pending", "pending", typical=1),
+        step("working", "working", typical=1),
+        step("paused", "paused", typical=1),
+        step("completed", "completed", typical=1),
+    ]
+    base = divide_production_budget(Decimal("1.00"), live, {"section": 1})
+    assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(base)} == {
+        "pending": 15,
+        "working": 15,
+        "paused": 15,
+        "completed": 15,
+    }
+
+    with_new = divide_production_budget(
+        Decimal("1.00"),
+        [*live, step("new", "pending", typical=1)],
+        {"section": 1},
+    )
+    assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(with_new)} == {
+        "pending": 12,
+        "working": 12,
+        "paused": 12,
+        "completed": 12,
+        "new": 12,
+    }
+
+    after_skip = divide_production_budget(
+        Decimal("1.00"),
+        [live[0], live[1], live[2], step("completed", "skipped", typical=1)],
+        {"section": 1},
+    )
+    rows = {row["step_id"]: row for row in after_skip["steps"]}
+    assert {step_id: rows[step_id]["allowance_seconds"] for step_id in ("pending", "working", "paused")} == {
+        "pending": 20,
+        "working": 20,
+        "paused": 20,
+    }
+    assert rows["completed"]["share_state"] == "excluded"
+
+
 def test_fallback_median_interpolates_even_values():
     result = divide_production_budget(
         Decimal("100.00"),
@@ -141,6 +183,24 @@ def test_all_excluded_steps_return_task_figures_without_division():
     assert result["distributable_seconds"] == 420
     assert [row["share_state"] for row in result["steps"]] == ["excluded", "excluded"]
     assert all(row["allowance_seconds"] is None for row in result["steps"])
+
+
+def test_deleted_skipped_step_is_outside_budget_universe_but_live_skipped_is_charged():
+    result = divide_production_budget(
+        Decimal("10.00"),
+        [
+            step("deleted", "skipped", worked=300, deleted=True),
+            step("live-skipped", "skipped", worked=120),
+            step("working", "working", typical=1),
+        ],
+        {"section": 1},
+    )
+    rows = {row["step_id"]: row for row in result["steps"]}
+    assert result["charged_seconds"] == 120
+    assert result["distributable_seconds"] == 480
+    assert set(rows) == {"live-skipped", "working"}
+    assert rows["live-skipped"]["share_state"] == "excluded"
+    assert rows["working"]["allowance_seconds"] == 480
 
 
 def test_half_even_budget_seconds_quantization():
