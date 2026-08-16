@@ -4437,6 +4437,123 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-15T09:55:54.174Z
     updatedAt: 2026-08-15T11:09:38.530Z
+  - id: source-file-item-economics-budget-division
+    type: source_file
+    name: app/beyo_manager/domain/item_economics/budget_division.py
+    description: The pure item-economics module that owns the static
+      production-budget division constants, exact rational arithmetic,
+      largest-remainder allocation, and share-state rules. It performs no I/O or
+      persistence; query services supply ORM rows and section typicals. Its
+      invariant is that allocated allowances sum exactly to the distributable
+      seconds and excluded consumption is charged once.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 14
+          endLine: 191
+          summary: The module declares the fixed typical/allocation constants and
+            implements the non-deleted step partition, charged consumption,
+            Fraction-based weighting, largest-remainder tie ordering, and share
+            states.
+          inferenceReason: The implementation is the formula boundary for the new per-step
+            budget allocation mechanism.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - id: projection-working-section-typical-times
+    type: projection
+    name: Working section typical times
+    description: The read model of live working sections and their median completed
+      section-total durations over the fixed 90-day window. It groups
+      contributing completed steps by task and section, excludes deleted or
+      marked-wrong records, and retains sections with insufficient samples as
+      explicit null rows. The grouping and window admission must remain aligned
+      so reassignment totals are not reduced to a recent rework fragment.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+          startLine: 21
+          endLine: 83
+          summary: The query groups completed non-deleted, non-marked-wrong steps by
+            working section and task, admits groups by latest close, calculates
+            percentile_cont(0.5), and left-joins live sections.
+          inferenceReason: This query is the independently consumable typical-time
+            projection described by the phase contract.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - id: projection-item-economics-task-budget-allocations
+    type: projection
+    name: Task budget allocations
+    description: The batched, read-only task view that combines current committed
+      evaluation budgets, non-deleted live steps, section typicals, and
+      item-economics readiness into per-step allowances. It omits unknown or
+      cross-workspace tasks, charges non-deleted excluded steps, and degrades
+      evaluation-less tasks to explicit no-budget states without persisting
+      derived values. Its invariant is that the response's time-only fields
+      reconcile with the same non-deleted step set used by budget status.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 100
+          endLine: 283
+          summary: The service batch-loads workspace-scoped tasks, evaluations, steps,
+            configuration, and typicals once, resolves readiness in Python, and
+            invokes the pure division function per task.
+          inferenceReason: The service is the batched read-model boundary for the new
+            allocation surface.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - id: endpoint-working-section-typical-times
+    type: endpoint
+    name: GET /api/v1/working-sections/typical-times
+    description: All-role endpoint for the working-section typical-time projection
+      with an optional repeatable section-id filter. It returns live section
+      names and explicit null typicals for under-sampled sections. The fixed
+      path is declared before the parameterized working-section route so
+      requests cannot be shadowed.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+          startLine: 131
+          endLine: 146
+          summary: The route admits ADMIN, MANAGER, WORKER, and SELLER, passes repeatable
+            working_section_ids to the query, and wraps the result in the
+            standard envelope before the parameterized route.
+          inferenceReason: The handler is the external boundary for the typical-time projection.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - id: endpoint-item-economics-task-budget-allocations
+    type: endpoint
+    name: GET /api/v1/item-economics/tasks/budget-allocations
+    description: All-role batched endpoint for time-only per-step task budget
+      allocations. It accepts repeatable task_ids and delegates the over-50
+      identity to the query boundary while preserving the standard response
+      envelope. Its fixed path is mounted before parameterized task routes.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+          startLine: 351
+          endLine: 365
+          summary: The route admits all four roles, accepts repeatable task_ids, and sends
+            the request through the shared service runner before parameterized
+            task paths.
+          inferenceReason: The handler is the external boundary for the allocation projection.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -8897,3 +9014,149 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
     updatedAt: 2026-08-15T08:40:24.816Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: contains
+    targetNodeId: projection-item-economics-task-budget-allocations
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          startLine: 100
+          endLine: 283
+          summary: The new batched allocation read model is implemented beside the
+            existing item-economics query projections.
+          inferenceReason: The service extends the item-economics domain's read boundary
+            without changing persisted formulas.
+    origin: ai_inferred
+    confidence: 0.88
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: contains
+    targetNodeId: projection-working-section-typical-times
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          startLine: 21
+          endLine: 83
+          summary: The typical-time query is a read-only projection used by item-economics
+            allocation and exposed independently.
+          inferenceReason: The projection supplies a domain input while remaining a
+            separate working-section read surface.
+    origin: ai_inferred
+    confidence: 0.84
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: source-file-item-economics-budget-division
+    relationshipType: implements
+    targetNodeId: projection-item-economics-task-budget-allocations
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 78
+          endLine: 191
+          summary: The pure division function supplies each task allocation projection
+            with its per-step allowance and share-state calculations.
+          inferenceReason: The source file is the implementation anchor for the
+            projection's arithmetic boundary.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: reads_from
+    targetNodeId: table-task-step
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 154
+          endLine: 165
+          summary: The allocation query loads non-deleted task steps for the requested
+            workspace-scoped tasks.
+          inferenceReason: Task-step rows are the live step-set input to the projection.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: reads_from
+    targetNodeId: table-item-cost-evaluation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 141
+          endLine: 152
+          summary: The allocation query filters the current committed evaluation per
+            requested task.
+          inferenceReason: The evaluation supplies the task's allowed worker-minute budget.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: source-file-item-economics-budget-division
+    relationshipType: implements
+    targetNodeId: projection-working-section-typical-times
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/budget_division.py
+          startLine: 14
+          endLine: 17
+          summary: The domain module owns the typical-time method and window constants
+            consumed by the typical-time query.
+          inferenceReason: The constants are shared contract vocabulary, though the SQL
+            projection itself is implemented by its query service.
+    origin: ai_inferred
+    confidence: 0.35
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: projection-working-section-typical-times
+    relationshipType: reads_from
+    targetNodeId: table-task-step
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+          startLine: 24
+          endLine: 38
+          summary: The typical-time query derives section totals from completed task-step
+            rows.
+          inferenceReason: Task steps are the authoritative stored duration source for the
+            projection.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: endpoint-item-economics-task-budget-allocations
+    relationshipType: accepts
+    targetNodeId: projection-item-economics-task-budget-allocations
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+          startLine: 351
+          endLine: 365
+          summary: The endpoint delegates the request to get_task_budget_allocations
+            through the shared runner.
+          inferenceReason: The endpoint accepts the corresponding batched projection.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z
+  - sourceNodeId: endpoint-working-section-typical-times
+    relationshipType: accepts
+    targetNodeId: projection-working-section-typical-times
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+          startLine: 131
+          endLine: 146
+          summary: The endpoint delegates to get_working_section_typical_times through the
+            shared runner.
+          inferenceReason: The endpoint accepts the corresponding typical-time projection.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-16T16:56:13.724Z

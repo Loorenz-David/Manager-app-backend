@@ -33,6 +33,7 @@ from beyo_manager.services.queries.item_economics.get_economics_configuration_st
 from beyo_manager.services.queries.item_economics.get_item_lifetime_economics import get_item_lifetime_economics
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.queries.item_economics.get_task_budget_status_worker import get_task_budget_status_worker
+from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
 from beyo_manager.services.queries.item_economics.list_cost_model_versions import list_cost_model_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
@@ -338,6 +339,21 @@ async def route_list_task_evaluations(
         claims,
         session,
         data={"task_client_id": task_client_id},
+    )
+
+
+# Fixed batch path must precede the parameterized task route block.
+@router.get("/tasks/budget-allocations")
+async def route_get_task_budget_allocations(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    task_ids: list[str] = Query(...),
+):
+    return await _run(
+        get_task_budget_allocations,
+        claims,
+        session,
+        query={"task_ids": task_ids},
     )
 
 

@@ -31,6 +31,9 @@ from beyo_manager.services.queries.working_sections.list_working_section_steps i
 from beyo_manager.services.queries.working_sections.list_working_sections import (
 	list_working_sections,
 )
+from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
+	get_working_section_typical_times,
+)
 from beyo_manager.services.run_service import run_service
 
 router = APIRouter()
@@ -120,6 +123,24 @@ async def get_user_last_active_step_record_route(
 		session=session,
 	)
 	outcome = await run_service(get_user_last_active_step_record, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.get("/typical-times")
+async def get_working_section_typical_times_route(
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+	session: AsyncSession = Depends(get_db),
+	working_section_ids: list[str] | None = Query(None),
+):
+	ctx = ServiceContext(
+		incoming_data={},
+		query_params={"working_section_ids": working_section_ids},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(get_working_section_typical_times, ctx)
 	if not outcome.success:
 		return build_err(outcome.error)
 	return build_ok(outcome.data)

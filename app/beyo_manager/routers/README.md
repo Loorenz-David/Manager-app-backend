@@ -76,6 +76,7 @@
 | POST | /api/v1/item-economics/tasks/{task_client_id}/projections | item-economics | route_create_item_cost_projection_api_v1_item_economics_tasks__task_client_id__projections_post |
 | DELETE | /api/v1/item-economics/projections/{client_id} | item-economics | route_delete_item_cost_projection_api_v1_item_economics_projections__client_id__delete |
 | POST | /api/v1/item-economics/projections/{client_id}/promote | item-economics | route_promote_item_cost_projection_api_v1_item_economics_projections__client_id__promote_post |
+| GET | /api/v1/item-economics/tasks/budget-allocations | item-economics | route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get |
 | GET | /api/v1/item-economics/tasks/{task_client_id}/budget-status | item-economics | route_get_task_budget_status_api_v1_item_economics_tasks__task_client_id__budget_status_get |
 | GET | /api/v1/item-economics/items/{item_client_id}/economics | item-economics | route_get_item_lifetime_economics_api_v1_item_economics_items__item_client_id__economics_get |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
@@ -151,6 +152,7 @@
 | POST | /api/v1/users/{user_id}/working-sections | user-working-sections | assign_working_sections_route_api_v1_users__user_id__working_sections_post |
 | GET | /api/v1/working-sections | working-sections | list_working_sections_route_api_v1_working_sections_get |
 | PUT | /api/v1/working-sections | working-sections | create_working_section_route_api_v1_working_sections_put |
+| GET | /api/v1/working-sections/typical-times | working-sections | get_working_section_typical_times_route_api_v1_working_sections_typical_times_get |
 | DELETE | /api/v1/working-sections/{working_section_id} | working-sections | delete_working_section_route_api_v1_working_sections__working_section_id__delete |
 | GET | /api/v1/working-sections/{working_section_id} | working-sections | get_working_section_route_api_v1_working_sections__working_section_id__get |
 | PATCH | /api/v1/working-sections/{working_section_id} | working-sections | edit_working_section_route_api_v1_working_sections__working_section_id__patch |
@@ -3990,6 +3992,28 @@ None
 | detail[].loc | array[integer | string] | Yes |  |
 | detail[].msg | string | Yes |  |
 | detail[].type | string | Yes |  |
+
+### GET /api/v1/working-sections/typical-times
+- **Tag**: working-sections
+- **OperationId**: get_working_section_typical_times_route_api_v1_working_sections_typical_times_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| working_section_ids | query | No | array[string] |
+
+Returns the median completed section-total for live sections; sections below the minimum sample size retain a null typical.
+
+### GET /api/v1/item-economics/tasks/budget-allocations
+- **Tag**: item-economics
+- **OperationId**: route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| task_ids | query | Yes | array[string] |
+
+Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
 
 ### PUT /api/v1/working-sections
 - **Tag**: working-sections

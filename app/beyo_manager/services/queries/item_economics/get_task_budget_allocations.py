@@ -1,0 +1,286 @@
+"""Batched task budget allocations, derived from the current read model."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+from sqlalchemy import Integer, case, cast, func, select
+
+from beyo_manager.domain.item_economics.budget_division import (
+    ALLOCATION_METHOD,
+    TYPICAL_METHOD,
+    TYPICAL_MIN_SAMPLE_SIZE,
+    TYPICAL_WINDOW_DAYS,
+    divide_production_budget,
+)
+from beyo_manager.domain.item_economics.configuration import (
+    resolve_economics_selection,
+    resolve_item_economics_status,
+    resolve_major_category,
+)
+from beyo_manager.domain.item_economics.division_serializers import serialize_budget_allocations
+from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
+from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.item_economics.cost_model_term import CostModelTerm
+from beyo_manager.models.tables.item_economics.cost_model_version import CostModelVersion
+from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
+from beyo_manager.models.tables.item_economics.item_valuation import ItemValuation
+from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
+from beyo_manager.models.tables.item_economics.production_cost_group import ProductionCostGroup
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.working_sections.working_section import WorkingSection
+from beyo_manager.services.commands.item_economics._common import today_utc
+from beyo_manager.services.context import ServiceContext
+from beyo_manager.domain.item_economics.calculator import calculate_actual_worker_minutes, calculate_remaining_worker_minutes
+
+
+_MAX_TASK_IDS = 50
+_BUDGET_STATUSES = frozenset({EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEASIBLE})
+
+
+async def _load_typicals(ctx: ServiceContext) -> dict[str, dict]:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=TYPICAL_WINDOW_DAYS)
+    grouped_steps = (
+        select(
+            TaskStep.working_section_id.label("working_section_id"),
+            TaskStep.task_id.label("task_id"),
+            func.sum(TaskStep.total_working_seconds).label("group_seconds"),
+            func.max(TaskStep.closed_at).label("latest_closed_at"),
+        )
+        .where(
+            TaskStep.workspace_id == ctx.workspace_id,
+            TaskStep.state == "completed",
+            TaskStep.is_deleted.is_(False),
+            TaskStep.recorded_time_marked_wrong.is_(False),
+        )
+        .group_by(TaskStep.working_section_id, TaskStep.task_id)
+        .subquery("completed_section_totals")
+    )
+    qualifying = grouped_steps.c.latest_closed_at >= cutoff
+    sample_count = func.count(grouped_steps.c.task_id).filter(qualifying)
+    percentile = func.percentile_cont(0.5).within_group(grouped_steps.c.group_seconds).filter(qualifying)
+    typical_seconds = case(
+        (sample_count >= TYPICAL_MIN_SAMPLE_SIZE, cast(func.round(percentile), Integer)),
+        else_=None,
+    )
+    statement = (
+        select(
+            WorkingSection.client_id,
+            WorkingSection.name,
+            sample_count.label("sample_count"),
+            typical_seconds.label("typical_worker_seconds"),
+        )
+        .outerjoin(grouped_steps, grouped_steps.c.working_section_id == WorkingSection.client_id)
+        .where(
+            WorkingSection.workspace_id == ctx.workspace_id,
+            WorkingSection.is_deleted.is_(False),
+        )
+        .group_by(WorkingSection.client_id, WorkingSection.name)
+    )
+    result = await ctx.session.execute(statement)
+    return {
+        row.client_id: {
+            "typical_worker_seconds": int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
+            "sample_count": int(row.sample_count or 0),
+            "section_name": row.name,
+            "method": TYPICAL_METHOD,
+            "window_days": TYPICAL_WINDOW_DAYS,
+            "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
+        }
+        for row in result
+    }
+
+
+async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
+    task_ids = list(ctx.query_params.get("task_ids") or [])
+    if len(task_ids) > _MAX_TASK_IDS:
+        raise ValidationError(
+            "BUDGET_ALLOCATIONS_TOO_MANY_TASK_IDS: at most 50 task ids may be requested"
+        )
+
+    tasks = (
+        await ctx.session.execute(
+            select(Task).where(
+                Task.workspace_id == ctx.workspace_id,
+                Task.client_id.in_(task_ids),
+                Task.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    visible_task_ids = [task.client_id for task in tasks]
+
+    primary_rows = (
+        await ctx.session.execute(
+            select(TaskItem).where(
+                TaskItem.workspace_id == ctx.workspace_id,
+                TaskItem.task_id.in_(visible_task_ids),
+                TaskItem.role == TaskItemRoleEnum.PRIMARY,
+                TaskItem.removed_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    primary_by_task = {row.task_id: row for row in primary_rows}
+    item_ids = [row.item_id for row in primary_rows]
+    items = (
+        await ctx.session.execute(
+            select(Item).where(
+                Item.workspace_id == ctx.workspace_id,
+                Item.client_id.in_(item_ids),
+                Item.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    item_by_id = {item.client_id: item for item in items}
+
+    evaluations = (
+        await ctx.session.execute(
+            select(ItemCostEvaluation).where(
+                ItemCostEvaluation.workspace_id == ctx.workspace_id,
+                ItemCostEvaluation.task_id.in_(visible_task_ids),
+                ItemCostEvaluation.kind == ItemCostEvaluationKindEnum.COMMITTED,
+                ItemCostEvaluation.superseded_at.is_(None),
+                ItemCostEvaluation.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    evaluation_by_task = {evaluation.task_id: evaluation for evaluation in evaluations}
+
+    steps = (
+        await ctx.session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == ctx.workspace_id,
+                TaskStep.task_id.in_(visible_task_ids),
+                TaskStep.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    steps_by_task: dict[str, list[TaskStep]] = defaultdict(list)
+    for step in steps:
+        steps_by_task[step.task_id].append(step)
+
+    typicals = await _load_typicals(ctx)
+
+    # These four reads intentionally happen once per request. They mirror the
+    # preview loader's query shapes and are resolved against each item in Python.
+    groups = (
+        await ctx.session.execute(
+            select(ProductionCostGroup).where(
+                ProductionCostGroup.workspace_id == ctx.workspace_id,
+                ProductionCostGroup.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    basis_versions = (
+        await ctx.session.execute(
+            select(ProductionCostBasisVersion).where(
+                ProductionCostBasisVersion.workspace_id == ctx.workspace_id,
+                ProductionCostBasisVersion.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    cost_model_versions = (
+        await ctx.session.execute(
+            select(CostModelVersion).where(
+                CostModelVersion.workspace_id == ctx.workspace_id,
+                CostModelVersion.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    terms = (
+        await ctx.session.execute(
+            select(CostModelTerm).where(
+                CostModelTerm.workspace_id == ctx.workspace_id,
+                CostModelTerm.is_deleted.is_(False),
+            ).order_by(CostModelTerm.created_at.asc(), CostModelTerm.client_id.asc())
+        )
+    ).scalars().all()
+    terms_by_model: dict[str, list[CostModelTerm]] = defaultdict(list)
+    for term in terms:
+        terms_by_model[term.cost_model_version_id].append(term)
+    valuations = (
+        await ctx.session.execute(
+            select(ItemValuation).where(
+                ItemValuation.workspace_id == ctx.workspace_id,
+                ItemValuation.item_id.in_(item_ids),
+                ItemValuation.superseded_at.is_(None),
+                ItemValuation.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    valuation_by_item = {valuation.item_id: valuation for valuation in valuations}
+
+    output = []
+    for task in tasks:
+        primary = primary_by_task.get(task.client_id)
+        item = item_by_id.get(primary.item_id) if primary is not None else None
+        evaluation = evaluation_by_task.get(task.client_id)
+        binding = "detached" if item is None else ("bound" if evaluation is None or evaluation.item_id == item.client_id else "mismatched")
+
+        if evaluation is None:
+            if item is None:
+                status = EconomicsStatusEnum.NOT_EVALUATED
+            else:
+                selection = resolve_economics_selection(
+                    resolve_major_category(item.item_major_category_snapshot),
+                    groups,
+                    basis_versions,
+                    cost_model_versions,
+                    today_utc(),
+                )
+                status = resolve_item_economics_status(
+                    valuation_by_item.get(item.client_id),
+                    selection,
+                    terms_by_model.get(
+                        selection.cost_model_version.client_id
+                        if selection.cost_model_version is not None
+                        else "",
+                        [],
+                    ),
+                )
+        else:
+            status = EconomicsStatusEnum.INFEASIBLE if Decimal(evaluation.allowed_worker_minutes) <= 0 else EconomicsStatusEnum.OK
+
+        task_steps = sorted(
+            steps_by_task.get(task.client_id, []),
+            key=lambda step: (step.sequence_order is None, step.sequence_order if step.sequence_order is not None else 0, step.client_id),
+        )
+        typicals_by_section = {
+            step.working_section_id: typicals.get(step.working_section_id, {}).get("typical_worker_seconds")
+            for step in task_steps
+        }
+        allowed = evaluation.allowed_worker_minutes if evaluation is not None and status in _BUDGET_STATUSES else None
+        division = divide_production_budget(allowed, task_steps, typicals_by_section)
+        actual_seconds = sum(int(step.total_working_seconds or 0) for step in task_steps)
+        if status in _BUDGET_STATUSES and allowed is not None:
+            actual_minutes = calculate_actual_worker_minutes(actual_seconds)
+            remaining_minutes = calculate_remaining_worker_minutes(Decimal(allowed), actual_minutes)
+            allowed_payload = Decimal(allowed)
+        else:
+            actual_seconds = None
+            remaining_minutes = None
+            allowed_payload = None
+
+        output.append(
+            {
+                "task_id": task.client_id,
+                "status": status.value,
+                "allowed_worker_minutes": allowed_payload,
+                "actual_worker_seconds": actual_seconds,
+                "remaining_worker_minutes": remaining_minutes,
+                "allocation_method": ALLOCATION_METHOD,
+                "steps": division["steps"],
+                "_binding": binding,
+            }
+        )
+    for row in output:
+        row.pop("_binding", None)
+    return serialize_budget_allocations(output)
+
+
+__all__ = ["get_task_budget_allocations"]
