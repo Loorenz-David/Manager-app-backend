@@ -121,4 +121,4 @@ nodes plus `implements` and `accepts` relationships. Resulting graph revision:
 
 ## Checkpoint
 
-The implementation checkpoint commit is recorded below after the commit is made.
+Implementation checkpoint: `98aa31b`
