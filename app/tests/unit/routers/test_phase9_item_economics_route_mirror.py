@@ -60,6 +60,7 @@ _EXPECTED_ROUTES = (
     ("GET", "/api/v1/item-economics/tasks/budget-allocations", _ALL_ROLES),
     # The budget-status handler picks the money-free worker service for WORKER and SELLER identities.
     ("GET", "/api/v1/item-economics/tasks/{task_client_id}/budget-status", _ALL_ROLES),
+    ("GET", "/api/v1/item-economics/tasks/{task_client_id}/production-time", _ALL_ROLES),
     ("GET", "/api/v1/item-economics/items/{item_client_id}/economics", _ADMIN_MANAGER),
 )
 
@@ -119,8 +120,8 @@ def test_router_source_matches_the_hand_written_route_and_role_set() -> None:
 
 
 @pytest.mark.unit
-def test_the_registry_ships_twenty_four_routes() -> None:
+def test_the_registry_ships_twenty_five_routes() -> None:
     # Enumerated above, one row per route; the count is derived from that table,
     # never asserted independently of it.
-    assert len(_EXPECTED_ROUTES) == 24
-    assert len({(method, path) for method, path, _ in _EXPECTED_ROUTES}) == 24
+    assert len(_EXPECTED_ROUTES) == 25
+    assert len({(method, path) for method, path, _ in _EXPECTED_ROUTES}) == 25

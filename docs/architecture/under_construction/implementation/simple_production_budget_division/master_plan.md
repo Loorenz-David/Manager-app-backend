@@ -36,8 +36,10 @@ simple_production_budget_division/
 |---|---|---|---|---|---|
 | 1 | M1+M2 domain module, E1+E2 endpoints, full test set | **APPROVED** | 2026-08-17 | Opus 5 (reviewer r4) | Verdict APPROVED, 0 open findings. 4 review rounds: 7 should-fix + 12 notes, **ZERO production defects** — M1/M2 correct as first written, changed only by the behaviour-preserving S1 extraction. Closeout done: baseline §7 → 2287/26/1 (23 v1 byte-identical + 3 foreign bootstrap), MVP calibration rule §6, frontend handoff folded (§6 rewritten with E1/E2 contracts, §8 worker cards added), archived to `archive/plan_1/`, gate commit + graph pass below. Checkpoints `0b85701` → `d4d51af` → `fb48d13` → `7f09637` → `99ade31` → `1290cc0` |
 
-Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
-implementer prompt is compiled only after its ledger is fully routed.
+| 2 | E3 — one task-scoped, section-keyed production-time endpoint (intention §12, mechanism M3) | **IMPLEMENTED** | 2026-08-17 | Codex (GPT-5) | E3 implemented and verified: targeted phase suite 164 passed; full suite 2337 selected, 2311 passed, 26 inherited failures, 1 deselected. Checkpoint follows the implementer handoff. |
+
+The projection (round 0) runs under the reviewer tables; the implementer prompt is
+compiled only after its ledger is fully routed.
 
 ## 4. Naming registry (final authority on names; intention §5 governs payload shapes)
 
@@ -62,6 +64,30 @@ implementer prompt is compiled only after its ledger is fully routed.
   the ONLY implementation of the M1 aggregation; E2 imports and calls it rather
   than inlining a copy.
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py` (E2)
+- `app/beyo_manager/services/queries/item_economics/get_task_production_time.py` (E3,
+  phase 2) — composes M1 + M3 + the budget-status resolution; computes no arithmetic
+  of its own (HC-6/M3.7). It MUST import `divide_production_budget` and
+  `typical_times_statement` rather than reimplementing either.
+
+**Phase 2 additions (names fixed 2026-08-17; shapes in intention §12.7):**
+- Section grouping and ordering live in `budget_division.py` beside the allocator, NOT
+  in the service — they are M3 mechanism, and the one-copy rule applies to them the
+  moment a second surface wants a section view. Registered name:
+  `group_steps_by_section(...)`. The M3.2 order key is `_section_sort_key(...)`,
+  sibling of the existing `_sort_key` at `:72`.
+- Payload builders extend the existing `division_serializers.py` (same module — E3 is
+  the same contract family; a third serializer module would fragment it):
+  `serialize_task_production_time(...)`, `serialize_production_time_section(...)`.
+- D11 resolved to variant B: the change is INSIDE `divide_production_budget` (the
+  allocation unit becomes the group), which now returns **both** `sections` and `steps`
+  keys (B1). **The per-step split lives in the domain module, not in E2** — this settles
+  the earlier "E2 becomes a consumer that splits its section share" wording against C19.
+  **No new allocator function may appear** (HC-6).
+- `ALLOCATION_METHOD` (`budget_division.py:17`) becomes
+  **`static_proportional_section_v1`** (P2 ruling). Grouped-unit remainder tie key is
+  `working_section_id` ASC for both callers (B6) — deliberately not M3.2's render order.
+- Liveness predicate: `state NOT IN TERMINAL_STEP_STATES`, **imported** from
+  `domain/task_steps/constants.py` (B7), never re-listed.
 
 **Routes:**
 - E1 → existing `routers/api_v1/working_sections.py` router (prefix
@@ -81,6 +107,15 @@ implementer prompt is compiled only after its ledger is fully routed.
   `beyo_manager/routers/README.md` — one Quick Index row + one detail section for
   each of E1 and E2 (README rows for E1 are unenforced by any test — P11 — so the
   reviewer checks them by hand).
+- E3 (phase 2) → same `routers/api_v1/item_economics.py` router, `GET
+  /tasks/{task_client_id}/production-time`. Declared inside the parameterized
+  `/tasks/{task_client_id}/…` block (beside `budget-status` at `:360`) and therefore
+  BELOW the fixed `/tasks/budget-allocations` path at `:346` — the comment at `:345`
+  is the standing reason. **HC-1a applies a third time:** both hand-written route
+  mirrors (`test_phase9_item_economics_route_mirror.py` and
+  `tests/unit/routers/api_v1/test_item_economics_router.py`) plus `routers/README.md`
+  take one additive row each, count assertions incremented. Same D10 rationale, no
+  new owner card.
 - **Query-param style (P12, deliberate first-of-kind):** `working_section_ids` and
   `task_ids` are FastAPI repeatable params (`list[str] = Query(...)`) — the repo's
   first; every prior multi-value filter is CSV. Chosen for native validation and the
@@ -230,6 +265,24 @@ calibration rather than the ceremony:
   `c1d2e3f4a5b6` — no migration in this pipeline. **The successor pipeline inherits
   2287 / 23 (+3 foreign, expected to vanish when the bootstrap work lands) / 1** —
   diff against this figure, not the v1 one (reviewer r4 closeout input 4).
+- **PHASE-2 START BASELINE (verified by the coordinator 2026-08-17, three consecutive
+  full runs): 2287 passed / 26 failed / 1 deselected**, ~112 s, head unchanged
+  `c1d2e3f4a5b6`. The 26 failure IDs are **byte-identical to the phase-1 closeout set** —
+  verified by full-set diff against the fix-r4 handoff's enumerated list, zero added, zero
+  removed. Composition confirmed by `git log` on the test files: **23 long-standing
+  inherited** (including
+  `bootstrap/test_seed_working_sections_integration.py::test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections`,
+  last touched in `92ec8a1`, i.e. NOT the owner's recent work) **+ 3 from the owner's
+  bootstrap item-economics seeding** (`test_seed_item_economics_configuration.py`, commit
+  `08092a2`). All 4 bootstrap-folder failures reproduce in isolation, so they are
+  deterministic, not order-dependent.
+- **KNOWN SUITE INSTABILITY (recorded, unresolved).** Of three consecutive runs, two gave
+  26 failed / 2287 passed with identical IDs; **one gave 25 failed / 2288 passed**. That
+  run's failure IDs were not captured, so the drifting test is **not named** — it is not
+  one of the four bootstrap tests (all four fail in isolation). Consequence, binding on
+  every session: **diff failure IDs, never totals.** A run reporting 25 is not "better
+  than baseline"; it means one test moved and the session must identify which before
+  claiming green-per-baseline. Related to the long-standing N11 suite-residue item.
 - Migrations: none expected (HC-2). The disposable-DB recipe in the v1 §10 exists but
   should not be needed; if any session believes it needs a migration, that is a STOP
   — report to the coordinator, do not write one. **No index either** — projection N4
@@ -315,3 +368,44 @@ authorize the coordinator to commit the graph file as-is.
 - Approval-gate commit + archive move at closeout (charter closeout ritual). Closeout
   also owns the two frontend-handoff folds recorded in intention §8 (un-omit
   production-time §6.1; author the worker-card section).
+
+**Phase-2 follow-ups recorded, deliberately NOT done in phase 2:**
+
+- **Extract `status` + `item_binding` into a single home.** `status` is derived in three
+  places (`get_task_budget_allocations.py:179-201`, `get_task_budget_status.py:112-127`,
+  `get_task_budget_status_worker.py:36-52`); `item_binding` is a verbatim duplicate across
+  the latter two, whose duplication carries a deliberate money-redaction comment. E3 avoids
+  becoming a fourth/third site by calling `get_task_budget_status(ctx)` directly (P4).
+  Extraction is a real improvement whose blast radius crosses HC-1's v1 perimeter.
+- **Three ordering expressions for two orders** (N3): `_sort_key`
+  (`budget_division.py:72`) is already duplicated inline at
+  `get_task_budget_allocations.py:203-206`, and T1 adds `_section_sort_key`. The one-copy
+  rule's trigger is visible; not phase 2's to fix.
+- **`routers/api_v1/item_economics.py:345`'s ordering comment is already half untrue** —
+  `/tasks/{task_client_id}/evaluations` (`:331`) is declared above the fixed batch path,
+  and N1 proves segment-count difference makes the ordering non-load-bearing. Worth
+  correcting so a future reader does not treat it as a constraint.
+
+**Phase 2 gates (added 2026-08-17):**
+
+- **Owner-card gate: C1 and C2 must be answered before the phase-2 plan is compiled.**
+  C1 (allocation unit) additionally decides whether phase 1's shipped E2 numbers change,
+  so it may not be deferred past projection r0.
+- **Mechanism-inventory gate: WAIVED again, same reasoning, same condition.** M3 is a
+  composition of the two contracted phase-1 mechanisms plus one new grouping rule, all
+  contracted inline at inventory depth in intention §12.5. The waiver's condition
+  carries verbatim: any mechanism the projection finds operating without a contract is a
+  GATE FAILURE routed to the intention, never a note.
+- **Projection gate: MANDATORY.** Charter rule 6 triggers are all present again (integer
+  division with rounding residue — now at a changed unit; multi-source read consistency
+  across three surfaces; a cross-surface agreement property, P-AGREE, that no phase-1
+  test covered). The projection additionally owns: **re-measuring §12.4 on the database
+  as it stands at that moment** (the local copy was refreshed from RDS mid-pipeline and
+  the excluded-state and skipped-step counts moved), and enumerating whether variant B
+  can be reached without a second allocator (HC-6).
+- **Documentation closeout differs from phase 1.** The frontend handoff is **rewritten
+  from scratch**, not edited (owner, 2026-08-17: "less prone to semantic errors than
+  editing"). The rewrite must carry the four gaps the coordinator found on 2026-08-17 —
+  step ordering authority, the transition endpoint for the card's Start action,
+  `working_section_id` in the step example, and the `section_name` vs
+  `section_name_snapshot` rule — plus the empty-`task_ids` warning.

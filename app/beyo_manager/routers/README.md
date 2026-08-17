@@ -78,6 +78,7 @@
 | POST | /api/v1/item-economics/projections/{client_id}/promote | item-economics | route_promote_item_cost_projection_api_v1_item_economics_projections__client_id__promote_post |
 | GET | /api/v1/item-economics/tasks/budget-allocations | item-economics | route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get |
 | GET | /api/v1/item-economics/tasks/{task_client_id}/budget-status | item-economics | route_get_task_budget_status_api_v1_item_economics_tasks__task_client_id__budget_status_get |
+| GET | /api/v1/item-economics/tasks/{task_client_id}/production-time | item-economics | route_get_task_production_time_api_v1_item_economics_tasks__task_client_id__production_time_get |
 | GET | /api/v1/item-economics/items/{item_client_id}/economics | item-economics | route_get_item_lifetime_economics_api_v1_item_economics_items__item_client_id__economics_get |
 | PUT | /api/v1/item-upholsteries | item-upholsteries | route_create_item_upholstery_api_v1_item_upholsteries_put |
 | POST | /api/v1/item-upholsteries/mark-ordered | item-upholsteries | route_mark_ordered_api_v1_item_upholsteries_mark_ordered_post |
@@ -1687,6 +1688,48 @@ None
 | detail[].type | string | Yes |  |
 
 Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
+
+### GET /api/v1/item-economics/tasks/{task_client_id}/production-time
+- **Tag**: item-economics
+- **OperationId**: route_get_task_production_time_api_v1_item_economics_tasks__task_client_id__production_time_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| task_client_id | path | Yes | string |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.task_id | string | Yes |  |
+| data.status | string | Yes |  |
+| data.item_binding | string | Yes |  |
+| data.allocation_method | string | Yes |  |
+| data.budget | object | Yes |  |
+| data.final | object | No |  |
+| data.sections[] | array[object] | Yes |  |
+| data.sections[].working_section_id | string | Yes |  |
+| data.sections[].section_name | string | No |  |
+| data.sections[].section_name_snapshot | string | No |  |
+| data.sections[].order_list | integer | No |  |
+| data.sections[].state | string | Yes |  |
+| data.sections[].state_entered_at | string | No |  |
+| data.sections[].worked_seconds | integer | Yes |  |
+| data.sections[].step_count | integer | Yes |  |
+| data.sections[].allowance_seconds | integer | No |  |
+| data.sections[].left_seconds | integer | No |  |
+| data.sections[].share_state | string | Yes |  |
+| data.sections[].typical | object | Yes |  |
+| warnings[] | string | Yes |  |
+
+Returns one time-only section row per non-deleted task section, with the section's
+current budget slice, consumption, state, and scoped typical-time metadata.
 
 ### GET /api/v1/item-upholsteries
 - **Tag**: item-upholsteries

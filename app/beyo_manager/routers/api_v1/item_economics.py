@@ -34,6 +34,7 @@ from beyo_manager.services.queries.item_economics.get_item_lifetime_economics im
 from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.queries.item_economics.get_task_budget_status_worker import get_task_budget_status_worker
+from beyo_manager.services.queries.item_economics.get_task_production_time import get_task_production_time
 from beyo_manager.services.queries.item_economics.list_cost_model_versions import list_cost_model_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
@@ -364,6 +365,20 @@ async def route_get_task_budget_status(
     session: AsyncSession = Depends(get_db),
 ):
     return await _run_budget_status(claims, session, task_client_id)
+
+
+@router.get("/tasks/{task_client_id}/production-time", response_model=None)
+async def route_get_task_production_time(
+    task_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        get_task_production_time,
+        claims,
+        session,
+        data={"task_client_id": task_client_id},
+    )
 
 
 @router.post("/tasks/{task_client_id}/projections")

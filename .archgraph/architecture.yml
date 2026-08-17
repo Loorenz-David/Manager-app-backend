@@ -4588,6 +4588,78 @@ nodes:
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
     updatedAt: 2026-08-17T10:41:50.921Z
+  - id: projection-item-economics-task-production-time
+    type: projection
+    name: Task production time
+    description: The task-scoped, read-only production-time view that composes
+      manager budget status with section grouping, section typicals, and
+      deterministic per-step time allowances. It includes ordered section rows
+      and a flat time-only final snapshot without monetary fields, persisted
+      calculation results, or schema changes. It preserves the existing
+      budget-status readiness and tenant boundary while exposing section
+      metadata and live state snapshots.
+    tags:
+      - item-economics
+      - production-time
+      - read-model
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          startLine: 23
+          endLine: 95
+          summary: The query composes workspace-scoped budget status, non-deleted task
+            steps with latest state, active section attributes, filtered typical
+            times, pure division, and the time-only serializer.
+          inferenceReason: This service is the implementation boundary for the task
+            production-time read projection.
+        - path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+          symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+          startLine: 172
+          endLine: 196
+          summary: The integration contract checks that the new projection agrees with the
+            existing allocation projection while exposing only the time
+            projection shape.
+          inferenceReason: The focused integration test verifies the projection's
+            compatibility and time-only boundary.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-17T17:12:48.742Z
+  - id: endpoint-item-economics-task-production-time
+    type: endpoint
+    name: GET /api/v1/item-economics/tasks/{task_client_id}/production-time
+    description: All-role task production-time endpoint returning a time-only
+      section and step projection for one workspace-scoped task. It delegates
+      through the shared service runner, preserves the standard response
+      envelope and not-found behavior, and is mounted as a parameterized task
+      route.
+    tags:
+      - item-economics
+      - production-time
+      - http
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+          startLine: 370
+          endLine: 381
+          summary: The route admits admin, manager, worker, and seller roles and delegates
+            the task identifier to get_task_production_time with
+            response_model=None.
+          inferenceReason: This handler is the external HTTP boundary for the new task
+            production-time projection.
+        - path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+          symbol: test_production_time_route_is_available_to_all_roles
+          startLine: 9
+          endLine: 16
+          summary: The route contract test invokes the endpoint for all four roles and
+            verifies dispatch to the new service.
+          inferenceReason: The test verifies the endpoint's role perimeter and service identity.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-17T17:12:48.742Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9273,3 +9345,35 @@ edges:
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
     updatedAt: 2026-08-17T10:41:50.921Z
+  - sourceNodeId: source-file-item-economics-budget-division
+    relationshipType: implements
+    targetNodeId: projection-item-economics-task-production-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 245
+          endLine: 401
+          summary: The pure allocator returns grouped section rows and per-step
+            production-time allowances using exact arithmetic and deterministic
+            remainder ordering.
+          inferenceReason: The source module implements the projection's calculation boundary.
+    origin: ai_inferred
+    confidence: 0.88
+    createdAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-17T17:12:48.742Z
+  - sourceNodeId: endpoint-item-economics-task-production-time
+    relationshipType: accepts
+    targetNodeId: projection-item-economics-task-production-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+          startLine: 370
+          endLine: 381
+          summary: The endpoint delegates to the task production-time query service.
+          inferenceReason: The endpoint accepts the corresponding projection.
+    origin: ai_inferred
+    confidence: 0.88
+    createdAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-17T17:12:48.742Z

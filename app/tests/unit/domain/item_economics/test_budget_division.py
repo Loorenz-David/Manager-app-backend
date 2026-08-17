@@ -1,8 +1,12 @@
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from beyo_manager.domain.item_economics.budget_division import (
     DivisionStep,
+    _section_sort_key,
     divide_production_budget,
+    group_steps_by_section,
 )
 
 
@@ -111,10 +115,10 @@ def test_live_partition_includes_working_paused_and_completed_steps():
     ]
     base = divide_production_budget(Decimal("1.00"), live, {"section": 1})
     assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(base)} == {
-        "pending": 15,
-        "working": 15,
-        "paused": 15,
-        "completed": 15,
+        "pending": 20,
+        "working": 20,
+        "paused": 20,
+        "completed": 0,
     }
 
     with_new = divide_production_budget(
@@ -123,11 +127,11 @@ def test_live_partition_includes_working_paused_and_completed_steps():
         {"section": 1},
     )
     assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(with_new)} == {
-        "pending": 12,
-        "working": 12,
-        "paused": 12,
-        "completed": 12,
-        "new": 12,
+        "pending": 15,
+        "working": 15,
+        "paused": 15,
+        "completed": 0,
+        "new": 15,
     }
 
     after_skip = divide_production_budget(
@@ -211,3 +215,66 @@ def test_half_even_budget_seconds_quantization():
     )
     assert result["budget_seconds"] == 11701
     assert sum(row["allowance_seconds"] for row in allocated_rows(result)) == 11701
+
+
+def test_c3_section_sort_key_uses_id_as_final_backstop():
+    assert _section_sort_key({"order_list": 2, "name": "Same", "working_section_id": "a"}) < _section_sort_key(
+        {"order_list": 2, "name": "Same", "working_section_id": "b"}
+    )
+
+
+def test_c5_section_unit_weights_a_reassigned_section_once():
+    result = divide_production_budget(
+        Decimal("180.00"),
+        [
+            step("structural", section="structural"),
+            step("sanding", section="sanding"),
+            step("upholstery-a", section="upholstery"),
+            step("upholstery-b", section="upholstery"),
+        ],
+        {"structural": 3600, "sanding": 1800, "upholstery": 3600},
+    )
+    allowances = {row["working_section_id"]: row["allowance_seconds"] for row in result["sections"]}
+    assert allowances == {"structural": 4320, "sanding": 2160, "upholstery": 4320}
+    assert [row["allowance_seconds"] for row in result["sections"]] != [3086, 1543, 6171]
+
+
+def test_c7_multi_open_governing_step_and_equal_remainder_tie_are_deterministic():
+    now = datetime.now(timezone.utc)
+    first = DivisionStep(
+        client_id="first", state="pending", working_section_id="section", typical_worker_seconds=1,
+        created_at=now - timedelta(minutes=2),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
+    )
+    second = DivisionStep(
+        client_id="second", state="pending", working_section_id="section", typical_worker_seconds=1,
+        created_at=now - timedelta(minutes=1),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
+    )
+    result = divide_production_budget(Decimal("0.05"), [second, first], {"section": 1})
+    rows = {row["step_id"]: row for row in result["steps"]}
+    assert rows["first"]["allowance_seconds"] == 2
+    assert rows["second"]["allowance_seconds"] == 1
+    assert result["sections"][0]["state"] == "pending"
+
+
+def test_c6_later_live_step_governs_section_state():
+    now = datetime.now(timezone.utc)
+    completed = DivisionStep(
+        client_id="completed", state="completed", working_section_id="section", created_at=now - timedelta(minutes=2),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
+    )
+    pending = DivisionStep(
+        client_id="pending", state="pending", working_section_id="section", created_at=now - timedelta(minutes=1),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
+    )
+    assert group_steps_by_section([completed, pending])[0]["state"] == "pending"
+
+
+def test_c10_section_allowances_sum_exactly_on_indivisible_budget():
+    result = divide_production_budget(
+        Decimal("1.01"),
+        [step("a", section="a", typical=1), step("b", section="b", typical=1), step("c", section="c", typical=1)],
+        {"a": 1, "b": 1, "c": 1},
+    )
+    assert sum(row["allowance_seconds"] for row in result["sections"]) == result["distributable_seconds"] == 61

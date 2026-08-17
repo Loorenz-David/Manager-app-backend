@@ -47,6 +47,7 @@ _ROUTES = [
 
 _ALL_ROLE_ROUTES = [
     ("GET", "/api/v1/item-economics/tasks/tsk_1/budget-status", None),
+    ("GET", "/api/v1/item-economics/tasks/tsk_1/production-time", None),
     ("GET", "/api/v1/item-economics/tasks/budget-allocations?task_ids=tsk_1", None),
 ]
 
@@ -132,6 +133,9 @@ def test_budget_status_route_is_available_to_all_roles(method, path, body, role_
     assert len(calls) == 1
     if "budget-allocations" in path:
         assert calls[0][0] is item_economics.get_task_budget_allocations
+        return
+    if "production-time" in path:
+        assert calls[0][0] is item_economics.get_task_production_time
         return
     if role_name in {"worker", "seller"}:
         assert calls[0][0] is item_economics.get_task_budget_status_worker
