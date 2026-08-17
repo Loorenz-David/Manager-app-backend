@@ -228,7 +228,14 @@ criterion→test maps in the fix handoffs and reviews.
   valuation so `resolve_economics_selection` runs in BOTH calls, guarded by an
   exact resolver-produced status assertion (see S6: `not_configured_no_cost_group`,
   which distinguishes from the short-circuit `not_evaluated`).
-- **C14c** — batch semantics rows: unknown id omitted, other-workspace omitted.
+- **C14c** — batch semantics: unknown id omitted (covered).
+- **C14d** — **tenant boundary** (split out of C14c per the r3 letter-verification
+  + tenant-boundary-row rules, S7): a task belonging to ANOTHER workspace, passed
+  in the id list, is omitted from `budget_allocations` — not returned as a
+  degraded row. RED: delete `Task.workspace_id == ctx.workspace_id` from E2's
+  visibility query (`get_task_budget_allocations.py:109-113`, definition site) —
+  the foreign id must then appear and fail both the absence assertion and the
+  existing `len(...) == 2` count.
 - **C15a** — E1 role admission (four rows) + envelope.
 - **C15b** — E1 service-identity assertion (P7 guard).
 - **C15c** — E2 role admission (four rows) + envelope.
@@ -406,6 +413,7 @@ criterion→test maps in the fix handoffs and reviews.
   | C14a — one/three-call query-count equality | `...::test_budget_allocation_constant_query_count_for_one_and_three_tasks` |
   | C14b — eval-less PRIMARY item + valuation resolver path | same C14 test node (fixture property) |
   | C14c — unknown task omission and status degradation | same C14 test node |
+  | C14d — other-workspace task omitted from the batch result | same C14 test node |
   | C15a — E1 all-role admission/envelope | `tests/unit/routers/api_v1/test_budget_division_routes.py::test_both_surfaces_admit_every_role_and_use_the_standard_envelope` |
   | C15b — E1 service identity/order | same C15 test node |
   | C15c — E2 all-role admission/envelope | same C15 test node |
@@ -468,3 +476,43 @@ criterion→test maps in the fix handoffs and reviews.
   the unchanged 23 inherited baseline IDs plus 3 foreign bootstrap IDs. The
   checkpoint hash and complete ledger are recorded in the r3 implementer
   handoff.
+
+- **Fix r3 consumption (coordinator, 2026-08-17)** — verified: checkpoint
+  `99ade31` perimeter matches (test file, README, mirror comment, pipeline docs —
+  no production files); the three exact pins present at
+  `test_budget_allocations_query.py:192-194`
+  (`not_configured_no_cost_group` / `ok` / `not_configured_no_cost_group`);
+  coordinator re-ran the E2 test file green (4 passed). One-probe delta ledger:
+  reviewer's probe 5 now bites (`'not_evaluated' == 'not_configured_no_cost_group'`
+  red). Suite 2287/26/1 = 23 baseline + 3 foreign (unchanged shape).
+  Phase → REVIEWING; re-review r3 compiled, delta-scoped to S6/N-i/N-j closure.
+
+- **Re-review r3 (2026-08-17, Opus 5) — CHANGES_REQUESTED (1 should-fix / 0
+  notes).** S6/N-i/N-j/N-l/N-k ALL CLOSED (probe 1 = r2's probe 5 re-applied,
+  now red with the exact prescribed pair; README placement/table/mirror comment
+  hand-checked; no-weaker-assertions PASSES — the E2 seam moved only
+  `!=` → `==` plus one added assertion); perimeter exactly the declared five
+  files; suite byte-identical to r2. NEW: **S7** — C14c's other-workspace row
+  has never existed (demanded since r1); reviewer probe: deleting
+  `Task.workspace_id == ctx.workspace_id` from E2's visibility query leaves all
+  26 phase tests green. Production filter present and correct — coverage hole;
+  blast radius if regressed = task-existence disclosure (downstream queries stay
+  scoped), violating §5's batch-read omission contract. Owner heard the
+  story-form assessment and chose to FIX (2026-08-17, "perfect, let's make the
+  implementer prompt"). Also recorded: probe-4 EQUIVALENCE — the M1 subquery's
+  `TaskStep.workspace_id` filter is redundant defence-in-depth (globally-unique
+  section client_ids); do not re-open. Fix r4 prompt compiled (test-only, one
+  row); re-review r4 minimal delta on S7 alone.
+
+- **Fix r4 (implementer, 2026-08-17, Codex) — IMPLEMENTED.** F1 adds a second
+  workspace and task with no dependent item/evaluation/step rows to `_seed`,
+  passes that foreign task id in the existing C14 batch, and asserts its id is
+  absent while retaining the exact `len(...) == 2` and `first_count == 11` pins.
+  `_cleanup` deletes the foreign task before the foreign workspace. The one
+  named definition-site mutation (remove `Task.workspace_id == ctx.workspace_id`
+  from the E2 visibility query) produced `AssertionError: assert 3 == 2` at
+  `test_budget_allocations_query.py:193` and was restored byte-for-byte. No
+  production or Architecture Graph changes. Focused E2 file: 4 passed. Full
+  non-E2E suite: 2287 passed, 26 failed, 1 deselected, 2 warnings; failures are
+  the unchanged 23 inherited baseline IDs plus 3 foreign bootstrap IDs. The
+  checkpoint and complete ledger are recorded in the r4 implementer handoff.

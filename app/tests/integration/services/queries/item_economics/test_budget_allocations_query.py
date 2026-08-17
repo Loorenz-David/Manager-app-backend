@@ -31,10 +31,12 @@ from beyo_manager.services.commands.task_steps.remove_task_step import remove_ta
 async def _seed(db_session):
     token = uuid4().hex[:10]
     workspace = Workspace(client_id=f"ws_{token}", name=f"Allocations {token}")
+    foreign_workspace = Workspace(client_id=f"ws_foreign_{token}", name=f"Foreign allocations {token}")
     user = User(client_id=f"usr_{token}", username=f"alloc_{token}", email=f"alloc_{token}@example.com", password="secret")
     section = WorkingSection(client_id=f"wsec_{token}", workspace_id=workspace.client_id, name="Upholstery")
     task = Task(client_id=f"tsk_{token}", workspace_id=workspace.client_id, task_scalar_id=1, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
     unevaluated_task = Task(client_id=f"tsk_unevaluated_{token}", workspace_id=workspace.client_id, task_scalar_id=2, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
+    foreign_task = Task(client_id=f"tsk_foreign_{token}", workspace_id=foreign_workspace.client_id, task_scalar_id=1, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
     item = Item(client_id=f"itm_{token}", workspace_id=workspace.client_id, item_major_category_snapshot="wood", created_by_id=user.client_id)
     unevaluated_item = Item(client_id=f"itm_unevaluated_{token}", workspace_id=workspace.client_id, item_major_category_snapshot="wood", created_by_id=user.client_id)
     task_item = TaskItem(client_id=f"tim_{token}", workspace_id=workspace.client_id, task_id=task.client_id, item_id=item.client_id, role=TaskItemRoleEnum.PRIMARY, created_by_id=user.client_id)
@@ -63,14 +65,16 @@ async def _seed(db_session):
     await db_session.flush()
     db_session.add(user)
     await db_session.flush()
-    db_session.add_all([section, task, unevaluated_task, item, unevaluated_item, group, model])
+    db_session.add(foreign_workspace)
+    await db_session.flush()
+    db_session.add_all([section, task, unevaluated_task, foreign_task, item, unevaluated_item, group, model])
     await db_session.flush()
     db_session.add_all([task_item, unevaluated_task_item, unevaluated_valuation, basis])
     await db_session.flush()
     db_session.add(evaluation)
     db_session.add_all([failed, live, deleted])
     await db_session.flush()
-    return workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, [failed, live, deleted]
+    return workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, [failed, live, deleted], foreign_task, foreign_workspace
 
 
 def _ctx(db_session, workspace_id, task_ids):
@@ -129,7 +133,7 @@ async def _seed_two_section_allocation(db_session):
 @pytest.mark.integration
 async def test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_distinct(db_session):
     values = await _seed(db_session)
-    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps, _foreign_task, _foreign_workspace = values
     try:
         result = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [task.client_id]))
         row = result["budget_allocations"][0]
@@ -171,7 +175,7 @@ async def test_budget_allocation_uses_shared_typicals_for_two_section_proportion
 @pytest.mark.integration
 async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db_session):
     values = await _seed(db_session)
-    workspace, *_ = values
+    workspace, _user, _section, task, unevaluated_task, *_rest, foreign_task, _foreign_workspace = values
     statements = []
     from beyo_manager.models import database
     async_engine = database._engine
@@ -185,8 +189,9 @@ async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db
         one = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [values[4].client_id]))
         first_count = len(statements)
         statements.clear()
-        three = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [values[3].client_id, values[4].client_id, "tsk_unknown"]))
+        three = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [task.client_id, unevaluated_task.client_id, "tsk_unknown", foreign_task.client_id]))
         assert len(three["budget_allocations"]) == 2
+        assert foreign_task.client_id not in {row["task_id"] for row in three["budget_allocations"]}
         assert first_count == len(statements)
         assert first_count == 11
         assert one["budget_allocations"][0]["status"] == "not_configured_no_cost_group"
@@ -200,7 +205,7 @@ async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db
 @pytest.mark.integration
 async def test_remove_service_maps_a_removed_step_to_deleted_skipped(db_session):
     values = await _seed(db_session)
-    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps, _foreign_task, _foreign_workspace = values
     try:
         await remove_task_step(
             ServiceContext(
@@ -217,12 +222,13 @@ async def test_remove_service_maps_a_removed_step_to_deleted_skipped(db_session)
 
 
 async def _cleanup(db_session, values):
-    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps, foreign_task, foreign_workspace = values
     await db_session.execute(delete(TaskStep).where(TaskStep.workspace_id == workspace.client_id))
     await db_session.execute(delete(ItemCostEvaluation).where(ItemCostEvaluation.client_id == evaluation.client_id))
     await db_session.execute(delete(TaskItem).where(TaskItem.workspace_id == workspace.client_id))
     await db_session.execute(delete(ItemValuation).where(ItemValuation.workspace_id == workspace.client_id))
     await db_session.execute(delete(Task).where(Task.workspace_id == workspace.client_id))
+    await db_session.execute(delete(Task).where(Task.client_id == foreign_task.client_id))
     await db_session.execute(delete(Item).where(Item.workspace_id == workspace.client_id))
     await db_session.execute(delete(ProductionCostBasisVersion).where(ProductionCostBasisVersion.client_id == basis.client_id))
     await db_session.execute(delete(CostModelVersion).where(CostModelVersion.client_id == model.client_id))
@@ -230,3 +236,4 @@ async def _cleanup(db_session, values):
     await db_session.execute(delete(WorkingSection).where(WorkingSection.workspace_id == workspace.client_id))
     await db_session.execute(delete(User).where(User.client_id == user.client_id))
     await db_session.execute(delete(Workspace).where(Workspace.client_id == workspace.client_id))
+    await db_session.execute(delete(Workspace).where(Workspace.client_id == foreign_workspace.client_id))

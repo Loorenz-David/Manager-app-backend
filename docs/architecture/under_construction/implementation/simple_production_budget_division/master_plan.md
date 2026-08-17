@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r3 implemented: C14b now pins `ok` for the evaluated task and `not_configured_no_cost_group` for the evaluation-less task; README path order/table repaired; worker-service mirror comment restored; fixture renamed to `unevaluated_*`. Focused suite 140 passed; full suite 2287 passed, 26 failed, 1 deselected, 2 warnings (23 inherited baseline + 3 foreign bootstrap). |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r4 adds the C14d other-workspace fixture row and absence assertion; focused file 4 passed; named tenant-filter mutation turned C14 red (`3 == 2`), then was reverted; full suite 2287 passed / 26 failed / 1 deselected / 2 warnings, with the known 23 baseline + 3 foreign bootstrap failures |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.
@@ -167,6 +167,19 @@ Earned by re-review r2 (2026-08-17):
   gets its OWN exact assertion whose value the degenerate fixture cannot produce
   (here: resolver-produced `not_configured_no_cost_group` vs short-circuit
   `not_evaluated`).
+
+Earned by re-review r3 (2026-08-17):
+
+- **Letter-verification rule (r3 lesson 1)** — applying the lettered-parts rule
+  retroactively, each new letter is checked against the test body in the same
+  pass; a letter without a test converts an invisible gap into documented false
+  assurance (earned: C14c inherited a row demanded since r1 that never existed).
+- **Tenant-boundary-row rule (r3 lesson 2)** — workspace scoping on any
+  batch-read endpoint gets its own enumerated criterion row, like error codes
+  under charter rule 2; the load-bearing top-level filter is distinguished from
+  redundant defence-in-depth in advance (probe-4 equivalence: the M1 subquery's
+  step-level workspace filter is redundant via globally-unique section ids —
+  recorded, do not re-open).
 
 ## 7. Environment topology (imported from the v1 master plan §10, verified 2026-08-12→15; update HERE if reality disagrees)
 
