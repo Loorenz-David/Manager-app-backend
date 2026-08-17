@@ -211,6 +211,31 @@ samples, median `2800` ≠ `4200` — still bites):
   byte-identical to the v1 phase-1 list; selected count grows by exactly this
   phase's added tests; totals recorded in the handoff (P-L: reviewer re-measures).
 
+### Lettered rows for compound criteria (N-k fold, coordinator 2026-08-17)
+
+Adopted per the §6 lettered-parts rule; these letters are the anchor for the
+criterion→test maps in the fix handoffs and reviews.
+
+- **C13a** — two-doors E2 assertions (removed step absent from rows AND from
+  `actual_worker_seconds`; non-deleted excluded step charged).
+- **C13b** — service-invoking door-mapping test (`remove_task_step` ⇒
+  SKIPPED + is_deleted).
+- **C13c** — byte-agreement: `get_task_budget_status.actual_worker_seconds`
+  equality on the same fixture.
+- **C14a** — statement-count equality between the 1-task and 3-task calls
+  (absolute pin `== 11`).
+- **C14b** — fixture property: the evaluation-less task carries a PRIMARY item +
+  valuation so `resolve_economics_selection` runs in BOTH calls, guarded by an
+  exact resolver-produced status assertion (see S6: `not_configured_no_cost_group`,
+  which distinguishes from the short-circuit `not_evaluated`).
+- **C14c** — batch semantics rows: unknown id omitted, other-workspace omitted.
+- **C15a** — E1 role admission (four rows) + envelope.
+- **C15b** — E1 service-identity assertion (P7 guard).
+- **C15c** — E2 role admission (four rows) + envelope.
+- **C17a** — E1 row exact key set.
+- **C17b** — E2 task object exact key set + money scan.
+- **C17c** — E2 step object exact key set + nested step money scan.
+
 ## Review log
 
 - **Round 0 (projection, 2026-08-16, Opus 5)** — verdict AMENDMENTS_REQUIRED: 4
@@ -398,3 +423,48 @@ samples, median `2800` ≠ `4200` — still bites):
   | 3 | `division_serializers.py::serialize_budget_step`: add `consumed_cost_minor` | `test_time_payload_serializers_have_exact_money_free_key_sets`; extra key in exact-set assertion | yes |
   | 4 | `working_sections.py`: move E1 declaration below `/{working_section_id}` | `test_both_surfaces_admit_every_role_and_use_the_standard_envelope`; captured command was `get_working_section` instead of E1 service | yes |
   | 5 | `get_working_section_typical_times.py::typical_times_statement`: remove `(working_section_id, task_id)` GROUP BY | `test_typical_query_aggregates_same_task_section_steps_before_sampling`; PostgreSQL grouping error at the shared builder | yes |
+
+- **Fix r2 consumption (coordinator, 2026-08-17)** — verified: checkpoint
+  `7f09637` file set matches the declared fix perimeter exactly (E2 −55 lines =
+  the deleted inline M1 copy; shared `typical_times_statement` extraction
+  landed); focused suite re-run by coordinator = 140 passed. Delta ledger: five
+  probes, five reds, including the two review-r1 green-survivors now biting
+  (S1 `return {}` → `None != 3600`; S2 rationale-site query → 12 != 11).
+  Lettered map delivered (C13a-c, C14a-c, C15a-c, C17a-c). Suite 2287/26/1 =
+  23 baseline (enumerated in the handoff, byte-identical) + 3 foreign.
+  Phase → REVIEWING; re-review r2 compiled DELTA-SCOPED per charter.
+
+- **Re-review r2 (2026-08-17, Opus 5) — CHANGES_REQUESTED (1 should-fix / 2 doc
+  notes).** ALL round-1 findings S1–S5 CLOSED and probe-confirmed (probes 1–4
+  re-applied, red with matching values); S1 seam verified clause-by-clause
+  (percentile_cont at exactly ONE site repo-wide; E2 specifics outside the
+  builder; generative select — no leak); suite 2287/26/1 reproduced, failure set
+  byte-identical to reviewer's r1 run; lettered-map spot-checks accurate;
+  perimeter clean (the extra file in the span belongs to the coordinator's
+  hash-record commit `baa108b`, not the fix). NEW: **S6** — F2 weakened two exact
+  status assertions to `!= "ok"`; reviewer's probe 5 regressed the fixture to the
+  r1 shape (dropped the PRIMARY item) with all 4 tests green — the S2 defect is
+  closed today but not durably. Correction measured by the reviewer:
+  pin `not_configured_no_cost_group` (resolver-produced, distinguishes from the
+  `not_evaluated` short-circuit) on both calls. N-i: E2 README section wedged
+  inside the working-sections block (fix handoff's "path-ordered" claim
+  inaccurate) — belongs before item-upholsteries `:1893`. N-j: E2 422 table
+  missing header-separator row; restore the dropped worker-service sentence as a
+  comment above the budget-status mirror row. N-k folded by coordinator (lettered
+  rows now in this plan). N-l: rename `no_item_*` fixtures at next touch (r3
+  touches that file — do it). Two rules earned → master plan §6
+  (no-weaker-assertions; fixture-property-pin). Fix r3 prompt compiled
+  (test/docs only); re-review r3 delta-scoped on S6+N-i/N-j.
+
+- **Fix r3 (implementer, 2026-08-17, Codex) — IMPLEMENTED.** F1 strengthens the
+  C14b fixture-property pins to `ok` for the evaluated task and
+  `not_configured_no_cost_group` for the evaluation-less task on both calls; the
+  single mandated fixture regression probe produced `not_evaluated` and was
+  reverted. F2 moves the E2 README detail into `/api/v1/item-*` path order and
+  F3 restores the E2 422 separator plus the budget-status worker-service
+  comment. F4 renames the fixture family to `unevaluated_*`. No production or
+  Architecture Graph changes. Focused phase/mirror suite: 140 passed. Full
+  non-E2E suite: 2287 passed, 26 failed, 1 deselected, 2 warnings; failures are
+  the unchanged 23 inherited baseline IDs plus 3 foreign bootstrap IDs. The
+  checkpoint hash and complete ledger are recorded in the r3 implementer
+  handoff.

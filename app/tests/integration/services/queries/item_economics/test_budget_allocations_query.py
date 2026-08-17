@@ -34,13 +34,13 @@ async def _seed(db_session):
     user = User(client_id=f"usr_{token}", username=f"alloc_{token}", email=f"alloc_{token}@example.com", password="secret")
     section = WorkingSection(client_id=f"wsec_{token}", workspace_id=workspace.client_id, name="Upholstery")
     task = Task(client_id=f"tsk_{token}", workspace_id=workspace.client_id, task_scalar_id=1, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
-    no_item_task = Task(client_id=f"tsk_no_item_{token}", workspace_id=workspace.client_id, task_scalar_id=2, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
+    unevaluated_task = Task(client_id=f"tsk_unevaluated_{token}", workspace_id=workspace.client_id, task_scalar_id=2, task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id)
     item = Item(client_id=f"itm_{token}", workspace_id=workspace.client_id, item_major_category_snapshot="wood", created_by_id=user.client_id)
-    no_item_item = Item(client_id=f"itm_no_item_{token}", workspace_id=workspace.client_id, item_major_category_snapshot="wood", created_by_id=user.client_id)
+    unevaluated_item = Item(client_id=f"itm_unevaluated_{token}", workspace_id=workspace.client_id, item_major_category_snapshot="wood", created_by_id=user.client_id)
     task_item = TaskItem(client_id=f"tim_{token}", workspace_id=workspace.client_id, task_id=task.client_id, item_id=item.client_id, role=TaskItemRoleEnum.PRIMARY, created_by_id=user.client_id)
-    no_item_task_item = TaskItem(client_id=f"tim_no_item_{token}", workspace_id=workspace.client_id, task_id=no_item_task.client_id, item_id=no_item_item.client_id, role=TaskItemRoleEnum.PRIMARY, created_by_id=user.client_id)
-    no_item_valuation = ItemValuation(
-        client_id=f"ival_no_item_{token}", workspace_id=workspace.client_id, item_id=no_item_item.client_id,
+    unevaluated_task_item = TaskItem(client_id=f"tim_unevaluated_{token}", workspace_id=workspace.client_id, task_id=unevaluated_task.client_id, item_id=unevaluated_item.client_id, role=TaskItemRoleEnum.PRIMARY, created_by_id=user.client_id)
+    unevaluated_valuation = ItemValuation(
+        client_id=f"ival_unevaluated_{token}", workspace_id=workspace.client_id, item_id=unevaluated_item.client_id,
         expected_sale_price_minor=0, currency=ItemCurrencyEnum.SWEDISH_KRONA, created_by_id=user.client_id,
     )
     group = ProductionCostGroup(client_id=f"pcg_{token}", workspace_id=workspace.client_id, name=f"group {token}", major_category="wood", created_by_id=user.client_id)
@@ -63,14 +63,14 @@ async def _seed(db_session):
     await db_session.flush()
     db_session.add(user)
     await db_session.flush()
-    db_session.add_all([section, task, no_item_task, item, no_item_item, group, model])
+    db_session.add_all([section, task, unevaluated_task, item, unevaluated_item, group, model])
     await db_session.flush()
-    db_session.add_all([task_item, no_item_task_item, no_item_valuation, basis])
+    db_session.add_all([task_item, unevaluated_task_item, unevaluated_valuation, basis])
     await db_session.flush()
     db_session.add(evaluation)
     db_session.add_all([failed, live, deleted])
     await db_session.flush()
-    return workspace, user, section, task, no_item_task, item, task_item, group, basis, model, evaluation, [failed, live, deleted]
+    return workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, [failed, live, deleted]
 
 
 def _ctx(db_session, workspace_id, task_ids):
@@ -129,7 +129,7 @@ async def _seed_two_section_allocation(db_session):
 @pytest.mark.integration
 async def test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_distinct(db_session):
     values = await _seed(db_session)
-    workspace, user, section, task, no_item_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
     try:
         result = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [task.client_id]))
         row = result["budget_allocations"][0]
@@ -189,8 +189,9 @@ async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db
         assert len(three["budget_allocations"]) == 2
         assert first_count == len(statements)
         assert first_count == 11
-        assert one["budget_allocations"][0]["status"] != "ok"
-        assert next(row for row in three["budget_allocations"] if row["task_id"] == values[4].client_id)["status"] != "ok"
+        assert one["budget_allocations"][0]["status"] == "not_configured_no_cost_group"
+        assert next(row for row in three["budget_allocations"] if row["task_id"] == values[3].client_id)["status"] == "ok"
+        assert next(row for row in three["budget_allocations"] if row["task_id"] == values[4].client_id)["status"] == "not_configured_no_cost_group"
     finally:
         event.remove(async_engine.sync_engine, "before_cursor_execute", record)
         await _cleanup(db_session, values)
@@ -199,7 +200,7 @@ async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db
 @pytest.mark.integration
 async def test_remove_service_maps_a_removed_step_to_deleted_skipped(db_session):
     values = await _seed(db_session)
-    workspace, user, section, task, no_item_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
     try:
         await remove_task_step(
             ServiceContext(
@@ -216,7 +217,7 @@ async def test_remove_service_maps_a_removed_step_to_deleted_skipped(db_session)
 
 
 async def _cleanup(db_session, values):
-    workspace, user, section, task, no_item_task, item, task_item, group, basis, model, evaluation, steps = values
+    workspace, user, section, task, unevaluated_task, item, task_item, group, basis, model, evaluation, steps = values
     await db_session.execute(delete(TaskStep).where(TaskStep.workspace_id == workspace.client_id))
     await db_session.execute(delete(ItemCostEvaluation).where(ItemCostEvaluation.client_id == evaluation.client_id))
     await db_session.execute(delete(TaskItem).where(TaskItem.workspace_id == workspace.client_id))

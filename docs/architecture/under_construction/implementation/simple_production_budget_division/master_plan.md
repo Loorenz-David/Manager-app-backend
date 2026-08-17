@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r2 closed S1–S5 and N-a–N-g: shared M1 builder plus two-section E2 split proof, resolver-path fixture, step key-set guard, E1 service identity, budget-status agreement, README/mirror/cosmetic cleanup. Focused 140 passed; full non-E2E 2287 passed / 26 failed / 1 deselected = 23 baseline + 3 foreign bootstrap failures. Checkpoint: fix r2. Re-review r2 remains next gate. |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r3 implemented: C14b now pins `ok` for the evaluated task and `not_configured_no_cost_group` for the evaluation-less task; README path order/table repaired; worker-service mirror comment restored; fixture renamed to `unevaluated_*`. Focused suite 140 passed; full suite 2287 passed, 26 failed, 1 deselected, 2 warnings (23 inherited baseline + 3 foreign bootstrap). |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.
@@ -153,6 +153,20 @@ Earned by review r1 (2026-08-16; each from a probe-confirmed coverage hole):
 - **Guard-is-the-reason rule (r1 lesson 5)** — mirror of charter rule 2's
   companion: each criterion's guarded construction must be the only reason its
   test passes; "delete the construction, suite stays green" is the review probe.
+
+Earned by re-review r2 (2026-08-17):
+
+- **No-weaker-assertions rule (r2 lesson 1)** — a fix that satisfies a criterion
+  by changing a fixture must strengthen, never weaken, the assertions that pin
+  that fixture; no assertion may become weaker than it was at the previous
+  checkpoint (cheaply checkable: diff for `==` → `!=`/`in` in the changed seam).
+  Earned: F2 met C14's fixture requirement while degrading two exact status pins
+  to `!= "ok"`, leaving the fixture property silently regressable (S6).
+- **Fixture-property-pin rule (r2 lesson 2, rationale-site companion)** — when a
+  criterion's fixture property is what makes a guard meaningful, that property
+  gets its OWN exact assertion whose value the degenerate fixture cannot produce
+  (here: resolver-produced `not_configured_no_cost_group` vs short-circuit
+  `not_evaluated`).
 
 ## 7. Environment topology (imported from the v1 master plan §10, verified 2026-08-12→15; update HERE if reality disagrees)
 

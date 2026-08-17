@@ -1643,6 +1643,51 @@ None
 | detail[].msg | string | Yes |  |
 | detail[].type | string | Yes |  |
 
+### GET /api/v1/item-economics/tasks/budget-allocations
+- **Tag**: item-economics
+- **OperationId**: route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| task_ids | query | Yes | array[string] |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.budget_allocations[] | array[object] | No |  |
+| data.budget_allocations[].task_id | string | Yes |  |
+| data.budget_allocations[].status | string | Yes |  |
+| data.budget_allocations[].allowed_worker_minutes | string | No |  |
+| data.budget_allocations[].actual_worker_seconds | integer | No |  |
+| data.budget_allocations[].remaining_worker_minutes | string | No |  |
+| data.budget_allocations[].allocation_method | string | Yes |  |
+| data.budget_allocations[].steps[] | array[object] | Yes |  |
+| data.budget_allocations[].steps[].step_id | string | Yes |  |
+| data.budget_allocations[].steps[].working_section_id | string | Yes |  |
+| data.budget_allocations[].steps[].section_name_snapshot | string | No |  |
+| data.budget_allocations[].steps[].typical_worker_seconds | integer | No |  |
+| data.budget_allocations[].steps[].allowance_seconds | integer | No |  |
+| data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
+| data.budget_allocations[].steps[].left_seconds | integer | No |  |
+| data.budget_allocations[].steps[].share_state | string | Yes |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
+
+Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
+
 ### GET /api/v1/item-upholsteries
 - **Tag**: item-upholsteries
 - **OperationId**: route_list_item_upholsteries_api_v1_item_upholsteries_get
@@ -3992,50 +4037,6 @@ None
 | detail[].loc | array[integer | string] | Yes |  |
 | detail[].msg | string | Yes |  |
 | detail[].type | string | Yes |  |
-
-### GET /api/v1/item-economics/tasks/budget-allocations
-- **Tag**: item-economics
-- **OperationId**: route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get
-
-#### Parameters
-| Name | In | Required | Type |
-| --- | --- | --- | --- |
-| task_ids | query | Yes | array[string] |
-
-#### Request Body
-None
-
-#### Responses
-- **200**: Successful Response
-  - Content-Type: application/json
-| Field Path | Type | Required | Enum |
-| --- | --- | --- | --- |
-| ok | boolean | Yes |  |
-| data.budget_allocations[] | array[object] | No |  |
-| data.budget_allocations[].task_id | string | Yes |  |
-| data.budget_allocations[].status | string | Yes |  |
-| data.budget_allocations[].allowed_worker_minutes | string | No |  |
-| data.budget_allocations[].actual_worker_seconds | integer | No |  |
-| data.budget_allocations[].remaining_worker_minutes | string | No |  |
-| data.budget_allocations[].allocation_method | string | Yes |  |
-| data.budget_allocations[].steps[] | array[object] | Yes |  |
-| data.budget_allocations[].steps[].step_id | string | Yes |  |
-| data.budget_allocations[].steps[].working_section_id | string | Yes |  |
-| data.budget_allocations[].steps[].section_name_snapshot | string | No |  |
-| data.budget_allocations[].steps[].typical_worker_seconds | integer | No |  |
-| data.budget_allocations[].steps[].allowance_seconds | integer | No |  |
-| data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
-| data.budget_allocations[].steps[].left_seconds | integer | No |  |
-| data.budget_allocations[].steps[].share_state | string | Yes |  |
-| warnings[] | string | Yes |  |
-- **422**: Validation Error
-  - Content-Type: application/json
-| Field Path | Type | Required | Enum |
-| detail[].loc | array[integer | string] | Yes |  |
-| detail[].msg | string | Yes |  |
-| detail[].type | string | Yes |  |
-
-Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
 
 ### GET /api/v1/working-sections/typical-times
 - **Tag**: working-sections

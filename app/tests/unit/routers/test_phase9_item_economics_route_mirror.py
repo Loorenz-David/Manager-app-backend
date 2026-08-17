@@ -58,6 +58,7 @@ _EXPECTED_ROUTES = (
     ("POST", "/api/v1/item-economics/projections/{client_id}/promote", _ADMIN_MANAGER),
     # The all-role read-only route; its payload is time-only for every identity.
     ("GET", "/api/v1/item-economics/tasks/budget-allocations", _ALL_ROLES),
+    # The budget-status handler picks the money-free worker service for WORKER and SELLER identities.
     ("GET", "/api/v1/item-economics/tasks/{task_client_id}/budget-status", _ALL_ROLES),
     ("GET", "/api/v1/item-economics/items/{item_client_id}/economics", _ADMIN_MANAGER),
 )
