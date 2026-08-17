@@ -20,6 +20,12 @@ automatic review finding**.
 
 ## 2. Folder layout (charter tables)
 
+**Positional state, 2026-08-17:** `plans/` is **empty** — both plans are closed and live in
+`archive/plan_1/` and `archive/plan_2/` with their rounds. `plan_1.md` was archived late: phase-1 closeout updated the tracker but left the file in `plans/` with a stale
+`state: PROMPT_READY` header. Corrected to APPROVED and moved 2026-08-17. **Closeout must move
+the plan AND correct its own state line** — the tracker and the plan header are two records and
+both are load-bearing.
+
 ```
 simple_production_budget_division/
   master_plan.md            ← this file

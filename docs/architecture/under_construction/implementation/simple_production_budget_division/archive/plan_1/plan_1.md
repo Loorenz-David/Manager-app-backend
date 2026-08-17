@@ -2,7 +2,10 @@
 
 ```
 plan: 1
-state: PROMPT_READY (projection r0 ran — AMENDMENTS_REQUIRED, ledger routed; implementer r1 prompt compiled)
+state: **APPROVED** (re-review r4, 2026-08-17, Opus 5 — 0 open findings; 4 review rounds,
+       7 should-fix + 12 notes, ZERO production defects). Header corrected and file
+       archived 2026-08-17: phase-1 closeout updated the tracker but left this line at
+       its mid-flight value.
 date: 2026-08-16
 ```
 
