@@ -246,6 +246,54 @@ Agents never promote/reject/edit review items. The coordinator runs the post-app
 graph pass at closeout under the owner's standing authorization (v1 practice,
 restated for this pipeline).
 
+### Post-approval graph pass — DONE 2026-08-17 (coordinator)
+
+Scope: exactly the 14 items this phase recorded (created `2026-08-16T16:56Z`).
+Each re-derived from source before its stored claim was read (skill anti-pattern
+rule). Result: **13 promoted to `human_confirmed`, 1 rejected.**
+
+- **Rejected:** `source-file-item-economics-budget-division --implements-->
+  projection-working-section-typical-times`. `budget_division.py` contains no SQL
+  and no query construction — it owns the constants (`:14-17`) and the pure
+  `divide_production_budget` (`:78-191`); the typicals projection is implemented
+  by `get_working_section_typical_times.py`, whose `typical_times_statement()`
+  builds the grouped-median SQL and merely *imports* those constants. The item's
+  own `inferenceReason` conceded this and its confidence was 0.35. Rejected, not
+  deprecated: never true, so no provenance to preserve.
+- **Promoted:** the 2 endpoints, the 2 projections, the source-file node, the
+  surviving `implements` edge, both `accepts`, all three `reads_from`, and both
+  domain `contains` edges. The `contains` "contradictions" the validator raised
+  are noise — `contains` is legitimately one-to-many and the confirmed graph
+  already carried two such edges from `domain-item-economics`.
+- Deliberate placement note: the typicals projection sits under
+  `domain-item-economics` even though its route/service live under
+  working-sections, because **no working-sections domain node exists** (only
+  `domain-task-execution`) and its constants + purpose are item-economics.
+- **Left untouched:** the 6 older pending items (`2026-08-16T06:01Z`) describing
+  `seed_item_economics_configuration` — the owner's unrelated in-flight bootstrap
+  work, not this pipeline's to adjudicate.
+- Graph: **181 nodes / 273 edges, 0 stale, pending 20 → 6**, revision
+  `0372ff7c…`. Audit record:
+  `.archgraph/reviews/2026-08-17T10-41-50-945Z--97cac7.yml`.
+
+**K5 RESOLVED — it was a false alarm.** The r1 handoff self-reported that
+checkpoint `0b85701` had committed `.archgraph/architecture.yml` "whole,
+carrying a pre-existing foreign graph delta", and both the coordinator and the
+reviewer carried that forward to this gate. Verified at closeout by reading the
+committed blob: `git show 0b85701:.archgraph/architecture.yml` contains the
+phase's 5 own records and **zero** `bootstrap-seed-item-economics` records. No
+foreign graph state was ever bundled into a phase commit. Nothing for the owner
+to accept.
+
+**Open, owner's call (not blocking):** the graph pass's file change is applied in
+tool state but is **deliberately left uncommitted**, because the working copy of
+`.archgraph/architecture.yml` now also carries the owner's 6 uncommitted foreign
+bootstrap graph records, and the file is rewritten wholesale by the tool — so
+committing it would bundle descriptions of still-untracked bootstrap code into
+this pipeline's history (the exact thing K5 feared and which never actually
+happened). Options: commit it alongside the bootstrap work when that lands, or
+authorize the coordinator to commit the graph file as-is.
+
 ## 9. Gates & authorizations
 
 - **Mechanism-inventory gate: WAIVED as a separate session** (coordinator,
