@@ -4625,7 +4625,26 @@ nodes:
     origin: ai_inferred
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-17T20:59:49.438Z
+    sourceLinks:
+      - path: app/beyo_manager/domain/item_economics/budget_division.py
+        symbol: _governing_step
+        startLine: 188
+        endLine: 208
+        contentHash: 461c8b6611a8a33d90aaa6c4312f0b0596004d81d72a55d92af2e62d2bf491d9
+        linkedAt: 2026-08-17T20:59:49.438Z
+      - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+        symbol: get_task_production_time
+        startLine: 23
+        endLine: 45
+        contentHash: c633e80b9dcf75ff815015e34076f570c8f981c577424b828f1795a858421ec9
+        linkedAt: 2026-08-17T20:59:49.438Z
+      - path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+        symbol: test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot
+        startLine: 106
+        endLine: 158
+        contentHash: c815e764d03eabd8f7088c0d07c45707c60ecc612b6767120d0fa4647aa6645b
+        linkedAt: 2026-08-17T20:59:49.438Z
   - id: endpoint-item-economics-task-production-time
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/production-time

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from beyo_manager.domain.item_economics.budget_division import (
     ALLOCATION_METHOD,
@@ -15,6 +15,7 @@ from beyo_manager.domain.item_economics.budget_division import (
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
+from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
@@ -51,7 +52,7 @@ def _step(token, workspace_id, task_id, section_id, user_id, *, state=TaskStepSt
 
 
 @pytest.mark.integration
-async def test_c1_c2_section_order_is_total_and_nulls_last(db_session):
+async def test_c1a_c2_section_order_is_total_and_nulls_last(db_session):
     values = await _seed(db_session)
     workspace, user, section, task, *_ = values
     token = task.client_id.rsplit("_", 1)[-1]
@@ -77,16 +78,67 @@ async def test_c1_c2_section_order_is_total_and_nulls_last(db_session):
 
 
 @pytest.mark.integration
-async def test_c4_c6_c25_grouped_row_preserves_state_and_snapshot(db_session):
+async def test_c1b_reversed_insertion_order_keeps_name_tie_break(db_session):
+    values = await _seed(db_session)
+    workspace, user, _section, task, *_ = values
+    token = task.client_id.rsplit("_", 1)[-1]
+    for base_step in values[11]:
+        base_step.is_deleted = True
+    alpha = WorkingSection(
+        client_id=f"wsec_tie_b_{token}", workspace_id=workspace.client_id, name="Alpha", order_list=2
+    )
+    beta = WorkingSection(
+        client_id=f"wsec_tie_a_{token}", workspace_id=workspace.client_id, name="Beta", order_list=2
+    )
+    # C1b: sections and their steps are inserted in the reverse order.
+    db_session.add_all([beta, alpha])
+    await db_session.flush()
+    db_session.add_all([
+        _step(token, workspace.client_id, task.client_id, beta.client_id, user.client_id, sequence_order=2),
+        _step(token, workspace.client_id, task.client_id, alpha.client_id, user.client_id, sequence_order=1),
+    ])
+    await db_session.flush()
+    try:
+        result = await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id))
+        assert [row["working_section_id"] for row in result["sections"]] == [alpha.client_id, beta.client_id]
+    finally:
+        await _cleanup(db_session, values)
+
+
+@pytest.mark.integration
+async def test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot(db_session):
     values = await _seed(db_session)
     workspace, user, section, task, *_ = values
     token = task.client_id.rsplit("_", 1)[-1]
     for base_step in values[11]:
         base_step.is_deleted = True
+    pending_entered_at = datetime(2026, 8, 17, 10, 0, tzinfo=timezone.utc)
+    completed_entered_at = datetime(2026, 8, 17, 11, 0, tzinfo=timezone.utc)
+    pending = _step(
+        token, workspace.client_id, task.client_id, section.client_id, user.client_id,
+        state=TaskStepStateEnum.PENDING, sequence_order=2, snapshot="Upholstery installation",
+    )
+    completed = _step(
+        token, workspace.client_id, task.client_id, section.client_id, user.client_id,
+        state=TaskStepStateEnum.COMPLETED, worked=600, sequence_order=1, snapshot="Upholstery",
+    )
+    pending.created_at = pending_entered_at - timedelta(minutes=1)
+    completed.created_at = pending_entered_at
+    db_session.add_all([pending, completed])
+    await db_session.flush()
+    pending_record = StepStateRecord(
+        client_id=f"ssr_pending_{token}", workspace_id=workspace.client_id, step_id=pending.client_id,
+        state=TaskStepStateEnum.PENDING, entered_at=pending_entered_at, created_by_id=user.client_id,
+    )
+    completed_record = StepStateRecord(
+        client_id=f"ssr_completed_{token}", workspace_id=workspace.client_id, step_id=completed.client_id,
+        state=TaskStepStateEnum.COMPLETED, entered_at=completed_entered_at, created_by_id=user.client_id,
+    )
+    db_session.add_all([pending_record, completed_record])
+    await db_session.flush()
+    pending.latest_state_record_id = pending_record.client_id
+    completed.latest_state_record_id = completed_record.client_id
     section.name = "Renamed"
-    first = _step(token, workspace.client_id, task.client_id, section.client_id, user.client_id, state=TaskStepStateEnum.COMPLETED, worked=600, sequence_order=1, snapshot="Upholstery")
-    second = _step(token, workspace.client_id, task.client_id, section.client_id, user.client_id, state=TaskStepStateEnum.PENDING, sequence_order=2, snapshot="Upholstery")
-    db_session.add_all([first, second])
     await db_session.flush()
     try:
         result = await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id))
@@ -94,10 +146,17 @@ async def test_c4_c6_c25_grouped_row_preserves_state_and_snapshot(db_session):
         assert row["step_count"] == 2
         assert row["worked_seconds"] == 600
         assert row["state"] == "pending"
+        assert row["state_entered_at"] == pending_entered_at.isoformat()
         assert row["section_name"] == "Renamed"
-        assert row["section_name_snapshot"] == "Upholstery"
+        assert row["section_name_snapshot"] == "Upholstery installation"
         assert row["allowance_seconds"] == 6000
     finally:
+        await db_session.execute(
+            update(TaskStep)
+            .where(TaskStep.workspace_id == workspace.client_id)
+            .values(latest_state_record_id=None)
+        )
+        await db_session.execute(delete(StepStateRecord).where(StepStateRecord.workspace_id == workspace.client_id))
         await _cleanup(db_session, values)
 
 
@@ -108,6 +167,7 @@ async def test_c8_c9_excluded_and_mixed_sections_keep_task_charge(db_session):
     token = task.client_id.rsplit("_", 1)[-1]
     excluded_section = WorkingSection(client_id=f"wsec_excluded_{token}", workspace_id=workspace.client_id, name="Excluded", order_list=4)
     db_session.add(excluded_section)
+    values[10].allowed_worker_minutes = Decimal("20.00")
     await db_session.flush()
     db_session.add_all([
         _step(token, workspace.client_id, task.client_id, excluded_section.client_id, user.client_id, state=TaskStepStateEnum.SKIPPED, worked=30),
@@ -121,7 +181,8 @@ async def test_c8_c9_excluded_and_mixed_sections_keep_task_charge(db_session):
         assert row["allowance_seconds"] is None
         assert row["worked_seconds"] == 70
         mixed = next(row for row in result["sections"] if row["working_section_id"] == section.client_id)
-        assert mixed["share_state"] == "on_track"
+        assert mixed["worked_seconds"] == 1200
+        assert mixed["share_state"] == "over_share"
         assert result["budget"]["actual_worker_seconds"] == 1270
     finally:
         await _cleanup(db_session, values)

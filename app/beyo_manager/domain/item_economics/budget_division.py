@@ -152,14 +152,16 @@ def group_steps_by_section(
         group["state"] = _state_value(_value(governing, "state"))
         entered_at = _value(_loaded_latest_state_record(governing), "entered_at")
         group["state_entered_at"] = entered_at
-        group["section_name_snapshot"] = next(
-            (
-                _value(step, "working_section_name_snapshot")
-                for step in group["steps"]
-                if _value(step, "working_section_name_snapshot") is not None
-            ),
-            None,
-        )
+        group["section_name_snapshot"] = _value(governing, "working_section_name_snapshot")
+        if group["section_name_snapshot"] is None:
+            group["section_name_snapshot"] = next(
+                (
+                    _value(step, "working_section_name_snapshot")
+                    for step in group["steps"]
+                    if _value(step, "working_section_name_snapshot") is not None
+                ),
+                None,
+            )
     return list(groups.values())
 
 
@@ -186,17 +188,22 @@ def _governing_step(steps: Sequence[Any]) -> Any:
             return (True, value.isoformat())
         return (True, str(value))
 
-    candidates = list(steps)
+    live_steps = [step for step in steps if not _step_state_is_terminal(step)]
+    candidates = live_steps or list(steps)
     candidates.sort(key=lambda step: str(_value(step, "client_id", "")))
-    candidates.sort(
-        key=lambda step: time_key(_value(_loaded_latest_state_record(step), "entered_at")),
-        reverse=True,
-    )
     candidates.sort(
         key=lambda step: time_key(_value(step, "created_at")),
         reverse=True,
     )
+    candidates.sort(
+        key=lambda step: time_key(_value(_loaded_latest_state_record(step), "entered_at")),
+        reverse=True,
+    )
     return candidates[0]
+
+
+def _step_state_is_terminal(step: Any) -> bool:
+    return _state_value(_value(step, "state")) in {state.value for state in TERMINAL_STEP_STATES}
 
 
 def _step_state_is_excluded(step: Any) -> bool:
@@ -354,12 +361,7 @@ def divide_production_budget(
             continue
 
         allowance = section_allowances[section_id]
-        worked_for_share = sum(
-            int(_value(step, "total_working_seconds", 0) or 0)
-            for step in group["steps"]
-            if not _step_state_is_excluded(step)
-        )
-        section_state = "over_share" if worked_for_share > allowance else "on_track"
+        section_state = "over_share" if worked > allowance else "on_track"
         section_rows.append(
             {
                 **group,

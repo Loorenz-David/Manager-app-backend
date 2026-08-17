@@ -34,6 +34,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
                 TaskStep.task_id == task_id,
                 TaskStep.is_deleted.is_(False),
             )
+            .order_by(TaskStep.client_id.asc())
         )
     ).scalars().all()
     section_ids = {step.working_section_id for step in steps}

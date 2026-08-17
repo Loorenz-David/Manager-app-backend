@@ -157,17 +157,20 @@ async def test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_di
 
 
 @pytest.mark.integration
-async def test_budget_allocation_uses_shared_typicals_for_two_section_proportional_split(db_session):
+async def test_budget_allocation_uses_shared_typicals_for_section_proportional_split(db_session):
     values = await _seed_two_section_allocation(db_session)
     workspace, _user, section, task, *_ = values
     try:
         result = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [task.client_id]))
         row = result["budget_allocations"][0]
-        steps = {step["working_section_id"]: step for step in row["steps"] if step["share_state"] != "excluded"}
-        assert steps[section.client_id]["typical_worker_seconds"] == 3600
-        second = next(step for step in row["steps"] if step["working_section_id"] != section.client_id)
-        assert second["typical_worker_seconds"] == 1800
-        assert steps[section.client_id]["allowance_seconds"] == 2 * second["allowance_seconds"]
+        steps = [step for step in row["steps"] if step["share_state"] != "excluded"]
+        assert next(step for step in steps if step["working_section_id"] == section.client_id)["typical_worker_seconds"] == 3600
+        second_section_id = next(step["working_section_id"] for step in steps if step["working_section_id"] != section.client_id)
+        allowances_by_section = {}
+        for step in steps:
+            allowances_by_section[step["working_section_id"]] = allowances_by_section.get(step["working_section_id"], 0) + step["allowance_seconds"]
+        # §12.6 P1: the proportional invariant is defined at the section unit.
+        assert allowances_by_section[section.client_id] == 2 * allowances_by_section[second_section_id]
     finally:
         await _cleanup(db_session, values)
 

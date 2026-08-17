@@ -54,7 +54,7 @@ def test_excluded_consumption_is_charged_before_division_and_clamped():
     )
     assert clamped["distributable_seconds"] == 0
     assert next(row for row in clamped["steps"] if row["step_id"] == "live")["allowance_seconds"] == 0
-    assert next(row for row in clamped["steps"] if row["step_id"] == "live")["share_state"] == "on_track"
+    assert next(row for row in clamped["steps"] if row["step_id"] == "live")["share_state"] == "over_share"
 
 
 def test_typicals_proportionally_weight_and_missing_typicals_split_equally():
@@ -258,14 +258,39 @@ def test_c7_multi_open_governing_step_and_equal_remainder_tie_are_deterministic(
     assert result["sections"][0]["state"] == "pending"
 
 
-def test_c6_later_live_step_governs_section_state():
+def test_c6c_multi_open_governing_precedence_is_entered_created_then_client_id():
     now = datetime.now(timezone.utc)
-    completed = DivisionStep(
-        client_id="completed", state="completed", working_section_id="section", created_at=now - timedelta(minutes=2),
+    entered_winner = DivisionStep(
+        client_id="z-winner", state="pending", working_section_id="section", typical_worker_seconds=1,
+        created_at=now - timedelta(minutes=3),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
+    )
+    created_winner = DivisionStep(
+        client_id="b-created", state="working", working_section_id="section", typical_worker_seconds=1,
+        created_at=now - timedelta(minutes=1),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
     )
+    client_id_winner = DivisionStep(
+        client_id="a-client", state="paused", working_section_id="section", typical_worker_seconds=1,
+        created_at=now - timedelta(minutes=2),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=3)),
+    )
+    result = divide_production_budget(
+        Decimal("1.00"),
+        [created_winner, client_id_winner, entered_winner],
+        {"section": 1},
+    )
+    assert result["sections"][0]["state"] == "pending"
+
+
+def test_c6_later_live_step_governs_section_state():
+    now = datetime.now(timezone.utc)
     pending = DivisionStep(
-        client_id="pending", state="pending", working_section_id="section", created_at=now - timedelta(minutes=1),
+        client_id="pending", state="pending", working_section_id="section", created_at=now - timedelta(minutes=2),
+        latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
+    )
+    completed = DivisionStep(
+        client_id="completed", state="completed", working_section_id="section", created_at=now - timedelta(minutes=1),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
     )
     assert group_steps_by_section([completed, pending])[0]["state"] == "pending"
