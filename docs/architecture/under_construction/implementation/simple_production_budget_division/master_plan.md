@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r4 adds the C14d other-workspace fixture row and absence assertion; focused file 4 passed; named tenant-filter mutation turned C14 red (`3 == 2`), then was reverted; full suite 2287 passed / 26 failed / 1 deselected / 2 warnings, with the known 23 baseline + 3 foreign bootstrap failures |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | **APPROVED** | 2026-08-17 | Opus 5 (reviewer r4) | Verdict APPROVED, 0 open findings. 4 review rounds: 7 should-fix + 12 notes, **ZERO production defects** — M1/M2 correct as first written, changed only by the behaviour-preserving S1 extraction. Closeout done: baseline §7 → 2287/26/1 (23 v1 byte-identical + 3 foreign bootstrap), MVP calibration rule §6, frontend handoff folded (§6 rewritten with E1/E2 contracts, §8 worker cards added), archived to `archive/plan_1/`, gate commit + graph pass below. Checkpoints `0b85701` → `d4d51af` → `fb48d13` → `7f09637` → `99ade31` → `1290cc0` |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.
@@ -181,6 +181,34 @@ Earned by re-review r3 (2026-08-17):
   step-level workspace filter is redundant via globally-unique section ids —
   recorded, do not re-open).
 
+### MVP calibration rule (owner-raised 2026-08-16, adopted at closeout)
+
+The owner asked mid-phase whether the test discipline was over-engineered. The
+assessment and the resulting rule, recorded so future pipelines inherit the
+calibration rather than the ceremony:
+
+- **Mutation probes with recorded observed-red are MANDATORY only for rule-6
+  mechanisms** — derivations, rounding, filters, admission rules, statistical
+  choices, money, time, ordering, dedupe keys — **plus tenant boundaries**
+  (r3 lesson 2). Routes, serializers, role admission and envelopes get ordinary
+  tests with no ledger row (this phase already did that: C15/C17/C18 never had
+  named mutations).
+- **Reviewer rounds are the expensive resource, not implementer rounds.** After a
+  projection has walked the mechanisms against real data and a ledger exists, the
+  first review is LIGHT-SCOPED: verify the ledger by sampling (5–6 rows), take
+  full adversarial depth only on the rule-6 seams, and declare the rest settled
+  ground in the handoff so later rounds never re-derive it. This phase's r1 did
+  exactly that and still found five real holes.
+- **Fix cycles are delta-scoped**: only the changed guards are re-probed; earlier
+  ledger rows stand.
+- **Evidence this calibration is right, not merely cheaper:** across four review
+  rounds the discipline found **zero production defects** (M1/M2 were correct as
+  first written) and **seven guards that did not guard** — including a monetary
+  key admissible on the worker surface, a route-shadowing regression that would
+  have passed green, and an unguarded tenant boundary. Every one was found by
+  deleting a construction and observing the suite stay green. That probe — not the
+  paperwork around it — is the part worth keeping.
+
 ## 7. Environment topology (imported from the v1 master plan §10, verified 2026-08-12→15; update HERE if reality disagrees)
 
 - Working directory for all commands: `backend/app/`.
@@ -193,6 +221,15 @@ Earned by re-review r3 (2026-08-17):
   The 23 failures are the phase-1 list in the v1 master plan; this pipeline compares
   against that list byte-identically. This phase adds tests and must not change any
   existing count.
+  **CLOSEOUT BASELINE (2026-08-17, APPROVED — measured three times independently:
+  implementer, reviewer, coordinator): 2287 passed / 26 failed / 1 deselected.**
+  The 26 decompose as the same **23 v1 IDs byte-identical** + **3 FOREIGN**
+  `tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py`
+  failures belonging to the owner's in-flight bootstrap-seeding work (untracked at
+  this gate; NOT caused by and NOT owned by this pipeline). Head unchanged
+  `c1d2e3f4a5b6` — no migration in this pipeline. **The successor pipeline inherits
+  2287 / 23 (+3 foreign, expected to vanish when the bootstrap work lands) / 1** —
+  diff against this figure, not the v1 one (reviewer r4 closeout input 4).
 - Migrations: none expected (HC-2). The disposable-DB recipe in the v1 §10 exists but
   should not be needed; if any session believes it needs a migration, that is a STOP
   — report to the coordinator, do not write one. **No index either** — projection N4

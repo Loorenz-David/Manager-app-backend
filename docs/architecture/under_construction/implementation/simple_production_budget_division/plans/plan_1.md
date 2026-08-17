@@ -516,3 +516,39 @@ criterion→test maps in the fix handoffs and reviews.
   non-E2E suite: 2287 passed, 26 failed, 1 deselected, 2 warnings; failures are
   the unchanged 23 inherited baseline IDs plus 3 foreign bootstrap IDs. The
   checkpoint and complete ledger are recorded in the r4 implementer handoff.
+
+- **Fix r4 consumption (coordinator, 2026-08-17)** — verified: checkpoint
+  `1290cc0` perimeter is the E2 test file + pipeline docs only (no production
+  file in the fix); foreign workspace `:34` + foreign task `:39` seeded, the
+  four-id call at `:192` with the explicit absence assertion at `:194`, count pin
+  `== 2` retained, FK-safe teardown (task `:231` before workspace `:239`) with the
+  residue table list declared. **Coordinator re-ran the C14d probe independently**
+  (deleted `Task.workspace_id == ctx.workspace_id` at
+  `get_task_budget_allocations.py:65-69`): the C14 node went RED — was 26-green
+  before r4 — then reverted with sha256 byte-identity confirmed and the file green
+  (4 passed). The red surfaces first at the `len(...) == 2` count assertion
+  (`:193`) with the absence assertion (`:194`) behind it; both are present, as the
+  prompt intended. `first_count == 11` unmoved with four ids. Suite 2287/26/1 =
+  23 baseline + 3 foreign. Implementer correctly noted the prompt's
+  `git diff 99ade31 -- app/beyo_manager` check cannot be empty while the owner's
+  foreign `bootstrap_app.py` edit sits in the tree — scoped-path diff was empty
+  (coordinator confirms; the overbroad instruction was mine).
+  Phase → REVIEWING; re-review r4 compiled, minimal delta on S7/C14d alone.
+
+- **Re-review r4 (2026-08-17, Opus 5) — APPROVED.** S7/C14d CLOSED: reviewer
+  re-applied the tenant-filter mutation (`get_task_budget_allocations.py:65-69`)
+  → RED `assert 3 == 2`, the foreign task returning as a third row exactly as S7
+  predicted; reverted byte-identical (sha256 recorded). Teardown verified
+  EMPIRICALLY against the configured DB (before/after table counts identical
+  across 7 tables; `ws_foreign_%` / `tsk_foreign_%` / `tsk_unevaluated_%` /
+  `ival_unevaluated_%` all 0 after the run; FK order confirmed) — not by reading.
+  No-weaker-assertions PASSES (one ADDED assertion; all pins retained verbatim).
+  Perimeter three files, no production file. Suite 2287/26/1, failure set
+  byte-identical to r3. Phase finding record: **7 should-fix + 12 notes across 4
+  rounds, ZERO production defects** — M1/M2 correct as first written, changed only
+  by the behaviour-preserving S1 extraction. Accuracy note accepted: pytest stops
+  at the first failing assert, so C14d's count assertion is what appears in the
+  traceback and the absence assertion is its belt-and-braces (plan_1.md:232-238
+  wording); both retained deliberately. Closeout inputs delivered (K5, three
+  recorded equivalences, frontend contract text, baseline, doctrine).
+  Handoff: `../handoffs/reviewer/2026-08-17_phase1_rereview_r4_handoff.md`.
