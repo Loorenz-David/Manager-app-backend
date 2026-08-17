@@ -47,6 +47,8 @@ def test_both_surfaces_admit_every_role_and_use_the_standard_envelope(path, role
     assert response.status_code == 200
     assert set(response.json()) == {"data", "ok", "warnings"}
     assert len(calls) == 1
+    if path == "/api/v1/working-sections/typical-times":
+        assert calls[0][0] is working_sections.get_working_section_typical_times
 
 
 def test_budget_allocations_rejects_more_than_fifty_ids_with_registered_identity(monkeypatch):
@@ -143,6 +145,7 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
     }
     from beyo_manager.domain.item_economics.division_serializers import (
         serialize_budget_allocation,
+        serialize_budget_step,
         serialize_typical_time,
     )
 
@@ -152,4 +155,14 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
     assert set(serialize_budget_allocation(task)) == {
         "task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "steps"
     }
-    assert not any("money" in key or "minor" in key for key in serialize_budget_allocation(task))
+    assert set(serialize_budget_step(task["steps"][0])) == {
+        "step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
+        "allowance_seconds", "worked_seconds", "left_seconds", "share_state",
+    }
+    payload = serialize_budget_allocation(task)
+    assert not any("money" in key or "minor" in key for key in payload)
+    assert not any(
+        "money" in key or "minor" in key
+        for step_payload in payload["steps"]
+        for key in step_payload
+    )

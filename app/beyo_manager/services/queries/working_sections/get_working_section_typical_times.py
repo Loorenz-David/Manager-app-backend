@@ -18,8 +18,8 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.services.context import ServiceContext
 
 
-async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
-    """Return live sections, with NULL typicals when fewer than five groups qualify."""
+def typical_times_statement(workspace_id: str):
+    """Build the shared grouped-median statement used by E1 and E2."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=TYPICAL_WINDOW_DAYS)
     grouped_steps = (
         select(
@@ -29,7 +29,7 @@ async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
             func.max(TaskStep.closed_at).label("latest_closed_at"),
         )
         .where(
-            TaskStep.workspace_id == ctx.workspace_id,
+            TaskStep.workspace_id == workspace_id,
             TaskStep.state == TaskStepStateEnum.COMPLETED,
             TaskStep.is_deleted.is_(False),
             TaskStep.recorded_time_marked_wrong.is_(False),
@@ -44,8 +44,7 @@ async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
         (sample_count >= TYPICAL_MIN_SAMPLE_SIZE, cast(func.round(percentile), Integer)),
         else_=None,
     )
-
-    statement = (
+    return (
         select(
             WorkingSection.client_id,
             WorkingSection.name,
@@ -57,11 +56,17 @@ async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
             grouped_steps.c.working_section_id == WorkingSection.client_id,
         )
         .where(
-            WorkingSection.workspace_id == ctx.workspace_id,
+            WorkingSection.workspace_id == workspace_id,
             WorkingSection.is_deleted.is_(False),
         )
         .group_by(WorkingSection.client_id, WorkingSection.name)
-        .order_by(WorkingSection.order_list.asc().nulls_last(), WorkingSection.created_at.asc())
+    )
+
+
+async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
+    """Return live sections, with NULL typicals when fewer than five groups qualify."""
+    statement = typical_times_statement(ctx.workspace_id).order_by(
+        WorkingSection.order_list.asc().nulls_last(), WorkingSection.created_at.asc()
     )
     working_section_ids = ctx.query_params.get("working_section_ids")
     if working_section_ids is not None:
@@ -83,4 +88,4 @@ async def get_working_section_typical_times(ctx: ServiceContext) -> dict:
     return serialize_typical_times(rows)
 
 
-__all__ = ["get_working_section_typical_times"]
+__all__ = ["get_working_section_typical_times", "typical_times_statement"]

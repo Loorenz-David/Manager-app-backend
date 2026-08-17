@@ -56,8 +56,7 @@ _EXPECTED_ROUTES = (
     ("POST", "/api/v1/item-economics/tasks/{task_client_id}/projections", _ADMIN_MANAGER),
     ("DELETE", "/api/v1/item-economics/projections/{client_id}", _ADMIN_MANAGER),
     ("POST", "/api/v1/item-economics/projections/{client_id}/promote", _ADMIN_MANAGER),
-    # The one route the whole workspace may call; the handler picks the money-free
-    # worker service for WORKER and SELLER identities.
+    # The all-role read-only route; its payload is time-only for every identity.
     ("GET", "/api/v1/item-economics/tasks/budget-allocations", _ALL_ROLES),
     ("GET", "/api/v1/item-economics/tasks/{task_client_id}/budget-status", _ALL_ROLES),
     ("GET", "/api/v1/item-economics/items/{item_client_id}/economics", _ADMIN_MANAGER),

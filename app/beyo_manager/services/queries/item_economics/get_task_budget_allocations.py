@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import Integer, case, cast, func, select
+from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.budget_division import (
     ALLOCATION_METHOD,
-    TYPICAL_METHOD,
-    TYPICAL_MIN_SAMPLE_SIZE,
-    TYPICAL_WINDOW_DAYS,
     divide_production_budget,
 )
 from beyo_manager.domain.item_economics.configuration import (
@@ -37,6 +33,7 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.commands.item_economics._common import today_utc
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.working_sections.get_working_section_typical_times import typical_times_statement
 from beyo_manager.domain.item_economics.calculator import calculate_actual_worker_minutes, calculate_remaining_worker_minutes
 
 
@@ -45,53 +42,12 @@ _BUDGET_STATUSES = frozenset({EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEAS
 
 
 async def _load_typicals(ctx: ServiceContext) -> dict[str, dict]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=TYPICAL_WINDOW_DAYS)
-    grouped_steps = (
-        select(
-            TaskStep.working_section_id.label("working_section_id"),
-            TaskStep.task_id.label("task_id"),
-            func.sum(TaskStep.total_working_seconds).label("group_seconds"),
-            func.max(TaskStep.closed_at).label("latest_closed_at"),
-        )
-        .where(
-            TaskStep.workspace_id == ctx.workspace_id,
-            TaskStep.state == "completed",
-            TaskStep.is_deleted.is_(False),
-            TaskStep.recorded_time_marked_wrong.is_(False),
-        )
-        .group_by(TaskStep.working_section_id, TaskStep.task_id)
-        .subquery("completed_section_totals")
-    )
-    qualifying = grouped_steps.c.latest_closed_at >= cutoff
-    sample_count = func.count(grouped_steps.c.task_id).filter(qualifying)
-    percentile = func.percentile_cont(0.5).within_group(grouped_steps.c.group_seconds).filter(qualifying)
-    typical_seconds = case(
-        (sample_count >= TYPICAL_MIN_SAMPLE_SIZE, cast(func.round(percentile), Integer)),
-        else_=None,
-    )
-    statement = (
-        select(
-            WorkingSection.client_id,
-            WorkingSection.name,
-            sample_count.label("sample_count"),
-            typical_seconds.label("typical_worker_seconds"),
-        )
-        .outerjoin(grouped_steps, grouped_steps.c.working_section_id == WorkingSection.client_id)
-        .where(
-            WorkingSection.workspace_id == ctx.workspace_id,
-            WorkingSection.is_deleted.is_(False),
-        )
-        .group_by(WorkingSection.client_id, WorkingSection.name)
-    )
-    result = await ctx.session.execute(statement)
+    result = await ctx.session.execute(typical_times_statement(ctx.workspace_id))
     return {
         row.client_id: {
             "typical_worker_seconds": int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
             "sample_count": int(row.sample_count or 0),
             "section_name": row.name,
-            "method": TYPICAL_METHOD,
-            "window_days": TYPICAL_WINDOW_DAYS,
-            "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
         }
         for row in result
     }
@@ -220,8 +176,6 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         primary = primary_by_task.get(task.client_id)
         item = item_by_id.get(primary.item_id) if primary is not None else None
         evaluation = evaluation_by_task.get(task.client_id)
-        binding = "detached" if item is None else ("bound" if evaluation is None or evaluation.item_id == item.client_id else "mismatched")
-
         if evaluation is None:
             if item is None:
                 status = EconomicsStatusEnum.NOT_EVALUATED
@@ -275,11 +229,8 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "remaining_worker_minutes": remaining_minutes,
                 "allocation_method": ALLOCATION_METHOD,
                 "steps": division["steps"],
-                "_binding": binding,
             }
         )
-    for row in output:
-        row.pop("_binding", None)
     return serialize_budget_allocations(output)
 
 

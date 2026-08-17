@@ -237,6 +237,30 @@ samples, median `2800` ≠ `4200` — still bites):
   surface and are listed in the implementer handoff. Architecture Graph delta
   applied in one batch: 5 nodes and 9 relationships, revision
   `ab1a4935ea94bc00544837222cc0cf638e3054898157de4985765805537f3a6c`.
+
+- **Round 1 consumption (coordinator, 2026-08-16)** — r1 handoff consumed
+  adversarially; routed to FIX ROUND r1b before review. Findings:
+  **K1 (defect, phase-caused):** the r1 claim "none of the 27 failure IDs is a
+  phase failure" is FALSE for
+  `test_item_economics_router.py::test_router_route_pairs_match_the_authoritative_route_table`
+  — a second hand-written route mirror (`_ROUTES:14`, `_ALL_ROLE_ROUTES:48`)
+  turned red by E2; coordinator reproduced the red (`Extra items in the left set:
+  ('GET', '/tasks/budget-allocations')`). HC-1a extended 3→4 artifacts
+  (intention round 6, D10 rationale).
+  **K2 (decomposition, verified):** 27 = 23 baseline IDs byte-identical to the
+  v1 list (`phase_1_worker_money_redaction.md:198-220`, diffed name-by-name)
+  + 3 foreign (`test_seed_item_economics_configuration.py`, owner's untracked
+  in-flight bootstrap work) + K1.
+  **K3 (hard-field gap):** observed-red ledger covers 1 of ~20 named mutations
+  (C1 only, honestly declared). C18's discipline requires the complete ledger.
+  **K4 (missing criterion):** C13b's service-invoking door-mapping test absent.
+  **K5 (perimeter note):** checkpoint `0b85701` committed
+  `.archgraph/architecture.yml` whole, carrying the PRE-EXISTING foreign graph
+  delta alongside the phase's 5-node/9-edge delta — flagged to owner; not
+  splittable cheaply, recorded for the approval gate.
+  **K6 (audit gap):** handoff maps no criterion→test-node table; r1b must
+  provide it so review can audit C1–C21 coverage row-by-row.
+
 - **Round 1b (implementer fix, 2026-08-16, Codex)** — IMPLEMENTED. Added the
   E2 row to the fourth authorized route mirror, including its required query
   parameter and service assertion; added the C20 all-excluded unit fixture.
@@ -249,6 +273,23 @@ samples, median `2800` ≠ `4200` — still bites):
   an explicit NOT COVERED — STOP item. No production behavior was changed and
   no Architecture Graph mutation was made; the r1 graph delta remains the
   authoritative graph state.
+
+- **Round 1b consumption (coordinator, 2026-08-16)** — routed to FIX ROUND r1c
+  (test-only) before first review. Verified: checkpoint `d4d51af` perimeter clean
+  (test files only, K5 respected — no architecture.yml); full suite re-run by
+  coordinator = 26 failed / 2278 passed, failure decomposition 23 baseline + 3
+  foreign confirmed (handoff said 2277 passed — one extra passing collected test,
+  foreign-side drift, recorded). The complete F2 ledger did its job and exposed:
+  **9 surviving mutations** (C6, C9c, C9d-statistic, C9d-rounding, C10a, C10b,
+  C13b-door2, C16, C20) and **5 uncovered criteria** (C9b, C9c, C9d, C10, C11) —
+  fourteen criterion-rows unproven, review would be a guaranteed
+  CHANGES_REQUESTED. Special risk flagged for r1c: C9c/C9d survivals mean the
+  D9 group-window admission and the cont+half-even statistic are UNPROVEN IN
+  PRODUCTION — the missing fixtures must decide whether production violates M1
+  as contracted (if so: production fix, recorded per-site). C16's survival is
+  anomalous (an at-fifty test that tolerates `>=`) — site or fixture is wrong.
+  C20's survival may mean the guard is naturally redundant — equivalence
+  analysis required, not silent acceptance.
 
 - **Round 1c (implementer, 2026-08-16, Codex)** — IMPLEMENTED (test-only).
   Added padded, teardown-owned M1 fixtures for per-(task, section) aggregation,
@@ -263,3 +304,97 @@ samples, median `2800` ≠ `4200` — still bites):
   the live-step partition, with identical observable results. Focused tests: 30
   passed. Full non-E2E suite: 2286 passed, 26 failed, 1 deselected (23 v1 baseline
   + 3 foreign bootstrap-seeding failures). No Architecture Graph mutation was made.
+
+- **Round 1c consumption + STOP adjudication (coordinator, 2026-08-16)** —
+  verified: checkpoint `fb48d13` perimeter test-only as declared; focused suite
+  re-run by coordinator = 30 passed; full-suite failure list = 23 baseline + 3
+  foreign (unchanged from r1b, re-verified there). Ledger CLOSED: every
+  criterion-row has an observed-red record except two adjudicated equivalences:
+  **C13b-door2 ACCEPTED** — `excluded` is constructed from `live_steps`, which
+  already filters `is_deleted`; the named mutation site is unreachable by
+  construction, and the protective red lives at C13a (loader filter) with the W8
+  fixture pinning both observables (deleted+skipped invisible; live skipped
+  charged). The door-2 named mutation is recorded as subsumed by C13a.
+  **C20 ACCEPTED** — with an empty allocated set, every downstream loop (weights,
+  raw shares, floors, remainder, allocation rows) is vacuously empty and the
+  output is identical with or without the guard; the guard stays as a readable
+  fast path, the criterion is satisfied by its behavior-pinning test, and the
+  named-mutation requirement is waived by this record.
+  W2/W3 production verdicts: **complied** (group-by task+section, MAX(closed_at)
+  admission, percentile_cont, half-even double rounding — each now pinned by a
+  red-proven fixture). C16 root cause: the old test asserted through the
+  monkeypatched service, bypassing the cap; now invokes the real command.
+  Phase → REVIEWING; review r1 compiled LIGHT-SCOPED (owner-ratified in
+  conversation after r1b: projection r0 did the deep semantic walk, the closed
+  ledger is auditable — the review verifies rather than re-derives).
+
+- **Round 1 (review, 2026-08-16, Opus 5) — CHANGES_REQUESTED (0 blocking / 5
+  should-fix / 8 notes).** Both rule-6 mechanisms verified CORRECT line-by-line
+  (M1 generated SQL + M2 function, full walk recorded in the handoff's
+  "Verified correct" section — settled ground, do not re-derive); ledger sampled
+  honest on six rows; perimeter over `0b85701^..fb48d13` clean; suite reproduced
+  2286/26/1 with mechanical 23+3 decomposition; both equivalence adjudications
+  upheld. Findings (all coverage, all probe-confirmed):
+  **S1** E2 inlines a second unproven copy of the M1 aggregation
+  (`_load_typicals` — `return {}` leaves 33 tests green; no E2 fixture has two
+  sections with differing typicals) → extract shared statement builder + E2
+  two-section 2:1 row. **S2** C14's fixture never runs the resolver path (the
+  N8-site mutation passes green) → evaluation-less task WITH primary item in
+  both calls. **S3** C17's E2 step key-set assertion missing (HC-3 hole:
+  `consumed_cost_minor` on steps passes green) → third key-set + step-wide money
+  scan. **S4** C15's E1 row can't detect P7 shadowing (declaration below the
+  param route passes green) → service-identity assertion. **S5** C13's
+  byte-agreement clause unasserted → budget-status comparison on the fixture.
+  Notes: N-a README detail sections incomplete/misplaced; N-b mirror-comment now
+  false for E2's row; N-c dead `_binding`; N-d/N-e minor unasserted clauses;
+  N-f/N-g cosmetics; **N-h routed to intention round 7** (fifth null field on
+  unevaluated E2 tasks + §6 qualifier; carries to the frontend handoff at
+  closeout). Handoff:
+  `../handoffs/reviewer/2026-08-16_phase1_review_r1_handoff.md`. Fix r2 prompt
+  compiled; re-review r2 will be delta-scoped per charter.
+
+- **Round 2 (implementer fix, 2026-08-17, Codex) — IMPLEMENTED.** F1 extracted
+  the registered `typical_times_statement(...)` grouped-median builder into the
+  E1 query module and made E2 call it; the E2 fixture now has two sections with
+  pinned 3600/1800 typicals and a 2:1 allowance split. F2 made C14's
+  evaluation-less task carry a PRIMARY item and valuation, and both calls execute
+  the resolver path; the local query-count fixture pins the eleven-statement
+  batch shape. F3 adds the E2 step exact-key-set assertion and scans nested step
+  keys for money terms. F4 pins E1 route service identity. F5 compares E2's
+  `actual_worker_seconds` with `get_task_budget_status` on the same C13 fixture.
+  F6 completes both README detail contracts, rewords the route-mirror comment,
+  removes dead `_binding`, hoists the excluded-state set, restores the new
+  import's order, and pins C3/C5b clauses. No production behavior changed except
+  the F1 shared-builder refactor; `division_serializers.py` was untouched by the
+  fix itself. Focused phase/mirror suite: 140 passed. Full non-E2E suite:
+  2287 passed, 26 failed, 1 deselected; the 26 are exactly the 23 inherited
+  baseline IDs plus the three foreign bootstrap-seeding IDs in
+  `test_seed_item_economics_configuration.py`.
+
+  **Criterion → test map (lettered compound rows):**
+
+  | Criterion row | Exact test node |
+  |---|---|
+  | C13a — deleted/excluded row set and charged consumption | `tests/integration/services/queries/item_economics/test_budget_allocations_query.py::test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_distinct` |
+  | C13b — remove-service state/deletion mapping | `...::test_remove_service_maps_a_removed_step_to_deleted_skipped` |
+  | C13c — E2/status actual-seconds agreement | `...::test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_distinct` |
+  | C14a — one/three-call query-count equality | `...::test_budget_allocation_constant_query_count_for_one_and_three_tasks` |
+  | C14b — eval-less PRIMARY item + valuation resolver path | same C14 test node (fixture property) |
+  | C14c — unknown task omission and status degradation | same C14 test node |
+  | C15a — E1 all-role admission/envelope | `tests/unit/routers/api_v1/test_budget_division_routes.py::test_both_surfaces_admit_every_role_and_use_the_standard_envelope` |
+  | C15b — E1 service identity/order | same C15 test node |
+  | C15c — E2 all-role admission/envelope | same C15 test node |
+  | C17a — E1 exact key set | `...::test_time_payload_serializers_have_exact_money_free_key_sets` |
+  | C17b — E2 task exact key set | same C17 test node |
+  | C17c — E2 step exact key set + nested money scan | same C17 test node |
+
+  **Round-2 mutation ledger (all probes applied at the named site, observed red,
+  and reverted byte-for-byte):**
+
+  | # | Mutation/site | Test node and observed red | Reverted |
+  |---|---|---|---|
+  | 1 | `get_task_budget_allocations.py::_load_typicals`: `return {}` | `test_budget_allocation_uses_shared_typicals_for_two_section_proportional_split`; `None != 3600` | yes |
+  | 2 | `get_task_budget_allocations.py` immediately before `resolve_economics_selection`: per-task workspace-wide `ProductionCostGroup` SELECT | `test_budget_allocation_constant_query_count_for_one_and_three_tasks`; `assert 12 == 11` | yes |
+  | 3 | `division_serializers.py::serialize_budget_step`: add `consumed_cost_minor` | `test_time_payload_serializers_have_exact_money_free_key_sets`; extra key in exact-set assertion | yes |
+  | 4 | `working_sections.py`: move E1 declaration below `/{working_section_id}` | `test_both_surfaces_admit_every_role_and_use_the_standard_envelope`; captured command was `get_working_section` instead of E1 service | yes |
+  | 5 | `get_working_section_typical_times.py::typical_times_statement`: remove `(working_section_id, task_id)` GROUP BY | `test_typical_query_aggregates_same_task_section_steps_before_sampling`; PostgreSQL grouping error at the shared builder | yes |

@@ -3993,17 +3993,6 @@ None
 | detail[].msg | string | Yes |  |
 | detail[].type | string | Yes |  |
 
-### GET /api/v1/working-sections/typical-times
-- **Tag**: working-sections
-- **OperationId**: get_working_section_typical_times_route_api_v1_working_sections_typical_times_get
-
-#### Parameters
-| Name | In | Required | Type |
-| --- | --- | --- | --- |
-| working_section_ids | query | No | array[string] |
-
-Returns the median completed section-total for live sections; sections below the minimum sample size retain a null typical.
-
 ### GET /api/v1/item-economics/tasks/budget-allocations
 - **Tag**: item-economics
 - **OperationId**: route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get
@@ -4013,7 +4002,77 @@ Returns the median completed section-total for live sections; sections below the
 | --- | --- | --- | --- |
 | task_ids | query | Yes | array[string] |
 
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.budget_allocations[] | array[object] | No |  |
+| data.budget_allocations[].task_id | string | Yes |  |
+| data.budget_allocations[].status | string | Yes |  |
+| data.budget_allocations[].allowed_worker_minutes | string | No |  |
+| data.budget_allocations[].actual_worker_seconds | integer | No |  |
+| data.budget_allocations[].remaining_worker_minutes | string | No |  |
+| data.budget_allocations[].allocation_method | string | Yes |  |
+| data.budget_allocations[].steps[] | array[object] | Yes |  |
+| data.budget_allocations[].steps[].step_id | string | Yes |  |
+| data.budget_allocations[].steps[].working_section_id | string | Yes |  |
+| data.budget_allocations[].steps[].section_name_snapshot | string | No |  |
+| data.budget_allocations[].steps[].typical_worker_seconds | integer | No |  |
+| data.budget_allocations[].steps[].allowance_seconds | integer | No |  |
+| data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
+| data.budget_allocations[].steps[].left_seconds | integer | No |  |
+| data.budget_allocations[].steps[].share_state | string | Yes |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
+
 Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
+
+### GET /api/v1/working-sections/typical-times
+- **Tag**: working-sections
+- **OperationId**: get_working_section_typical_times_route_api_v1_working_sections_typical_times_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| working_section_ids | query | No | array[string] |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.typical_times[] | array[object] | No |  |
+| data.typical_times[].working_section_id | string | Yes |  |
+| data.typical_times[].section_name | string | Yes |  |
+| data.typical_times[].typical_worker_seconds | integer | No |  |
+| data.typical_times[].sample_count | integer | Yes |  |
+| data.typical_times[].method | string | Yes |  |
+| data.typical_times[].window_days | integer | Yes |  |
+| data.typical_times[].min_sample_size | integer | Yes |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
+
+Returns the median completed section-total for live sections; sections below the minimum sample size retain a null typical.
 
 ### PUT /api/v1/working-sections
 - **Tag**: working-sections

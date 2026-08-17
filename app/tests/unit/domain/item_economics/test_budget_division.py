@@ -50,6 +50,7 @@ def test_excluded_consumption_is_charged_before_division_and_clamped():
     )
     assert clamped["distributable_seconds"] == 0
     assert next(row for row in clamped["steps"] if row["step_id"] == "live")["allowance_seconds"] == 0
+    assert next(row for row in clamped["steps"] if row["step_id"] == "live")["share_state"] == "on_track"
 
 
 def test_typicals_proportionally_weight_and_missing_typicals_split_equally():
@@ -84,6 +85,7 @@ def test_tie_order_is_nulls_last_then_client_id():
         {"section": 1},
     )
     rows = {row["step_id"]: row for row in allocated_rows(result)}
+    assert rows["a"]["allowance_seconds"] == 1
     assert rows["z"]["allowance_seconds"] == 2
 
 

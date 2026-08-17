@@ -34,7 +34,7 @@ simple_production_budget_division/
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED (r1c) | 2026-08-16 | Codex | r1c closed every exposed ledger row: new M1 group/window/continuous-half-even/filter/threshold fixtures and M2/50-ID boundary fixtures turn all non-equivalent named mutations red; C13b-door2 and C20 are recorded equivalence STOPs. Production complied with M1/M2; no production or graph change. Suite: 2286 passed, 26 failed, 1 deselected. Checkpoints `0b85701`, `d4d51af`, `fb48d13` |
+| 1 | M1+M2 domain module, E1+E2 endpoints, full test set | IMPLEMENTED | 2026-08-17 | Codex | Fix r2 closed S1–S5 and N-a–N-g: shared M1 builder plus two-section E2 split proof, resolver-path fixture, step key-set guard, E1 service identity, budget-status agreement, README/mirror/cosmetic cleanup. Focused 140 passed; full non-E2E 2287 passed / 26 failed / 1 deselected = 23 baseline + 3 foreign bootstrap failures. Checkpoint: fix r2. Re-review r2 remains next gate. |
 
 Single-phase pipeline. The projection (round 0) runs under the reviewer tables; the
 implementer prompt is compiled only after its ledger is fully routed.
@@ -56,7 +56,11 @@ implementer prompt is compiled only after its ledger is fully routed.
   builders (new module; v1 `serializers.py` is closed, HC-1)
 
 **Query services:**
-- `app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py` (E1/M1)
+- `app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py`
+  (E1/M1) — ALSO exports the shared grouped-median statement builder
+  `typical_times_statement(...)` (registered per review r1 S1 / one-copy rule):
+  the ONLY implementation of the M1 aggregation; E2 imports and calls it rather
+  than inlining a copy.
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py` (E2)
 
 **Routes:**
@@ -131,6 +135,24 @@ phase, named now so prompts carry them:
   residue checks name their tables.
 - **Suite-number verification (P-L)** — baseline figures are verified at consumption,
   never trusted from a handoff.
+
+Earned by review r1 (2026-08-16; each from a probe-confirmed coverage hole):
+
+- **Rationale-site rule (r1 lesson 1)** — a named mutation is applied at the site
+  the criterion's RATIONALE names, not merely at a site that reddens the test; a
+  criterion that specifies a fixture property is checked as a fixture property.
+- **Lettered-parts rule (r1 lesson 2)** — multi-part criteria get one lettered row
+  per part (C17a/b/c style) so the criterion→test map cannot mark a compound
+  criterion green on partial coverage.
+- **Service-identity rule (r1 lesson 3)** — route mount/ordering risks are guarded
+  by `calls[0][0] is <service>` assertions, never by status-code + call-count
+  (precedent `test_item_economics_router.py:133`).
+- **One-copy rule (r1 lesson 4)** — a registered mechanism implemented in a second
+  call site needs either the registry to name a shared helper both sites call, or
+  a criterion per copy; an unregistered second copy is a finding.
+- **Guard-is-the-reason rule (r1 lesson 5)** — mirror of charter rule 2's
+  companion: each criterion's guarded construction must be the only reason its
+  test passes; "delete the construction, suite stays green" is the review probe.
 
 ## 7. Environment topology (imported from the v1 master plan §10, verified 2026-08-12→15; update HERE if reality disagrees)
 

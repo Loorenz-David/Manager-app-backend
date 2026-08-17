@@ -101,10 +101,11 @@ def divide_production_budget(
         }
 
     budget_seconds = _budget_seconds(allowed_worker_minutes)
+    excluded_state_values = {state.value for state in EXCLUDED_STEP_STATES}
     excluded = [
         step
         for step in live_steps
-        if _state_value(_value(step, "state")) in {state.value for state in EXCLUDED_STEP_STATES}
+        if _state_value(_value(step, "state")) in excluded_state_values
     ]
     allocated = [step for step in live_steps if step not in excluded]
     charged_seconds = sum(int(_value(step, "total_working_seconds", 0) or 0) for step in excluded)
