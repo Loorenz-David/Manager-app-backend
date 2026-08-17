@@ -1,3 +1,14 @@
+> # ⛔ SUPERSEDED — do not build from this file
+>
+> Replaced in full on **2026-08-17** by
+> **`HANDOFF_TO_FRONTEND_production_time_and_worker_cards_20260817.md`**.
+>
+> This document was written before the backend existed and patched twice afterwards. Its
+> §4 row-ordering guidance (`sequence_order`) is **wrong in practice** — that column is
+> NULL on every live step — and its four-call design for the production-time widget has
+> been replaced by a single endpoint. Kept for provenance only. §9 of the new document
+> lists every difference.
+
 # Frontend handoff — "Production time" component (task details)
 
 **Date:** 2026-08-16 · **Updated 2026-08-17** — the two gaps this document originally

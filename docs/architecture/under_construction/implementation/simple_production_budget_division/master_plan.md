@@ -36,7 +36,7 @@ simple_production_budget_division/
 |---|---|---|---|---|---|
 | 1 | M1+M2 domain module, E1+E2 endpoints, full test set | **APPROVED** | 2026-08-17 | Opus 5 (reviewer r4) | Verdict APPROVED, 0 open findings. 4 review rounds: 7 should-fix + 12 notes, **ZERO production defects** — M1/M2 correct as first written, changed only by the behaviour-preserving S1 extraction. Closeout done: baseline §7 → 2287/26/1 (23 v1 byte-identical + 3 foreign bootstrap), MVP calibration rule §6, frontend handoff folded (§6 rewritten with E1/E2 contracts, §8 worker cards added), archived to `archive/plan_1/`, gate commit + graph pass below. Checkpoints `0b85701` → `d4d51af` → `fb48d13` → `7f09637` → `99ade31` → `1290cc0` |
 
-| 2 | E3 — one task-scoped, section-keyed production-time endpoint (intention §12, mechanism M3) | **IMPLEMENTED** | 2026-08-17 | Codex (GPT-5) | E3 implemented and verified: targeted phase suite 164 passed; full suite 2337 selected, 2311 passed, 26 inherited failures, 1 deselected. Checkpoint follows the implementer handoff. |
+| 2 | E3 — one task-scoped, section-keyed production-time endpoint (intention §12, mechanism M3) | **APPROVED** | 2026-08-17 | Opus 5 (reviewer r3) | Verdict APPROVED, 0 blocking / 0 should-fix / 9 carried-forward notes. All 7 r1 findings closed **and demonstrated by definition-site mutation**: C1b, C6a, C6b, C6c, C9, C25b, C27 each reddened at the expected assertion; the two fixtures that survived their own mutations in r1 now bite. Nothing loosened — 9 asserts added, 1 deleted, probed to cost no coverage (N1). Suite 2313/26/1, failure IDs byte-identical to the phase-1 closeout set (0 added, 0 removed), re-derived independently. Phase-2 tests proven to leave **zero** DB residue and zero orphan FKs by isolation. Three implementer decisions ruled acceptable. Checkpoints `98aa31b` → `f904100`. |
 
 The projection (round 0) runs under the reviewer tables; the implementer prompt is
 compiled only after its ledger is fully routed.
@@ -283,6 +283,22 @@ calibration rather than the ceremony:
   every session: **diff failure IDs, never totals.** A run reporting 25 is not "better
   than baseline"; it means one test moved and the session must identify which before
   claiming green-per-baseline. Related to the long-standing N11 suite-residue item.
+- **MEASURED SUITE RESIDUE (coordinator, 2026-08-17 — quantifies the long-standing N11
+  item).** Each full-suite run leaves roughly **24 `task_steps` across ~17 tasks**
+  permanently behind (measured by creation hour: 24/17 per run, 48/34 in hours with two
+  runs). Live `task_steps` moved **2833 → 3049** over one day of review activity, and
+  three-step same-section groups moved **1 → 19**. Consequences, binding on later
+  sessions: (a) **§12.4's counts drift with every suite run** — re-measure rather than
+  cite, and never treat a changed count as evidence of a code change; (b) some test
+  outside this pipeline violates charter rule 11½; (c) any "measured on the configured
+  database" claim must state when it was taken. **PROVEN at review r3 by isolation:** running every phase-2 test
+  file (166 tests) moved `task_steps` 3376 → **3376** and `step_state_records`
+  8983 → **8983** — zero rows, zero orphan FKs; a full-suite run moved them to 3400 / 9023.
+  **The residue comes entirely from tests outside this pipeline.**
+- **PHASE-2 CLOSEOUT BASELINE (APPROVED 2026-08-17; measured independently by implementer,
+  reviewer and coordinator): 2313 passed / 26 failed / 1 deselected.** The 26 IDs are
+  byte-identical to the phase-1 closeout set — 0 added, 0 removed. Head unchanged
+  `c1d2e3f4a5b6`. Successors inherit **2313 / 26 / 1**.
 - Migrations: none expected (HC-2). The disposable-DB recipe in the v1 §10 exists but
   should not be needed; if any session believes it needs a migration, that is a STOP
   — report to the coordinator, do not write one. **No index either** — projection N4
@@ -368,6 +384,40 @@ authorize the coordinator to commit the graph file as-is.
 - Approval-gate commit + archive move at closeout (charter closeout ritual). Closeout
   also owns the two frontend-handoff folds recorded in intention §8 (un-omit
   production-time §6.1; author the worker-card section).
+
+**Rules earned in phase 2 (review r1) — add to §6's standing set:**
+
+- **Precedence-disagreement rule.** When a criterion pins a *precedence* (an ordering key,
+  a governing-row rule, a tie-break), its fixture must make **every level of that
+  precedence disagree with the others**. B1, S1 and S2 are one shape: the expected value
+  held for a second, independent reason, so the guard could not fail. C6's completed step
+  must be created *last*; C1's insertion order must contradict the expected order; C9's
+  excluded seconds must be the only thing crossing the slice. Charter rule 2's companion
+  says this for fixtures; it now says it for precedence rules.
+- **Criterion-kind rule.** A criterion the plan classes as DB, whose named mutation reddens
+  only a unit test, is a **mis-kind, not a pass**. The criterion→test ledger records *which
+  test bites on which mutation* (charter rule 11), not criterion → one test name.
+- **Chosen-from-a-set rule.** Any field derived by picking **one row out of a group**
+  (`section_name_snapshot` from the governing step, a section's `state`) is a rule-6
+  mechanism and needs a contracted key — and the read that feeds it needs a deterministic
+  `ORDER BY`. The projection's mechanism sweep must ask "which fields are chosen from a
+  set, and by what key?" alongside ordering and dedupe keys.
+- **Perimeter-by-path rule.** Tool-recorded state (`.archgraph/architecture.yml`) is part
+  of the write perimeter and is declared **by path**, not narrated in prose. A declared
+  perimeter that does not match `git show --stat` cannot be audited, and the two claims
+  every review rests on — "every probe was reverted", "nothing changed outside the
+  perimeter" — are reconstructed from exactly that comparison.
+
+- **Deleted-assertion rule (earned review r3).** In a round scoped to *strengthen only*, a
+  **deleted** assertion is reviewed exactly like a loosened one, and the reviewer does not
+  rule on the letter: they must **demonstrate** that the surviving criteria still pin the
+  value — by drifting it and observing red — before letting the deletion stand. **A diff
+  that greps clean for `==` → `!=` is not a loosening check; removed lines are the other
+  half of it.**
+- **Perimeter-by-path rule, extended (N4/N5).** The perimeter list and the failure list are
+  **generated from `git` and from `pytest` output, never retyped.** Both of fix r2's filing
+  defects were transcription, in the one artifact whose whole job is to be
+  machine-comparable.
 
 **Phase-2 follow-ups recorded, deliberately NOT done in phase 2:**
 

@@ -88,6 +88,122 @@ HC-1a from three to four authorized artifacts under D10's existing rationale —
 is the same designed tripwire family the owner already accepted, not a new
 decision. Recorded here for provenance; no new card raised.
 
-## Open
+## Settled — phase 2 (owner answers 2026-08-17)
 
-None. (Card 1 → D8; D9 owner-proposed; projection card 1 → D10.)
+**D11 — the working section is the allocation unit (answers C1).** Owner chose B.
+Verbatim: *"i don't fully understand the issue, because if a task has two upholstery
+task steps then the work for those two should be sum isn't becasuse two imply one is
+completed the other is pending or working, the total time that working section has
+taken to fix an item is the total worked time of those two task steps. i think this
+which i discribe is what you are pointing as a soluction with the 'recommendation B'."*
+
+**Coordinator correction, recorded because the reason differs from the owner's
+reading:** what the owner described (summing the two steps' worked time) is the
+*consumed* side, already settled by D9 and restated as M3.3 — both variants do it.
+C1 was about the *allowance*. Measured consequence of variant A on a 180-minute
+budget with typicals 60/30/60 and two Upholstery steps: Upholstery is allotted
+**102.9 min** while Structural Repair drops to 51.4 and Sanding to 25.7, because the
+second Upholstery step adds a second full Upholstery weight (total weight 150 → 210,
+`budget_division.py:142-147`). The rework therefore *grants* Upholstery budget and
+*takes* it from sections that did nothing wrong, and Upholstery can rework
+indefinitely without ever reading late. Under B the slices are 72/36/72, both passes
+count against Upholstery's 72, and the second pass surfaces as `over_share` — which
+is the intent. The owner's answer stands as B on the corrected reasoning.
+
+**D11a — per-step split inside a section (coordinator-specified, not carded).**
+Variant B allocates to the section, but the worker card still needs one number per
+step. Rule: **the section's open step is allowed the section's slice minus the worked
+seconds of that section's closed steps.** Justification for not raising a card: the
+database has **0 of 2782 (task, section) groups with two non-closed steps**, so "the
+open step" is unambiguous in all real data, and the rule gives the card the honest
+answer to "how long do I have for this second pass?" The theoretically-possible
+multi-open case is pinned by fixture (§12.10 row 5), never by production reality.
+Raised here for owner visibility under the MVP calibration rule.
+
+**D12 — the live step governs the section's displayed state (answers C2).** Owner:
+*"the recomendation is the correct approach"* → variant A. A section holding a
+completed first pass and a pending reassignment renders **pending**, because the
+section genuinely has work to do again and the row's time keeps climbing. The
+furthest-state reading (showing *completed*) is the audit question, which this widget
+is not for.
+
+**D13 — E3 carries no per-step data, and a step row's `share_state` comes from its
+section (answers projection card 1, 2026-08-17).** Owner: *"i don't understand the problem
+of card 1 … if a working section has two task steps assigned, both task steps account for
+the total worked time so if both working times additions overflow the allowed time it
+should not render on track for independent steps … because this endpoint should not be
+returning the individual task steps. only what is need it to read on the component which
+is upholstery has worked a total of 2 h regardless of how many task steps was it
+re-assigned to."*
+
+Coordinator reading, recorded because the card was about a surface the owner had not
+assumed was in play: card 1 concerned **E2's worker card**, which does render one card per
+step — E3 never did. Two consequences. (a) E3's payload loses `step_ids`; `step_count`
+stays as a fact about the section. (b) The owner's "should not render on track for
+independent steps" is **stricter** than the projectionist's recommendation, under which an
+earlier finished pass would read `on_track` while only the governing step showed the
+overflow. Adopted per the owner: a step row's `share_state` is derived from its
+**section's** total worked vs its slice, so no step of an overflowing section reads
+on-track. `allowance_seconds` / `left_seconds` stay per-step — they answer "how long do I
+have for *this* pass?" — and only the state is section-derived. Bonus: E2 and E3 now
+report the same *state* for a section, not merely reconcilable numbers.
+
+**D14 — allowances and time-left may go negative (answers projection card 2).** Owner:
+*"that is a frontend concern, the frontend gets the values and sees the overflow and will
+render the overflow, the backend just presents the data the frontend decides how to
+visualize it."* No clamping: clamping would break P-AGREE's exact sum, the one guarantee
+this phase exists to establish. The frontend handoff rewrite carries the rule that a
+non-positive `allowance_seconds` draws a full over-share bar rather than a division.
+
+**D15 — a failed step's time still comes off the whole budget (answers projection card
+3).** Owner: *"we still show the ate [= eaten] time that section took."* Coordinator
+reading: the consumed time stays visible in the section's `worked_seconds`, and "still"
+keeps today's rule — charging remains at the task level, which is also the
+projectionist's recommendation. So D11 changes the **weighting** unit only; `C` stays Σ
+worked over non-deleted excluded steps, D8's promise holds, §4's consequence table stands,
+and five phase-1 assertions keep their exact numbers. **Flagged for correction in one
+line if that reading is wrong** — the alternative (each section absorbs its own failures)
+would let a task promise time it has already spent.
+
+
+**D16 — a section reads `over_share` on its TOTAL worked, failed passes included
+(answers review r1 card 1, 2026-08-17).** Owner: *"yes over share is the correct solution
+( fail, cancell or deleted steps is not something that will happen often but the solution
+that was provided as recommended is viable )."* So `share_state` compares M3.3's
+`worked_seconds` — the section's total over all non-deleted steps, including excluded
+ones — against `allowance_seconds`. `left_seconds` is unchanged and stays
+`allowance_seconds − worked_seconds`, because §12.7's published example prints all three
+on one row and the client must be able to reproduce the arithmetic. M3.5b's
+exclusion rule continues to govern **only** the residual that splits a slice across a
+section's steps: charging decides how much is allocated, `share_state` reports what the
+section has spent. Owner's framing recorded: the excluded states are rare, and the
+recommendation is viable rather than ideal.
+
+**D12 reachability — owner challenge, adjudicated 2026-08-17.** Owner: *"about the D12 I
+don't think this is possible to happen, because when the user manipulates a task step
+( worker or manager ) it manipulates the active task step, once closed it never opens
+again, a new one is created, or im i wrong ?"* **The owner is right about the
+reassignment flow, and measured right about today's data.** Coordinator measurements:
+**0** multi-step groups where the newest-created step is closed while a live step exists;
+all 5 `{completed, pending}` groups have the pending step newest; `created_at` is NULL on
+**0 of 3049** live steps; and — correcting review r1's supporting claim — **no multi-step
+group shares an identical `created_at`** (49 two-step groups have 2 distinct timestamps,
+19 three-step groups have 3). Two of B1's three deviating fixtures are therefore
+unreachable through the database. Closed steps never reopen, confirmed in code
+(`transition_step_state.py:150-152` raises on any transition out of terminality).
+
+**The fix still lands, for the one case the reassignment argument does not cover:** a
+manager adds a second step to a section that already holds a pending one, and the *newer*
+step is completed first. Newest-created is then closed while older live work remains, and
+the row would read `completed` beside outstanding work. Nothing in the write paths
+prevents it; it simply has no instance today. The code currently agrees with D12 by the
+coincidence that steps on one section are created in the order they go live — which is
+enforced nowhere. Partitioning by liveness before sorting costs ~5 lines and makes the
+code state the rule. **Reclassified BLOCKING → should-fix** on the corrected reachability;
+it stays in the r2 work list.
+
+---
+
+## Settled — phase 1
+
+None open. (Card 1 → D8; D9 owner-proposed; projection card 1 → D10.)
