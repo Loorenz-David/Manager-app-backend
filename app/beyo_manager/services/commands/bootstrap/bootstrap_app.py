@@ -5,6 +5,9 @@ from beyo_manager.services.commands.bootstrap.phases.seed_admin_user import seed
 from beyo_manager.services.commands.bootstrap.phases.seed_item_categories import seed_item_categories
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_type_links import seed_issue_type_links
 from beyo_manager.services.commands.bootstrap.phases.seed_issue_types import seed_issue_types
+from beyo_manager.services.commands.bootstrap.phases.seed_item_economics_configuration import (
+    seed_item_economics_configuration,
+)
 from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import seed_pause_reasons
 from beyo_manager.services.commands.bootstrap.phases.seed_sku_templates import seed_sku_templates
 from beyo_manager.services.commands.bootstrap.phases.seed_email_connection import seed_email_connection
@@ -56,6 +59,17 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
             section_ids,
             user_result["admin_user_id"],
         )
+        fayoz_user_id = worker_result.get("Fayoz")
+        if fayoz_user_id is None:
+            raise ValidationError(
+                "Bootstrap worker 'Fayoz' is required for item-economics configuration."
+            )
+        item_economics_result = await seed_item_economics_configuration(
+            ctx.session,
+            workspace_id=workspace_result["workspace_id"],
+            creator_user_id=fayoz_user_id,
+            section_ids=section_ids,
+        )
         email_connection_result = await seed_email_connection(
             ctx.session,
             workspace_result,
@@ -69,5 +83,6 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
         "roles_seeded": list(role_ids.keys()),
         "pause_reasons_seeded": list(pause_reason_ids.keys()),
         "sku_templates_seeded": list(sku_template_ids.keys()),
+        "item_economics_configuration": item_economics_result,
         "email_connection": email_connection_result,
     }

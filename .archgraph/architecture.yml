@@ -4437,6 +4437,40 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-15T09:55:54.174Z
     updatedAt: 2026-08-15T11:09:38.530Z
+  - id: command-bootstrap-seed-item-economics-configuration
+    type: command
+    name: seed_item_economics_configuration
+    description: Seeds stable-ID seat and wood production-cost configuration plus a
+      workspace cost model. It updates only sole bootstrap-owned versions and
+      permanently freezes a chain when any successor exists, while preserving
+      person-owned groups and section memberships.
+    tags:
+      - bootstrap
+      - item-economics
+      - configuration
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: seed_item_economics_configuration
+          startLine: 406
+          endLine: 463
+          summary: The command coordinates group, membership, basis-version, and model
+            seeding and reports created, updated, frozen, or person-owned
+            outcomes.
+          inferenceReason: This independently named bootstrap operation is a command
+            boundary with explicit ownership-gate behavior.
+        - path: app/tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py
+          symbol: test_human_successors_permanently_freeze_bootstrap_basis_and_model
+          startLine: 264
+          endLine: 361
+          summary: Integration coverage creates human successors, deletes them, reruns
+            bootstrap, and verifies the bootstrap basis and model remain frozen.
+          inferenceReason: The test establishes that successor existence permanently
+            closes the bootstrap mutation gate.
+    origin: human_confirmed
+    confidence: 0.97
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
   - id: source-file-item-economics-budget-division
     type: source_file
     name: app/beyo_manager/domain/item_economics/budget_division.py
@@ -4458,10 +4492,10 @@ nodes:
             states.
           inferenceReason: The implementation is the formula boundary for the new per-step
             budget allocation mechanism.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - id: projection-working-section-typical-times
     type: projection
     name: Working section typical times
@@ -4482,10 +4516,10 @@ nodes:
             percentile_cont(0.5), and left-joins live sections.
           inferenceReason: This query is the independently consumable typical-time
             projection described by the phase contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - id: projection-item-economics-task-budget-allocations
     type: projection
     name: Task budget allocations
@@ -4507,10 +4541,10 @@ nodes:
             invokes the pure division function per task.
           inferenceReason: The service is the batched read-model boundary for the new
             allocation surface.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - id: endpoint-working-section-typical-times
     type: endpoint
     name: GET /api/v1/working-sections/typical-times
@@ -4529,10 +4563,10 @@ nodes:
             working_section_ids to the query, and wraps the result in the
             standard envelope before the parameterized route.
           inferenceReason: The handler is the external boundary for the typical-time projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - id: endpoint-item-economics-task-budget-allocations
     type: endpoint
     name: GET /api/v1/item-economics/tasks/budget-allocations
@@ -4550,10 +4584,10 @@ nodes:
             the request through the shared service runner before parameterized
             task paths.
           inferenceReason: The handler is the external boundary for the allocation projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9014,6 +9048,101 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
     updatedAt: 2026-08-15T08:40:24.816Z
+  - sourceNodeId: command-bootstrap-seed-item-economics-configuration
+    relationshipType: writes_to
+    targetNodeId: table-production-cost-group
+    description: Creates stable-ID seat and wood groups only when the category is
+      not already person-owned.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _get_or_create_group
+          startLine: 135
+          endLine: 175
+          summary: The helper reads the stable group and inserts ProductionCostGroup only
+            when no category group exists.
+          inferenceReason: Direct ORM insertion means the bootstrap command writes
+            production_cost_groups.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
+  - sourceNodeId: command-bootstrap-seed-item-economics-configuration
+    relationshipType: writes_to
+    targetNodeId: table-production-cost-group-section
+    description: Adds missing section memberships without moving sections already
+      assigned elsewhere.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_group_sections
+          startLine: 178
+          endLine: 218
+          summary: The helper queries active memberships and inserts
+            ProductionCostGroupSection for unassigned configured sections.
+          inferenceReason: Direct ORM insertion means the bootstrap command writes
+            production_cost_group_sections.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
+  - sourceNodeId: command-bootstrap-seed-item-economics-configuration
+    relationshipType: writes_to
+    targetNodeId: table-production-cost-basis-version
+    description: Creates or updates the sole stable bootstrap basis version and
+      freezes it permanently after any successor.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_basis_version
+          startLine: 221
+          endLine: 300
+          summary: The helper inserts a stable ProductionCostBasisVersion or updates its
+            values only when it is open and the only version in the group chain.
+          inferenceReason: The command directly creates and conditionally mutates
+            production_cost_basis_versions.
+    origin: human_confirmed
+    confidence: 0.99
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
+  - sourceNodeId: command-bootstrap-seed-item-economics-configuration
+    relationshipType: writes_to
+    targetNodeId: table-cost-model-version
+    description: Creates or updates the sole stable bootstrap model version and
+      freezes it permanently after any successor.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+          startLine: 303
+          endLine: 404
+          summary: The helper inserts the stable CostModelVersion and updates it only
+            while no other workspace model version exists.
+          inferenceReason: The command directly creates and conditionally mutates
+            cost_model_versions.
+    origin: human_confirmed
+    confidence: 0.99
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
+  - sourceNodeId: command-bootstrap-seed-item-economics-configuration
+    relationshipType: writes_to
+    targetNodeId: table-cost-model-term
+    description: Creates and synchronizes the five stable percentage terms while the
+      bootstrap model remains independently managed.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+          startLine: 352
+          endLine: 404
+          summary: The helper validates stable term ownership, inserts missing stable
+            terms, and updates their names, types, and percentages.
+          inferenceReason: The command directly creates and conditionally mutates
+            cost_model_terms.
+    origin: human_confirmed
+    confidence: 0.99
+    createdAt: 2026-08-16T06:01:36.498Z
+    updatedAt: 2026-08-17T10:47:58.548Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-item-economics-task-budget-allocations
@@ -9026,10 +9155,10 @@ edges:
             existing item-economics query projections.
           inferenceReason: The service extends the item-economics domain's read boundary
             without changing persisted formulas.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.88
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-working-section-typical-times
@@ -9042,10 +9171,10 @@ edges:
             allocation and exposed independently.
           inferenceReason: The projection supplies a domain input while remaining a
             separate working-section read surface.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.84
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: source-file-item-economics-budget-division
     relationshipType: implements
     targetNodeId: projection-item-economics-task-budget-allocations
@@ -9059,10 +9188,10 @@ edges:
             with its per-step allowance and share-state calculations.
           inferenceReason: The source file is the implementation anchor for the
             projection's arithmetic boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: projection-item-economics-task-budget-allocations
     relationshipType: reads_from
     targetNodeId: table-task-step
@@ -9075,10 +9204,10 @@ edges:
           summary: The allocation query loads non-deleted task steps for the requested
             workspace-scoped tasks.
           inferenceReason: Task-step rows are the live step-set input to the projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: projection-item-economics-task-budget-allocations
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -9091,26 +9220,10 @@ edges:
           summary: The allocation query filters the current committed evaluation per
             requested task.
           inferenceReason: The evaluation supplies the task's allowed worker-minute budget.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
-  - sourceNodeId: source-file-item-economics-budget-division
-    relationshipType: implements
-    targetNodeId: projection-working-section-typical-times
-    metadata:
-      evidence:
-        - path: app/beyo_manager/domain/item_economics/budget_division.py
-          startLine: 14
-          endLine: 17
-          summary: The domain module owns the typical-time method and window constants
-            consumed by the typical-time query.
-          inferenceReason: The constants are shared contract vocabulary, though the SQL
-            projection itself is implemented by its query service.
-    origin: ai_inferred
-    confidence: 0.35
-    createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: projection-working-section-typical-times
     relationshipType: reads_from
     targetNodeId: table-task-step
@@ -9124,10 +9237,10 @@ edges:
             rows.
           inferenceReason: Task steps are the authoritative stored duration source for the
             projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: endpoint-item-economics-task-budget-allocations
     relationshipType: accepts
     targetNodeId: projection-item-economics-task-budget-allocations
@@ -9140,10 +9253,10 @@ edges:
           summary: The endpoint delegates the request to get_task_budget_allocations
             through the shared runner.
           inferenceReason: The endpoint accepts the corresponding batched projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z
   - sourceNodeId: endpoint-working-section-typical-times
     relationshipType: accepts
     targetNodeId: projection-working-section-typical-times
@@ -9156,7 +9269,7 @@ edges:
           summary: The endpoint delegates to get_working_section_typical_times through the
             shared runner.
           inferenceReason: The endpoint accepts the corresponding typical-time projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-16T16:56:13.724Z
+    updatedAt: 2026-08-17T10:41:50.921Z

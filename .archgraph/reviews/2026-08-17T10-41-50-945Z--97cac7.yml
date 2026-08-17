@@ -1,0 +1,164 @@
+reviewId: 2026-08-17T10-41-50-945Z--97cac7
+reviewedItemIds:
+  - edge:source-file-item-economics-budget-division--implements-->projection-working-section-typical-times
+  - edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-allocations
+  - node:source-file-item-economics-budget-division
+  - node:projection-item-economics-task-budget-allocations
+  - node:projection-working-section-typical-times
+  - node:endpoint-item-economics-task-budget-allocations
+  - node:endpoint-working-section-typical-times
+  - edge:endpoint-item-economics-task-budget-allocations--accepts-->projection-item-economics-task-budget-allocations
+  - edge:endpoint-working-section-typical-times--accepts-->projection-working-section-typical-times
+  - edge:projection-item-economics-task-budget-allocations--reads_from-->table-item-cost-evaluation
+  - edge:projection-item-economics-task-budget-allocations--reads_from-->table-task-step
+  - edge:projection-working-section-typical-times--reads_from-->table-task-step
+  - edge:domain-item-economics--contains-->projection-item-economics-task-budget-allocations
+  - edge:domain-item-economics--contains-->projection-working-section-typical-times
+decisions:
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-working-section-typical-times
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "Wrong as always. budget_division.py contains no SQL and no query
+      construction — verified by reading: it holds only the M1/M2 constants
+      (:14-17) and the pure divide_production_budget function (:78-191). The
+      typical-times projection is implemented by
+      get_working_section_typical_times.py, whose typical_times_statement()
+      builds the grouped-median SQL (percentile_cont at :42) and merely IMPORTS
+      those three constants. The item's own inferenceReason concedes this ('the
+      SQL projection itself is implemented by its query service'), and its 0.35
+      confidence is the engine's own signal. Supplying shared constants is not
+      implementing; recording it as such would make a future reader look for the
+      typicals SQL in the wrong file. Rejected rather than deprecated: it was
+      never true, so there is no provenance to preserve."
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-allocations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified by reading divide_production_budget (:78-191): it is the
+      arithmetic the allocations projection surfaces — per-step allowance,
+      left_seconds and share_state all originate there (exact Fraction weights,
+      largest-remainder rounding, NULL-safe tie key). The source file is
+      genuinely the implementation anchor for that projection's computation. The
+      flagged contradiction was mutual exclusivity against the sibling
+      implements edge being rejected in this same set, so it resolves here."
+  - itemId: node:source-file-item-economics-budget-division
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "File exists and is the pipeline's registered pure-domain module
+      (master plan §4): owns
+      TYPICAL_WINDOW_DAYS/TYPICAL_MIN_SAMPLE_SIZE/TYPICAL_METHOD/ALLOCATION_MET\
+      HOD/EXCLUDED_STEP_STATES and divide_production_budget. Read this session."
+  - itemId: node:projection-item-economics-task-budget-allocations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: a read-only projection, nothing persisted (HC-2). Divides
+      a task's allowed_worker_minutes across its live steps weighted by section
+      typicals; returns per-step allowance/left/share_state plus task figures.
+      Implemented by get_task_budget_allocations.py over the pure function."
+  - itemId: node:projection-working-section-typical-times
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: read-only projection computing, per working section, the
+      median of (task, section) completed-step total-seconds groups over a
+      90-day window admitted by MAX(closed_at), NULL below 5 qualifying groups.
+      No persistence."
+  - itemId: node:endpoint-item-economics-task-budget-allocations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Route verified this session on the item-economics router (GET
+      /tasks/budget-allocations), declared above the parameterized
+      /tasks/{task_client_id} block, require_roles ADMIN/MANAGER/WORKER/SELLER,
+      repeatable task_ids capped at 50 with
+      BUDGET_ALLOCATIONS_TOO_MANY_TASK_IDS. Also mirrored in both v1
+      route-mirror tests (HC-1a) and routers/README.md.
+  - itemId: node:endpoint-working-section-typical-times
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Route verified this session on the working-sections router (GET
+      /typical-times), declared ABOVE the /{working_section_id} param route so
+      it is not shadowed (projection P7; guarded by a service-identity assertion
+      since fix r2), all four roles, optional repeatable working_section_ids.
+  - itemId: edge:endpoint-item-economics-task-budget-allocations--accepts-->projection-item-economics-task-budget-allocations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the route's handler runs get_task_budget_allocations and
+      serializes its result; the endpoint is the sole public entry to that
+      projection."
+  - itemId: edge:endpoint-working-section-typical-times--accepts-->projection-working-section-typical-times
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the route's handler runs
+      get_working_section_typical_times; asserted by service identity in
+      test_budget_division_routes.py."
+  - itemId: edge:projection-item-economics-task-budget-allocations--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the projection loads the committed-current evaluation per
+      task (kind=COMMITTED, superseded_at IS NULL, is_deleted false) to obtain
+      allowed_worker_minutes — the same row budget-status reads, batched via
+      .in_ which is safe under uix_item_cost_evaluations_current."
+  - itemId: edge:projection-item-economics-task-budget-allocations--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: the projection loads the task's non-deleted steps for the
+      allocated/excluded partition, their total_working_seconds (worked_seconds)
+      and the charged consumption C."
+  - itemId: edge:projection-working-section-typical-times--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified: task_steps is the sole sample source — completed,
+      non-deleted, not marked-wrong steps grouped by (working_section_id,
+      task_id), summing total_working_seconds. The rejected
+      working_section_daily_work_stats alternative is recorded in intention
+      §2.2."
+  - itemId: edge:domain-item-economics--contains-->projection-item-economics-task-budget-allocations
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Correct domain placement: the projection consumes the item-cost
+      evaluation's budget and lives on the item-economics router. Flagged
+      contradictions are validator noise — contains is legitimately one-to-many
+      and the confirmed graph already carries domain-item-economics contains
+      budget-status and lifetime."
+  - itemId: edge:domain-item-economics--contains-->projection-working-section-typical-times
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Best available placement, checked deliberately: the endpoint and
+      query service sit under working-sections, but no working-sections domain
+      node exists (only domain-task-execution, which owns steps and the state
+      machine), and this projection's constants live in the item_economics
+      domain module while its purpose is to weight item-economics budget
+      allocations. The evidence summary honestly records that it is 'exposed
+      independently'. Contradictions are the same one-to-many validator noise."
+retiredItemIds:
+  - edge:source-file-item-economics-budget-division--implements-->projection-working-section-typical-times
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-17T10:41:50.945Z
+graphRevisionBefore: ab1a4935ea94bc00544837222cc0cf638e3054898157de4985765805537f3a6c
+graphRevisionAfter: 0372ff7c2bd89bac27c188754c7cc21532e1d941827a882f4d299aa497385bf9
+evidenceSummary: 14 evidence entries across 5 files; no drift detected
+humanInstruction: "Post-approval graph pass for the
+  simple_production_budget_division pipeline, run by the coordinator under the
+  owner's standing authorization recorded in master plan §8 (v1 practice
+  restated for this pipeline). Scope: exactly the 14 items this phase's
+  implementer recorded (created 2026-08-16T16:56Z). 13 promoted after
+  independent re-derivation from source; 1 rejected as never-true
+  (budget_division.py implements no SQL — the typicals projection is implemented
+  by its query service, as the item's own inferenceReason concedes). The 6 older
+  pending items belong to the owner's unrelated in-flight bootstrap-seeding work
+  and were deliberately left untouched."
+reviewTokenCorrelation: ed91893e97af

@@ -1,0 +1,69 @@
+reviewId: 2026-08-17T10-47-58-572Z--de08c1
+reviewedItemIds:
+  - edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-term
+  - edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-version
+  - edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-basis-version
+  - edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group
+  - edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group-section
+  - node:command-bootstrap-seed-item-economics-configuration
+decisions:
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-term
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-basis-version
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group-section
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+  - itemId: node:command-bootstrap-seed-item-economics-configuration
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-read the cited implementation and tests. The bootstrap command
+      owns this boundary and the relationship is true. The validator's
+      other-target warnings reflect the command's legitimate writes to multiple
+      distinct tables, not a contradiction.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-17T10:47:58.572Z
+graphRevisionBefore: 0372ff7c2bd89bac27c188754c7cc21532e1d941827a882f4d299aa497385bf9
+graphRevisionAfter: 136dca24c83d78f626acc80fbcffcd7c54a4b76692a5b1499847c45058d0af25
+evidenceSummary: 7 evidence entries across 2 files; no drift detected
+humanInstruction: User explicitly authorized approval of the six bootstrap
+  item-economics architecture nodes and relationships in this turn.
+reviewTokenCorrelation: da4bfd3fdaff
