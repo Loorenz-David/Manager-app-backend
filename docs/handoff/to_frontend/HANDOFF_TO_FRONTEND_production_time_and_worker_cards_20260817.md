@@ -17,27 +17,54 @@ budget-status semantics; this one wins on everything below.
 
 ---
 
-## 1. The calls
+## 1. The calls — read this per component, not as one list
 
-| # | Route | Roles | Used by |
-|---|---|---|---|
-| 1 | `GET /api/v1/item-economics/tasks/{task_client_id}/production-time` | all four | **A** — the whole widget, one call |
-| 2 | `GET /api/v1/working-sections/typical-times` | all four | **B** — fetch once at bootstrap, cache |
-| 3 | `GET /api/v1/item-economics/tasks/budget-allocations?task_ids=…` | all four | **B** — batched, ≤50 task ids |
+**These two components do not share a data path.** Each has its own call list. Nothing
+below is needed by both.
+
+### Component A — Production time widget: **ONE call, and only this one**
+
+| Route | Roles |
+|---|---|
+| `GET /api/v1/item-economics/tasks/{task_client_id}/production-time` | all four |
+
+It returns the headline, the section rows, the typicals and the on-track states in a
+single response. **Do not call anything else for this widget** — not budget-status, not
+the step list, not typical-times, not budget-allocations. Those four calls *were* the old
+design and this endpoint exists to replace them. If you find yourself making a second
+request to render this component, something is wrong.
+
+### Component B — Worker task-step cards: **two calls**
+
+| Route | Roles | When |
+|---|---|---|
+| `GET /api/v1/working-sections/typical-times` | all four | once at bootstrap, cached |
+| `GET /api/v1/item-economics/tasks/budget-allocations?task_ids=…` | all four | when the step feed loads, batched ≤50 ids |
+
+**Why component B does not use component A's endpoint.** Two reasons, both structural:
+
+1. **It spans many tasks, not one.** The worker's feed shows steps from a dozen different
+   tasks at once. The production-time endpoint answers for a *single* task id, so a
+   15-task feed would mean 15 round trips; `budget-allocations` answers for up to 50 task
+   ids in one.
+2. **It needs per-step numbers, which the production-time endpoint deliberately does not
+   return.** The widget draws one row per *working section* — a section worked twice is
+   one row. The cards draw one per *step*. Each card needs its own
+   `allowance_seconds` / `left_seconds`, and only `budget-allocations` carries those.
+
+So the replacement is real but scoped: **four calls became one for the widget**, while the
+cards keep the two calls that were built for them. Both read the same server-side
+`share_state`, which is what stops the two screens ever disagreeing.
 
 Standard envelope on all three: `{ "ok": true, "warnings": [], "data": { … } }`.
 
-**Component A needs call 1 and nothing else.** It carries the headline, the section rows,
-the typicals and the on-track states in one response. Do not also call budget-status, the
-step list, or typical-times for this widget — they were the old four-call design.
-
-**All three are role-flat for time data.** Call 1 in particular returns a **byte-identical
-body to all four roles** — there is no monetary field at any depth, so there is nothing to
-branch on. This is enforced by a test that walks every key recursively.
+**All three are role-flat for time data.** The production-time call in particular returns a
+**byte-identical body to all four roles** — no monetary field at any depth, so there is
+nothing to branch on. Enforced by a test that walks every key recursively.
 
 ---
 
-## 2. Call 1 — production time (component A)
+## 2. The production-time payload — component A
 
 ```json
 { "task_id": "tsk…",
@@ -177,19 +204,18 @@ those endpoints. What this pipeline adds is the progress line.
 
 | card element | source |
 |---|---|
-| section name | call 3 `steps[].section_name_snapshot` |
-| worked time | call 3 `steps[].worked_seconds` (+ live tick, §3) |
-| "of 1h 0m" | call 3 `steps[].allowance_seconds` — this step's share |
-| "35m left" | call 3 `steps[].left_seconds` (may be negative) |
+| section name | `budget-allocations` → `steps[].section_name_snapshot` |
+| worked time | `budget-allocations` → `steps[].worked_seconds` (+ live tick, §3) |
+| "of 1h 0m" | `budget-allocations` → `steps[].allowance_seconds` — this step's share |
+| "35m left" | `budget-allocations` → `steps[].left_seconds` (may be negative) |
 | bar fill | `worked_seconds / allowance_seconds` — **guard the denominator** |
-| bar colour | call 3 `steps[].share_state` |
-| typical-only fallback | call 2 `typical_worker_seconds` when there is no budget |
+| bar colour | `budget-allocations` → `steps[].share_state` |
+| typical-only fallback | `typical-times` → `typical_worker_seconds` when there is no budget |
 
-**Efficiency.** Call 3 is batched: collect the visible cards' `task_id`s and make **one**
+**Efficiency.** `budget-allocations` is batched: collect the visible cards' `task_id`s and make **one**
 request with up to 50 ids, not one per card. Sending more → `422
 BUDGET_ALLOCATIONS_TOO_MANY_TASK_IDS`. **If your visible list is empty, skip the call** —
-`task_ids` is required, and an omitted parameter returns a generic 422. Call 2 is
-workspace-level reference data: fetch once per session, cache (an hour TTL is plenty), and
+`task_ids` is required, and an omitted parameter returns a generic 422. `typical-times` is workspace-level reference data: fetch once per session, cache (an hour TTL is plenty), and
 pass `working_section_ids` for just the sections this worker belongs to.
 
 **Two distinctions the card must not blur.**
@@ -207,7 +233,7 @@ disagree about whether a section is on track.
 
 ---
 
-## 6. Call 2 — typical times (reference data)
+## 6. Typical times — component B reference data
 
 ```json
 { "typical_times": [
@@ -230,7 +256,7 @@ correctly reads as taking **longer** per item, never shorter.
   refines how typicals are derived, those values change and the shape does not. **Key your
   display off them rather than hard-coding "90-day median".**
 
-`allocation_method` on call 1 and call 3 plays the same role. It is
+`allocation_method` on `production-time` and `budget-allocations` plays the same role. It is
 `static_proportional_section_v1` today. **It changed from `static_proportional_v1` in this
 release, and the per-step numbers moved with it** — if you cached anything from a preview
 build, that label is how you tell the generations apart.
@@ -241,10 +267,10 @@ build, that label is how you tell the generations apart.
 
 Absence is meaningful, never an error.
 
-- Call 3 **omits** task ids that are unknown, deleted, or in another workspace. Ask for
+- `budget-allocations` **omits** task ids that are unknown, deleted, or in another workspace. Ask for
   four, get two rows — that is a correct answer. Notice by key, not by error.
-- Call 2 returns every live section of the workspace including zero-sample ones.
-- Call 1 returns only sections **this task actually touched** — not the workspace list.
+- `typical-times` returns every live section of the workspace including zero-sample ones.
+- `production-time` returns only sections **this task actually touched** — not the workspace list.
 - A section deleted after the work happened still appears, with `section_name: null`,
   `order_list: null` and a null typical. Its `section_name_snapshot` is your label.
 
