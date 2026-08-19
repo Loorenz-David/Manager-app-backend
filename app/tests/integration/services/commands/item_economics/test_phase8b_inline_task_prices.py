@@ -73,6 +73,9 @@ async def _seed_economic_workspace(
     purchase_term: bool = False,
     configured: bool = True,
     valuation: bool = False,
+    valuation_expected_sale_price_minor: int | None = 1000,
+    valuation_purchase_cost_minor: int | None = None,
+    valuation_currency: ItemCurrencyEnum = ItemCurrencyEnum.SWEDISH_KRONA,
 ) -> tuple[Workspace, User, Item, ItemCategory]:
     token = uuid4().hex
     workspace = Workspace(client_id=f"ws_{token}", name=f"phase8b {token}")
@@ -155,9 +158,9 @@ async def _seed_economic_workspace(
             ItemValuation(
                 workspace_id=workspace.client_id,
                 item_id=item.client_id,
-                expected_sale_price_minor=1000,
-                purchase_cost_minor=None,
-                currency=ItemCurrencyEnum.SWEDISH_KRONA,
+                expected_sale_price_minor=valuation_expected_sale_price_minor,
+                purchase_cost_minor=valuation_purchase_cost_minor,
+                currency=valuation_currency,
                 created_by_id=user.client_id,
             )
         )
@@ -177,7 +180,25 @@ async def _current_valuations(db_session, item_id: str) -> list[ItemValuation]:
     )
 
 
-async def _cleanup_committed_workspace(db_session, workspace_id: str, user_id: str) -> None:
+async def _valuation_audits(db_session, workspace_id: str) -> list[AuditLog]:
+    return list(
+        (
+            await db_session.scalars(
+                select(AuditLog).where(
+                    AuditLog.workspace_id == workspace_id,
+                    AuditLog.event == "item_valuation.created",
+                )
+            )
+        ).all()
+    )
+
+
+async def _cleanup_committed_workspace(
+    db_session,
+    workspace_id: str,
+    user_id: str,
+    *additional_user_ids: str,
+) -> None:
     await db_session.rollback()
     for table in (
         ItemCostEvaluationTerm,
@@ -194,18 +215,20 @@ async def _cleanup_committed_workspace(db_session, workspace_id: str, user_id: s
         AuditLog,
     ):
         await db_session.execute(delete(table).where(table.workspace_id == workspace_id))
-    await db_session.execute(
-        text(
-            "DELETE FROM history_record_links WHERE history_record_id IN "
-            "(SELECT client_id FROM history_records WHERE created_by_id = :user_id)"
-        ),
-        {"user_id": user_id},
-    )
-    await db_session.execute(
-        text("DELETE FROM history_records WHERE created_by_id = :user_id"),
-        {"user_id": user_id},
-    )
-    await db_session.execute(delete(User).where(User.client_id == user_id))
+    user_ids = (user_id, *additional_user_ids)
+    for cleanup_user_id in user_ids:
+        await db_session.execute(
+            text(
+                "DELETE FROM history_record_links WHERE history_record_id IN "
+                "(SELECT client_id FROM history_records WHERE created_by_id = :user_id)"
+            ),
+            {"user_id": cleanup_user_id},
+        )
+        await db_session.execute(
+            text("DELETE FROM history_records WHERE created_by_id = :user_id"),
+            {"user_id": cleanup_user_id},
+        )
+    await db_session.execute(delete(User).where(User.client_id.in_(user_ids)))
     await db_session.execute(delete(Workspace).where(Workspace.client_id == workspace_id))
     await db_session.commit()
 
@@ -215,51 +238,51 @@ async def _cleanup_committed_workspace(db_session, workspace_id: str, user_id: s
     ("case_id", "configured", "purchase_term", "item_values", "expected_status"),
     [
         (
-            "C1-row-1-full-trio-purchase-term-commits",
+            "C7-row-1-full-trio-purchase-term-commits",
             True,
             True,
             {"expected_sale_price_minor": 1000, "purchase_cost_minor": 200, "currency": "swedish_krona"},
             "committed",
         ),
         (
-            "C1-row-2-expected-price-commits",
+            "C7-row-2-expected-price-commits",
             True,
             False,
             {"expected_sale_price_minor": 1000, "currency": "swedish_krona"},
             "committed",
         ),
         (
-            "C1-row-3-purchase-term-missing-purchase-cost",
+            "C7-row-3-purchase-term-missing-purchase-cost",
             True,
             True,
             {"expected_sale_price_minor": 1000, "currency": "swedish_krona"},
             "item_missing_purchase_cost",
         ),
         (
-            "C1-row-4-purchase-only-missing-expected-price",
+            "C7-row-4-purchase-only-missing-expected-price",
             True,
             False,
             {"purchase_cost_minor": 200, "currency": "swedish_krona"},
             "item_missing_expected_price",
         ),
         (
-            "C1-row-5-full-trio-currency-mismatch",
+            "C7-row-5-full-trio-currency-mismatch",
             True,
             True,
             {"expected_sale_price_minor": 1000, "purchase_cost_minor": 200, "currency": "danish_krona"},
             "currency_mismatch",
         ),
         (
-            "C1-row-6-unconfigured-workspace",
+            "C7-row-6-unconfigured-workspace",
             False,
             False,
             {"expected_sale_price_minor": 1000, "currency": "swedish_krona"},
             "not_configured_no_cost_group",
         ),
     ],
-    ids=lambda value: value if isinstance(value, str) and value.startswith("C1-") else None,
+    ids=lambda value: value if isinstance(value, str) and value.startswith("C7-") else None,
 )
-async def test_c1_inline_birth_writes_valuation_and_handles_exact_auto_statuses(
+async def test_c7_inline_birth_writes_valuation_and_handles_exact_auto_statuses(
     db_session,
     monkeypatch,
     caplog,
@@ -464,55 +487,282 @@ async def test_c5_row_3_currency_alone_is_accepted_ignored_and_item_unvalued(
 
 
 @pytest.mark.integration
-async def test_c4_row_1_current_valuation_refusal_rolls_back_item_mutation_and_task(
-    db_session,
+async def test_c1_different_inline_values_version_chain_and_credit_task_creator(
+    db_session, monkeypatch
 ):
-    workspace, user, item, _category = await _seed_economic_workspace(db_session, valuation=True)
+    await _disable_event_dispatch(monkeypatch)
+    workspace, valuation_creator, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
+    token = uuid4().hex
+    task_creator = User(
+        client_id=f"usr_{token}",
+        username=f"phase1_task_creator_{token}",
+        email=f"{token}@example.test",
+        password="test",
+    )
+    db_session.add(task_creator)
+    await db_session.flush()
+    workspace_id = workspace.client_id
+    valuation_creator_id = valuation_creator.client_id
+    task_creator_id = task_creator.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    await db_session.commit()
+    try:
+        result = await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                task_creator_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "expected_sale_price_minor": 1300,
+                        "purchase_cost_minor": 450,
+                        "currency": "swedish_krona",
+                    },
+                },
+            )
+        )
+        assert result["item_id"] == item_id
+        valuations = await _current_valuations(db_session, item_id)
+        assert len(valuations) == 2
+        old, new = valuations
+        assert old.created_by_id == valuation_creator_id
+        assert old.superseded_at is not None
+        assert old.superseded_by_id == new.client_id
+        assert new.expected_sale_price_minor == 1300
+        assert new.purchase_cost_minor == 450
+        assert new.currency == ItemCurrencyEnum.SWEDISH_KRONA
+        assert new.created_by_id == task_creator_id
+        assert new.superseded_at is None
+    finally:
+        await _cleanup_committed_workspace(
+            db_session, workspace_id, valuation_creator_id, task_creator_id
+        )
+
+
+@pytest.mark.integration
+async def test_c2_identical_inline_values_are_a_zero_write_noop(db_session, monkeypatch):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
     workspace_id = workspace.client_id
     user_id = user.client_id
     item_id = item.client_id
     item_article_number = item.article_number
-    original_designer = "original"
-    item.designer = original_designer
-    await db_session.flush()
+    current = (await _current_valuations(db_session, item_id))[0]
+    current_id = current.client_id
+    current_creator_id = current.created_by_id
+    before_count = 1
+    assert len(await _current_valuations(db_session, item_id)) == before_count
+    assert len(await _valuation_audits(db_session, workspace_id)) == 0
     await db_session.commit()
     try:
-        with pytest.raises(
-            ValidationError,
-            match=rf"^ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM: item {item_id}.*valuation",
-        ):
-            await create_task(
-                _ctx(
-                    db_session,
-                    workspace_id,
-                    user_id,
-                    {
-                        "task_type": "return",
-                        "item": {
-                            "article_number": item_article_number,
-                            "designer": "changed-before-refusal",
-                            "expected_sale_price_minor": 2000,
-                            "currency": "swedish_krona",
-                        },
+        await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "expected_sale_price_minor": 1200,
+                        "purchase_cost_minor": 400,
+                        "currency": "swedish_krona",
                     },
-                )
+                },
             )
-        await db_session.rollback()
-        stored_item = await db_session.scalar(select(Item).where(Item.client_id == item_id))
-        assert stored_item.designer == original_designer
-        assert await db_session.scalar(
-            select(Task).where(Task.workspace_id == workspace_id)
-        ) is None
-        assert await db_session.scalar(
-            select(TaskItem).where(TaskItem.workspace_id == workspace_id)
-        ) is None
-        assert len(await _current_valuations(db_session, item_id)) == 1
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        after_count = len(valuations)
+        assert before_count == 1
+        assert after_count == 1
+        assert valuations[0].client_id == current_id
+        assert valuations[0].created_by_id == current_creator_id
+        assert valuations[0].superseded_at is None
+        assert valuations[0].superseded_by_id is None
+        assert len(await _valuation_audits(db_session, workspace_id)) == 0
     finally:
         await _cleanup_committed_workspace(db_session, workspace_id, user_id)
 
 
 @pytest.mark.integration
-async def test_c4_row_2_never_valued_existing_item_accepts_inline_price(db_session, monkeypatch):
+async def test_c3_partial_inline_request_inherits_omitted_current_value(
+    db_session, monkeypatch
+):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    await db_session.commit()
+    try:
+        await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "purchase_cost_minor": 450,
+                        "currency": "swedish_krona",
+                    },
+                },
+            )
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        assert len(valuations) == 2
+        assert valuations[1].expected_sale_price_minor == 1200
+        assert valuations[1].purchase_cost_minor == 450
+        assert valuations[1].currency == ItemCurrencyEnum.SWEDISH_KRONA
+    finally:
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
+
+
+@pytest.mark.integration
+async def test_c4_partial_effectively_identical_request_is_a_zero_write_noop(
+    db_session, monkeypatch
+):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    current_id = (await _current_valuations(db_session, item_id))[0].client_id
+    await db_session.commit()
+    try:
+        await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "purchase_cost_minor": 400,
+                        "currency": "swedish_krona",
+                    },
+                },
+            )
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        assert len(valuations) == 1
+        assert valuations[0].client_id == current_id
+        assert valuations[0].superseded_at is None
+        assert valuations[0].superseded_by_id is None
+        assert len(await _valuation_audits(db_session, workspace_id)) == 0
+    finally:
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
+
+
+@pytest.mark.integration
+async def test_c5_currency_only_change_creates_a_new_version(db_session, monkeypatch):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    await db_session.commit()
+    try:
+        await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {
+                        "article_number": item_article_number,
+                        "expected_sale_price_minor": 1200,
+                        "purchase_cost_minor": 400,
+                        "currency": "euro",
+                    },
+                },
+            )
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        assert len(valuations) == 2
+        assert valuations[0].currency == ItemCurrencyEnum.SWEDISH_KRONA
+        assert valuations[0].superseded_by_id == valuations[1].client_id
+        assert valuations[1].expected_sale_price_minor == 1200
+        assert valuations[1].purchase_cost_minor == 400
+        assert valuations[1].currency == ItemCurrencyEnum.EURO
+        assert valuations[1].superseded_at is None
+    finally:
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
+
+
+@pytest.mark.integration
+async def test_c8_no_inline_price_leaves_existing_valuation_untouched(db_session, monkeypatch):
+    await _disable_event_dispatch(monkeypatch)
+    workspace, user, item, _category = await _seed_economic_workspace(
+        db_session,
+        valuation=True,
+        valuation_expected_sale_price_minor=1200,
+        valuation_purchase_cost_minor=400,
+    )
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    item_article_number = item.article_number
+    current_id = (await _current_valuations(db_session, item_id))[0].client_id
+    await db_session.commit()
+    try:
+        await create_task(
+            _ctx(
+                db_session,
+                workspace_id,
+                user_id,
+                {
+                    "task_type": "return",
+                    "item": {"article_number": item_article_number},
+                },
+            )
+        )
+        valuations = await _current_valuations(db_session, item_id)
+        assert len(valuations) == 1
+        assert valuations[0].client_id == current_id
+        assert valuations[0].superseded_at is None
+        assert valuations[0].superseded_by_id is None
+        assert len(await _valuation_audits(db_session, workspace_id)) == 0
+    finally:
+        await _cleanup_committed_workspace(db_session, workspace_id, user_id)
+
+
+@pytest.mark.integration
+async def test_c6_never_valued_existing_item_accepts_first_inline_price(db_session, monkeypatch):
     await _disable_event_dispatch(monkeypatch)
     workspace, user, item, _category = await _seed_economic_workspace(db_session)
     workspace_id = workspace.client_id

@@ -672,23 +672,22 @@ These are **not** the legacy keys. `item.item_value_minor` / `item.item_cost_min
 `item.item_currency` still exist on the body and are still rejected (§1.2); the trio above
 is the replacement.
 
-### 9.1 The refusal — an existing item that already has a price
+### 9.1 Inline re-pricing — an existing item that already has a price
 
 Task creation resolves the item first (by `client_id`, or `article_number` / `sku`). If it
-matched an **existing** item that already has a current valuation, sending the trio is
-refused:
+matches an **existing** item with a current valuation, sending the trio now re-prices that
+item. An amount supplied in the request replaces the stored amount; a field omitted from
+the request keeps its current value.
 
-```json
-{ "error": "ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM: item itm_01H… already has a current valuation; use the valuation endpoint PUT /api/v1/item-economics/items/itm_01H…/valuation.", "ok": false }
-```
+If the resulting amounts or currency differ from the current valuation, task creation
+writes a new valuation version credited to whoever created the task. If the effective
+amounts and currency are identical, it writes nothing at all — no new valuation row, no
+supersession and no valuation audit event.
 
-→ `422`, and **the whole task creation is rolled back** — no task, no task-item, no change
-to the matched item. The message names the item and the endpoint to use instead.
-
-The rule in one line: **inline pricing is for an item's birth. Changing an existing item's
-price is always the valuation endpoint.** An existing item with *no* current valuation
-(never priced, or its price deleted) accepts the trio and gets a new valuation — the chain
-grows, it does not resurrect the deleted row.
+An existing item with *no* current valuation (never priced, or its price deleted) still
+accepts the trio and starts a valuation chain; it does not resurrect a deleted row. This
+inline convenience deliberately differs from `PUT /items/{id}/valuation`, which continues
+to replace values wholesale rather than inheriting an omitted amount.
 
 ### 9.2 What the automatic commit does with it
 
@@ -713,8 +712,8 @@ exists: the create response looks identical in all six cases.
 ## Validation notes
 
 - Backend validation run: full suite green at the phase-9 checkpoint. Role gates, the money
-  redaction on all eight step endpoints, the `ITEM_MONEY_MOVED` bridge, the inline-pricing
-  refusal and the six auto-commit outcomes each have integration coverage.
+  redaction on all eight step endpoints, the `ITEM_MONEY_MOVED` bridge, inline-pricing
+  versioning and the six auto-commit outcomes each have integration coverage.
 - Suggested frontend validation:
   1. grep the app for `item_value_minor`, `item_cost_minor`, `item_currency` — every hit is
      either a form field to delete or a reader of a key that no longer exists;
@@ -722,8 +721,8 @@ exists: the create response looks identical in all six cases.
      rendered and nothing throws on the absent key; repeat under SELLER;
   3. create a task with the inline trio on a brand-new article number, then call
      budget-status and confirm `status: "ok"`;
-  4. repeat against an already-priced item and confirm the `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM`
-     path leaves no task behind;
+  4. against an already-priced item, send a **different** price and confirm a new valuation
+     version appears; repeat with the **identical** price and confirm no new version appears;
   5. walk the ten branch-B statuses by dismantling the configuration one piece at a time
      and confirm each renders its own copy, with no numbers.
 

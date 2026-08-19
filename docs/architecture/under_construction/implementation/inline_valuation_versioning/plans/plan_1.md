@@ -2,7 +2,7 @@
 
 ```
 plan: 1
-state: PROMPT_READY (round 2 — r1 blocked on a coordinator scoping error, HC-1 corrected 3 → 4)
+state: IMPLEMENTED (round 1b)
 date: 2026-08-19
 ```
 
@@ -86,3 +86,21 @@ planning and archive files, which record a decision that was true when written.
   `backend/docs/` was never searched. No owner card was warranted — D-AUTH already covers
   the document edit. HC-1 corrected to FOUR files, T2b and C10 added, and the edit
   specified in intention §3.1 rather than left open. No code was written in r1.
+
+- **implement r1b (2026-08-19) — IMPLEMENTED.** Replaced the priced-item refusal with
+  the contracted compare/inherit/version decision in front of the existing shared writer;
+  identical effective triples now write no valuation row, supersession, or valuation audit.
+  Retired the identity from live application/test/document surfaces, rewrote operational
+  handoff §9.1 and validation step 4, and added automated C1–C10 coverage. Focused suite:
+  78 passed. Full suite: 2320 passed / 26 inherited failures / 1 deselected (2346 selected),
+  with an empty failure-ID diff against the 26-test baseline. Ruff check passed on all
+  changed Python files. Named C2/C3/C5 mutations each went red at the production decision
+  site and reverted byte-identically to pre-probe SHA-256
+  `63f5a81fafed0a248c75e7428c8b4086aa95ae16f0c1feca072766efc57c3447`.
+  C10 also required mechanically replacing the validation overview's remaining generic
+  `inline-pricing refusal` wording with `inline-pricing versioning`; this stayed in the
+  authorized handoff file and added no semantics beyond intention §3.1. No semantic
+  decisions or scope deviations were required. Architecture Graph additive delta was
+  zero; a description-only maintenance preview for the existing human-confirmed
+  `command-task-create` node was rejected by the approval channel, so no graph mutation was
+  attempted again and the stale refusal wording is routed for separately authorized follow-up.

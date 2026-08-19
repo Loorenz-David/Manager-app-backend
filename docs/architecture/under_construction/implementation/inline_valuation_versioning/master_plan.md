@@ -1,7 +1,7 @@
 # Master plan — inline_valuation_versioning
 
 ```
-state: phase 1 PROMPT_READY
+state: phase 1 IMPLEMENTED
 date: 2026-08-19
 ```
 
@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **BLOCKED → r1b PROMPT_READY** | 2026-08-19 | coordinator | r1 stopped correctly on a coordinator scoping error: HC-1 said three files, but the identity is published in the operational handoff (`:682`, `:725`). Root cause — the verification grep ran from `backend/app/`, so `backend/docs/` was never searched. HC-1 corrected 3 → 4 under the existing D-AUTH, no owner card. T2b + C10 added; the document edit specified in intention §3.1. No code was written in r1. Prompt: `prompts/implementer/2026-08-19_phase1_implement_r1b.md` |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **IMPLEMENTED** | 2026-08-19 | Codex | r1b: four-file behavior/document perimeter implemented; focused 78 passed; full suite 2320 passed / 26 inherited failures / 1 deselected (2346 selected), failure-ID diff empty; review pending |
 
 ## 4. Naming registry
 

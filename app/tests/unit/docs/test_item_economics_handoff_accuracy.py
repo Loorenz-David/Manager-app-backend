@@ -94,7 +94,6 @@ _LITERAL_IDENTITIES = frozenset({
     "ITEM_COST_GROUP_CATEGORY_TAKEN",
     "ITEM_COST_GROUP_CATEGORY_IMMUTABLE",
     "ITEM_COST_ITEM_MISSING_MAJOR_CATEGORY",
-    "ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM",
     "ITEM_MONEY_MOVED",
 })
 
@@ -191,6 +190,38 @@ def test_no_document_invents_a_fully_qualified_item_economics_path(document) -> 
 def test_no_document_names_an_unregistered_error_identity(document) -> None:
     for token in _IDENTITY_TOKEN.findall(_text(document)):
         assert token in _REGISTRY, token
+
+
+@pytest.mark.unit
+def test_operational_handoff_documents_inline_repricing_contract() -> None:
+    text = _text(_OPERATIONAL)
+    assert "inline-pricing refusal" not in text
+    section = " ".join(
+        text.split("### 9.1 Inline re-pricing", 1)[1].split("### 9.2", 1)[0].split()
+    )
+    for required in (
+        "a field omitted from the request keeps its current value",
+        "writes a new valuation version credited to whoever created the task",
+        "writes nothing at all",
+        "still accepts the trio and starts a valuation chain",
+        "continues to replace values wholesale",
+    ):
+        assert required in section
+
+    validation = " ".join(
+        text.split("## Validation notes", 1)[1].split("## Trace links", 1)[0].split()
+    )
+    assert "send a **different** price and confirm a new valuation version appears" in validation
+    assert "repeat with the **identical** price and confirm no new version appears" in validation
+    assert "inline-pricing versioning" in validation
+
+
+@pytest.mark.unit
+def test_retired_inline_refusal_identity_is_absent_from_live_sources() -> None:
+    retired_identity = "ITEM_COST_INLINE_PRICE" + "_ON_PRICED_ITEM"
+    for root in (_PACKAGE, _APP_ROOT / "tests", _HANDOFFS):
+        for path in (*root.rglob("*.py"), *root.rglob("*.md")):
+            assert retired_identity not in path.read_text(), path
 
 
 @pytest.mark.unit

@@ -197,7 +197,6 @@ async def create_task(ctx: ServiceContext) -> dict:
         item_id: str | None = None
         resolved_item: Item | None = None
         item_was_created = False
-        item_has_current_valuation = False
         if request.item is not None:
             if request.item.article_number is None and request.item.sku is None:
                 # Neither identifier was given, so the SKU template is this item's only
@@ -322,35 +321,50 @@ async def create_task(ctx: ServiceContext) -> dict:
             )
         )
         if inline_price_requested:
+            expected_sale_price_minor = request.item.expected_sale_price_minor
+            purchase_cost_minor = request.item.purchase_cost_minor
+            should_write_valuation = True
             if not item_was_created:
-                item_has_current_valuation = (
-                    await ctx.session.scalar(
-                        select(ItemValuation).where(
-                            ItemValuation.workspace_id == ctx.workspace_id,
-                            ItemValuation.item_id == resolved_item.client_id,
-                            ItemValuation.superseded_at.is_(None),
-                            ItemValuation.is_deleted.is_(False),
-                        )
+                current_valuation = await ctx.session.scalar(
+                    select(ItemValuation).where(
+                        ItemValuation.workspace_id == ctx.workspace_id,
+                        ItemValuation.item_id == resolved_item.client_id,
+                        ItemValuation.superseded_at.is_(None),
+                        ItemValuation.is_deleted.is_(False),
                     )
-                    is not None
                 )
-                if item_has_current_valuation:
-                    raise ValidationError(
-                        f"ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM: item {resolved_item.client_id} "
-                        "already has a current valuation; use the valuation endpoint "
-                        f"PUT /api/v1/item-economics/items/{resolved_item.client_id}/valuation."
+                if current_valuation is not None:
+                    expected_sale_price_minor = (
+                        request.item.expected_sale_price_minor
+                        if request.item.expected_sale_price_minor is not None
+                        else current_valuation.expected_sale_price_minor
+                    )
+                    purchase_cost_minor = (
+                        request.item.purchase_cost_minor
+                        if request.item.purchase_cost_minor is not None
+                        else current_valuation.purchase_cost_minor
+                    )
+                    should_write_valuation = (
+                        expected_sale_price_minor,
+                        purchase_cost_minor,
+                        request.item.currency,
+                    ) != (
+                        current_valuation.expected_sale_price_minor,
+                        current_valuation.purchase_cost_minor,
+                        current_valuation.currency,
                     )
 
-            valuation = await write_item_valuation_chain_in_session(
-                ctx.session,
-                workspace_id=ctx.workspace_id,
-                item_id=resolved_item.client_id,
-                expected_sale_price_minor=request.item.expected_sale_price_minor,
-                purchase_cost_minor=request.item.purchase_cost_minor,
-                currency=request.item.currency,
-                created_by_id=ctx.user_id,
-            )
-            await audit(ctx, "item_valuation.created", "item_valuation", valuation.client_id)
+            if should_write_valuation:
+                valuation = await write_item_valuation_chain_in_session(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    item_id=resolved_item.client_id,
+                    expected_sale_price_minor=expected_sale_price_minor,
+                    purchase_cost_minor=purchase_cost_minor,
+                    currency=request.item.currency,
+                    created_by_id=ctx.user_id,
+                )
+                await audit(ctx, "item_valuation.created", "item_valuation", valuation.client_id)
         auto_events: list = []
         try:
             async with ctx.session.begin_nested():
