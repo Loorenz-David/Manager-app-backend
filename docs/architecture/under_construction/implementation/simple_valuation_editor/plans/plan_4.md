@@ -2,7 +2,7 @@
 
 ```
 plan: 4
-state: IMPLEMENTED — authored by the coordinator 2026-08-19; awaiting review
+state: CHANGES_REQUESTED r1 -> applied; r2 -> applied; awaiting re-review r3
 date: 2026-08-19
 gate: projection WAIVED — documentation only, no code, no mechanism
 runs in parallel with: plan 3 (the carried repairs). No shared files — plan 4 touches only
@@ -45,8 +45,8 @@ plan §8's six obligations:
 3. **The Save flow** (§6) — one call; `can_commit: false` disables the button; reconciliation
    mandatory.
 4. **§8.4's display prohibition lifted**, its contract kept (§7.2).
-5. **§6's status→treatment table amended** for this endpoint (§7.1), with §5.2's collapsibility
-   qualification.
+5. **§6's status→treatment table amended** for this endpoint (§7.1), with §5.2 item 4's
+   collapsibility condition.
 6. **Save cannot create the first valuation row** (§6.2) — D9's precondition, flagged as the
    one omission that would be silent.
 
@@ -57,8 +57,9 @@ mockup**, `is_estimated`'s empty-set case, and `quantity`'s missing CHECK constr
 ### 3.2 The production-time reply
 
 Answers all three questions — settled-only by design with D16's rationale and why options A and
-B are declined; `worked_seconds` settled-only for every consumer, enforced structurally by
-there being **no clock in the layer**; and the `allowance_i / typical_i` ratio as a true
+B are declined; `worked_seconds` settled-only for every consumer, because it is
+`total_working_seconds` and nothing else (the stronger *no clock in the layer* form of this
+claim was false and was corrected at r1 — see the Review log); and the `allowance_i / typical_i` ratio as a true
 consequence of the current allocation method but **not a contract**, with the two conditions
 that break it today.
 
