@@ -4696,6 +4696,48 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
     updatedAt: 2026-08-17T17:12:48.742Z
+  - id: projection-item-economics-expected-sold-price-scenario
+    type: projection
+    name: Expected Sold Price Scenario Arithmetic
+    description: Expected sold price scenario arithmetic is the pure item-economics
+      calculation boundary that turns collapsed cost-model coefficients, a
+      worker-minute rate, typical seconds, quantity, and a candidate whole-item
+      price into allowance, break-even, infeasibility, and slider-domain values.
+      It owns integer half-even rounding, cost-term collapse, the capped
+      lower-bound search, exact rational step alignment, and band derivation; it
+      performs no queries, persistence, or serialization. A missing purchase
+      cost remains a data-state null result while an invalid term shape raises
+      the registered validation identity. Published amounts must remain
+      whole-item minor units and retain the two-step centiminute-to-seconds
+      conversion so client and server thresholds agree.
+    tags:
+      - item-economics
+      - price-scenario
+      - pure-arithmetic
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/price_scenario.py
+          startLine: 25
+          endLine: 209
+          summary: The new pure module defines the collapsed price model and slider-domain
+            carriers, exact half-even arithmetic, term collapse, allowance
+            conversion, capped lower-bound searches, rational step helpers, and
+            slider-band derivation.
+          inferenceReason: These functions collectively implement an independently
+            testable expected-sold-price calculation boundary with no I/O or
+            persistence.
+        - path: app/tests/unit/domain/item_economics/test_price_scenario.py
+          startLine: 79
+          endLine: 417
+          summary: The phase test module enumerates all 21 criteria, including real ORM
+            term shapes, exact search and band literals, mutation-sensitive
+            rounding behavior, and the direct-import purity boundary.
+          inferenceReason: The dedicated acceptance suite shows the arithmetic is treated
+            as one independently verified projection contract.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-19T14:25:19.021Z
+    updatedAt: 2026-08-19T14:25:19.021Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9417,3 +9459,21 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-19T10:46:40.034Z
     updatedAt: 2026-08-19T10:46:53.654Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: contains
+    targetNodeId: projection-item-economics-expected-sold-price-scenario
+    description: The Item Economics domain contains the pure expected-sold-price
+      scenario calculation boundary.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/price_scenario.py
+          startLine: 1
+          endLine: 11
+          summary: The module is located in the item_economics domain package and depends
+            only on domain enums plus the shared validation error.
+          inferenceReason: Its package boundary and imports place the new pure projection
+            inside Item Economics rather than a service or persistence boundary.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-19T14:25:19.021Z
+    updatedAt: 2026-08-19T14:25:19.021Z
