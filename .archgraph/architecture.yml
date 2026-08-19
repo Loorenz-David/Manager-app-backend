@@ -4328,10 +4328,14 @@ nodes:
     name: create_task
     description: Creates a task and its PRIMARY item binding, resolving or creating
       the item inside the caller-owned transaction. When the request carries an
-      inline amount, it refuses a matched item with a current valuation and
-      otherwise creates the next item valuation chain row before the auto-commit
-      savepoint. It delegates chain advancement to the shared item valuation
-      writer and records the item_valuation.created audit event. The same
+      inline amount and the matched item already has a current valuation, it
+      inherits any omitted amount from that valuation and advances the chain
+      only when the resulting expected sale price, purchase cost and currency
+      differ from the current row; identical effective values write nothing at
+      all. A newly created or never-valued item gets the first chain row. Chain
+      advancement is delegated to the shared item valuation writer, and the
+      command records the item_valuation.created audit event only when a row is
+      written; all of this happens before the auto-commit savepoint. The same
       command then runs best-effort item-cost auto-commit against the task and
       resolved item.
     metadata:
@@ -4365,7 +4369,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
-    updatedAt: 2026-08-15T08:40:24.816Z
+    updatedAt: 2026-08-19T10:34:47.071Z
   - id: decision-money-audience-admin-manager-only
     type: decision
     name: "Money audience: ADMIN/MANAGER only"
@@ -9058,6 +9062,16 @@ edges:
       evidence:
         - path: app/beyo_manager/services/commands/tasks/create_task.py
           symbol: create_task
+          startLine: 316
+          endLine: 367
+          summary: The inline-price block calls write_item_valuation_chain_in_session and
+            audits the resulting item valuation before the auto-commit
+            savepoint.
+          inferenceReason: The command directly persists the valuation chain through the
+            shared writer.
+      evidenceHistory:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
           startLine: 317
           endLine: 353
           summary: The inline-price block calls write_item_valuation_chain_in_session and
@@ -9065,10 +9079,11 @@ edges:
             savepoint.
           inferenceReason: The command directly persists the valuation chain through the
             shared writer.
+          supersededAt: 2026-08-19T10:35:34.659Z
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
-    updatedAt: 2026-08-15T08:40:24.816Z
+    updatedAt: 2026-08-19T10:35:34.659Z
   - sourceNodeId: command-task-create
     relationshipType: writes_to
     targetNodeId: table-task

@@ -104,3 +104,28 @@ planning and archive files, which record a decision that was true when written.
   zero; a description-only maintenance preview for the existing human-confirmed
   `command-task-create` node was rejected by the approval channel, so no graph mutation was
   attempted again and the stale refusal wording is routed for separately authorized follow-up.
+
+- **implement r1b (2026-08-19, Codex)** — IMPLEMENTED, checkpoint `6f82579`. Four HC-1
+  files plus the two pipeline-state records; perimeter generated from `git`, nothing
+  undeclared. Suite 2346 selected / 2320 passed / 26 failed / 1 deselected with the
+  arithmetic stated (2 removed, 8 added). Coordinator consumption re-verified the identity
+  retirement, re-applied C2's mutation **on the post-Ruff final file** (reddens C2 and C4),
+  confirmed the revert against the declared SHA, and re-ran the suite. **Graph corrected by the coordinator 2026-08-19**, owner-authorized ("can we correct that
+  stall claim"), before review: (a) `node:command-task-create`'s description **edited** — it
+  claimed an inline amount on an already-valued item is *refused*; it now states the
+  inherit/compare/version-or-no-op behaviour. (b)
+  `edge:command-task-create--writes_to-->table-item-valuation` **re-anchored** 317-353 →
+  316-367: the block grew when the branch replaced the guard, so the stored range stopped
+  before the writer call at `:358` and the audit at `:367` that its own summary describes.
+  Records `.archgraph/changes/2026-08-19T10-34-47-091Z--d52860.yml` and
+  `…T10-35-34-680Z--adbe44.yml`; revision → `f823271e…`. Code read before the stored claim,
+  per the graph policy's anti-pattern rule.
+
+  **Residual, deliberately not actioned (for the reviewer to note, not to fix):** the
+  `reads_from → table-item` evidence summary still says the command loads the item *"before
+  applying the inline-price refusal predicate"*, and its `inferenceReason` says the read
+  decides *"whether inline valuation is permitted"*. Both are stale wording. **Evidence
+  summaries and inferenceReasons are immutable through review and maintenance alike**, so
+  the only remedy is deleting and re-recording the edge — which would destroy a
+  `human_confirmed` origin over a phrase, while the claim itself (`reads_from table-item`)
+  remains true and correctly anchored. Recorded rather than repaired.

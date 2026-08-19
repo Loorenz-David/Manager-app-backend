@@ -1,0 +1,48 @@
+changeId: 2026-08-19T10-34-47-091Z--d52860
+operations:
+  - itemId: node:command-task-create
+    kind: edit
+    before:
+      description: Creates a task and its PRIMARY item binding, resolving or creating
+        the item inside the caller-owned transaction. When the request carries
+        an inline amount, it refuses a matched item with a current valuation and
+        otherwise creates the next item valuation chain row before the
+        auto-commit savepoint. It delegates chain advancement to the shared item
+        valuation writer and records the item_valuation.created audit event. The
+        same command then runs best-effort item-cost auto-commit against the
+        task and resolved item.
+    after:
+      description: Creates a task and its PRIMARY item binding, resolving or creating
+        the item inside the caller-owned transaction. When the request carries
+        an inline amount and the matched item already has a current valuation,
+        it inherits any omitted amount from that valuation and advances the
+        chain only when the resulting expected sale price, purchase cost and
+        currency differ from the current row; identical effective values write
+        nothing at all. A newly created or never-valued item gets the first
+        chain row. Chain advancement is delegated to the shared item valuation
+        writer, and the command records the item_valuation.created audit event
+        only when a row is written; all of this happens before the auto-commit
+        savepoint. The same command then runs best-effort item-cost auto-commit
+        against the task and resolved item.
+    rationale: "The stored description asserts that an inline amount on an
+      already-valued item is refused. That behaviour was retired by the
+      inline_valuation_versioning phase (owner decisions D-AUTH/D17/D18):
+      create_task.py:323-362 now inherits omitted amounts, compares the
+      effective triple including currency, and writes a new valuation version
+      only when it differs. Verified by reading the code before reading this
+      claim. The description is edited rather than the node rejected because the
+      node's identity and every relationship remain correct — only the behaviour
+      sentence went stale."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T10:34:47.091Z
+graphRevisionBefore: ab867312dafda5e89f5b08050451794d2c681f60344388dba727e336d8a40c7f
+graphRevisionAfter: 5eca14d2729f23425acc652ceb20622be2c6f757e6b61911c49ddc936b3a543e
+humanInstruction: 'Owner, 2026-08-19: "before i move to the reviewer can we
+  correct that stall claim" — explicit authorization to correct the stale
+  behavioural claim on command-task-create left by the
+  inline_valuation_versioning phase, which retired the inline-price refusal.'
+changeTokenCorrelation: 018b36636b45

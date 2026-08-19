@@ -1,0 +1,36 @@
+changeId: 2026-08-19T10-35-34-680Z--adbe44
+operations:
+  - itemId: edge:command-task-create--writes_to-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 317
+          endLine: 353
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 316
+          endLine: 367
+    rationale: "Location correction only; the claim is unchanged and still true. The
+      inline-price block grew when the compare-inherit-version branch replaced
+      the refusal guard: it now runs 316-367, so the stored 317-353 range stops
+      before the write_item_valuation_chain_in_session call at :358 and the
+      item_valuation.created audit at :367 that the summary describes. The
+      savepoint the summary refers to is still immediately after, at :370."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T10:35:34.680Z
+graphRevisionBefore: 5eca14d2729f23425acc652ceb20622be2c6f757e6b61911c49ddc936b3a543e
+graphRevisionAfter: f823271e13e4efe7109bb420fe4f6e6bbe15d240f9e14c9d7cc12ae88035c26d
+humanInstruction: "Owner, 2026-08-19, same authorization as the description fix:
+  correct the stale graph state left by inline_valuation_versioning.
+  Location-only correction; the evidence claim is unchanged."
+changeTokenCorrelation: 0924a15cbfd3

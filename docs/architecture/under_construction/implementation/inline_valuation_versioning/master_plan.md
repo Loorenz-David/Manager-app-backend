@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **IMPLEMENTED** | 2026-08-19 | Codex | r1b: four-file behavior/document perimeter implemented; focused 78 passed; full suite 2320 passed / 26 inherited failures / 1 deselected (2346 selected), failure-ID diff empty; review pending |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **IMPLEMENTED — review r1 next** | 2026-08-19 | Codex → coordinator | Checkpoint `6f82579`, 6 files, perimeter exact, nothing undeclared. Coordinator verified independently: identity gone from `app/` and `docs/handoff/` (9 provenance files untouched, as intended); C2's mutation re-applied **on the post-Ruff final file** reddens C2 **and** C4, so the confound-catching row bites on its own; revert matches the declared SHA `10c5f350…`; suite 2320/26/1, 26 IDs byte-identical. Flagged to review: the graph's `command-task-create` description still asserts the retired refusal. |
 
 ## 4. Naming registry
 
@@ -66,6 +66,16 @@ in particular:
   observed at 25 and the drifting test is not identified.
 - The suite leaves ~24 `task_steps` behind per full run (tests outside these pipelines);
   row counts drift, so never read a changed count as evidence of a code change.
+- **SUITE INSTABILITY — measured at ±1 in BOTH directions (coordinator, 2026-08-19).**
+  On unchanged code the failure count has now been observed at **25, 26 and 27** across
+  separate full runs. At r1b consumption one run gave `27 failed / 2319 passed` and the very
+  next gave `26 failed / 2320 passed`, with **26 unique IDs byte-identical to baseline and
+  no duplicates** — so this is a genuinely flaky test, not a parametrisation artefact, and
+  it can add a failure as readily as remove one.
+  **Binding consequence: a single run is not evidence.** A run disagreeing with the baseline
+  count must be repeated and its **ID set** diffed before any conclusion is drawn; only an ID
+  added or removed across repeated runs is a finding. A count alone — higher or lower — is
+  noise. The drifting test remains unidentified and is inherited, not introduced here.
 - **This phase removes a test**, so the selected count falls before it rises. State both
   numbers in the handoff.
 
