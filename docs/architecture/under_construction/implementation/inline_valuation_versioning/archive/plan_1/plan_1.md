@@ -200,3 +200,23 @@ planning and archive files, which record a decision that was true when written.
   would sweep lockfiles and binaries. **Per review r1's own rule — "if any root is
   deliberately left out, say so in the criterion, not silently in the test" — the narrowing
   belongs in C9's text.** C9 is therefore restated below rather than left implicit.
+
+- **re-review r3 (2026-08-19, Opus 5) — APPROVED.** **S1 closed**, and verified by
+  *extending* rather than repeating the plant set: P7 `app/migrations/_rev_probe.py` and P8
+  `docs/handoff/presentation_system/_rev_probe.md`, each planted **alone**, turn the guard
+  red and name the path — the two roots the fix handoff claimed but never demonstrated. P9
+  confirms `app/.venv/` is the only exclusion and correctly stays green. Across three rounds
+  all four newly-covered roots are proven independently.
+  **F1 ruled note, not should-fix**, on a fact the coordinator's argument missed: the guard's
+  own root contains `docs/handoff/to_frontend/archived/beyo_partner_api (1).docx`, whose
+  `read_text()` raises `UnicodeDecodeError` — so removing the extension filter would pin C9
+  red forever for a reason unrelated to the identity. Recorded refinement: widen the
+  allowlist, never remove the filter.
+  All three implementer DECISIONS ruled correct, including declining `ruff format`:
+  reformatting an HC-1 file mid-fix would have destroyed the perimeter diff the round runs on.
+- **N2 closed at closeout (coordinator, 2026-08-19).** The reviewer left it as the
+  coordinator's call — accept as permanent debt, or add a banner. Added: the test file now
+  opens with a docstring naming which C-range belongs to which plan and pointing at the
+  `C1-row-* → C7-row-*` mapping here. Comment only; the file's 27 tests and the full suite
+  (2320/26/1) were re-verified unchanged **before** the approval-gate commit, so the approved
+  tree is the verified tree.

@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **FIX r2 CONSUMED — re-review r3 PROMPT_READY** | 2026-08-19 | Codex → coordinator | S1 closed: the C9 guard now scans `app/` + `docs/handoff/` (only `app/.venv/` excluded). Coordinator re-planted both probes **separately** on the final tree — each turns the guard red on its own; suite 2320/26/1, IDs byte-identical; perimeter `e9531dc` = 2 files. **F1 raised for adjudication:** the guard filters to `*.py`/`*.md` while C9 names whole trees — an `app/*.yml` plant stays green. Read as note-level and C9 restated to declare the narrowing, per review r1's own rule. Card 1 applied earlier (graph rev `50b39402…`). Prompt: `prompts/reviewer/2026-08-19_phase1_rereview_r3.md`. |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **APPROVED** | 2026-08-19 | Opus 5 (reviewer r3) | Re-review r3: **S1 CLOSED**, verified by two fresh single-root plants the earlier rounds never probed — `app/migrations/` and `docs/handoff/presentation_system/` each turn the guard red alone (P7, P8); `app/.venv/` correctly stays green (P9) and is gitignored, so it cannot hide committed source. **F1 ruled note, not should-fix**: removing the extension filter would make the guard crash on `docs/handoff/to_frontend/archived/beyo_partner_api (1).docx` (`UnicodeDecodeError`) and go red forever for the wrong reason; the narrowing is stated in C9, satisfying r1's own rule. Nothing loosened. All three implementer DECISIONS ruled correct, including declining `ruff format` — reformatting an HC-1 file mid-fix would have destroyed the perimeter diff the round runs on. Suite 2320/26/1, IDs byte-identical. **N2 closed at closeout** by the coordinator: a banner comment now names which C-range belongs to which plan; suite re-verified unchanged. |
 
 ## 4. Naming registry
 
@@ -46,6 +46,28 @@ in particular:
   never retyped.
 - **Deleted-assertion rule** — the rejection test is being *replaced*; the handoff must
   show what now covers the behaviour that test used to pin.
+
+**Rules earned in this pipeline:**
+
+- **Verification-scope rule.** A claim that something appears *nowhere* is only as good as
+  the directory the search ran in. State the root covered, and run "appears nowhere" searches
+  from the **repository root**. HC-1's three-file scope was wrong for exactly this reason and
+  cost an implementer round.
+- **Stated-narrowing rule (earned r1, ruled r3).** A guard may cover less than its criterion
+  names — but the narrowing lives **in the criterion**, never silently in the test. A *silent*
+  narrowing is a guard claiming a perimeter it does not hold; a *stated* one is a scope
+  decision on the record, which is what a criterion is for.
+- **Widen the allowlist, never remove the filter (r3 refinement).** If C9-style coverage is
+  ever extended, add extensions (`.yml`, `.json`, `.sh`, `.txt`). Removing the filter is not
+  the stricter option — it is the broken one: the guard's own root contains a binary `.docx`
+  that raises `UnicodeDecodeError`, which would pin the criterion red forever for a reason
+  unrelated to what it guards. **A tripwire that fires on the wrong thing trains people to
+  ignore it.**
+- **Prove each root alone.** A combined plant proves *something* caught it; single-root
+  plants prove *each root* is covered. Three rounds each extended the plant set rather than
+  repeating it (coordinator: `app/scripts/`, `docs/handoff/from_frontend/`; reviewer r3:
+  `app/migrations/`, `docs/handoff/presentation_system/`, plus a green control on
+  `app/.venv/`), and only that layering established all four newly-covered roots.
 - **Verification-scope rule (earned here).** A claim that something appears *nowhere* is
   only as good as the directory the search ran in. State the root the search covered, and
   for "appears nowhere" claims run it from the **repository root**, not from whichever

@@ -1,3 +1,14 @@
+"""Inline task prices — two criterion vocabularies live in this file (N2).
+
+`test_c1_…`/`test_c2_…`/`test_c4_…`/`test_c5_…`/`test_c8_…` numbered against
+`inline_valuation_versioning` plan 1 (C1-C10) — the compare/inherit/version behaviour.
+`test_c2_absent_inline_prices_…`, `test_c3_legacy_money_rejection_…`, `test_c4_row_*`,
+`test_c5_inline_validation_rows_…` numbered against `item_cost_calculation` phase 8b.
+Read the C-number against the plan named in the test's own docstring, never against this
+file. `test_c7_…` was `test_c1_…` under phase 8b (params `C1-row-*` -> `C7-row-*`);
+`inline_valuation_versioning/plans/plan_1.md` carries the mapping.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
