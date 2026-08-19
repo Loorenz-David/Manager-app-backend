@@ -87,6 +87,30 @@ contract** — it breaks for a section whose typical is null or `0`, and the con
 exactly the contradiction D16 forbade in the payload. It must say `share_state` is a settled
 verdict, suppressed or marked provisional while `state == "working"`. **New dated file.**
 
+> **MANDATORY: this answer has a known expiry, and the reply must say so.**
+> The `live_clock_for_working_time_economics` pipeline (intention RESOLVED 2026-08-19, gate
+> pending) **reverses this answer**: its §4.1 makes `share_state`, `worked_seconds` and
+> `left_seconds` live on this very endpoint, and its §5.4 obliges its own closeout handoff to
+> carry "the go-live statement that deletes their interim verdict-suppression gate".
+>
+> Shipping "settled-only by design, adapt your UI" **without that forward notice** hands the
+> frontend a contract that expires and makes them build a permanent suppression they will be
+> told to unbuild. That is the same failure as the in-place rewrite of the 2026-08-15
+> handoff — a stale contract consumed in good faith — and it is the failure this team wrote
+> us a document about.
+>
+> **The reply therefore states, in the same breath as the answer:** settled-only is correct
+> **and current**; a backend pipeline is in flight that will make it live on this endpoint;
+> the suppression they build should be **removable behind one flag, not baked into the
+> component**; and its removal is signalled by that pipeline's own dated handoff, not by this
+> one. Everything else in the answer — the D16 rationale, the no-clock-in-the-layer fact, the
+> `allowance_i / typical_i` warning — stands unchanged and is not expiring.
+>
+> **The price-scenario handoff (§3.1) carries no such caveat**: that payload has no progress
+> block (D5, gross-of-progress), so the live clock cannot move a number on it. The two
+> deliverables of this phase have different shelf lives and must not be written as though
+> they share one.
+
 ### 3.3 The carried repairs
 
 | id | change |
