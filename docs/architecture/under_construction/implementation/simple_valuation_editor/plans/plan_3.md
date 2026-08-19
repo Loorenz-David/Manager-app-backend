@@ -2,7 +2,7 @@
 
 ```
 plan: 3
-state: REVIEWED r1 — CHANGES_REQUESTED (0 blocking); fix prompt compiled
+state: FIX r2 APPLIED; two coordinator findings open — fix r3 prompt compiled
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
       and is quoted below. Justification recorded per charter.

@@ -72,7 +72,11 @@ def _has_purchase_term(terms: list[object]) -> bool:
 async def _current_valuation(ctx: ServiceContext, item_id: str) -> ItemValuation | None:
     return await ctx.session.scalar(
         select(ItemValuation).where(
-            # Redundant defence-in-depth: _load_task_and_item owns the tenant boundary (C10).
+            # This line only — workspace_id is redundant defence-in-depth: item_id is
+            # already resolved workspace-scoped by
+            # get_task_budget_status.py:_load_task_and_item, proven by
+            # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
+            # The three predicates below this one are load-bearing.
             ItemValuation.workspace_id == ctx.workspace_id,
             ItemValuation.item_id == item_id,
             ItemValuation.superseded_at.is_(None),
@@ -86,7 +90,11 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
         (
             await ctx.session.execute(
                 select(TaskStep).where(
-                    # Redundant defence-in-depth: _load_task_and_item owns the tenant boundary (C10).
+                    # This line only — workspace_id is redundant defence-in-depth:
+                    # task_id is already resolved workspace-scoped by
+                    # get_task_budget_status.py:_load_task_and_item, proven by
+                    # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
+                    # The two predicates below this one are load-bearing.
                     TaskStep.workspace_id == ctx.workspace_id,
                     TaskStep.task_id == task_id,
                     TaskStep.is_deleted.is_(False),
@@ -152,6 +160,12 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
 async def get_task_price_scenario(ctx: ServiceContext) -> dict:
     """Compose live configuration, task typicals, and the price-domain anchors."""
 
+    # Accepted duplication (measured at phase 3): this re-reads task, item, the current
+    # valuation and the preview inputs that get_task_budget_status has already loaded —
+    # roughly eight redundant round trips on the common no-evaluation branch. Collapsing
+    # it means returning those objects from get_task_budget_status, whose TaskBudgetStatus
+    # carries item_id and no objects and is a contract other screens consume. Reusing this
+    # service is also what keeps status, binding and the tenant boundary identical to them.
     budget_status = await get_task_budget_status(ctx)
     task, item = await _load_task_and_item(ctx)
     typical = await _typical_block(ctx, task.client_id)

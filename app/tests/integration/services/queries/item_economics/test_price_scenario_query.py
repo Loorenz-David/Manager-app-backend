@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, select
 
 from beyo_manager.domain.item_economics.configuration import EconomicsSelection
 from beyo_manager.domain.item_economics.enums import (
@@ -821,14 +821,19 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
         await db_session.flush()
         db_session.add(current)
         await db_session.flush()
-        # Update old, then current so the forced heap scan makes the no-filter mutant
-        # deterministically encounter the older live tuple first.
+        # The mutant this row exists to catch (dropping superseded_at IS NULL) returns
+        # whichever live row the scan reaches first. Updating `older` BEFORE `current`
+        # puts the older row's newer tuple earlier in the heap, so the mutant returns
+        # the older row and this test goes red. Measured at review r1: swap these two
+        # updates and the mutant passes 3/3. Heap order is not a guarantee — if this
+        # ever stops discriminating, that is what changed.
+        # The assertions below do not depend on any of it: the unmutated query is
+        # deterministic by uix_item_valuations_current, a partial unique index on
+        # item_id in models/tables/item_economics/item_valuation.py.
         older.superseded_by_id = current.client_id
         await db_session.flush()
         current.expected_sale_price_minor = current_price
         await db_session.commit()
-        await db_session.execute(text("SET LOCAL enable_indexscan = off"))
-        await db_session.execute(text("SET LOCAL enable_bitmapscan = off"))
 
         result = await module.get_task_price_scenario(
             ServiceContext(
