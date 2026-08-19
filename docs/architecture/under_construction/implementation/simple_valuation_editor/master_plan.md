@@ -255,6 +255,16 @@ rather than merely inherited:
   discriminate, evaluate the function at the values it is meant to tell apart** — here, one
   call each at `Q = 1` and `Q = 6` would have shown they coincide. An assertion that reads as
   evidence and is not is worse than its absence, because it stops anyone looking again.
+- **On a pending `ai_inferred` item, EVIDENCE can be re-anchored but SOURCE LINKS cannot —
+  those need reject-and-re-record** (card 1 of phase 2's review, 2026-08-19). The review
+  path's `edit` decision carries `anchors`, which reaches the evidence entries and nothing
+  else. `archgraph_repair_anchors` returns `INTERNAL_ERROR` on such items (reproduced twice,
+  on a re-anchor and on an unlink/link batch); `preview_maintenance_changes` refuses them by
+  design; and `apply_changes` refuses an overlapping-but-different link so it cannot append a
+  competing mapping. **Why it is worth the reject:** a source link's `contentHash` drives
+  staleness detection, so a drifted span wires that alarm to the wrong region — it fires on
+  edits to an unrelated test and stays silent on edits to the rows the claim rests on. A
+  monitoring signal pointed at the wrong lines is worse than none.
 - **A pending `ai_inferred` item can only be corrected through the REVIEW path, and its
   preview must be verified by reading the `anchors` block** (coordinator, 2026-08-19, N9
   fix). Two attempts failed first, both instructive: `archgraph_repair_anchors` returned

@@ -4760,57 +4760,6 @@ nodes:
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
     updatedAt: 2026-08-19T15:54:54.896Z
-  - id: projection-item-economics-task-price-scenario
-    type: projection
-    name: Task price scenario
-    description: Manager-only, task-scoped read model that composes workspace-scoped
-      task/item binding, the saved valuation and byline, live item-economics
-      configuration, median-substituted task typical time, and the pure
-      price-scenario model into break-even anchors and a slider domain.
-      Non-bound bindings govern the payload by nulling
-      valuation/model/anchor/domain structure while keeping the step-derived
-      typical; the projection performs no writes.
-    tags:
-      - item-economics
-      - price-scenario
-      - read-model
-    metadata:
-      evidence:
-        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
-          symbol: get_task_price_scenario
-          startLine: 149
-          endLine: 271
-          summary: The query service composes budget status, workspace-scoped task/item
-            resolution, current valuation/byline, live configuration, the task
-            typical block, pure price-model anchors, binding overrides,
-            fingerprinting, and service-side serialization.
-          inferenceReason: This function is the implementation boundary for the task
-            price-scenario projection.
-        - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
-          symbol: test_c1_status_matrix_has_twelve_exact_rows
-          startLine: 405
-          endLine: 429
-          summary: The integration contract enumerates all twelve economics statuses and
-            verifies whether the model, anchors, and domain are published.
-          inferenceReason: The test verifies the projection's total status branch,
-            including its five present and seven absent cases.
-    origin: ai_inferred
-    confidence: 0.95
-    createdAt: 2026-08-19T17:04:11.607Z
-    updatedAt: 2026-08-19T17:04:11.607Z
-    sourceLinks:
-      - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
-        symbol: get_task_price_scenario
-        startLine: 149
-        endLine: 271
-        contentHash: c276ce6989d8c4343ee56618f2e2027c3f92a36ccc3c95513c9d53085009b7b5
-        linkedAt: 2026-08-19T17:04:11.607Z
-      - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
-        symbol: test_c1_status_matrix_has_twelve_exact_rows
-        startLine: 405
-        endLine: 429
-        contentHash: 663e12c1ebf78a57d04f15aebc34e0aa5f07e23ad31325d546e7dac7731f7e0f
-        linkedAt: 2026-08-19T17:04:11.607Z
   - id: endpoint-item-economics-task-price-scenario
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/price-scenario
@@ -4857,6 +4806,57 @@ nodes:
         endLine: 153
         contentHash: c13a7d491982f2cd17357a8a26b6d14667960055cee72d9d50a3fe2ab3a9bb31
         linkedAt: 2026-08-19T17:04:11.607Z
+  - id: projection-item-economics-task-price-scenario
+    type: projection
+    name: Task price scenario
+    description: Manager-only, task-scoped read model that composes workspace-scoped
+      task/item binding, the saved valuation and byline, live item-economics
+      configuration, median-substituted task typical time, and the pure
+      price-scenario model into break-even anchors and a slider domain.
+      Non-bound bindings govern the payload by nulling
+      valuation/model/anchor/domain structure while keeping the step-derived
+      typical; the projection performs no writes.
+    tags:
+      - item-economics
+      - price-scenario
+      - read-model
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 149
+          endLine: 273
+          summary: The query service composes budget status, workspace-scoped task/item
+            resolution, current valuation/byline, live configuration, the task
+            typical block, pure price-model anchors, binding overrides,
+            fingerprinting, and service-side serialization.
+          inferenceReason: This function is the implementation boundary for the task
+            price-scenario projection.
+        - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+          startLine: 387
+          endLine: 419
+          summary: The integration contract enumerates all twelve economics statuses and
+            verifies whether the model, anchors, and domain are published.
+          inferenceReason: The test verifies the projection's total status branch,
+            including its five present and seven absent cases.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-19T17:34:47.483Z
+    updatedAt: 2026-08-19T17:34:47.483Z
+    sourceLinks:
+      - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 149
+        endLine: 273
+        contentHash: c276ce6989d8c4343ee56618f2e2027c3f92a36ccc3c95513c9d53085009b7b5
+        linkedAt: 2026-08-19T17:34:47.483Z
+      - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 387
+        endLine: 419
+        contentHash: 663e12c1ebf78a57d04f15aebc34e0aa5f07e23ad31325d546e7dac7731f7e0f
+        linkedAt: 2026-08-19T17:34:47.483Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9614,5 +9614,24 @@ edges:
             corresponding projection.
     origin: ai_inferred
     confidence: 0.94
-    createdAt: 2026-08-19T17:04:11.607Z
-    updatedAt: 2026-08-19T17:04:11.607Z
+    createdAt: 2026-08-19T17:34:47.483Z
+    updatedAt: 2026-08-19T17:34:47.483Z
+  - sourceNodeId: source-file-item-economics-price-scenario
+    relationshipType: implements
+    targetNodeId: projection-item-economics-task-price-scenario
+    description: The pure price-scenario module supplies the arithmetic the task
+      price-scenario projection publishes.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          summary: The query service imports collapse_terms, break_even_price_minor,
+            infeasible_at_or_below_minor, ceil_to_step, slider_domain and the
+            PriceModel carrier from the pure module, and every published anchor
+            and band value is returned by one of them.
+          inferenceReason: A projection whose published numbers are all produced by a pure
+            module stands in the same implements relation to it as the
+            budget-division module does to the production-time projection.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-19T17:34:47.483Z
+    updatedAt: 2026-08-19T17:34:47.483Z

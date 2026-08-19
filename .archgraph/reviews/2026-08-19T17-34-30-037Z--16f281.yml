@@ -1,0 +1,36 @@
+reviewId: 2026-08-19T17-34-30-037Z--16f281
+reviewedItemIds:
+  - node:projection-item-economics-task-price-scenario
+decisions:
+  - itemId: node:projection-item-economics-task-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "Re-recorded, not retired (review r1 F7, owner card 1). The node's
+      two SOURCE LINKS still carry the drifted spans its evidence entries were
+      just corrected for: 149-271 stops two lines inside the function's closing
+      return, and 405-429 excludes the twelve parametrize rows the claim rests
+      on while overrunning into the next test's decorators. A source link drives
+      staleness detection through its contentHash, so a wrong span wires that
+      signal to the wrong region - it would alarm on edits to an unrelated test
+      and stay silent on edits to the rows it claims to verify. Source links
+      cannot be corrected in place on a pending ai_inferred item: maintenance
+      refuses such items by design and repair_anchors returns INTERNAL_ERROR
+      (reproduced twice). Re-recorded immediately with both links at the
+      verified addresses, the accepts edge restored, and the missing sibling
+      implements edge added. Owner-authorized 2026-08-19."
+retiredItemIds:
+  - node:projection-item-economics-task-price-scenario
+  - edge:endpoint-item-economics-task-price-scenario--accepts-->projection-item-economics-task-price-scenario
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T17:34:30.037Z
+graphRevisionBefore: b4c77f47ff7f266a54a457259d48ece32cf93c1aa428688a7f462f3f46cc4960
+graphRevisionAfter: 7aac4491d5afcdc86167570690849df8f6412481239b0dd06f2b607f119c0038
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: "Owner (David), 2026-08-19, card 1: \"about card 1 we can
+  correct it.\" Reject-and-re-record is the only route to a pending item's
+  source links; the accepts edge and the new implements edge are restored in the
+  immediately following batch."
+reviewTokenCorrelation: 3b28f8d1f877

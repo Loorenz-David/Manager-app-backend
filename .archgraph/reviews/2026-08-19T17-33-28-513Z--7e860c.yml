@@ -1,0 +1,43 @@
+reviewId: 2026-08-19T17-33-28-513Z--7e860c
+reviewedItemIds:
+  - node:projection-item-economics-task-price-scenario
+decisions:
+  - itemId: node:projection-item-economics-task-price-scenario
+    decision: edit
+    editedFields:
+      confidence: 0.95
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 149
+          endLine: 273
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+          startLine: 387
+          endLine: 419
+    rationale: "Address-only, both entries (review r1 F7, owner card 1). Verified at
+      head 97520fb: the service function runs 149-273 (271 stopped two lines
+      inside the closing return; 274-275 blank, 276 __all__), and the C1 test's
+      parametrize table starts at 387 with the body ending at 419 (420-421
+      blank, 422 is the NEXT test's decorator). The old 405-429 both excluded
+      the twelve rows its own summary describes and overran into an unrelated
+      test. Summaries and inferenceReasons untouched; confidence restated at its
+      existing 0.95 solely because an edit decision requires an edit object.
+      Edit, not promote - the owner authorized the address fix, not verification
+      of the descriptions. Owner-authorized 2026-08-19: \"about card 1 we can
+      correct it.\""
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T17:33:28.513Z
+graphRevisionBefore: ea100e058ff2be39b77ca71dc44c52976cbed24644b3bb31204a9ca91ecba5c8
+graphRevisionAfter: b4c77f47ff7f266a54a457259d48ece32cf93c1aa428688a7f462f3f46cc4960
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: 'Owner (David), 2026-08-19, answering phase 2 review r1 owner
+  card 1 verbatim: "about card 1 we can correct it." Address-only correction of
+  two drifted evidence spans; the node remains pending and ai_inferred.'
+reviewTokenCorrelation: f7e077a7f991

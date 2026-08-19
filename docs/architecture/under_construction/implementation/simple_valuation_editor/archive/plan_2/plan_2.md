@@ -253,8 +253,19 @@ payload.** Suite 2425/26/1 re-measured; failure IDs byte-identical.
   ownership of a guard the plan deliberately placed in one file. **Routed to plan 3** rather
   than a fix round: deleting a redundant test is not worth a checkpoint plus a re-review.
 - **F3, F4, F5, F6, F8, F9, F11** → plan 3 (see `plans/plan_3.md` §3).
-- **F7 → owner card 1**, relayed. Two graph evidence spans are provably wrong at head and the
-  sibling `implements` edge is missing. Does not hold the gate.
+- **F7 → owner card 1 — ANSWERED and ENACTED (owner, 2026-08-19: *"about card 1 we can correct it"*).** Two graph evidence spans were provably wrong at head and the
+  sibling `implements` edge was missing. Does not hold the gate. **Enacted 2026-08-19**:
+  both spans verified at the line by the coordinator before mutating — the service function
+  runs `149-273` (the recorded `271` stopped two lines inside the closing `return`), and the
+  C1 test's parametrize table runs `387-419` (the recorded `405-429` excluded its own twelve
+  rows and overran into the next test's decorators). Evidence corrected through the review
+  path (`.archgraph/reviews/2026-08-19T17-33-28-513Z--7e860c.yml`); the two **source links**
+  then required a reject-and-re-record, because a pending `ai_inferred` item's links are
+  reachable by no other route (`.../2026-08-19T17-34-30-037Z--16f281.yml`). Re-recorded with
+  both links at the verified spans, the `accepts` edge restored and the sibling
+  `source-file-item-economics-price-scenario --implements-->` edge added. Verified at the
+  node afterwards: `stale: false`, both edges present. Node remains `ai_inferred` and
+  **pending** — the owner authorized the addresses, not the descriptions.
 - **F10**: `test_c16_reciprocal_comment_pairs_are_present` **works** — each of the four
   comments deleted **alone** reddens it, so "prove each root alone" is satisfied. The
   substring form is the right trade here: what is protected *is* a pointer string.
