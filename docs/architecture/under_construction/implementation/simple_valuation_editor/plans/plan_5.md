@@ -53,13 +53,46 @@ and it is strictly weaker because a comment cannot fail.
 > exactly the kind of item that gets dropped. If the implementer judges the widening wrong,
 > **that is a STOP and a report**, not a judgement call.
 
-## 2. Files — one for §1, up to two more for §1B
+## 1C. Two rows phase 3 could not write for itself
+
+Re-review r4 measured all five predicates the two `get_task_price_scenario.py` `WHERE`
+comments vouch for, one mutation at a time, whole-suite and ID-diffed. **Three of the five are
+asserted by nothing.** One (`TaskStep.is_deleted`) turned out to be redundant with a Python
+filter and needs no test — the comment was corrected instead. **The other two need rows, and
+phase 3 closed with its comments telling the truth about that rather than hiding it.**
+
+| Predicate | Why nothing catches it | What a regression does |
+|---|---|---|
+| `ItemValuation.item_id == item_id` | Every fixture holds one item per workspace, so there is never a second item's valuation to return instead | Returns **another item's** current valuation — its price, its colleague's byline — on this item's screen. A wider blast radius than either predicate that *is* proven: those return the wrong row for the right item |
+| `TaskStep.task_id == task_id` | All eight `_typical_block` tests use `_TypicalSession`, whose `execute()` discards the statement, so the `WHERE` is never evaluated | Sums **every task's steps in the workspace** into one task's typical time — a wrong break-even, slider domain and suggested price, with no error |
+
+**Task:** two rows against a real session.
+
+1. A second item in the same workspace, each with its own current valuation → assert `saved`
+   carries **this** item's. **Named mutation:** drop `ItemValuation.item_id == item_id` → red.
+2. A `_typical_block` row that issues real SQL — a second task in the same workspace with its
+   own steps → assert the typical reflects only the requested task. **Named mutation:** drop
+   `TaskStep.task_id == task_id` → red. **This one cannot use `_TypicalSession`**; that is the
+   entire reason the gap exists.
+
+**Both mutations must be measured across the whole suite**, and each row's fixture must make
+its own predicate the only reason its outcome holds — the companion to rule 2 that this
+project has now spent four rounds on.
+
+**When these land, the two comments must be updated to say so** (`get_task_price_scenario.py`,
+comment-only). A comment that says *"item_id is NOT proven"* after a test proves it is the same
+defect class in the opposite direction. **That file is phase 3's and closed** — so this is a
+declared, comment-only reopening, not a scope drift. If it looks like more than that, STOP.
+
+## 2. Files — one for §1, up to two more for §1B, plus §1C's
 
 | Path | |
 |---|---|
 | `app/tests/unit/docs/test_item_economics_handoff_accuracy.py` | §1, additive |
 | `app/tests/unit/domain/item_economics/test_price_scenario.py` | §1B, additive — **one row, nothing else touched** |
 | `app/beyo_manager/domain/item_economics/price_scenario.py` | §1B fallback only — **one comment line**, and only if the direct row is declined |
+| `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py` | §1C, additive — two rows |
+| `app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py` | §1C, **comment-only** — the two `WHERE` comments, once the rows exist |
 
 **Nothing else.** Not the handoffs — they are APPROVED text by the time this runs, and a test
 that requires changing its subject to pass is a test asserting the wrong thing. **If the
@@ -90,6 +123,9 @@ edit to the document.**
 | C5 | Suite at or above plan 3's closing baseline. Failure IDs diffed, not counted. |
 | C6 | **§1B**: either the direct domain row exists, or the fallback comment does, and the handoff states which and why. |
 | C7 | **§1B named mutation**: delete `collapse_terms`'s `if term.is_deleted is True: continue` → the observed-red set, measured **across the suite**, now contains the new domain row. Record both sides. **Before this plan, that set was exactly one test and it was in an integration file** — so the criterion is that the set grows, not that it is one. |
+| C8 | **§1C**: both rows exist, both against a real session, and the `_typical_block` row does **not** use `_TypicalSession`. |
+| C9 | **§1C named mutations**, one at a time, whole-suite, both sides computed: drop `ItemValuation.item_id == item_id` → the new item row red; drop `TaskStep.task_id == task_id` → the new typical row red. **Each measured at 0-added/0-removed before this plan** — that is the before-state the criterion is against. |
+| C10 | **§1C**: the two `WHERE` comments updated to name the new rows as proof. A comment still saying *"NOT proven"* after the proof exists is the same defect in the opposite direction. |
 
 ## 5. What this phase cannot do, and should not try
 

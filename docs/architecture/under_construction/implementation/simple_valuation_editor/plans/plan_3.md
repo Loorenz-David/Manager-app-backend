@@ -2,7 +2,7 @@
 
 ```
 plan: 3
-state: FIX r3 APPLIED; both coordinator findings closed — re-review r4 prompt compiled
+state: APPROVED — re-review r4, 0 blocking; both should-fixes applied at the fold
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
       and is quoted below. Justification recorded per charter.
@@ -197,7 +197,18 @@ Handoff at `handoffs/reviewer/2026-08-19_phase3_review_r1_handoff.md`; fix promp
    does. See master plan §5's new rule on determinism aids.
 
 **Confirmed by the review and not to be re-raised:** F6's block was genuinely dead
-(`detached ⟺ item is None`); F9's refusal is correct because `TaskBudgetStatus` carries no
-objects; `_current_valuation` needs no `ORDER BY` because `uix_item_valuations_current` is a
+(`detached ⟺ item is None`); F9's refusal is correct because `TaskBudgetStatus` carries
+`item_id` and `result: ItemCostResult | None` but **none of the objects re-read here** — not the
+`Task`, the `Item`, the selection, the terms or the valuation — so collapsing it needs a third
+file; `_current_valuation` needs no `ORDER BY` because `uix_item_valuations_current` is a
 partial unique index; `can_commit` true under `mismatched` is deliberate and tested; and the
 C1 teardown satisfies rule 11½ with the residue block correctly outside the `try/finally`.
+
+4. **The sentence above was itself wrong for two rounds, and that is the entry's own lesson.**
+   It read *"`TaskBudgetStatus` carries no objects"* — the exact clause r3 was spent removing
+   from the code. It carries `result: ItemCostResult | None`. The correction landed in
+   `get_task_price_scenario.py` and in the fix handoff, and **reached neither of the two
+   documents that outlive them** — this log and the master plan tracker, where `:60` recorded
+   the correction while `:62` still asserted the error two rows apart. Found at re-review r4,
+   by the reviewer, against their own r1 prose. **After correcting a claim in code, grep every
+   live document for the old form in the same edit.** Recorded in master plan §5.

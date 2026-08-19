@@ -76,7 +76,12 @@ async def _current_valuation(ctx: ServiceContext, item_id: str) -> ItemValuation
             # already resolved workspace-scoped by
             # get_task_budget_status.py:_load_task_and_item, proven by
             # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
-            # The three predicates below this one are load-bearing.
+            # All three below are load-bearing; two are proven. Drop superseded_at and
+            # test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain goes red;
+            # drop is_deleted and test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen
+            # goes red. item_id is NOT proven — measured whole-suite at re-review r4, deleting
+            # it reddens nothing, because no fixture holds two items in one workspace. Drop it
+            # in production and this returns another item's valuation: its price, its byline.
             ItemValuation.workspace_id == ctx.workspace_id,
             ItemValuation.item_id == item_id,
             ItemValuation.superseded_at.is_(None),
@@ -90,11 +95,20 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
         (
             await ctx.session.execute(
                 select(TaskStep).where(
-                    # This line only — workspace_id is redundant defence-in-depth:
-                    # task_id is already resolved workspace-scoped by
+                    # Of these three, only task_id is load-bearing, and none of the three
+                    # is proven. workspace_id is redundant defence-in-depth: task_id is
+                    # already resolved workspace-scoped by
                     # get_task_budget_status.py:_load_task_and_item, proven by
                     # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
-                    # The two predicates below this one are load-bearing.
+                    # is_deleted is defence-in-depth too — budget_division.py:group_steps_by_section
+                    # already skips deleted steps in Python, so this predicate cannot change
+                    # a result. task_id IS load-bearing: without it this sums every task's
+                    # steps in the workspace into one task's typical time — a wrong break-even,
+                    # slider domain and suggested price, with no error. Measured whole-suite
+                    # (workspace_id at review r1, the other two at re-review r4): dropping
+                    # any of the three reddens nothing, because every
+                    # _typical_block test uses the _TypicalSession fake, whose execute()
+                    # discards the statement and never issues this SQL.
                     TaskStep.workspace_id == ctx.workspace_id,
                     TaskStep.task_id == task_id,
                     TaskStep.is_deleted.is_(False),
