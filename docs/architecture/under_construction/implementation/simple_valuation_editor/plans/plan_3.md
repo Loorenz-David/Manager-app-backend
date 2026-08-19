@@ -1,151 +1,167 @@
-# Plan 3 — closeout: the frontend contract, and the review's carried repairs
+# Plan 3 — the carried repairs from phase 2's review
 
 ```
 plan: 3
-state: NOT_STARTED — blocked on plan 2 APPROVED (satisfied 2026-08-19)
+state: PROMPT_READY
 date: 2026-08-19
-gate: projection — WAIVABLE (see §5)
+gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
+      and is quoted below. Justification recorded per charter.
+runs in parallel with: plan 4 (the frontend handoff). No shared files — plan 3 touches
+      only app/, plan 4 only docs/handoff/.
 ```
 
 ## 1. Goal
 
-Two jobs that belong together because they are the same act — telling the outside world what
-this feature is, and repairing what two review rounds found but deliberately did not spend a
-fix cycle on.
+Close the seven notes phase 2's review raised and deliberately did not spend a fix cycle on.
+**None is a behaviour defect** — review r1 applied 34 mutations and recorded that *no mutation
+produced a wrong-but-green payload*. Six of these are missing evidence or tidy-ups; one (F9)
+is latency.
 
-1. **The frontend contract.** Master plan §8's six closeout obligations. Without them the
-   endpoint ships and nobody can build the screen it exists for.
-2. **The carried repairs.** Seven notes from phase 2's review, each a real gap in evidence
-   rather than a defect in behaviour, batched here because batching them costs one review
-   round instead of seven.
+The reviewer computed every expected value. This phase writes them down, it does not
+rediscover them.
 
-## 2. Files
-
-**The frontend deliverable** — a **new dated handoff**, never an edit of a published file:
+## 2. Files — exactly two
 
 | Path | |
 |---|---|
-| `backend/docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_price_scenario_<date>.md` | new |
-| `backend/docs/handoff/to_backend/…_production_time_live_share_state_<date>_REPLY.md` | new — the frontend's three questions, answered |
+| `app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py` | F3, F6, F9 |
+| `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py` | F2, F4, F5, F8 |
 
-**The code repairs**, each one line or one row:
-
-| Path | Change |
-|---|---|
-| `app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py` | F3 (`is_deleted` in `_has_purchase_term`), F6 (comment or remove the dead override), F9 (collapse duplicated loads — **or** record the acceptance) |
-| `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py` | F2 (delete the duplicate C16 literal), F4, F5, F8 rows; F8's marker decision |
-
-**No change to `price_scenario.py`, `calculator.py`, `cases/serializers.py` or any phase-1
-file.** Both phases are APPROVED.
-
-### The rule that governs the handoff, and why it is not negotiable
-
-`HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md` was **rewritten in place** on
-2026-08-19 to retire an error identity. Five frontend artifacts cited the stale copy in good
-faith for four days and a shipped feature was built around a refusal that no longer existed.
-The frontend raised it themselves and asked for the convention. **Master plan §8's obligations
-4 and 5 name that file: they are discharged by a NEW dated handoff that supersedes by
-reference, never by editing it.**
+**Nothing else.** Not `price_scenario.py`, not `calculator.py`, not `cases/serializers.py`,
+not `serializers.py`, not the router, not any mirror artifact — phases 1 and 2 are APPROVED
+and their files are closed. **If a repair appears to need a third file, that is a STOP and a
+report, not a judgement call.** (This project has produced three implement blockers, all on
+coordinator artifacts, all correct. The presumption is with you.)
 
 ## 3. Tasks
 
-### 3.1 The six closeout obligations (master plan §8)
+### F4 — the one with teeth. Do this first.
 
-1. **The M1 arithmetic, specified for a second language** — per operation: integer arithmetic
-   both sides, BigInt, no float, never a language `round()` (half-away-from-zero). The client
-   executes this every slider frame; an ambiguity makes two screens disagree at the chip's
-   flip point.
-2. **Name the accepted divergence** (D5): on a task carrying excluded-step time this screen's
-   `AT PRICE` exceeds the production-time screen's distributable total by exactly
-   `charged_seconds`.
-3. **The Save flow** (D4): Save is `POST …/evaluations/commit`; `can_commit: false` **disables**
-   the button; reconciliation against the commit response is mandatory.
-4. **§8.4's display prohibition** amended — its contract (per item, never per unit) stands.
-5. **§6's status→treatment table** amended: D8 publishes `model`/`anchors`/`domain` under
-   `item_unvalued` and `item_missing_expected_price`, where that table says numerics are `null`.
-6. **Save cannot create a valuation row** — D9's precondition. With no current valuation the
-   commit path refuses regardless of the price in the body, so `can_commit` is `false` and the
-   purchase price must be set first through `PUT /items/{id}/valuation`. **This is the one
-   obligation whose omission is silent**: it is the written form of an assumption about
-   another codebase, and unwritten it is a defect waiting for the first optimisation that
-   skips the prompt.
+`_current_valuation` (`:71-79`) filters `superseded_at IS NULL AND is_deleted = false`. The
+code is **correct**; nothing asserts it. Review r1's probe: **deleting
+`superseded_at.is_(None)` leaves the entire phase test file green** — no fixture builds a
+supersession chain.
 
-### 3.2 The production-time reply (owed, unblocked)
+Why it matters here specifically: the previous pipeline (`inline_valuation_versioning`) made
+re-pricing write a **new chain row** rather than refuse, so supersession chains are a common
+live state in this system. Unguarded, a regression reads the byline and the saved price from
+an arbitrary historical row — a stale price under the wrong person's name, with no error.
 
-The frontend's `HANDOFF_TO_BACKEND_production_time_live_share_state_20260819.md` asked three
-questions and has had only a conversational answer. Ship them as a dated file:
-`share_state` is **settled-only by design** (D16's rationale, and Option A would reintroduce
-the `left_seconds: -100` defect in the payload); `worked_seconds` is settled-only for every
-consumer, structurally — there is **no clock read anywhere** in
-`services/queries/item_economics/`; and `allowance_i / typical_i` is a true consequence of
-`static_proportional_section_v1`, exact up to largest-remainder rounding, **but not a
-contract** — it breaks for a section whose typical is null or `0`, and the constant moves with
-`charged_seconds`.
+**Fixture:** one item, two valuation rows, the older superseded (`superseded_at` set,
+`superseded_by_id` pointing at the newer). **Assert `saved.valuation_id` is the current row**,
+and that `saved.expected_sale_price_minor` is the current row's.
+**Named mutation (definition site, `_current_valuation`):** drop `superseded_at.is_(None)`
+→ this row red.
 
-**Correction owed with it:** the 2026-08-18 handoff's §Live time instructs the client to tick
-`worked_seconds` locally while `share_state` stays settled — manufacturing in the client
-exactly the contradiction D16 forbade in the payload. It must say `share_state` is a settled
-verdict, suppressed or marked provisional while `state == "working"`. **New dated file.**
+### F3 — one line
 
-> **MANDATORY: this answer has a known expiry, and the reply must say so.**
-> The `live_clock_for_working_time_economics` pipeline (intention RESOLVED 2026-08-19, gate
-> pending) **reverses this answer**: its §4.1 makes `share_state`, `worked_seconds` and
-> `left_seconds` live on this very endpoint, and its §5.4 obliges its own closeout handoff to
-> carry "the go-live statement that deletes their interim verdict-suppression gate".
->
-> Shipping "settled-only by design, adapt your UI" **without that forward notice** hands the
-> frontend a contract that expires and makes them build a permanent suppression they will be
-> told to unbuild. That is the same failure as the in-place rewrite of the 2026-08-15
-> handoff — a stale contract consumed in good faith — and it is the failure this team wrote
-> us a document about.
->
-> **The reply therefore states, in the same breath as the answer:** settled-only is correct
-> **and current**; a backend pipeline is in flight that will make it live on this endpoint;
-> the suppression they build should be **removable behind one flag, not baked into the
-> component**; and its removal is signalled by that pipeline's own dated handoff, not by this
-> one. Everything else in the answer — the D16 rationale, the no-clock-in-the-layer fact, the
-> `allowance_i / typical_i` warning — stands unchanged and is not expiring.
->
-> **The price-scenario handoff (§3.1) carries no such caveat**: that payload has no progress
-> block (D5, gross-of-progress), so the live clock cannot move a number on it. The two
-> deliverables of this phase have different shelf lives and must not be written as though
-> they share one.
+`_has_purchase_term` (`:63-68`) tests every term in the list; `collapse_terms`
+(`price_scenario.py:71-72`) skips `is_deleted is True`. **Both consume the same `terms` list
+in the same call.** Intention §3.1B and §9A.2 both scope the purchase term to *non-deleted*
+rows.
 
-### 3.3 The carried repairs
+Unreachable today — `_load_preview_inputs` (`_common.py:207-215`) filters
+`CostModelTerm.is_deleted.is_(False)` in SQL. The failure it would produce if a future caller
+passes unfiltered terms: `can_commit: false` demanding a purchase cost for a term the model
+correctly ignores — a disabled button whose press would in fact have succeeded.
 
-| id | change |
-|---|---|
-| F2 | delete `test_c16_discriminating_literal_is_exact`; `test_price_scenario.py` owns the guard |
-| F3 | `_has_purchase_term` skips `term.is_deleted is True`, mirroring `collapse_terms` |
-| F4 | criterion + fixture: two chain rows for one item, one superseded, asserting `saved.valuation_id` is the current one |
-| F5 | add usable typicals `{11, 12}` to C4 (median `11.5` → half-even `12`, truncation `11`) |
-| F6 | comment the dead `detached` override as belt-and-braces for §9.2A, or remove it |
-| F8 | either move the marker or give the file a session; record which, and whether the two redundant workspace predicates get rows or a recorded acceptance |
-| F9 | collapse the duplicated task/item/configuration loads, **or** record the acceptance with its reason |
+**Change:** skip `term.is_deleted is True`, mirroring `collapse_terms`.
+**Row:** a deleted purchase term present → `can_commit` is `true` and the model collapses.
+**Named mutation:** restore the unfiltered `any(...)` → this row red.
+
+### F5 — the rounding mode is unguarded
+
+C4's fixture (usable typicals `10, 11` → median `10.5`) yields `41` under half-even **and**
+under truncation, because `10.5` rounds to the even `10` either way. Review r1 measured it:
+truncation reddened **nothing**; half-up and sum-quantisation each reddened C4. So C4 pins
+per-section-vs-sum, which is what it was written for, and not half-even-vs-truncation, which
+§5.3A also contracts.
+
+**Change:** add usable typicals `{11, 12}` alongside the existing pair — median `11.5`,
+half-even `12`, truncation `11`.
+**Named mutation (definition site):** `int(resolved)` in place of `round_half_even(...)` →
+the new row red, and record that it currently reddens nothing.
+
+### F2 — delete the duplicate
+
+`test_c16_discriminating_literal_is_exact` (`:731`) duplicates the assertion that
+`test_price_scenario.py:379-386` owns. It is the direct cause of review r1's F1 — the
+implementer's ledger recorded one reddened test where two is the true set.
+
+**Change: delete it.** `test_price_scenario.py` owns the guard. It adds only that the query
+module binds `slider_domain` from the right module, which every anchors assertion in the same
+file already implies; against that it splits ownership of a guard the plan deliberately placed
+in one file, and it carries `@pytest.mark.integration` while opening no session.
+
+**Confirm afterwards** that the `max(1, quantity) → max(6, quantity)` mutation reddens
+**exactly one** test again — measured across the **suite**, per master plan §5's widened rule.
+
+### F6 — dead code
+
+```python
+if budget_status.item_binding == "detached":
+    can_commit = False
+```
+
+`detached ⟺ item is None` (`get_task_budget_status.py:111`) and `can_commit` already requires
+`item is not None` (`:185`) — the two predicates are the same fact, and removing the block
+reddens nothing. **Your call:** keep it with a one-line comment naming it as belt-and-braces
+for §9.2A, or remove it. Say which and why in the handoff. Do not leave it looking like a live
+guard.
+
+### F8 — decide the marker, then record it
+
+Eight of the file's thirteen functions run through `_run_scenario`, which monkeypatches every
+dependency; only `test_c10_…` opens a session. Review r1 measured the consequence: dropping
+`TaskStep.workspace_id == ctx.workspace_id` from `_typical_block`, and
+`ItemValuation.workspace_id == ctx.workspace_id` from `_current_valuation`, each reddened
+**nothing**.
+
+Both predicates are **redundant** by reading: `task_id` and `item_id` are resolved
+workspace-scoped upstream by `_load_task_and_item`, and client_ids are prefixed ULIDs. The
+endpoint's real tenant boundary is that resolution, and C10 covers it with three rows against
+a live database including the cross-workspace row.
+
+**This is a decision, not necessarily a change.** Either (a) add rows that exercise the two
+predicates against a real session, or (b) record them in a comment at both sites as redundant
+defence-in-depth whose boundary is proven by C10. **State which you chose and why.** Do not
+silently leave a reader thinking they are load-bearing.
+
+### F9 — latency, and a judgement you may decline
+
+`get_task_price_scenario` calls `get_task_budget_status(ctx)` — which itself runs
+`_load_task_and_item`, and on the no-evaluation branch `_load_preview_inputs` **and** the
+current-valuation select — then repeats `_load_task_and_item` at `:153`, the valuation at
+`:161` and `_load_preview_inputs` at `:166`. On the **common** branch (a task with no
+committed evaluation — the state this screen exists to resolve) that is roughly eight
+redundant round trips per open.
+
+Correctness is unaffected, and D-6's reuse of `get_task_budget_status` is exactly what keeps
+the status, the binding and the tenant boundary identical to the other screens. **Collapsing
+the duplicates must not weaken that.** Either collapse them, or **accept with a recorded
+reason** — both are acceptable outcomes; an unrecorded one is not.
 
 ## 4. Acceptance criteria
 
 | C | Criterion |
 |---|---|
-| C1 | Every one of §3.1's six obligations appears in the new handoff, each traceable to its decision (D1, D4, D5, D8, D9, HC-5). A checklist test is not required; the reviewer reads it. |
-| C2 | **No published handoff is edited.** `git diff` shows zero modifications under `docs/handoff/` — only additions. This is the criterion that enforces §2's rule. |
-| C3 | F3: a row where a **deleted** purchase term is present — `can_commit` is `true` and the model collapses. **Named mutation:** restore the unfiltered `any(...)` → this row red. |
-| C4 | F4: the supersession row. **Named mutation:** delete `superseded_at.is_(None)` from `_current_valuation` → this row red. It currently leaves the whole file green. |
-| C5 | F5: the `{11, 12}` median row. **Named mutation:** `int(resolved)` in place of `round_half_even(...)` → this row red. It currently reddens nothing. |
-| C6 | F2's duplicate is gone and the phase-1 mutation's observed-red set is **one** test again — measured across the **suite**, per master plan §5's widened rule. |
-| C7 | F8's decision is recorded and, if tenant rows are added, each asserts its own predicate alone. |
-| C8 | Suite green at or above the phase-2 baseline **2425 / 26 / 1**; failure IDs diffed, not counted. |
+| C1 | **F4**: the supersession row asserts `saved.valuation_id` and `saved.expected_sale_price_minor` are the current row's. **Named mutation** at `_current_valuation`'s definition: drop `superseded_at.is_(None)` → red. Record that it reddened nothing before this row existed. |
+| C2 | **F3**: a deleted purchase term → `can_commit: true`, model collapses. **Named mutation**: unfiltered `any(...)` → red. |
+| C3 | **F5**: the `{11, 12}` median row. **Named mutation**: `int(resolved)` for `round_half_even(...)` → red. |
+| C4 | **F2**: `test_c16_discriminating_literal_is_exact` is gone, and the `max(6, quantity)` mutation's observed-red set is **one** test, measured **across the suite**. |
+| C5 | **F6** and **F8**: each decided, each recorded in the handoff with its reason. F6's block is either commented or absent. |
+| C6 | **F9**: collapsed, or accepted with a recorded reason. If collapsed, the C1/C2/C9/C10 rows of phase 2 still pass unchanged — the status, binding and tenant boundary must be identical. |
+| C7 | Suite at or above **2425 / 26 / 1**, minus the one test deleted by F2, plus the rows added. Failure IDs **diffed, not counted**. |
 
-## 5. Gates
+## 5. Standing rules that bite here
 
-**Projection: waivable, and here is the justification to record if it is waived.** This phase
-ships no new mechanism — no derivation, no rounding rule, no search, no statistic. §3.3's
-repairs are one-line guards and test rows whose expected values the review already computed
-and published; §3.1 is prose. Charter rule 6 has no trigger. *If the implementer finds one,
-that is a STOP, not a judgement call.*
-
-**Review: one round, light-scoped.** The MVP calibration's condition is finally satisfied
-here and nowhere earlier in this project: most of this surface is not rule-6.
+- **Every named mutation: compute both sides, run the WHOLE SUITE, record every test that
+  reddens** (master plan §5, widened at phase 2's F1 — this is the round that rule was earned
+  for). A `-k` run is not an observation.
+- **Rule 2's companion** — each new row's fixture makes its own predicate the only reason its
+  outcome holds. F4's fixture must have a chain; F5's must have a median the modes disagree on.
+- **Rule 11½** — tests that commit own their teardown in `try/finally`, naming their tables.
+- **No new mechanism.** If a repair seems to need one, STOP.
 
 ## 6. Review log
 
