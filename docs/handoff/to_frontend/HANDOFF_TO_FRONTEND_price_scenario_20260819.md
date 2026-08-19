@@ -201,6 +201,12 @@ function roundHalfEven(a, b) {            // BigInt, b > 0n
 }
 ```
 
+**This transcription was executed, not just written.** It was run in Node and compared against
+the shipped Python implementation over **612 cases** — five divisors (`2`, `3`, `5`, `100 000`,
+the rate's `13 000 000`), every numerator from `−60` to `+60`, plus the exact operands of the
+three published operations at `P = 855 000`. **Zero mismatches**, including every negative tie.
+Copy it verbatim; if you rewrite it, re-run that comparison.
+
 **`Number` is forbidden throughout.** `855_000 × 22_000` is already `1.881e10`, and the second
 line multiplies by another `10⁶` — well past what a double carries losslessly. **`Math.round`
 is half-away-from-zero, not half-even; using it is the single most likely way to ship a screen
