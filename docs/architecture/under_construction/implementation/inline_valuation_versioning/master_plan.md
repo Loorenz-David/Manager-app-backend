@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **IMPLEMENTED — review r1 next** | 2026-08-19 | Codex → coordinator | Checkpoint `6f82579`, 6 files, perimeter exact, nothing undeclared. Coordinator verified independently: identity gone from `app/` and `docs/handoff/` (9 provenance files untouched, as intended); C2's mutation re-applied **on the post-Ruff final file** reddens C2 **and** C4, so the confound-catching row bites on its own; revert matches the declared SHA `10c5f350…`; suite 2320/26/1, 26 IDs byte-identical. Flagged to review: the graph's `command-task-create` description still asserts the retired refusal. |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **REVIEWING** | 2026-08-19 | Codex → coordinator | Checkpoint `6f82579`, 6 files, perimeter exact, nothing undeclared. Coordinator verified independently: identity gone from `app/` and `docs/handoff/` (9 provenance files untouched, as intended); C2's mutation re-applied **on the post-Ruff final file** reddens C2 **and** C4, so the confound-catching row bites on its own; revert matches the declared SHA `10c5f350…`; suite 2320/26/1, 26 IDs byte-identical. Flagged to review: the graph's `command-task-create` description still asserts the retired refusal. Review prompt: `prompts/reviewer/2026-08-19_phase1_review_r1.md`. Graph corrected pre-review (revision `0f36b07a…`). |
 
 ## 4. Naming registry
 
