@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **PROMPT_READY** | 2026-08-19 | coordinator | Intention round 1; D17/D18 settled; prompt at `prompts/implementer/2026-08-19_phase1_implement_r1.md` |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **BLOCKED → r1b PROMPT_READY** | 2026-08-19 | coordinator | r1 stopped correctly on a coordinator scoping error: HC-1 said three files, but the identity is published in the operational handoff (`:682`, `:725`). Root cause — the verification grep ran from `backend/app/`, so `backend/docs/` was never searched. HC-1 corrected 3 → 4 under the existing D-AUTH, no owner card. T2b + C10 added; the document edit specified in intention §3.1. No code was written in r1. Prompt: `prompts/implementer/2026-08-19_phase1_implement_r1b.md` |
 
 ## 4. Naming registry
 
@@ -46,14 +46,23 @@ in particular:
   never retyped.
 - **Deleted-assertion rule** — the rejection test is being *replaced*; the handoff must
   show what now covers the behaviour that test used to pin.
+- **Verification-scope rule (earned here).** A claim that something appears *nowhere* is
+  only as good as the directory the search ran in. State the root the search covered, and
+  for "appears nowhere" claims run it from the **repository root**, not from whichever
+  directory the previous command left you in. HC-1's three-file scope was wrong for exactly
+  this reason and cost an implementer round. The enumeration was right; the search wasn't.
 
 ## 6. Environment
 
 - Working directory `backend/app/`; infra `make dev-up`; tests
   `PYTHONPATH=. pytest -m 'not e2e'`.
-- **Start baseline: 2313 passed / 26 failed / 1 deselected**, head `c1d2e3f4a5b6`,
-  inherited from `simple_production_budget_division` phase 2 closeout. The 26 IDs are the
-  documented inherited set. **Diff failure IDs, never totals** — one run in three has been
+- **Start baseline: 2314 passed / 26 failed / 1 deselected** (2340 selected), head
+  `c1d2e3f4a5b6`. Measured independently by the implementer at r1 and re-measured by the
+  coordinator; both agree. **Corrected from 2313** — the figure carried over from
+  `simple_production_budget_division`'s closeout. The 26 failure IDs are byte-identical to
+  that closeout set, so the **+1 passing test is unexplained**: every commit between the
+  two measurements was documentation-only, and no test file changed. Recorded as unknown
+  rather than rationalised. It is precisely why the rule below exists. **Diff failure IDs, never totals** — one run in three has been
   observed at 25 and the drifting test is not identified.
 - The suite leaves ~24 `task_steps` behind per full run (tests outside these pipelines);
   row counts drift, so never read a changed count as evidence of a code change.

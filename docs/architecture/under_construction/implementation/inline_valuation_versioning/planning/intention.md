@@ -1,11 +1,12 @@
 # Intention: inline valuation versioning on task creation
 
 ```
-status: SHAPED — 0 owner cards open (D17, D18 settled); next gate = implement r1
+status: SHAPED — 0 owner cards open (D17, D18, D-AUTH settled); round 2 corrects
+        HC-1 to FOUR files after the implement-r1 blocker; next gate = implement r1b
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19
 date: 2026-08-19
-round: 1
+round: 2
 ```
 
 ---
@@ -21,18 +22,37 @@ are the same, do nothing.**
 **Hard constraints:**
 
 - **HC-1 — Authorized v1 change (owner, 2026-08-19).** This deliberately changes closed
-  item-cost v1 behaviour and **retires a registered error identity**. Exactly THREE files
-  may change:
+  item-cost v1 behaviour and **retires a registered error identity**. Exactly FOUR files
+  may change (corrected from three — see the round-2 note below):
   1. `app/beyo_manager/services/commands/tasks/create_task.py` — the guard at `:324-342`
      becomes the compare-and-version branch
   2. `app/tests/unit/docs/test_item_economics_handoff_accuracy.py` — remove
      `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` from the registered-identity set (`:97`)
   3. `app/tests/integration/services/commands/item_economics/test_phase8b_inline_task_prices.py`
      — the rejection test becomes the versioning tests
-  Nothing else. Verified 2026-08-19: those are the **only** three files in the repository
-  that reference the identity, and it appears **nowhere** in `Application_contracts` nor
-  in either published item-economics handoff — so **no document edit is required**, and
-  the docs-accuracy suite stays green once the registry entry is removed.
+  4. `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md`
+     — §9.1 rewritten and validation step 4 rewritten (see §3.1)
+
+  **HC-1 correction, round 2 (coordinator, 2026-08-19, implement r1 blocker).** Round 1
+  enumerated THREE files on a verification that was wrong: the grep behind it was run from
+  `backend/app/`, so `backend/docs/` was never searched. The identity **is** published, in
+  two live places — an example error response at `:682` and a validation step at `:725`,
+  inside a titled subsection **§9.1 "The refusal — an existing item that already has a
+  price"** whose whole body asserts the behaviour being retired. Removing the registry
+  entry without touching the document turns
+  `test_no_document_names_an_unregistered_error_identity[operational]` red, which is
+  exactly what the implementer hit.
+
+  **No new owner card is raised.** D-AUTH already authorized retiring the identity;
+  removing it from the document that publishes it is entailed by that decision, not a
+  separate one. Same precedent as `simple_production_budget_division`'s HC-1a extension
+  (3 → 4 artifacts, same rationale, recorded for provenance). The implementer was correct
+  to stop rather than exceed the perimeter — the constraint worked.
+
+  **Verified 2026-08-19, repo-wide from `backend/`:** four live files, plus references in
+  `item_cost_calculation`'s planning and archive documents, which are **provenance of a
+  decision that was true when written and MUST NOT be rewritten**. `Application_contracts`
+  carries no reference.
 - **HC-2 — One valuation writer.** `write_item_valuation_chain_in_session`
   (`services/commands/item_economics/_common.py:117`) remains the only code that
   supersedes and creates a valuation. It already sets `superseded_at`,
@@ -91,6 +111,28 @@ When the trigger fires and the item **was not created by this request**:
 **Comparison includes currency (D18).** 400 EUR is not 400 SEK; ignoring currency would
 leave an item priced in the wrong one, and the budget's own currency-equality check
 (`calculator.py:376-383`) would then fail downstream with a less traceable status.
+
+### 3.1 The document edit, specified (not left to the implementer)
+
+Deleting the two lines is **wrong**: it would leave the handoff silent about what now
+happens when an inline price meets a priced item, and would strand §9.1's closing "rule in
+one line", which asserts the retired behaviour.
+
+**§9.1 (`:675-691`) is rewritten**, title included, to state the new behaviour: the trio
+now re-prices the item; a field omitted from the request keeps its current value (D17); a
+resulting price that differs from what is stored writes a new valuation version credited
+to whoever created the task; an identical one writes nothing at all. It must also keep the
+one fact that survives unchanged — an existing item with *no* current valuation still
+accepts the trio and starts a chain — and state the deliberate divergence from
+`PUT /items/{id}/valuation`, which continues to replace wholesale (§5).
+
+**Validation step 4 (`:725-726`)** is rewritten from "confirm the … path leaves no task
+behind" to two checks: re-price an already-priced item with a **different** price and
+confirm a new valuation version appears; repeat with the **identical** price and confirm
+no new version appears.
+
+Nothing else in that document changes. §9.2's auto-commit table is unaffected — it
+describes what happens once a valuation exists, which this phase does not alter.
 
 ## 4. Properties
 

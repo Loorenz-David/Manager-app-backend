@@ -2,7 +2,7 @@
 
 ```
 plan: 1
-state: PROMPT_READY
+state: PROMPT_READY (round 2 — r1 blocked on a coordinator scoping error, HC-1 corrected 3 → 4)
 date: 2026-08-19
 ```
 
@@ -39,8 +39,14 @@ acceptance rows. No migration, no new module, no second valuation writer.
   no audit). Different → call the existing writer with the effective triple and
   `created_by_id = ctx.user_id`.
 - **T2 — retire the identity.** Remove the raise and remove the entry at
-  `test_item_economics_handoff_accuracy.py:97`. After T2 the string must appear **nowhere**
-  in the package.
+  `test_item_economics_handoff_accuracy.py:97`.
+- **T2b — the published document (added round 2, HC-1 corrected 3 → 4).** Rewrite §9.1 and
+  validation step 4 of
+  `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md`
+  **exactly as intention §3.1 specifies** — a rewrite stating the new behaviour, not a
+  deletion of the two lines. After T2 + T2b the identity must appear nowhere in `app/` and
+  nowhere in `docs/handoff/`. It **remains** in `item_cost_calculation`'s planning and
+  archive documents, which are provenance and must not be touched.
 - **T3 — tests.** The nine rows below, in
   `test_phase8b_inline_task_prices.py`. The existing rejection test is replaced; say in
   the handoff which new row covers each behaviour it used to pin (deleted-assertion rule).
@@ -59,13 +65,24 @@ Exact literals. Fixtures own their teardown (rule 11½).
 | C6 | Existing item, no current valuation → first valuation written |
 | C7 | Item created by this request + prices → unchanged behaviour |
 | C8 | No inline price on an existing priced item → zero valuation rows touched |
-| C9 | `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` is absent from the whole package; docs-accuracy suite green |
+| C9 | `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` is absent from `app/` and from `docs/handoff/`; the full docs-accuracy suite is green, `test_no_document_names_an_unregistered_error_identity[operational]` included. Its surviving occurrences in `item_cost_calculation`'s planning/archive are provenance and expected |
+| C10 | The rewritten §9.1 states the new behaviour — re-prices, inherits an omitted field, no-ops on identical values — and no longer asserts the retired refusal anywhere in the document |
 
 ## Out of scope
 
-`set_item_valuation`'s wholesale-replace semantics (intention §5). `auto_commit`. Any
-document edit — verified unnecessary, the identity is published nowhere.
+`set_item_valuation`'s wholesale-replace semantics (intention §5). `auto_commit`. Every
+document other than the operational handoff — in particular `item_cost_calculation`'s
+planning and archive files, which record a decision that was true when written.
 
 ## Review log
 
 (empty — plan authored 2026-08-19)
+
+- **implement r1 (2026-08-19) — BLOCKED, correctly.** The implementer stopped rather than
+  exceed the perimeter: retiring the identity turned
+  `test_no_document_names_an_unregistered_error_identity[operational]` red, because the
+  identity is published in the operational handoff at `:682` and `:725`. Root cause was the
+  coordinator's: the verification grep behind HC-1 was run from `backend/app/`, so
+  `backend/docs/` was never searched. No owner card was warranted — D-AUTH already covers
+  the document edit. HC-1 corrected to FOUR files, T2b and C10 added, and the edit
+  specified in intention §3.1 rather than left open. No code was written in r1.
