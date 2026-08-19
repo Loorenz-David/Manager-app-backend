@@ -383,9 +383,15 @@ it across polls to detect a configuration change; it is `null` exactly when `mod
    never multiplies or divides by `quantity`. Per-piece display is a frontend transform at the
    display edge, and `quantity` is shipped for exactly that purpose.
 3. **§9.1's refusal is gone.** Sending an inline price on task creation for an item that
-   already has a valuation no longer raises `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` — it
-   re-prices the item, writing a new version credited to the task creator when the values
-   differ and doing nothing when they do not. That identity is retired.
+   already has a valuation **no longer fails**. It re-prices the item: a new valuation version
+   credited to whoever created the task when the values differ, and **nothing written at all**
+   when they match. A field you omit keeps its current value rather than being nulled, and a
+   currency change counts as a difference.
+
+   **The error identity that refusal raised is retired, and this document deliberately does not
+   spell it out.** A backend guard asserts that no live document names an unregistered error
+   identity — precisely so nobody codes against an error that can no longer occur. Search your
+   own codebase for the identity you were handling on that path and delete the branch.
 
 **On the last one, an apology and a process change.** §9.1 was corrected by editing the
 2026-08-15 file **in place, under its original filename and date**, on 2026-08-19. Your team

@@ -216,6 +216,21 @@ rather than merely inherited:
   N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
   a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
   mutation; where it cannot, say so and why.
+- **A tripwire's roots are wider than the pipeline that widened them — including for the
+  coordinator** (phase 3 implement blocker, 2026-08-19). Naming a retired error identity in a
+  *new* handoff tripped
+  `test_retired_inline_refusal_identity_is_absent_from_live_sources`, whose roots cover all of
+  `docs/handoff/` — roots this coordinator widened, in an earlier pipeline, for exactly this
+  reason. It broke a running implementer session's baseline from a file in a different
+  phase's perimeter.
+  **Two consequences.** (1) **Before writing any document under a guarded root, run that
+  guard** — `pytest tests/unit/docs/` costs 1.3 s. (2) When a document must *describe* a
+  retired identity, describe the behaviour and tell the reader to search their own codebase;
+  do not spell the token. Explaining the omission in one line is more useful than the token
+  anyway — it tells the reader the convention.
+  **Parallel phases share a baseline.** Plan 3 and plan 4 have disjoint file perimeters and
+  still collided, because a test's roots are not a perimeter. When two phases run at once,
+  each session's baseline is the *other* session's live output.
 - **When an obligation is reciprocal, BOTH sites must be inside the perimeter — and the
   sweep is for the class, not the instance** (implement r1b blocker, 2026-08-19). Three
   consecutive implementer sessions blocked on the same shape: an obligation requiring a
