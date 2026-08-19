@@ -2,9 +2,9 @@
 
 ```
 plan: 2
-state: NOT_STARTED — blocked on plan 1 APPROVED
+state: APPROVED
 date: 2026-08-19
-gate: projection r0 REQUIRED (M3 is a statistic, M6 is a fingerprint — master plan §7)
+gate: review r1 APPROVED — 0 blocking, 1 should-fix (coordinator-routed), 11 notes
 ```
 
 **This plan is authored at planning time and will be amended at plan 1's closeout.** The
@@ -194,7 +194,7 @@ named obligation. **Nothing else in a phase-1 or out-of-table file may change.**
 | C | Criterion |
 |---|---|
 | C1 | **The status matrix: twelve rows over all twelve values** (§12A's correction), each asserting its own row of §9A.1 — the seven `null` rows **and** the five present rows. The present half is what fails silently if the predicate is written as `status is OK`. **Two fixture constraints, stated because otherwise the outcome is a property of the fixture rather than of the status** (L3, and C1's own decidability): the B6 and B7 rows use a cost model **without** a purchase term, or with a purchase cost present, per §9A.1's `†` qualification — plus **one further row** with a purchase term and no purchase cost asserting all three blocks `null`; and every "present" row uses a **fundable** model, since a degenerate model or `T = 0` makes `domain` `null` while the status is still `ok`. |
-| C2 | **`can_commit`, one row per condition**, each fixture violating **only** its own condition (rule 2's companion), plus the two asymmetry rows: valuation-with-null-price ⇒ `true`; **no valuation row ⇒ `false`** even with a price supplied. A test exercising only task state passes against §8's incomplete gloss and proves nothing. **The predicate is computed from the LIVE selection** (§9A.2's block form), never from the status — §9A.2's "equivalently A1/A2/B7/B10" shorthand is retracted, and one row proves why: a task committed while the configuration was healthy keeps status `ok` after its cost model version expires, where the status form would publish `can_commit: true` for a button whose press is a guaranteed error. |
+| C2 | **`can_commit`, one row per condition**, each fixture violating **only** its own condition (rule 2's companion), plus the two asymmetry rows: valuation-with-null-price ⇒ `true`; **no valuation row ⇒ `false`** even with a price supplied. A test exercising only task state passes against §8's incomplete gloss and proves nothing. **Conditions 3 and 4 cannot be isolated at this layer, and that is stated here rather than discovered** (review r1, L3/F11): §9A.2's "no active PRIMARY `TaskItem`" and "its `Item` row is deleted" are distinct in `commit_item_cost_evaluation`, but `_load_task_and_item` collapses both to `item is None`, so one fixture necessarily wears two names. Neither row passes for the wrong reason; neither proves its own condition alone. Master plan §5 already required this sentence — it was earned at plan 1's N3 and this criterion did not get it. **The predicate is computed from the LIVE selection** (§9A.2's block form), never from the status — §9A.2's "equivalently A1/A2/B7/B10" shorthand is retracted, and one row proves why: a task committed while the configuration was healthy keeps status `ok` after its cost model version expires, where the status form would publish `can_commit: true` for a button whose press is a guaranteed error. |
 | C3 | **M3 usability**: a section whose typical is exactly `0` with five qualifying groups — `sections_without_sample` counts it and the median is substituted for it. Under §5.2's superseded "NULL" wording this row is red. |
 | C4 | **Median quantisation**: an even number of usable typicals differing by an odd amount so the median is `x.5`, with **two** sections substituted — asserting per-section quantisation, which differs from sum-quantisation by exactly one second on this fixture. |
 | C5 | **Participating set**, one row per excluded state — `SKIPPED`, `CANCELLED`, `FAILED` separately, never one row for "an excluded state" (rule 2). Plus a section whose steps are all deleted. |
@@ -221,4 +221,58 @@ worker/seller variant, **any write**, multi-task items.
 
 ## 6. Review log
 
-*(empty — populated by the reviewer)*
+**projection r0 — 2026-08-19, Opus 5 — `AMENDMENTS_REQUIRED`**, 0 owner cards, 17 rows: 5
+upstream (§9.2A, §4.4B, §9A.1's `†`, §5.3A's empty set, §9A.2's retraction), 10 plan
+amendments, 3 delegations. Headline: the carried N8 fix was itself inert.
+
+**implement r1 / r1b — BLOCKED, twice, correctly.** Both on coordinator artifacts: a blanket
+prohibition that made its own exception unsatisfiable, a criterion still carrying a retired
+assertion form, a missing reciprocal-comment site, and a wrong file count. Zero files changed
+across both. See master plan §5's three rules earned there.
+
+**implement r1c — 2026-08-19, Codex — checkpoint `48705b3`.** 11/11 roster, 52 new tests,
+route mirror 25 → 26. D-5 imported the private helpers (preserving `.value` semantics), D-6
+called `get_task_budget_status`, D-7 chose service-side serialization so the perimeter stayed
+exact and the STOP was not entered.
+
+**review r1 — 2026-08-19, Opus 5 — `APPROVED`. 0 blocking, 1 should-fix, 11 notes.**
+**34 mutations applied one at a time, each file run whole, each reverted and hash-verified;
+27 reddened.** Of the seven that did not: two were not real mutations, one is provably dead
+code (F6), four are coverage gaps (F4, F5, F8 ×2). **No mutation produced a wrong-but-green
+payload.** Suite 2425/26/1 re-measured; failure IDs byte-identical.
+
+- **F1 (should-fix, routed to the coordinator — no code, no gate hold)**: the r1c ledger
+  records **one** reddened test for the `max(6, quantity)` mutation; the measured set is
+  **two** — `test_quantity_zero_falls_back_to_a_divisor_of_one` **and**
+  `test_c16_discriminating_literal_is_exact`, confirmed by a whole-suite run (2423/28/1) and
+  set-diffed. Understated in the safe direction: the guard is stronger than recorded.
+  **Corrected here rather than in the r1c handoff** — a consumed handoff is provenance and is
+  never rewritten; this Review log is the authoritative fold record.
+- **F2 (note)**: the duplicate C16 literal in `test_price_scenario_query.py:731` is what broke
+  the ledger. Reviewer's judgment, which I accept: it does not earn its place — it splits
+  ownership of a guard the plan deliberately placed in one file. **Routed to plan 3** rather
+  than a fix round: deleting a redundant test is not worth a checkpoint plus a re-review.
+- **F3, F4, F5, F6, F8, F9, F11** → plan 3 (see `plans/plan_3.md` §3).
+- **F7 → owner card 1**, relayed. Two graph evidence spans are provably wrong at head and the
+  sibling `implements` edge is missing. Does not hold the gate.
+- **F10**: `test_c16_reciprocal_comment_pairs_are_present` **works** — each of the four
+  comments deleted **alone** reddens it, so "prove each root alone" is satisfied. The
+  substring form is the right trade here: what is protected *is* a pointer string.
+
+**Verified correct and settled for plan 3** (do not re-derive): M3's participating set is
+byte-identical to the allocator's and reached through the imported `_step_state_is_excluded`;
+`_MODEL_STATUSES` is exactly §9A.1's A1/A2/B6/B7/B10 and narrowing it reddens five tests;
+`can_commit` reads the live selection with all five conjuncts individually probed, and its
+drift row genuinely constructs a committed-`ok`/live-`B5` state; M6's fingerprint order,
+`CALCULATION_VERSION` and null-coupling each bite; `suggested_price_minor`'s null-domain
+guard bites with the `AttributeError` it exists to prevent; §9.2A's blanking bites.
+
+**The implementer's `ruff format` refusal was ruled correct** — the reviewer reconstructed
+all five unformatted roster files from baseline `302c3ab` and confirmed they would already
+reformat there, so formatting would have rewritten executable lines under comment-only
+authorisations.
+
+**Coordinator verification before folding:** perimeter 11/11 against the roster; the three
+comment-only exceptions comment-only in the diff; suite re-measured independently at
+2425/26/1; `price_scenario.py`'s post-revert hash matches across the implementer's and the
+reviewer's declarations, independently confirming both reverts.
