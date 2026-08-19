@@ -2,7 +2,7 @@
 
 ```
 plan: 5
-state: NOT_STARTED — blocked on plan 3 APPROVED (shares no files, but shares a baseline)
+state: NOT_STARTED — unblocked 2026-08-19 (plan 3 APPROVED). Baseline 26 / 2431 / 1
 date: 2026-08-19
 gate: projection WAIVED — one test file, no new mechanism
 origin: phase 4 re-review r2, R8 and lesson 3; §1B added from phase 3 review r1, N-2

@@ -4,7 +4,7 @@
 state: phases 1, 2, 3 and 4 APPROVED; phase 5 NOT_STARTED and unblocked
 date: 2026-08-19
 phases: 5 — see §3. Phases 3 and 4 ran in parallel (app/ vs docs/handoff/); phase 5 was
-        opened by re-review r2's R8 and is blocked on phase 3.
+        opened by re-review r2's R8, was blocked on phase 3, and is now unblocked.
 ```
 
 ## 1. Mission
@@ -43,7 +43,7 @@ three files resolve there, and are not rewritten.
 
 ## 3. Phase registry & tracker
 
-Four phases. The two gate rows come first, then one row per phase — **newest state first**;
+Five phases. The two gate rows come first, then one row per phase — **newest state first**;
 rows marked *superseded* are the same phase's earlier states, kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
