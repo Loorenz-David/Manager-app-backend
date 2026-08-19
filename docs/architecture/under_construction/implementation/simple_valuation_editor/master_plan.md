@@ -187,6 +187,20 @@ rather than merely inherited:
   N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
   a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
   mutation; where it cannot, say so and why.
+- **When an obligation is reciprocal, BOTH sites must be inside the perimeter — and the
+  sweep is for the class, not the instance** (implement r1b blocker, 2026-08-19). Three
+  consecutive implementer sessions blocked on the same shape: an obligation requiring a
+  comment at two sites while only one site was authorized. The first two fixes patched the
+  instance in front of me and the next instance blocked the next session. **The fix that
+  ended it was a grep**: every "comment at both sites" obligation across the master plan, the
+  plan and the intention, resolved in one pass — exactly two of them, now both enumerated in
+  `plan_2.md` §2's roster. **When a blocker reveals a *pattern*, search for every instance
+  before writing the correction.** Patching instances serially costs one session each.
+- **A perimeter's file count belongs in the plan, stated once, not computed by whoever needs
+  it** (same blocker). The r1b prompt said "nine files" where 7 + 3 = 10, and the plan's own
+  exception header still said "Two edits" when there were three. A count restated in a
+  second document is a count that drifts; `plan_2.md` §2 now carries the roster and the
+  prompt points at it.
 - **When a correction lands in two places, fix both in the same edit — a criterion is a
   place** (implement r1 blocker, 2026-08-19). L1's fix was applied to `plan_2.md` §2 and not
   to C16, which still carried the retired equality form; the plan then contradicted itself

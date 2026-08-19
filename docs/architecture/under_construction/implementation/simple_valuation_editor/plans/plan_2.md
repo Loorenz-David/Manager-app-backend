@@ -50,8 +50,22 @@ found in it is a finding routed back, not an edit made here.
 
 ### Enumerated exceptions carried in from phase 1's closeout
 
-Two edits outside the table above are authorized, each one row, each traceable to a named
-phase-1 note. **Nothing else in a phase-1 file may change.**
+**Four** edits outside the table above are authorized, each one row, each traceable to a
+named obligation. **Nothing else in a phase-1 or out-of-table file may change.**
+
+> **THE PERIMETER ROSTER — count it here, do not add it up yourself.**
+> **7 table files + 4 exceptions = 11 files.** That total is the number the re-review checks
+> `git diff --name-only` against. It was stated as "nine" in the r1b prompt and was wrong;
+> the roster lives here now, in the plan, so there is one place to be right.
+>
+> **The reciprocal-comment obligations are exactly two, swept 2026-08-19 across the master
+> plan, this plan and the intention. There is no third.**
+> 1. `_shape_error` — `price_scenario.py:53-57` ↔ `calculator.py:124-128` (exceptions 2, 3)
+> 2. `serialize_user_light`'s three-key shape — `item_economics/serializers.py` (in the
+>    table) ↔ `cases/serializers.py:102-108` (exception 4)
+>
+> Each pair lands **in the same commit**. A one-way pointer is worse than none: the whole
+> purpose is that a later consolidation finds *both* sites.
 
 1. **`app/tests/unit/domain/item_economics/test_price_scenario.py` — N8.** Phase 1's
    `test_quantity_zero_falls_back_to_a_divisor_of_one` carries a second assertion that does
@@ -101,6 +115,14 @@ phase-1 note. **Nothing else in a phase-1 file may change.**
    this file**: one comment. No executable line may change, and the arithmetic is APPROVED
    and out of scope. Added 2026-08-19 after the implement r1 blocker — exception 2 was
    unsatisfiable without it.
+4. **`app/beyo_manager/domain/cases/serializers.py` — comment only, beside
+   `serialize_user_light` at `:102-108`**, naming
+   `domain/item_economics/serializers.py`'s re-declared three-key shape. Intention §6 makes
+   the re-declaration a deliberate decision *"pointed at in a comment at **both** sites so a
+   later consolidation finds both"*, and master plan §4 repeats it — but the existing site
+   has always sat outside this phase's perimeter, so the obligation was unsatisfiable as
+   written. **One comment. No executable line may change**, and nothing about `domain/cases`
+   is otherwise in scope. Added 2026-08-19 after the implement r1b blocker.
 
 ## 3. Tasks
 
@@ -187,7 +209,7 @@ phase-1 note. **Nothing else in a phase-1 file may change.**
 | C13 | **Service identity** (service-identity rule): the route's mount is guarded by `calls[0][0] is get_task_price_scenario`, never by status code + call count. **This needs a NEW test function in `test_item_economics_router.py`** (L10) — the cited precedent lives in `test_budget_status_route_is_available_to_all_roles` (`:135-143`), which is parametrized over `_ALL_ROLE_ROUTES`, the list this route must **not** join; and the two `_ROUTES` parametrizations assert only `403` + `calls == []` and `200` + `len(calls) == 1`. §2 describes that file as a one-row edit; it is one row **plus this function**. |
 | C19 | **The typical map is built defensively** (L13): a participating section with **no row** from `typical_times_statement` — reachable when its `WorkingSection` is deleted — resolves through `.get()` to a `None` typical and is counted in `sections_without_sample`. `sections_total` counts sections derived from **steps**, never from the statement's rows; a `KeyError` here would be a 500 on an ordinary data state. |
 | C14 | **`divide_production_budget` is not called** by this feature (§10's first cut). Asserted, not assumed — a criterion, because the allocator is the obvious thing for an implementer to reach for when it sees "sections". |
-| C16 | **The three carried exceptions land** (§2). (a) The discriminating `Q = 0` row asserts the **exact literal** `slider_domain(8_919, 0, 0) == SliderDomain(step_minor=110, min_minor=3_080, max_minor=12_100)` and reddens under `max(1, quantity) → max(6, quantity)` at `slider_domain`'s definition (the mutation returns `114 / 3_078 / 12_084`). **Never a call-to-call equality** — `f(0) == f(1)` is invariant under that mutation at every `B`, which is the defect this row exists to remove. (b) Both `_shape_error` cross-reference comments exist, each naming the other's path, and **both land in the same commit** — a one-way pointer defeats the purpose. *Corrected 2026-08-19 at the implement r1 blocker: this criterion still carried the retired equality form after §2 had been fixed, so the plan contradicted itself.* |
+| C16 | **All four carried exceptions land** (§2), and the perimeter is **11 files**. (c) **Both `serialize_user_light` cross-reference comments exist**, each naming the other's path — the new site in `item_economics/serializers.py` and the existing one at `cases/serializers.py:102-108` — in the same commit. (a) The discriminating `Q = 0` row asserts the **exact literal** `slider_domain(8_919, 0, 0) == SliderDomain(step_minor=110, min_minor=3_080, max_minor=12_100)` and reddens under `max(1, quantity) → max(6, quantity)` at `slider_domain`'s definition (the mutation returns `114 / 3_078 / 12_084`). **Never a call-to-call equality** — `f(0) == f(1)` is invariant under that mutation at every `B`, which is the defect this row exists to remove. (b) Both `_shape_error` cross-reference comments exist, each naming the other's path, and **both land in the same commit** — a one-way pointer defeats the purpose. *Corrected 2026-08-19 at the implement r1 blocker: this criterion still carried the retired equality form after §2 had been fixed, so the plan contradicted itself.* |
 | C17 | **Purity is NOT extended to the query service — decided here, not left to the handoff** (L17). A purity assertion cannot bind an I/O module: the query service exists to hold a session and ORM queries, so the forbidden-prefix set has no meaning for it. And phase 1's assertion lives in `test_price_scenario.py`, which §2 opens for exactly one edit — extending it there would be a scope breach. **N6 is therefore recorded and closed, not carried further**: if a future phase ever does extend a C21-style assertion, it must handle **relative imports** (N6): `ast.ImportFrom` with `level > 0` carries a partial `node.module` that no forbidden prefix matches, and `from . import x` has `node.module is None` and is skipped entirely. Theoretical in this repo — `app/beyo_manager` contains zero relative imports — which is exactly why it would pass review unnoticed. If the assertion is **not** extended, say so in the handoff rather than leaving it ambiguous. |
 | C15 | **Teardown** (rule 11½): every test committing rows deletes them in `finally`; the residue check names its tables. The baseline's ~24 `task_steps` / ~40 `step_state_records` drift is inherited and is never read as evidence. |
 
