@@ -2,7 +2,7 @@
 
 ```
 plan: 1
-state: IMPLEMENTED (round 1b)
+state: IMPLEMENTED (fix round 2)
 date: 2026-08-19
 ```
 
@@ -164,3 +164,19 @@ planning and archive files, which record a decision that was true when written.
   `item_cost_calculation/archive/plan_8b/2026-08-15_phase8b_implement_r1_handoff.md:49` and
   `…/2026-08-15_phase8b_review_r1_handoff.md:187`. Deliberately **not** reverted — that
   would break this plan's citations instead, and archives are not rewritten.
+
+- **fix r2 (2026-08-19, Codex) — IMPLEMENTED.** Resolved review-r1 S1 by widening
+  `test_retired_inline_refusal_identity_is_absent_from_live_sources` from the package,
+  tests and `docs/handoff/to_frontend/` subsets to all Python/Markdown files under `app/`
+  and `docs/handoff/`. The only explicit exclusion is `app/.venv/`, which is the installed
+  dependency environment rather than a live source root; `app/scripts/`, `app/migrations/`,
+  top-level app modules, and every handoff subfolder remain covered. The final-form P6
+  probe went red first on `app/scripts/_reviewer_probe_c9.py` and then, after that plant was
+  removed, on `docs/handoff/from_frontend/_reviewer_probe_c9.md`; both probes were removed
+  and the docs-accuracy suite returned to 51 passed. Full suite: 2346 selected / 2320 passed
+  / 26 inherited failures / 1 deselected, with failure-ID diff added `[]`, removed `[]`;
+  changed-file Ruff lint passed. **N1 decision record:** r1b renamed
+  `test_c1_inline_birth_writes_valuation_and_handles_exact_auto_statuses` →
+  `test_c7_inline_birth_writes_valuation_and_handles_exact_auto_statuses` and parameter ids
+  `C1-row-*` → `C7-row-*`; the mapping is retained rather than rewriting the two archived
+  phase-8b citations.

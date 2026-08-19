@@ -20,12 +20,12 @@ from beyo_manager.domain.item_economics.serializers import serialize_task_budget
 
 _APP_ROOT = Path(__file__).resolve().parents[3]
 _BACKEND_ROOT = Path(__file__).resolve().parents[4]
-_HANDOFFS = _BACKEND_ROOT / "docs" / "handoff" / "to_frontend"
+_HANDOFFS = _BACKEND_ROOT / "docs" / "handoff"
 _DOMAIN_DOCS = _BACKEND_ROOT / "docs" / "domains" / "item_economics"
 _PACKAGE = _APP_ROOT / "beyo_manager"
 
-_OPERATIONAL = _HANDOFFS / "HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md"
-_CONFIGURATION = _HANDOFFS / "HANDOFF_TO_FRONTEND_item_economics_configuration_20260815.md"
+_OPERATIONAL = _HANDOFFS / "to_frontend" / "HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md"
+_CONFIGURATION = _HANDOFFS / "to_frontend" / "HANDOFF_TO_FRONTEND_item_economics_configuration_20260815.md"
 
 _PREFIX = "/api/v1/item-economics"
 
@@ -219,8 +219,10 @@ def test_operational_handoff_documents_inline_repricing_contract() -> None:
 @pytest.mark.unit
 def test_retired_inline_refusal_identity_is_absent_from_live_sources() -> None:
     retired_identity = "ITEM_COST_INLINE_PRICE" + "_ON_PRICED_ITEM"
-    for root in (_PACKAGE, _APP_ROOT / "tests", _HANDOFFS):
+    for root in (_APP_ROOT, _HANDOFFS):
         for path in (*root.rglob("*.py"), *root.rglob("*.md")):
+            if root == _APP_ROOT and ".venv" in path.relative_to(root).parts:
+                continue
             assert retired_identity not in path.read_text(), path
 
 
