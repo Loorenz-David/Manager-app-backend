@@ -122,6 +122,7 @@ def _require_enum(value: object, enum_type: type[_T], field: str) -> _T:
 
 
 def _shape_error(calculation_type: object, field: str) -> ValidationError:
+    # Deliberately duplicated at domain/item_economics/price_scenario.py:_shape_error.
     type_name = getattr(calculation_type, "value", calculation_type)
     return ValidationError(
         f"ITEM_COST_TERM_SHAPE_INVALID: {type_name} has an invalid {field} shape"

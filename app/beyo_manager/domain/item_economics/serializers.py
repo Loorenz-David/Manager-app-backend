@@ -283,3 +283,83 @@ def serialize_item_lifetime_economics(
             "offset": offset,
         },
     }
+
+
+def serialize_task_price_scenario(scenario: dict) -> dict:
+    """Serialize the manager-only task price-scenario projection."""
+
+    item = scenario["item"]
+    saved = scenario["saved"]
+    model = scenario["model"]
+    domain = scenario["domain"]
+    if saved is not None:
+        valuation = saved["valuation"]
+        created_by = saved["created_by"]
+        # Same three-key shape is intentionally re-declared at
+        # domain/cases/serializers.py:serialize_user_light; keep both copies aligned.
+        saved_payload = {
+            "valuation_id": valuation.client_id,
+            "expected_sale_price_minor": valuation.expected_sale_price_minor,
+            "purchase_cost_minor": valuation.purchase_cost_minor,
+            "created_at": valuation.created_at.isoformat(),
+            "created_by": (
+                {
+                    "client_id": created_by.client_id,
+                    "username": created_by.username,
+                    "profile_picture": created_by.profile_picture,
+                }
+                if created_by is not None
+                else None
+            ),
+        }
+    else:
+        saved_payload = None
+
+    if model is not None:
+        price_model = model["price_model"]
+        model_payload = {
+            "cost_model_version_id": model["cost_model_version_id"],
+            "basis_version_id": model["basis_version_id"],
+            "residual_percent_milli": price_model.residual_percent_milli,
+            "constant_deduction_minor": price_model.constant_deduction_minor,
+            "cost_per_worker_minute_ten_thousandths": (
+                price_model.cost_per_worker_minute_ten_thousandths
+            ),
+            "is_purely_proportional": price_model.constant_deduction_minor == 0,
+        }
+    else:
+        model_payload = None
+
+    return {
+        "task_id": scenario["task_id"],
+        "status": _enum_value(scenario["status"]),
+        "item_binding": scenario["item_binding"],
+        "can_commit": scenario["can_commit"],
+        "currency": _enum_value(scenario["currency"]),
+        "calculation_version": scenario["calculation_version"],
+        "config_fingerprint": scenario["config_fingerprint"],
+        "item": (
+            {
+                "client_id": item.client_id,
+                "article_number": item.article_number,
+                "label": item.item_category_snapshot,
+                "quantity": item.quantity,
+            }
+            if item is not None
+            else None
+        ),
+        "saved": saved_payload,
+        "model": model_payload,
+        "typical": scenario["typical"],
+        "anchors": scenario["anchors"],
+        "domain": (
+            {
+                "rule": "break_even_band_v1",
+                "min_minor": domain.min_minor,
+                "max_minor": domain.max_minor,
+                "step_minor": domain.step_minor,
+            }
+            if domain is not None
+            else None
+        ),
+    }

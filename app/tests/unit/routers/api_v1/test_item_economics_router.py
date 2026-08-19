@@ -43,6 +43,7 @@ _ROUTES = [
     ("DELETE", "/api/v1/item-economics/projections/ice_1", None),
     ("POST", "/api/v1/item-economics/projections/ice_1/promote", None),
     ("GET", "/api/v1/item-economics/items/itm_1/economics", None),
+    ("GET", "/api/v1/item-economics/tasks/tsk_1/price-scenario", None),
 ]
 
 _ALL_ROLE_ROUTES = [
@@ -141,6 +142,15 @@ def test_budget_status_route_is_available_to_all_roles(method, path, body, role_
         assert calls[0][0] is item_economics.get_task_budget_status_worker
     else:
         assert calls[0][0] is item_economics.get_task_budget_status
+
+
+def test_price_scenario_route_mounts_the_price_scenario_service(monkeypatch):
+    client, calls = _client(monkeypatch, "manager")
+
+    response = client.get("/api/v1/item-economics/tasks/tsk_1/price-scenario")
+
+    assert response.status_code == 200
+    assert calls[0][0] is item_economics.get_task_price_scenario
 
 
 def test_router_surface_has_no_term_mutation_and_no_derived_rate_input():

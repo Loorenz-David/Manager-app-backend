@@ -379,7 +379,11 @@ def test_quantity_zero_falls_back_to_a_divisor_of_one() -> None:
         min_minor=420_000,
         max_minor=1_650_000,
     )
-    assert slider_domain(1_211_335, 0, 29) == slider_domain(1_211_335, 1, 29)
+    assert slider_domain(8_919, 0, 0) == SliderDomain(
+        step_minor=110,
+        min_minor=3_080,
+        max_minor=12_100,
+    )
 
 
 def test_c18_minimum_resolves_disagreeing_floor_constraints() -> None:

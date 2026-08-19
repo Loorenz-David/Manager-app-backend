@@ -35,6 +35,7 @@ from beyo_manager.services.queries.item_economics.get_task_budget_allocations im
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.queries.item_economics.get_task_budget_status_worker import get_task_budget_status_worker
 from beyo_manager.services.queries.item_economics.get_task_production_time import get_task_production_time
+from beyo_manager.services.queries.item_economics.get_task_price_scenario import get_task_price_scenario
 from beyo_manager.services.queries.item_economics.list_cost_model_versions import list_cost_model_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_basis_versions import list_production_cost_basis_versions
 from beyo_manager.services.queries.item_economics.list_production_cost_groups import list_production_cost_groups
@@ -375,6 +376,20 @@ async def route_get_task_production_time(
 ):
     return await _run(
         get_task_production_time,
+        claims,
+        session,
+        data={"task_client_id": task_client_id},
+    )
+
+
+@router.get("/tasks/{task_client_id}/price-scenario", response_model=None)
+async def route_get_task_price_scenario(
+    task_client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        get_task_price_scenario,
         claims,
         session,
         data={"task_client_id": task_client_id},

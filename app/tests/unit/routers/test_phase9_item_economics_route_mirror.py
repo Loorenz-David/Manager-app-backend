@@ -6,7 +6,7 @@ cannot disagree with that surface, which is the whole failure this criterion exi
 catch. Adding a route means editing three places — the router, the README, and this
 list — and that friction is the point.
 
-Two arbiters over the same 23 rows:
+Two arbiters over the same 26 rows:
 
 1. the README's Quick Index rows for `/api/v1/item-economics/` match (method, path);
 2. the router source's ``@router.<verb>`` decorators and their ``require_roles([...])``
@@ -61,6 +61,7 @@ _EXPECTED_ROUTES = (
     # The budget-status handler picks the money-free worker service for WORKER and SELLER identities.
     ("GET", "/api/v1/item-economics/tasks/{task_client_id}/budget-status", _ALL_ROLES),
     ("GET", "/api/v1/item-economics/tasks/{task_client_id}/production-time", _ALL_ROLES),
+    ("GET", "/api/v1/item-economics/tasks/{task_client_id}/price-scenario", _ADMIN_MANAGER),
     ("GET", "/api/v1/item-economics/items/{item_client_id}/economics", _ADMIN_MANAGER),
 )
 
@@ -120,8 +121,8 @@ def test_router_source_matches_the_hand_written_route_and_role_set() -> None:
 
 
 @pytest.mark.unit
-def test_the_registry_ships_twenty_five_routes() -> None:
+def test_the_registry_ships_twenty_six_routes() -> None:
     # Enumerated above, one row per route; the count is derived from that table,
     # never asserted independently of it.
-    assert len(_EXPECTED_ROUTES) == 25
-    assert len({(method, path) for method, path, _ in _EXPECTED_ROUTES}) == 25
+    assert len(_EXPECTED_ROUTES) == 26
+    assert len({(method, path) for method, path, _ in _EXPECTED_ROUTES}) == 26

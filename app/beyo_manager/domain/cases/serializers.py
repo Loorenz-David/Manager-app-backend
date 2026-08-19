@@ -100,6 +100,8 @@ def serialize_message(message) -> dict:
 
 
 def serialize_user_light(user) -> dict | None:
+    # This three-key shape is intentionally re-declared in
+    # domain/item_economics/serializers.py:serialize_task_price_scenario.
     if user is None:
         return None
     return {

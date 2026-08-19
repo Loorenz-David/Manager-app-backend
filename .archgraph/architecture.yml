@@ -4760,6 +4760,103 @@ nodes:
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
     updatedAt: 2026-08-19T15:54:54.896Z
+  - id: projection-item-economics-task-price-scenario
+    type: projection
+    name: Task price scenario
+    description: Manager-only, task-scoped read model that composes workspace-scoped
+      task/item binding, the saved valuation and byline, live item-economics
+      configuration, median-substituted task typical time, and the pure
+      price-scenario model into break-even anchors and a slider domain.
+      Non-bound bindings govern the payload by nulling
+      valuation/model/anchor/domain structure while keeping the step-derived
+      typical; the projection performs no writes.
+    tags:
+      - item-economics
+      - price-scenario
+      - read-model
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 149
+          endLine: 271
+          summary: The query service composes budget status, workspace-scoped task/item
+            resolution, current valuation/byline, live configuration, the task
+            typical block, pure price-model anchors, binding overrides,
+            fingerprinting, and service-side serialization.
+          inferenceReason: This function is the implementation boundary for the task
+            price-scenario projection.
+        - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+          startLine: 405
+          endLine: 429
+          summary: The integration contract enumerates all twelve economics statuses and
+            verifies whether the model, anchors, and domain are published.
+          inferenceReason: The test verifies the projection's total status branch,
+            including its five present and seven absent cases.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-19T17:04:11.607Z
+    updatedAt: 2026-08-19T17:04:11.607Z
+    sourceLinks:
+      - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 149
+        endLine: 271
+        contentHash: c276ce6989d8c4343ee56618f2e2027c3f92a36ccc3c95513c9d53085009b7b5
+        linkedAt: 2026-08-19T17:04:11.607Z
+      - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 405
+        endLine: 429
+        contentHash: 663e12c1ebf78a57d04f15aebc34e0aa5f07e23ad31325d546e7dac7731f7e0f
+        linkedAt: 2026-08-19T17:04:11.607Z
+  - id: endpoint-item-economics-task-price-scenario
+    type: endpoint
+    name: GET /api/v1/item-economics/tasks/{task_client_id}/price-scenario
+    description: ADMIN/MANAGER-only task price-scenario endpoint. It delegates
+      through the shared service runner to the task price-scenario read model
+      and exposes no worker or seller variant.
+    tags:
+      - item-economics
+      - price-scenario
+      - http
+      - manager-only
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+          startLine: 385
+          endLine: 396
+          summary: The GET handler is guarded by ADMIN/MANAGER roles and delegates the
+            path task identifier to get_task_price_scenario through _run.
+          inferenceReason: This route is the external HTTP boundary for the task
+            price-scenario projection.
+        - path: app/tests/unit/routers/api_v1/test_item_economics_router.py
+          symbol: test_price_scenario_route_mounts_the_price_scenario_service
+          startLine: 147
+          endLine: 153
+          summary: The route test verifies successful manager access and
+            identity-preserving dispatch to get_task_price_scenario.
+          inferenceReason: The test proves the endpoint mounts the intended projection
+            service rather than an adjacent item-economics query.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-19T17:04:11.607Z
+    updatedAt: 2026-08-19T17:04:11.607Z
+    sourceLinks:
+      - path: app/beyo_manager/routers/api_v1/item_economics.py
+        symbol: route_get_task_price_scenario
+        startLine: 385
+        endLine: 396
+        contentHash: 1aa49c99048031f33c347c4130328afaa0b013f6f74111b1e4829cdc6b4a8d18
+        linkedAt: 2026-08-19T17:04:11.607Z
+      - path: app/tests/unit/routers/api_v1/test_item_economics_router.py
+        symbol: test_price_scenario_route_mounts_the_price_scenario_service
+        startLine: 147
+        endLine: 153
+        contentHash: c13a7d491982f2cd17357a8a26b6d14667960055cee72d9d50a3fe2ab3a9bb31
+        linkedAt: 2026-08-19T17:04:11.607Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9501,3 +9598,21 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
     updatedAt: 2026-08-19T15:29:24.418Z
+  - sourceNodeId: endpoint-item-economics-task-price-scenario
+    relationshipType: accepts
+    targetNodeId: projection-item-economics-task-price-scenario
+    description: The manager-only HTTP route exposes the task price-scenario projection.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+          startLine: 385
+          endLine: 396
+          summary: The endpoint passes get_task_price_scenario to the shared service
+            runner.
+          inferenceReason: The service identity establishes that this endpoint accepts the
+            corresponding projection.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-19T17:04:11.607Z
+    updatedAt: 2026-08-19T17:04:11.607Z
