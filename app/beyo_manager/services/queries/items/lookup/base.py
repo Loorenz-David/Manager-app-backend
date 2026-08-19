@@ -15,6 +15,7 @@ class ItemLookupResult:
     external_id: str | None
     external_source: str | None
     images: list = field(default_factory=list)
+    purchase_price: int | float | None = None
 
 
 class ItemLookupHandler(ABC):

@@ -96,4 +96,5 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             external_id=None,
             external_source=_EXTERNAL_SOURCE_NAME,
             images=images,
+            purchase_price=data.get("purchase_price"),
         )
