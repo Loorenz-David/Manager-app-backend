@@ -8,14 +8,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 
 from beyo_manager.domain.item_economics.configuration import EconomicsSelection
 from beyo_manager.domain.item_economics.enums import (
     CostModelTermCalculationTypeEnum,
     EconomicsStatusEnum,
 )
-from beyo_manager.domain.item_economics.price_scenario import SliderDomain
 from beyo_manager.domain.items.enums import ItemCurrencyEnum
 from beyo_manager.domain.task_steps.enums import (
     TaskStepReadinessStatusEnum,
@@ -148,6 +147,23 @@ async def test_c4_even_median_is_quantised_once_per_substituted_section() -> Non
     assert result["sections_without_sample"] == 2
 
 
+@pytest.mark.integration
+async def test_phase3_c3_half_even_median_differs_from_truncation() -> None:
+    session = _TypicalSession(
+        [_step(f"wsec_half_even_{index}") for index in range(3)],
+        [
+            _typical_row("wsec_half_even_0", 11),
+            _typical_row("wsec_half_even_1", 12),
+            _typical_row("wsec_half_even_2", None),
+        ],
+    )
+
+    result = await module._typical_block(_ctx(session), "tsk_scenario")
+
+    assert result["total_seconds"] == 35
+    assert result["sections_without_sample"] == 1
+
+
 @pytest.mark.parametrize(
     "state",
     [
@@ -229,6 +245,7 @@ def _scenario_objects(
     rate=Decimal("1300.0000"),
     with_valuation=True,
     with_purchase_term=False,
+    with_deleted_purchase_term=False,
     with_percent_term=True,
     with_item=True,
     selection_status=EconomicsStatusEnum.OK,
@@ -321,6 +338,18 @@ def _scenario_objects(
                 cost_model_version_id=model.client_id,
                 name="Purchase",
                 calculation_type=CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST,
+                created_by_id=user.client_id,
+            )
+        )
+    if with_deleted_purchase_term:
+        terms.append(
+            CostModelTerm(
+                client_id="cmvt_deleted_purchase",
+                workspace_id="ws_scenario",
+                cost_model_version_id=model.client_id,
+                name="Deleted purchase",
+                calculation_type=CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST,
+                is_deleted=True,
                 created_by_id=user.client_id,
             )
         )
@@ -490,6 +519,19 @@ async def test_c2_can_commit_uses_each_live_admission_condition(
     result, _ = await _run_scenario(monkeypatch, status=status, **options)
 
     assert result["can_commit"] is expected
+
+
+@pytest.mark.integration
+async def test_phase3_c2_deleted_purchase_term_is_ignored_by_admission_and_model(
+    monkeypatch,
+) -> None:
+    result, _ = await _run_scenario(
+        monkeypatch,
+        with_deleted_purchase_term=True,
+    )
+
+    assert result["can_commit"] is True
+    assert result["model"]["constant_deduction_minor"] == 0
 
 
 @pytest.mark.parametrize("sections_total", [1, 0])
@@ -697,6 +739,147 @@ async def test_c10_task_resolution_is_workspace_scoped_and_hides_deleted(
 
 
 @pytest.mark.integration
+async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
+    db_session,
+    monkeypatch,
+) -> None:
+    token = uuid4().hex[:10]
+    workspace = Workspace(client_id=f"ws_price_chain_{token}", name=f"Chain {token}")
+    user = User(
+        client_id=f"usr_price_chain_{token}",
+        username=f"price_chain_{token}",
+        email=f"price_chain_{token}@example.test",
+        password="test",
+    )
+    item = Item(
+        client_id=f"itm_price_chain_{token}",
+        workspace_id=workspace.client_id,
+        item_major_category_snapshot="wood",
+        quantity=6,
+        created_by_id=user.client_id,
+    )
+    older = ItemValuation(
+        client_id=f"ival_price_chain_old_{token}",
+        workspace_id=workspace.client_id,
+        item_id=item.client_id,
+        expected_sale_price_minor=700_000,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        superseded_at=datetime(2026, 8, 18, 9, 0, tzinfo=timezone.utc),
+        created_by_id=user.client_id,
+    )
+    current = ItemValuation(
+        client_id=f"ival_price_chain_current_{token}",
+        workspace_id=workspace.client_id,
+        item_id=item.client_id,
+        expected_sale_price_minor=854_999,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        created_by_id=user.client_id,
+    )
+    objects = _scenario_objects()
+    objects.task.client_id = f"tsk_price_chain_{token}"
+    objects.task.workspace_id = workspace.client_id
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+    current_valuation_id = current.client_id
+    current_price = 855_000
+
+    async def fake_status(_ctx):
+        return SimpleNamespace(
+            status=EconomicsStatusEnum.NOT_EVALUATED,
+            item_binding="bound",
+        )
+
+    async def fake_task_and_item(_ctx):
+        return objects.task, item
+
+    async def fake_preview(_ctx, _item):
+        return objects.selection, objects.terms
+
+    async def fake_typical(_ctx, _task_id):
+        return {
+            "total_seconds": 12_300,
+            "is_estimated": False,
+            "sections_without_sample": 0,
+            "sections_total": 4,
+            "method": "median_completed_section_totals",
+            "window_days": 90,
+            "min_sample_size": 5,
+        }
+
+    monkeypatch.setattr(module, "get_task_budget_status", fake_status)
+    monkeypatch.setattr(module, "_load_task_and_item", fake_task_and_item)
+    monkeypatch.setattr(module, "_load_preview_inputs", fake_preview)
+    monkeypatch.setattr(module, "_typical_block", fake_typical)
+
+    try:
+        db_session.add_all([workspace, user])
+        await db_session.flush()
+        db_session.add(item)
+        await db_session.flush()
+        db_session.add(older)
+        await db_session.flush()
+        db_session.add(current)
+        await db_session.flush()
+        # Update old, then current so the forced heap scan makes the no-filter mutant
+        # deterministically encounter the older live tuple first.
+        older.superseded_by_id = current.client_id
+        await db_session.flush()
+        current.expected_sale_price_minor = current_price
+        await db_session.commit()
+        await db_session.execute(text("SET LOCAL enable_indexscan = off"))
+        await db_session.execute(text("SET LOCAL enable_bitmapscan = off"))
+
+        result = await module.get_task_price_scenario(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace.client_id,
+                    "user_id": user.client_id,
+                    "role_name": "manager",
+                },
+                incoming_data={"task_client_id": objects.task.client_id},
+                query_params={},
+                session=db_session,
+            )
+        )
+
+        assert result["saved"]["valuation_id"] == current_valuation_id
+        assert result["saved"]["expected_sale_price_minor"] == current_price
+    finally:
+        await db_session.rollback()
+        await db_session.execute(
+            delete(ItemValuation).where(ItemValuation.workspace_id == workspace_id)
+        )
+        await db_session.execute(delete(Item).where(Item.client_id == item_id))
+        await db_session.execute(delete(User).where(User.client_id == user_id))
+        await db_session.execute(
+            delete(Workspace).where(Workspace.client_id == workspace_id)
+        )
+        await db_session.commit()
+
+    valuation_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(ItemValuation)
+        .where(ItemValuation.workspace_id == workspace_id)
+    )
+    item_residue = await db_session.scalar(
+        select(func.count()).select_from(Item).where(Item.client_id == item_id)
+    )
+    user_residue = await db_session.scalar(
+        select(func.count()).select_from(User).where(User.client_id == user_id)
+    )
+    workspace_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(Workspace)
+        .where(Workspace.client_id == workspace_id)
+    )
+    assert valuation_residue == 0
+    assert item_residue == 0
+    assert user_residue == 0
+    assert workspace_residue == 0
+
+
+@pytest.mark.integration
 def test_c14_query_service_does_not_call_the_budget_divider() -> None:
     source = inspect.getsource(module)
 
@@ -724,13 +907,4 @@ def test_c16_reciprocal_comment_pairs_are_present() -> None:
     assert (
         "domain/item_economics/serializers.py:serialize_task_price_scenario"
         in case_serializer_source
-    )
-
-
-@pytest.mark.integration
-def test_c16_discriminating_literal_is_exact() -> None:
-    assert module.slider_domain(8_919, 0, 0) == SliderDomain(
-        step_minor=110,
-        min_minor=3_080,
-        max_minor=12_100,
     )

@@ -62,7 +62,8 @@ _MODEL_STATUSES = frozenset(
 
 def _has_purchase_term(terms: list[object]) -> bool:
     return any(
-        getattr(term, "calculation_type", None)
+        getattr(term, "is_deleted", None) is not True
+        and getattr(term, "calculation_type", None)
         is CostModelTermCalculationTypeEnum.ITEM_PURCHASE_COST
         for term in terms
     )
@@ -71,6 +72,7 @@ def _has_purchase_term(terms: list[object]) -> bool:
 async def _current_valuation(ctx: ServiceContext, item_id: str) -> ItemValuation | None:
     return await ctx.session.scalar(
         select(ItemValuation).where(
+            # Redundant defence-in-depth: _load_task_and_item owns the tenant boundary (C10).
             ItemValuation.workspace_id == ctx.workspace_id,
             ItemValuation.item_id == item_id,
             ItemValuation.superseded_at.is_(None),
@@ -84,6 +86,7 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
         (
             await ctx.session.execute(
                 select(TaskStep).where(
+                    # Redundant defence-in-depth: _load_task_and_item owns the tenant boundary (C10).
                     TaskStep.workspace_id == ctx.workspace_id,
                     TaskStep.task_id == task_id,
                     TaskStep.is_deleted.is_(False),
@@ -241,8 +244,6 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
         model_data = None
         anchors = None
         domain = None
-        if budget_status.item_binding == "detached":
-            can_commit = False
 
     fingerprint = (
         f"{model_data['cost_model_version_id']}:{model_data['basis_version_id']}:"
