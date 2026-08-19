@@ -140,3 +140,27 @@ planning and archive files, which record a decision that was true when written.
   `0f36b07a…`. **Post-state verified: 183 nodes / 275 edges — unchanged counts — pending
   reviews still 4, 0 diagnostics, 0 stale.** The graph carries no stale claim from this
   phase.
+
+- **review r1 (2026-08-19, Opus 5)** — **CHANGES_REQUIRED**: 1 should-fix, 5 notes, 0
+  blocking. M1 verified faithful, including three traps the reviewer checked and cleared:
+  the falsy-zero case (inheritance keys on `is not None`, so a request price of `0` is kept,
+  not treated as omitted); a `NULL` field on the current row inheriting correctly; and no
+  enum-vs-string coercion across the persistence boundary, which would have made every
+  triple compare "different". **S1** — C9's standing guard does not cover the perimeter C9
+  states; demonstrated by planting the identity in `app/scripts/` and
+  `docs/handoff/from_frontend/` and watching the docs-accuracy suite stay green at 51
+  passed. The identity is genuinely absent today — what fails is the tripwire, not the
+  state. **Card 1 answered** (owner: *"yes we should maintin it correctly, we don't want to
+  leave it half way"*): `node:command-task-create`'s whole-function anchor widened
+  **72-580 → 72-594**, the true span verified by AST rather than by reading; lines 581-594
+  assemble the response and sat outside the map. Pre-existing drift from 2026-08-15,
+  invisible to staleness detection because that keys on where a claim *starts*. Record
+  `.archgraph/changes/2026-08-19T11-10-47-193Z--a635cc.yml`, revision `50b39402…`.
+
+  **N1 rename mapping, recorded so archived evidence stays followable:**
+  `test_c1_inline_birth_writes_valuation_and_handles_exact_auto_statuses` →
+  `test_c7_inline_birth_writes_valuation_and_handles_exact_auto_statuses`, and its parameter
+  ids **`C1-row-*` → `C7-row-*`**. Cited under the old names in
+  `item_cost_calculation/archive/plan_8b/2026-08-15_phase8b_implement_r1_handoff.md:49` and
+  `…/2026-08-15_phase8b_review_r1_handoff.md:187`. Deliberately **not** reverted — that
+  would break this plan's citations instead, and archives are not rewritten.

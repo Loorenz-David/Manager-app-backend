@@ -1,0 +1,40 @@
+changeId: 2026-08-19T11-10-47-193Z--a635cc
+operations:
+  - itemId: node:command-task-create
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 72
+          endLine: 580
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 72
+          endLine: 594
+    rationale: "Location correction only; the claim is unchanged. The evidence
+      describes create_task as a whole-function boundary but its range stops at
+      580, while the function ends at 594 (verified by AST, not by reading).
+      Lines 581-594 assemble the response dict returned to the caller. Staleness
+      detection keys on where a claim starts, so this drift is invisible to it:
+      an agent trusting the range as 'the whole command' would be editing past
+      the edge of the map. Predates this phase (recorded 2026-08-15); neither
+      caused nor touched by inline_valuation_versioning. Owner-authorized
+      2026-08-19 in answer to review r1 card 1."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T11:10:47.193Z
+graphRevisionBefore: 0f36b07a885c3c82ee3cc832d6beecada8f25e3e26c4d9c6c7e812cfa608c2a0
+graphRevisionAfter: 50b3940273f51b9bafeb5a48f08c5970e291d6f9f95abb604af51db5d771f00b
+humanInstruction: "Owner, 2026-08-19, answering review r1 card 1: \"yes we
+  should maintin it correctly, we don't want to leave it half way\" — authorize
+  widening command-task-create's whole-function evidence anchor 72-580 to
+  72-594. Pre-existing drift, not caused by this phase."
+changeTokenCorrelation: 95afe0780745

@@ -4343,7 +4343,7 @@ nodes:
         - path: app/beyo_manager/services/commands/tasks/create_task.py
           symbol: create_task
           startLine: 72
-          endLine: 580
+          endLine: 594
           summary: The command creates and flushes Task and PRIMARY TaskItem rows,
             resolves or creates the item, writes an inline valuation through
             write_item_valuation_chain_in_session before the begin_nested
@@ -4366,10 +4366,23 @@ nodes:
             architectural boundary for task/item birth and the new inline
             valuation write.
           supersededAt: 2026-08-15T08:40:24.816Z
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 72
+          endLine: 580
+          summary: The command creates and flushes Task and PRIMARY TaskItem rows,
+            resolves or creates the item, writes an inline valuation through
+            write_item_valuation_chain_in_session before the begin_nested
+            savepoint, and then invokes
+            auto_commit_item_cost_evaluation_in_session.
+          inferenceReason: This implementation is the task-creation command's
+            architectural boundary for task/item birth and the new inline
+            valuation write.
+          supersededAt: 2026-08-19T11:10:47.174Z
     origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
-    updatedAt: 2026-08-19T10:34:47.071Z
+    updatedAt: 2026-08-19T11:10:47.174Z
   - id: decision-money-audience-admin-manager-only
     type: decision
     name: "Money audience: ADMIN/MANAGER only"
