@@ -43,8 +43,10 @@ the whole design: you get constants, you do the arithmetic locally.
    allowance** (§5.3).
 4. **Disable Save when `can_commit` is `false`** (§6) — pressing it is a guaranteed error.
 5. **Reconcile after Save** against the commit response, and refetch on mismatch (§6.3).
-6. **Handle `model: null`** — the screen keeps its frame and names the missing thing; it never
-   shows zeros (§5.2).
+6. **Handle `model: null` *and* `saved: null` — they are different absences.** `model: null`
+   means no slider and no numbers (§5.2). `saved: null` means nobody has priced this item yet,
+   and it arrives **with a full `model`** — that is the screen's main use case, not an error
+   state (§2, §3).
 
 ---
 
@@ -102,7 +104,7 @@ Written from the shipped serializer, not from a design document.
     "created_by": {                  // null only if the user row cannot be loaded
       "client_id": "usr_…",
       "username": "Marta Lind",
-      "profile_picture": "https://…"
+      "profile_picture": "https://…"   // nullable — null, never an empty string
     }
   },
 
@@ -141,9 +143,15 @@ Written from the shipped serializer, not from a design document.
 }
 ```
 
-**Every `…_minor` field, `currency` and both `item` string fields are nullable.** The screen's
-first render for a brand-new item has `saved: null`, `currency: null` and a fully populated
-`model`.
+**Nullable: `currency`, `config_fingerprint`, `item` and both its string fields, `saved` and
+every one of its members except `valuation_id` and `created_at`, `profile_picture`, all four
+numeric blocks, and `break_even_price_minor` / `suggested_price_minor` within `anchors`.**
+Non-null on every response: `task_id`, `status`, `item_binding`, `can_commit`,
+`calculation_version`, `typical` and all seven of its members, and `anchors.is_fundable` /
+`anchors.infeasible_at_or_below_minor` when `anchors` is present.
+
+The screen's first render for a brand-new item has `saved: null`, `currency: null` and a fully
+populated `model`.
 
 **Note the integer-scaled fields.** `residual_percent_milli` and
 `cost_per_worker_minute_ten_thousandths` are integers, **not** the house decimal-as-string,
@@ -162,16 +170,20 @@ left for work after deductions — the model deducts **78 %**. It is easily misr
 
 ## 3. What the screen renders, key by key
 
+**`model === null` gates the four numeric blocks and nothing else.** `saved`, `currency` and
+`item` are independently nullable — a brand-new item renders with a full `model` and none of
+the three. Every row below marked ⚠ needs its own null check.
+
 | On screen | From |
 |---|---|
-| `1 425 SEK` per piece | draft price ÷ `item.quantity`, your side |
-| `× 6 pieces · 8 550 SEK total` | `item.quantity`, draft price |
-| `AT PRICE 2h 25m` | `allowance_seconds(P)` — §4 |
-| `TYPICAL 3h 25m` | `typical.total_seconds` |
-| chip `Below typical work` | draft price vs `anchors.break_even_price_minor` — §5.3 |
-| `suggested 2 025/piece` | `anchors.suggested_price_minor ÷ quantity` |
-| slider ends `700` / `2 700` | `domain.min_minor` / `max_minor` ÷ quantity — **but read §5.4** |
-| `Marta Lind · saved version · 14 Aug, 10:24` | `saved.created_by.username`, `saved.created_at` |
+| `1 425 SEK` per piece | draft price ÷ `max(1, item.quantity)`, your side — ⚠ `item` is `null` on `detached` |
+| `× 6 pieces · 8 550 SEK total` | `max(1, item.quantity)`, draft price — ⚠ as above |
+| `AT PRICE 2h 25m` | `allowance_seconds(P)` — §4 — ⚠ needs `model`, so gate on `model !== null` |
+| `TYPICAL 3h 25m` | `typical.total_seconds` — always present |
+| chip `Below typical work` | draft price vs `anchors.break_even_price_minor` — §5.3 — ⚠ `anchors` null with `model`; the member is independently nullable |
+| `suggested 2 025/piece` | `anchors.suggested_price_minor ÷ max(1, quantity)` — ⚠ as above |
+| slider ends `700` / `2 750` | `domain.min_minor` / `max_minor` ÷ `max(1, quantity)` — ⚠ `domain` null with `model`; **and note `2 750`, not the mockup's `2 700` — see §5.4** |
+| `Marta Lind · saved version · 14 Aug, 10:24` | `saved.created_by.username`, `saved.created_at` — ⚠⚠ **`saved` is `null` for an item nobody has priced and on any non-`bound` binding; `created_by` is separately nullable. Two checks, not one.** |
 
 ---
 
@@ -276,7 +288,7 @@ typicals are derived, those values change and the payload shape does not.
 1. **`item_binding` is `"bound"`.** Under `detached` or `mismatched` all four are `null`
    **whatever the status says** — and `mismatched` always reports `ok` or `infeasible`, so
    status alone will tell you the blocks are there when they are not. Check the binding first.
-   (§7.4.)
+   (§5.5.)
 2. **`status` is one of** `ok`, `infeasible`, `item_unvalued`, `item_missing_expected_price`,
    `not_evaluated`. It is `null` for the other seven — the five configuration failures,
    `item_missing_purchase_cost`, and `currency_mismatch`.
@@ -284,7 +296,8 @@ typicals are derived, those values change and the payload shape does not.
    `infeasible` come from the *committed* snapshot and do not consult the live configuration,
    so a task committed while the configuration was healthy reports `ok` after its cost model
    version expires — with every block `null`. This is the same live/displayed split §6.1
-   describes for `can_commit`, and the two always move together.
+   describes for `can_commit` — an expired cost model version empties these blocks and turns
+   `can_commit` false at the same time. Beyond that shared cause the two are independent (§6.1).
 4. **The model collapses** — a cost model with a purchase-cost term and no purchase cost
    available yields `null` blocks under any status, the same as `item_missing_purchase_cost`.
 
@@ -347,6 +360,29 @@ rather than assuming.
 
 ---
 
+### 5.5 The payload when `item_binding` is not `"bound"`
+
+`item_binding` governs the whole payload and **wins over `status`** — on both non-`bound`
+values, every time, not as an edge case.
+
+| Key | `detached` | `mismatched` |
+|---|---|---|
+| `item` | **`null`** — there is no item row to describe | populated |
+| `saved`, `currency` | `null` | `null` |
+| `model`, `anchors`, `domain`, `config_fingerprint` | `null` | `null` |
+| `typical` | **populated** — it derives from the task's steps alone | **populated** |
+| `status` | as resolved | **always `ok` or `infeasible`** |
+| `can_commit` | `false` | **as resolved — may be `true`** |
+
+The `mismatched` row is the trap: the status will read `ok`, which §5.2 item 2 lists as a
+"blocks present" status, and the blocks are `null` anyway. **Check `item_binding` before
+`status`, and `model === null` before both.**
+
+Both states mean the task lost or swapped its primary item. That is an empty state, not an
+error — `200`, keep the frame, say what is missing.
+
+---
+
 ## 6. Saving
 
 **Save is one call:** `POST /api/v1/item-economics/tasks/{task_client_id}/evaluations/commit`
@@ -365,8 +401,10 @@ model has a purchase term.
 
 It is computed from the **live** configuration, not from the displayed status — a task
 committed while the configuration was healthy can still read `ok` after its cost model version
-expires, and committing would then fail. **The same split governs the `model` block** (§5.2
-item 3); the two always move together.
+expires, and committing would then fail. **The same live/displayed split governs the `model`
+block** (§5.2 item 3): both are computed from the live configuration, so an expired cost model
+version empties the blocks and turns `can_commit` false together. **That shared cause is the
+only thing they share** — see the two paragraphs below.
 
 **`can_commit` is deliberately conservative in one direction.** It is computed without knowing
 the price or purchase cost you will send, because a GET cannot. The commit endpoint *does*
@@ -377,7 +415,7 @@ than wrong, and do not conclude it is broken.
 
 **`can_commit` is unrelated to whether the blocks are present.** Under
 `item_binding: "mismatched"` it can read `true` with no model on screen — a saveable task whose
-price screen has nothing to show. See §7.4.
+price screen has nothing to show. See §5.5.
 
 ### 6.2 Save cannot create the first valuation row — set the purchase price first
 
@@ -416,10 +454,14 @@ functions of the price and the model, never of the typical.
 
 It also does not cover `item.quantity` or `item.label`.
 
-**So: refetch the scenario on item-changed and step-transition events for this task**, not only
-on a fingerprint mismatch. The screen is short-lived, so in practice this is one refetch on the
-events you already receive — but a screen left open across a step transition is pricing against
-a break-even that has moved.
+**So: refetch the scenario on `task:step-state-changed` for *any* task in the workspace, and on
+`item:updated` for this item** — not only on a fingerprint mismatch. Both are workspace
+broadcasts you already have a socket for; do not filter the step event to this task, because
+the typical is a workspace-wide median and any task's step transition can move it.
+`item:updated` is emitted on item edits (quantity, category) and, to our knowledge, has not
+been named in a handoff to you before — if your client does not handle it yet, this is the
+screen that needs it. The window also slides with time alone, which no event covers; a screen
+left open for a long session should refetch on reopen regardless.
 
 ---
 
@@ -429,8 +471,7 @@ a break-even that has moved.
 
 1. **§6's status → treatment table.** It says the numerics are `null` everywhere but `ok` and
    `infeasible`. **For this endpoint only**, `model`, `anchors` and `domain` are also present
-   under `item_unvalued`, `item_missing_expected_price` and `not_evaluated` (subject to §5.2's
-   collapsibility qualification). Other endpoints are unchanged.
+   under `item_unvalued`, `item_missing_expected_price` and `not_evaluated` (subject to §5.2 item 4 — the model must collapse). Other endpoints are unchanged.
 2. **§8.4's display prohibition** ("do not show '1000 × 5' anywhere near these figures") is
    **lifted for this screen**. Its *contract* stands unchanged and is not negotiable: a
    valuation is per item, never per unit; the wire carries whole-item minor units; the backend
@@ -443,30 +484,8 @@ a break-even that has moved.
    currency change counts as a difference.
 
    **The error identity that refusal raised is retired, and this document deliberately does not
-   spell it out.** A backend guard asserts that no live document names an unregistered error
-   identity — precisely so nobody codes against an error that can no longer occur. Search your
+   spell it out.** A backend guard sweeps every live document for retired error identities — precisely so nobody codes against an error that can no longer occur. Search your
    own codebase for the identity you were handling on that path and delete the branch.
-
-### 7.4 The payload when `item_binding` is not `"bound"`
-
-`item_binding` governs the whole payload and **wins over `status`** — on both non-`bound`
-values, every time, not as an edge case.
-
-| Key | `detached` | `mismatched` |
-|---|---|---|
-| `item` | **`null`** — there is no item row to describe | populated |
-| `saved`, `currency` | `null` | `null` |
-| `model`, `anchors`, `domain`, `config_fingerprint` | `null` | `null` |
-| `typical` | **populated** — it derives from the task's steps alone | **populated** |
-| `status` | as resolved | **always `ok` or `infeasible`** |
-| `can_commit` | `false` | **as resolved — may be `true`** |
-
-The `mismatched` row is the trap: the status will read `ok`, which §5.2 item 2 lists as a
-"blocks present" status, and the blocks are `null` anyway. **Check `item_binding` before
-`status`, and `model === null` before both.**
-
-Both states mean the task lost or swapped its primary item. That is an empty state, not an
-error — `200`, keep the frame, say what is missing.
 
 **On the last one, an apology and a process change.** §9.1 was corrected by editing the
 2026-08-15 file **in place, under its original filename and date**, on 2026-08-19. Your team

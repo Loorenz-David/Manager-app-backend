@@ -142,4 +142,48 @@ occurrence of the false absence claim is inside the sentence retracting it.
 line; B3's rolling window read at the line; B1's five-condition gate read at
 `get_task_price_scenario.py:168-207`. Nothing accepted on the handoff's word.
 
-**Awaiting re-review r2** — delta-scoped to the changed text.
+**re-review r2 — 2026-08-19, Opus 5 — `CHANGES_REQUESTED`. 1 blocking, 4 should-fix, 3 notes,
+0 owner cards. All eight applied.**
+
+**Seven of r1's ten findings closed outright.** S1's correction survived the strongest probe of
+the round — a **wrapper-aware transitive import walk over all 82 modules** reachable from
+`services/queries/item_economics/`, matching seven clock primitives: 41 raw hits, 39 write-side,
+**exactly two on a read path — the two the correction names.** True *and* complete.
+
+**All three unclosed findings failed the same way, and it is how a correction fails rather than
+how a draft does: each fix landed where r1 pointed and not where the same defect also lived.**
+
+- **R1 (blocking)** — §3, the render table a developer actually builds from, was never touched.
+  It still dereferenced `saved.created_by.username` on the one payload where `saved` is `null` —
+  **the brand-new item, the flagship case §5.2 exists to celebrate** — divided by `quantity`
+  three times after N1 corrected §5.4 to `max(1, quantity)`, and printed `2 700` where §5.4 calls
+  that number wrong. **Fixed**: the table now carries ⚠ markers per row, a gating sentence above
+  it, and `2 750`; action item 6 now names both absences.
+- **R2** — a **fifth** nullability (`profile_picture`), excluded by the closed-set summary line
+  the B2 fix itself introduced. **Fixed** with the full enumeration, both directions.
+- **R3** — r1's own replacement text asserted `can_commit` and the model block "always move
+  together"; three paragraphs later the document says they are "unrelated". The second is right —
+  `item_unvalued` has a full model and `can_commit: false`. **Fixed at both sites.**
+- **R4** — the refetch instruction was scoped "for this task" while the mechanism is
+  workspace-wide, and asserted the frontend "already receives" `item:updated`. **Verified: that
+  event exists as a workspace broadcast and appears in NO live handoff** — only two archived
+  ones. **Fixed**: both events named, the scope corrected, and the fact that we have never
+  published `item:updated` to them stated plainly.
+- **R5** — §7.4 sat inside "Amendments to [another document]" and orphaned the apology
+  paragraph. **Fixed**: moved to **§5.5**, apology restored beneath amendment 3, three
+  cross-references retargeted.
+- **R6, R7** — the guard sentence named the wrong test; a dangling reference to the deleted
+  "collapsibility qualification". **Both fixed.**
+- **R8** — neither phase-4 document is registered with the accuracy arbiter. **Routed to
+  plan 5.**
+
+**Coordinator verification before folding**: `item:updated`'s publication status checked
+directly (3 emit sites, 0 live handoffs, 2 archived); the arbiter's coverage read at
+`test_item_economics_handoff_accuracy.py:27-28, 159, 169, 175`. Guards green after every
+correction: `tests/unit/docs/` 59 passed. **This time the fix perimeter was found by grep
+before editing**, per r2's lesson 1 — all three R1 defects were confirmed to live in §3 and
+nowhere else.
+
+**Awaiting re-review r3** — delta-scoped, and it must attack r2's replacement text as
+adversarially as r1's, because three of r2's five findings were defects *in r1's own proposed
+wording*.
