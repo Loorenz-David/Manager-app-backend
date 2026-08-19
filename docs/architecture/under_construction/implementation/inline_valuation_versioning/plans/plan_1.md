@@ -65,7 +65,7 @@ Exact literals. Fixtures own their teardown (rule 11½).
 | C6 | Existing item, no current valuation → first valuation written |
 | C7 | Item created by this request + prices → unchanged behaviour |
 | C8 | No inline price on an existing priced item → zero valuation rows touched |
-| C9 | `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` is absent from `app/` and from `docs/handoff/`; the full docs-accuracy suite is green, `test_no_document_names_an_unregistered_error_identity[operational]` included. Its surviving occurrences in `item_cost_calculation`'s planning/archive are provenance and expected |
+| C9 | `ITEM_COST_INLINE_PRICE_ON_PRICED_ITEM` is absent from every `*.py` and `*.md` file under `app/` (excluding `app/.venv/`) and under `docs/handoff/` — the extension and `.venv` narrowings are stated here deliberately, per review r1's rule that a narrowing lives in the criterion and not silently in the test; the full docs-accuracy suite is green, `test_no_document_names_an_unregistered_error_identity[operational]` included. Its surviving occurrences in `item_cost_calculation`'s planning/archive are provenance and expected |
 | C10 | The rewritten §9.1 states the new behaviour — re-prices, inherits an omitted field, no-ops on identical values — and no longer asserts the retired refusal anywhere in the document |
 
 ## Out of scope
@@ -180,3 +180,23 @@ planning and archive files, which record a decision that was true when written.
   `test_c7_inline_birth_writes_valuation_and_handles_exact_auto_statuses` and parameter ids
   `C1-row-*` → `C7-row-*`; the mapping is retained rather than rewriting the two archived
   phase-8b citations.
+
+- **fix r2 (2026-08-19, Codex) — S1 closed, verified independently.** Checkpoint
+  `e9531dc`, two files, perimeter exact. The guard now scans all `*.py`/`*.md` under
+  `app/` and `docs/handoff/`, excluding only `app/.venv/`. **Coordinator re-planted both
+  probes separately on the final tree** — `app/scripts/_coord_probe.py` and
+  `docs/handoff/from_frontend/_coord_probe.md` each turn the guard red **on their own**,
+  which is stronger than a combined plant because it proves each root independently. Both
+  removed; tree clean. Suite re-run 2320/26/1, IDs byte-identical.
+
+  **F1 (coordinator-found, for re-review to adjudicate — note-level).** The guard filters
+  to `*.py` and `*.md`. C9 says the identity is absent from **`app/`** and
+  **`docs/handoff/`**, with no extension qualifier. Probed: `app/_coord_probe.yml`
+  containing the literal leaves the guard **green** (`1 passed`). This is S1's exact shape
+  one layer out — the criterion names trees, the guard narrows them — but with three
+  differences that argue for note, not should-fix: the extension filter is **pre-existing**
+  module behaviour rather than something this round introduced; the realistic carriers of a
+  Python error constant are `.py` and `.md`, both covered; and widening to all file types
+  would sweep lockfiles and binaries. **Per review r1's own rule — "if any root is
+  deliberately left out, say so in the criterion, not silently in the test" — the narrowing
+  belongs in C9's text.** C9 is therefore restated below rather than left implicit.

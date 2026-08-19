@@ -23,7 +23,7 @@ after approval).
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **CHANGES_REQUESTED → fix r2 PROMPT_READY** | 2026-08-19 | Opus 5 (reviewer r1) | Review r1: **1 should-fix, 5 notes, 0 blocking.** M1 faithful; C1–C8 and C10 all bite under mutation; two independent suite runs 2320/26/1 with byte-identical ID sets. **S1:** C9's standing guard scans `app/beyo_manager` + `app/tests` + `docs/handoff/to_frontend`, but C9 states `app/` and `docs/handoff/` — proved by planting the literal in `app/scripts/` and `docs/handoff/from_frontend/` and watching 51 tests stay green. Fix is ~2 lines in one HC-1 file. **Card 1 → owner authorized**, coordinator applied: `command-task-create` anchor widened 72-580 → 72-594 (AST-verified; graph rev `50b39402…`). Prompt: `prompts/implementer/2026-08-19_phase1_fix_r2.md`. |
+| 1 | M1 compare/inherit/version in `create_task`, identity retired, tests | **FIX r2 CONSUMED — re-review r3 PROMPT_READY** | 2026-08-19 | Codex → coordinator | S1 closed: the C9 guard now scans `app/` + `docs/handoff/` (only `app/.venv/` excluded). Coordinator re-planted both probes **separately** on the final tree — each turns the guard red on its own; suite 2320/26/1, IDs byte-identical; perimeter `e9531dc` = 2 files. **F1 raised for adjudication:** the guard filters to `*.py`/`*.md` while C9 names whole trees — an `app/*.yml` plant stays green. Read as note-level and C9 restated to declare the narrowing, per review r1's own rule. Card 1 applied earlier (graph rev `50b39402…`). Prompt: `prompts/reviewer/2026-08-19_phase1_rereview_r3.md`. |
 
 ## 4. Naming registry
 
