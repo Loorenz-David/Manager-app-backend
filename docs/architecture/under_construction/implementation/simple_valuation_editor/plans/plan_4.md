@@ -95,4 +95,51 @@ conditions against `commit_item_cost_evaluation`.
 
 ## 6. Review log
 
-*(empty)*
+**review r1 — 2026-08-19, Opus 5 — `CHANGES_REQUESTED`. 3 blocking, 4 should-fix, 3 notes,
+0 owner cards.** Every finding a text correction the coordinator owns; no ratified decision
+reopened. **All corrections applied 2026-08-19 with the reviewer's verbatim replacements.**
+
+The two things the plan nominated as riskiest — §4's BigInt transcription and the worked
+example — were **re-executed independently** (612 cases, 0 mismatches; `855 000 → 188 100 →
+14 469 → 8 681`) and are correct. C1, C2, C4, C5 and C6 held. **Every failure was in C3**, and
+they shared one root: the handoff described the payload's nullability as a function of `status`
+while the shipped query gates it on **five** conditions.
+
+- **B1 — the block rule.** §5.2 listed `status` alone; the code requires `item_binding ==
+  "bound"` **and** the status **and** `selection_ready` **and** `currency_agrees` **and** a
+  collapsible model (`get_task_price_scenario.py:196-207`). Two were absent entirely.
+  Reproduced against the shipped service: a committed task with an expired live cost model
+  version reports `status: "ok"` with every block `null`. **Fixed**: §5.2 now enumerates all
+  four with "treat `model === null` as the switch, never `status`", and a new **§7.4** carries
+  intention §9.2A's non-`bound` payload table — including that `mismatched` always reports
+  `ok`/`infeasible` and `can_commit` may be `true` with nothing to show.
+- **B2 — four nullable fields documented as always present**: `currency`,
+  `item.article_number`, `item.label`, `saved.expected_sale_price_minor`. All 46 keys were
+  right; the nullability was not. **Three of the four were already recorded in intention §8A.**
+  **Fixed**: annotated in place, plus a line stating that a brand-new item's first render is
+  `saved: null`, `currency: null`, `model` populated.
+- **B3 — `config_fingerprint` was the only staleness signal and is blind to the typical.**
+  `typical_times_statement` uses a rolling 90-day window off `datetime.now`
+  (`get_working_section_typical_times.py:23`), so the typical moves when any task in the
+  workspace completes a step **and with time alone** — and `break_even`, `suggested` and all
+  three `domain` values derive from it. The commit-response reconciliation cannot see it
+  either: budget and allowance are functions of the price and the model, never the typical.
+  **Fixed**: §6.3 now states the coverage boundary and instructs refetch on item-changed and
+  step-transition events.
+- **S1 — a false absence claim, published as verified.** See master plan §5's extended
+  verification-scope rule. **Fixed** in both places, with the retraction left visible in §6 of
+  the reply rather than silently corrected.
+- **S2** (the `n`-conflation intention §3.2A had already corrected), **S3** (§8.1 read as
+  though the production-time screen deducts *all* elapsed work), **S4** ("treat that rounding
+  as inert" — tie-free is not inert, and BigInt `/` truncates on negatives): all **fixed**
+  verbatim. **N1** (`max(1, quantity)`), **N2** (the cap case), **N3** (`can_commit`'s
+  conservative direction): all **folded**.
+
+**Verified green after the corrections:** `tests/unit/docs/` 59 passed; the only remaining
+occurrence of the false absence claim is inside the sentence retracting it.
+
+**Coordinator verification before folding:** S1's two `today_utc()` call sites read at the
+line; B3's rolling window read at the line; B1's five-condition gate read at
+`get_task_price_scenario.py:168-207`. Nothing accepted on the handoff's word.
+
+**Awaiting re-review r2** — delta-scoped to the changed text.

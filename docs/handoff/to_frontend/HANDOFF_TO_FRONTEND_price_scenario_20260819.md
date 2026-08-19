@@ -79,20 +79,24 @@ Written from the shipped serializer, not from a design document.
   "status": "ok",                    // the twelve-value vocabulary
   "item_binding": "bound",           // bound | detached | mismatched
   "can_commit": true,
-  "currency": "swedish_krona",
+  "currency": "swedish_krona",       // null whenever "saved" is null — including the
+                                     // unpriced item of §5.2. Do not format money with it
+                                     // unchecked.
   "calculation_version": 1,
-  "config_fingerprint": "cmv_7a1:pcbv_3f9:v1",
+  "config_fingerprint": "cmv_7a1:pcbv_3f9:v1",   // null exactly when "model" is
 
   "item": {                          // null when item_binding is "detached"
     "client_id": "itm_…",
-    "article_number": "0000608",
-    "label": "Dining chairs",        // the item's category snapshot
+    "article_number": "0000608",     // nullable
+    "label": "Dining chairs",        // the item's category snapshot — nullable
     "quantity": 6
   },
 
-  "saved": {                         // null when the item has no valuation row
+  "saved": {                         // null when there is no valuation row, and on any
+                                     // non-"bound" item_binding
     "valuation_id": "ival_…",
-    "expected_sale_price_minor": 855000,
+    "expected_sale_price_minor": 855000,   // null under item_missing_expected_price —
+                                           // the state §6.2's flow deliberately creates
     "purchase_cost_minor": null,
     "created_at": "2026-08-14T10:24:00+00:00",
     "created_by": {                  // null only if the user row cannot be loaded
@@ -136,6 +140,10 @@ Written from the shipped serializer, not from a design document.
   }
 }
 ```
+
+**Every `…_minor` field, `currency` and both `item` string fields are nullable.** The screen's
+first render for a brand-new item has `saved: null`, `currency: null` and a fully populated
+`model`.
 
 **Note the integer-scaled fields.** `residual_percent_milli` and
 `cost_per_worker_minute_ten_thousandths` are integers, **not** the house decimal-as-string,
@@ -213,8 +221,11 @@ is half-away-from-zero, not half-even; using it is the single most likely way to
 that disagrees with the server.**
 
 Two of the three operations can actually land on a tie (the price × residual multiply, and the
-rate division). The seconds conversion is provably tie-free over integers — a fact we tested,
-so you may treat that third rounding as inert.
+rate division). The seconds conversion is provably tie-free over integers — `3·cm mod 5` is
+never `2.5` — so **the half-even tie rule never fires there**. It still rounds, and you still
+call `roundHalfEven` for it: BigInt `/` truncates toward zero, which disagrees on negative
+operands (`allowed_centimin = −1n` → `−1n` half-even, `0n` truncated). Use the function for all
+three.
 
 ### Display rounding
 
@@ -225,9 +236,10 @@ so you may treat that third rounding as inert.
 
 The server's persisted formula rounds **each** percentage term separately; this published form
 rounds **once**. The difference is bounded by `(n + 1) / 2` minor units, where `n` is the number
-of percentage terms — for a two-term model, **at most 1 öre**, which at the rate above is about
-0.07 seconds. Invisible at whole-minute display. We assert this bound by test against the real
-persisted path, over seven model shapes.
+of **percentage** terms in the model (not the term count). One percentage term ⇒ ≤ 1 öre ⇒
+about **0.046 s** at the rate above; two ⇒ ≤ 1.5 öre ⇒ about **0.07 s**. Either way the largest
+error is under a tenth of a second against a display quantised to whole minutes. We assert this
+bound by test against the real persisted path, over seven model shapes.
 
 The trade buys you a payload of three integers instead of an unbounded term array, and a
 **monotone** budget function — the per-term form is not monotone, so a search over it can be
@@ -258,18 +270,31 @@ typicals are derived, those values change and the payload shape does not.
 
 ### 5.2 When `model`, `anchors` and `domain` are null
 
-`model` is present for five statuses: `ok`, `infeasible`, `item_unvalued`,
-`item_missing_expected_price`, `not_evaluated`. It is `null` for the other seven — the five
-configuration failures, `item_missing_purchase_cost`, and `currency_mismatch`.
+`model`, `anchors`, `domain` and `config_fingerprint` are published together or not at all.
+**Four things must hold at once**; `status` is only one of them.
+
+1. **`item_binding` is `"bound"`.** Under `detached` or `mismatched` all four are `null`
+   **whatever the status says** — and `mismatched` always reports `ok` or `infeasible`, so
+   status alone will tell you the blocks are there when they are not. Check the binding first.
+   (§7.4.)
+2. **`status` is one of** `ok`, `infeasible`, `item_unvalued`, `item_missing_expected_price`,
+   `not_evaluated`. It is `null` for the other seven — the five configuration failures,
+   `item_missing_purchase_cost`, and `currency_mismatch`.
+3. **The *live* configuration still resolves and its currency still agrees.** `ok` and
+   `infeasible` come from the *committed* snapshot and do not consult the live configuration,
+   so a task committed while the configuration was healthy reports `ok` after its cost model
+   version expires — with every block `null`. This is the same live/displayed split §6.1
+   describes for `can_commit`, and the two always move together.
+4. **The model collapses** — a cost model with a purchase-cost term and no purchase cost
+   available yields `null` blocks under any status, the same as `item_missing_purchase_cost`.
+
+**Treat `model === null` as the switch, never `status`.** Every rule above is a way for the
+blocks to be missing under a status that looks healthy.
 
 **This is the important one:** the screen works for an item **nobody has priced yet**. Under
 `item_unvalued` and `item_missing_expected_price` you still get the model, the anchors and the
 band — because the missing price is the variable the screen exists to choose. This is a
 deliberate change from the 2026-08-15 handoff's §6 table; see §7.
-
-One qualification: under those two statuses the model is present **only if it collapses** — a
-cost model with a purchase-cost term and no purchase cost available yields `null` blocks, the
-same as `item_missing_purchase_cost`.
 
 `infeasible` is **not** a degraded state here. It means the allowance is ≤ 0 at the committed
 price, and fixing that is exactly what the user came to do. Render the screen fully.
@@ -290,8 +315,9 @@ against a server integer makes the flip exact and makes the chip and the marker 
 construction.
 
 `is_fundable` is `false` and `break_even_price_minor` is `null` when no price funds the typical
-work — a cost model whose terms consume the whole price, or no typical evidence at all. Then
-the chip and the marker are not rendered.
+work — a cost model whose terms consume the whole price, no typical evidence at all, or when no
+representable price funds it. Then the chip and the marker are not rendered; your handling is
+the same in all three cases.
 
 `infeasible_at_or_below_minor` is the highest whole-item price that buys **no work at all**. It
 is never null. Note it is often **not** zero — for the example model it is `29`.
@@ -303,8 +329,8 @@ invent a band around the saved price** — a band with no anchor invites a manag
 trust the result.
 
 When present, every value is a multiple of `step_minor`, which is itself a multiple of
-`quantity`, so `min_minor / quantity`, `max_minor / quantity` and `step_minor / quantity` are
-all exact integers.
+`max(1, quantity)` — **see §8.2, and use that divisor, not `quantity`** — so
+`min_minor / max(1, quantity)` and its siblings are all exact integers.
 
 **The band is derived, not fixed** (`rule: "break_even_band_v1"`) — 0.35× to 1.35× of the
 break-even price, stepped. Fixed ends were rejected: a workspace pricing cabinets at 9 000 a
@@ -339,7 +365,19 @@ model has a purchase term.
 
 It is computed from the **live** configuration, not from the displayed status — a task
 committed while the configuration was healthy can still read `ok` after its cost model version
-expires, and committing would then fail.
+expires, and committing would then fail. **The same split governs the `model` block** (§5.2
+item 3); the two always move together.
+
+**`can_commit` is deliberately conservative in one direction.** It is computed without knowing
+the price or purchase cost you will send, because a GET cannot. The commit endpoint *does*
+accept a `purchase_cost_minor` in its body, so a commit carrying one could succeed where
+`can_commit` reads `false`. This screen's Save sends only the price, so that never bites — but
+if Save is ever extended to send a purchase cost, expect the field to be conservative rather
+than wrong, and do not conclude it is broken.
+
+**`can_commit` is unrelated to whether the blocks are present.** Under
+`item_binding: "mismatched"` it can read `true` with no model on screen — a saveable task whose
+price screen has nothing to show. See §7.4.
 
 ### 6.2 Save cannot create the first valuation row — set the purchase price first
 
@@ -364,8 +402,24 @@ Echo nothing to the server, but **assert the commit response's `production_budge
 means the configuration moved mid-drag, or the ≤ 1-öre approximation crossed a display
 boundary. Refetch-and-tell, never silent save.
 
-`config_fingerprint` is `cost_model_version_id:basis_version_id:v{calculation_version}`. Compare
-it across polls to detect a configuration change; it is `null` exactly when `model` is.
+`config_fingerprint` is `cost_model_version_id:basis_version_id:v{calculation_version}`; it is
+`null` exactly when `model` is. It covers **the configuration and nothing else** — the rate and
+the whole term set, because cost model terms are immutable for the life of their version.
+
+**It does not cover the typical, and therefore does not cover the anchors or the band.**
+`typical.total_seconds` is a workspace-wide median over a rolling 90-day window, so it moves
+when *any* task in the workspace completes a step — and, because the window slides, with time
+alone. `break_even_price_minor`, `suggested_price_minor` and all three `domain` values are
+derived from it, so **all five can change between two polls with an identical fingerprint**,
+and the commit-response reconciliation above cannot see it: the budget and the allowance are
+functions of the price and the model, never of the typical.
+
+It also does not cover `item.quantity` or `item.label`.
+
+**So: refetch the scenario on item-changed and step-transition events for this task**, not only
+on a fingerprint mismatch. The screen is short-lived, so in practice this is one refetch on the
+events you already receive — but a screen left open across a step transition is pricing against
+a break-even that has moved.
 
 ---
 
@@ -393,6 +447,27 @@ it across polls to detect a configuration change; it is `null` exactly when `mod
    identity — precisely so nobody codes against an error that can no longer occur. Search your
    own codebase for the identity you were handling on that path and delete the branch.
 
+### 7.4 The payload when `item_binding` is not `"bound"`
+
+`item_binding` governs the whole payload and **wins over `status`** — on both non-`bound`
+values, every time, not as an edge case.
+
+| Key | `detached` | `mismatched` |
+|---|---|---|
+| `item` | **`null`** — there is no item row to describe | populated |
+| `saved`, `currency` | `null` | `null` |
+| `model`, `anchors`, `domain`, `config_fingerprint` | `null` | `null` |
+| `typical` | **populated** — it derives from the task's steps alone | **populated** |
+| `status` | as resolved | **always `ok` or `infeasible`** |
+| `can_commit` | `false` | **as resolved — may be `true`** |
+
+The `mismatched` row is the trap: the status will read `ok`, which §5.2 item 2 lists as a
+"blocks present" status, and the blocks are `null` anyway. **Check `item_binding` before
+`status`, and `model === null` before both.**
+
+Both states mean the task lost or swapped its primary item. That is an empty state, not an
+error — `200`, keep the frame, say what is missing.
+
 **On the last one, an apology and a process change.** §9.1 was corrected by editing the
 2026-08-15 file **in place, under its original filename and date**, on 2026-08-19. Your team
 cited the stale copy in good faith for four days and built around a refusal that no longer
@@ -405,8 +480,11 @@ adopted, and it is why this document amends rather than edits.
 
 ### 8.1 `AT PRICE` is gross of work already done
 
-This screen's `AT PRICE` ignores time already spent, including time lost to cancelled or failed
-steps. The production-time screen's distributable total does **not** — it deducts that time.
+This screen's `AT PRICE` is the allowance for the **whole job**, before any of it is worked.
+The production-time screen shows what is left to distribute, and it subtracts one thing this
+screen does not: `charged_seconds` — the time already logged on steps that were **skipped,
+cancelled or failed**. Time worked on ordinary steps is subtracted by neither; it is allocated,
+not removed.
 
 **So on a task carrying excluded-step time, the two screens differ by exactly that amount.**
 This is deliberate and owner-ratified: this screen compares a plan to a plan — "does this price

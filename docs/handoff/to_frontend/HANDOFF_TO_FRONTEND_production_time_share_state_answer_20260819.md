@@ -55,12 +55,14 @@ on your own example, `"over_share"` beside `worked_seconds: 0, left_seconds: 186
 same contradiction inverted — moved out of your UI and into the payload, where every other
 consumer inherits it.
 
-Making all three live cascades further than it looks. **There is no clock read anywhere in
-`services/queries/item_economics/`** — no `datetime.now`, no `func.now`. The entire read
-surface is a pure function of stored state, which is what makes two calls a minute apart
-identical, makes the budget-status and production-time screens agree by construction, and makes
-responses reproducible. Option A would put the first clock in that layer to serve a verdict
-whose provisionality you can already detect.
+Making all three live cascades further than it looks. `worked_seconds` on this endpoint is
+`TaskStep.total_working_seconds` and nothing else (`budget_division.py:134`, `:266`) — a stored
+column, never a clock difference — and `share_state` compares it against an allowance derived
+from the same settled column, which is why two calls a minute apart return the same verdict.
+(The read family is not clock-free in general: version applicability and the typical's 90-day
+window both read the clock. What is clock-free is the worked-seconds basis itself, which is the
+invariant that matters here.) Option A would put the first *worked-time* clock into this layer
+to serve a verdict whose provisionality you can already detect.
 
 ### Why not Option B
 
@@ -165,9 +167,16 @@ than a mirror digest for both of us.
 
 - **Backend validation run:** none required — no code changed. The facts above were verified
   against source at the line: `budget_division.py:364` (the comparison), `:134` and `:266`
-  (`worked_seconds` is `total_working_seconds` and nothing else), `:327-335` (the median
-  substitution), and a repository-wide search confirming no clock read in
-  `services/queries/item_economics/`.
+  (**`worked_seconds` is `total_working_seconds` and nothing else** — the claim §1 actually
+  rests on), and `:327-335` (the median substitution).
+
+  **A correction to an earlier draft of this document, kept visible because you were nearly
+  told it.** A draft asserted "no clock read anywhere in `services/queries/item_economics/`".
+  That is **false** — `today_utc()` is called in two files there, and it wraps
+  `datetime.now(timezone.utc)`. The original search matched the literals `datetime.now` and
+  `func.now` and missed the wrapper. The verdict is unaffected, because it never depended on
+  the directory being clock-free — only on the worked-seconds basis being a stored column,
+  which it is. Recorded so you do not inherit a structural guarantee we cannot make.
 - **Suggested frontend validation:** one test that the verdict is not rendered as a verdict
   while `state === "working"`, and one that `share_state` is still rendered as received when it
   is not. Keep your mutation-tested rule that no file compares `worked_seconds` to

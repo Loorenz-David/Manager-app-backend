@@ -57,7 +57,8 @@ row, and it is a gate row, not a phase row.
 | 1 | *(prior row — projection r0)* | *superseded* | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 4 upstream, 11 plan amendments, 4 written delegations — **all routed before the implement prompt compiled**. Three named mutations (C7, C17, C10) proved unable to fail and were replaced; `infeasible_at_or_below_minor` for the mockup is **29**, not the `0` §4.2A claimed. Design survived intact: M1's form faithful to the shipped calculator, all four literals exact, the bound holds on every shape. Coordinator re-derived each load-bearing claim, including confirming the unflushed-ORM `is_deleted = None` trap empirically. |
 | 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **APPROVED** | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 1 should-fix (coordinator-routed, no code), 11 notes.** 34 mutations applied one at a time, each file run whole, each reverted and hash-verified — **27 reddened**; of the seven that did not, two were not real mutations, one is provably dead code, four are coverage gaps, and **none produced a wrong-but-green payload**. Suite 2425/26/1, failure IDs byte-identical. **F1**: the r1c ledger's observed-red set is one test where two is measured — the coordinator's probe P1, confirmed across the whole suite; corrected in plan 2's Review log rather than in the consumed handoff, which is provenance. Seven notes batched into **plan 3** rather than a fix round. Card 1 (graph spans + missing `implements` edge) relayed; does not hold the gate. Checkpoint `48705b3`. |
 | 3 | The seven carried repairs from phase 2's review (F2–F9). Code only. | **PROMPT_READY** | 2026-08-19 | coordinator | `plans/plan_3.md`, 7 criteria, two-file perimeter. Projection **WAIVED** — no new mechanism, and review r1 computed every expected value. Prompt at `prompts/implementer/2026-08-19_phase3_implement_r1.md`. **F4 is the one with teeth**: the supersession predicate is unasserted and the previous pipeline made chains a common state. F6/F8/F9 are decisions the implementer may resolve either way — only an *unrecorded* outcome is unacceptable. |
-| 4 | The frontend handoff and the production-time reply. Documentation only. | **IMPLEMENTED** | 2026-08-19 | coordinator | `plans/plan_4.md`, 6 criteria. Both files new; **nothing edited** — amend-by-reference, the convention the frontend asked for. Written from the shipped serializer, not the intention's example. **Split from plan 3 so it could run in parallel** — no shared files. Awaiting a light review of C3/C4 (every key and literal against code). |
+| 4 | The frontend handoff and the production-time reply. Documentation only. | **CHANGES_REQUESTED → corrections applied, awaiting re-review r2** | 2026-08-19 | Opus 5 (review r1) + coordinator (fold) | 3 blocking, 4 should-fix, 3 notes, 0 owner cards — **all text, all the coordinator's, all applied verbatim**. Every failure was in C3 and shared one root: nullability described as a function of `status` where the code gates on five conditions. **B1** the block rule (two conditions absent; reproduced against the shipped service), **B2** four nullable fields shown as always present (three already recorded in intention §8A), **B3** `config_fingerprint` blind to the typical — which moves with *time alone* on a rolling 90-day window, carrying break-even, suggested and the whole band with it. **S1** published a false absence claim as verified: `today_utc()` wraps `datetime.now` and defeated the literal grep. §4's BigInt block and the worked example were re-executed and are correct. Six rules earned, in §5. |
+| 4 | *(prior row)* | *superseded* | 2026-08-19 | coordinator | `plans/plan_4.md`, 6 criteria. Both files new; **nothing edited** — amend-by-reference, the convention the frontend asked for. Written from the shipped serializer, not the intention's example. **Split from plan 3 so it could run in parallel** — no shared files. Awaiting a light review of C3/C4 (every key and literal against code). |
 
 **Phases 3 and 4 run in parallel.** Plan 3 touches only `app/`, plan 4 only `docs/handoff/`.
 | 2 | *(prior row — implement r1c)* | *superseded* | 2026-08-19 | Codex (implement r1c) | 52 new tests, C1–C19 mapped, checkpoint `48705b3`, route mirror 25 → 26. **Three blockers preceded it, all on coordinator artifacts, all correct** — perimeter contradictions and a miscount; zero files were changed across them. Coordinator verified at consumption: perimeter exactly **11/11** against the roster; the three comment-only exceptions read as comment-only in the diff (1 + 1 + 2 lines, zero executable change) and both reciprocal pairs name each other; the `test_price_scenario.py` exception is exactly the one assertion, inert equality → exact literal; D-5 took the import branch, preserving the `.value` semantics; suite **2425/26/1** re-measured independently (+52). **One discrepancy found**: the ledger's observed-red set is one test, but the same literal is asserted in a second file (`test_price_scenario_query.py:731`), so the true set is two — phase 1's F2 in a new shape, seeded as review probe P1. Review prompt at `prompts/reviewer/2026-08-19_phase2_review_r1.md`. |
@@ -216,6 +217,40 @@ rather than merely inherited:
   N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
   a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
   mutation; where it cannot, say so and why.
+- **VERIFICATION-SCOPE, EXTENDED: an absence claim is only as good as its TERM SET, not just
+  the directory it ran in** (phase 4 review r1, S1). The `inline_valuation_versioning` version
+  of this rule was about the *root*; this one is about the *terms*. "No clock read anywhere in
+  `services/queries/item_economics/`" was published to the frontend **as verified**, from a
+  grep for `datetime.now|utcnow|func.now`. The codebase's own `today_utc()` wrapper defeated
+  it — two calls in that exact directory. **Record the search terms beside an absence claim,
+  or restate it as the presence claim it is standing in for.** Here the honest form was
+  narrower and stronger: *`worked_seconds` is `total_working_seconds` and nothing else at
+  `budget_division.py:134` and `:266`* — a claim that holds and that the verdict actually
+  rested on.
+- **"Executed, not merely written" must extend to prose asserting an absence** (same finding).
+  §4's BigInt block was executed over 612 cases and was flawless; the sentence three pages
+  later asserting a directory-wide absence was not executable and was wrong. The care went
+  where the code was, not where the risk was.
+- **A payload contract's NULLABILITY needs its own criterion, separate from its key list**
+  (phase 4 review r1, L1). C3 asked that every key match the serializer — and all 46 did.
+  Every failure was a *nullability*, so the document passed the check it was given while
+  getting the harder half wrong. Future handoff phases: **"every nullable field is annotated
+  as nullable, and every annotation names a reachable status or binding that produces the
+  null."**
+- **Avoid the example; read the corrections** (L2). "Written from the serializer, not the
+  intention's §8 example" was right — that example carried four wrong values. But §8**A** is
+  not the example, it is the *corrected walk*, and it already held three of the four missed
+  nullabilities and the `n`-conflation this handoff then re-broke. Skipping a document's
+  errata along with its errors is how a correction gets made twice.
+- **An invariant appearing in two sections is stated identically in both, or once with a
+  cross-reference** (L3). §6.1 stated the live-vs-displayed split precisely for `can_commit`;
+  §5.2 governed the same split for the model block and did not. Same author, same sitting,
+  four pages apart — and only one of them sits on the path a frontend dev reads before writing
+  a null check.
+- **A read order built from section numbers misses lettered sections a projection added**
+  (L5). §9.2A — *binding wins over the status table* — was a projection-round insert, and it
+  never reached the handoff; §9A.1's `†` did, but only as a footnote. A closeout phase's read
+  order names **the projection handoffs' ledgers**, not only intention sections.
 - **A tripwire's roots are wider than the pipeline that widened them — including for the
   coordinator** (phase 3 implement blocker, 2026-08-19). Naming a retired error identity in a
   *new* handoff tripped
