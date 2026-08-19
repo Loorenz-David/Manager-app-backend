@@ -1,0 +1,41 @@
+reviewId: 2026-08-19T15-29-08-038Z--f161b6
+reviewedItemIds:
+  - edge:domain-item-economics--contains-->source-file-item-economics-price-scenario
+  - node:source-file-item-economics-price-scenario
+decisions:
+  - itemId: edge:domain-item-economics--contains-->source-file-item-economics-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: Rejected only to be re-recorded alongside its node (see the node's
+      rationale). The containment claim is unchanged and correct.
+  - itemId: node:source-file-item-economics-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "My own record, one hour old and unreviewed by anyone. Two drifts
+      after fix r2: the line spans moved (module 14-209 -> 14-211, tests 79-417
+      -> 79-426 after a two-line comment and one new test), and my test evidence
+      summary states 'Fifty-two unit tests' where there are now 53. Re-anchoring
+      repairs addresses only - an evidence summary is immutable through both
+      review and maintenance - so a stale count can only be corrected by reject
+      and re-record. Rejecting rather than leaving it because a wrong number
+      inside an evidence summary is the top error cluster this graph's own
+      review history identifies, and because the count is volatile by nature.
+      Re-recorded with symbol-based anchors and no counts in either summary, so
+      the record does not rot on the next test added. Coordinator, 2026-08-19,
+      fix r2 fold."
+retiredItemIds:
+  - edge:domain-item-economics--contains-->source-file-item-economics-price-scenario
+  - node:source-file-item-economics-price-scenario
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T15:29:08.038Z
+graphRevisionBefore: 084fd3e9f52930a2877331a228f2798aeafdeba3dae7bc73f9b75070c1d1869b
+graphRevisionAfter: 50b3940273f51b9bafeb5a48f08c5970e291d6f9f95abb604af51db5d771f00b
+evidenceSummary: 3 evidence entries across 2 files; no drift detected
+humanInstruction: "Coordinator housekeeping under the owner's 2026-08-19
+  authorization of owner card 1 (re-record the node as a source file). No new
+  architectural claim: same node, same containment, corrected addresses after
+  fix r2 and a volatile count removed from an evidence summary."
+reviewTokenCorrelation: f23df45ab923

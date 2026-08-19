@@ -50,12 +50,29 @@ row, and it is a gate row, not a phase row.
 |---|---|---|---|---|---|
 | — | Mechanism-inventory gate over intention §3–§9 (M1, M1b, M2, M2b, M3, M4, M5, M6) | **PASSED** | 2026-08-19 | Opus 5 (inventory) + coordinator (fold) | Eight mechanisms swept, twelve lettered sections added, nothing renumbered. Three owner cards raised and all three closed (D8, D9, D10). Coordinator verified the load-bearing claims independently rather than consuming them: break-even `1 211 335` re-derived (the intention's `1 211 364` solved a real-arithmetic equation instead of §4.1's least-integer search — off by 29), `ival` prefix, `usable = not None and > 0` at `budget_division.py:326`, and the commit path ignoring a request price when no valuation row exists (`:212-213`). **One defect found in the delta and corrected at the fold**: §9A.1's "can return only nine of the twelve" is ten, contradicted by its own B1–B10 table and by §12A. Ledger empty; intention now `RESOLVED and PLAN-READY (round 4)`. |
 | — | Implementation planning | **DONE** | 2026-08-19 | coordinator | Two phases, split at the domain/service boundary the codebase already draws (`budget_division.py` / `calculator.py` are pure; `services/queries/` does I/O). Criteria built from §12 + §12A's eleven obligations. **HC-2 extended to a fourth artifact** — one new pure domain module — recorded in plan_1 §2 under the HC-1a precedent, no new owner card. |
-| 1 | The pure price mechanisms: `round_half_even`, the collapsed form, the break-even and infeasibility searches, the step helpers, the band. No I/O. | **PROMPT_READY** | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 4 upstream, 11 plan amendments, 4 written delegations — **all routed before the implement prompt compiled**. Three named mutations (C7, C17, C10) proved unable to fail and were replaced; `infeasible_at_or_below_minor` for the mockup is **29**, not the `0` §4.2A claimed. Design survived intact: M1's form faithful to the shipped calculator, all four literals exact, the bound holds on every shape. Coordinator re-derived each load-bearing claim, including confirming the unflushed-ORM `is_deleted = None` trap empirically. |
+| 1 | The pure price mechanisms: `round_half_even`, the collapsed form, the break-even and infeasibility searches, the step helpers, the band. No I/O. | **APPROVED** | 2026-08-19 | Opus 5 (re-review r3) | **0 blocking, 0 should-fix. F1 and F2 closed**, both verified independently rather than read off the handoff: F1's mutation reddens exactly the one new test whole-file; F2's six re-measured sets match the reviewer's own r1 measurements test-for-test, which is the non-circular half of that check. Suite **2373/26/1** — measured independently by implementer, coordinator and reviewer. Perimeter `+11 / −0` across exactly two files. Four new notes, all routed: **N8** (the coordinator's own strengthening assertion does not discriminate — `max(6, quantity)` leaves 53 green) → plan 2 §2 with a verified fixture; **N9** (graph symbol/span mismatch, also the coordinator's) → owner card 1, does not hold the gate; **N10** → registered as C22; **N11** → plan 2 task 4. N2 closed as accepted, N6 to plan 2. Checkpoints `b72821c` → `aea97ca`. |
+| 1 | *(prior row — fix r2)* | *superseded* | 2026-08-19 | Codex (fix r2) | F1 and F2 addressed inside the two-file perimeter, checkpoint `aea97ca`. Coordinator verified: `git diff b72821c aea97ca -- app/` is exactly the two allowed files; the production change is **two comment lines** and nothing else; the new test carries both required assertions; suite re-measured independently at **2373/26/1** (+1). No note from the fix prompt's §5 was acted on — confirmed by reading the diff, not the claim. Graph re-recorded twice this session (owner card 1, then a self-correction for span drift and a stale count in my own evidence summary). Re-review prompt at `prompts/reviewer/2026-08-19_phase1_rereview_r3.md`. |
+| 1 | *(prior row — review r1)* | *superseded* | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 2 should-fix, 7 notes.** The arithmetic is correct — the reviewer re-derived every published number from a reference implementation written from the intention alone, without importing the module, and all 22 values matched; 18 of its own 22 mutations bit. **F1**: `slider_domain`'s `max(1, quantity)` guard has **no test** — deleting it leaves all 52 green, and `quantity = 0` is a documented live input (§2.7: no CHECK constraint) that then raises `ValueError` instead of returning a band. Coordinator re-confirmed both sides. **F2**: three of six ledger rows understate their observed-red set (C8 reddens 5, C17 3, C10 2) — all from `-k`-filtered runs; no defect hidden. Owner card 1 answered: re-record the graph node as `source_file`. Fix prompt at `prompts/implementer/2026-08-19_phase1_fix_r2.md`. |
+| 1 | *(prior row — implement r1)* | *superseded* | 2026-08-19 | Codex (implement r1) | 52 tests, C1–C21 all mapped, checkpoint `b72821c`. Coordinator verified at consumption: perimeter clean (2 app files + declared `.archgraph` write); suite **2372/26/1** re-measured independently (+52, inherited 26 unchanged); revert hashes recomputed and matching; rule 3 fixtures confirmed to use real unflushed `CostModelTerm`. **One ledger inaccuracy found by re-applying a probe**: the C10 mutation reddens **two** tests, not the one recorded — C12's chained `== SEARCH_CAP_MINOR == 2**40` also bites. Both failures correct; the record was taken from a filtered run. Review prompt at `prompts/reviewer/2026-08-19_phase1_review_r1.md` carries it as probe P1. |
+| 1 | *(prior row — projection r0)* | *superseded* | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 4 upstream, 11 plan amendments, 4 written delegations — **all routed before the implement prompt compiled**. Three named mutations (C7, C17, C10) proved unable to fail and were replaced; `infeasible_at_or_below_minor` for the mockup is **29**, not the `0` §4.2A claimed. Design survived intact: M1's form faithful to the shipped calculator, all four literals exact, the bound holds on every shape. Coordinator re-derived each load-bearing claim, including confirming the unflushed-ORM `is_deleted = None` trap empirically. |
 | 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **NOT_STARTED** — blocked on phase 1 APPROVED | — | — | Plan at `plans/plan_2.md`, 15 criteria; amended at phase 1 closeout with its review lessons. |
 
 ## 4. Naming registry
 
 Reserved before any code exists, so two sessions cannot pick two names for one thing.
+
+**Phase 1's public surface — registered at closeout under delegation D-1.** These twelve
+names are phase 2's interface; phase 2 cites them rather than choosing its own.
+
+Module `beyo_manager.domain.item_economics.price_scenario`. Carriers: `PriceModel`
+(frozen: `residual_percent_milli`, `constant_deduction_minor`,
+`cost_per_worker_minute_ten_thousandths`), `SliderDomain` (frozen: `step_minor`, `min_minor`,
+`max_minor`), `CostModelTermInput` (Protocol), `SEARCH_CAP_MINOR`. Functions:
+`round_half_even`, `collapse_terms`, `budget_minor`, `allowed_centimin`, `allowance_seconds`,
+`break_even_price_minor`, `infeasible_at_or_below_minor`, `floor_to_step`, `ceil_to_step`,
+`two_significant_digits`, `slider_domain` — and **`digits`, which is INTERNAL to phase 1**
+(N7): a generic integer helper with no domain meaning, public only because a criterion
+asserted it directly. Phase 2 calls `two_significant_digits`, never `digits`.
 
 | Thing | Name | Home |
 |---|---|---|
@@ -80,6 +97,20 @@ Binding constraints on names and copies:
   other requires a decision.
 - The `round_half_even(a, b)` integer helper is **one** function. If it appears in both
   the query service and a domain module, that is a finding, not a convenience.
+- **`_shape_error` — second sanctioned duplication, coordinator decision at the review r1
+  fold (2026-08-19, N5).** `price_scenario.py:53-57` reproduces `calculator.py:124-128`
+  verbatim, including the published message string that `test_calculator.py:501` asserts
+  exactly. **Sanctioned, with two conditions**: (a) both sites carry a comment pointing at
+  the other, exactly as `serialize_user_light`'s duplication does; (b) **a third copy is
+  forbidden** — phase 2's query service imports one of the two rather than reproducing it.
+  Reason for sanctioning rather than extracting: the alternative is for a pure domain module
+  to import from `calculator.py` solely for a message formatter, and the duplicated *string*
+  is already pinned by an exact-match test in the calculator's own suite, so a drift between
+  the copies fails loudly there. The identity token itself is correctly **reused from the
+  registered set, never minted**.
+- **`digits` is internal to phase 1** (N7). It is a generic integer helper with no domain
+  meaning; phase 2 calls `two_significant_digits` and never `digits`. Registered as internal
+  when D-1's twelve public names are folded into this section at phase 1 closeout.
 
 ## 5. Standing rules
 
@@ -138,6 +169,38 @@ rather than merely inherited:
   mechanical: state the value under the contract and the value under the mutation, and
   confirm they differ.** A mutation whose two sides were never computed is a claim, not a
   guard.
+- **A mutation ledger's observation is a property of the whole file, not of the test you
+  were watching** (review r1, 2026-08-19). Companion to the rule above. Three of six ledger
+  rows understated their result because the observation came from a `-k`-filtered run: C8's
+  mutation reddens **five** tests, C17's **three**, C10's **two**. Every extra failure was
+  correct — but **an unexpected reddening is exactly the signal the ledger exists to
+  surface, and a filtered run cannot produce it.** Re-apply, run the file whole, record the
+  complete set. This belongs in the executor doctrine, not only in this project.
+- **Every `max(`, `min(` and `or 0` in a contract is a candidate criterion row** (review r1,
+  F1). §7A.1 states `Q = max(1, quantity)` inline, §9.4 explains the division-by-zero it
+  prevents, and §2.7 proves the input is live — three sections carrying the hazard and no
+  criterion carrying a row. Deleting the guard left all 52 tests green. **Guards stated in a
+  parenthesis are still guards, and guards are what silently disappear.**
+- **A `>=` in a contract implies two rows, not one** (review r1, N2). Charter rule 2's
+  adjacent-pair discipline applies to comparison operators, not only to ranked orders.
+- **Say in the plan when a criterion deliberately cannot isolate its predicate** (review r1,
+  N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
+  a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
+  mutation; where it cannot, say so and why.
+- **A fixture whose expected value is the same under the defect proves nothing, even when
+  the assertion beside it bites** (re-review r3, N8 — earned against the coordinator). The
+  strengthening assertion `slider_domain(B, 0, I) == slider_domain(B, 1, I)` was specified to
+  pin the clamp *target*. At the fixture's own `B`, the bands at `Q = 0`, `Q = 1` and `Q = 6`
+  are identical, so `max(6, quantity)` passes it. **Before adding an assertion that claims to
+  discriminate, evaluate the function at the values it is meant to tell apart** — here, one
+  call each at `Q = 1` and `Q = 6` would have shown they coincide. An assertion that reads as
+  evidence and is not is worse than its absence, because it stops anyone looking again.
+- **Don't put counts in evidence summaries** (coordinator, fix r2 fold — earned on my own
+  record within an hour of writing it). An archgraph evidence summary is **immutable through
+  both review and maintenance**: a stale number in one can only be corrected by rejecting the
+  item and re-recording it. Describe what the evidence shows, never how many of them there
+  are; prefer symbol anchors over line spans — **but not both on one entry** (N9), since a
+  symbol-based re-anchor then silently narrows a module-wide span to that one symbol.
 - **Corollary — inert mutations are inherited, not invented.** All three came from §12A,
   faithfully transcribed into the plan. A wrong criterion propagates downstream unchanged
   because each layer is copying, not re-deriving. Corrections therefore go **upstream first**
@@ -152,8 +215,11 @@ rather than merely inherited:
   a full run of `PYTHONPATH=. pytest -m 'not e2e'` completed in 118.54s. The figure is
   verified, not carried over from the previous pipeline's closeout, and the 26 failure IDs
   are byte-identical to that closeout set.
-- **This phase ADDS routes.** The route-mirror counts move 25 → 26 (HC-2a). State the
-  before and after counts in every handoff.
+- **PHASE 2 adds routes**; phase 1 adds none. The route-mirror counts move 25 → 26 (HC-2a)
+  in phase 2 only. *Corrected 2026-08-19 at the implement r1 fold — this line read "This
+  phase ADDS routes" from when the project was a single phase, and after the split it
+  contradicted plan 1's own perimeter. Raised by the implementer, who was right to flag it
+  rather than reconcile it silently.*
 - **SUITE INSTABILITY — measured at ±1 in BOTH directions.** On unchanged code the failure
   count has been observed at **25, 26 and 27** across separate full runs, with byte-identical
   ID sets and no duplicates. The drifting test is unidentified and inherited, not introduced

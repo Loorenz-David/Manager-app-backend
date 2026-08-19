@@ -2,9 +2,9 @@
 
 ```
 plan: 1
-state: PROMPT_READY
+state: APPROVED
 date: 2026-08-19
-gate: projection r0 COMPLETE — AMENDMENTS_REQUIRED, all 17 ledger rows routed
+gate: re-review r3 APPROVED — 0 blocking, 0 should-fix; F1 and F2 closed
 ```
 
 ## 1. Goal
@@ -192,6 +192,7 @@ each named mutation names its **site** — definition or call.
 
 | C | Criterion |
 |---|---|
+| C22 | **The `quantity` guard** (added at closeout from review r1's F1 — the criterion existed as a finding before it existed as a row, per N10, and plan §4 must remain the complete authority on what this phase proves). `slider_domain(1_211_335, 0, 29) == SliderDomain(15_000, 420_000, 1_650_000)`. **Named mutation:** in `slider_domain`'s **definition**, `divisor = max(1, quantity)` → `divisor = quantity` → this row red (`ValueError: b must be positive` from `two_significant_digits`). Both sides computed; observed-red set measured whole-file at r3 as exactly this one test. **Known gap, carried to plan 2 (N8):** the row's companion assertion `slider_domain(B, 0, I) == slider_domain(B, 1, I)` does **not** discriminate the clamp target — at `B = 1_211_335` the bands at `Q = 0`, `Q = 1` and `Q = 6` are all identical, so `max(6, quantity)` leaves all 53 tests green. Verified by the reviewer and re-verified by the coordinator. |
 | C21 | **Purity, with the forbidden set fixed and the scope named** (projection F14). The assertion is **direct-import only** — the module's own `import` statements, not the transitive closure — and the forbidden prefixes are exactly **`sqlalchemy`, `beyo_manager.models`, `beyo_manager.services`**. Consequence, and the reason the scope had to be decided rather than left open: a transitive reading would fail on importing `CostModelTerm` for a type hint, since the models package pulls in SQLAlchemy. So **the module duck-types its term inputs against a `Protocol`**, the idiom `calculator.py:67-72` already uses for `TermSnapshot`, rather than typing against the ORM class. The *mechanism* (AST walk, source scan, or otherwise) is the implementer's choice — there is no precedent in `tests/unit/` to copy — but the set and the scope are not. |
 
 ## 5. Out of scope — this is phase 2
@@ -223,6 +224,86 @@ the thing it mutates is a circular definition and therefore not implementable. C
 and the band literals `15 000 / 420 000 / 1 650 000` are exact; the `(n+1)/2` bound holds on
 every enumerated shape. What failed was the evidence, not the mechanism — the same shape as
 the mechanism-inventory gate one level up.
+
+**review r1 — 2026-08-19, Opus 5 — `CHANGES_REQUESTED`, 0 blocking / 2 should-fix / 7 notes,
+1 owner card (answered).**
+
+- **F1 (should-fix)** — `slider_domain`'s `max(1, quantity)` guard (`price_scenario.py:190`)
+  has no criterion and no fixture. Deleting it leaves all 52 tests green; with
+  `quantity = 0` — a live input per intention §2.7, which records that `items.quantity` has
+  **no CHECK constraint** — the un-guarded path raises `ValueError` from
+  `two_significant_digits`, i.e. a 500 from phase 2's endpoint instead of a band. Authority:
+  §7A.1 (`Q = max(1, quantity)`), §9.4, §2.7. Coordinator re-confirmed both sides: contract
+  `SliderDomain(15_000, 420_000, 1_650_000)`, mutation `ValueError: b must be positive`.
+- **F2 (should-fix)** — the mutation ledger's observation column understates three of six
+  rows (C8 reddens **5** tests, C17 **3**, C10 **2**). All extra failures are correct and no
+  defect is hidden; the defect is in the record, and the pattern is consistent with
+  `-k`-filtered runs.
+- **N1** — `collapse_terms` short-circuits mid-loop, so shape validation is not exhaustive
+  and the outcome is order-dependent. Unreachable on persisted rows (structural proof
+  against `ck_cost_model_terms_value_by_type`). **Routed upstream to intention §3.1B** — a
+  missing sentence, not a defect.
+- **N2** — C19's `>=` boundary is unpinned (its fixture sits far above the equality case);
+  equality is unreachable on realistic data. **N3** — C13 cannot isolate its predicate,
+  which plan task 4 already states, so it is confirmed rather than open; its sibling C20
+  does bite. **N4** — the `P = 0` pre-check is unreachable but §4.2A-mandated: **keep it**.
+  **N5** — `_shape_error` duplicates `calculator.py:124-128` verbatim; **sanctioned in master
+  plan §4** with cross-reference comments and a third copy forbidden. **N6** — C21's AST walk
+  misses relative imports; theoretical here (the package has none), carried to plan 2.
+  **N7** — `digits` is public; registered **internal to phase 1** at closeout.
+- **Owner card 1 — ANSWERED (owner, 2026-08-19): re-record the graph node as a source file.**
+  Owner, verbatim: *"about the owner card 1 : the recommended option is correct."*
+  **Enacted by the coordinator under that authorization**, in two steps because type and id
+  cannot be changed by `edit` and an evidence summary is immutable through review:
+  (1) `reject` of `node:projection-item-economics-expected-sold-price-scenario` and its
+  `contains` edge — audit record `.archgraph/reviews/2026-08-19T15-13-32-988Z--741606.yml`,
+  rationale recorded in full; (2) re-record as
+  `source-file-item-economics-price-scenario`, `type: source_file`, named after the module,
+  with the evidence span corrected to **`14-209`** so it covers `SEARCH_CAP_MINOR` and the
+  `CostModelTermInput` Protocol, plus the `domain-item-economics --contains-->` edge.
+  Graph revision `e3758a82…` → `084fd3e9…`, 184 nodes / 276 edges, 0 diagnostics.
+  The new node is `ai_inferred` and **pending** — the owner adjudicated the type and name,
+  not the description's verification, and promotion to `human_confirmed` is a separate act.
+  `projection-item-economics-task-price-scenario` is left free for phase 2's endpoint.
+  **`.archgraph/architecture.yml` is tracked and now modified — it needs a commit.**
+
+**Settled ground for the re-review** (the reviewer's own re-derivation, not to be re-spent):
+all 22 published values reproduced from a reference implementation written from the
+intention alone; suite re-measured 2372/26/1; perimeter exactly the three declared files;
+the D-2 unflushed-`None` trap confirmed exercised (mutating the skip test to
+`is_deleted is not False` reddens **19** tests).
+
+**fix r2 — 2026-08-19, Codex — checkpoint `aea97ca`.** F1 and F2 addressed inside the
+two-file perimeter. The entire production change is **two comment lines** above
+`divisor = max(1, quantity)` citing §§2.7/9.4; the expression is untouched. One new test with
+two assertions. No note was acted on — confirmed by reading the diff. Suite 2373/26/1.
+
+**re-review r3 — 2026-08-19, Opus 5 — `APPROVED`. 0 blocking, 0 should-fix. F1 and F2 CLOSED.**
+
+- **F1 closed**: the mutation applied at the definition site reddens **exactly** the one new
+  test, whole-file, no `-k`. Both sides confirmed.
+- **F2 closed**: the six re-measured red sets match the reviewer's **own r1 measurements**
+  test-for-test — which is the non-circular half of the check, since the fix prompt had
+  supplied the numbers.
+- **N8 (new)** — *the coordinator's strengthening assertion does not strengthen anything.*
+  `slider_domain(B, 0, I) == slider_domain(B, 1, I)` was specified to distinguish "clamped to
+  1" from "the bands coincided". It does not: at `B = 1_211_335` the bands at `Q = 0`, `Q = 1`
+  **and** `Q = 6` are all `SliderDomain(15_000, 420_000, 1_650_000)`, so `max(6, quantity)`
+  leaves all 53 green. Measured by the reviewer, re-verified by the coordinator. Assertion 1
+  alone carries the row. **Routed to plan 2** with the discriminating fixture the reviewer
+  supplied (`B = 8_919`: `Q = 1` → `110 / 3_080 / 12_100`, `Q = 6` → `114 / 3_078 / 12_084`),
+  independently recomputed.
+- **N9** — the re-recorded graph node's production evidence carries `symbol: slider_domain`
+  against a whole-module span `14-211`; a symbol-based re-anchor would silently narrow
+  module-wide evidence to one function. **Owner card 1, relayed; the gate does not hold on
+  it.** Also the coordinator's error.
+- **N10** → registered as **C22** above. **N11** → the `_shape_error` sanction's comment-pair
+  condition had no landing point; routed to plan 2 task 4. **N2** closed as accepted
+  (unreachable on realistic data). **N6** carried to plan 2.
+- **The re-recorded graph node was assessed and endorsed**: the old projection node is gone
+  (`NODE_NOT_FOUND`), `projection-item-economics-task-price-scenario` is free for phase 2,
+  the type and name-is-the-path convention match the `human_confirmed`
+  `source-file-item-economics-budget-division` precedent, and the span `14-211` is correct.
 
 Coordinator verification before folding (nothing accepted on the handoff's word): the
 `infeasible = 29` computation re-derived; the `P = 25` bound attainment recomputed by hand;

@@ -4696,20 +4696,20 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
     updatedAt: 2026-08-17T17:12:48.742Z
-  - id: projection-item-economics-expected-sold-price-scenario
-    type: projection
-    name: Expected Sold Price Scenario Arithmetic
-    description: Expected sold price scenario arithmetic is the pure item-economics
-      calculation boundary that turns collapsed cost-model coefficients, a
-      worker-minute rate, typical seconds, quantity, and a candidate whole-item
-      price into allowance, break-even, infeasibility, and slider-domain values.
-      It owns integer half-even rounding, cost-term collapse, the capped
-      lower-bound search, exact rational step alignment, and band derivation; it
-      performs no queries, persistence, or serialization. A missing purchase
-      cost remains a data-state null result while an invalid term shape raises
-      the registered validation identity. Published amounts must remain
-      whole-item minor units and retain the two-step centiminute-to-seconds
-      conversion so client and server thresholds agree.
+  - id: source-file-item-economics-price-scenario
+    type: source_file
+    name: app/beyo_manager/domain/item_economics/price_scenario.py
+    description: The pure item-economics module that turns collapsed cost-model
+      coefficients, a worker-minute rate, typical seconds, quantity and a
+      candidate whole-item price into allowance, break-even, infeasibility and
+      slider-domain values. It owns integer half-even rounding, cost-term
+      collapse, the capped lower-bound searches, exact rational step alignment
+      and band derivation. It performs no queries, persistence or serialization;
+      query services supply the ORM rows. A missing purchase cost is a
+      data-state null result while an invalid term shape raises the registered
+      ITEM_COST_TERM_SHAPE_INVALID identity. Published amounts stay whole-item
+      minor units and retain the two-step centiminute-to-seconds conversion so
+      client and server thresholds agree.
     tags:
       - item-economics
       - price-scenario
@@ -4717,27 +4717,34 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/domain/item_economics/price_scenario.py
-          startLine: 25
-          endLine: 209
-          summary: The new pure module defines the collapsed price model and slider-domain
-            carriers, exact half-even arithmetic, term collapse, allowance
-            conversion, capped lower-bound searches, rational step helpers, and
-            slider-band derivation.
-          inferenceReason: These functions collectively implement an independently
-            testable expected-sold-price calculation boundary with no I/O or
-            persistence.
+          symbol: slider_domain
+          startLine: 14
+          endLine: 211
+          summary: The module defines SEARCH_CAP_MINOR, the CostModelTermInput Protocol,
+            the PriceModel and SliderDomain carriers, integer half-even
+            rounding, term collapse, the price-to-allowance conversion, capped
+            lower-bound searches, exact rational step helpers and slider-band
+            derivation. Its imports are dataclasses, decimal, fractions, typing,
+            item_economics.enums and errors.validation only.
+          inferenceReason: "A module that computes a closed set of published values from
+            supplied inputs, with no session, ORM-model, SQLAlchemy or service
+            import, is a pure source-file boundary rather than a read model:
+            nothing can ask it for anything over the wire."
         - path: app/tests/unit/domain/item_economics/test_price_scenario.py
-          startLine: 79
-          endLine: 417
-          summary: The phase test module enumerates all 21 criteria, including real ORM
-            term shapes, exact search and band literals, mutation-sensitive
-            rounding behavior, and the direct-import purity boundary.
-          inferenceReason: The dedicated acceptance suite shows the arithmetic is treated
-            as one independently verified projection contract.
+          symbol: test_c21_module_has_no_direct_import_from_forbidden_boundaries
+          summary: The unit suite exercises the module against real unpersisted
+            CostModelTerm ORM instances and asserts exact integer literals for
+            the rounding table, the error bound against the persisted calculator
+            path, both searches and both slider bands, plus an AST assertion
+            that the module directly imports nothing from sqlalchemy,
+            beyo_manager.models or beyo_manager.services.
+          inferenceReason: The tests run with no database session and pin the purity
+            property structurally, confirming the boundary is arithmetic rather
+            than a read model.
     origin: ai_inferred
     confidence: 0.96
-    createdAt: 2026-08-19T14:25:19.021Z
-    updatedAt: 2026-08-19T14:25:19.021Z
+    createdAt: 2026-08-19T15:29:24.418Z
+    updatedAt: 2026-08-19T15:29:24.418Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9461,19 +9468,21 @@ edges:
     updatedAt: 2026-08-19T10:46:53.654Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
-    targetNodeId: projection-item-economics-expected-sold-price-scenario
-    description: The Item Economics domain contains the pure expected-sold-price
-      scenario calculation boundary.
+    targetNodeId: source-file-item-economics-price-scenario
+    description: The item-economics domain contains the price-scenario pure
+      arithmetic module.
     metadata:
       evidence:
         - path: app/beyo_manager/domain/item_economics/price_scenario.py
           startLine: 1
           endLine: 11
-          summary: The module is located in the item_economics domain package and depends
-            only on domain enums plus the shared validation error.
-          inferenceReason: Its package boundary and imports place the new pure projection
-            inside Item Economics rather than a service or persistence boundary.
+          summary: The module sits in beyo_manager/domain/item_economics/ beside
+            budget_division.py and calculator.py, and imports only that
+            package's enums plus the shared validation error.
+          inferenceReason: Physical placement inside the domain package together with
+            domain-only imports establishes containment by the item-economics
+            domain.
     origin: ai_inferred
     confidence: 0.96
-    createdAt: 2026-08-19T14:25:19.021Z
-    updatedAt: 2026-08-19T14:25:19.021Z
+    createdAt: 2026-08-19T15:29:24.418Z
+    updatedAt: 2026-08-19T15:29:24.418Z

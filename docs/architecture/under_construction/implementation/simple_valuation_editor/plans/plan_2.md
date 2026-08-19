@@ -39,6 +39,34 @@ is needed — only the awareness that HC-2a's line list is incomplete.
 **No change to `price_scenario.py`.** Phase 1 is settled; a defect found in it is a finding
 routed back, not an edit made here.
 
+### Enumerated exceptions carried in from phase 1's closeout
+
+Two edits outside the table above are authorized, each one row, each traceable to a named
+phase-1 note. **Nothing else in a phase-1 file may change.**
+
+1. **`app/tests/unit/domain/item_economics/test_price_scenario.py` — N8.** Phase 1's
+   `test_quantity_zero_falls_back_to_a_divisor_of_one` carries a second assertion that does
+   not discriminate: at `B = 1_211_335` the bands at `Q = 0`, `Q = 1` and `Q = 6` are all
+   identical, so a clamp to `6` passes it. **Replace that assertion with a discriminating
+   one** using the fixture the reviewer supplied and the coordinator recomputed:
+
+   ```
+   B = 8_919:  Q = 1 → SliderDomain(110, 3_080, 12_100)
+               Q = 6 → SliderDomain(114, 3_078, 12_084)
+   ```
+
+   so `slider_domain(8_919, 0, 0) == slider_domain(8_919, 1, 0)` is red under
+   `max(6, quantity)`. **Named mutation:** `max(1, quantity)` → `max(6, quantity)` in
+   `slider_domain`'s definition → this assertion red. Keeping the current assertion is the
+   one option that leaves a false impression, which is why this is carried rather than
+   accepted.
+2. **`app/beyo_manager/domain/item_economics/calculator.py` — N11, comment only.** Master
+   plan §4 sanctions `_shape_error`'s duplication on condition that **both** sites carry a
+   comment pointing at the other. Phase 1 could not write the `calculator.py` half — that
+   file is on plan 1 §2's exclusion list — and a one-way pointer is worse than none, since
+   the point is that a later consolidation finds both. **Both comments land here, together,
+   in the same commit.** No executable line in `calculator.py` may change.
+
 ## 3. Tasks
 
 1. Task resolution reusing `get_task_budget_status`'s path (§2.5): task → PRIMARY
@@ -78,6 +106,8 @@ routed back, not an edit made here.
 | C12 | **Route mirror**: all four HC-2a artifacts move together; both counts read 26; the mirror test's own name no longer says "twenty five". |
 | C13 | **Service identity** (one-copy rule / service-identity rule): the route's mount is guarded by `calls[0][0] is get_task_price_scenario`, never by status code + call count (precedent `test_item_economics_router.py:133`). |
 | C14 | **`divide_production_budget` is not called** by this feature (§10's first cut). Asserted, not assumed — a criterion, because the allocator is the obvious thing for an implementer to reach for when it sees "sections". |
+| C16 | **The two carried exceptions land** (§2): the discriminating `Q = 0` row asserts `slider_domain(8_919, 0, 0) == slider_domain(8_919, 1, 0)` and reddens under `max(6, quantity)`; both `_shape_error` cross-reference comments exist, each naming the other's path. |
+| C17 | **Purity, if extended** — if this phase adds a C21-style import assertion for the query service, it must handle **relative imports** (N6): `ast.ImportFrom` with `level > 0` carries a partial `node.module` that no forbidden prefix matches, and `from . import x` has `node.module is None` and is skipped entirely. Theoretical in this repo — `app/beyo_manager` contains zero relative imports — which is exactly why it would pass review unnoticed. If the assertion is **not** extended, say so in the handoff rather than leaving it ambiguous. |
 | C15 | **Teardown** (rule 11½): every test committing rows deletes them in `finally`; the residue check names its tables. The baseline's ~24 `task_steps` / ~40 `step_state_records` drift is inherited and is never read as evidence. |
 
 ## 5. Out of scope

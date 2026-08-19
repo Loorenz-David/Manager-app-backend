@@ -378,6 +378,22 @@ half-even question is confined to the two operations the client also runs.
 | `cost_per_worker_minute_minor` | `Decimal`, scale 4 (`Numeric(12,4)`), `CHECK > 0` | `cost_per_worker_minute_ten_thousandths = int(value.scaleb(4))` |
 | `P` (candidate price) | `int` minor units, `CHECK >= 0` on the column | `P >= 0`; the client never sends a price to this endpoint — `P` is the client's own slider value |
 
+**Short-circuit and validation exhaustiveness (added at the review r1 fold, 2026-08-19 —
+N1).** The missing-purchase-cost outcome **short-circuits the collapse**: terms after the
+purchase term are not shape-validated. The consequence is order-dependence — for the same
+two-term set, `[purchase, malformed]` returns the no-model `None` while
+`[malformed, purchase]` raises. Demonstrated on real ORM instances by review r1.
+
+**This is sound, and the reason is structural, not incidental.**
+`ck_cost_model_terms_value_by_type` (`cost_model_term.py:38`) enumerates exactly the three
+term shapes the collapse accepts, so no *persisted* row can be malformed; `percent_value` is
+`Numeric(6,3)`, so no persisted row can exceed scale 3; and
+`uix_cost_model_terms_purchase_cost` bounds purchase terms at one per version. The order
+this section fixes (`created_at, client_id`) is therefore immaterial to every published
+value. Recorded because charter rule 5 says ordering semantics are **contracted, not
+inherited** — an implementer who later relaxes a CHECK, or feeds this function unpersisted
+rows from a new caller, needs to find this sentence rather than rediscover the behaviour.
+
 **The term set is `_load_preview_inputs`'s, not a new query.** Non-deleted terms of the
 selected cost model version, ordered `created_at, client_id` (`_common.py:207-215`). The
 partial unique index `uix_cost_model_terms_purchase_cost` guarantees **at most one**

@@ -1,0 +1,45 @@
+reviewId: 2026-08-19T15-13-32-988Z--741606
+reviewedItemIds:
+  - edge:domain-item-economics--contains-->projection-item-economics-expected-sold-price-scenario
+  - node:projection-item-economics-expected-sold-price-scenario
+decisions:
+  - itemId: edge:domain-item-economics--contains-->projection-item-economics-expected-sold-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: Rejected only because its target node is rejected and re-recorded
+      under the correct type and id (see the node's rationale). The containment
+      claim itself is correct and is re-recorded unchanged against
+      source-file-item-economics-price-scenario. Owner-authorized 2026-08-19.
+  - itemId: node:projection-item-economics-expected-sold-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "Wrong type, wrong name family, and premature. Every other projection
+      node in this graph is a read model with a service behind it; this node's
+      own description says it performs no queries, persistence or serialization
+      - the negation of that property. The exact precedent is human_confirmed:
+      source-file-item-economics-budget-division, the sibling pure module in the
+      same package. The name also leaves the -task- family (siblings:
+      task-budget-status, task-budget-allocations, task-production-time) and
+      occupies the projection name that phase 2's get_task_price_scenario
+      endpoint needs. Rejected rather than edited because type and id cannot be
+      changed by edit, and the evidence summary is immutable through review.
+      Re-recorded as source-file-item-economics-price-scenario, type
+      source_file, with the evidence span corrected to 14-209 to include
+      SEARCH_CAP_MINOR and the CostModelTermInput Protocol. Owner-authorized
+      2026-08-19 (review r1 owner card 1)."
+retiredItemIds:
+  - edge:domain-item-economics--contains-->projection-item-economics-expected-sold-price-scenario
+  - node:projection-item-economics-expected-sold-price-scenario
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T15:13:32.988Z
+graphRevisionBefore: e3758a82cb5c02c020d4c57184a521661d2aa6c3e8d7de4b512ceae4fbd1d642
+graphRevisionAfter: 50b3940273f51b9bafeb5a48f08c5970e291d6f9f95abb604af51db5d771f00b
+evidenceSummary: 3 evidence entries across 2 files; no drift detected
+humanInstruction: "Owner (David), 2026-08-19, answering review r1 owner card 1
+  verbatim: \"about the owner card 1 : the recommended option is correct\" —
+  i.e. re-record the node as a source file named after price_scenario.py,
+  leaving the projection name free for phase 2's endpoint."
+reviewTokenCorrelation: 70992ee4a3df
