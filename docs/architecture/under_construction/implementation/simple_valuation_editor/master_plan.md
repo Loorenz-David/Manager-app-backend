@@ -1,9 +1,9 @@
 # Master plan — simple_valuation_editor
 
 ```
-state: PRE-PLAN — intention RESOLVED, mechanism-inventory gate OPEN
+state: phases 1 and 2 APPROVED; phase 3 PROMPT_READY; phase 4 in re-review
 date: 2026-08-19
-phases: not yet defined (implementation-planner runs after the inventory gate)
+phases: 4 — see §3. Phases 3 and 4 run in parallel (app/ vs docs/handoff/).
 ```
 
 ## 1. Mission
@@ -18,8 +18,8 @@ no-I/O code. This pipeline publishes the function's **inputs** instead of one ev
 output at a time. It persists nothing, changes no existing payload, and is deleted by
 removing what it added.
 
-Authorities: `planning/intention.md` (RESOLVED, round 2), `planning/owner_decisions.md`
-(D1–D7, ledger empty).
+Authorities: `planning/intention.md` (RESOLVED and PLAN-READY, round 4),
+`planning/owner_decisions.md` (D1–D10, ledger empty).
 
 ## 2. Folder layout
 
@@ -42,9 +42,8 @@ three files resolve there, and are not rewritten.
 
 ## 3. Phase registry & tracker
 
-Phases are **not yet defined**. The implementation-planner authors them from the
-intention *after* the mechanism-inventory gate closes (§7). Until then this table has one
-row, and it is a gate row, not a phase row.
+Four phases. The two gate rows come first, then one row per phase — **newest state first**;
+rows marked *superseded* are the same phase's earlier states, kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
