@@ -1,0 +1,30 @@
+changeId: 2026-08-19T10-46-32-317Z--0ed5e7
+operations:
+  - itemId: edge:command-task-create--reads_from-->table-item
+    kind: delete
+    rationale: The claim (create_task reads table-item) is true and correctly
+      anchored, but its evidence summary asserts the read happens 'before
+      applying the inline-price refusal predicate' and its inferenceReason says
+      the read decides 'whether inline valuation is permitted'. No refusal
+      predicate exists after the inline_valuation_versioning phase. Summaries
+      and inferenceReasons are immutable through both review and maintenance, so
+      the only way to correct the wording is to delete and re-record.
+      Re-recorded immediately with an accurate summary and then promoted back to
+      human_confirmed on the coordinator's own re-derivation of
+      create_task.py:236-248, read before the stored claim.
+retiredItemIds:
+  - itemId: edge:command-task-create--reads_from-->table-item
+    retiredAt: 2026-08-19T10:46:32.317Z
+    reason: delete
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T10:46:32.317Z
+graphRevisionBefore: f823271e13e4efe7109bb420fe4f6e6bbe15d240f9e14c9d7cc12ae88035c26d
+graphRevisionAfter: f4e39f721609f93c1c5e462eafb89958ac31a85529e7651e5869ba996a7fc8ed
+humanInstruction: "Owner, 2026-08-19: \"can we correct that reads_from ->
+  table-item evidence summary also, i don't want to leave things half done\".
+  Delete is step 1 of 3; the edge is re-recorded with a corrected summary and
+  promoted back to human_confirmed in the same session."
+changeTokenCorrelation: 501b9b96893f

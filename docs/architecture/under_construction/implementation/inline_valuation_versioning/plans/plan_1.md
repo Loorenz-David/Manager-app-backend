@@ -121,11 +121,22 @@ planning and archive files, which record a decision that was true when written.
   `…T10-35-34-680Z--adbe44.yml`; revision → `f823271e…`. Code read before the stored claim,
   per the graph policy's anti-pattern rule.
 
-  **Residual, deliberately not actioned (for the reviewer to note, not to fix):** the
-  `reads_from → table-item` evidence summary still says the command loads the item *"before
-  applying the inline-price refusal predicate"*, and its `inferenceReason` says the read
-  decides *"whether inline valuation is permitted"*. Both are stale wording. **Evidence
-  summaries and inferenceReasons are immutable through review and maintenance alike**, so
-  the only remedy is deleting and re-recording the edge — which would destroy a
-  `human_confirmed` origin over a phrase, while the claim itself (`reads_from table-item`)
-  remains true and correctly anchored. Recorded rather than repaired.
+  **(c) The `reads_from → table-item` evidence summary was corrected too** — owner, same
+  session: *"i don't want to leave things half done."* Its summary said the item is loaded
+  *"before applying the inline-price refusal predicate"* and its `inferenceReason` said the
+  read decides *"whether inline valuation is permitted"*; neither describes anything that
+  still exists. **Evidence summaries and inferenceReasons are immutable through review and
+  maintenance alike**, so the only remedy is delete-and-re-record, which costs the
+  `human_confirmed` origin. Done as a complete three-step sequence rather than accepting the
+  loss: `dryRun` confirmed the identity triple (reported `exact-duplicate`) → delete →
+  re-record with an accurate summary naming the `was_created` flag the inline branch keys on
+  → **promote back to `human_confirmed`**. Promotion is honest here rather than
+  rubber-stamping: the coordinator read `create_task.py:236-248` and stated what it does
+  **before** opening the stored claim, which is the graph policy's own definition of
+  independent re-derivation.
+
+  Records: `.archgraph/changes/2026-08-19T10-46-32-317Z--0ed5e7.yml` (delete) and
+  `.archgraph/reviews/2026-08-19T10-46-53-673Z--bda7ab.yml` (promote). Final revision
+  `0f36b07a…`. **Post-state verified: 183 nodes / 275 edges — unchanged counts — pending
+  reviews still 4, 0 diagnostics, 0 stale.** The graph carries no stale claim from this
+  phase.

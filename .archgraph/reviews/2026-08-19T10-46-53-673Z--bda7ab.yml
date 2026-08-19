@@ -1,0 +1,32 @@
+reviewId: 2026-08-19T10-46-53-673Z--bda7ab
+reviewedItemIds:
+  - edge:command-task-create--reads_from-->table-item
+decisions:
+  - itemId: edge:command-task-create--reads_from-->table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Independently re-derived from source before the stored claim was
+      read, per the graph policy's anti-pattern rule: create_task.py:236-248
+      builds an item ServiceContext from request.item, calls
+      find_or_create_item, captures client_id and was_created, loads the
+      resolved Item and raises NotFound when absent. The reads_from relationship
+      is therefore true and the anchor is current. This edge carried
+      human_confirmed origin until this session; it was deleted and re-recorded
+      only because its evidence summary named an inline-price refusal predicate
+      that no longer exists, and summaries are immutable through review and
+      maintenance alike. Promotion restores the standing the claim had, on a
+      fresh derivation rather than on inheritance."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T10:46:53.673Z
+graphRevisionBefore: 9355d91250d47d83fb8591a7f5a82f7c72ac38b1d82e612ffeb3c27f32c57679
+graphRevisionAfter: 0f36b07a885c3c82ee3cc832d6beecada8f25e3e26c4d9c6c7e812cfa608c2a0
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: "Owner, 2026-08-19: \"i don't want to leave things half done\"
+  — step 3 of 3, restoring the edge to human_confirmed after the
+  delete-and-re-record needed to correct its immutable evidence summary."
+reviewTokenCorrelation: 1fbb87557bf2

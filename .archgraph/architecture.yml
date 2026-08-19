@@ -9125,35 +9125,6 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-15T07:35:40.252Z
     updatedAt: 2026-08-15T08:40:24.816Z
-  - sourceNodeId: command-task-create
-    relationshipType: reads_from
-    targetNodeId: table-item
-    metadata:
-      evidence:
-        - path: app/beyo_manager/services/commands/tasks/create_task.py
-          symbol: create_task
-          startLine: 236
-          endLine: 248
-          summary: The command resolves an existing item through find_or_create_item and
-            loads the resolved Item before applying the inline-price refusal
-            predicate.
-          inferenceReason: The command reads the item identity and current state to decide
-            whether inline valuation is permitted.
-      evidenceHistory:
-        - path: app/beyo_manager/services/commands/tasks/create_task.py
-          symbol: create_task
-          startLine: 228
-          endLine: 248
-          summary: The command resolves an existing item through find_or_create_item and
-            loads the resolved Item before applying the inline-price refusal
-            predicate.
-          inferenceReason: The command reads the item identity and current state to decide
-            whether inline valuation is permitted.
-          supersededAt: 2026-08-15T08:40:24.816Z
-    origin: human_confirmed
-    confidence: 0.96
-    createdAt: 2026-08-15T07:35:40.252Z
-    updatedAt: 2026-08-15T08:40:24.816Z
   - sourceNodeId: command-bootstrap-seed-item-economics-configuration
     relationshipType: writes_to
     targetNodeId: table-production-cost-group
@@ -9411,3 +9382,25 @@ edges:
     confidence: 0.88
     createdAt: 2026-08-17T17:12:48.742Z
     updatedAt: 2026-08-17T17:12:48.742Z
+  - sourceNodeId: command-task-create
+    relationshipType: reads_from
+    targetNodeId: table-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 236
+          endLine: 248
+          summary: The command builds an item ServiceContext from request.item, calls
+            find_or_create_item, captures the returned client_id and was_created
+            flag, then loads the resolved Item and raises NotFound when it is
+            absent.
+          inferenceReason: The command reads the item's identity and its was_created flag
+            to bind the PRIMARY TaskItem and to drive the inline valuation
+            branch, which keys on was_created to choose between a first chain
+            write and a compare-inherit-version against the item's current
+            valuation.
+    origin: human_confirmed
+    confidence: 0.96
+    createdAt: 2026-08-19T10:46:40.034Z
+    updatedAt: 2026-08-19T10:46:53.654Z
