@@ -1,0 +1,38 @@
+reviewId: 2026-08-19T15-54-54-915Z--ad0028
+reviewedItemIds:
+  - node:source-file-item-economics-price-scenario
+decisions:
+  - itemId: node:source-file-item-economics-price-scenario
+    decision: edit
+    editedFields:
+      confidence: 0.96
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/price_scenario.py
+          startLine: 14
+          endLine: 211
+    rationale: Address-only correction (N9, re-review r3). The production evidence
+      entry carried symbol slider_domain against the whole-module span 14-211 -
+      two schemes pointing at different things. slider_domain is defined at 182;
+      line 14 is SEARCH_CAP_MINOR, and the summary describes the whole module. A
+      later symbol-based re-anchor would resolve to slider_domain alone and
+      silently narrow module-wide evidence to one function, dropping the
+      rounding, the term collapse and both searches off the map with nobody
+      deleting them. Span unchanged; only the misleading symbol removed.
+      Summary, inferenceReason, type, name, description untouched; confidence
+      restated at its existing 0.96 solely because an edit decision requires an
+      edit object. Edit, not promote - the owner authorized the address fix, not
+      verification. Owner-authorized 2026-08-19.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-19T15:54:54.915Z
+graphRevisionBefore: 243c5019ddfacf40971866dd659d19a6909183040838f3c4d978823ed8a2adda
+graphRevisionAfter: 42c184f31791458db8fb85fcd927eb790bbe2320486237186ef2cac10492f485
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: 'Owner (David), 2026-08-19, answering re-review r3 owner card
+  1 verbatim: "about card 1: you can correct it now." Address-only fix to the
+  production evidence entry; the node remains pending and ai_inferred.'
+reviewTokenCorrelation: fe94b86a7c90

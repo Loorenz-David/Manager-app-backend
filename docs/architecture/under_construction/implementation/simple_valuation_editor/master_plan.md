@@ -195,6 +195,15 @@ rather than merely inherited:
   discriminate, evaluate the function at the values it is meant to tell apart** — here, one
   call each at `Q = 1` and `Q = 6` would have shown they coincide. An assertion that reads as
   evidence and is not is worse than its absence, because it stops anyone looking again.
+- **A pending `ai_inferred` item can only be corrected through the REVIEW path, and its
+  preview must be verified by reading the `anchors` block** (coordinator, 2026-08-19, N9
+  fix). Two attempts failed first, both instructive: `archgraph_repair_anchors` returned
+  `INTERNAL_ERROR`, and `preview_maintenance_changes` refuses pending `ai_inferred` items by
+  design — the review path with an `edit` decision carrying `anchors` is the only route.
+  Then the trap the archgraph skill names fired live: a preview whose `anchors` array had
+  been dropped produced **the identical `decisionSetHash`** (`19159d56…`) as the one that
+  carried it. Applying it would have recorded a decision and moved nothing. **The hash does
+  not cover anchors. Read the `anchors` block, every time.**
 - **Don't put counts in evidence summaries** (coordinator, fix r2 fold — earned on my own
   record within an hour of writing it). An archgraph evidence summary is **immutable through
   both review and maintenance**: a stale number in one can only be corrected by rejecting the

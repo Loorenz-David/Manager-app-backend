@@ -4717,7 +4717,6 @@ nodes:
     metadata:
       evidence:
         - path: app/beyo_manager/domain/item_economics/price_scenario.py
-          symbol: slider_domain
           startLine: 14
           endLine: 211
           summary: The module defines SEARCH_CAP_MINOR, the CostModelTermInput Protocol,
@@ -4741,10 +4740,26 @@ nodes:
           inferenceReason: The tests run with no database session and pin the purity
             property structurally, confirming the boundary is arithmetic rather
             than a read model.
+      evidenceHistory:
+        - path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: slider_domain
+          startLine: 14
+          endLine: 211
+          summary: The module defines SEARCH_CAP_MINOR, the CostModelTermInput Protocol,
+            the PriceModel and SliderDomain carriers, integer half-even
+            rounding, term collapse, the price-to-allowance conversion, capped
+            lower-bound searches, exact rational step helpers and slider-band
+            derivation. Its imports are dataclasses, decimal, fractions, typing,
+            item_economics.enums and errors.validation only.
+          inferenceReason: "A module that computes a closed set of published values from
+            supplied inputs, with no session, ORM-model, SQLAlchemy or service
+            import, is a pure source-file boundary rather than a read model:
+            nothing can ask it for anything over the wire."
+          supersededAt: 2026-08-19T15:54:54.896Z
     origin: ai_inferred
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
-    updatedAt: 2026-08-19T15:29:24.418Z
+    updatedAt: 2026-08-19T15:54:54.896Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
