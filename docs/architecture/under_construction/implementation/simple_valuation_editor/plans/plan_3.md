@@ -2,7 +2,7 @@
 
 ```
 plan: 3
-state: PROMPT_READY
+state: IMPLEMENTED — in review r1
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
       and is quoted below. Justification recorded per charter.
