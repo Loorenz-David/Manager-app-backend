@@ -2,7 +2,7 @@
 
 ```
 plan: 3
-state: IMPLEMENTED — in review r1
+state: REVIEWED r1 — CHANGES_REQUESTED (0 blocking); fix prompt compiled
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
       and is quoted below. Justification recorded per charter.
@@ -165,4 +165,39 @@ reason** — both are acceptable outcomes; an unrecorded one is not.
 
 ## 6. Review log
 
-*(empty)*
+**r1 — `CHANGES_REQUESTED`, 0 blocking / 3 should-fix / 6 notes. All seven criteria MET.**
+Handoff at `handoffs/reviewer/2026-08-19_phase3_review_r1_handoff.md`; fix prompt at
+`prompts/implementer/2026-08-19_phase3_fix_r2.md`.
+
+**Corrections to this plan's own text, recorded here because the plan is the home artifact:**
+
+1. **§3 F5's premise was half-stated, and the missing half is a correction to §4 C3.** F5 said
+   C4's `10.5` fixture "yields 41 under half-even **and** under truncation", so C3 was written
+   to separate those two. It does — `{11, 12, None}` gives 35 half-even, 34 truncated. **But
+   `11.5` rounds to `12` under half-even *and* under half-up, so C3 cannot tell those apart.**
+   The reviewer mutated `round_half_even`'s tie branch to half-up and measured: **C4 red, C3
+   green.** C4's `10.5` carries the half-up half (`10` half-even vs `11` half-up).
+   **The pair pins the rounding mode; neither row does alone.** Anyone deleting or narrowing
+   either row on the grounds that "the other one covers rounding" removes half the guard.
+   Recorded in master plan §5.
+
+2. **§4 C1's second clause was never satisfied, and is discharged here.** C1 required
+   *"record that it reddened nothing before this row existed."* The r1b ledger recorded the
+   mutation and its observed-red delta but never the before-state. **The fact: before
+   `test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain` existed, dropping
+   `superseded_at.is_(None)` from `_current_valuation` left the entire phase test file green.**
+   That is what F4 was raised for. The fix handoff repeats it (D5) so it lands in a second
+   place; this entry is the one that survives in the plan.
+
+3. **§3 F4's fixture guidance under-specified the mechanism it was asking for.** It said "one
+   item, two valuation rows, the older superseded" and left discrimination to the implementer,
+   who reached for planner GUCs that turned out to do nothing. What actually makes the mutant
+   fail is the **order of the two UPDATEs** — heap order, not a plan hint. A fixture whose
+   discrimination depends on physical row order should say so at the fixture, which F-2 now
+   does. See master plan §5's new rule on determinism aids.
+
+**Confirmed by the review and not to be re-raised:** F6's block was genuinely dead
+(`detached ⟺ item is None`); F9's refusal is correct because `TaskBudgetStatus` carries no
+objects; `_current_valuation` needs no `ORDER BY` because `uix_item_valuations_current` is a
+partial unique index; `can_commit` true under `mismatched` is deliberate and tested; and the
+C1 teardown satisfies rule 11½ with the residue block correctly outside the `try/finally`.

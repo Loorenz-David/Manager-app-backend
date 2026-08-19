@@ -56,7 +56,8 @@ rows marked *superseded* are the same phase's earlier states, kept as provenance
 | 1 | *(prior row — implement r1)* | *superseded* | 2026-08-19 | Codex (implement r1) | 52 tests, C1–C21 all mapped, checkpoint `b72821c`. Coordinator verified at consumption: perimeter clean (2 app files + declared `.archgraph` write); suite **2372/26/1** re-measured independently (+52, inherited 26 unchanged); revert hashes recomputed and matching; rule 3 fixtures confirmed to use real unflushed `CostModelTerm`. **One ledger inaccuracy found by re-applying a probe**: the C10 mutation reddens **two** tests, not the one recorded — C12's chained `== SEARCH_CAP_MINOR == 2**40` also bites. Both failures correct; the record was taken from a filtered run. Review prompt at `prompts/reviewer/2026-08-19_phase1_review_r1.md` carries it as probe P1. |
 | 1 | *(prior row — projection r0)* | *superseded* | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 4 upstream, 11 plan amendments, 4 written delegations — **all routed before the implement prompt compiled**. Three named mutations (C7, C17, C10) proved unable to fail and were replaced; `infeasible_at_or_below_minor` for the mockup is **29**, not the `0` §4.2A claimed. Design survived intact: M1's form faithful to the shipped calculator, all four literals exact, the bound holds on every shape. Coordinator re-derived each load-bearing claim, including confirming the unflushed-ORM `is_deleted = None` trap empirically. |
 | 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **APPROVED** | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 1 should-fix (coordinator-routed, no code), 11 notes.** 34 mutations applied one at a time, each file run whole, each reverted and hash-verified — **27 reddened**; of the seven that did not, two were not real mutations, one is provably dead code, four are coverage gaps, and **none produced a wrong-but-green payload**. Suite 2425/26/1, failure IDs byte-identical. **F1**: the r1c ledger's observed-red set is one test where two is measured — the coordinator's probe P1, confirmed across the whole suite; corrected in plan 2's Review log rather than in the consumed handoff, which is provenance. Seven notes batched into **plan 3** rather than a fix round. Card 1 (graph spans + missing `implements` edge) relayed; does not hold the gate. Checkpoint `48705b3`. |
-| 3 | The seven carried repairs from phase 2's review (F2–F9). Code only. | **IMPLEMENTED — in review** | 2026-08-19 | Codex (implement r1b) | 3 new rows, 1 duplicate deleted, checkpoint `ef55f6d`, **0 owner cards**. Perimeter exactly the two allowed files (`+3/−2` and `+183/−13`); no third file touched and no STOP entered. Coordinator verified at consumption rather than reading the ledger: suite re-measured **26 / 2430 / 1** with failure IDs byte-identical, the count reconciling exactly against the concurrent owner change to `purchase_api.py` (`2425 +3 −1 +3`); **all four named mutations re-applied whole-suite at their definition sites and reverted byte-identical**, every observed-red set matching the ledger — including **C4's**, the criterion that had been wrong in phases 1 and 2 and is now measurably one test. Also confirmed independently: the `int(resolved)` mutant leaves C4's own row green, which is the half of plan §3's F5 premise the implementer did not record; F6's block is genuinely dead (`detached ⟺ item is None`, and `can_commit` already requires `item is not None`); F9's refusal is true because `TaskBudgetStatus` carries `item_id` and no object, so collapsing needs a third file; and `_current_valuation` needs no `ORDER BY` because `uix_item_valuations_current` is a partial unique index — **recorded so it is not re-raised**. **One coordinator finding, seeded as review probe P1**: the two F8 comments name `(C10)`, a criterion label that archives at closeout — the only two criterion-ID references in the whole `app/beyo_manager/` tree — and the handoff's C5 row claims they name the test function, which they do not. **A second result worth the round**: the implementer measured 27 twice with the extra ID `test_c3_real_concurrent_open_insert_translates_the_loser[model]`, the coordinator measured 26 with it absent — the same test red and green on identical code, giving §6's "unidentified" drifting test a name for the first time in three pipelines. Review prompt at `prompts/reviewer/2026-08-19_phase3_review_r1.md`, five probes. |
+| 3 | The seven carried repairs from phase 2's review (F2–F9). Code only. | **FIX_PROMPT_READY** | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 3 should-fix, 6 notes. All seven criteria MET** — the reviewer's own summary: *"the endpoint is correct and every one of the seven repairs does what it was asked to do."* **All three should-fixes are one shape — a record that does not survive the reader it was written for**, and together they answer the question plan 3 §3 actually asked and the r1b handoff answered narrowly: *were the decisions recorded*, not *were they made*. **F-1** the F8 comments dangle at `(C10)` **and** sit as the first line inside a multi-predicate `WHERE`, one row above `superseded_at.is_(None)` — the very filter this phase's C1 row exists to protect. **F-2** the C1 fixture's two `SET LOCAL` planner GUCs are **inert**: the reviewer measured that deleting them keeps the mutant red 3/3 while swapping the two UPDATEs turns it green 3/3, and the coordinator **reproduced the decisive half independently** (GUCs kept, UPDATEs swapped → 49/49 green). The determinism is the UPDATE order alone, and the file's one comment credits the half that does nothing. **F-3** F9's latency acceptance lives only in a handoff that archives → moved to the call site. Coordinator also reproduced **N-2** whole-suite: deleting `collapse_terms`'s `is_deleted` skip reddens **exactly one test in the entire codebase**, phase 3's new C2 row, with the domain file 53/53 green — so a phase-1 domain semantic had **no guard at all** before this phase and now has one, two layers away. **Two coordinator amendments to the reviewer's verbatim text, both recorded in the fix prompt**: a count mismatch (*"three predicates below"* above four), and `item_valuation.py:35` — a bare line number inside the very finding that outlaws unresolvable references. Reviewer declared a `VACUUM (ANALYZE, FULL)` on `item_valuations` as the durability half of P2. Fix prompt at `prompts/implementer/2026-08-19_phase3_fix_r2.md`. |
+| 3 | *(prior row — implement r1b)* | *superseded* | 2026-08-19 | Codex (implement r1b) | 3 new rows, 1 duplicate deleted, checkpoint `ef55f6d`, **0 owner cards**. Perimeter exactly the two allowed files (`+3/−2` and `+183/−13`); no third file touched and no STOP entered. Coordinator verified at consumption rather than reading the ledger: suite re-measured **26 / 2430 / 1** with failure IDs byte-identical, the count reconciling exactly against the concurrent owner change to `purchase_api.py` (`2425 +3 −1 +3`); **all four named mutations re-applied whole-suite at their definition sites and reverted byte-identical**, every observed-red set matching the ledger — including **C4's**, the criterion that had been wrong in phases 1 and 2 and is now measurably one test. Also confirmed independently: the `int(resolved)` mutant leaves C4's own row green, which is the half of plan §3's F5 premise the implementer did not record; F6's block is genuinely dead (`detached ⟺ item is None`, and `can_commit` already requires `item is not None`); F9's refusal is true because `TaskBudgetStatus` carries `item_id` and no object, so collapsing needs a third file; and `_current_valuation` needs no `ORDER BY` because `uix_item_valuations_current` is a partial unique index — **recorded so it is not re-raised**. **One coordinator finding, seeded as review probe P1**: the two F8 comments name `(C10)`, a criterion label that archives at closeout — the only two criterion-ID references in the whole `app/beyo_manager/` tree — and the handoff's C5 row claims they name the test function, which they do not. **A second result worth the round**: the implementer measured 27 twice with the extra ID `test_c3_real_concurrent_open_insert_translates_the_loser[model]`, the coordinator measured 26 with it absent — the same test red and green on identical code, giving §6's "unidentified" drifting test a name for the first time in three pipelines. Review prompt at `prompts/reviewer/2026-08-19_phase3_review_r1.md`, five probes. |
 | 3 | *(prior row — prompt compiled)* | *superseded* | 2026-08-19 | coordinator | `plans/plan_3.md`, 7 criteria, two-file perimeter. Projection **WAIVED** — no new mechanism, and review r1 computed every expected value. Prompt at `prompts/implementer/2026-08-19_phase3_implement_r1.md`. **F4 is the one with teeth**: the supersession predicate is unasserted and the previous pipeline made chains a common state. F6/F8/F9 are decisions the implementer may resolve either way — only an *unrecorded* outcome is unacceptable. |
 | 5 | Register the price-scenario handoff with the docs accuracy arbiter. One test file. | **NOT_STARTED** | 2026-08-19 | — | `plans/plan_5.md`. Origin: r2's R8 — of 59 tests under `tests/unit/docs/`, exactly one reads either phase-4 document. "The docs guards are green" was reporting on other documents. |
 | 4 | The frontend handoff and the production-time reply. Documentation only. | **APPROVED** | 2026-08-19 | Opus 5 (r1, r2, r3) + coordinator | Three review rounds, 24 findings, **all applied**; r3 returned 0 blocking. The two documents the frontend builds from are correct: 46 keys with their nullability, a BigInt rounding function executed against the server's own over 612 cases, the four conditions that empty the numeric blocks plus the binding rule overriding them, `domain` singled out as the one block that can be null while the others are present, the Save flow with D9's unenforceable precondition, the staleness boundary with a debounce, and a settled-only answer with an honest expiry. **Every blocking finding across three rounds was the coordinator's.** Five rules earned, in §5. |
@@ -360,6 +361,40 @@ rather than merely inherited:
   faithfully transcribed into the plan. A wrong criterion propagates downstream unchanged
   because each layer is copying, not re-deriving. Corrections therefore go **upstream first**
   (home-artifact rule), or the next phase plan copies the same defect from the same source.
+- **"Record the decision" needs a named medium, or it defaults to the handoff — which
+  archives** (review r1, phase 3). Three of that phase's seven repairs were decisions rather
+  than code, and the plan asked for each to be *"recorded in the handoff with its reason."*
+  The implementer complied exactly, and **two of the three were then invisible to the reader
+  they were written for**: F8's justification pointed at a criterion label that archives, and
+  F9's latency acceptance lived only in a document that archives. **A criterion asking for a
+  recorded decision must name where the record lives after closeout** — code comment, master
+  plan, or graph node. The call site wins whenever the reader is the person who will question
+  the code, because it is the only medium that cannot be archived away.
+- **A cross-reference from production code must resolve from a clean checkout with no
+  pipeline documents present** (review r1, phase 3 — the testable form of the rule
+  `force_task_ready` earned). This rules out criterion IDs, round numbers, mutation nicknames
+  and **bare line numbers** in one sentence. The house convention is `path:symbol` and already
+  satisfies it in four places. *Earned twice in one round*: the review found `(C10)` in the
+  tree, and the coordinator then found `item_valuation.py:35` inside the review's own verbatim
+  replacement text — **reviewer prose enters the tree with no second reader**, the same lesson
+  phase 4 earned across r2 and r3.
+- **A test's determinism aid is a mechanism, and rule 5 applies to it** (review r1, phase 3).
+  *"Forcing a heap scan and a deterministic live-tuple order"* is two adjectives standing in
+  for a contract, and **one of the two did nothing** — one probe each showed which. When a
+  fixture has to be strengthened before its ledger row is accepted, **the strengthening is
+  itself a claim that needs its own both-sides check.** The failure it sets up is specific:
+  the next editor preserves the conspicuous scaffolding and reorders the plain lines that
+  actually carry the discrimination.
+- **A comment at the head of a multi-predicate `WHERE` annotates the whole block to a
+  skimmer** (review r1, phase 3). Two of this project's rounds were spent on filters nobody
+  asserted; a "Redundant defence-in-depth" line one row above the very predicate the phase
+  existed to protect is the converse error, and worse. Scoping language — *"this line only"*,
+  *"the three below this one are load-bearing"* — costs six words.
+- **A criterion naming a rounding MODE needs a fixture where the modes disagree — and one
+  fixture rarely settles all of them** (extended at review r1, phase 3). C3's `11.5` separates
+  half-even from truncation and **not** from half-up; C4's `10.5` carries the half-up half.
+  **The pair pins the mode; neither row does alone.** The earlier form of this rule read as
+  though one fixture could.
 
 ## 6. Environment
 
@@ -377,8 +412,29 @@ rather than merely inherited:
   rather than reconcile it silently.*
 - **SUITE INSTABILITY — measured at ±1 in BOTH directions.** On unchanged code the failure
   count has been observed at **25, 26 and 27** across separate full runs, with byte-identical
-  ID sets and no duplicates. The drifting test is unidentified and inherited, not introduced
-  by any of these pipelines.
+  ID sets and no duplicates. Inherited, not introduced by any of these pipelines.
+  **The drifting test now has a name, after three pipelines of "unidentified".** On commit
+  `ef55f6d`, four independent full runs by three observers split two-and-two, and the single
+  differing ID was the same one every time:
+
+  ```
+  tests/integration/services/commands/item_economics/test_phase4_fix_coverage.py::
+  test_c3_real_concurrent_open_insert_translates_the_loser[model]
+  ```
+
+  | Observer | Failed | That ID |
+  |---|---|---|
+  | Implementer (phase 3 r1b), run 1 | 27 | present |
+  | Implementer, run 2 | 27 | present |
+  | Coordinator | 26 | absent |
+  | Reviewer (phase 3 r1) | 26 | absent |
+
+  It passes **1/1 in isolation**, and it is a *real-concurrency* test — the one kind whose
+  outcome depends on suite-wide load rather than on the code. **This is a leading candidate
+  with four observations, not a confirmed diagnosis**; confirming it is its own session and
+  is outside every plan in this project. Nothing was touched.
+  **What produced the name was recording the ID rather than the count, every time** — the
+  discipline was already in this section; only the bookkeeping was missing.
   **Binding consequence: a single run is not evidence.** A run disagreeing with the
   baseline count is repeated and its **ID set** diffed before any conclusion is drawn. Only
   an ID added or removed across repeated runs is a finding. A count alone — higher or lower
