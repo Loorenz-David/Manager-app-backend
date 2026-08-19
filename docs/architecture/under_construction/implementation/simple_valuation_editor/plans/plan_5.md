@@ -1,14 +1,30 @@
-# Plan 5 — register the price-scenario handoff with the accuracy arbiter
+# Plan 5 — the two predicates the comments call unproven
 
 ```
 plan: 5
-state: NOT_STARTED — unblocked 2026-08-19 (plan 3 APPROVED). Baseline 26 / 2431 / 1
+state: PROMPT_READY — 2026-08-19. Baseline 26 / 2431 / 1
 date: 2026-08-19
-gate: projection WAIVED — one test file, no new mechanism
-origin: phase 4 re-review r2, R8 and lesson 3; §1B added from phase 3 review r1, N-2
+gate: projection WAIVED — no new mechanism; both before-states measured whole-suite at
+      re-review r4 and quoted below
+scope: §1C ONLY. §1 and §1B were SET ASIDE by owner decision on 2026-08-19 and now live at
+      `docs/architecture/under_construction/set_aside/PLAN_item_economics_deferred_coverage_20260819.md`,
+      which also carries N-5 and the two named flaky tests. They are kept below, struck
+      through in their headings, so the routing that produced them stays legible — but they
+      are NOT this plan's scope and must not be implemented here.
+origin: phase 3 re-review r4, H-1
 ```
 
-## 1. Goal
+## 0. Why the scope narrowed, recorded because it was a judgement
+
+Plan 5 originally carried three unrelated concerns. The owner chose the shortest path to
+closed, on a line worth writing down: **§1 and §1B each guard something that is correct today
+and that no comment in the tree claims otherwise. §1C does not** — phase 3 shipped two
+comments in production code that say, in as many words, that `item_id` and `TaskStep.task_id`
+are **NOT proven**. That sentence is honest only until someone makes it false, and it is the
+one piece of this project that is actively telling a future reader something it would rather
+not have to.
+
+## ~~1. Goal~~ — SET ASIDE, see the scope line above
 
 `app/tests/unit/docs/test_item_economics_handoff_accuracy.py` calls itself *"the accuracy
 arbiter for the two frontend handoffs"*. It covers `_OPERATIONAL` and `_CONFIGURATION` — both
@@ -23,7 +39,7 @@ throughout.
 This is the most arithmetic-dense handoff this project has produced, and it is the one a
 frontend builds a money screen from. It should be under the same arbiter as its predecessors.
 
-## 1B. A second, unrelated goal — and the perimeter widening it forces
+## ~~1B. A second, unrelated goal~~ — SET ASIDE, see the scope line above
 
 **Phase 3's review found that a phase-1 domain semantic has exactly one guard in the whole
 codebase, and it is in an integration file two layers away.**
@@ -53,7 +69,7 @@ and it is strictly weaker because a comment cannot fail.
 > exactly the kind of item that gets dropped. If the implementer judges the widening wrong,
 > **that is a STOP and a report**, not a judgement call.
 
-## 1C. Two rows phase 3 could not write for itself
+## 1C. THE SCOPE — two rows phase 3 could not write for itself
 
 Re-review r4 measured all five predicates the two `get_task_price_scenario.py` `WHERE`
 comments vouch for, one mutation at a time, whole-suite and ID-diffed. **Three of the five are
@@ -84,22 +100,23 @@ comment-only). A comment that says *"item_id is NOT proven"* after a test proves
 defect class in the opposite direction. **That file is phase 3's and closed** — so this is a
 declared, comment-only reopening, not a scope drift. If it looks like more than that, STOP.
 
-## 2. Files — one for §1, up to two more for §1B, plus §1C's
+## 2. Files — exactly two, both §1C's
 
 | Path | |
 |---|---|
-| `app/tests/unit/docs/test_item_economics_handoff_accuracy.py` | §1, additive |
-| `app/tests/unit/domain/item_economics/test_price_scenario.py` | §1B, additive — **one row, nothing else touched** |
-| `app/beyo_manager/domain/item_economics/price_scenario.py` | §1B fallback only — **one comment line**, and only if the direct row is declined |
-| `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py` | §1C, additive — two rows |
-| `app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py` | §1C, **comment-only** — the two `WHERE` comments, once the rows exist |
+| `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py` | additive — two rows |
+| `app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py` | **comment-only** — the two `WHERE` comments, once the rows exist |
+
+**Set aside and NOT in this perimeter:** `tests/unit/docs/test_item_economics_handoff_accuracy.py`,
+`tests/unit/domain/item_economics/test_price_scenario.py`,
+`domain/item_economics/price_scenario.py`.
 
 **Nothing else.** Not the handoffs — they are APPROVED text by the time this runs, and a test
 that requires changing its subject to pass is a test asserting the wrong thing. **If the
 arbiter's assertions fail against the shipped handoff, that is a finding routed back, not an
 edit to the document.**
 
-## 3. Tasks
+## ~~3. Tasks~~ — SET ASIDE with §1
 
 1. Add `_PRICE_SCENARIO = _HANDOFFS / "to_frontend" / "HANDOFF_TO_FRONTEND_price_scenario_20260819.md"`.
 2. Add `_PRICE_SCENARIO_ROUTES = frozenset({"GET /api/v1/item-economics/tasks/{task_client_id}/price-scenario"})`
@@ -114,29 +131,33 @@ edit to the document.**
 
 ## 4. Acceptance criteria
 
+**C1–C7 were set aside with §1 and §1B.** They live in the set-aside plan and are not
+criteria here.
+
 | C | Criterion |
 |---|---|
-| C1 | The price-scenario handoff is a subject of the route-mirror, status-vocabulary and error-identity assertions the other two handoffs already face. |
-| C2 | The `:169` union assertion is either extended or exempted, **with the reason written into the test file**, and the choice is stated in the handoff. |
-| C3 | **Named mutation:** introduce a route into the handoff's prose that does not exist in the router → an arbiter test reddens. Both sides computed; whole-suite run. |
-| C4 | **Named mutation:** name a retired or unregistered error identity in the handoff → reddens (this already holds via `test_retired_inline_refusal_identity_is_absent_from_live_sources`; confirm it is not the *only* thing covering the document). |
-| C5 | Suite at or above plan 3's closing baseline. Failure IDs diffed, not counted. |
-| C6 | **§1B**: either the direct domain row exists, or the fallback comment does, and the handoff states which and why. |
-| C7 | **§1B named mutation**: delete `collapse_terms`'s `if term.is_deleted is True: continue` → the observed-red set, measured **across the suite**, now contains the new domain row. Record both sides. **Before this plan, that set was exactly one test and it was in an integration file** — so the criterion is that the set grows, not that it is one. |
-| C8 | **§1C**: both rows exist, both against a real session, and the `_typical_block` row does **not** use `_TypicalSession`. |
-| C9 | **§1C named mutations**, one at a time, whole-suite, both sides computed: drop `ItemValuation.item_id == item_id` → the new item row red; drop `TaskStep.task_id == task_id` → the new typical row red. **Each measured at 0-added/0-removed before this plan** — that is the before-state the criterion is against. |
-| C10 | **§1C**: the two `WHERE` comments updated to name the new rows as proof. A comment still saying *"NOT proven"* after the proof exists is the same defect in the opposite direction. |
+| C1 | Both rows exist, both against a **real session**, and the `_typical_block` row does **not** use `_TypicalSession` — that fake's `execute(self, _statement)` discards the statement, which is the entire reason the gap exists. |
+| C2 | **Named mutation**, at the definition site, whole-suite, both sides computed: drop `ItemValuation.item_id == item_id` → the new item row red. **Before-state, measured twice at re-review r4 (reviewer, then coordinator with a repeat): 0 added, 0 removed.** |
+| C3 | **Named mutation**, separately and one at a time: drop `TaskStep.task_id == task_id` → the new typical row red. **Before-state, measured at re-review r4: 0 added, 0 removed.** |
+| C4 | Rule 2's companion holds for each row: its own predicate is the only reason its outcome holds. The item row must fail if it reads the *other* item's valuation; the typical row must fail if it sums the *other* task's steps. |
+| C5 | Rule 11½: each row that commits owns its teardown in `try/finally`, naming its tables, with residue assertions **outside** it. Copy `test_phase3_c1_…` / `test_phase3_g2_…`, whose shape two review rounds confirmed. |
+| C6 | The two `WHERE` comments updated to name the new rows as proof. **A comment still saying "NOT proven" after the proof exists is the same defect in the opposite direction** — and it is the defect this plan exists to remove, so leaving it would make the plan self-defeating. |
+| C7 | `ruff check` and `ruff format --check` clean on both files. |
+| C8 | Suite **26 / 2433 / 1** — two rows added. Failure IDs **diffed, not counted**; master plan §6 binding, and see §5. |
 
-## 5. What this phase cannot do, and should not try
+## 5. Two things that will bite
 
-The arbiter checks **routes, error identities, status values and envelope keys** — string-level
-facts. It cannot check nullability, which is where every phase-4 defect actually lived. **Do not
-extend it into a nullability checker**; that is a different mechanism and would need its own
-inventory. Registering the document closes the drift channel the arbiter was built for and
-leaves the one it was not.
+**The suite has at least two flaky tests, and a single run is not evidence.** Master plan §6
+carries 21 observations and two named IDs. If your count disagrees, **repeat and ID-diff before
+concluding** — at re-review r4 a coordinator run read 27 on an unrelated shopify flake, and the
+immediate repeat came back 26 with the baseline set byte-identical. A single 27 would have been
+read as the mutation biting, and the finding would have been wrong.
 
-Master plan §5 carries the lesson separately: a payload contract's nullability needs its own
-enumerated criterion, and that belongs in the *plan* that writes the document, not in a test.
+**`get_task_price_scenario.py` and `test_price_scenario_query.py` are phase 3's files and phase
+3 is APPROVED.** This is a **declared, narrow reopening**: two additive test rows and two
+comment edits. It is not a licence to revise either file. The production file has had **zero
+executable-line changes since `ef55f6d`** across four rounds — C6 must not break that; the
+comment edits are comment edits. **If a task appears to need more, that is a STOP and a report.**
 
 ## 6. Review log
 
