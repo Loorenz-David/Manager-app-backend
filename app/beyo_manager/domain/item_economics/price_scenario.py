@@ -187,6 +187,8 @@ def slider_domain(
     if break_even_minor is None:
         return None
 
+    # Intention §§2.7/9.4: storage has no quantity CHECK; legacy zero must
+    # clamp to one before this value becomes a divisor.
     divisor = max(1, quantity)
     step_per_piece = two_significant_digits(
         break_even_minor,

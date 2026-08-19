@@ -373,6 +373,15 @@ def test_c17_quantity_seven_slider_domain_uses_per_piece_derivation() -> None:
     assert domain.max_minor % domain.step_minor == 0
 
 
+def test_quantity_zero_falls_back_to_a_divisor_of_one() -> None:
+    assert slider_domain(1_211_335, 0, 29) == SliderDomain(
+        step_minor=15_000,
+        min_minor=420_000,
+        max_minor=1_650_000,
+    )
+    assert slider_domain(1_211_335, 0, 29) == slider_domain(1_211_335, 1, 29)
+
+
 def test_c18_minimum_resolves_disagreeing_floor_constraints() -> None:
     model = PriceModel(22_000, 150_000, 13_000_000)
     break_even = break_even_price_minor(model, 12_300)
