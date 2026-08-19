@@ -669,6 +669,31 @@ correct implementation of §4.1 can never return `1_211_364`. **§4.1's definiti
 `break_even_price_minor = 1_211_335` for the mockup's data**, and §8's example value is
 corrected accordingly (§8A.1).
 
+### 4.4B `suggested_price_minor` when there is no band (projection r0, L6)
+
+§4.4 gives `suggested_price_minor = null` only when `break_even_price_minor` is `null`. But
+§7A.1 makes `domain` `null` whenever `min_minor >= max_minor`, which is **reachable with a
+non-`null` `B`** — so `ceil_to_step(break_even, domain.step_minor)` has no step to read.
+
+Measured against the shipped module: `PriceModel(residual=100_000, K=0, rate_tt=10_000)` —
+a rate of `1.0000` minor/minute, legal under `Numeric(12,4)` and `CHECK > 0` — with
+`typical_total_seconds = 60` gives `break_even_price_minor = 1`,
+`infeasible_at_or_below_minor = 0`, and `slider_domain(1, 6, 0) is None`. A bounded sweep
+found thirty-four such `(rate, residual, T, Q)` combinations.
+
+**Contract: `suggested_price_minor` is `null` whenever `domain` is `null`, as well as
+whenever `break_even_price_minor` is `null`.** It is a multiple of the step, so it cannot
+exist without one.
+
+The corner is degenerate — it needs `B < 80·Q`, a break-even under about five kronor — and
+it is unguarded: an implementer following §4.4 literally writes
+`ceil_to_step(B, domain.step_minor)` and gets an `AttributeError` on a `null` `domain`,
+which is a 500 where the contract wants a `null`.
+
+**`suggested_price_minor` had no acceptance criterion in either phase** — it is a published
+key and one of the mockup's seven rendered elements, and nothing pinned the composition
+`ceil_to_step(break_even, step_minor)`. Plan 2 now carries one.
+
 **The suggested price is unaffected**, which is why this survived round 2 unnoticed:
 `ceil_to_step(1_211_335, 15_000) = 81 × 15_000 = 1_215_000` = `2 025`/piece over 6 —
 still the mockup's figure. §4.4's *conclusion* holds; its *derivation* does not, and the
@@ -740,10 +765,22 @@ substitution. **Contract:**
 
 ```
 usable(t)               = t is not None and t > 0
-is_estimated            = any participating section is not usable
+is_estimated            = sections_total == 0 or any participating section is not usable
 sections_without_sample = count of participating sections that are not usable
 sections_total          = count of participating sections
 ```
+
+> **The empty case, added at the projection r0 fold (2026-08-19, L12).** The `is_estimated`
+> line originally read *"any participating section is not usable"*. With **no** participating
+> sections — a task with no steps, or one whose every section's steps are all in
+> `EXCLUDED_STEP_STATES`, both reachable — `any()` over the empty set is `False`, so the
+> block published `total_seconds: 0, is_estimated: false, sections_without_sample: 0,
+> sections_total: 0`: a screen rendering a **measured** typical of zero. §5.3's no-evidence
+> contract says the opposite and never noticed it was describing a non-empty set.
+>
+> Downstream the damage is contained — `T = 0` makes `break_even_price_minor` return `None`
+> and the slider is suppressed — so exactly one boolean says "measured" about nothing. That
+> is the rule-6 profile precisely: the number looks plausible and is wrong.
 
 **2. The median is a `Fraction`; the total is an integer.** `_median` (`:69-74`) returns
 the mean of the two middle values for an even count, so the substitute is `x.5` whenever
@@ -1195,6 +1232,36 @@ exactly what the user came to do.
 `model`, `anchors` and `domain` all `null` — the task lost or swapped its primary item
 and a price screen for it is meaningless, but that is an empty state, not an error.
 
+### 9.2A `item_binding` wins over the status table — always, not sometimes (projection r0, L2)
+
+§9.2 and §9A.1's table **collide on every occurrence of a non-`bound` binding**, not in an
+edge case. Read at `get_task_budget_status.py:111`:
+
+- **`mismatched`** requires `evaluation is not None`, so the branch always continues into
+  `_build_evaluated_status` and the status is always `ok` or `infeasible` — §9A.1 rows A1/A2,
+  which say the blocks are **present**, while §9.2 says all `null`.
+- **`detached`** means `item is None`. Either the status is `not_evaluated` (row B10,
+  present) or `ok`/`infeasible` (A1/A2, present). §9.2 says `null` on both paths.
+
+**§9.2 governs.** It is the only rule that can be honoured: with no `Item` there is no
+category, so no selection, no quantity, no rate — nothing from which a model, an anchor set
+or a band could be derived. The status table describes what is *derivable when the item is
+bound*; binding is upstream of it.
+
+**The rest of the payload on those two paths, defined here because the serializer needs it
+on the first request:**
+
+| Key | `detached` | `mismatched` |
+|---|---|---|
+| `item` | **`null`** — there is no `Item` row at all | populated from the PRIMARY item |
+| `saved`, `model`, `anchors`, `domain` | `null` | `null` |
+| `typical` | **populated** — it derives from steps alone and stays honest | populated |
+| `status` | as resolved | as resolved |
+| `can_commit` | **`false`** — condition 3 fails | as resolved |
+| `config_fingerprint` | `null` — the model is | `null` |
+
+`item: null` requires §8's `item` object to be nullable; it was typed as always present.
+
 ### 9.3 Reconciliation at save time
 
 The client echoes `config_fingerprint` and asserts the commit response's
@@ -1272,13 +1339,34 @@ total over all twelve values:
 | B3 | `not_configured_ambiguous_cost_group` | no | `null` | idem |
 | B4 | `not_configured_no_basis_version` | no | `null` | no rate |
 | B5 | `not_configured_no_cost_model_version` | no | `null` | no terms |
-| B6 | `item_unvalued` | no | **present** | configuration fully resolved; only the price is missing, and the price is the slider's variable |
-| B7 | `item_missing_expected_price` | no | **present** | idem |
+| B6 | `item_unvalued` | no | **present iff collapsible** † | configuration fully resolved; only the price is missing, and the price is the slider's variable |
+| B7 | `item_missing_expected_price` | no | **present iff collapsible** † | idem |
 | B8 | `item_missing_purchase_cost` | no | `null` | `constant_deduction_minor` is undefined (§3.1) |
 | B9 | `currency_mismatch` | no | `null` | the three-way equality of `validate_currency_equality` is broken |
 | B10 | `not_evaluated` | no | **present** | configuration and price both resolved |
 
 Twelve rows, twelve values, each decidable from the selection alone.
+
+> **† Qualification added at the projection r0 fold (2026-08-19, L3).** B6 and B7 are
+> **not** unconditionally present. `ITEM_READINESS_PRECEDENCE` places `ITEM_UNVALUED` and
+> `ITEM_MISSING_EXPECTED_PRICE` **above** `ITEM_MISSING_PURCHASE_COST`
+> (`configuration.py:33-39`), so a higher-precedence check fires first and the vocabulary
+> cannot report that the purchase cost is *also* missing. When the cost model carries a
+> non-deleted `item_purchase_cost` term and no purchase cost is available,
+> `collapse_terms` returns `None` (§3.1B) and there is no model to publish.
+>
+> **Contract:** on B6 and B7 the three blocks are present **iff the model collapses** — i.e.
+> the model has no purchase term, or a purchase cost exists. Otherwise all three are `null`,
+> exactly as B8.
+>
+> Without this qualification a criterion asserting "present" on B6/B7 would hold only for a
+> cost model without a purchase term, making the expected outcome a property of the fixture
+> rather than of the status — which is what charter rule 2's companion forbids.
+>
+> **This does not reopen D8 or D9.** Under D9's flow the purchase price is set first, which
+> creates the valuation row and makes the model collapsible; the case bites only where D9's
+> precondition does not hold — the precondition master plan §8 obligation 6 exists to write
+> down. A contract-text correction, not a lived failure.
 
 > **RATIFIED — D8 (owner, 2026-08-19). This table governs; §9.1 is superseded.** Owner,
 > verbatim: *"the frontend will allow to display the handle to set a expected sold price
@@ -1341,8 +1429,22 @@ can_commit = conditions 1–4
              AND (no purchase term OR purchase_cost_minor is present)   (not B8)
 ```
 
-Equivalently: `can_commit` is true exactly for statuses A1, A2, B7 and B10 — everything
-except the expected price itself, which Save supplies. **`item_unvalued` (B6) yields
+~~Equivalently: `can_commit` is true exactly for statuses A1, A2, B7 and B10~~ — everything
+except the expected price itself, which Save supplies.
+
+> **RETRACTED at the projection r0 fold (2026-08-19, L14). The two forms are not
+> equivalent, and the status form is unsafe.** A1/A2 are produced by
+> `_build_evaluated_status` (`get_task_budget_status.py:150`) from the **committed**
+> evaluation, which never consults `resolve_item_economics_status`. So a task committed while
+> the configuration was healthy keeps status `ok` after the cost model version is deleted or
+> its `effective_to` passes (`configuration.py:52-61` compares against `today_utc()`). The
+> **live** selection is then B5, `commit_item_cost_evaluation` refuses at `:229-230`, and the
+> status form publishes `can_commit: true` for a button whose press is a guaranteed error —
+> precisely the failure §11 names and the reason D4 made this field load-bearing.
+>
+> **The block form above governs, and it is computed from the live selection.** The status
+> shorthand is retained struck through rather than deleted, because it reads as a
+> simplification anyone would reach for again. **`item_unvalued` (B6) yields
 `can_commit: false`**, which would leave the screen with a slider and no way to save
 through D4's endpoint.
 

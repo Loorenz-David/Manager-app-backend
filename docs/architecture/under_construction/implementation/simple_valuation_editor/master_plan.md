@@ -55,7 +55,7 @@ row, and it is a gate row, not a phase row.
 | 1 | *(prior row — review r1)* | *superseded* | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 2 should-fix, 7 notes.** The arithmetic is correct — the reviewer re-derived every published number from a reference implementation written from the intention alone, without importing the module, and all 22 values matched; 18 of its own 22 mutations bit. **F1**: `slider_domain`'s `max(1, quantity)` guard has **no test** — deleting it leaves all 52 green, and `quantity = 0` is a documented live input (§2.7: no CHECK constraint) that then raises `ValueError` instead of returning a band. Coordinator re-confirmed both sides. **F2**: three of six ledger rows understate their observed-red set (C8 reddens 5, C17 3, C10 2) — all from `-k`-filtered runs; no defect hidden. Owner card 1 answered: re-record the graph node as `source_file`. Fix prompt at `prompts/implementer/2026-08-19_phase1_fix_r2.md`. |
 | 1 | *(prior row — implement r1)* | *superseded* | 2026-08-19 | Codex (implement r1) | 52 tests, C1–C21 all mapped, checkpoint `b72821c`. Coordinator verified at consumption: perimeter clean (2 app files + declared `.archgraph` write); suite **2372/26/1** re-measured independently (+52, inherited 26 unchanged); revert hashes recomputed and matching; rule 3 fixtures confirmed to use real unflushed `CostModelTerm`. **One ledger inaccuracy found by re-applying a probe**: the C10 mutation reddens **two** tests, not the one recorded — C12's chained `== SEARCH_CAP_MINOR == 2**40` also bites. Both failures correct; the record was taken from a filtered run. Review prompt at `prompts/reviewer/2026-08-19_phase1_review_r1.md` carries it as probe P1. |
 | 1 | *(prior row — projection r0)* | *superseded* | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 4 upstream, 11 plan amendments, 4 written delegations — **all routed before the implement prompt compiled**. Three named mutations (C7, C17, C10) proved unable to fail and were replaced; `infeasible_at_or_below_minor` for the mockup is **29**, not the `0` §4.2A claimed. Design survived intact: M1's form faithful to the shipped calculator, all four literals exact, the bound holds on every shape. Coordinator re-derived each load-bearing claim, including confirming the unflushed-ORM `is_deleted = None` trap empirically. |
-| 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **NOT_STARTED** — blocked on phase 1 APPROVED | — | — | Plan at `plans/plan_2.md`, 15 criteria; amended at phase 1 closeout with its review lessons. |
+| 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **PROMPT_READY** | 2026-08-19 | Opus 5 (projection r0) + coordinator (fold) | Projection returned `AMENDMENTS_REQUIRED`, **0 owner cards**, 17 ledger rows — 5 upstream, 10 plan amendments, 3 written delegations (D-5, D-6, D-7) — **all routed before the implement prompt compiled**. Headline: **the carried N8 fix was itself inert** — `f(0) == f(1)` is invariant under `max(6, ·)` at every `B`; coordinator re-verified both forms against the shipped module. Also found: §9.2 and §9A.1 collide on *every* non-`bound` binding (not an edge case); `can_commit`'s status shorthand is unsafe after a config drift; the empty participating set publishes `is_estimated: false`; `suggested_price_minor` had **no criterion in either phase** and crashes on a null domain; HC-2a's line numbers all re-verified correct at head. Criteria 15 → 19. |
 
 ## 4. Naming registry
 
@@ -187,6 +187,15 @@ rather than merely inherited:
   N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
   a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
   mutation; where it cannot, say so and why.
+- **The mutation check is on the ASSERTION FORM, not on the fixture** (phase 2 projection,
+  L1 — earned against the coordinator, immediately after the rule below and in the act of
+  applying it). The fix for N8 replaced a non-discriminating fixture with a discriminating
+  one and kept the assertion form `f(0) == f(1)`. That form is invariant under
+  `max(1, ·) → max(6, ·)` **at every `B`**, because the mutation maps both call sites to the
+  same divisor. A right fixture reached through a wrong comparison is still decoration.
+  **Prefer an exact literal over an equality between two calls**: the literal carries the
+  discriminating power, the equality throws it away. Four inert checks in this project now,
+  two of them mine.
 - **A fixture whose expected value is the same under the defect proves nothing, even when
   the assertion beside it bites** (re-review r3, N8 — earned against the coordinator). The
   strengthening assertion `slider_domain(B, 0, I) == slider_domain(B, 1, I)` was specified to
