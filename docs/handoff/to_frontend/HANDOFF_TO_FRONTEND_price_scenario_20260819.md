@@ -4,6 +4,8 @@
 
 - Handoff ID: `HANDOFF_TO_FRONTEND_price_scenario_20260819`
 - Created at (UTC): `2026-08-19T18:00:00Z`
+- **Status: draft until phase approval — the approval commit is first delivery.** Revised
+  three times pre-delivery (review r1, r2, r3); the one substantive reversal is recorded in §7.
 - Owner agent: `Claude Opus 5` (backend pipeline coordinator)
 - Source plan: `backend/docs/architecture/under_construction/implementation/simple_valuation_editor/master_plan.md`
 - Phase artifacts: `.../archive/plan_1/plan_1.md` (pure arithmetic, APPROVED `62ab05e`),
@@ -150,6 +152,8 @@ Non-null on every response: `task_id`, `status`, `item_binding`, `can_commit`,
 `calculation_version`, `typical` and all seven of its members, and `anchors.is_fundable` /
 `anchors.infeasible_at_or_below_minor` when `anchors` is present.
 
+Within a block that is present, every member not named above is non-null.
+
 The screen's first render for a brand-new item has `saved: null`, `currency: null` and a fully
 populated `model`.
 
@@ -182,7 +186,7 @@ the three. Every row below marked ⚠ needs its own null check.
 | `TYPICAL 3h 25m` | `typical.total_seconds` — always present |
 | chip `Below typical work` | draft price vs `anchors.break_even_price_minor` — §5.3 — ⚠ `anchors` null with `model`; the member is independently nullable |
 | `suggested 2 025/piece` | `anchors.suggested_price_minor ÷ max(1, quantity)` — ⚠ as above |
-| slider ends `700` / `2 750` | `domain.min_minor` / `max_minor` ÷ `max(1, quantity)` — ⚠ `domain` null with `model`; **and note `2 750`, not the mockup's `2 700` — see §5.4** |
+| slider ends `700` / `2 750` | `domain.min_minor` / `max_minor` ÷ `max(1, quantity)` — ⚠⚠ **`domain` can be `null` while `model` is present** — no usable typical means no band (§5.4); **and note `2 750`, not the mockup's `2 700` — see §5.4** |
 | `Marta Lind · saved version · 14 Aug, 10:24` | `saved.created_by.username`, `saved.created_at` — ⚠⚠ **`saved` is `null` for an item nobody has priced and on any non-`bound` binding; `created_by` is separately nullable. Two checks, not one.** |
 
 ---
@@ -282,8 +286,10 @@ typicals are derived, those values change and the payload shape does not.
 
 ### 5.2 When `model`, `anchors` and `domain` are null
 
-`model`, `anchors`, `domain` and `config_fingerprint` are published together or not at all.
-**Four things must hold at once**; `status` is only one of them.
+`model`, `anchors` and `config_fingerprint` are published together or not at all. **Four
+things must hold at once**; `status` is only one of them. `domain` needs all four **and** a
+usable band on top — it is the one block that can be `null` while the others are present
+(§5.4).
 
 1. **`item_binding` is `"bound"`.** Under `detached` or `mismatched` all four are `null`
    **whatever the status says** — and `mismatched` always reports `ok` or `infeasible`, so
@@ -458,6 +464,13 @@ It also does not cover `item.quantity` or `item.label`.
 `item:updated` for this item** — not only on a fingerprint mismatch. Both are workspace
 broadcasts you already have a socket for; do not filter the step event to this task, because
 the typical is a workspace-wide median and any task's step transition can move it.
+**Debounce it — trailing edge, 10–15 seconds, and coalesce.** This request is not cheap on our
+side (the typical is an aggregate over the workspace's completed-step history), and a busy floor
+emits step transitions continuously. You are guarding against a screen that is *minutes* stale
+at the moment of commit, not against being a second behind: one refetch after the events stop is
+worth as much as fifty during them. **Always refetch immediately before enabling Save after a
+long idle**, which is the moment the number actually has to be right.
+
 `item:updated` is emitted on item edits (quantity, category) and, to our knowledge, has not
 been named in a handoff to you before — if your client does not handle it yet, this is the
 screen that needs it. The window also slides with time alone, which no event covers; a screen
@@ -471,7 +484,8 @@ left open for a long session should refetch on reopen regardless.
 
 1. **§6's status → treatment table.** It says the numerics are `null` everywhere but `ok` and
    `infeasible`. **For this endpoint only**, `model`, `anchors` and `domain` are also present
-   under `item_unvalued`, `item_missing_expected_price` and `not_evaluated` (subject to §5.2 item 4 — the model must collapse). Other endpoints are unchanged.
+   under `item_unvalued`, `item_missing_expected_price` and `not_evaluated` (subject to
+   §5.2 item 4 — the model must collapse). Other endpoints are unchanged.
 2. **§8.4's display prohibition** ("do not show '1000 × 5' anywhere near these figures") is
    **lifted for this screen**. Its *contract* stands unchanged and is not negotiable: a
    valuation is per item, never per unit; the wire carries whole-item minor units; the backend
@@ -484,7 +498,8 @@ left open for a long session should refetch on reopen regardless.
    currency change counts as a difference.
 
    **The error identity that refusal raised is retired, and this document deliberately does not
-   spell it out.** A backend guard sweeps every live document for retired error identities — precisely so nobody codes against an error that can no longer occur. Search your
+   spell it out.** A backend guard sweeps every live document for retired error identities —
+   precisely so nobody codes against an error that can no longer occur. Search your
    own codebase for the identity you were handling on that path and delete the branch.
 
 **On the last one, an apology and a process change.** §9.1 was corrected by editing the

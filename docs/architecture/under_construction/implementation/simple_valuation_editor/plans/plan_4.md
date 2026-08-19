@@ -2,7 +2,7 @@
 
 ```
 plan: 4
-state: CHANGES_REQUESTED r1 -> applied; r2 -> applied; awaiting re-review r3
+state: APPROVED — r1, r2 and r3 all applied; r3 returned 0 blocking
 date: 2026-08-19
 gate: projection WAIVED — documentation only, no code, no mechanism
 runs in parallel with: plan 3 (the carried repairs). No shared files — plan 4 touches only
@@ -185,6 +185,36 @@ correction: `tests/unit/docs/` 59 passed. **This time the fix perimeter was foun
 before editing**, per r2's lesson 1 — all three R1 defects were confirmed to live in §3 and
 nowhere else.
 
-**Awaiting re-review r3** — delta-scoped, and it must attack r2's replacement text as
-adversarially as r1's, because three of r2's five findings were defects *in r1's own proposed
-wording*.
+**re-review r3 — 2026-08-19, Opus 5 — `CHANGES_REQUESTED`. 0 blocking, 3 should-fix, 3 notes.
+All six applied, plus one site the findings did not name. Phase closed.**
+
+**All seven r2 findings closed, and P1 passed cleanly** — the reviewer re-grepped independently
+across five probes and found **no correction that leaked to a second site**, the first round of
+this review where that held.
+
+- **F1** — *`domain` is not published with `model`*, and the document said it was at two sites.
+  A blanket claim true for three of its four subjects, which is why r1 and r2 both read it as a
+  unit. **Reproduced by the coordinator**: with no usable typical, `model` is PRESENT, `anchors`
+  is present with null members, and **`domain` is `None`** — reachable in any workspace whose
+  sections have fewer than five completed samples, i.e. every new workspace. §3's ⚠ marker named
+  the wrong gate: `model !== null` passes while `domain.min_minor` throws.
+- **F2** — r2's own refetch correction was right about the mechanism and silent about its cost.
+  Verified: `typical_times_statement`'s grouping subquery carries **no date predicate** — it
+  groups every completed step in the workspace for all time, and the 90-day window is a `FILTER`
+  on the outer aggregates. So "refetch on any task's step transition" asks for an unbounded
+  aggregate per event, from every open screen. **Fixed** with a trailing-edge debounce and the
+  instruction to refetch immediately before enabling Save after an idle.
+- **F3** — the reply's action list promised "a known end date" for something §4 says has **no**
+  date. **Fixed — and the grep-first discipline found a second site the finding did not name**:
+  the delivery-context line promising "an expiry date". Both now say the expiry is certain and
+  the date is not yet knowable.
+- **N1, N2, N3** applied: the enumeration's closing clause, a `Status: draft until phase
+  approval` marker on both documents (they had been revised in place under an unchanged
+  `Created at`, in a document set whose §5 adopts the opposite convention), and two rewrapped
+  lines.
+
+**Verdict: phase 4 APPROVED by the coordinator on r3's own terms** — *"This is one edit pass
+from done… no finding requires more than replacing a sentence"* — with each replacement
+verified against shipped code rather than accepted: F1 reproduced, F2's query shape read at the
+line, F3 checked by grep. A fourth round would re-read three sentences whose facts are already
+confirmed.

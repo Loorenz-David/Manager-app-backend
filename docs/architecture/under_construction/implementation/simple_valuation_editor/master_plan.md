@@ -57,7 +57,8 @@ rows marked *superseded* are the same phase's earlier states, kept as provenance
 | 2 | The read model, the route, the mirror: M3, M4, M6, the status table, `can_commit`, HC-2a's four artifacts. | **APPROVED** | 2026-08-19 | Opus 5 (review r1) | **0 blocking, 1 should-fix (coordinator-routed, no code), 11 notes.** 34 mutations applied one at a time, each file run whole, each reverted and hash-verified — **27 reddened**; of the seven that did not, two were not real mutations, one is provably dead code, four are coverage gaps, and **none produced a wrong-but-green payload**. Suite 2425/26/1, failure IDs byte-identical. **F1**: the r1c ledger's observed-red set is one test where two is measured — the coordinator's probe P1, confirmed across the whole suite; corrected in plan 2's Review log rather than in the consumed handoff, which is provenance. Seven notes batched into **plan 3** rather than a fix round. Card 1 (graph spans + missing `implements` edge) relayed; does not hold the gate. Checkpoint `48705b3`. |
 | 3 | The seven carried repairs from phase 2's review (F2–F9). Code only. | **PROMPT_READY** | 2026-08-19 | coordinator | `plans/plan_3.md`, 7 criteria, two-file perimeter. Projection **WAIVED** — no new mechanism, and review r1 computed every expected value. Prompt at `prompts/implementer/2026-08-19_phase3_implement_r1.md`. **F4 is the one with teeth**: the supersession predicate is unasserted and the previous pipeline made chains a common state. F6/F8/F9 are decisions the implementer may resolve either way — only an *unrecorded* outcome is unacceptable. |
 | 5 | Register the price-scenario handoff with the docs accuracy arbiter. One test file. | **NOT_STARTED** | 2026-08-19 | — | `plans/plan_5.md`. Origin: r2's R8 — of 59 tests under `tests/unit/docs/`, exactly one reads either phase-4 document. "The docs guards are green" was reporting on other documents. |
-| 4 | The frontend handoff and the production-time reply. Documentation only. | **CHANGES_REQUESTED r2 → corrections applied, awaiting re-review r3** | 2026-08-19 | Opus 5 (review r1) + coordinator (fold) | 3 blocking, 4 should-fix, 3 notes, 0 owner cards — **all text, all the coordinator's, all applied verbatim**. Every failure was in C3 and shared one root: nullability described as a function of `status` where the code gates on five conditions. **B1** the block rule (two conditions absent; reproduced against the shipped service), **B2** four nullable fields shown as always present (three already recorded in intention §8A), **B3** `config_fingerprint` blind to the typical — which moves with *time alone* on a rolling 90-day window, carrying break-even, suggested and the whole band with it. **S1** published a false absence claim as verified: `today_utc()` wraps `datetime.now` and defeated the literal grep. §4's BigInt block and the worked example were re-executed and are correct. Six rules earned, in §5. |
+| 4 | The frontend handoff and the production-time reply. Documentation only. | **APPROVED** | 2026-08-19 | Opus 5 (r1, r2, r3) + coordinator | Three review rounds, 24 findings, **all applied**; r3 returned 0 blocking. The two documents the frontend builds from are correct: 46 keys with their nullability, a BigInt rounding function executed against the server's own over 612 cases, the four conditions that empty the numeric blocks plus the binding rule overriding them, `domain` singled out as the one block that can be null while the others are present, the Save flow with D9's unenforceable precondition, the staleness boundary with a debounce, and a settled-only answer with an honest expiry. **Every blocking finding across three rounds was the coordinator's.** Five rules earned, in §5. |
+| 4 | *(prior row — r2)* | *superseded* | 2026-08-19 | Opus 5 (review r2) | 2026-08-19 | Opus 5 (review r1) + coordinator (fold) | 3 blocking, 4 should-fix, 3 notes, 0 owner cards — **all text, all the coordinator's, all applied verbatim**. Every failure was in C3 and shared one root: nullability described as a function of `status` where the code gates on five conditions. **B1** the block rule (two conditions absent; reproduced against the shipped service), **B2** four nullable fields shown as always present (three already recorded in intention §8A), **B3** `config_fingerprint` blind to the typical — which moves with *time alone* on a rolling 90-day window, carrying break-even, suggested and the whole band with it. **S1** published a false absence claim as verified: `today_utc()` wraps `datetime.now` and defeated the literal grep. §4's BigInt block and the worked example were re-executed and are correct. Six rules earned, in §5. |
 | 4 | *(prior row)* | *superseded* | 2026-08-19 | coordinator | `plans/plan_4.md`, 6 criteria. Both files new; **nothing edited** — amend-by-reference, the convention the frontend asked for. Written from the shipped serializer, not the intention's example. **Split from plan 3 so it could run in parallel** — no shared files. Awaiting a light review of C3/C4 (every key and literal against code). |
 
 **Phases 3 and 4 run in parallel.** Plan 3 touches only `app/`, plan 4 only `docs/handoff/`.
@@ -231,6 +232,26 @@ rather than merely inherited:
   §4's BigInt block was executed over 612 cases and was flawless; the sentence three pages
   later asserting a directory-wide absence was not executable and was wrong. The care went
   where the code was, not where the risk was.
+- **A blanket "these N are published together" claim needs one probe per member** (phase 4 r3,
+  F1). It survived two review rounds because it was true for three of its four subjects, and
+  both rounds read it as a unit. This is charter rule 2 applied to **prose**: a criterion over a
+  grouped claim enumerates one row per member, because the member that differs is invisible
+  inside a list of members that don't.
+- **A correctness fix to a client instruction needs a cost line** (phase 4 r3, F2). The
+  reviewer who corrects *when* to call an endpoint has no reason to look at what the call runs,
+  and the frontend has no way to. Here the corrected instruction asked for an unbounded
+  workspace aggregate per step transition, from every open screen.
+- **Grep before calling a field-level fix done — standing, not a remedy** (phase 4 r2 lesson 3,
+  confirmed by r3's P1). Three rounds of corrections leaked to unnamed sites; the round where
+  the coordinator grepped first was the round where nothing leaked. It cost three greps. It
+  caught a fourth site on the very next finding, one the review had not named.
+- **Verbatim replacement text is unreviewed on arrival.** It is still the right protocol — it is
+  what made these rounds cheap — but a re-review's scope is always the corrections *and* the
+  correcting sentences. Across r2 and r3, four findings were defects in a reviewer's own
+  proposed wording.
+- **A final round reads every document in the phase end to end, regardless of delta** (r3
+  lesson 5). F3 sat in a file nothing had changed that round, in the four-line action list, and
+  contradicted the section it pointed at.
 - **A payload contract's NULLABILITY needs its own criterion, separate from its key list**
   (phase 4 review r1, L1). C3 asked that every key match the serializer — and all 46 did.
   Every failure was a *nullability*, so the document passed the check it was given while

@@ -4,6 +4,8 @@
 
 - Handoff ID: `HANDOFF_TO_FRONTEND_production_time_share_state_answer_20260819`
 - Created at (UTC): `2026-08-19T18:15:00Z`
+- **Status: draft until phase approval — the approval commit is first delivery.** Revised once
+  pre-delivery (review r1); the correction is recorded visibly in §6.
 - Owner agent: `Claude Opus 5` (backend pipeline coordinator)
 - **Answers:** `HANDOFF_TO_BACKEND_production_time_live_share_state_20260819` (frontend repo,
   `docs/handoff/to_backend/`)
@@ -19,7 +21,8 @@
 - **API or contract changes:** none. Endpoint, response shape, error cases, role gates,
   ordering and socket events all unchanged.
 - **What you are owed and are getting here:** the answer, its reasoning, a correction to a
-  section of ours that caused the problem you found, and **an expiry date** (§4).
+  section of ours that caused the problem you found, and **notice that this answer expires —
+  certainly, but on no date we can give you yet** (§4).
 
 ---
 
@@ -27,8 +30,9 @@
 
 1. **Suppress or mark provisional the `share_state` verdict while `state == "working"`.**
    Keep rendering `share_state` as received — you are gating its *display*, not deriving it.
-2. **Build that suppression behind one flag, removable in a single change** — see §4. It has a
-   known end date.
+2. **Build that suppression behind one flag, removable in a single change** — see §4. **Its
+   expiry is certain; its date is not yet knowable**, so make the removal cheap rather than
+   scheduled.
 3. **Amend your plan's criterion 5 explicitly** rather than relaxing it. The verdict stays a
    rendered backend value.
 4. **Do not ship the `allowance_i / typical_i` ratio** as an item-level figure without the
