@@ -36,8 +36,17 @@ called `..._twenty_five_routes` asserting 26, which is a comment that lies at ex
 place a future route author looks first. It is the same artifact, so no perimeter extension
 is needed — only the awareness that HC-2a's line list is incomplete.
 
-**No change to `price_scenario.py`.** Phase 1 is settled; a defect found in it is a finding
-routed back, not an edit made here.
+**No change to any executable line of `price_scenario.py`.** Phase 1 is settled; a defect
+found in it is a finding routed back, not an edit made here.
+
+> **Corrected 2026-08-19, implement r1 blocker.** This read *"No change to
+> `price_scenario.py`"* without qualification, which contradicted exception 2 below —
+> `_shape_error`'s comment **pair** cannot exist unless one of the two comments lands in
+> `price_scenario.py`. The implementer was right to stop rather than pick a side; the
+> constraint worked. **A comment-only exception is authorized** (exception 3), under the same
+> entailment as HC-2's fourth artifact and `simple_production_budget_division`'s HC-1a
+> extension: writing down a sanction the master plan already granted is entailed by that
+> sanction, not a separate decision. **No new owner card.**
 
 ### Enumerated exceptions carried in from phase 1's closeout
 
@@ -86,6 +95,12 @@ phase-1 note. **Nothing else in a phase-1 file may change.**
    file is on plan 1 §2's exclusion list — and a one-way pointer is worse than none, since
    the point is that a later consolidation finds both. **Both comments land here, together,
    in the same commit.** No executable line in `calculator.py` may change.
+3. **`app/beyo_manager/domain/item_economics/price_scenario.py` — N11's other half, comment
+   only.** The second of the two cross-reference comments, beside `_shape_error` at
+   `:53-57`, naming `calculator.py:124-128`. **This is the entire authorization for touching
+   this file**: one comment. No executable line may change, and the arithmetic is APPROVED
+   and out of scope. Added 2026-08-19 after the implement r1 blocker — exception 2 was
+   unsatisfiable without it.
 
 ## 3. Tasks
 
@@ -172,7 +187,7 @@ phase-1 note. **Nothing else in a phase-1 file may change.**
 | C13 | **Service identity** (service-identity rule): the route's mount is guarded by `calls[0][0] is get_task_price_scenario`, never by status code + call count. **This needs a NEW test function in `test_item_economics_router.py`** (L10) — the cited precedent lives in `test_budget_status_route_is_available_to_all_roles` (`:135-143`), which is parametrized over `_ALL_ROLE_ROUTES`, the list this route must **not** join; and the two `_ROUTES` parametrizations assert only `403` + `calls == []` and `200` + `len(calls) == 1`. §2 describes that file as a one-row edit; it is one row **plus this function**. |
 | C19 | **The typical map is built defensively** (L13): a participating section with **no row** from `typical_times_statement` — reachable when its `WorkingSection` is deleted — resolves through `.get()` to a `None` typical and is counted in `sections_without_sample`. `sections_total` counts sections derived from **steps**, never from the statement's rows; a `KeyError` here would be a 500 on an ordinary data state. |
 | C14 | **`divide_production_budget` is not called** by this feature (§10's first cut). Asserted, not assumed — a criterion, because the allocator is the obvious thing for an implementer to reach for when it sees "sections". |
-| C16 | **The two carried exceptions land** (§2): the discriminating `Q = 0` row asserts `slider_domain(8_919, 0, 0) == slider_domain(8_919, 1, 0)` and reddens under `max(6, quantity)`; both `_shape_error` cross-reference comments exist, each naming the other's path. |
+| C16 | **The three carried exceptions land** (§2). (a) The discriminating `Q = 0` row asserts the **exact literal** `slider_domain(8_919, 0, 0) == SliderDomain(step_minor=110, min_minor=3_080, max_minor=12_100)` and reddens under `max(1, quantity) → max(6, quantity)` at `slider_domain`'s definition (the mutation returns `114 / 3_078 / 12_084`). **Never a call-to-call equality** — `f(0) == f(1)` is invariant under that mutation at every `B`, which is the defect this row exists to remove. (b) Both `_shape_error` cross-reference comments exist, each naming the other's path, and **both land in the same commit** — a one-way pointer defeats the purpose. *Corrected 2026-08-19 at the implement r1 blocker: this criterion still carried the retired equality form after §2 had been fixed, so the plan contradicted itself.* |
 | C17 | **Purity is NOT extended to the query service — decided here, not left to the handoff** (L17). A purity assertion cannot bind an I/O module: the query service exists to hold a session and ORM queries, so the forbidden-prefix set has no meaning for it. And phase 1's assertion lives in `test_price_scenario.py`, which §2 opens for exactly one edit — extending it there would be a scope breach. **N6 is therefore recorded and closed, not carried further**: if a future phase ever does extend a C21-style assertion, it must handle **relative imports** (N6): `ast.ImportFrom` with `level > 0` carries a partial `node.module` that no forbidden prefix matches, and `from . import x` has `node.module is None` and is skipped entirely. Theoretical in this repo — `app/beyo_manager` contains zero relative imports — which is exactly why it would pass review unnoticed. If the assertion is **not** extended, say so in the handoff rather than leaving it ambiguous. |
 | C15 | **Teardown** (rule 11½): every test committing rows deletes them in `finally`; the residue check names its tables. The baseline's ~24 `task_steps` / ~40 `step_state_records` drift is inherited and is never read as evidence. |
 

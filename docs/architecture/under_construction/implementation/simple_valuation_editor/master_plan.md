@@ -187,6 +187,17 @@ rather than merely inherited:
   N3). Plan 1 task 4 did this for C13 — which is why C13's inability to bite was recorded as
   a confirmed reading instead of raised as a finding. Where a criterion *can* bite, name the
   mutation; where it cannot, say so and why.
+- **When a correction lands in two places, fix both in the same edit — a criterion is a
+  place** (implement r1 blocker, 2026-08-19). L1's fix was applied to `plan_2.md` §2 and not
+  to C16, which still carried the retired equality form; the plan then contradicted itself
+  and blocked an implementer session. **After amending a plan's task or perimeter text, grep
+  the criteria for the old form.** The charter's home-artifact rule stops a change being
+  patched *downstream*; it does not stop one being applied *incompletely* within its home.
+- **A perimeter stated as a blanket prohibition must be narrowed the moment an exception
+  needs it** (same blocker). §2 read "No change to `price_scenario.py`" while an enumerated
+  exception required a comment in that very file. Both statements were mine and one had to
+  give. Prefer *"no change to any executable line"* over *"no change"* wherever a
+  comment-only exception is foreseeable.
 - **The mutation check is on the ASSERTION FORM, not on the fixture** (phase 2 projection,
   L1 — earned against the coordinator, immediately after the rule below and in the act of
   applying it). The fix for N8 replaced a non-discriminating fixture with a discriminating
