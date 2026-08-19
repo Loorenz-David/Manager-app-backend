@@ -164,8 +164,10 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
     # valuation and the preview inputs that get_task_budget_status has already loaded —
     # roughly eight redundant round trips on the common no-evaluation branch. Collapsing
     # it means returning those objects from get_task_budget_status, whose TaskBudgetStatus
-    # carries item_id and no objects and is a contract other screens consume. Reusing this
-    # service is also what keeps status, binding and the tenant boundary identical to them.
+    # carries item_id and the evaluation result but none of the objects re-read here — not
+    # the Task, the Item, the selection, the terms or the valuation — and is a contract
+    # other screens consume. Reusing this service is also what keeps status, binding and
+    # the tenant boundary identical to them.
     budget_status = await get_task_budget_status(ctx)
     task, item = await _load_task_and_item(ctx)
     typical = await _typical_block(ctx, task.client_id)

@@ -885,6 +885,141 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
 
 
 @pytest.mark.integration
+async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
+    db_session,
+    monkeypatch,
+) -> None:
+    token = uuid4().hex[:10]
+    workspace = Workspace(client_id=f"ws_price_del_{token}", name=f"Deleted {token}")
+    user = User(
+        client_id=f"usr_price_del_{token}",
+        username=f"price_del_{token}",
+        email=f"price_del_{token}@example.test",
+        password="test",
+    )
+    item = Item(
+        client_id=f"itm_price_del_{token}",
+        workspace_id=workspace.client_id,
+        item_major_category_snapshot="wood",
+        quantity=6,
+        created_by_id=user.client_id,
+    )
+    # The realistic post-delete state: delete_item_valuation.py:delete_item_valuation sets
+    # is_deleted with superseded_at still null, and it is reachable from the live route
+    # routers/api_v1/item_economics.py:route_delete_item_valuation. The partial index
+    # uix_item_valuations_current covers live rows only, so this row is legal.
+    deleted = ItemValuation(
+        client_id=f"ival_price_del_{token}",
+        workspace_id=workspace.client_id,
+        item_id=item.client_id,
+        expected_sale_price_minor=910_000,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        created_by_id=user.client_id,
+        is_deleted=True,
+        deleted_at=datetime(2026, 8, 19, 8, 0, tzinfo=timezone.utc),
+        deleted_by_id=user.client_id,
+    )
+    objects = _scenario_objects()
+    objects.task.client_id = f"tsk_price_del_{token}"
+    objects.task.workspace_id = workspace.client_id
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+    item_id = item.client_id
+
+    async def fake_status(_ctx):
+        return SimpleNamespace(
+            status=EconomicsStatusEnum.NOT_EVALUATED,
+            item_binding="bound",
+        )
+
+    async def fake_task_and_item(_ctx):
+        return objects.task, item
+
+    async def fake_preview(_ctx, _item):
+        return objects.selection, objects.terms
+
+    async def fake_typical(_ctx, _task_id):
+        return {
+            "total_seconds": 12_300,
+            "is_estimated": False,
+            "sections_without_sample": 0,
+            "sections_total": 4,
+            "method": "median_completed_section_totals",
+            "window_days": 90,
+            "min_sample_size": 5,
+        }
+
+    monkeypatch.setattr(module, "get_task_budget_status", fake_status)
+    monkeypatch.setattr(module, "_load_task_and_item", fake_task_and_item)
+    monkeypatch.setattr(module, "_load_preview_inputs", fake_preview)
+    monkeypatch.setattr(module, "_typical_block", fake_typical)
+
+    try:
+        db_session.add_all([workspace, user])
+        await db_session.flush()
+        db_session.add(item)
+        await db_session.flush()
+        db_session.add(deleted)
+        await db_session.commit()
+
+        result = await module.get_task_price_scenario(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace.client_id,
+                    "user_id": user.client_id,
+                    "role_name": "manager",
+                },
+                incoming_data={"task_client_id": objects.task.client_id},
+                query_params={},
+                session=db_session,
+            )
+        )
+
+        # serialize_task_price_scenario emits `saved` wholesale: with the row hidden there is
+        # no dict to hold valuation_id, expected_sale_price_minor or created_by, so this one
+        # assertion is the strictest available form of all three. Drop
+        # is_deleted.is_(False) from _current_valuation and `saved` becomes a dict carrying
+        # the deleted row's ID, 910000, and this user's byline.
+        assert result["saved"] is None
+        assert result["currency"] is None
+        # The deleted row would also readmit commit: task ASSIGNED, selection OK, currencies
+        # agreeing and no purchase term leave valuation-presence as the only false conjunct.
+        assert result["can_commit"] is False
+    finally:
+        await db_session.rollback()
+        await db_session.execute(
+            delete(ItemValuation).where(ItemValuation.workspace_id == workspace_id)
+        )
+        await db_session.execute(delete(Item).where(Item.client_id == item_id))
+        await db_session.execute(delete(User).where(User.client_id == user_id))
+        await db_session.execute(
+            delete(Workspace).where(Workspace.client_id == workspace_id)
+        )
+        await db_session.commit()
+
+    valuation_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(ItemValuation)
+        .where(ItemValuation.workspace_id == workspace_id)
+    )
+    item_residue = await db_session.scalar(
+        select(func.count()).select_from(Item).where(Item.client_id == item_id)
+    )
+    user_residue = await db_session.scalar(
+        select(func.count()).select_from(User).where(User.client_id == user_id)
+    )
+    workspace_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(Workspace)
+        .where(Workspace.client_id == workspace_id)
+    )
+    assert valuation_residue == 0
+    assert item_residue == 0
+    assert user_residue == 0
+    assert workspace_residue == 0
+
+
+@pytest.mark.integration
 def test_c14_query_service_does_not_call_the_budget_divider() -> None:
     source = inspect.getsource(module)
 

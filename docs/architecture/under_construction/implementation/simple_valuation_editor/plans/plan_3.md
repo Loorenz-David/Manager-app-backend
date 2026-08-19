@@ -2,7 +2,7 @@
 
 ```
 plan: 3
-state: FIX r2 APPLIED; two coordinator findings open — fix r3 prompt compiled
+state: FIX r3 APPLIED; both coordinator findings closed — re-review r4 prompt compiled
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; every expected value was computed by review r1
       and is quoted below. Justification recorded per charter.
