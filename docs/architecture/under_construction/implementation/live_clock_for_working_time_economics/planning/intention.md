@@ -1,13 +1,14 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED and PLAN-READY (rounds 4a–4d, 2026-08-20; latest fold **round 4d**)
+status: RESOLVED and PLAN-READY (rounds 4a–4e, 2026-08-20; latest fold **round 4e**)
         — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
         2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
         §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
-        findings, owner-dispositioned). Rounds 4b–4d fold phase-1 findings upstream
-        (see the changelog); **4d corrects 4c** on HC-3A's failure site — read 4d as
-        the standing statement. Next: phase 2 (planning is DONE; phase 1 APPROVED).
+        findings, owner-dispositioned). Rounds 4b–4e fold phase-1 and plan-2-projection
+        findings upstream (see the changelog); **4d corrects 4c** on HC-3A's failure
+        site — read 4d as the standing statement. Next: phase 2 implement prompt
+        (planning DONE; phase 1 APPROVED; plan 2 projection folded at 4e).
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md
@@ -177,6 +178,21 @@ things are pinned:
   clock read survives only where this pipeline's determinism contract does not reach;
   within the three surfaces, one request is one `now`, cutoff included.
 
+  **Round 4e — the second instance of E-A's own construct, found by plan 2's projection
+  r0 (§2.3A fourth correction).** `today_utc()` reaches `resolve_economics_selection`
+  from **two** places on this pipeline's surfaces:
+  `get_task_budget_allocations.py:get_task_budget_allocations` (E-A, brought under
+  `ctx.now.date()` by plan 2) and
+  `_common.py:_load_preview_inputs` (E-B both faces, and E-P and the price scenario
+  through composition, on the no-committed-evaluation branch). Both come under the
+  injected `now` as `now.date()`, for the same reason and with the same
+  behaviour-preserving character: `_load_preview_inputs` gains `now: datetime | None =
+  None` whose default preserves the existing read for its command-side callers, and the
+  two query services pass `ctx.now`. Leaving only one of the two converted is the split
+  this pipeline exists to remove, reintroduced through the configuration date — and it
+  would be the one remaining counterexample to the sentence above. Guarded per call site
+  by a stub row on the same shape as round 4b's (plan 2 C12).
+
 ---
 
 ## 2. Grounding — what exists today (verified 2026-08-19, all paths read this session)
@@ -261,6 +277,26 @@ typical block, and the working-sections surface itself. The term set was right; 
 scope excluded a callee module — record the scope as the call graph, not the
 directory. Resolution in HC-3A's scope bullet below; T1's byte-identity for E-P and
 E-A rests on it.
+
+**Fourth correction (round 4e, projection r0 on plan 2 — the scope rule again, one
+package further out).** The corrected search of round 4b covered the query packages and
+the typicals callee. It did not enter
+`services/commands/item_economics/_common.py`, which
+`get_task_budget_status.py:get_task_budget_status` and
+`get_task_budget_status_worker.py:get_task_budget_status_worker` import from:
+`_common.py:_load_preview_inputs` calls `_common.py:today_utc` and hands the result to
+`configuration.py:resolve_economics_selection`. That is a wall-clock read on the E-B,
+E-P and price-scenario request paths, on the no-committed-evaluation branch. It is the
+**same construct** as E-A's `today_utc()` — the instance §2.3A named and the class it
+did not. Verified at source by the coordinator before folding (the import at
+`get_task_budget_status.py:29`, the call at `_common.py:203`). Consequence had it stayed
+unnamed: after phase 2, E-A would resolve its economics selection from `ctx.now.date()`
+while E-B/E-P resolved theirs from a fresh clock read, so a UTC date rollover mid-request
+could select different basis/cost-model versions and report a different `status` for the
+same task — on the branch where `actual_worker_seconds` is `None`, which HC-5's own
+tests cannot see. **Fifth instance of the verification-scope rule in this family**
+(directory → term set → suite → call graph → the command package a query service
+imports from).
 
 Second correction, same paragraph: the sweep's IO wrapper has **five** production
 callers, not two — `get_worker_daily_step_breakdown.py`, `list_workers_totals.py`,
@@ -1590,3 +1626,25 @@ fifth node to that list without catching the count — corrected to "four", with
 provenance note left inline. Status → **RESOLVED and PLAN-READY (round 4a)**.
 Calibration outcome and the gate's tracker row live in `master_plan.md` §3/§7. Next:
 **implementation planning**.
+
+**Round 4e — 2026-08-20, plan 2 projection r0 folded (one upstream finding).** The
+projection's U1: §2.3A's *corrected* absence claim was scope-limited again, one package
+further out than round 4b's. `_common.py:_load_preview_inputs` — imported by
+`get_task_budget_status.py:get_task_budget_status` and
+`get_task_budget_status_worker.py:get_task_budget_status_worker` — calls
+`_common.py:today_utc` and feeds it to `configuration.py:resolve_economics_selection`.
+That is a wall-clock read on the E-B, E-P and price-scenario request paths, and it is
+the **same construct** as E-A's `today_utc()`, the one instance §2.3A did name. Fifth
+instance of the verification-scope rule in this family (directory → term set → suite →
+call graph → the command package a query service imports from). §2.3A carries the
+fourth correction; §1A HC-3A's scope bullet carries the resolution (additive `now`
+parameter with a default that preserves the command-side callers' read; the two query
+services pass `ctx.now`). Verified at source by the coordinator before folding.
+**Disposition — coordinator's, no owner card:** the conversion enters **plan 2's**
+perimeter (task 4b, criterion C12) rather than being recorded as a scoped-out gap,
+because converting E-A's instance and not this one would leave a live counterexample to
+HC-3A's "within the three surfaces, one request is one `now`" — a cross-surface `status`
+disagreement at a UTC date rollover, on the branch where `actual_worker_seconds` is
+`None` and HC-5's own tests cannot see it. This widens phase 2's file perimeter into
+`services/commands/item_economics/`, named explicitly in `plans/plan_2.md` §3 and §7.
+No product semantics, shipped promise, or D1–D9 decision moved.

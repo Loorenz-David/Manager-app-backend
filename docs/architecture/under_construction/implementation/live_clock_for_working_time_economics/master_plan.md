@@ -1,11 +1,11 @@
 # Master plan — live_clock_for_working_time_economics
 
 ```
-state: IN PROGRESS. Gate PASSED; phase 1 APPROVED (`d21fe9e`); phase 2
-       PROMPT_READY (projection r0); phases 3–4 NOT_STARTED.
-       Next: hand `prompts/reviewer/2026-08-20_phase2_projection_r0.md` to a
-       projection session. §3's tracker is the authority on state — this line is a
-       convenience and is refreshed at every gate.
+state: IN PROGRESS. Gate PASSED; phase 1 APPROVED (`d21fe9e`); phase 2 **PROJECTED**
+       (r0 folded, 22 rows routed, intention at round 4e); phases 3–4 NOT_STARTED.
+       Next: compile the phase 2 implement prompt into `prompts/implementer/`.
+       §3's tracker is the authority on state — this line is a convenience and is
+       refreshed at every gate.
 date: 2026-08-20 (header refreshed after phase 1 approval)
 coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md
              — that document is SUPERSEDED as an instruction set; see its banner)
@@ -60,7 +60,8 @@ Newest state first; superseded rows kept as provenance.
 | 1 | *(prior row — implement prompt compiled)* | *superseded* | 2026-08-20 | coordinator | Implement prompt at `prompts/implementer/2026-08-20_phase1_implement_r1.md` — goldens-first sequencing as a hard constraint, delegations D1–D3 carried, mutation-ledger obligations inline, baseline 26/2436/1 + ID set referenced. |
 | 1 | *(prior row — projection folded)* | *superseded (PROJECTED)* | 2026-08-20 | Fable 5 (projection r0) + coordinator (fold) | Verdict `AMENDMENTS_REQUIRED`, 0 owner cards, 12 ledger rows — **all routed before the implement prompt**: 8 plan amendments applied verbatim into `plans/plan_1.md` (headline: the E-A golden must be one single-task call per task — its task `SELECT` has no `ORDER BY`, so a batched byte-golden is order-luck; C10's expire-then-dirty order passed under the exact HC-1A assignment it guards; T2's "production transition path" pinned to `_step_transition_core.py:_apply_step_transition(now=t)` since `transition_step_state` stamps its own clock; C7's anchor mutation needs >1-day separation or the buffer swallows it), 3 written delegations (plan 1 §6), 1 upstream (L3: the typicals cutoff wall-clock read §2.3A missed — intention round 4b + plan 2 C11 + the §6 fact correction here). Coordinator verified L3/L5/L4 at source before applying; the citation fix was class-swept (3 sites, projection saw 1). Baseline re-measured at `2711b58` (A4): **26 / 2436 / 1**, ID set enumerated in §6; count matches history, no repeat owed. Projection perimeter: exactly its one handoff file ✓. Next: implement prompt. |
 | 1 | *(prior row — projection prompt compiled)* | *superseded* | 2026-08-20 | coordinator | Prompt at `prompts/reviewer/2026-08-20_phase1_projection_r0.md` — fresh-session inputs only, depth on the loader arithmetic / T2 ledger / golden determinism / clock boundary. |
-| 2 | The three surfaces live: the fold (N-2), E-P one-map composition, E-A batch + `today_utc()`→`ctx.now.date()`, the typicals `now` shim; C1–C11 | **PROMPT_READY (projection r0)** | 2026-08-20 | coordinator | `plans/plan_2.md` refreshed against what phase 1 actually shipped (loader signature and its fails-closed guard, `ctx.now`, the goldens) and its read-first list extended to plan 1 §5/§7 and §5's nine new rules. Projection prompt at `prompts/reviewer/2026-08-20_phase2_projection_r0.md` — fresh-session inputs only; depth on the fold's **population equality** (a silent divergence moves a headline without its rows), E-P's composition and the one-map contract, E-A's batch keying and call counts, the typicals shim's inertness, C1's golden invariance through the new code path, and C9's constructibility. Implement prompt compiles only after the ledger is fully routed. |
+| 2 | The three surfaces live: the fold (N-2), E-P one-map composition, E-A batch + `today_utc()`→`ctx.now.date()`, the typicals `now` shim **+ the config-date shim (round 4e)**; C1–C12 | **PROJECTED** | 2026-08-20 | Opus 5 (projection r0) + coordinator (fold) | Verdict `AMENDMENTS_REQUIRED`, **0 owner cards, 22 ledger rows — all routed before the implement prompt**: 12 amendments applied verbatim (A1–A4, A7–A10, A12–A15), 6 written delegations recorded as **D4–D9** in `plans/plan_2.md` §6, 1 upstream fold (**U1 → intention round 4e**). Headlines: C4's invocation counter must sit on **all three** consumer bindings and its fixture needs a committed evaluation or the fold never runs; E-A's `today_utc()` mutation is inert without a `effective_from` straddle; C5's "fresh session" is unconstructible on the rollback-scoped `db_session`, and the dirty-check must precede `expire_all()`; E-A must **not** gain a `selectinload` (it would silently move `allowance_seconds` through `_governing_step`). Coordinator verified every load-bearing claim at source before applying (11 of them, listed in plan 2 §7) and **re-measured the baseline independently: 26 / 2459 / 1, failing-ID set `comm`-diffed empty in both directions** — §6 now carries both baselines (A14; plan 2 §2 and the orientation banner had both cited §6 for a figure it did not hold). **Three amendments corrected by the coordinator before entering the tree:** **F-A6** (blocking, measured) — A6's row could not fail, because `_governing_step`'s last-applied stable sort is primary and A6's own fixture pinned distinct `entered_at`; split into two measured fixtures, one per field, with the inertness of the wrong pairing measured too (**eighth** instance of the class, **second** arriving inside a correction of that class); **F-A5** — the criterion contradicted delegation D7 from the same handoff (strict indexing turns the stated divergence into a `KeyError`), re-anchored to the E-B face; **F-A11** — the widen-the-perimeter amendment enumerated 4 of 7 suites, omitting E-A's own. **U1 disposition, coordinator's call:** `_load_preview_inputs`'s `today_utc()` conversion is brought **into** phase 2 (task 4b + **C12**) rather than deferred — same construct as E-A's, and leaving one converted and one not would ship a live counterexample to HC-3A. Perimeter widened into `services/commands/item_economics/`, named explicitly. Three rules earned into §5. Next: the phase 2 implement prompt. |
+| 2 | *(prior row — projection prompt compiled)* | *superseded (PROMPT_READY, projection r0)* | 2026-08-20 | coordinator | `plans/plan_2.md` refreshed against what phase 1 actually shipped (loader signature and its fails-closed guard, `ctx.now`, the goldens) and its read-first list extended to plan 1 §5/§7 and §5's nine new rules. Projection prompt at `prompts/reviewer/2026-08-20_phase2_projection_r0.md` — fresh-session inputs only; depth on the fold's **population equality**, E-P's composition and the one-map contract, E-A's batch keying and call counts, the typicals shim's inertness, C1's golden invariance through the new code path, and C9's constructibility. | `plans/plan_2.md` refreshed against what phase 1 actually shipped (loader signature and its fails-closed guard, `ctx.now`, the goldens) and its read-first list extended to plan 1 §5/§7 and §5's nine new rules. Projection prompt at `prompts/reviewer/2026-08-20_phase2_projection_r0.md` — fresh-session inputs only; depth on the fold's **population equality** (a silent divergence moves a headline without its rows), E-P's composition and the one-map contract, E-A's batch keying and call counts, the typicals shim's inertness, C1's golden invariance through the new code path, and C9's constructibility. Implement prompt compiles only after the ledger is fully routed. |
 | 3 | D9: the two frozen-percent feed sites (N-4) + T13 both rows, re-commit immunity | NOT_STARTED | 2026-08-20 | — | `plans/plan_3.md`. Projection REQUIRED (money/percent derivation = rule-6). |
 | 4 | Closeout handoff (six §7 obligations, headline: retire the frontend's interim flag) + the five-node graph delta | NOT_STARTED | 2026-08-20 | — | `plans/plan_4.md`. Projection **WAIVED**: documentation only, no mechanism — waiver recorded here per charter. Full review round regardless. |
 | — | Mechanism-inventory gate over the intention's mechanisms (M-1…M-9, §7 trigger table) | **PASSED** | 2026-08-20 | Opus 5 (inventory) + owner (D8–D9) + coordinator (fold) | Nine mechanisms swept, 11 lettered sections added (+758/−5), nothing renumbered. Session verdict `OWNER_DECISIONS_PENDING`; both cards answered the same day (**D8** ship-and-disclose the settlement window, **D9** freeze the frozen blocks whole) and folded at round 4a → **PASS**, no second reviewer session (no card branch changed a contract, only behaviour). Coordinator verified at consumption rather than reading the ledger: perimeter matches `git diff` exactly (the one undeclared `app/` change in the tree — `items/lookup/` — is the owner's concurrent item-lookup work, excluded from every pipeline commit); **12 load-bearing claims re-verified at source** (sync-close + async-enqueue in `_step_transition_core.py`, the flag disjunction and `_BUCKET_STATE` in `averaged_time.py`, `uix_step_state_records_active`, the worker-face `percent_consumed` branch, settlement's single `int(round(Σ))` across users, the 8-member enum, `DivisionStep`, `today_utc()` in E-A's loop, `_MAX_TASK_IDS = 50`, `FALLBACK_POLL_SECONDS = 30`, `max_try = 3`); all four §3.2 worked examples re-followed. **Calibration (seal opened at the fold, §7)**: H1 and H2 found and exceeded — H2's own arithmetic corrected, the per-user denominator is *impossible*, not merely loose; **H3 missed by the sweep** (§8's three-vs-four count), fixed at the fold as a coordinator finding. T1's named mutation proved inert and rewritten as T1′ — the both-sides rule biting a fourth time, this round on the coordinator lineage's own artifact. Unilateral resolutions U1–U9 recorded in the handoff; none reopens D1–D7; ratified by the owner's round-4a acceptance. Commits `da4ebcd` (scaffolding) → `e2e7c24` (gate delta) → gate-close commit. |
@@ -247,16 +248,49 @@ restated because they are load-bearing here:
   consumption of implement r1). The same named mutation applied to one of two uses
   of `now` reddens 11 tests; applied to both, 12. Two shapes, two observations —
   a ledger row that does not say which shape it ran is not reproducible.
+- **Where a sort is a stack of stable sorts, only the last one applied is primary —
+  a field below it is observable only on a fixture that ties every key above it**
+  (coordinator, plan 2 projection r0 consumption, F-A6). `budget_division.py:_governing_step`
+  sorts by `client_id`, then `created_at`, then `entered_at`; a criterion written to
+  prove the substituted row carries `created_at` specified a fixture with **distinct**
+  `entered_at`, where `created_at` is never consulted — the mutation left the governing
+  step unchanged on both sides. One field per fixture, each tying the keys above it,
+  and **measure the ordering against the real function before writing the row**: the
+  arithmetic of a sort stack is not readable off the criterion's prose. Eighth instance
+  of the row-that-cannot-fail class, second to arrive inside a correction written to
+  fix that class.
+- **An amendment that widens a perimeter is itself an enumeration, and inherits
+  "enumerate, never sample"** (coordinator, same consumption, F-A11). The amendment
+  raised precisely because C10's blast-radius perimeter was too narrow listed four of
+  the seven suites that reach the changed function — omitting the one belonging to the
+  surface the phase rewrites hardest. Generate such a list mechanically (`grep -rln`
+  over `tests/`) and record **each entry's mode of contact** (executes it / drives it
+  with a hand-rolled session / references it by identity), because "reaches" is not one
+  relationship and the remedy differs per mode.
+- **A delegation and a criterion authored in the same handoff can contradict each
+  other** (coordinator, same consumption, F-A5). D7 granted strict indexing of the live
+  map; A5's criterion stated a value divergence that strict indexing converts into a
+  `KeyError`. Both were individually right. When consuming a ledger, cross-read the
+  delegations against the criteria they touch — the rows are written independently and
+  nothing inside the handoff does that check.
 
 ## 6. Environment
 
 - Working directory `backend/app/`; tests `PYTHONPATH=. pytest -m 'not e2e'`. The bare
   `make test` form fails collection (`ModuleNotFoundError: beyo_manager`) in some shells.
-- **Start baseline, re-measured by this coordinator 2026-08-20 on a clean tree at
-  `2711b58`: 26 failed / 2436 passed / 1 deselected** (supersedes the `a0aaacc`
+- **Start baseline, pre-phase-1, re-measured by this coordinator 2026-08-20 on a clean
+  tree at `2711b58`: 26 failed / 2436 passed / 1 deselected** (supersedes the `a0aaacc`
   measurement of 26/2433/1 — commit `6c15678` added/changed item-lookup tests, +3
-  passed, failed set unchanged; re-measure forced by projection r0 finding L4). The
-  26 are inherited and pre-existing; none is in `item_economics`. **The enumerated
+  passed, failed set unchanged; re-measure forced by projection r0 finding L4).
+- **Current baseline, phase 1 approved: 26 failed / 2459 passed / 1 deselected** —
+  measured by plan 2's projection r0 at `0151775` and **re-measured independently by
+  the coordinator at the same tree**, 123.97 s. The +23 are phase 1's own tests. The
+  failure-ID set is **unchanged between the two baselines** and is what every criterion
+  compares against; both coordinator runs `comm`-diffed empty in both directions
+  against the enumeration below. Cite *this* line for a phase-2 baseline, not the
+  pre-phase-1 one (plan 2 projection r0, A14 — plan 2 §2 and the superseded-orientation
+  banner at `646fb9a` both cited §6 for `2459` while §6 carried only `2436`).
+  The 26 are inherited and pre-existing; none is in `item_economics`. **The enumerated
   failure-ID set C1 compares against:**
 
   ```

@@ -36,11 +36,15 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 ## 2. Read first
 
 1. `master_plan.md` §4 (N-1…N-4), §5 — **including the nine rules earned in phase 1**,
-   which bind here — and §6 (the four-caller table fact; the baseline **26 / 2459 / 1**
-   with its enumerated ID set; the third-flake and `TZ` environment facts).
-1b. `plans/plan_1.md` §5 (C9 and C11/C12 as amended — the shapes this phase's criteria
-   are modelled on), §6's structural-facts note, and §7's Review log: six rounds of
-   findings, every blocking one in a plan or review artifact rather than in code.
+   which bind here — and §6 (the four-caller table fact; the **current** baseline
+   **26 / 2459 / 1** with its enumerated ID set — §6 now carries both baselines, cite
+   the phase-1-approved one; the third-flake and `TZ` environment facts).
+1b. `plans/plan_1.md` §5 — **C5** (the `_apply_step_transition` close-at-`t` recipe
+   this phase's C6 and C9 both reuse; `transition_step_state` cannot be used),
+   **C10** (the dirty-check-before-expire assertion order this phase's C5 reuses),
+   and C9/C11/C12 as amended — §6's structural-facts note and its three written
+   delegations, and §7's Review log: six rounds of findings, every blocking one in a
+   plan or review artifact rather than in code.
 2. Intention §1A (HC-1A, HC-3A scope — E-A's `today_utc()`), §4.1 + §4.1A (the field
    table, the fold, the composition contract and per-caller declaration table), §4.2,
    §4.3 + §4.3A (the three allowance paths — path 3 is the expensive mistake), §2.6
@@ -71,6 +75,36 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
   sweep is shared across tasks — §3.4A B); `DivisionStep` substitution per task;
   headline `actual_seconds` from the map; `today_utc()` → `ctx.now.date()` resolved
   **once before the loop** (HC-3A scope).
+
+  **E-A's step-load options are unchanged — no `selectinload` is added** (projection
+  r0, A7). The service selects steps with no eager load, and
+  `budget_division.py:_loaded_latest_state_record` reads `step.__dict__` and yields
+  `None` without emitting SQL, so `_governing_step` orders E-A's candidates by
+  `created_at` / `client_id` alone. Both obvious resolutions are defects: building
+  `DivisionStep(latest_state_record=step.latest_state_record)` triggers a lazy load on
+  an async session (`MissingGreenlet` — loud), and "fixing" that by adding
+  `selectinload(TaskStep.latest_state_record)` **silently moves E-A's
+  `allowance_seconds` and `left_seconds`**, because a section whose steps are all
+  COMPLETED takes `_section_step_allowances`'s `else` branch and hands the residual to
+  whichever step `_governing_step` returns — an ordering that changes the moment the
+  relationship is loaded. The substituted row therefore carries **exactly what the
+  allocator would read today**: `budget_division._loaded_latest_state_record(step)`.
+  Importing that private helper is the house precedent (`get_task_price_scenario.py`
+  already imports `_median` and `_step_state_is_excluded` from the same module).
+- `app/beyo_manager/services/commands/item_economics/_common.py` — **additive only,
+  and this is a deliberate widening of the perimeter into the commands package**
+  (coordinator's disposition of projection r0's U1; intention round 4e).
+  `_load_preview_inputs` gains `now: datetime | None = None`; `None` preserves today's
+  `today_utc()` read for its command-side callers, and it passes `now.date()` to
+  `configuration.py:resolve_economics_selection` when given one. The two query
+  services that import it — `get_task_budget_status.py:get_task_budget_status` and
+  `get_task_budget_status_worker.py:get_task_budget_status_worker` — pass `ctx.now`.
+  **Why it is in scope:** this is the *same construct* as E-A's `today_utc()`, which
+  task 3 already converts, on the E-B / E-P / price-scenario request path; converting
+  one instance and not the other leaves a live counterexample to HC-3A's "within the
+  three surfaces, one request is one `now`" and a cross-surface `status` disagreement
+  at a UTC date rollover. Nothing else in the commands package is touched, and no
+  command-side caller changes behaviour. Covered by C12.
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py` —
   only if the `_build_evaluated_status` threading requires a call-site change; expected
   unchanged (it inherits the fold).
@@ -98,7 +132,12 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 4. The typicals cutoff under `ctx.now` (intention HC-3A round 4b): the additive
    parameter and the two call sites (E-P's `typical_times_statement(...)` call and
    E-A's `_load_typicals`).
-5. Tests C1–C11, mutation ledger per master plan §5.
+4b. The configuration-date read under `ctx.now` (intention HC-3A round 4e): the
+   additive `now` parameter on `_common.py:_load_preview_inputs` and the two query
+   call sites (`get_task_budget_status`, `get_task_budget_status_worker`). Same shim
+   shape as task 4 — a default that preserves the existing read for callers outside
+   this pipeline.
+5. Tests C1–C12, mutation ledger per master plan §5.
 
 ## 5. Acceptance criteria
 
@@ -113,66 +152,409 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 - **C3 — T6 coherence** (§5.2 criterion 3, HC-5): one open record;
   `budget.actual_worker_seconds == Σ sections[].worked_seconds`; per row
   `left_seconds == allowance_seconds − worked_seconds`; `share_state` consistent with
-  the figures beside it. Plus the population row: a task carrying one `SKIPPED` step —
-  headline still equals the fold over **all** non-deleted steps (§4.1A A).
+  the figures beside it.
+
+  Plus the population row (projection r0 A5, **as amended by the coordinator** — see
+  §7): a task carrying one `SKIPPED` step whose `total_working_seconds` is **non-zero**
+  (use `240`) — headline still equals the fold over **all** non-deleted steps
+  (§4.1A A), and `Σ sections[].worked_seconds` still includes it
+  (`budget_division.py:group_steps_by_section` keeps excluded steps in
+  `group["worked_seconds"]` — verified at source, measured `840`). At
+  `total_working_seconds = 0` on the SKIPPED step the two sides coincide at addition's
+  identity element and the row cannot fail (master plan §5, earned at plan 1 review r1
+  B1).
+
+  **Named mutation, definition site,
+  `get_task_budget_status.py:_build_evaluated_status`:** filter
+  `budget_division.EXCLUDED_STEP_STATES` out of the step set it hands the loader.
+  **Both sides**, task with one WORKING-open step at `600` live and one SKIPPED step at
+  `240` settled, **asserted on the E-B manager face** (headline only, no substituted
+  rows): contract `actual_worker_seconds == 840`; mutation `== 600` ⇒ red.
+  **Why E-B and not E-P for this row:** under delegation D7 the substituted rows index
+  the live map strictly, so the same mutation applied at E-P's or E-A's loader-input
+  site raises `KeyError` on the SKIPPED step's `client_id` instead of producing the
+  divergence — still red, but not the observable the row names, and a criterion states
+  what actually happens (charter rule 11: both sides for the *named* fixture). If the
+  implementer also probes the E-P/E-A site, the ledger records the raise as the
+  observed red, not a value comparison.
 - **C4 — T1′ row b (call sites, one per endpoint):** with `ctx.now` frozen and the
   loader's clock-stub in place, serving each endpoint twice yields byte-identical
   payloads and **loader invocations == 1 per request** (E-P's composition included —
-  this is the §4.1A D double-computation guard). **Named mutation, per endpoint at the
-  call site:** E-P passing `live_seconds=None` instead of its map ⇒ invocation count 2
-  ⇒ red; E-A restoring `today_utc()` inside the loop ⇒ its determinism row red.
+  this is the §4.1A D double-computation guard).
+
+  Each consumer binds the loader by name at import
+  (`from …live_worked_seconds import load_live_worked_seconds`), so a counter installed
+  on one module's attribute observes only that module's calls. The criterion's counter
+  is installed on **every** consumer binding —
+  `get_task_production_time.load_live_worked_seconds`,
+  `get_task_budget_status.load_live_worked_seconds`, and
+  `get_task_budget_allocations.load_live_worked_seconds` — and the assertion is over the
+  **total**. Contract: total == 1 per request for each of E-P, E-B manager face, E-B
+  worker face, E-A. Under the named mutation (E-P passes `live_seconds=None`) the total
+  is **2**, and a counter installed only at E-P's binding would read **1** under both
+  sides, because E-P keeps its own loader call to build its division rows and only the
+  second call moves — the row would be decoration.
+
+  **Fixture precondition, load-bearing:** the task carries a **committed,
+  non-superseded, non-deleted `ItemCostEvaluation`**.
+  `get_task_budget_status.py:get_task_budget_status` returns `_empty_status(…)` before
+  `_build_evaluated_status` on every other branch, so without the evaluation the fold
+  never runs, the mutation's second loader call never happens, and the total stays 1
+  under both sides. The same precondition makes E-B's contract total 1 rather than 0.
+
+  **Named mutations, per endpoint at the call site:**
+  - E-P passing `live_seconds=None` instead of its map ⇒ invocation total 2 ⇒ red.
+  - **E-A restoring `today_utc()` inside the loop** (call site,
+    `get_task_budget_allocations.py:get_task_budget_allocations`). This mutation only
+    bites on a fixture where the two dates select different configuration rows:
+    `today_utc()` and `ctx.now.date()` feed
+    `configuration.py:resolve_economics_selection`'s `on_date`, which filters basis and
+    cost-model versions through `configuration.py:is_applicable`. Fixture: a task in the
+    batch with **an item and no committed evaluation** (the only branch that reaches
+    this call — verified at source), `ctx.now = 2020-01-01T00:00Z`, and a
+    `ProductionCostBasisVersion` with `effective_from = 2020-06-01`. **Both sides:**
+    contract `status == "not_configured_no_basis_version"`; mutation (real today ≥
+    2020-06-01) `status == "ok"` or the valuation-derived status — differ ⇒ red.
+    Without the straddle the mutation is inert and the row proves nothing.
 - **C5 — T9 (HC-1A), three rows:** serve each endpoint against a task with an open
-  working record; re-read `task_steps.total_working_seconds` in a fresh session ⇒
-  unchanged. **Named mutation (loader call site in each service):** assign the live
-  figure onto `step.total_working_seconds` before division ⇒ column re-read `600` not
-  `0` ⇒ red (§9A T9's both sides).
-- **C6 — T12 allowances:** one payload with an open working record: every
-  `allowance_seconds` (sections and steps) byte-identical to the settled payload's;
-  honest-form rows per §9A T12 — no excluded step in the fixture has an open working
-  record (assert), `charged_seconds` computed from settled values (assert on the
-  division input). `typical` blocks byte-identical (path 3, §4.3A).
-- **C7 — T7 worker face:** the worker/seller serializer carries no monetary key while
-  its time fields are live — the existing key-walk family extended by one
-  live-state row; the live time fields equal the manager face's for the same fixture
-  (D5 — no split-brain).
+  working record; `task_steps.total_working_seconds` unchanged.
+
+  **Assert in this order, per endpoint:** (1) `session.dirty` contains no `TaskStep`;
+  then (2) `session.expire_all()`; then (3) re-read
+  `task_steps.total_working_seconds` and assert it is unchanged. This is plan 1 §5
+  C10's order, and the order is the criterion: `Session.expire_all()` **discards
+  un-flushed attribute changes**, so an expire-then-re-read form passes under the very
+  assignment this row exists to catch. In E-P and E-A the assignment would land after
+  the request's last `session.execute()`, so no autoflush rescues the row.
+
+  **Not "a fresh session".** `tests/conftest.py:db_session` is rollback-scoped and
+  these fixtures are flush-only, so a genuinely new session sees none of the fixture
+  rows and the contract-side assertion fails before any mutation is applied. The
+  same-session form above is the constructible one and is **the form that ships** — it
+  is not the implementer's to pick, because one of the two silently disarms the row.
+  (A committing fixture would owe a `try/finally` teardown — charter 11½.)
+
+  **Named mutation (loader call site in each service):** assign the live figure onto
+  `step.total_working_seconds` before division ⇒ column re-read `600` not `0` ⇒ red
+  (§9A T9's both sides).
+- **C6 — T12 allowances.** Serve the payload with an open working record; then close
+  that record through the production transition path and run
+  `_recompute_step_time_totals`; then serve again. Every `allowance_seconds` (sections
+  and steps) in the first payload is byte-identical to the second's. The close recipe is
+  plan 1 §5 C5's: `_step_transition_core.py:_apply_step_transition` with `now=t`
+  (`transition_step_state.py:transition_step_state` stamps its own clock and cannot
+  close at a pinned `t`). Honest-form rows per §9A T12 — no excluded step in the fixture
+  has an open working record (assert), `charged_seconds` computed from settled values
+  (assert on the division input). `typical` blocks byte-identical (path 3, §4.3A).
+
+  **Second and third rows — the substituted row carries every field the allocator
+  reads.** The goldens cannot guard this: both golden tasks hold exactly **one** step in
+  **one** section (`test_live_clock_goldens.py`, `tsp_live_clock_golden_idle` /
+  `tsp_live_clock_golden_frozen` — verified), so
+  `budget_division.py:_governing_step` has a single candidate and every field that only
+  affects **ordering** can be dropped from the substituted rows with the goldens still
+  byte-identical. `_governing_step` applies three stable sorts — `client_id` asc, then
+  `created_at` desc, then `latest_state_record.entered_at` desc — so **the last one
+  applied is the primary key**, and a field is only observable on a fixture that ties
+  every key above it. Each row therefore gets its own fixture (charter rule 2's
+  companion), both with **two steps in one section**, one holding an open working
+  record, asserting the full E-P `sections[]` and E-A `steps[]` payloads against those
+  produced from the same fixture through the un-substituted (settled) path.
+
+  Coordinator-measured against the real `_governing_step` (see §7):
+
+  - **Row 2 — `created_at`.** Fixture: the two steps' `latest_state_record.entered_at`
+    are **equal**; `created_at` distinct; `client_id` order contradicts `created_at`
+    order (the later-created step sorts *higher* by `client_id`). **Named mutation,
+    substitution site in `get_task_production_time.py`:** construct `DivisionStep`
+    omitting `created_at` (leaving its `None` default). **Both sides:** contract —
+    governing step is the later-created one, and `state_entered_at` /
+    `section_name_snapshot` follow it; mutation — the `created_at` sort goes inert and
+    the tie falls to the `client_id` order, moving the governing step to the other one
+    ⇒ red. Measured: `stp_b` → `stp_a`.
+  - **Row 3 — `latest_state_record`.** Fixture: `entered_at` **distinct** and ordered
+    *against* `created_at` (the later-entered step is the earlier-created one). **Named
+    mutation, same site:** construct `DivisionStep` omitting `latest_state_record`.
+    **Both sides:** contract — governing is the later-**entered** step; mutation — the
+    `entered_at` key ties at `None` for both, `created_at` takes over, governing moves
+    ⇒ red. Measured: `stp_b` → `stp_a`.
+  - **Do not merge these two fixtures.** On row 3's fixture the `created_at` mutation is
+    **inert** (measured: `stp_b` → `stp_b`) — distinct `entered_at` decides the order by
+    itself and nothing below it is ever consulted. A single fixture with distinct
+    `entered_at` carrying both mutations is the row-that-cannot-fail shape this project
+    has now recorded eight times.
+
+  The ten fields the allocator reads are enumerated in master plan §4, N-3.
+
+  **Fourth row — E-A's all-completed section.** A task with one section whose steps are
+  **all `COMPLETED`** (≥ 2 of them, distinct `created_at`), served through E-A: every
+  `allowance_seconds` and `left_seconds` byte-identical to the pre-substitution payload.
+  **Named mutation, `get_task_budget_allocations.py:get_task_budget_allocations`
+  step-load site:** add `.options(selectinload(TaskStep.latest_state_record))` ⇒ the
+  residual lands on a different step ⇒ red. Neither C1 nor C6's open-record rows can see
+  this: the goldens' sections hold one step each, and a section with an open working
+  record never reaches `_section_step_allowances`'s `else` branch.
+- **C7 — T7 worker face, one new integration row** in
+  `app/tests/integration/services/queries/item_economics/`. Serve one fixture — a task
+  with an open working record and a committed evaluation — through both faces on the
+  production path, and assert: (1) walking every key of
+  `serialize_task_budget_status(get_task_budget_status_worker(ctx),
+  include_monetary=False)` yields no key containing `_minor`, `cost`, `price`,
+  `currency`, `money` or `valuation` (the token walk at
+  `test_production_time_query.py:test_c14_c16_flat_time_only_degradation_and_tenant_boundary`
+  is the pattern); (2) the worker face's `actual_worker_seconds`,
+  `actual_worker_minutes`, `remaining_worker_minutes`, `percent_consumed` and
+  `variance_worker_minutes` equal the manager face's for that fixture, and are
+  **greater than** the same task's settled-basis values (D5 — no split-brain, and the
+  row is non-vacuous only because the live term is non-zero). **This is not an
+  extension of `tests/unit/services/queries/item_economics/test_phase8_serializers.py`:**
+  that family builds its status objects by hand, so it cannot carry a live field
+  without breaching charter rule 3, and it sits outside this phase's declared test
+  perimeter. **Named mutation,
+  `get_task_budget_status_worker.py:get_task_budget_status_worker`:** replace the
+  `_build_evaluated_status` delegation with the pre-phase settled aggregate ⇒ assertion
+  (2) red (intention §4.1A D, row 2 — "worker face silently stays settled").
 - **C8 — T8 cost shape:** one active worker across N batched tasks ⇒ exactly one
   open-record probe statement and one `compute_record_contributions` call
   (`count_queries` / call counting, never wall-clock); two workers ⇒ two calls. The
   50-task ceiling **measurement** is a Review-log obligation, not a criterion
   (charter rule 1; §9A T8) — record it there with the fixture shape.
+
+  **Named mutation, call site,
+  `get_task_budget_allocations.py:get_task_budget_allocations`:** move the
+  `load_live_worked_seconds` call **inside** the per-task loop, over that task's steps
+  only. **Both sides**, one active worker holding one open working record in each of
+  **3** batched tasks: contract — **1** open-record probe statement and **1**
+  `compute_record_contributions` call; mutation — **3** probe statements and **3**
+  wrapper calls, because the user's sweep is re-run once per task instead of once per
+  request (§3.4A B's "a worker's sweep is shared across all their steps"). The
+  two-worker row's contract side is 1 probe + **2** wrapper calls.
 - **C9 — T11 settlement window observed** (D8): open record → read E-P → close through
   the production transition **without** running the analytics worker → read E-P again
   ⇒ `worked_seconds` equals the pre-work settled value (the drop exists); then run
   `_recompute_step_time_totals` ⇒ value returns within ≤ 1 s per step (§3.3A).
-- **C10 — the price-scenario blast radius** (§2.6): the full existing price-scenario
-  suite green at this phase's head; if any test is time-dependent under the live
-  `_build_evaluated_status`, the fix is a frozen `ctx.now` in its fixtures — never a
-  change to the shipped service file. Review log records which of the two outcomes
-  happened.
+- **C10 — the `_build_evaluated_status` blast radius** (§2.6). N-2 changes that
+  function from a scalar SQL aggregate into a step load plus a loader call, so its
+  dependents can go red for **two** unrelated reasons, and the plan admits both
+  remedies: (a) *time dependence* under the live basis — remedy is a frozen `ctx.now`
+  in the affected fixtures, never a change to a shipped service file; (b) *statement
+  shape* — a suite driving the service with a hand-rolled session
+  (`test_price_scenario_query.py:_TypicalSession`,
+  `test_phase9_committed_filter_structure.py:_CapturingSession` are the existing
+  shapes) answers a `scalar()` for the aggregate and cannot answer a
+  `select(TaskStep)`; remedy is the fixture's shape, again never the service.
+
+  **Perimeter — every suite that reaches `get_task_budget_status` /
+  `_build_evaluated_status`,** enumerated at this phase's head and all green (this list
+  is the coordinator's, measured by `grep -rln` over `tests/`; projection r0's A11
+  named four of the seven — see §7):
+
+  1. `tests/integration/services/queries/item_economics/test_price_scenario_query.py`
+  2. `tests/integration/services/queries/item_economics/test_live_clock_goldens.py`
+  3. `tests/integration/services/commands/item_economics/test_phase8_status_results.py`
+  4. `tests/integration/services/commands/item_economics/test_phase8_reviewer_r1_probe.py`
+  5. `tests/integration/services/queries/item_economics/test_budget_allocations_query.py`
+     — **calls `get_task_budget_status` directly on a real session** (line ~148). E-A's
+     own suite, and the one this phase rewrites hardest; it was absent from A11.
+  6. `tests/unit/services/queries/item_economics/test_phase9_committed_filter_structure.py`
+     — drives both faces through `_CapturingSession` with `(_task(), None, None)`,
+     which takes the no-PRIMARY-item branch and **early-returns before**
+     `_build_evaluated_status`. The shape risk is therefore latent, not present —
+     named rather than discovered, because the moment a row of it grows an evaluation
+     it becomes case (b). Its `_SITES` ids embed source line numbers
+     (`"get_task_budget_status.py:106-108"`) that this phase's edits will make stale:
+     they are **test ids, not assertions**, so nothing reddens — do not "fix" them and
+     do not file them.
+  7. `tests/unit/routers/api_v1/test_item_economics_router.py` — references the two
+     service functions **by identity** (`assert calls[0][0] is
+     item_economics.get_task_budget_status`), never executing their bodies. Immune to
+     a keyword-only signature addition (R6: `run_service` calls `fn(ctx)` with no
+     signature introspection), but listed so its greenness is checked rather than
+     assumed.
+
+  The Review log records, **per file**, which of the two outcomes happened.
 - **C11 — the typicals cutoff reads no clock on E-P/E-A** (intention HC-3A round 4b):
   with `beyo_manager.services.queries.working_sections.get_working_section_typical_times`'s
   module clock stubbed, serving E-P and E-A performs **zero** clock reads in that
   module (stub call-count == 0). **Named mutation, one per call site:** drop the
   `now` argument at E-P's call ⇒ the statement falls back to the defaulted clock read
   ⇒ stub intercepted ⇒ that row red; same for E-A's `_load_typicals` call. Both sides:
-  contract stub-count 0/0, mutation ≥ 1 at the mutated site. Plus one
-  behaviour-preservation row: `typical_times_statement()` called with no argument
-  (the outside-pipeline form) produces the same rows as before this phase for the
-  same fixture — the shim is inert.
+  contract stub-count 0/0, mutation ≥ 1 at the mutated site.
+
+  Plus one behaviour-preservation row for the shim:
+  `typical_times_statement(workspace_id)` called **without the `now` argument** — the
+  form its two out-of-pipeline callers use
+  (`get_working_section_typical_times.py:get_working_section_typical_times`,
+  `get_task_price_scenario.py:_typical_block`) — executed against a fixture with
+  exactly five qualifying completed section-totals, asserting the **exact** returned
+  rows (`sample_count == 5`, `typical_worker_seconds ==` the fixture's median). "The
+  same rows as before this phase" is not writable: the pre-phase function is not
+  callable at test time, and `typical_times_statement()` with no argument at all is a
+  `TypeError` (`workspace_id` is a required positional). **Named mutation, definition
+  site, `get_working_section_typical_times.py:typical_times_statement`:** make the
+  defaulted branch resolve to a fixed **future** instant (`datetime(2099, 1, 1,
+  tzinfo=timezone.utc)`) instead of the clock ⇒ the cutoff moves past every fixture
+  row's `latest_closed_at` (the filter is `latest_closed_at >= cutoff` — verified at
+  source) ⇒ `sample_count == 0` and `typical_worker_seconds is None` ⇒ red. Use the
+  future form; a fixed **past** instant is inert, because a wider window admits the
+  same five rows.
+- **C12 — the configuration date reads no clock on the three surfaces** (intention
+  HC-3A round 4e; this criterion is the coordinator's, added with U1's disposition —
+  see §7). Same shape as C11, one package further out: with
+  `beyo_manager.services.commands.item_economics._common`'s module clock stubbed,
+  serving **E-B (both faces), E-P and E-A** performs **zero** clock reads in that module
+  (stub call-count == 0), on a fixture that takes the **no-committed-evaluation**
+  branch — the only branch that reaches `_load_preview_inputs`. **Named mutation, one
+  per call site** (`get_task_budget_status.py:get_task_budget_status`,
+  `get_task_budget_status_worker.py:get_task_budget_status_worker`): drop the `now`
+  argument ⇒ the callee falls back to its defaulted `today_utc()` ⇒ stub intercepted ⇒
+  that row red. **Both sides:** contract stub-count 0 per surface; mutation ≥ 1 at the
+  mutated site. Plus one behaviour-preservation row: `_load_preview_inputs(ctx, item)`
+  called **without** `now` — the form its command-side callers use — selects the same
+  basis and cost-model versions as before this phase for a fixture whose
+  `effective_from` rows do not straddle today. The shim is inert for the commands
+  package, which is not this pipeline's to change.
 
 ## 6. Notes
 
 - **Path 3 warning verbatim** (§4.3A): `typicals_by_section` must never be fed live
   figures — a live typical moves every allowance on the payload. The loader's output
   goes to step rows and headline only.
-- `_build_evaluated_status`'s step load and E-P's existing step load are **two loads
-  in one E-P request** — acceptable (they serve different needs; the *live map* is
-  computed once, which is what HC-5 contracts). If the implementer consolidates, the
-  consolidation must not change E-B-standalone's behaviour; either outcome is recorded
-  in the Review log.
-- Inherited hazards: the two flaky tests (master plan §6); repeat + ID-diff before any
-  conclusion. Parallel sessions share a baseline — none run in parallel with this one.
+- Under N-2 as specified here, `_build_evaluated_status` loads steps **only** on the
+  `live_seconds is None` path; on E-P's path it sums the passed map and issues no step
+  query. E-P therefore ends this phase with **one** step load and no SQL aggregate,
+  where it has one step load plus one aggregate today — a net reduction, not the "two
+  loads in one request" this note previously anticipated. E-B standalone and the worker
+  face trade their aggregate for a step load plus the loader's probe. No consolidation
+  question remains; nothing is owed to the Review log here. (projection r0, A15)
+- Inherited hazards: the **three** flaky tests (master plan §6 — two named, the third
+  permanently unattributable); repeat + ID-diff before any conclusion, and capture the
+  failing-ID set *before* repeating. Parallel sessions share a baseline — none run in
+  parallel with this one.
+- **`budget_division.py:DivisionStep.created_at` is annotated `datetime | None` while
+  the module imports no `datetime`** (projection r0, R4). Inert today — `from __future__
+  import annotations` defers evaluation — but any `typing.get_type_hints()` /
+  `dataclasses` type-resolution over `DivisionStep` raises `NameError`. Out of this
+  phase's perimeter and no criterion is owed: recorded so the implementer does not
+  introduce such a call while building `DivisionStep` rows, and so a reviewer seeing it
+  does not file it as this phase's.
+
+### Written delegations (projection r0 — decisions granted on purpose)
+
+- **D4 — `typical_times_statement`'s `now` parameter form.** The implementer chooses
+  between `def typical_times_statement(workspace_id: str, now: datetime | None = None)`
+  and a keyword-only `*, now: datetime | None = None`. Both leave the two
+  single-argument callers untouched. Record the choice **as a comment in
+  `get_working_section_typical_times.py` beside the parameter**, naming the shim's
+  purpose and its out-of-pipeline callers. **The same choice, made the same way, covers
+  `_common.py:_load_preview_inputs`'s `now` parameter** (task 4b) — one form for both
+  shims, so the codebase does not grow two conventions for one construct.
+- **D5 — C11's clock-stub site.** The module binds `datetime` at import and reads it
+  only inside `typical_times_statement`, so the stub is
+  `monkeypatch.setattr(get_working_section_typical_times_module, "datetime", …)` — the
+  same shape plan 1's C8 used at the loader. The counting class's construction (a
+  `classmethod now(cls, tz=None)` appending to a list) is the implementer's. Record the
+  choice **as a comment in the C11 test beside the stub**. C12's stub follows the same
+  shape against `_common`, whose clock read is `_common.py:today_utc`.
+- **D6 — C8's counting medium.** Either (i) `tests/conftest.py:count_queries` filtered
+  by compiled SQL text — the loader's probe is the only statement naming
+  `step_state_records` without joining `task_steps`, and E-A issues no other
+  `step_state_records` query (unlike E-P, whose
+  `selectinload(TaskStep.latest_state_record)` does) — or (ii) monkeypatching
+  `live_worked_seconds.compute_record_contributions` with a counting passthrough.
+  Record the choice **as a comment in the C8 test**, including which of the two the
+  "exactly one probe statement" half is asserted by.
+- **D7 — a step absent from the live map.** The loader contracts that every input step
+  is keyed in its output (plan 1 §4, task 3), so the case cannot arise under contract.
+  Build the substituted rows with **strict indexing** (`live_map[step.client_id]`) so a
+  population divergence introduced later raises rather than silently falling back to
+  the settled column and masking C3's population row. Record **as a comment at the
+  substitution site**. *(Coordinator note: this is why C3's population mutation is
+  asserted on the E-B face — see C3.)*
+- **D8 — E-P's call order.** `get_task_production_time.py:get_task_production_time`
+  today calls `get_task_budget_status(ctx)` before loading its steps. It must load
+  steps first, resolve the live map, then call the status service with it. The
+  reordering is granted: both reads sit inside one transaction over rows this request
+  does not write, so no observable value moves. No Review-log entry owed.
+- **D9 — the `live_seconds` branch.** `_build_evaluated_status` branches on
+  `live_seconds is None`, never on truthiness: a task whose non-deleted step set is
+  empty yields `{}` from the loader, and a falsy test silently recomputes. No payload
+  difference is observable (the loader short-circuits on an empty step set with zero
+  SQL and returns `{}` again), so **no criterion is owed** — recorded so a reviewer
+  does not file it and so the `is None` form the plan's own wording implies is the one
+  that ships.
 
 ## 7. Review log
 
-(empty — append-only)
+(append-only)
+
+### Projection r0 consumed — 2026-08-20, coordinator
+
+Handoff `handoffs/reviewer/2026-08-20_phase2_projection_r0_handoff.md`, verdict
+`AMENDMENTS_REQUIRED`, 0 owner cards, 22 ledger rows. Write perimeter verified against
+`git status`: **exactly the one handoff file**, no code, no plan edit, no graph write ✓.
+
+**Baseline re-measured by the coordinator, not carried:** `PYTHONPATH=. pytest -m 'not
+e2e'` at `0151775` ⇒ **26 failed / 2459 passed / 1 deselected** in 123.97 s; failing-ID
+set `comm`-diffed against master plan §6's enumeration — **empty in both directions**.
+Matches the projection's own measurement. No repeat owed.
+
+**Load-bearing claims re-verified at source before applying** (never from the handoff's
+summary): `get_task_budget_status.py` returns `_empty_status` at both pre-fold branches
+before `_build_evaluated_status` (A2 ✓); E-P loads steps with
+`selectinload(TaskStep.latest_state_record)` and E-A with no options (A7 ✓); the
+typicals filter is `latest_closed_at >= cutoff`, so A9's *future*-instant mutation is
+the biting direction ✓; both golden tasks hold one PENDING step in one section, so C1's
+live term is `0` and the substituted-row mapping is unguarded ✓;
+`group_steps_by_section` keeps excluded steps in `group["worked_seconds"]` (measured
+`840`) ✓; PAUSED is neither terminal nor excluded, so C9's post-close read moves no
+allowance ✓; `typical_times_statement` has four production callers ✓;
+`DivisionStep.created_at` is annotated with no `datetime` import ✓;
+`tests/conftest.py:db_session` is rollback-scoped, so A4's "fresh session" objection
+holds ✓; `count_queries` exists at `conftest.py:64` ✓.
+
+**Routing:** 12 amendments applied verbatim (A1–A4, A7–A10, A12–A15); 6 delegations
+recorded in §6 as D4–D9; 1 upstream finding folded (U1 → intention **round 4e**).
+**Three amendments were corrected by the coordinator before entering the tree:**
+
+- **F-A6 (blocking, measured).** A6's row could not fail as written. `_governing_step`
+  applies three *stable* sorts — `client_id` asc, then `created_at` desc, then
+  `entered_at` desc — so the last applied is the primary key, and A6's own fixture
+  specifies **distinct `entered_at`**, which decides the order by itself. Measured
+  against the real function: dropping `created_at` on that fixture leaves the governing
+  step at `stp_b` under **both** sides (∅). Split into two fixtures, each measured, each
+  making its own field the only reason its outcome holds: row 2 ties `entered_at` so
+  `created_at` decides (`stp_b` → `stp_a`); row 3 distinguishes `entered_at` against
+  `created_at` order so the record omission decides (`stp_b` → `stp_a`), and on row 3's
+  fixture the `created_at` mutation is measurably inert (`stp_b` → `stp_b`). **Eighth
+  instance of the row-that-cannot-fail class, and the second to appear inside a
+  correction written to fix that very class** — A6 exists because C1 is structurally
+  insensitive to the field mapping.
+- **F-A5 (should-fix).** A5's stated both-sides collides with delegation D7 from the
+  same handoff: under strict indexing the excluded-state mutation raises `KeyError` at
+  E-P's/E-A's substitution site instead of producing the stated `600` vs `840`
+  divergence. Still red, but not the named observable. Re-anchored to the E-B manager
+  face, which folds a headline with no substituted rows and yields the divergence
+  cleanly; the raise is recorded as the E-P/E-A behaviour.
+- **F-A11 (should-fix).** A11's perimeter — the amendment whose own purpose was that
+  C10's perimeter is "too narrow" — enumerated **four** of the **seven** suites that
+  reach `get_task_budget_status`/`_build_evaluated_status`. Missing:
+  `test_budget_allocations_query.py`, which calls the service directly on a real session
+  and is E-A's own suite; the phase-9 structural test, named only parenthetically; and
+  the router unit test. Enumerated all seven with each one's mode of contact, plus the
+  stale-line-number test-id hazard in the phase-9 file (ids, not assertions — nothing
+  reddens, do not "fix").
+
+**U1 disposition — coordinator's call, taken, not deferred.** `_load_preview_inputs`'s
+`today_utc()` read is confirmed at source on the E-B/E-P/price-scenario path
+(`get_task_budget_status.py:29` imports it; `_common.py:203` passes it to
+`resolve_economics_selection`). It is brought **into** phase 2's perimeter as task 4b +
+C12, rather than recorded as a scoped-out gap. Reasoning: it is the same construct as
+E-A's `today_utc()`, which this phase already converts, so converting one and not the
+other leaves a live counterexample to HC-3A inside the pipeline that exists to remove
+exactly that split; the conversion is the additive-shim shape already in this phase's
+task list; and deferring it would reopen two approved query services in a later phase
+and force the closeout handoff to disclose a cross-surface disagreement we chose to
+leave in. This **widens the perimeter into `services/commands/item_economics/`** — named
+here explicitly per master plan §5's widen-the-allowlist rule. No owner card: no product
+semantics, shipped promise, or D1–D9 decision moves.
