@@ -465,6 +465,21 @@ async def test_c12_half_even_rounding_is_applied_to_each_half_second_share(db_se
 
 
 @pytest.mark.integration
+async def test_c12_rounding_locus_is_share_before_settled_addition(db_session):
+    """The odd settled value isolates the locus because half-even and half-up agree at 31.5."""
+    workspace, user, section, task, token = await _seed_workspace(db_session)
+    start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    first, _ = await _add_step_record(
+        db_session, workspace, user, section, task, token, 1, start, settled=1,
+    )
+    second, _ = await _add_step_record(db_session, workspace, user, section, task, token, 2, start)
+    result = await load_live_worked_seconds(
+        db_session, workspace.client_id, [first, second], start + timedelta(seconds=63)
+    )
+    assert result == {first.client_id: 33, second.client_id: 32}
+
+
+@pytest.mark.integration
 async def test_c10_loader_never_persists_live_seconds_on_task_step(db_session):
     workspace, user, section, task, token = await _seed_workspace(db_session)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
