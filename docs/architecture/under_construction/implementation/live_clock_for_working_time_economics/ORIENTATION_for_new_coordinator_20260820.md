@@ -1,5 +1,26 @@
 # Orientation — incoming pipeline coordinator, `live_clock_for_working_time_economics`
 
+> ## ⚠ STATUS: SUPERSEDED as an instruction set — 2026-08-20, `4b426f9`
+>
+> **This document did its job and is now history. Do not follow §2's status table or
+> §10's first move: both are stale, and following them would restart work already
+> approved.** It is not rewritten (house rule: never revise a published document —
+> amend by reference), so read it as provenance.
+>
+> **The live hub is `master_plan.md`** — §3's tracker is the only authority on state.
+> As of this banner: intention **round 4d, D1–D9, ledger empty**; mechanism-inventory
+> gate **PASSED** (§2's "it has NOT run" is stale); **phase 1 APPROVED** (`d21fe9e`);
+> phases 2–4 planned; **next action = hand
+> `prompts/reviewer/2026-08-20_phase2_projection_r0.md` to a projection session.**
+>
+> **What in here is still true and still binding:** §4 (the shipped promise to the
+> frontend — its closeout handoff must carry the go-live statement retiring their
+> verdict-suppression flag; tracked at `master_plan.md` §7 and `plans/plan_4.md`),
+> §5's load-bearing code facts, §6's standing rules, §7's environment *except* the
+> baseline (now **26 / 2459 / 1** — see `master_plan.md` §6, which also enumerates the
+> failure-ID set and records a **third** intermittent test), §8 (how the owner works),
+> and §9 (what is not yours).
+
 ```
 written: 2026-08-20 by the outgoing coordinator (Opus 5), at the owner's request
 for: the session that will orchestrate this pipeline
