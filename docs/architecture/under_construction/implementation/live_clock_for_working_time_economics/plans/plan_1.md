@@ -55,9 +55,40 @@ payloads are byte-identical to `348a09f` throughout (that is criterion C1). No
    and the golden test's docstring says why (phase 3 changes the frozen-percent
    *source*; in the no-drift state old and new sources are value-identical, so these
    goldens survive D9 — a drift fixture would not); (c) steps whose open records are
-   `PENDING` (§9A T5: proves the state filter, not record absence). Serialize all
-   three endpoint payloads (`json.dumps(sort_keys=True)`), write the three golden
-   files, and the assert test that replays the fixture and compares byte-for-byte.
+   `PENDING` (§9A T5: proves the state filter, not record absence). Serialize,
+   with `json.dumps(payload, sort_keys=True, separators=(",", ":"))`, the
+   following payload set — three golden files, one per endpoint, each a JSON object
+   with the two task keys `idle_no_result` (fixture a) and `frozen_no_drift`
+   (fixture b):
+
+   - `golden_production_time.json` — per task, the return of
+     `get_task_production_time(ctx)`.
+   - `golden_budget_status.json` — per task, an object
+     `{"manager": serialize_task_budget_status(get_task_budget_status(ctx), include_monetary=True),
+     "worker": serialize_task_budget_status(get_task_budget_status_worker(ctx), include_monetary=False)}`
+     — both faces captured, because phase 2 changes both and phase 3 (D9) rewires the
+     worker face's `result.percent_consumed`; each face's golden is the byte-freeze at
+     its own serialization site.
+   - `golden_budget_allocations.json` — per task, the return of
+     `get_task_budget_allocations(ctx)` called with `task_ids` of exactly that one
+     task. Never one batched two-task call:
+     `get_task_budget_allocations.py:get_task_budget_allocations` selects its tasks
+     with no `ORDER BY`, so a multi-task response's row order is database-dependent
+     and a byte golden over it is fixture luck.
+
+   Fixture (c) applies to both tasks: every step of (a) and (b) holds an open
+   `PENDING` record.
+
+   Typicals stability: `get_working_section_typical_times.py:typical_times_statement`
+   computes `cutoff = datetime.now(timezone.utc) − TYPICAL_WINDOW_DAYS` at statement
+   build, and both `sample_count` and `typical_worker_seconds` are filtered by
+   `latest_closed_at >= cutoff` — a wall-clock read on the E-P and E-A request paths.
+   The golden fixture must make the typicals block time-invariant by construction: no
+   fixture step is `COMPLETED` and every fixture step's `closed_at` is `NULL`, so
+   `sample_count == 0` and `typical_worker_seconds` is `None` on every section at any
+   future run date. The golden test's docstring records this constraint and why.
+
+   Write the assert test that replays the fixtures and compares byte-for-byte.
    **Commit the goldens + test in the phase's first checkpoint commit and record the
    hash in the Review log** — a golden added after any surface change is a gate
    failure, not a test.
@@ -94,22 +125,40 @@ Every criterion is an automated test in this phase's files unless marked otherwi
 - **C1 — nothing changed.** Full suite: baseline 26 failed / +new passed / 1
   deselected, failure IDs byte-identical to `master_plan.md` §6's set; golden test
   green on the unchanged endpoints. (The golden test IS the payload-freeze proof.)
-- **C2 — goldens.** Three golden files exist; the assert test replays the fixture and
-  compares full payloads byte-for-byte; the capture commit precedes every other change
-  of this pipeline's phases (Review log records the checkpoint hash). Fixture (c)'s
-  open-`PENDING` records present.
+- **C2 — goldens.** Three golden files exist **per task 1's composition** (two task
+  keys each; E-B both faces at their own serialization sites; E-A one single-task
+  call per task, never batched); the assert test replays the fixtures and compares
+  full payloads byte-for-byte; the capture commit precedes every other change of this
+  pipeline's phases (Review log records the checkpoint hash). Fixture (c)'s
+  open-`PENDING` records present; task 1's typicals-invariance constraint holds (no
+  `COMPLETED` fixture step, every `closed_at` NULL) and the golden test's docstring
+  records it.
 - **C3 — the four §3.2 rows** (T3), expected values from §3.2A: row 1 two workers/two
   users ⇒ 1800+1800 (fixture reason: **distinct** credited users, its only reason for
-  3600); rows 2–4 with `allows_batch_working=True` on every participating step (§3.2A
-  precondition): 1500/300; cross-task halving; 1200. One row each; each fixture's
-  predicate the only reason its number holds.
+  3600; both steps `allows_batch_working=True` — with the flag off, a same-user
+  counterfactual still reads 1800+1800 (non-batch intervals never divide,
+  `concurrency.py:averaged_seconds_by_record`) and the distinct-users predicate stops
+  being the reason the number holds; with the flag on, the counterfactual reads
+  900+900. Contract 1800/1800, counterfactual 900/900); rows 2–4 with
+  `allows_batch_working=True` on every participating step (§3.2A precondition):
+  1500/300; cross-task halving with row 3's durations and expected integers delegated
+  (D1, §6); 1200. One row each; each fixture's predicate the only reason its number
+  holds.
 - **C4 — exclusions** (T4): open `PAUSED` ⇒ 0 live term; record flag alone ⇒ 0; step
   flag alone ⇒ 0 **and** the same-worker sibling step's live figure **rises** (§6A
   E3 — both assertions in the step-flag row); `is_deleted` record ⇒ 0 (docstring: no
   shipped writer, defense-in-depth, §3.1A D); zero-cases `entered_at >= now` ⇒ 0 and
   both-attribution-NULL ⇒ skipped (§3.1A D).
 - **C5 — T2 parity, both rows** (§9A): batch row (case-2 shape) and single-open-record
-  row; compute live at `t`, close via the production transition path, run
+  row; compute live at `t`, close by calling
+  `_step_transition_core.py:_apply_step_transition` with `now=t` (passing ctx, step,
+  task, the open record as `closing_record`, `new_state=TaskStepStateEnum.PAUSED`,
+  `credited_user_id` of the fixture worker, `pause_reason_id=None`,
+  `transition_reason=None`) — the shared core both shipped commands route through,
+  and the only production entry that accepts the pinned clock
+  (`transition_step_state.py:transition_step_state` stamps its own
+  `datetime.now(timezone.utc)` internally and cannot close "at t" against fixed
+  fixture timestamps) — then run
   `_recompute_step_time_totals` directly, assert `|live − column| ≤ 1` **per step**
   (§3.3A B — never a per-user tolerance). Fixtures commit ⇒ own `try/finally`
   teardown (charter 11½). Single-row precondition: that worker holds **no other open
@@ -124,22 +173,55 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   (case-4 shape): correct shares require `W_start` anchored at `min(entered_at)`.
   **Named mutation (definition site, the window computation):** anchor at
   `max(entered_at)` — this row's expected values shift and it reddens; compute both
-  sides in the ledger.
+  sides in the ledger. Fixture constraint the mutation depends on: the closed
+  record's `exited_at` must precede `max(entered_at) − 1 day` (i.e., the two open
+  records' `entered_at` sit more than a day plus the overlap apart), or the 1-day
+  buffer swallows the `max(entered_at)` anchor and the mutation cannot redden.
+  Operationally such an old open record cannot exist (§3.2 window note); the fixture
+  inserts rows directly and the database permits it — correctness must not hang on
+  the scheduler.
 - **C8 — determinism / T1′ row a (definition site):** loader called twice with the
   same `now` over unchanged state returns equal dicts; with the module's clock stubbed
   to advance +5 s per call, output is unchanged (stub call-count == 0 — the loader
   reads no clock). **Named mutation:** insert a `datetime.now(timezone.utc)` read into
   the loader ⇒ stub row reddens (`600` vs `605` per §9A T1′).
 - **C9 — `ServiceContext.now`:** aware-UTC type row; explicit `now=` honored;
-  default-constructed contexts stamp at construction (two constructions ⇒
-  non-decreasing distinct stamps). A naive `now` handed to the loader raises
+  default-stamp row: monkeypatch `beyo_manager.services.context.datetime` (the module
+  global the `default_factory` lambda resolves at call time) with a stub whose
+  `now(tz)` returns `T0` then `T0 + 1s` on successive calls; two default
+  constructions carry `now == T0` and `now == T0 + 1s` respectively — proving the
+  stamp is evaluated per construction, at construction time, never shared as a class
+  default. (Two unstubbed back-to-back constructions can legally collide at
+  microsecond resolution; "distinct stamps" is not a property the mechanism
+  guarantees, and the unstubbed form flakes.) A naive `now` handed to the loader raises
   `TypeError` inside the sweep (§1A HC-3A — the one loud failure; one row).
 - **C10 — HC-1A at loader level:** after `load_live_worked_seconds` over a step with
-  an open record, `session.expire_all()` + re-read of `total_working_seconds` from the
-  DB is unchanged, and `session.dirty` contains no `TaskStep`. (Endpoint-level T9 is
-  phase 2.)
+  an open record, assert in this order: (1) `session.dirty` contains no `TaskStep` —
+  before any expire, because `Session.expire_all()` discards un-flushed attribute
+  changes and an expire-first ordering passes under the very assignment this row
+  exists to catch; then (2) `session.expire_all()`; then (3) re-read
+  `total_working_seconds` from the DB and assert it is unchanged. (Endpoint-level T9
+  is phase 2.)
 
 ## 6. Notes
+
+### Delegations granted in writing (projection r0, 2026-08-20)
+
+- **D1 — C3 row 3:** the interval durations and the resulting expected integers are
+  the implementer's choice, recorded in the test beside the row. The shape is not:
+  one worker, two open batchable records on steps of two different tasks, loader
+  called over task 1's steps only, expected value = the halved share per §3.2A
+  case 3.
+- **D2 — golden capture mechanism:** the implementer chooses between (i) a
+  regeneration branch inside `test_live_clock_goldens.py` gated on an env flag the
+  committed test never sets, or (ii) a throwaway capture script that is never
+  committed. Constraints either way: the goldens plus assert test land in the phase's
+  first checkpoint commit (C2), and no dead scaffolding ships (charter rule 4).
+- **D3 — golden fixture persistence:** golden fixtures are flush-only on the
+  rollback-scoped `db_session` fixture (`tests/conftest.py:db_session`) — never
+  committed — so their fixed client_ids cannot collide with committed residue across
+  runs. C5's committing fixtures keep the `try/finally` teardown the plan already
+  requires.
 
 - The wrapper returns `seconds: float` with `.get(record_id, 0.0)` (§3.1A C) — a
   missing key is never an error; do not "harden" it.
@@ -153,4 +235,13 @@ Every criterion is an automated test in this phase's files unless marked otherwi
 
 ## 7. Review log
 
-(empty — append-only, shared by implementer and reviewer)
+- **2026-08-20 — projection r0 consumed (coordinator).** Verdict AMENDMENTS_REQUIRED,
+  0 owner cards, 12 ledger rows: 8 plan amendments applied verbatim (A1/A2 golden
+  composition + typicals invariance, A5 the `_apply_step_transition` close path, A6
+  the stubbed default-stamp row, A7 C10's assertion order, A8 C3 row 1's batch flag,
+  A9 C7's separation constraint), 1 routed upstream (L3 — the typicals cutoff clock
+  read, folded into intention §2.3A/HC-3A and plan 2), 3 delegations recorded in §6
+  (D1–D3). Coordinator verified L3/L5/L4 at source before applying; baseline
+  re-measured at `2711b58`: 26 failed / 2436 passed / 1 deselected, ID set enumerated
+  in master plan §6. Handoff:
+  `handoffs/reviewer/2026-08-20_phase1_projection_r0_handoff.md`.

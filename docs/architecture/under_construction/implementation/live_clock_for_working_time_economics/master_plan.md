@@ -47,7 +47,8 @@ Newest state first; superseded rows kept as provenance.
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | — | Implementation planning | **DONE** | 2026-08-20 | coordinator | Four phases, split so no payload changes before its guards exist: goldens + clock boundary + loader (1) → the three surfaces (2) → D9 frozen blocks (3, needs the live basis for T13 to discriminate) → closeout handoff + graph delta (4, docs only). Strictly sequential 1→2→3→4 — plans 2 and 3 share files, and the valuation pipeline's parallel doc phase collided on a tripwire despite disjoint perimeters. The four pre-registered decisions resolved as **N-1…N-4** (§4), each grounded in source read this session (`run_service` is a pure error boundary over an already-built ctx, so the boundary is ctx construction; `ItemCostResult` stores `actual_worker_minutes` + `variance_worker_minutes`, which reconstructs the frozen denominator without touching the current evaluation). D5 satisfied: no release before plan 3 approves, all four §4.1 rows ship together. |
-| 1 | Pre-change T5 goldens; `ServiceContext.now` (N-1); the loader `load_live_worked_seconds` (N-3) + its contract proven at loader level (T2/T3/T4/T10, window anchor, HC-1A) | **PROMPT_READY (projection r0)** | 2026-08-20 | coordinator | `plans/plan_1.md`. Projection REQUIRED; prompt at `prompts/reviewer/2026-08-20_phase1_projection_r0.md` — fresh-session inputs only, depth on the loader arithmetic / T2 ledger / golden determinism / clock boundary. Implement prompt compiles only after the ledger is fully routed. |
+| 1 | Pre-change T5 goldens; `ServiceContext.now` (N-1); the loader `load_live_worked_seconds` (N-3) + its contract proven at loader level (T2/T3/T4/T10, window anchor, HC-1A) | **PROJECTED** | 2026-08-20 | Fable 5 (projection r0) + coordinator (fold) | Verdict `AMENDMENTS_REQUIRED`, 0 owner cards, 12 ledger rows — **all routed before the implement prompt**: 8 plan amendments applied verbatim into `plans/plan_1.md` (headline: the E-A golden must be one single-task call per task — its task `SELECT` has no `ORDER BY`, so a batched byte-golden is order-luck; C10's expire-then-dirty order passed under the exact HC-1A assignment it guards; T2's "production transition path" pinned to `_step_transition_core.py:_apply_step_transition(now=t)` since `transition_step_state` stamps its own clock; C7's anchor mutation needs >1-day separation or the buffer swallows it), 3 written delegations (plan 1 §6), 1 upstream (L3: the typicals cutoff wall-clock read §2.3A missed — intention round 4b + plan 2 C11 + the §6 fact correction here). Coordinator verified L3/L5/L4 at source before applying; the citation fix was class-swept (3 sites, projection saw 1). Baseline re-measured at `2711b58` (A4): **26 / 2436 / 1**, ID set enumerated in §6; count matches history, no repeat owed. Projection perimeter: exactly its one handoff file ✓. Next: implement prompt. |
+| 1 | *(prior row — projection prompt compiled)* | *superseded* | 2026-08-20 | coordinator | Prompt at `prompts/reviewer/2026-08-20_phase1_projection_r0.md` — fresh-session inputs only, depth on the loader arithmetic / T2 ledger / golden determinism / clock boundary. |
 | 2 | The three surfaces live: the fold (N-2), E-P one-map composition, E-A batch + `today_utc()`→`ctx.now.date()`; T1′/T5–T9/T11/T12 | NOT_STARTED | 2026-08-20 | — | `plans/plan_2.md`. Frozen-percent wiring untouched until phase 3. Projection REQUIRED. |
 | 3 | D9: the two frozen-percent feed sites (N-4) + T13 both rows, re-commit immunity | NOT_STARTED | 2026-08-20 | — | `plans/plan_3.md`. Projection REQUIRED (money/percent derivation = rule-6). |
 | 4 | Closeout handoff (six §7 obligations, headline: retire the frontend's interim flag) + the five-node graph delta | NOT_STARTED | 2026-08-20 | — | `plans/plan_4.md`. Projection **WAIVED**: documentation only, no mechanism — waiver recorded here per charter. Full review round regardless. |
@@ -173,10 +174,41 @@ restated because they are load-bearing here:
 
 - Working directory `backend/app/`; tests `PYTHONPATH=. pytest -m 'not e2e'`. The bare
   `make test` form fails collection (`ModuleNotFoundError: beyo_manager`) in some shells.
-- **Start baseline, measured by this coordinator 2026-08-20 on a clean tree at
-  `a0aaacc`: 26 failed / 2433 passed / 1 deselected.** Matches the outgoing
-  coordinator's figure at `ee253cd` (the three intervening commits are doc-only). The
-  26 are inherited and pre-existing; none is in `item_economics`.
+- **Start baseline, re-measured by this coordinator 2026-08-20 on a clean tree at
+  `2711b58`: 26 failed / 2436 passed / 1 deselected** (supersedes the `a0aaacc`
+  measurement of 26/2433/1 — commit `6c15678` added/changed item-lookup tests, +3
+  passed, failed set unchanged; re-measure forced by projection r0 finding L4). The
+  26 are inherited and pre-existing; none is in `item_economics`. **The enumerated
+  failure-ID set C1 compares against:**
+
+  ```
+  tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py::test_seed_item_economics_creates_requested_configuration_and_updates_owned_values
+  tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py::test_human_successors_permanently_freeze_bootstrap_basis_and_model
+  tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py::test_person_owned_configuration_and_section_membership_are_not_overridden
+  tests/integration/services/commands/bootstrap/test_seed_working_sections_integration.py::test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections
+  tests/integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_updates_all_items_creates_history_and_dispatches_events
+  tests/integration/services/commands/items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_rolls_back_when_any_item_is_missing
+  tests/integration/services/commands/shopify/test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference
+  tests/integration/services/commands/task_steps/test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task
+  tests/integration/services/commands/tasks/test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged
+  tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_promotes_expected_candidates
+  tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_demotes_low_priority_available_first
+  tests/integration/services/commands/upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_noop_emits_no_events
+  tests/integration/services/commands/working_sections/test_batch_working_section_integration.py::test_batch_flag_round_trips_and_new_step_snapshots_follow_section_value
+  tests/integration/services/commands/working_sections/test_batch_working_section_integration.py::test_worker_working_sections_excludes_counts_for_deleted_parent_tasks
+  tests/integration/services/commands/working_sections/test_working_section_ordering_integration.py::test_reorder_rewrites_sort_order_and_worker_view_follows_it
+  tests/integration/services/commands/working_sections/test_working_section_ordering_integration.py::test_reorder_rejects_payload_not_matching_active_set
+  tests/integration/test_audit_log.py::test_write_audit_from_event_inserts_row
+  tests/integration/test_audit_log.py::test_detail_defaults_to_empty_dict
+  tests/unit/domain/shopify/test_dimension_migration.py::test_legacy_seat_height_without_height_maps_without_zero_values
+  tests/unit/domain/shopify/test_dimension_migration.py::test_legacy_multiline_rerun_is_idempotent_and_protects_existing_values
+  tests/unit/services/commands/auth/test_sign_in_user.py::test_sign_in_user_preserves_custom_workspace_role_name
+  tests/unit/services/queries/worker_stats/test_endpoint_split.py::test_split_services_return_disjoint_worker_shapes
+  tests/unit/test_case_type_serializers.py::test_serialize_case_type_entry_returns_contract_fields
+  tests/unit/test_items_router.py::test_route_list_item_issues_forwards_client_id
+  tests/unit/test_items_router.py::test_route_delete_item_issues_forwards_ids
+  tests/unit/test_upholstery_inventories_router.py::test_route_list_upholstery_inventories_passes_filter_query_params
+  ```
 - **⚠ Suite instability — at least TWO named flaky tests** (named after 21 measured runs,
   `simple_valuation_editor/master_plan.md` §6 carries the full evidence):
   `test_phase4_fix_coverage.py::test_c3_real_concurrent_open_insert_translates_the_loser[model]`
@@ -217,7 +249,13 @@ against `allowance_seconds` (budget-division D16 — change the basis for all th
 fields or re-create the `left_seconds: -100` beside `on_track` bug);
 NULL/0-typical sections get the median substituted; `typical_times_statement`'s
 grouping subquery has no date predicate (any per-event refetch design runs an unbounded
-historical aggregate).
+historical aggregate). **Corrected round 4b (projection r0, L3):** the last fact is
+true of the *subquery* but incomplete about the *statement* — the outer qualifying
+filter (`latest_closed_at >= cutoff`) derives its cutoff from
+`datetime.now(timezone.utc)` at statement build
+(`get_working_section_typical_times.py:typical_times_statement`), a wall-clock read on
+the E-P and E-A request paths. Resolution in intention §1A HC-3A (round 4b) and
+plan 2 C11.
 
 ## 7. Gates
 

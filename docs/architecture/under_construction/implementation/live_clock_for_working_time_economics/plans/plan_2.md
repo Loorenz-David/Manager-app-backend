@@ -30,7 +30,7 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 3. Source: the three services + `get_task_budget_status_worker.py`,
    `division_serializers.py`, `serializers.py:serialize_task_budget_status`,
    `get_task_price_scenario.py` (read — its call is in your blast radius),
-   `budget_division.py:DivisionStep`, `_step_transition_core.py:apply_step_transition`
+   `budget_division.py:DivisionStep`, `_step_transition_core.py:_apply_step_transition`
    (T11's close path).
 
 ## 3. Files expected to change
@@ -55,6 +55,14 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py` —
   only if the `_build_evaluated_status` threading requires a call-site change; expected
   unchanged (it inherits the fold).
+- `app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py`
+  — **additive only** (round 4b, projection r0 / intention HC-3A):
+  `typical_times_statement` gains a `now: datetime | None = None` parameter; `None`
+  preserves the existing `datetime.now(timezone.utc)` cutoff read (the compatibility
+  shim for callers outside this pipeline — the working-sections surface and the
+  price-scenario typical block, both settled-basis and out of scope, whose behaviour
+  and suites must be untouched); E-P and E-A pass `ctx.now`. No other change to this
+  file — its aggregates and grouping are path 3 of §4.3A and stay settled.
 - New/extended test files under
   `app/tests/integration/services/queries/item_economics/` for C1–C10 below; the
   price-scenario suite (`test_price_scenario*.py`) **only if** C10 finds it red —
@@ -68,7 +76,10 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 2. E-P: one map, both consumers (status + division rows).
 3. E-A: batch probe, per-user sweeps shared across tasks, headline from the map,
    `today_utc()` replacement.
-4. Tests C1–C10, mutation ledger per master plan §5.
+4. The typicals cutoff under `ctx.now` (intention HC-3A round 4b): the additive
+   parameter and the two call sites (E-P's `typical_times_statement(...)` call and
+   E-A's `_load_typicals`).
+5. Tests C1–C11, mutation ledger per master plan §5.
 
 ## 5. Acceptance criteria
 
@@ -119,6 +130,16 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
   `_build_evaluated_status`, the fix is a frozen `ctx.now` in its fixtures — never a
   change to the shipped service file. Review log records which of the two outcomes
   happened.
+- **C11 — the typicals cutoff reads no clock on E-P/E-A** (intention HC-3A round 4b):
+  with `beyo_manager.services.queries.working_sections.get_working_section_typical_times`'s
+  module clock stubbed, serving E-P and E-A performs **zero** clock reads in that
+  module (stub call-count == 0). **Named mutation, one per call site:** drop the
+  `now` argument at E-P's call ⇒ the statement falls back to the defaulted clock read
+  ⇒ stub intercepted ⇒ that row red; same for E-A's `_load_typicals` call. Both sides:
+  contract stub-count 0/0, mutation ≥ 1 at the mutated site. Plus one
+  behaviour-preservation row: `typical_times_statement()` called with no argument
+  (the outside-pipeline form) produces the same rows as before this phase for the
+  same fixture — the shim is inert.
 
 ## 6. Notes
 

@@ -136,6 +136,18 @@ things are pinned:
   request) comes under the injected `now` as `now.date()`. This is behaviour-preserving
   except at a UTC date rollover mid-request, where it replaces an inconsistency with a
   consistent answer, and it is what makes T1 decidable for E-A at all.
+  **Round 4b — a second residual read, found by projection r0 (§2.3A third
+  correction):** `get_working_section_typical_times.py:typical_times_statement`
+  derives its window cutoff from `datetime.now(timezone.utc)` on the E-P and E-A
+  request paths. Resolution: the statement gains an **additive** `now` parameter
+  whose default preserves the existing clock read — the compatibility shim for its
+  callers outside this pipeline (the working-sections surface and the price-scenario
+  typical block, both settled-basis and out of scope) — and **E-P and E-A pass
+  `ctx.now`**, guarded per call site by a stub row (phase 2): with the module's clock
+  stubbed, serving E-P/E-A performs zero clock reads there; dropping the `now`
+  argument at either call site is the named mutation that reddens it. The defaulted
+  clock read survives only where this pipeline's determinism contract does not reach;
+  within the three surfaces, one request is one `now`, cutoff included.
 
 ---
 
@@ -207,6 +219,20 @@ conclusion rather than weakening it.
 - **Therefore:** the item-economics query family **already reads the wall clock**,
   inside E-A itself. There is no covenant to breach and never was. The consequence
   that matters is HC-3A's third bullet, not the framing.
+
+**Third correction (round 4b, projection r0 — the scope rule biting again, this time
+on the corrected claim itself).** The search above ran over
+`services/queries/item_economics/` and missed a clock read on a **callee** module
+sitting on two of the three surfaces' request paths:
+`get_working_section_typical_times.py:typical_times_statement` (in
+`services/queries/working_sections/`) computes its qualifying cutoff as
+`datetime.now(timezone.utc) − TYPICAL_WINDOW_DAYS` at statement build, and both
+`sample_count` and `typical_worker_seconds` are filtered by
+`latest_closed_at >= cutoff`. Its production callers: E-P, E-A, the price-scenario
+typical block, and the working-sections surface itself. The term set was right; the
+scope excluded a callee module — record the scope as the call graph, not the
+directory. Resolution in HC-3A's scope bullet below; T1's byte-identity for E-P and
+E-A rests on it.
 
 Second correction, same paragraph: the sweep's IO wrapper has **five** production
 callers, not two — `get_worker_daily_step_breakdown.py`, `list_workers_totals.py`,
@@ -589,7 +615,7 @@ first is the significant one.
 
 1. **Settlement is asynchronous, so there is a window in which the number falls and
    recovers.** The transition closes the record *synchronously*
-   (`_step_transition_core.py:apply_step_transition` sets `closing_record.exited_at =
+   (`_step_transition_core.py:_apply_step_transition` sets `closing_record.exited_at =
    now`) and only **enqueues** the recompute — `create_instant_task(...,
    PROCESS_STEP_TRANSITION)`, routed to `queue:analytics`
    (`task_router.py`), executed later by
@@ -857,7 +883,7 @@ three must hold, and each needs its own reason.
 | 3 | section **weights** — `typicals_by_section` → `resolved_weights` → `raw_shares` | `get_working_section_typical_times.py:typical_times_statement` — `SUM(TaskStep.total_working_seconds)` | it is a **SQL aggregate over the persisted column**, never fed the loader's output |
 
 **Path 2, verified.** Every route into SKIPPED/CANCELLED/FAILED closes the open record
-first: `_step_transition_core.py:apply_step_transition` sets `closing_record.exited_at =
+first: `_step_transition_core.py:_apply_step_transition` sets `closing_record.exited_at =
 now` before opening a record whose `state` is the new terminal state, and
 `remove_task_step.py` explicitly closes open records (`record.exited_at = now`) while
 setting `state = SKIPPED`. So an excluded step's open record — if it has one — is in a
@@ -1475,6 +1501,21 @@ What the gate changed, and why:
 
 Nothing in D1–D7 was reopened. Every finding above is a mechanism, a totality, or a
 derivation; no product semantics changed.
+
+**Round 4b — 2026-08-20, plan 1 projection r0 folded (one upstream finding).** The
+projection's L3: §2.3A's corrected absence claim was itself scope-limited — the
+typicals statement's window cutoff is a `datetime.now(timezone.utc)` read on the E-P
+and E-A request paths, in a callee module the directory-scoped grep never entered
+(the verification-scope rule biting a fourth time in this family: directory, term
+set, suite, now **call graph**). §2.3A carries the third correction; §1A HC-3A's
+scope bullet carries the resolution (additive `now` parameter, E-P/E-A pass
+`ctx.now`, defaulted clock read survives only outside this pipeline's surfaces;
+guarded by plan 2 C11). Also fixed, class-swept: two citations of
+`_step_transition_core.py:apply_step_transition` — the defined symbol is
+`_apply_step_transition`. Plan-level amendments (golden composition, the
+`_apply_step_transition` close path for T2's fixture, assertion-order and
+stub-clock corrections) live in `plans/plan_1.md` and its Review log, not here. No
+semantics changed; D1–D9 untouched.
 
 **Round 4a — 2026-08-20, gate cards ratified; coordinator fold. Gate: PASS.** Owner,
 verbatim: *"about the owner cards the recommendations are the correct approach."*
