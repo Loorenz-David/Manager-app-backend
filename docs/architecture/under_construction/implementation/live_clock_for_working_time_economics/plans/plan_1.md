@@ -194,12 +194,21 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   default. (Two unstubbed back-to-back constructions can legally collide at
   microsecond resolution; "distinct stamps" is not a property the mechanism
   guarantees, and the unstubbed form flakes.) A naive `now` handed to the loader
-  **fails closed at the loader's own boundary** with `TypeError` (§1A HC-3A as
-  amended round 4c — the sweep cannot raise on this driver; the un-guarded
-  behaviour is a silently vanished live term). The test is named for the boundary,
-  its docstring records why the sweep site cannot fire (the 0-rows naive-bind
-  observation), and the **named mutation** is: delete the boundary guard
-  (definition site) ⇒ exactly this row reds, whole-suite.
+  **fails closed at the loader's own boundary** (§1A HC-3A as amended **round 4d**).
+  Amended at re-review r4 (B1-r4): the row must pin the failure **site**, not the
+  exception type — the guard sits above `concurrency.py:_sweep`, which raises the
+  same `TypeError` whenever the shifted bind still fetches the row, so a type-only
+  assertion cannot tell them apart and the mutation's bite becomes an artifact of
+  the host's UTC offset (measured: guard deleted ⇒ this row fails at `+02:00` and
+  **passes** under `TZ=UTC`). The guard carries a message naming its own boundary
+  (`load_live_worked_seconds` …) and the row asserts it with
+  `pytest.raises(TypeError, match=...)`. The docstring records what was measured —
+  the naive bind is **shifted by the client host's local UTC offset**, not
+  normalized, so un-guarded the loader either loses the live term silently or
+  raises from the sweep, depending on host and fixture. **Named mutation:** delete
+  the guard (definition site) ⇒ exactly this row reds, whole-suite, **and it must
+  red under `TZ=UTC` as well as under the host's own zone** — one run each,
+  recorded.
 - **C11 — the settled term is load-bearing** (added at review r1, finding B1 — the
   identity-element rule, master plan §5). Two rows with `settled != 0`: (a) a step
   with a non-zero settled column **and** an open working record, asserting exactly
@@ -241,6 +250,17 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   is phase 2.)
 
 ## 6. Notes
+
+### Structural facts established by review — no criterion is owed
+
+- **The per-step accumulation form (`+=` vs `=`) is untestable by construction**
+  (re-review r4, N2-r4 — closed there, recorded here because it outlives the
+  handoff). `uix_step_state_records_active` admits at most one open record per
+  step and the wrapper emits one row per record, so the loader's filter admits at
+  most one contribution per `step_id` and the two forms cannot differ through any
+  database fixture. Two users cannot hold open records on the same step, by the
+  same index. **No row is owed; this is untestable, not overlooked** — do not file
+  it again.
 
 ### Delegations granted in writing (projection r0, 2026-08-20)
 
@@ -437,3 +457,31 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   `prompts/reviewer/2026-08-20_phase1_rereview_r4.md`. r1's N6 routed to
   `plans/plan_4.md` C6 (owner adjudication — an evidence summary is immutable,
   so closing it means reject-and-re-record).
+
+- **2026-08-20 — re-review r4 consumed (coordinator). CHANGES_REQUESTED: 1
+  blocking, 0 should-fix, 4 notes — and the blocking finding is in the
+  coordinator's own round-4c correction.** Perimeter verified: reviewer wrote
+  exactly its one handoff file; loader hash unchanged; r4's own three mutations
+  (M-float, M-attr, M-anchor) reproduce r3's ledger with zero removals. r2/r3's
+  work is confirmed correct in full — C11, C12(a/b/c), N1, N3, N7, S2 all hold.
+  **B1-r4, verified by the coordinator and upgraded from derived to measured:**
+  the guard raises CPython's *byte-identical* message one frame above
+  `concurrency.py:_sweep`, so `pytest.raises(TypeError)` cannot distinguish them.
+  Deleting the guard and running the C9 row: at the host's `+02:00` it fails
+  ("DID NOT RAISE"), **under `TZ=UTC` it passes** — the safety test's bite was an
+  artifact of the host offset, and on an ordinary UTC CI box the guard could have
+  been deleted with nothing red. r4's row-4 counter-measurement (same code, naive
+  `now` one hour later ⇒ the sweep *does* raise) independently falsifies round
+  4c's "the sweep cannot fire". Folded: **intention round 4d** (HC-3A's third and
+  measured statement of the failure site, plus the obligation that the guard be
+  distinguishable from what it pre-empts); **master plan §5** +4 rules
+  (both-directions site probes · a guard must not imitate its own failure ·
+  host-dependent observations are environment facts · capture the ID set before
+  repeating); **master plan §6** +2 environment facts (a third intermittent test,
+  identity unrecoverable; `TZ` matters to this phase). C9 amended round 4d;
+  N2-r4 recorded as a structural fact in §6 (the `+=` form is untestable by
+  construction — no row owed, do not re-file). Fix prompt
+  `prompts/implementer/2026-08-20_phase1_fix_r5.md`: B1-r4 + N1-r4 + N4-r4,
+  **one production line in scope** (the guard's message — coordinator's choice
+  between r4's two options, reasoned in the prompt), and the ledger must prove
+  host-independence under two `TZ` settings.

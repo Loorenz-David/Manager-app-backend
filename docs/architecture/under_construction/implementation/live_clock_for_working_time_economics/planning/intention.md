@@ -116,17 +116,35 @@ things are pinned:
 - **Type.** `entered_at` / `exited_at` are `DateTime(timezone=True)`
   (`step_state_record.py:StepStateRecord`) and arrive **timezone-aware** from the
   driver. `now` is therefore `datetime.now(timezone.utc)` — aware, UTC.
-  **The loader fails closed at its own boundary** (round 4c — supersedes this
-  bullet's round-4 claim that a naive `now` raises inside `concurrency.py:_sweep`):
-  measured on the configured driver, a naive `window_end` bind is accepted and
-  silently shifts the overlap fetch — the rows never reach the sweep, so the named
-  site cannot fire and the un-guarded behaviour is a **silently vanished live term**,
-  not an error. The contract is therefore an explicit `TypeError` guard at the top
-  of `live_worked_seconds.py:load_live_worked_seconds`, and it is rule-6
-  load-bearing, not defensive decoration. Named mutation (charter rule 11): deleting
-  the guard (definition site) must turn exactly the loader's naive-`now` test red —
-  measured whole-suite at one added ID, twice independently (review r1; coordinator
-  consumption).
+  **The loader fails closed at its own boundary** (round 4d — supersedes BOTH the
+  round-4 claim that a naive `now` raises inside `concurrency.py:_sweep` AND the
+  round-4c claim that the rows never reach the sweep. Each named a failure site
+  without probing it in both directions; the second was written in the act of
+  correcting the first).
+
+  **What is measured.** A naive `window_end` bind is not "normalized" — the driver
+  reinterprets it in the **client host's local UTC offset at that date**, shifting
+  the overlap-fetch boundary by that offset. What follows depends on the shift and
+  the fixture's timestamps, so the un-guarded loader has **two** failure modes and
+  which one appears is an environment fact, not a mechanism fact:
+  - the shift moves `window_end` before the open record's `entered_at` ⇒ 0 rows ⇒
+    the sweep never runs ⇒ a **silently vanished live term**, no error;
+  - the row is still fetched ⇒ `concurrency.py:_sweep` **does** raise `TypeError`
+    at `(end - interval.entered_at)`.
+  Measured both ways on one host by varying only `now` (review r4), and measured
+  across hosts by varying only `TZ` (coordinator, same fixture: guard deleted, the
+  loader's naive-`now` test fails on a `+02:00` host and **passes** under `TZ=UTC`).
+
+  **The contract** is therefore an explicit guard at the top of
+  `live_worked_seconds.py:load_live_worked_seconds` — rule-6 load-bearing, not
+  defensive decoration, because one of its two un-guarded modes is silent. **The
+  guard must be distinguishable from the failure it pre-empts**: it raises the same
+  exception type at a lower frame, so a type-only assertion cannot tell them apart
+  and the safety test is decoration on any host where the sweep raises (charter
+  rule 11). The guard therefore carries a message naming its own boundary, and its
+  named mutation (delete the guard, definition site) must redden the loader's
+  naive-`now` test **on every host** — proven by running that mutation under at
+  least two `TZ` settings, one of them `UTC`.
 - **Injection site, given the router's fixed signature.** `run_service.py:run_service`
   calls every query service as `fn(ctx)`, and `context.py:ServiceContext` carries the
   standing instruction "Never add boolean flags or config values here". So `now` is
@@ -1528,6 +1546,20 @@ guarded by plan 2 C11). Also fixed, class-swept: two citations of
 `_apply_step_transition`. Plan-level amendments (golden composition, the
 `_apply_step_transition` close path for T2's fixture, assertion-order and
 stub-clock corrections) live in `plans/plan_1.md` and its Review log, not here. No
+semantics changed; D1–D9 untouched.
+
+**Round 4d — 2026-08-20, phase 1 re-review r4 folded (one upstream correction, and
+it corrects round 4c's own correction).** HC-3A's Type bullet has now named a
+failure site three times; the first two were never probed in both directions.
+Round 4 said the sweep raises; round 4c said the sweep cannot fire; **both are
+false as generalizations** — the naive bind is shifted by the *client host's* UTC
+offset, so the un-guarded loader either loses the live term silently or raises from
+the sweep, depending on the host and the fixture. Measured by varying `now` on one
+host (r4) and by varying `TZ` on one fixture (coordinator: the guard's own mutation
+bites at `+02:00` and **does not bite under `TZ=UTC`**). The bullet now records the
+mechanism and obliges the guard to be distinguishable from the failure it pre-empts.
+Sixth instance on this project of a defect class arriving inside the correction of
+its own class — and the first where the correction was the coordinator's. No
 semantics changed; D1–D9 untouched.
 
 **Round 4c — 2026-08-20, phase 1 review r1 folded (two upstream corrections).**
