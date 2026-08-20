@@ -272,3 +272,24 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   batch: inferred `Live worked-seconds loader` projection with `reads_from
   step_state_records` and `calls compute_record_contributions`; no review item was
   promoted, rejected, edited, or removed.
+
+- **2026-08-20 — implementation consumed (coordinator), verified independently.**
+  Perimeter: `git diff --name-only 08fc141..HEAD` equals the declared 10 items
+  exactly. Goldens-first proven from the checkpoint itself: `1081a2b` contains only
+  the three goldens + their test. Clean suite re-run: **26 / 2454 / 1**, failure IDs
+  byte-identical to master plan §6's set. **All three named mutations re-applied by
+  the coordinator, whole-suite, reverted, hash-verified (`6d11b922…fa82ca`)**:
+  mutation 1 (naive elapsed, call site) added exactly the ledger's 8 IDs; mutation 2
+  (`max(entered_at)` anchor) exactly its 1. **Mutation 3 required a repeat in a
+  second shape**: with the inserted clock read used *only* as the sweep timestamp —
+  the ledger row's literal description — the added set is **11** (the
+  `zero_cases` test stays green, because the fixture-`now` window fetch still
+  excludes the future-entry record); with the clock read used as **both** window-end
+  and sweep timestamp, the added set is exactly the ledger's **12**. The
+  implementer's observation was true and their mutant was the both-args shape; the
+  row's site description under-stated it. Recorded here per rule 11 (a named
+  mutation names where it is applied — and, this proves, *how far* it reaches):
+  future ledger rows for multi-use arguments state which uses the mutation covers.
+  Consumption flags routed to review r1 as probes P1–P7 (headline: the naive-`now`
+  boundary guard is a sound but unplanned semantic addition whose justification
+  needs reconciling and whose own deletion may leave every test green).
