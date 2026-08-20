@@ -1,0 +1,177 @@
+reviewId: 2026-08-20T04-46-34-665Z--228822
+reviewedItemIds:
+  - node:endpoint-item-economics-task-production-time
+  - node:projection-item-economics-task-production-time
+  - edge:endpoint-item-economics-task-production-time--accepts-->projection-item-economics-task-production-time
+  - edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-production-time
+  - node:domain-purchase-api-sek-price-normalization
+  - edge:source-file-item-economics-price-scenario--implements-->projection-item-economics-task-price-scenario
+decisions:
+  - itemId: node:endpoint-item-economics-task-production-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_task_production_time
+            startLine: 370
+            endLine: 381
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_task_production_time
+            startLine: 371
+            endLine: 382
+        - index: 1
+          from:
+            path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+            symbol: test_production_time_route_is_available_to_all_roles
+            startLine: 9
+            endLine: 16
+          to:
+            path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+            symbol: test_production_time_route_is_available_to_all_roles
+            startLine: 8
+            endLine: 14
+    rationale: "Claim verified, both addresses corrected. The route does admit
+      exactly ADMIN, MANAGER, WORKER, SELLER with response_model=None and
+      delegates the path identifier through _run - four roles counted, not
+      assumed. Index 0 was 370-381: it opened on a blank line and closed one
+      line before the _run call's paren; the route is 371-382. Index 1 was 9-16,
+      which EXCLUDED the @pytest.mark.parametrize at line 8 that carries the
+      four role names - the very evidence the summary rests on - and included
+      two trailing blanks instead. Corrected to 8-14."
+  - itemId: node:projection-item-economics-task-production-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+            symbol: get_task_production_time
+            startLine: 23
+            endLine: 95
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+            symbol: get_task_production_time
+            startLine: 23
+            endLine: 96
+        - index: 1
+          from:
+            path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+            symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+            startLine: 172
+            endLine: 196
+          to:
+            path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+            symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+            startLine: 191
+            endLine: 213
+    rationale: "Read the service before the claim: it composes
+      get_task_budget_status, workspace-scoped non-deleted TaskStep with
+      latest_state_record selectinloaded, section attributes, typicals, the pure
+      division and a time-only serializer - which is what the summary says.
+      Index 1 was materially wrong, not merely drifted: 172-196 begins inside
+      the PRECEDING test's body and ends four lines into the target, so the
+      anchor pointed mostly at a different test. The named test is 191-213
+      including its @pytest.mark.integration. Index 0 corrected 23-95 to 23-96,
+      the closing paren of the serializer call."
+  - itemId: edge:endpoint-item-economics-task-production-time--accepts-->projection-item-economics-task-production-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_task_production_time
+            startLine: 370
+            endLine: 381
+          to:
+            path: app/beyo_manager/routers/api_v1/item_economics.py
+            symbol: route_get_task_production_time
+            startLine: 371
+            endLine: 382
+    rationale: "Verified at the route: _run(get_task_production_time, ...) is the
+      delegation, so the endpoint accepts this projection. Same off-by-one as
+      the endpoint node's first anchor - 370 is blank and the call closes at 382
+      - corrected here too so the two records agree."
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-production-time
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/domain/item_economics/budget_division.py
+            symbol: divide_production_budget
+            startLine: 245
+            endLine: 401
+          to:
+            path: app/beyo_manager/domain/item_economics/budget_division.py
+            symbol: divide_production_budget
+            startLine: 273
+            endLine: 401
+    rationale: "The reported conflicting-canonical-relationship is a FALSE POSITIVE,
+      checked rather than deferred to: the sibling implements edge from the same
+      module to projection-item-economics-task-budget-allocations is origin
+      human_confirmed, so one pure module implementing two projections is
+      established human-verified structure. This is the same checker behaviour
+      seen on contains edges this session and is filed in the archgraph ledger.
+      The anchor was wrong in the way that matters: 245-401 begins 28 lines
+      inside a DIFFERENT function - line 245 is an else-branch assigning a
+      governing step - while divide_production_budget begins at 273. Corrected
+      to 273-401."
+  - itemId: node:domain-purchase-api-sek-price-normalization
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "All three anchors land exactly and every checkable claim holds. The
+      rate table at :22-25 has exactly three entries - DKK 1.5, EUR 11, SEK 1 -
+      so complete is accurate rather than a guess; conversion is
+      Decimal(str(price)) * rate, integral results downcast to int. The node's
+      two behavioural claims verify at the lines: an absent price returns None
+      before any lookup, and an unsupported code raises ValueError from
+      KeyError, which is fail-closed. The call site at :132-145 normalizes
+      before ItemLookupResult is constructed, so nothing unnormalized crosses
+      the boundary. The test anchor 44-80 spans the parametrize at 44 through
+      the rejects test, covering both claims. NOTE: this node describes the
+      owner's concurrent purchase_api work, which is still uncommitted in the
+      working tree - promoted on the code as it stands, and the graph file must
+      be committed together with it."
+  - itemId: edge:source-file-item-economics-price-scenario--implements-->projection-item-economics-task-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "DISCLOSURE: this session wrote this record 40 minutes ago, after
+      rejecting its predecessor for enumerating six of seven imports. Author and
+      confirmer are the same session, and the owner authorized promotion
+      explicitly. What makes it more than self-certification is the order the
+      skill prescribes: the code was read first, the seven-name import block
+      counted, and round_half_even traced to its use in _typical_block BEFORE
+      any summary was written - the re-record is the product of that reading,
+      not a paraphrase of the claim it replaced. Re-verified now: the import
+      block still lists seven names and the new summary deliberately describes
+      what the module supplies rather than listing members, so it cannot go
+      stale by omission the way its predecessor did."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:46:34.665Z
+graphRevisionBefore: 12085bcc4b27066bed0032c995a8b5269ca0421c01366416d0c1c21f5c42d3f7
+graphRevisionAfter: 853894ae6768bdab53dfe64da277c777d27b2a1311f65a8a48690dcb3de09807
+evidenceSummary: 11 evidence entries across 8 files; no drift detected
+humanInstruction: "Owner authorized promotion of the remaining pending items and
+  the commit: \"you can human confirmed the arch graph and commit\". Includes
+  explicit authorization to promote the implements edge this session
+  re-recorded, and the node describing the owner's own concurrent purchase_api
+  work."
+reviewTokenCorrelation: 3474454d6a0d

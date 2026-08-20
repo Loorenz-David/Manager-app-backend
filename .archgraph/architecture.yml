@@ -4624,12 +4624,32 @@ nodes:
         - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
           symbol: get_task_production_time
           startLine: 23
+          endLine: 96
+          summary: The query composes workspace-scoped budget status, non-deleted task
+            steps with latest state, active section attributes, filtered typical
+            times, pure division, and the time-only serializer.
+          inferenceReason: This service is the implementation boundary for the task
+            production-time read projection.
+        - path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+          symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+          startLine: 191
+          endLine: 213
+          summary: The integration contract checks that the new projection agrees with the
+            existing allocation projection while exposing only the time
+            projection shape.
+          inferenceReason: The focused integration test verifies the projection's
+            compatibility and time-only boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          startLine: 23
           endLine: 95
           summary: The query composes workspace-scoped budget status, non-deleted task
             steps with latest state, active section attributes, filtered typical
             times, pure division, and the time-only serializer.
           inferenceReason: This service is the implementation boundary for the task
             production-time read projection.
+          supersededAt: 2026-08-20T04:46:34.640Z
         - path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
           symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
           startLine: 172
@@ -4639,10 +4659,11 @@ nodes:
             projection shape.
           inferenceReason: The focused integration test verifies the projection's
             compatibility and time-only boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-20T04:46:34.640Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-17T20:59:49.438Z
+    updatedAt: 2026-08-20T04:46:34.640Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -4678,8 +4699,8 @@ nodes:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           symbol: route_get_task_production_time
-          startLine: 370
-          endLine: 381
+          startLine: 371
+          endLine: 382
           summary: The route admits admin, manager, worker, and seller roles and delegates
             the task identifier to get_task_production_time with
             response_model=None.
@@ -4687,15 +4708,34 @@ nodes:
             production-time projection.
         - path: app/tests/unit/routers/api_v1/test_production_time_routes.py
           symbol: test_production_time_route_is_available_to_all_roles
+          startLine: 8
+          endLine: 14
+          summary: The route contract test invokes the endpoint for all four roles and
+            verifies dispatch to the new service.
+          inferenceReason: The test verifies the endpoint's role perimeter and service identity.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+          startLine: 370
+          endLine: 381
+          summary: The route admits admin, manager, worker, and seller roles and delegates
+            the task identifier to get_task_production_time with
+            response_model=None.
+          inferenceReason: This handler is the external HTTP boundary for the new task
+            production-time projection.
+          supersededAt: 2026-08-20T04:46:34.640Z
+        - path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+          symbol: test_production_time_route_is_available_to_all_roles
           startLine: 9
           endLine: 16
           summary: The route contract test invokes the endpoint for all four roles and
             verifies dispatch to the new service.
           inferenceReason: The test verifies the endpoint's role perimeter and service identity.
-    origin: ai_inferred
+          supersededAt: 2026-08-20T04:46:34.640Z
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-20T04:46:34.640Z
   - id: source-file-item-economics-price-scenario
     type: source_file
     name: app/beyo_manager/domain/item_economics/price_scenario.py
@@ -4756,10 +4796,10 @@ nodes:
             import, is a pure source-file boundary rather than a read model:
             nothing can ask it for anything over the wire."
           supersededAt: 2026-08-19T15:54:54.896Z
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
-    updatedAt: 2026-08-19T15:54:54.896Z
+    updatedAt: 2026-08-20T04:39:02.236Z
   - id: endpoint-item-economics-task-price-scenario
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/price-scenario
@@ -4789,10 +4829,10 @@ nodes:
             identity-preserving dispatch to get_task_price_scenario.
           inferenceReason: The test proves the endpoint mounts the intended projection
             service rather than an adjacent item-economics query.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:04:11.607Z
-    updatedAt: 2026-08-19T17:04:11.607Z
+    updatedAt: 2026-08-20T04:39:02.236Z
     sourceLinks:
       - path: app/beyo_manager/routers/api_v1/item_economics.py
         symbol: route_get_task_price_scenario
@@ -4824,8 +4864,8 @@ nodes:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
           symbol: get_task_price_scenario
-          startLine: 149
-          endLine: 273
+          startLine: 181
+          endLine: 311
           summary: The query service composes budget status, workspace-scoped task/item
             resolution, current valuation/byline, live configuration, the task
             typical block, pure price-model anchors, binding overrides,
@@ -4834,29 +4874,96 @@ nodes:
             price-scenario projection.
         - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
           symbol: test_c1_status_matrix_has_twelve_exact_rows
+          startLine: 583
+          endLine: 617
+          summary: The integration contract enumerates all twelve economics statuses and
+            verifies whether the model, anchors, and domain are published.
+          inferenceReason: The test verifies the projection's total status branch,
+            including its five present and seven absent cases.
+      evidenceHistory:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 149
+          endLine: 273
+          summary: The query service composes budget status, workspace-scoped task/item
+            resolution, current valuation/byline, live configuration, the task
+            typical block, pure price-model anchors, binding overrides,
+            fingerprinting, and service-side serialization.
+          inferenceReason: This function is the implementation boundary for the task
+            price-scenario projection.
+          supersededAt: 2026-08-20T04:39:02.236Z
+        - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
           startLine: 387
           endLine: 419
           summary: The integration contract enumerates all twelve economics statuses and
             verifies whether the model, anchors, and domain are published.
           inferenceReason: The test verifies the projection's total status branch,
             including its five present and seven absent cases.
-    origin: ai_inferred
+          supersededAt: 2026-08-20T04:39:02.236Z
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-19T17:34:47.483Z
+    updatedAt: 2026-08-20T04:40:54.047Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: get_task_price_scenario
-        startLine: 149
-        endLine: 273
-        contentHash: c276ce6989d8c4343ee56618f2e2027c3f92a36ccc3c95513c9d53085009b7b5
-        linkedAt: 2026-08-19T17:34:47.483Z
+        startLine: 181
+        endLine: 311
+        contentHash: 4a3dd8fc24d145b0eaa8f094e6bb84bb60e9620384565b2a39ba99a8e0d179ee
+        linkedAt: 2026-08-20T04:40:34.534Z
       - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
         symbol: test_c1_status_matrix_has_twelve_exact_rows
-        startLine: 387
-        endLine: 419
-        contentHash: 663e12c1ebf78a57d04f15aebc34e0aa5f07e23ad31325d546e7dac7731f7e0f
-        linkedAt: 2026-08-19T17:34:47.483Z
+        startLine: 583
+        endLine: 617
+        contentHash: 6e53ba0c1aa4d2c5855df517c70abe6db0752a5158dd01e90f8e547f67a41480
+        linkedAt: 2026-08-20T04:40:54.047Z
+  - id: domain-purchase-api-sek-price-normalization
+    type: domain
+    name: Purchase API SEK price normalization
+    description: Transforms purchase-application purchase prices into Swedish kronor
+      before an external lookup result is serialized. It owns only the purchase
+      adapter's interpretation of the external currency code; it does not fetch
+      live exchange rates or alter internal-database lookup results. The fixed
+      contract is 1 EUR = 11 SEK, 1 DKK = 1.5 SEK and 1 SEK = 1 SEK, while an
+      absent price remains absent. An unsupported currency must fail closed so
+      an unnormalized purchase price never crosses the lookup boundary.
+    tags:
+      - items
+      - purchase-api
+      - currency
+      - money
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/items/lookup/purchase_api.py
+          symbol: _normalize_purchase_price_to_sek
+          startLine: 22
+          endLine: 47
+          summary: The purchase adapter defines the complete EUR, DKK and SEK fixed-rate
+            table and converts numeric purchase prices with Decimal arithmetic.
+          inferenceReason: This function is the implementation boundary that owns external
+            purchase-price currency interpretation and guarantees SEK output.
+        - path: app/beyo_manager/services/queries/items/lookup/purchase_api.py
+          symbol: PurchaseApiLookupHandler.lookup
+          startLine: 132
+          endLine: 145
+          summary: The purchase API response's purchase_price and currency fields are
+            normalized before ItemLookupResult is returned.
+          inferenceReason: This call site proves normalization occurs before the
+            cross-source lookup orchestrator serializes the external result.
+        - path: app/tests/unit/services/queries/items/test_lookup_item_by_article_number.py
+          symbol: test_purchase_api_lookup_normalizes_purchase_price_to_sek
+          startLine: 44
+          endLine: 80
+          summary: Tests enumerate EUR, DKK and SEK output values and reject an
+            unsupported currency.
+          inferenceReason: The tests protect the complete supported-currency mapping and
+            the invariant that malformed currency cannot emit an unnormalized
+            price.
+    origin: human_confirmed
+    confidence: 0.99
+    createdAt: 2026-08-19T18:49:23.014Z
+    updatedAt: 2026-08-20T04:46:34.640Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9531,16 +9638,26 @@ edges:
       evidence:
         - path: app/beyo_manager/domain/item_economics/budget_division.py
           symbol: divide_production_budget
+          startLine: 273
+          endLine: 401
+          summary: The pure allocator returns grouped section rows and per-step
+            production-time allowances using exact arithmetic and deterministic
+            remainder ordering.
+          inferenceReason: The source module implements the projection's calculation boundary.
+      evidenceHistory:
+        - path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
           startLine: 245
           endLine: 401
           summary: The pure allocator returns grouped section rows and per-step
             production-time allowances using exact arithmetic and deterministic
             remainder ordering.
           inferenceReason: The source module implements the projection's calculation boundary.
-    origin: ai_inferred
+          supersededAt: 2026-08-20T04:46:34.640Z
+    origin: human_confirmed
     confidence: 0.88
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-20T04:46:34.640Z
   - sourceNodeId: endpoint-item-economics-task-production-time
     relationshipType: accepts
     targetNodeId: projection-item-economics-task-production-time
@@ -9548,14 +9665,22 @@ edges:
       evidence:
         - path: app/beyo_manager/routers/api_v1/item_economics.py
           symbol: route_get_task_production_time
+          startLine: 371
+          endLine: 382
+          summary: The endpoint delegates to the task production-time query service.
+          inferenceReason: The endpoint accepts the corresponding projection.
+      evidenceHistory:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
           startLine: 370
           endLine: 381
           summary: The endpoint delegates to the task production-time query service.
           inferenceReason: The endpoint accepts the corresponding projection.
-    origin: ai_inferred
+          supersededAt: 2026-08-20T04:46:34.640Z
+    origin: human_confirmed
     confidence: 0.88
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-17T17:12:48.742Z
+    updatedAt: 2026-08-20T04:46:34.640Z
   - sourceNodeId: command-task-create
     relationshipType: reads_from
     targetNodeId: table-item
@@ -9594,10 +9719,10 @@ edges:
           inferenceReason: Physical placement inside the domain package together with
             domain-only imports establishes containment by the item-economics
             domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-19T15:29:24.418Z
-    updatedAt: 2026-08-19T15:29:24.418Z
+    updatedAt: 2026-08-20T04:39:02.236Z
   - sourceNodeId: endpoint-item-economics-task-price-scenario
     relationshipType: accepts
     targetNodeId: projection-item-economics-task-price-scenario
@@ -9612,26 +9737,39 @@ edges:
             runner.
           inferenceReason: The service identity establishes that this endpoint accepts the
             corresponding projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-19T17:34:47.483Z
+    updatedAt: 2026-08-20T04:39:02.236Z
   - sourceNodeId: source-file-item-economics-price-scenario
     relationshipType: implements
     targetNodeId: projection-item-economics-task-price-scenario
-    description: The pure price-scenario module supplies the arithmetic the task
+    description: The pure price module supplies every derived number the
       price-scenario projection publishes.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
-          summary: The query service imports collapse_terms, break_even_price_minor,
-            infeasible_at_or_below_minor, ceil_to_step, slider_domain and the
-            PriceModel carrier from the pure module, and every published anchor
-            and band value is returned by one of them.
+          symbol: get_task_price_scenario
+          summary: "The query service imports its price mathematics from the pure module
+            and performs none of it itself: the collapsed cost-model form, the
+            break-even and infeasibility searches, the step-rounding helper and
+            the slider-band derivation all arrive as imported callables, and the
+            PriceModel carrier is the module's own dataclass. Every value the
+            projection publishes under model, anchors and domain is the return
+            of one of them."
           inferenceReason: A projection whose published numbers are all produced by a pure
             module stands in the same implements relation to it as the
             budget-division module does to the production-time projection.
-    origin: ai_inferred
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: _typical_block
+          summary: The typical block quantises each participating section's resolved
+            typical through the same module's integer rounding helper rather
+            than a language round, so the module also supplies the arithmetic
+            behind the published typical total.
+          inferenceReason: Recorded as a second evidence entry because the module's role
+            reaches past the anchors block into the typical the anchors are
+            derived from - a dependency the first entry alone understates.
+    origin: human_confirmed
     confidence: 0.94
-    createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-19T17:34:47.483Z
+    createdAt: 2026-08-20T04:39:17.970Z
+    updatedAt: 2026-08-20T04:46:34.640Z

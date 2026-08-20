@@ -115,3 +115,44 @@ not move `suggestedDecision`.
 
 **Blocks my task:** no — promoted over the false positives, with the reasoning in the review
 record `.archgraph/reviews/2026-08-20T04-39-02-258Z--6e129c.yml`.
+
+### Second instance, same session — it is not only `contains`
+
+`edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-production-time`
+reported the same contradiction type and the same `suggestedDecision: "investigate"`:
+
+> Another "implements" edge starting at "source-file-item-economics-budget-division" already
+> points at "projection-item-economics-task-budget-allocations".
+
+The sibling edge it names is **`origin: human_confirmed`**. One pure module implementing two
+projections is exactly what `budget_division.py` does — it is the shared allocator behind both
+the allocations projection and the production-time projection, which is the whole reason both
+exist.
+
+**So the check misfires on `implements` too, not just `contains`.** Two of the six items
+reviewed at this closeout carried it, both false, both would have been parked by an agent that
+took `suggestedDecision` at face value. Whatever the rule is, "a source node may have at most
+one edge of a given type" is not true of this graph's human-confirmed content for either type.
+Promoted over it; reasoning in `.archgraph/reviews/2026-08-20T04-46-34-665Z--228822.yml`.
+
+---
+
+## Closing note — what the anchors looked like across 11 items
+
+Not a finding, but the reason two of the findings above matter. Of the eleven pending items
+reviewed at this closeout, **six carried anchors that did not point where they claimed**:
+
+| Item | Stored | Actual | Kind of wrong |
+|---|---|---|---|
+| `projection-…-price-scenario` ev0 | 149–273 | 181–311 | drifted (code moved) |
+| `projection-…-price-scenario` ev1 | 387–419 | 583–617 | drifted, ~200 lines |
+| `projection-…-production-time` ev1 | 172–196 | 191–213 | **wrong region** — inside the preceding test |
+| `endpoint-…-production-time` ev1 | 9–16 | 8–14 | **excluded its own evidence** — the parametrize carrying the four roles |
+| `…budget-division--implements-->…` | 245–401 | 273–401 | **wrong region** — starts 28 lines inside another function |
+| `endpoint-…-production-time` ev0 | 370–381 | 371–382 | off by one, opens on a blank line |
+
+Three of those six were never right — they did not drift, they were recorded wrong. **Line
+spans recorded alongside a symbol are worth re-deriving from the symbol at review time rather
+than trusting**, and the two that excluded a decorator are the sharper lesson: when a test's
+evidence is its `@pytest.mark.parametrize` table, an anchor starting at the `def` points at the
+assertion and misses the data it is asserting over.
