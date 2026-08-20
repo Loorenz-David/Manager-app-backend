@@ -92,6 +92,7 @@ async def _add_step_record(
     step_deleted: bool = False,
     record_marked_wrong: bool = False,
     step_marked_wrong: bool = False,
+    create_record: bool = True,
 ):
     step = TaskStep(
         client_id=f"tsp_live_{token}_{number}",
@@ -112,22 +113,24 @@ async def _add_step_record(
     )
     db_session.add(step)
     await db_session.flush()
-    record = StepStateRecord(
-        client_id=f"ssr_live_{token}_{number}",
-        workspace_id=workspace.client_id,
-        step_id=step.client_id,
-        state=state,
-        entered_at=entered_at,
-        exited_at=exited_at,
-        created_by_id=user.client_id if record_created_by_id == "__default__" else record_created_by_id,
-        credited_user_id=credited_user_id,
-        recorded_time_marked_wrong=record_marked_wrong,
-        is_deleted=record_deleted,
-    )
-    db_session.add(record)
-    await db_session.flush()
-    step.latest_state_record_id = record.client_id
-    await db_session.flush()
+    record = None
+    if create_record:
+        record = StepStateRecord(
+            client_id=f"ssr_live_{token}_{number}",
+            workspace_id=workspace.client_id,
+            step_id=step.client_id,
+            state=state,
+            entered_at=entered_at,
+            exited_at=exited_at,
+            created_by_id=user.client_id if record_created_by_id == "__default__" else record_created_by_id,
+            credited_user_id=credited_user_id,
+            recorded_time_marked_wrong=record_marked_wrong,
+            is_deleted=record_deleted,
+        )
+        db_session.add(record)
+        await db_session.flush()
+        step.latest_state_record_id = record.client_id
+        await db_session.flush()
     return step, record
 
 
@@ -172,6 +175,7 @@ async def test_c3_row_2_sweep_changes_divisor_mid_interval(db_session):
 
 @pytest.mark.integration
 async def test_c3_row_3_cross_task_open_record_is_in_the_divisor(db_session):
+    # D1: two overlapping 30-minute cross-task records yield 900 seconds each.
     workspace, user, section, task, token = await _seed_workspace(db_session)
     other_task = await _add_task(db_session, workspace, user, token, 2)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
@@ -237,6 +241,7 @@ async def test_c4_step_marked_wrong_drops_it_and_releases_sibling_share(db_sessi
 
 @pytest.mark.integration
 async def test_c4_deleted_record_is_excluded_defensively(db_session):
+    """Only reset/phases/delete_step_state_records.py writes this hard DELETE."""
     workspace, user, section, task, token = await _seed_workspace(db_session)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
     step, _ = await _add_step_record(
@@ -248,6 +253,7 @@ async def test_c4_deleted_record_is_excluded_defensively(db_session):
 
 @pytest.mark.integration
 async def test_c4_zero_cases_future_entry_and_missing_attribution_are_skipped(db_session):
+    """Missing attribution tests the ``if user_id is not None`` deletion; future-entry tests the both-args clock-read shape, per the review log's consumption entry."""
     workspace, user, section, task, token = await _seed_workspace(db_session)
     now = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
     future, _ = await _add_step_record(db_session, workspace, user, section, task, token, 1, now)
@@ -342,6 +348,7 @@ async def test_c7_window_anchors_at_minimum_open_entry(db_session):
     )
     result = await load_live_worked_seconds(db_session, workspace.client_id, [first, second], now)
     assert result[first.client_id] == 90900
+    assert result[second.client_id] == 1800
 
 
 @pytest.mark.integration
@@ -395,7 +402,8 @@ async def test_c9_service_context_stamps_and_honors_aware_utc_now(monkeypatch, d
 
 
 @pytest.mark.integration
-async def test_c9_naive_now_fails_loudly_inside_the_sweep(db_session):
+async def test_c9_naive_now_fails_closed_at_the_loader_boundary(db_session):
+    """HC-3A and plan C9 now place the failure at the loader boundary: the configured driver normalizes a naive bind before the sweep, so the sweep cannot raise (0 rows observed)."""
     workspace, user, section, task, token = await _seed_workspace(db_session)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
     step, _ = await _add_step_record(db_session, workspace, user, section, task, token, 1, start)
@@ -403,6 +411,57 @@ async def test_c9_naive_now_fails_loudly_inside_the_sweep(db_session):
         await load_live_worked_seconds(
             db_session, workspace.client_id, [step], datetime(2026, 1, 10, 9, 10)
         )
+
+
+@pytest.mark.integration
+async def test_c11_nonzero_settled_term_is_added_to_live_share(db_session):
+    workspace, user, section, task, token = await _seed_workspace(db_session)
+    start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    with_open, _ = await _add_step_record(
+        db_session, workspace, user, section, task, token, 1, start, settled=100,
+        allows_batch_working=False,
+    )
+    result = await load_live_worked_seconds(
+        db_session, workspace.client_id, [with_open], start + timedelta(minutes=10)
+    )
+    assert result == {with_open.client_id: 700}
+
+
+@pytest.mark.integration
+async def test_c11_nonzero_settled_term_is_returned_without_open_record(db_session):
+    workspace, user, section, task, token = await _seed_workspace(db_session)
+    start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    settled_only, _ = await _add_step_record(
+        db_session, workspace, user, section, task, token, 2, start,
+        settled=250, create_record=False,
+    )
+    result = await load_live_worked_seconds(
+        db_session, workspace.client_id, [settled_only], start + timedelta(minutes=10)
+    )
+    assert result == {settled_only.client_id: 250}
+
+
+@pytest.mark.integration
+async def test_c12_loader_output_values_are_ints(db_session):
+    workspace, user, section, task, token = await _seed_workspace(db_session)
+    start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    first, _ = await _add_step_record(db_session, workspace, user, section, task, token, 1, start)
+    result = await load_live_worked_seconds(
+        db_session, workspace.client_id, [first], start + timedelta(minutes=10)
+    )
+    assert all(isinstance(value, int) for value in result.values())
+
+
+@pytest.mark.integration
+async def test_c12_half_even_rounding_is_applied_to_each_half_second_share(db_session):
+    workspace, user, section, task, token = await _seed_workspace(db_session)
+    start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
+    first, _ = await _add_step_record(db_session, workspace, user, section, task, token, 1, start)
+    second, _ = await _add_step_record(db_session, workspace, user, section, task, token, 2, start)
+    result = await load_live_worked_seconds(
+        db_session, workspace.client_id, [first, second], start + timedelta(seconds=61)
+    )
+    assert result == {first.client_id: 30, second.client_id: 30}
 
 
 @pytest.mark.integration
