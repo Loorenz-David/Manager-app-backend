@@ -209,17 +209,29 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   (`settled_seconds + live_by_step.get(step_id, 0)` → `live_by_step.get(step_id,
   0)`) ⇒ both rows redden — both sides computed per row, whole-suite, ID sets
   recorded. (Measured before the fix: this mutation's added set was **∅**.)
-- **C12 — the output type and the rounding locus discriminate** (added at review
-  r1, finding B2). (a) A type row: `assert all(isinstance(v, int) for v in
-  result.values())` — `==` cannot express this (`1800.0 == 1800`). (b) A
-  half-second locus row: one worker, two batch steps opened together, elapsed an
-  **odd** second count at the fixed `now`, so each share is exactly `x.5`;
-  asserted as the **half-even** integer (exact literal). **Named mutations:**
-  return the raw float (`+= contribution.seconds`, definition site) ⇒ the type row
-  reddens (and (b)'s value moves); `int(math.floor(x + 0.5))` in place of
-  `int(round(x))` ⇒ the half-second row reddens while the type row stays green —
-  recorded per row, whole-suite. (Measured before the fix: dropping `int(round)`
-  added **∅**.)
+- **C12 — the output type, the rounding MODE, and the rounding LOCUS each
+  discriminate** (added at review r1 finding B2; **row (c) added at the
+  coordinator's fix-r2 consumption — see §7**). Three rows, one property each:
+  - **(a) type.** `assert all(isinstance(v, int) for v in result.values())` —
+    `==` cannot express this (`1800.0 == 1800`).
+  - **(b) mode**, locus-neutral. Two batch steps opened together, `settled = 0`,
+    elapsed **61 s** ⇒ each share exactly `30.5` ⇒ asserted `30` (half-even).
+    Half-up would give `31`. With `settled = 0` both loci agree, so this row
+    isolates the mode.
+  - **(c) locus**, mode-neutral. Two batch steps opened together, elapsed
+    **63 s** ⇒ each share exactly `31.5`; the measured step carries an **odd**
+    `settled` (use `settled = 1`) ⇒ asserted `1 + round(31.5) = 1 + 32 = 33`.
+    The arithmetic that makes this row isolate the locus: `round(31.5) = 32` and
+    `floor(31.5 + 0.5) = 32` **agree**, so the mode cannot move it; while
+    `int(round(1 + 31.5)) = int(round(32.5)) = 32 ≠ 33`, so the sum-locus does.
+  **Named mutations** (all definition site, whole-suite, both sides computed):
+  return the raw float (`+= contribution.seconds`) ⇒ (a) and (b) redden;
+  `int(math.floor(x + 0.5))` for `int(round(x))` ⇒ (b) reddens, (a) and (c) stay
+  green; **round the sum instead of the share** — accumulate
+  `+= contribution.seconds` and return
+  `int(round(settled_seconds + live_by_step.get(step_id, 0)))` ⇒ **(c) reddens,
+  (a) and (b) stay green.** (Measured at fix-r2 consumption, before row (c)
+  existed: the locus mutation's added set was **∅** across the whole suite.)
 - **C10 — HC-1A at loader level:** after `load_live_worked_seconds` over a step with
   an open record, assert in this order: (1) `session.dirty` contains no `TaskStep` —
   before any expire, because `Session.expire_all()` discards un-flushed attribute
@@ -355,3 +367,28 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`; it
   was restored byte-identically after each probe. No tracker update was made;
   that remains coordinator-owned.
+
+- **2026-08-20 — fix r2 consumed (coordinator), verified independently; ONE new
+  coordinator finding.** Perimeter exactly the declared three files;
+  **`git diff ae7d723..HEAD -- app/beyo_manager/` is empty — zero production
+  lines changed this cycle**, loader hash unchanged. Suite re-run **26 / 2458 / 1**
+  (= 2454 + 4), failure IDs byte-identical to §6's set. **All four named mutations
+  re-applied whole-suite by the coordinator and every observed-red set matches the
+  ledger ID-for-ID**: drop-settled ⇒ both C11 rows; raw-float ⇒ both C12 rows;
+  half-up ⇒ the half-even row alone (the type row correctly stays green — the
+  ledger's own claim, verified); delete-the-guard ⇒ the renamed C9 row alone.
+  Reverts hash-verified `6d11b922…fa82ca`. B1, B2, S1, S2, N1, N3, N7 all
+  correctly addressed.
+  **Finding F-C1 (coordinator's own criterion, not the implementer's work):
+  C12 as written promised locus discrimination in its title and named only
+  MODE and TYPE mutations, and its (b) fixture sits at `settled = 0` where the
+  two loci coincide.** Measured: the locus mutation — accumulate the raw float
+  and round the sum in the return comprehension — leaves the **whole suite
+  green, added-ID set ∅**. So §3.1A A's "round the share, never the sum",
+  the term whose stated purpose is to make §4.1's two-resolutions claim true
+  (and thereby make master plan §4's N-2 choice safe), had no test that could
+  fail. This is B1/B2's exact class **arriving inside the correction of its own
+  class** — the fifth time this project has recorded that shape. C12 amended
+  above with the mode/locus rows separated and each isolating arithmetic given;
+  routed to fix r3 (`prompts/implementer/2026-08-20_phase1_fix_r3.md`), one row.
+  Rule earned → master plan §5.
