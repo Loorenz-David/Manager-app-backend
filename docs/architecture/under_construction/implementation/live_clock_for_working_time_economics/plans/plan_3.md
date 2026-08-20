@@ -4,7 +4,8 @@
 state: NOT_STARTED
 phase: 3
 date: 2026-08-20
-depends_on: plan 2 APPROVED (the live basis must exist for T13's mutation to discriminate)
+depends_on: plan 2 APPROVED 2026-08-21 (`efd6b99`) — holds. The live basis exists, so
+            T13's mutation can discriminate.
 ```
 
 ## 1. Goal
@@ -88,6 +89,35 @@ No handoff (phase 4).
   the plan-1 golden test staying green with its files untouched (read-only in this
   phase's diff, as in plan 2 C1). This is the criterion that makes D9 invisible to
   every frozen task that has not been reopened.
+
+## 5A. Carried from phase 2 — read before writing a single criterion
+
+Phase 2 ran six rounds and **every blocking finding was in a plan, a ledger or a
+criterion — never in the code.** Four things it earned bind this plan directly:
+
+- **Write criteria as lettered rows, one named mutation each — not as a headline
+  sentence with subordinate clauses.** Phase 2's C2, C4, C6 row 1 and C7 were each written
+  as a headline plus clauses, and in all four **the headline shipped and the clauses did
+  not**. C6's rows 2–4, written as separate lettered rows with their own mutations, shipped
+  complete on the first attempt. This plan's §5 is to be lettered throughout.
+- **This phase's determinism guard is C1/C2's pre-open comparison — NOT phase 2's
+  two-serve byte-identity rows.** Re-review r5 closed that search structurally: two serves
+  on one session with a frozen `ctx.now` can differ through exactly two channels, and
+  rounding collapses the interesting one (this is T1, which the gate already retired once).
+  Those rows guard the two-serve loader count and whole-second determinism, nothing more.
+  A comparison between genuinely different states — pre-open vs open — is what discriminates
+  here.
+- **T13's rows name the branch each surface actually reaches, not the surface.** Phase 2's
+  C12 claimed four surfaces and could only prove two: E-A no longer imports `today_utc`, and
+  E-P's fixture reaches `_build_evaluated_status` and never touches the preview path. A
+  criterion that lists surfaces over-claims; one that names branches is checkable.
+- **Before choosing a fixture, compute the *verdict* under both bases, not just the
+  values** (master §5, the degenerate-controlling-term rule). Percent is a ratio and a
+  ratio has its own degeneracies: a denominator that makes both bases agree, an allowance of
+  zero, a frozen block whose stored figures happen to equal the live ones. **`allowed ≡
+  actual + variance` (N-4) means a fixture with `variance_worker_minutes = 0` makes the
+  frozen and live denominators identical** — that fixture cannot fail, and it is the most
+  natural one to reach for.
 
 ## 6. Notes
 

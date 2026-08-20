@@ -1,7 +1,7 @@
 # Plan 2 — the three surfaces go live (one loader run, one `now`, per request)
 
 ```
-state: CHANGES_REQUESTED — 2026-08-20 (implement r1 · coordinator consumption; fix r2 dispatched)
+state: APPROVED — 2026-08-21 (implement r1 · fix r2 · review r3 · fix r4 · re-review r5 · fix r6)
 phase: 2
 date: 2026-08-20
 depends_on: plan 1 APPROVED 2026-08-20 (`d21fe9e`) — holds
@@ -1040,3 +1040,71 @@ warnings: 21 IDs were added and none removed. The S2 settled-substitution mutati
 produced 30 failed, 2475 passed, 1 deselected, and 2 warnings: exactly the four IDs
 above were added and none removed. The focused phase file passed 18 tests and Ruff was
 clean. No production file was changed and no Architecture Graph delta was recorded.
+
+### Fix r6 consumed — 2026-08-21, coordinator. **PHASE APPROVED.**
+
+**Perimeter: test-only, exactly as prescribed** — `git show efd6b99 --name-only` touches
+**nothing** under `app/beyo_manager/`; one test file (+103) and three pipeline records.
+Checkpoint `efd6b99`.
+
+**Clean suite re-measured at `efd6b99`: 26 / 2479 / 1**, failing-ID set `comm`-diffed
+against §6's enumeration — empty in both directions. Phase file 17 → **18 tests**.
+
+**B1 closed — and the coordinator proved it at both surfaces, which neither the ledger nor
+the first probe did.** The implementer's mutation added the live delta unconditionally, so
+it hit `None + int` on every fixture without qualifying typicals: **19 of its 21 added IDs
+are collateral crashes, not weight movements.** The row is sound; the number is not. The
+coordinator re-ran a *non-crashing* form (delta added only where a typical exists), twice:
+
+| Mutation site | Added IDs |
+|---|---|
+| E-P, `get_task_production_time.py`, between the typicals loop and `divide_production_budget` | **exactly 2** — `test_b1_live_work_does_not_change_typical_section_weights` and the re-anchored `test_c6_allowances_are_byte_identical_after_settlement_recompute` |
+| **E-A, `get_task_budget_allocations.py`, its own per-task typicals dict** | **exactly 2 — the same two** |
+
+Zero removed either way. The E-A run matters on its own: the first probe sat at E-P's site
+and could not have exercised the row's E-A assertion at all, so without it the
+`steps[]` half would have shipped unproven. **The class is swept at both surfaces**, which
+is what §4.3A path 3 needed and what nothing in this repository had before this round.
+
+**Arithmetic verified independently at source:** budget `100.00 min` = 6000 s, less the
+`_seed` fixture's 1440 s of excluded charge = **4560 distributable**; section medians
+`median[1000,2000,3600,5000,6000] = 3600` and `median[600,1200,1800,2400,3000] = 1800`,
+i.e. weights 2:1 ⇒ **3040 / 1520**, asserted exactly on E-P's `sections[]` **and** E-A's
+`steps[]`. Under the mutation the open record's 600 s moves section 1's weight to 4200,
+giving 3192 / 1368 — a single sufficient cause, and non-vacuous only because the live term
+is non-zero. The new typicals seeds use `datetime.now(UTC) - timedelta(days=1)`: **S3's
+lesson was carried into a new fixture without being asked**, so this row does not expire.
+
+**S2 closed by the preferred route.** C6 row 1 now stands on the positive-allowance
+two-section fixture and reddens under both mutations above — it discriminates a weights
+defect, where before it compared `0` to `0` across an operation that equalized its own two
+sides.
+
+**N — the r6 ledger's 21-ID claim overstates its mutation's reach** (recorded, not routed).
+Same class as fix r2's row 4, different cause: there a foreign commit polluted the run,
+here the mutation's own shape crashed unrelated fixtures. The reproducible figure is **2**.
+Cite that.
+
+---
+
+## Approval
+
+**State: APPROVED — 2026-08-21.** Six rounds (implement r1 · fix r2 · review r3 · fix r4 ·
+re-review r5 · fix r6). All twelve criteria C1–C12 proven; every blocking and should-fix
+finding closed and independently re-measured by the coordinator.
+
+**No r7 spent, and the reason is recorded here as phase 1's was.** The r6 delta is one
+fixture and two rows; the coordinator verified both empirically with a **stricter** mutation
+than the ledger's, at **both** call sites, and re-derived the fixture's arithmetic from
+source. The perimeter is test-only, so the production risk of the round is nil. What a
+reviewer would add is a fresh pair of eyes on 103 lines of test code whose discriminating
+power has already been measured twice; that is not worth a round after r5 reviewed the
+phase in full and confirmed the production code correct for the third time.
+
+**What this phase shipped.** The fold (N-2) replacing E-B's SQL aggregate; E-P's one-map
+composition; E-A's batch probe with `today_utc()` → `ctx.now.date()`; two additive clock
+shims (typicals and the configuration date, the latter added mid-phase as intention round
+4e); `DivisionStep` substitution at both surfaces with strict indexing. **Production code
+changed by exactly three lines after implement r1** — two D7 comments and one token —
+because it was correct at its first attempt. Every blocking finding in all six rounds was
+in a plan, a ledger, a criterion or a coordinator artifact. Never in the code.

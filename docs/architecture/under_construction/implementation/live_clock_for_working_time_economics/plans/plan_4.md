@@ -95,6 +95,24 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   execute from their side alone (no internal symbol soup in client-facing sections;
   `path:symbol` only in the provenance appendix).
 
+## 6A. Carried notes from phase 2 (closeout record, not criteria)
+
+- **The section-weight input is unguarded for *any* wrong value, not only a live one**
+  (re-review r5 N3). Phase 2's B1 row pins the live direction, which was this phase family's
+  to owe; the wider gap — nothing in the budget-division family observes what
+  `typicals_by_section` carries — is **pre-existing coverage debt that phase 2 did not
+  create**. Recorded here so the closeout handoff can name it honestly rather than implying
+  the weights are fully guarded.
+- **What phase 2's two-serve byte-identity rows actually guard** (re-review r5 F-R4): the
+  loader-invocation total across two serves, and payload determinism at whole-second
+  granularity under a frozen clock. They are **not** an open-record determinism guard — no
+  mutation exists that they alone catch, established structurally, not by exhaustion. Any
+  future reader tempted to lean on them should read plan 2 §7's r5 entry first.
+- **The published approval baseline** (master plan §7, closeout obligation 7) is the
+  reference point `narrow_typical_work_times` D23 builds on: phase 2 approved at `efd6b99`,
+  suite 26 / 2479 / 1, failure-ID set unchanged from master §6. The closeout handoff states
+  the tree **and** the ID set, never a bare count.
+
 ## 7. Review log
 
 (empty — append-only)
