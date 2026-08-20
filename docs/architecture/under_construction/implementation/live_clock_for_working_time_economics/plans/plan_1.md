@@ -1,7 +1,7 @@
 # Plan 1 — the pre-change goldens, the clock boundary, and the live loader
 
 ```
-state: NOT_STARTED
+state: APPROVED — 2026-08-20 (implement r1 · review r1 · fixes r2/r3/r5 · re-review r4)
 phase: 1
 date: 2026-08-20
 depends_on: mechanism-inventory gate PASSED (round 4a) — holds
@@ -516,3 +516,37 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   | M-float: accumulate raw `contribution.seconds` alone | **29 failed / 2456 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_loader_output_values_are_ints, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_rounding_locus_is_share_before_settled_addition}`; removed-ID diff ∅. Fixture sides: raw `30.5` violates the integer/30 contract and raw `1 + 31.5 = 32.5` violates the locus row's 33. |
 
   The mutation-probe file was `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`; every probe was reverted and hash-verified. No master tracker or Architecture Graph state was changed. Checkpoint commit is required by the closing protocol after this log and handoff are written.
+
+- **2026-08-20 — fix r5 consumed (coordinator). PHASE 1 APPROVED.** Perimeter
+  exactly the four declared files; the production diff is **one line** — the
+  guard's message — and nothing else in `app/` moved (new loader hash
+  `f8fdf46e…18719d`). Suite **26 / 2459 / 1**, failure IDs byte-identical to
+  master plan §6's enumerated set.
+  **B1-r4 closed, and the closure is measured, not argued:** with the guard
+  deleted the C9 row now reddens under the host's `CEST +02:00` **and** under
+  `TZ=UTC` — one added ID each, zero removals — where before the fix the same
+  mutation failed at `+02:00` and **passed** under `TZ=UTC`. The safety test no
+  longer discriminates by accident of the host offset. N1-r4 and N4-r4 applied
+  verbatim.
+  **The two docstrings that landed are the r4 reviewer's own prescribed text, so
+  the coordinator read them as shipped prose and verified their claims rather
+  than their presence** (this phase was bitten twice by unverified claims, both
+  times inside a correction): C4's — swept the class, **no** shipped command sets
+  `StepStateRecord.is_deleted = True` anywhere in `beyo_manager/`, the only hard
+  `DELETE` is `reset/phases/delete_step_state_records.py` and it *is*
+  workspace-scoped; C9's — both halves were measured by the coordinator at the
+  r4 fold (naive bind shifted by the client host's offset ⇒ 0 rows at `+02:00`,
+  1 row + a sweep `TypeError` at UTC). Also checked: no code, test or live
+  document still references the retired guard message (the two remaining hits
+  are inside r4's consumed handoff, which is history and is not rewritten), and
+  the new message is unique and greppable.
+  **No r6 was spent, and this is the reason** (recorded per the named-medium
+  rule): r4 swept the docstring class in full, r5 replaced exactly two members
+  of it, and the coordinator — who authored neither — verified both empirically;
+  the C12 arithmetic lines are byte-identical in the diff, so the r5 ledger's
+  M-locus / M-mode / M-float rows measure the same code r3 and r4 already
+  measured, and the implementer re-ran all three on the new hash anyway with
+  matching sets. **No unswept class remains.**
+  **Outstanding, non-blocking, carried:** three pending `ai_inferred` archgraph
+  items from the implement round plus r1's N6 (an evidence summary containing a
+  count) — owner-adjudicated, tracked at `plans/plan_4.md` C6.
