@@ -1,8 +1,10 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED (round 2, 2026-08-19) — 0 owner cards open (D5–D6 ratified,
-        §10.2). NOT plan-ready until the mechanism-inventory gate passes.
+status: RESOLVED (round 3, 2026-08-20) — 0 owner cards open (D5–D6 ratified §10.2;
+        D7 recorded round 3). Coordinator review of 2026-08-19 folded (all six
+        findings, owner-dispositioned). NOT plan-ready until the mechanism-inventory
+        gate passes.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md
@@ -10,8 +12,8 @@ shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              verbatim: "my intention is for the system to use this live clock
              centralized so that any client ( the frontend, or a scheduler ) can
              make correct decisions."
-date: 2026-08-19
-round: 2
+date: 2026-08-19 (rounds 1–2) · 2026-08-20 (round 3)
+round: 3
 ```
 
 ---
@@ -175,12 +177,27 @@ writes.
 
 ### 2.6 In-flight neighbour
 
-The `simple_valuation_editor` pipeline (intention resolved 2026-08-19) is adding
-`get_task_price_scenario.py` / `price_scenario.py` in the same query family. No shared
-files: its payload deliberately carries no progress block (its D5 ratified gross-of-
-progress), so it does not consume the live figure in v1. Sequencing note for the
-planner: the two pipelines touch the same router and route-mirror tests (§5.4 here vs
-its HC-2a), which is a merge-order concern, not a semantic one.
+The `simple_valuation_editor` pipeline (intention resolved 2026-08-19) added
+`get_task_price_scenario.py` / `price_scenario.py` in the same query family. Its
+payload deliberately carries no progress block (its D5 ratified gross-of-progress),
+so it does not consume the live figure in v1 — but as of its phase-2 implement round
+(checkpoint `48705b3`, the same day this intention was shaped) the perimeters are
+**not disjoint**: `get_task_price_scenario` resolves its task through
+`get_task_budget_status` (`get_task_price_scenario.py:43-45`, called at `:191`) — the
+service whose `_build_evaluated_status` this pipeline makes live. Three consequences
+the planner owns (coordinator review 2026-08-19, finding 1):
+
+- changing `_build_evaluated_status` now changes a dependency of a **shipped**
+  endpoint from another pipeline;
+- any price-scenario test assertion that transitively depends on budget-status-derived
+  numbers becomes time-dependent once the live basis lands — T1's fixed-`now`
+  discipline extends to that suite;
+- the coupling is structural, not semantic: the price-scenario payload consumes only
+  `status`, `item_binding` and the committed evaluation, none of them worked-derived.
+
+This pipeline adds **no route and no field** (HC-4), so it touches neither the router
+nor the route-mirror tests. The round-1 claim of a router/mirror overlap between the
+two pipelines was wrong and is withdrawn (round 3).
 
 ---
 
@@ -204,7 +221,12 @@ open_working_share(s, now) =
         RecordContribution.seconds of that record from
         compute_record_contributions(session, workspace_id, u, W_start, now, now)
         where u       = COALESCE(credited_user_id, created_by_id) of the open record
-              W_start = the open record's entered_at − 1 day
+              W_start = min(entered_at) over u's open working records − 1 day
+                        -- ONE sweep per user serves all of u's open records (§3.4);
+                        -- anchoring on any LATER open record would drop closed
+                        -- records that overlapped an earlier one's first segments —
+                        -- §3.2 case 4 reintroduced through the window instead of
+                        -- the divisor (coordinator finding 3)
         filtered to is_open AND state == "working" AND record_id == the open record
 ```
 
@@ -236,6 +258,18 @@ Recorded in full so the naive form is never "simplified" back in:
 
 Each case is an enumerated test row (§9, T3).
 
+**Window note (round 3, owner context).** Operationally, an open working record today
+cannot be older than the previous midnight UTC: every clock source — HTTP clock-out,
+Connecteam, and the overnight sweep
+(`services/tasks/users/auto_clock_out_open_shifts.py`) — closes open working records
+through the same transition (`_clock_worker_shift.py:200-224`, `SHIFT_ENDED`), the
+owner-built safeguard for forgotten steps; the company does not work nights, and
+logout auto-closes as well. With the 1-day buffer, that makes the anchor choice
+unreachable in practice. The `min(entered_at)` anchor is specified anyway: the
+document must give one instruction, and correctness must not hang on a scheduler in
+another domain (charter rule 11 — safety binds at the boundary). If the company ever
+runs a night shift, or the sweep misses a night, nothing here needs revisiting.
+
 ### 3.3 The no-snap invariant
 
 Because M1 and settlement are the **same function** evaluated at two moments, closing
@@ -265,6 +299,14 @@ extra queries beyond the open-record probe) or one, each over a window of hours,
 history. Work is proportional to *current activity*, never to record accumulation.
 E-A's 50-task bound adds only the same per-active-worker sweeps; a worker's sweep is
 shared across all their steps in the batch, not repeated per task.
+
+**The stated ceiling (round 3, coordinator finding 6):** sweeps per request ≤ distinct
+active workers holding an open working record in the batch, itself bounded by the
+endpoint's 50-task cap; each sweep's window is bounded to under ~2 days by the
+overnight close (§3.2 window note) plus the 1-day buffer. The worst request is
+therefore ≤ 50 small, bounded sweeps after one batched open-record probe. The plan
+records one measured worst case at that ceiling (T8); if the measurement embarrasses
+the design, the remedy is restructuring the fetch — never a cache (HC-1).
 
 ---
 
@@ -296,6 +338,16 @@ and by the two division-calling services before they hand rows to
 that there is exactly one such computation per request and that no surface mixes
 bases (HC-5). The future alerting scheduler consumes the same loader; it is this
 pipeline's non-goal but this seam's first external customer (§7).
+
+**One named structural consequence (round 3, coordinator finding 4).**
+`_build_evaluated_status` currently produces `actual_seconds` as a **SQL aggregate**
+(`func.sum(TaskStep.total_working_seconds)`, `get_task_budget_status.py:141-150`).
+Under M1 that aggregate can no longer be the sole producer of the task figure. Two
+resolutions are arithmetically identical — replace it with a per-step fold over the
+loader's output, or keep it for the settled term and add the loader's open shares on
+top — and the planner picks **one** and records it before any implementer session.
+What is contractual either way: the per-step figures and the task figure derive from
+the same loader output (HC-5), never from two independent reads.
 
 ### 4.2 What stays settled on those same responses
 
@@ -358,8 +410,11 @@ the go-live statement that deletes their interim verdict-suppression gate (their
 stated deletion condition); the correction they are owed on the 2026-08-18 "Live
 time" section (client ticking is superseded by server truth — smoothing from
 time-of-receipt remains legitimate); the answers to their four open questions (§2.3,
-§2.5, §4.1, HC-3/T1); and the note that `worked_seconds` may now *decrease* between
-polls only in the ≤ 1s rounding sense of §3.3, never structurally.
+§2.5, §4.1, HC-3/T1); and the note that `worked_seconds` decreases between polls in
+exactly two ways: the ≤ 1s rounding sense of §3.3, and the D7 disowning events
+(mark-inaccurate, record/step deletion), where it drops by the whole disowned share
+at once, deliberately. Client smoothing must snap down to the served value, never
+clamp — a clamp keeps displaying time the workspace has explicitly disowned.
 
 ---
 
@@ -371,7 +426,14 @@ polls only in the ≤ 1s rounding sense of §3.3, never structurally.
   archival truth (HC-1).
 - **Monotonicity within one open interval:** between two reads with no transitions,
   a step's live figure is non-decreasing (the sweep's divisor for future segments can
-  change, but past segments are fixed). Across a transition, §3.3 bounds the move.
+  change, but past segments are fixed) — **except on the disowning events, where it
+  drops by design (D7).** Marking a running record's time inaccurate zeroes its live
+  share immediately: `mark_step_time_inaccurate` selects any non-deleted record — no
+  `exited_at` filter — and also sets the **step-level** flag, poisoning the step's
+  surrounding timings exactly as settled inaccurate time is skipped today. Deleting
+  the record or the step does the same. The drop is the feature working —
+  acknowledged-wrong time is removed at once; recovery tooling is future work (§7).
+  Across a transition, §3.3 bounds the move.
 - **Client smoothing** (adding elapsed-since-receipt between polls) remains
   legitimate and skew-proof; clients must not re-derive verdicts — `share_state` is
   rendered as received. Unchanged from the standing rule (budget-division D7/HC-4);
@@ -441,7 +503,11 @@ silent failure:
   (record flag and step flag, one row each) accrues 0; deleted record accrues 0;
   deleted step excluded entirely.
 - **T5 — idle byte-identity** (criterion 4): golden-file comparison of all three
-  payloads for a task with no open intervals, before/after the feature.
+  payloads for a task with no open intervals. Sequencing is part of the criterion
+  (coordinator finding 5): the goldens are **captured and committed at the
+  pre-change checkpoint**, and the post-change suite asserts against those files. A
+  golden captured after the change compares the new payload to itself and passes
+  vacuously — writing one is a gate failure, not a test.
 - **T6 — propagation coherence** (HC-5, criterion 3): with one open record, assert on
   one payload that `budget.actual_worker_seconds == Σ sections[].worked_seconds`
   basis-consistently, that `left_seconds = allowance − live worked` per row, and that
@@ -451,7 +517,10 @@ silent failure:
   serializer carries no monetary keys while its time fields are live — the existing
   §11A.3 test family extended by one live-state row.
 - **T8 — E-A batch cost shape:** one active worker across N batched tasks triggers
-  one sweep, asserted by query/call counting, not by wall-clock timing (rule 1).
+  one sweep, asserted by query/call counting, not by wall-clock timing (rule 1). Plus
+  the ceiling row (§3.4): a batch at the 50-task cap with distinct active workers
+  performs exactly one batched open-record probe and ≤ one sweep per worker, and the
+  plan records the measured worst case at that ceiling.
 
 ---
 
@@ -476,6 +545,15 @@ blast-radius explanation.
 
 **D4 — honoured from the frontend handoff:** no new fields, no server-now timestamp,
 shapes frozen (their explicit request; HC-4).
+
+**D7 — the live figure drops on disowning events, by design (owner, 2026-08-20,
+folded round 3).** Owner, verbatim: "the whole point of marked inaccurrate is exactly
+that, to remove data that the user can acknowledge as incorrect, so that is something
+that all users can account for, an open record that it is marked as inaccurate will
+be removing that time passed as it has poisoned the surrounding timings like it
+currently does today when skippiing inacurrate times ( later i will add ways to
+recover that time )." Monotonicity (§6) and the closeout handoff (§5.4) are scoped
+around these events; time-recovery tooling is future work, out of scope.
 
 ### 10.2 Ratified round 2 (owner, 2026-08-19)
 
@@ -546,3 +624,32 @@ Next: **mechanism-inventory**. The claims most worth attacking there are the §3
 no-snap ≤ 1s bound (is the rounding-locus argument the only drift source?), the
 §3.1 window rule (`entered_at − 1 day` — is settlement's buffer provably sufficient
 for the live case?), and T8's query-count bound on the 50-task batch.
+
+**Round 3 — 2026-08-20, coordinator review folded.** Source:
+`planning/coordinator_review_of_intention_20260819.md` (all six findings verified
+against the code before folding; the review's two keystone verifications spare the
+gate that re-work). Owner dispositions, conversation of 2026-08-20:
+
+- **Finding 1** (accepted): §2.6 rewritten — the price-scenario endpoint calls
+  `get_task_budget_status` since checkpoint `48705b3`, so the perimeters are not
+  disjoint; the false router/mirror-overlap claim withdrawn.
+- **Finding 2** (owner-ratified as intended behaviour → **D7**): the live figure
+  drops immediately when a running record is marked inaccurate or deleted — that is
+  the point of marking; §6 and §5.4 rewritten to name the event family instead of
+  promising monotonicity the backend does not keep.
+- **Finding 3** (accepted, with owner context): window anchor fixed to
+  `min(entered_at)` of the user's open working records; the owner's operational
+  safeguards (overnight auto-clock-out sweep, logout auto-close — both verified in
+  code) make the distinction unreachable today and are recorded as the reason this is
+  defense-in-depth rather than a live bug.
+- **Finding 4** (accepted): the E-B SQL aggregate's fate is a named planner decision
+  (§4.1) — per-step fold or settled-sum-plus-live-term, one chosen and recorded
+  before implementation.
+- **Finding 5** (accepted): T5 now carries its capture sequencing — goldens committed
+  at the pre-change checkpoint, or the test is vacuous.
+- **Finding 6** (accepted): §3.4 states the ceiling — ≤ 50 bounded sweeps worst-case,
+  window bounded by the overnight close — and T8 records the measured worst case.
+
+The review's process note is adopted for the gate: sweep §6 and §2.6 at equal depth
+to the nominated claims; round 3 is itself evidence for that note — finding 2 sat in
+§6, which round 2's self-assessment never flagged.

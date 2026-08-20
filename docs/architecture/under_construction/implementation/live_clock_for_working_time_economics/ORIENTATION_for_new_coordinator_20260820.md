@@ -44,9 +44,9 @@ Assume the same about yours.
 
 | File | |
 |---|---|
-| `planning/intention.md` | **RESOLVED, round 2.** D1–D6 ratified, ledger empty. The owner's own document. |
-| `planning/owner_decisions.md` | D1–D6 with the owner's verbatim words |
-| `planning/coordinator_review_of_intention_20260819.md` | **My review of that intention — six findings. Read it with the intention, not after.** |
+| `planning/intention.md` | **RESOLVED, round 3 (2026-08-20).** D1–D7 ratified, ledger empty. The owner's own document. |
+| `planning/owner_decisions.md` | D1–D7 with the owner's verbatim words |
+| `planning/coordinator_review_of_intention_20260819.md` | The review that produced round 3. **All six findings are folded — read it as provenance, not as an open list.** |
 
 **In one sentence:** make the worked-seconds basis *live* — settled work plus the
 concurrency-averaged share of any open `working` interval — computed once in the backend and
@@ -67,19 +67,29 @@ wrong. The previous pipeline ran this gate and it paid: it found a break-even li
 completed steps**, so live figures cannot move `allowance_seconds`. The intention's central
 safety argument is sound. I checked this at the source, not by reading the document.
 
-**The six findings, in one line each.** Details in the review; the numbers below are its
-section numbers.
+**All six of my findings are folded, and I verified the folds against code rather than against
+the changelog** (2026-08-20). Do not re-open them; the one-line summaries below exist so you
+recognise the reasoning when you meet it.
 
-1. **§2.6's "no shared files" is now false.** It was written before the price-scenario
-   pipeline landed. Re-derive the overlap set yourself against the current tree.
-2. **Two promises to the frontend that the mechanism contradicts.** Reconcile before planning.
-3. **The window rule is under-specified for the multi-open case.** More than one open interval
-   at once is the ordinary state on a busy floor, not an edge case.
-4. **E-B's SQL aggregate must be dismantled and the document doesn't say so.**
-5. **T5 is not writable as stated.**
-6. **E-A's cost is proportional to something unbounded.**
+| # | Disposition |
+|---|---|
+| 1 | §2.6 rewritten. The perimeters are **not** disjoint — `get_task_price_scenario` resolves its task through `get_task_budget_status`, so changing `_build_evaluated_status` changes a dependency of a shipped endpoint from another pipeline, and T1's fixed-`now` discipline extends to that suite. The round-1 router/mirror overlap claim is withdrawn. |
+| 2 | **Owner-ratified as intended behaviour → D7.** The live figure *does* drop on disowning events and that is the feature: marking a running record inaccurate zeroes its share at once. I verified the mechanism — `mark_step_time_inaccurate` selects on `workspace_id`/`client_id`/`is_deleted` with **no `exited_at` filter**, so an open record is selectable, and `_apply_inaccurate_time_flag` sets `recorded_time_marked_wrong` and `taken_from_average` on **both** the record and the step. §5.4 now obliges the closeout handoff to tell the frontend to **snap down, never clamp**. |
+| 3 | Window anchor fixed to `min(entered_at)` over the user's open records, with the reason inline: a later anchor drops closed records that overlapped an earlier one's first segments. |
+| 4 | The SQL aggregate's fate is now a **named planner decision** — per-step fold, or keep it for the settled term and add open shares — picked and recorded before any implementer session. |
+| 5 | T5 carries its sequencing: goldens **captured and committed at the pre-change checkpoint**, and writing one afterwards is called a gate failure rather than a test. |
+| 6 | §3.4 states the ceiling: ≤ 50 bounded sweeps worst-case, one measured worst case required, and **never a cache** (HC-1). |
 
-The review also carries a process note for whoever runs the gate. Honour it.
+**Two small things I would fix, not findings.** The round-3 amendments cite
+`get_task_price_scenario.py:191` where the call is at **192**, and
+`get_task_budget_status.py:141-150` where the `func.sum` aggregate is at **140** — each
+citation excludes the very line it names. More to the point, **these are bare line numbers
+into two files that changed twice this week**, and one of them drifted *within a day* because
+a comment edit moved it. Prefer `path:symbol`, which is this project's house convention and
+the rule §6 below records. Harmless today; worth not propagating into plans.
+
+The review also carries a process note for whoever runs the gate. Honour it — **round 3 is
+itself evidence for it**, because finding 2 sat in §6, which nothing had nominated.
 
 ---
 

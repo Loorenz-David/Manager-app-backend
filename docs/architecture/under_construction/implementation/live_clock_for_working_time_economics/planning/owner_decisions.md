@@ -50,6 +50,31 @@ HC-4):** response shapes frozen; no new field; no `server_now` / `as-of` timesta
 their smoothing anchors to time-of-receipt precisely so no client clock is ever
 compared to a server clock.
 
+**D7 — the live figure drops on disowning events, by design (owner, 2026-08-20 —
+coordinator review finding 2, ratified as intended behaviour).** Owner, verbatim:
+*"yes i'm aware of that, the whole point of marked inaccurrate is exactly that, to
+remove data that the user can acknowledge as incorrect, so that is something that all
+users can account for, an open record that it is marked as inaccurate will be
+removing that time passed as it has poisoned the surrounding timings like it
+currently does today when skippiing inacurrate times ( later i will add ways to
+recover that time )."*
+
+Recorded consequence: §6's monotonicity is scoped around the disowning events
+(mark-inaccurate on a running record — `mark_step_time_inaccurate` has no `exited_at`
+filter and sets the step-level flag too — and record/step deletion); the §5.4
+closeout handoff tells the frontend the figure drops by the whole disowned share at
+once and that smoothing must snap down, never clamp. Time-recovery tooling is future
+work, out of scope.
+
+**Round-3 context note — finding 3 (window anchor).** The owner supplied the
+operational safeguards during disposition, verbatim: *"at midnight utc they close,
+this company im building the app doesn't work on night … when the users log out they
+auto close open records also."* Both verified in code
+(`services/tasks/users/auto_clock_out_open_shifts.py`;
+`_clock_worker_shift.py:200-224`). The `min(entered_at)` anchor is therefore
+defense-in-depth, not a live-bug fix — recorded so the gate does not re-litigate the
+severity.
+
 ---
 
 ## Round 1 cards — ALL ANSWERED (owner, 2026-08-19)
@@ -137,6 +162,7 @@ intra-line. (Audience unchanged: ADMIN/MANAGER only, HC-6.)
 
 ## Ledger status
 
-**Empty as of round 2 (2026-08-19).** D1–D4 settled during shaping, D5–D6 ratified by
-the owner. No decision in this intention is a guess. Next gate:
-**mechanism-inventory**.
+**Empty as of round 3 (2026-08-20).** D1–D4 settled during shaping, D5–D6 ratified by
+the owner (round 2), D7 ratified from the coordinator review (round 3, all six
+findings dispositioned — see the intention's round-3 changelog). No decision in this
+intention is a guess. Next gate: **mechanism-inventory**.
