@@ -43,7 +43,7 @@ alerting scheduler can never disagree.
   column keeps its exact meaning — settled, concurrency-averaged, recomputed at
   transitions — and every persisted consumer of it (`item_cost_results`, daily
   analytics rollups, `total_cost_minor`) is untouched. `CALCULATION_VERSION`
-  (`calculator.py:20`) is **not** bumped: its contract covers persisted formula
+  (`calculator.py:CALCULATION_VERSION`) is **not** bumped: its contract covers persisted formula
   outputs, and this feature persists nothing. The dividing line, binding on every
   surface decision in this document: **"what is happening" is live; "what happened"
   is settled.**
@@ -86,26 +86,26 @@ alerting scheduler can never disagree.
 
 ### 2.1 The ledger: state records, and what "settled" means
 
-`step_state_records` (`models/tables/tasks/step_state_record.py`): `state` (:39),
-`entered_at` (:76), `exited_at` (:77, **nullable — NULL means running now**),
-`recorded_time_marked_wrong` (:75), `credited_user_id` (:91, attribution is
-`COALESCE(credited_user_id, created_by_id)`), `is_deleted` (:92). Exactly one open
+`step_state_records` (`models/tables/tasks/step_state_record.py`): `state`,
+`entered_at`, `exited_at` (**nullable — NULL means running now**),
+`recorded_time_marked_wrong`, `credited_user_id` (attribution is
+`COALESCE(credited_user_id, created_by_id)`), `is_deleted`. Exactly one open
 record per step at a time — the transition core closes the previous record before
 opening the next (`latest_state_record` is singular).
 
 `task_steps.total_working_seconds` is recomputed at each transition by
 `_recompute_step_time_totals`
-(`services/tasks/analytics/process_step_transition.py:185-258`): it gathers the
+(`process_step_transition.py:_recompute_step_time_totals`): it gathers the
 step's records in `TIME_BEARING_STATES = {WORKING, PAUSED}`
-(`domain/task_steps/constants.py:11-14`), runs each credited user's records through
-the sweep, and **sums only closed contributions** (`c.is_open` rows are skipped at
-`:236`). The column is therefore settled-only *by that filter*, per state:
+(`task_steps/constants.py:TIME_BEARING_STATES`), runs each credited user's records through
+the sweep, and **sums only closed contributions** (`c.is_open` rows are skipped by that function's
+per-record filter). The column is therefore settled-only *by that filter*, per state:
 `int(round(Σ closed working shares))`.
 
 ### 2.2 The crediting rule: the concurrency sweep
 
 `averaged_seconds_by_record(intervals, now)`
-(`domain/analytics/concurrency.py:79-93`, sweep at `:37-76`) — pure, deterministic:
+(`analytics/concurrency.py:averaged_seconds_by_record`, sweep in `:_sweep`) — pure, deterministic:
 
 - Intervals are grouped **per worker, per state**. Working intervals divide only
   among working intervals of the same worker.
@@ -120,14 +120,14 @@ the sweep, and **sums only closed contributions** (`c.is_open` rows are skipped 
   many steps it is spread across; shares sum back to wall-clock time.
 
 `compute_record_contributions(session, workspace_id, user_id, window_start,
-window_end, now)` (`services/queries/analytics/averaged_time.py:71-…`) is the IO
+window_end, now)` (`analytics/averaged_time.py:compute_record_contributions`) is the IO
 wrapper: fetches one worker's time-bearing records overlapping a window, runs the
 sweep, returns per-record `RecordContribution` rows carrying `seconds`, `is_open`,
 `step_id`, bucketed `state`, and `marked_wrong`.
 
 ### 2.3 The precedent: live `now` already exists in a read path
 
-`get_worker_daily_step_breakdown` (`services/queries/worker_stats/…:211-214`) — a
+`get_worker_daily_step_breakdown` (`worker_stats/get_worker_daily_step_breakdown.py:get_worker_daily_step_breakdown`) — a
 query-layer read endpoint — already calls `compute_record_contributions` with
 `now = datetime.now(timezone.utc)`. The "no clock in the read layer" property the
 frontend worried about is a property of the **item-economics query family**, not of
@@ -139,18 +139,18 @@ not breach a covenant. (`list_workers_totals.py` is the second precedent.)
 All three compute worked time from the settled column and only from it:
 
 - **E-P** `GET /tasks/{id}/production-time`
-  (`get_task_production_time.py:23-95`): composes `get_task_budget_status` with the
+  (`get_task_production_time.py:get_task_production_time`): composes `get_task_budget_status` with the
   task's steps and `divide_production_budget`; section `worked_seconds` is
   `Σ total_working_seconds` per section (`budget_division.py`,
   `group_steps_by_section`), verdict `share_state = "over_share" if worked > allowance`.
 - **E-B** `GET /tasks/{id}/budget-status`: manager face and the independent
   worker/seller face (`get_task_budget_status_worker.py`, A7) both delegate the
   evaluated computation to the shared `_build_evaluated_status`
-  (`get_task_budget_status.py:135-176`), whose
-  `actual_seconds = SUM(total_working_seconds)` (`:141-150`) feeds Q4 minutes,
+  (`get_task_budget_status.py:_build_evaluated_status`), whose
+  `actual_seconds = SUM(total_working_seconds)` (in `_build_evaluated_status`) feeds Q4 minutes,
   remaining, percent, variance, and — manager only — `consumed_cost_minor` /
   `variance_cost_minor` through the pure calculator.
-- **E-A** `GET /tasks/budget-allocations` (`get_task_budget_allocations.py:100-283`):
+- **E-A** `GET /tasks/budget-allocations` (`get_task_budget_allocations.py:get_task_budget_allocations`):
   batch-loads steps (which carry the settled column) and calls
   `divide_production_budget` per task — the worker step cards' source.
 
@@ -161,10 +161,10 @@ section `worked/left/share_state` and budget `actual_worker_seconds/minutes`,
 ### 2.5 The settled consumers that must NOT move
 
 - `item_cost_results` — durable end-of-episode record, recomputed by the analytics
-  worker at READY/terminal from settled data (`process_step_transition.py:87-97`).
+  worker at READY/terminal from settled data (`process_step_transition.py:handle_process_step_transition`).
 - Daily analytics rollups (`reconcile_user_time.py` family) — settled at transitions.
 - `task_steps.total_cost_minor` — salary-priced, persisted at settlement
-  (`process_step_transition.py:249-256`); worker-compensation domain, out of scope.
+  (`process_step_transition.py:_recompute_step_time_totals`); worker-compensation domain, out of scope.
 - The `final` block of E-P (`division_serializers.py`,
   `_serialize_production_time_final`) — a frozen result record by definition. Its
   `percent_consumed` key is wired to the request's status percent today; that wiring
@@ -183,7 +183,8 @@ payload deliberately carries no progress block (its D5 ratified gross-of-progres
 so it does not consume the live figure in v1 — but as of its phase-2 implement round
 (checkpoint `48705b3`, the same day this intention was shaped) the perimeters are
 **not disjoint**: `get_task_price_scenario` resolves its task through
-`get_task_budget_status` (`get_task_price_scenario.py:43-45`, called at `:191`) — the
+`get_task_budget_status` — imported and called inside
+`get_task_price_scenario.py:get_task_price_scenario` — the
 service whose `_build_evaluated_status` this pipeline makes live. Three consequences
 the planner owns (coordinator review 2026-08-19, finding 1):
 
@@ -254,7 +255,7 @@ Recorded in full so the naive form is never "simplified" back in:
    closes B at 9:20, keeps A. At 9:30 A's correct share is 20/2 + 10 = 20m, not 30m.
    The open record's early segments were shared with a record that no longer appears
    in any "currently open" query — hence the window fetch back to `entered_at − 1 day`
-   (the same buffer settlement uses, `process_step_transition.py:230`).
+   (the same buffer settlement uses, `process_step_transition.py:_recompute_step_time_totals` (the `timedelta(days=1)` buffer)).
 
 Each case is an enumerated test row (§9, T3).
 
@@ -262,7 +263,7 @@ Each case is an enumerated test row (§9, T3).
 cannot be older than the previous midnight UTC: every clock source — HTTP clock-out,
 Connecteam, and the overnight sweep
 (`services/tasks/users/auto_clock_out_open_shifts.py`) — closes open working records
-through the same transition (`_clock_worker_shift.py:200-224`, `SHIFT_ENDED`), the
+through the same transition (`_clock_worker_shift.py`, the `SHIFT_ENDED` path), the
 owner-built safeguard for forgotten steps; the company does not work nights, and
 logout auto-closes as well. With the 1-day buffer, that makes the anchor choice
 unreachable in practice. The `min(entered_at)` anchor is specified anyway: the
@@ -282,7 +283,7 @@ settled column:
 ```
 
 The ≤ 1s slack is rounding locus only: settlement rounds the sum of all closed shares
-once (`int(round(Σ))`, `:245-246`), M1 rounds the settled column and the open share
+once (`int(round(Σ))`, where `_recompute_step_time_totals` writes the step fields), M1 rounds the settled column and the open share
 separately. Nothing else may contribute drift — a violation beyond the slack means the
 live computation and settlement have diverged, which is exactly the defect HC-2
 exists to prevent. Tested as T2, the load-bearing test of this pipeline. (This is
@@ -341,7 +342,8 @@ pipeline's non-goal but this seam's first external customer (§7).
 
 **One named structural consequence (round 3, coordinator finding 4).**
 `_build_evaluated_status` currently produces `actual_seconds` as a **SQL aggregate**
-(`func.sum(TaskStep.total_working_seconds)`, `get_task_budget_status.py:141-150`).
+(`func.coalesce(func.sum(TaskStep.total_working_seconds), 0)` over the task's
+non-deleted steps, in `get_task_budget_status.py:_build_evaluated_status`).
 Under M1 that aggregate can no longer be the sole producer of the task figure. Two
 resolutions are arithmetically identical — replace it with a per-step fold over the
 loader's output, or keep it for the settled term and add the loader's open shares on
@@ -653,3 +655,32 @@ gate that re-work). Owner dispositions, conversation of 2026-08-20:
 The review's process note is adopted for the gate: sweep §6 and §2.6 at equal depth
 to the nominated claims; round 3 is itself evidence for that note — finding 2 sat in
 §6, which round 2's self-assessment never flagged.
+
+**Round 3a — 2026-08-20, citation form. No claim changed.** Every code reference in
+this document was converted from `path:line` to `path:symbol`, the house convention
+and the rule the `simple_valuation_editor` pipeline earned twice: **a cross-reference
+must resolve from a clean checkout, and a line number does not.**
+
+Two round-3 citations were wrong when written — `get_task_price_scenario.py:191` (the
+call is at 192; 191 is a comment) and `get_task_budget_status.py:141-150` (the
+`func.sum` is at 140, and the span ran three lines past the statement into unrelated
+code). Both excluded the exact line they named.
+
+The sweep then found **eleven more** from rounds 1–2, and four of those began *inside*
+a signature or mid-statement — `concurrency.py:37-76` at the close of a signature,
+`averaged_time.py:71` mid-parameter-list, `get_task_budget_status.py:135-176` five
+lines into `_build_evaluated_status`, `get_task_budget_allocations.py:100-283`
+forty-four lines into its function. The same defect shape found in six of eleven
+architecture-graph anchors reviewed the same day: **someone records the line where the
+interesting part is, not where the construct begins.**
+
+Why the form, not just the numbers: the call cited as `:191` sat at line **152, 155,
+169, 171, 185 and 192** across six commits on 2026-08-19–20, while **the code never
+changed once** — every move was comments added above it. A citation correct in the
+morning was wrong by the afternoon. All eleven symbols were verified to resolve
+against the tree at `bf470d4`.
+
+**One instance nearly survived the fix.** §4.1's aggregate citation was corrected
+first; the identical reference appears again in §2.4 and was only caught by sweeping
+for the *form* rather than re-reading the fix site — the failure this project has now
+recorded four times, arriving inside the correction of its own class.

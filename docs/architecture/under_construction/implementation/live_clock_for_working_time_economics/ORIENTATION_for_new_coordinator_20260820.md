@@ -80,13 +80,16 @@ recognise the reasoning when you meet it.
 | 5 | T5 carries its sequencing: goldens **captured and committed at the pre-change checkpoint**, and writing one afterwards is called a gate failure rather than a test. |
 | 6 | §3.4 states the ceiling: ≤ 50 bounded sweeps worst-case, one measured worst case required, and **never a cache** (HC-1). |
 
-**Two small things I would fix, not findings.** The round-3 amendments cite
-`get_task_price_scenario.py:191` where the call is at **192**, and
-`get_task_budget_status.py:141-150` where the `func.sum` aggregate is at **140** — each
-citation excludes the very line it names. More to the point, **these are bare line numbers
-into two files that changed twice this week**, and one of them drifted *within a day* because
-a comment edit moved it. Prefer `path:symbol`, which is this project's house convention and
-the rule §6 below records. Harmless today; worth not propagating into plans.
+**Citation form — done, round 3a (2026-08-20).** Every code reference in the intention is now
+`path:symbol`, and all eleven symbols were verified to resolve against the tree. Two round-3
+citations had been wrong when written and a sweep found eleven more from rounds 1–2, four of
+them beginning *inside* a signature or mid-statement. The intention's §11 records the pass and
+why the form matters: the call one of them cited sat at lines **152, 155, 169, 171, 185 and
+192** across six commits in two days while **the code never changed once**.
+
+**Carry the form into your plans and prompts.** No line numbers into source — a symbol
+survives everything except a rename, and a rename is the one change you *want* to break the
+reference.
 
 The review also carries a process note for whoever runs the gate. Honour it — **round 3 is
 itself evidence for it**, because finding 2 sat in §6, which nothing had nominated.
