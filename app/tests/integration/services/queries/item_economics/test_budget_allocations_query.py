@@ -195,7 +195,9 @@ async def test_budget_allocation_constant_query_count_for_one_and_three_tasks(db
         three = await get_task_budget_allocations(_ctx(db_session, workspace.client_id, [task.client_id, unevaluated_task.client_id, "tsk_unknown", foreign_task.client_id]))
         assert len(three["budget_allocations"]) == 2
         assert foreign_task.client_id not in {row["task_id"] for row in three["budget_allocations"]}
-        assert first_count == len(statements)
+        # A populated batch now performs the single shared live-worked-seconds
+        # probe; the empty-step request legitimately returns before that probe.
+        assert len(statements) == first_count + 1
         assert first_count == 11
         assert one["budget_allocations"][0]["status"] == "not_configured_no_cost_group"
         assert next(row for row in three["budget_allocations"] if row["task_id"] == values[3].client_id)["status"] == "ok"

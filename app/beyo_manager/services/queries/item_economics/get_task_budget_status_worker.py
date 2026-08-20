@@ -36,7 +36,7 @@ async def get_task_budget_status_worker(ctx: ServiceContext) -> TaskBudgetStatus
     if evaluation is None:
         if item is None:
             return _empty_status(EconomicsStatusEnum.NOT_EVALUATED, binding=binding, item_id=None)
-        selection, terms = await _load_preview_inputs(ctx, item)
+        selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
             select(ItemValuation).where(
                 ItemValuation.workspace_id == ctx.workspace_id,

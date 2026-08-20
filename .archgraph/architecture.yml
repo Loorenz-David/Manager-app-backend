@@ -9839,3 +9839,63 @@ edges:
     confidence: 0.9
     createdAt: 2026-08-20T11:21:10.757Z
     updatedAt: 2026-08-20T11:21:10.757Z
+  - sourceNodeId: projection-item-economics-task-production-time
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          summary: The production-time query loads one live_seconds map and passes it to
+            budget status and DivisionStep substitution.
+          inferenceReason: The projection's request-time worked-seconds basis is the
+            shared live-worked-seconds projection.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-20T18:38:39.916Z
+  - sourceNodeId: projection-item-economics-task-budget-status
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+          symbol: _build_evaluated_status
+          summary: Evaluated budget status sums the supplied live_seconds map, or loads it
+            from the shared loader using ctx.now.
+          inferenceReason: The budget-status projection derives its actual-worker-seconds
+            headline from the live-worked-seconds projection.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-20T18:38:39.916Z
+  - sourceNodeId: projection-item-economics-task-budget-status-worker
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          symbol: get_task_budget_status_worker
+          summary: The worker status face delegates the evaluated fold to the shared
+            budget-status implementation.
+          inferenceReason: The worker projection inherits the same live-worked-seconds
+            basis through the shared status implementation.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-20T18:38:39.916Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          summary: The batched allocation query loads one live_seconds map over all
+            visible steps and uses it for headlines and DivisionStep rows.
+          inferenceReason: The allocation projection derives present-tense worked seconds
+            from the shared live-worked-seconds projection.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-20T18:38:39.916Z

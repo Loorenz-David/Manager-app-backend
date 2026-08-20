@@ -169,7 +169,14 @@ async def write_item_valuation_chain_in_session(
     return valuation
 
 
-async def _load_preview_inputs(ctx: ServiceContext, item: Item):
+async def _load_preview_inputs(
+    ctx: ServiceContext,
+    item: Item,
+    *,
+    # The optional request clock keeps command-side callers on their existing
+    # today_utc() behaviour while query surfaces can share one ctx.now.
+    now: datetime | None = None,
+):
     """Load the complete live configuration used by valuation previews and auto-commit."""
     groups = (
         await ctx.session.execute(
@@ -200,7 +207,7 @@ async def _load_preview_inputs(ctx: ServiceContext, item: Item):
         groups,
         basis_versions,
         cost_model_versions,
-        today_utc(),
+        now.date() if now is not None else today_utc(),
     )
     terms = []
     if selection.cost_model_version is not None:

@@ -9,7 +9,9 @@ from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.budget_division import (
     ALLOCATION_METHOD,
+    DivisionStep,
     divide_production_budget,
+    _loaded_latest_state_record,
 )
 from beyo_manager.domain.item_economics.configuration import (
     resolve_economics_selection,
@@ -30,9 +32,8 @@ from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
-from beyo_manager.models.tables.working_sections.working_section import WorkingSection
-from beyo_manager.services.commands.item_economics._common import today_utc
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import typical_times_statement
 from beyo_manager.domain.item_economics.calculator import calculate_actual_worker_minutes, calculate_remaining_worker_minutes
 
@@ -42,7 +43,7 @@ _BUDGET_STATUSES = frozenset({EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEAS
 
 
 async def _load_typicals(ctx: ServiceContext) -> dict[str, dict]:
-    result = await ctx.session.execute(typical_times_statement(ctx.workspace_id))
+    result = await ctx.session.execute(typical_times_statement(ctx.workspace_id, now=ctx.now))
     return {
         row.client_id: {
             "typical_worker_seconds": int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
@@ -120,6 +121,14 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
     for step in steps:
         steps_by_task[step.task_id].append(step)
 
+    live_seconds = await load_live_worked_seconds(
+        ctx.session,
+        ctx.workspace_id,
+        steps,
+        ctx.now,
+    )
+    selection_date = ctx.now.date()
+
     typicals = await _load_typicals(ctx)
 
     # These four reads intentionally happen once per request. They mirror the
@@ -185,7 +194,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                     groups,
                     basis_versions,
                     cost_model_versions,
-                    today_utc(),
+                    selection_date,
                 )
                 status = resolve_item_economics_status(
                     valuation_by_item.get(item.client_id),
@@ -204,13 +213,28 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
             steps_by_task.get(task.client_id, []),
             key=lambda step: (step.sequence_order is None, step.sequence_order if step.sequence_order is not None else 0, step.client_id),
         )
+        division_steps = [
+            DivisionStep(
+                client_id=step.client_id,
+                state=step.state,
+                working_section_id=step.working_section_id,
+                total_working_seconds=live_seconds[step.client_id],
+                sequence_order=step.sequence_order,
+                working_section_name_snapshot=step.working_section_name_snapshot,
+                typical_worker_seconds=None,
+                is_deleted=step.is_deleted,
+                created_at=step.created_at,
+                latest_state_record=_loaded_latest_state_record(step),
+            )
+            for step in task_steps
+        ]
         typicals_by_section = {
             step.working_section_id: typicals.get(step.working_section_id, {}).get("typical_worker_seconds")
             for step in task_steps
         }
         allowed = evaluation.allowed_worker_minutes if evaluation is not None and status in _BUDGET_STATUSES else None
-        division = divide_production_budget(allowed, task_steps, typicals_by_section)
-        actual_seconds = sum(int(step.total_working_seconds or 0) for step in task_steps)
+        division = divide_production_budget(allowed, division_steps, typicals_by_section)
+        actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
         if status in _BUDGET_STATUSES and allowed is not None:
             actual_minutes = calculate_actual_worker_minutes(actual_seconds)
             remaining_minutes = calculate_remaining_worker_minutes(Decimal(allowed), actual_minutes)

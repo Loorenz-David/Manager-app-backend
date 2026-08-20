@@ -6,16 +6,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.item_economics.budget_division import (
+    DivisionStep,
     TYPICAL_METHOD,
     TYPICAL_MIN_SAMPLE_SIZE,
     TYPICAL_WINDOW_DAYS,
     divide_production_budget,
+    _loaded_latest_state_record,
 )
 from beyo_manager.domain.item_economics.division_serializers import serialize_task_production_time
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import typical_times_statement
 
@@ -23,7 +26,6 @@ from beyo_manager.services.queries.working_sections.get_working_section_typical_
 async def get_task_production_time(ctx: ServiceContext) -> dict:
     """Compose the manager budget status with the task's section view."""
 
-    status = await get_task_budget_status(ctx)
     task_id = ctx.incoming_data.get("task_client_id")
     steps = (
         await ctx.session.execute(
@@ -37,6 +39,28 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             .order_by(TaskStep.client_id.asc())
         )
     ).scalars().all()
+    live_seconds = await load_live_worked_seconds(
+        ctx.session,
+        ctx.workspace_id,
+        steps,
+        ctx.now,
+    )
+    status = await get_task_budget_status(ctx, live_seconds=live_seconds)
+    division_steps = [
+        DivisionStep(
+            client_id=step.client_id,
+            state=step.state,
+            working_section_id=step.working_section_id,
+            total_working_seconds=live_seconds[step.client_id],
+            sequence_order=step.sequence_order,
+            working_section_name_snapshot=step.working_section_name_snapshot,
+            typical_worker_seconds=None,
+            is_deleted=step.is_deleted,
+            created_at=step.created_at,
+            latest_state_record=_loaded_latest_state_record(step),
+        )
+        for step in steps
+    ]
     section_ids = {step.working_section_id for step in steps}
     sections = (
         await ctx.session.execute(
@@ -53,7 +77,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
     typical_details: dict[str, dict] = {}
     if section_ids:
         typical_result = await ctx.session.execute(
-            typical_times_statement(ctx.workspace_id).where(
+            typical_times_statement(ctx.workspace_id, now=ctx.now).where(
                 WorkingSection.client_id.in_(section_ids)
             )
         )
@@ -75,7 +99,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
         status.allowed_worker_minutes
         if status.status in {EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEASIBLE}
         else None,
-        steps,
+        division_steps,
         typicals_by_section,
         section_by_id,
     )

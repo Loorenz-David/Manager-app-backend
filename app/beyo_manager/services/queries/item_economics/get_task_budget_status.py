@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from collections.abc import Mapping
+
+from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.calculator import (
     calculate_actual_worker_minutes,
@@ -28,6 +30,7 @@ from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.item_economics._common import _load_preview_inputs
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
 
 
 @dataclass
@@ -97,7 +100,11 @@ def _empty_status(status: EconomicsStatusEnum, *, binding: str, item_id: str | N
     )
 
 
-async def get_task_budget_status(ctx: ServiceContext) -> TaskBudgetStatus:
+async def get_task_budget_status(
+    ctx: ServiceContext,
+    *,
+    live_seconds: Mapping[str, int] | None = None,
+) -> TaskBudgetStatus:
     task, item = await _load_task_and_item(ctx)
     evaluation = await ctx.session.scalar(
         select(ItemCostEvaluation).where(
@@ -112,7 +119,7 @@ async def get_task_budget_status(ctx: ServiceContext) -> TaskBudgetStatus:
     if evaluation is None:
         if item is None:
             return _empty_status(EconomicsStatusEnum.NOT_EVALUATED, binding=binding, item_id=None)
-        selection, terms = await _load_preview_inputs(ctx, item)
+        selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
             select(ItemValuation).where(
                 ItemValuation.workspace_id == ctx.workspace_id,
@@ -124,7 +131,14 @@ async def get_task_budget_status(ctx: ServiceContext) -> TaskBudgetStatus:
         status = resolve_item_economics_status(valuation, selection, terms)
         return _empty_status(status, binding=binding, item_id=item.client_id)
 
-    return await _build_evaluated_status(ctx, task, item, evaluation, binding)
+    return await _build_evaluated_status(
+        ctx,
+        task,
+        item,
+        evaluation,
+        binding,
+        live_seconds=live_seconds,
+    )
 
 
 async def _build_evaluated_status(
@@ -133,18 +147,27 @@ async def _build_evaluated_status(
     item: Item | None,
     evaluation: ItemCostEvaluation,
     binding: str,
+    *,
+    live_seconds: Mapping[str, int] | None = None,
 ) -> TaskBudgetStatus:
     """Build the shared evaluated read model after a caller's own filter."""
-    actual_seconds = int(
-        await ctx.session.scalar(
-            select(func.coalesce(func.sum(TaskStep.total_working_seconds), 0)).where(
-                TaskStep.workspace_id == ctx.workspace_id,
-                TaskStep.task_id == task.client_id,
-                TaskStep.is_deleted.is_(False),
+    if live_seconds is None:
+        steps = (
+            await ctx.session.execute(
+                select(TaskStep).where(
+                    TaskStep.workspace_id == ctx.workspace_id,
+                    TaskStep.task_id == task.client_id,
+                    TaskStep.is_deleted.is_(False),
+                )
             )
+        ).scalars().all()
+        live_seconds = await load_live_worked_seconds(
+            ctx.session,
+            ctx.workspace_id,
+            steps,
+            ctx.now,
         )
-        or 0
-    )
+    actual_seconds = sum(live_seconds.values())
     actual_minutes = calculate_actual_worker_minutes(actual_seconds)
     allowed = Decimal(evaluation.allowed_worker_minutes)
     status = EconomicsStatusEnum.INFEASIBLE if allowed <= 0 else EconomicsStatusEnum.OK

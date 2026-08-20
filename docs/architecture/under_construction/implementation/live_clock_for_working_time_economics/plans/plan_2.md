@@ -558,3 +558,20 @@ and force the closeout handoff to disclose a cross-surface disagreement we chose
 leave in. This **widens the perimeter into `services/commands/item_economics/`** — named
 here explicitly per master plan §5's widen-the-allowlist rule. No owner card: no product
 semantics, shipped promise, or D1–D9 decision moves.
+
+### Implementer r1 — 2026-08-20, Codex
+
+The phase-2 implementation is complete in the declared production perimeter. `_build_evaluated_status` now folds one live-seconds map over all non-deleted steps; E-P loads once and threads the same map into status and division rows; E-A performs one batch loader call before its task loop; and both the typical-times and preview-configuration compatibility shims accept the request clock. Division rows are substituted with `DivisionStep` values and strict live-map indexing; no ORM settled-total assignment or E-A eager relationship load was introduced. The golden files and golden test are byte-identical and read-only in this diff.
+
+Validation: phase-local coverage is **6 passed**; final clean full suite is **26 failed / 2465 passed / 1 deselected / 2 warnings**. The 26 failing IDs are exactly the baseline set enumerated in master plan §6; the six additional passes are this phase's new test file. `ruff check`, `compileall`, and `git diff --check` pass. C10's seven-suite perimeter was exercised and green as-is except the necessary query-count assertion update in `test_budget_allocations_query.py` for the new shared live probe: price scenario, goldens, phase-8 status results, phase-8 reviewer probe, E-A allocations, phase-9 committed-filter structure, and the item-economics router.
+
+Mutation ledger (whole-suite runs used the clean baseline ID set from master §6; each mutant was restored before the next probe):
+
+- C3 population filter at `get_task_budget_status.py:_build_evaluated_status`: adding `EXCLUDED_STEP_STATES` to the step query added exactly `tests/integration/services/queries/item_economics/test_budget_allocations_query.py::test_budget_allocation_keeps_excluded_consumption_and_deleted_steps_distinct` (27 failed / 2464 passed / 1 deselected). Restored and verified.
+- C4 E-P `live_seconds=None`: added exactly `tests/integration/services/queries/item_economics/test_phase2_live_surfaces.py::test_c4_each_surface_uses_one_loader_call_and_c5_does_not_persist_live_seconds` (27 / 2464 / 1). Restored and verified.
+- C11 E-P omission of `now=ctx.now`: added exactly `tests/integration/services/queries/item_economics/test_phase2_live_surfaces.py::test_c11_c12_surface_call_sites_do_not_fall_back_to_module_clocks` (27 / 2464 / 1). Restored and verified.
+- C11 E-A omission of `now=ctx.now`: the same single added phase-test ID (27 / 2464 / 1). Restored and verified.
+- C12 manager and worker omission of `now=ctx.now`: each independently added the same single phase-test ID (27 / 2464 / 1). Restored and verified.
+- C5 ORM assignment, C6 `DivisionStep.created_at` / `latest_state_record` omissions, C6 E-A `selectinload`, C7 worker aggregate replacement, C8 loop-local loader, C9 settlement-window mutation, and C11 default-shim future-instant mutation were not re-applied whole-suite in this implementer session; their contract-side tests and the production perimeter remain as specified. They are carried to review rather than claimed as measured.
+
+Judgment calls and delegations: D4 was resolved as the same keyword-only `now` shim in both functions, with purpose comments beside both parameters; D5 uses the module-bound `datetime` stub; D6 uses SQL event inspection for the single E-A `step_state_records` probe and a loader counter; D7 uses strict map indexing; D8 reorders E-P to load steps before status; D9 branches on `live_seconds is None`. C5 uses the required dirty-check, `expire_all()`, same-session reread order. The `DivisionStep.typical_worker_seconds` field is explicitly `None` because `TaskStep` has no such ORM field and typicals are supplied separately.

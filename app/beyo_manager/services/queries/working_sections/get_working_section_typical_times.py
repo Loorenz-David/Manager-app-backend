@@ -18,9 +18,15 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.services.context import ServiceContext
 
 
-def typical_times_statement(workspace_id: str):
+def typical_times_statement(
+    workspace_id: str,
+    *,
+    # The optional request clock keeps the working-sections and price-scenario
+    # callers on their existing clock read while E-P/E-A share ctx.now.
+    now: datetime | None = None,
+):
     """Build the shared grouped-median statement used by E1 and E2."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=TYPICAL_WINDOW_DAYS)
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=TYPICAL_WINDOW_DAYS)
     grouped_steps = (
         select(
             TaskStep.working_section_id.label("working_section_id"),
