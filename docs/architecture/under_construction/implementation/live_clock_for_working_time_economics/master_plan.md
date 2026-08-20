@@ -158,8 +158,13 @@ restated because they are load-bearing here:
   parity bound, money derived from seconds. Every mechanism produces a number that looks
   plausible when it is wrong. Nothing here fails loudly.
 - **Every named mutation: compute both sides, name its site (file,
-  definition-vs-call-site), run the WHOLE SUITE, record the complete observed-red ID
-  set.** A `-k` or single-file run is not an observation.
+  definition-vs-call-site), run it at the scope its hypothesis requires, record the
+  full evidence record** — hypothesis, scope, command, tree identity, result,
+  observed-red ID delta (both directions at that scope). *Amended 2026-08-21 per the
+  charter's "Test-evidence scope and reuse" section (owner decision, test-execution-policy
+  audit): the earlier form mandated the whole suite for every observation; L4 is now
+  reserved for gates, absence claims, and coupling discovery — an absence claim
+  ("nothing anywhere guards X") still runs, and can only run, whole-suite.*
 - **A single run is not evidence.** Two named flaky tests exist (§6). A count that
   disagrees with baseline is repeated and its **ID set** diffed before any conclusion.
   Only an ID added or removed across repeated runs is a finding.
@@ -418,19 +423,30 @@ each would invalidate in-flight measurements:
    the exact measurements xdist is being bought for. Isolation first, then parallelism,
    then re-enumerate the baseline failure-ID set under the new runner before trusting a
    single mutation result.
-2. **Narrow the mutation *set* per round, never the suite.** From review r3 onward only
-   mutations whose criteria changed that round are re-measured (typically 3–4);
-   confirmed measurements stand in the Review log and are cited, not re-run. Fix r2's
-   full sweep is a one-time correction of B4, not the steady state.
+2. **Narrow the mutation *set* per round, never re-measure confirmed rows.** From
+   review r3 onward only mutations whose criteria changed that round are re-measured
+   (typically 3–4); confirmed measurements stand in the Review log and are cited, not
+   re-run. Fix r2's full sweep is a one-time correction of B4, not the steady state.
 
-**The one thing that does not get narrowed: every mutation run stays whole-suite.**
-Scoping a probe to the phase's own test file destroys both signals the protocol exists
-for — **∅ detection** (a phase-scoped run cannot show that a mutation reddened nothing
-anywhere, and both of this round's blocking findings were ∅) and **removed IDs /
-cross-file coupling** (C6's `latest_state_record` mutation reddened two tests *outside*
-the phase file; a scoped run would have reported the opposite of the truth). xdist is the
-enabler precisely because it makes keeping this rule affordable rather than tempting to
-break.
+**Superseded 2026-08-21 (owner decision, all three cards of the test-execution-policy
+audit approved — `archive/plan_2/` will hold the audit at closeout; live at
+`handoffs/coordinator/2026-08-21_test_execution_policy_audit.md`):** this section
+previously closed with the absolute "every mutation run stays whole-suite". That
+absolute is retired. The governing policy now lives in the charter's
+**"Test-evidence scope and reuse"** section (`/Users/davidloorenz/agent-skills/pipeline-charter.md`):
+mutation observations run at hypothesis scope (L1 targeted / L2 domain by default);
+full-suite (L4) is reserved for the one clean stamp per implement/fix cycle close,
+review entry on a changed tree, the approval gate, baseline re-enumeration, and
+hypotheses that are repository-wide by construction. The two signals the old absolute
+protected are exactly the L4 triggers the charter names: **absence claims** ("no test
+anywhere guards X", expecting ∅/∅ — both of review r3's blocking findings and §4.3A
+path 3 were this shape) and **removed-ID / cross-file coupling discovery** (C6's
+`latest_state_record` mutation reddened two tests outside the phase file). State those
+hypotheses explicitly and they still get the full suite; every other observation does
+not. Every evidence record carries hypothesis, scope, command, tree identity (SHA +
+clean-status assert; dirty trees add a diff digest), result, and ID-delta — and a
+record whose tree matches the consumer's is cited, never reproduced. Phase 3 is the
+first phase run under this policy.
 
 ### Code facts verified at source (this coordinator, 2026-08-20, tree `a0aaacc`)
 
