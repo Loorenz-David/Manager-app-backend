@@ -747,6 +747,18 @@ row 3 keeps them distinct and swaps `created_at` against them. The two fixtures 
 merged, and `client_id` order contradicts `created_at` order as required — which is why
 the mutation moves the governing step from `stp_b` to `stp_a` rather than being inert.
 
+**Tree provenance of the fix-r2 ledger (added at review r3's S5).** The fourteen-row
+sweep was captured against a clean tree at **26 / 2474 / 1**; the delivered tree reads
+**26 / 2476 / 1** — the cap stream's two tests landed underneath the sweep. **Every one of
+the fourteen rows is therefore an observation on a superseded tree**, not only row 4.
+Review r3 re-measured rows 3, 6 and 11 on the delivered tree and all three reproduce
+ID-for-ID with zero removals, so the ledger is credible and no re-sweep is owed —
+but rows are cited *with* this provenance, never as if measured at the delivered tree.
+**Row 4's added-ID set is struck**: it claimed seven IDs; the reproducible value, measured
+twice by the coordinator at the delivered tree, is **exactly one** —
+`test_c6_created_at_is_carried_into_the_production_division_row`. Do not cite the original
+seven.
+
 **F-L4 — one ledger row does not reproduce (should-fix, routed to review r3 as a probe).**
 Ledger row 4 (C6 `created_at`) claims **seven** added IDs, including
 `test_prechange_payloads_match_byte_golden_files` and five valuation/calculator/price-scenario
@@ -777,3 +789,58 @@ IDs ⇒ one open-record probe + one worker sweep; 51 ⇒ rejected before queryin
 **Disposition: review r3 — the FIRST review of this phase.** Full checklist, not
 delta-scoped: implement r1 went to a coordinator-dispositioned fix without a review round,
 so no reviewer has yet seen any of this phase.
+
+### Review r3 consumed — 2026-08-20, coordinator
+
+First full review of the phase. Verdict `CHANGES_REQUESTED`: **1 blocking, 5 should-fix,
+6 notes — and the production code is confirmed correct by a second independent pass.**
+Review perimeter: **exactly its one handoff file** ✓; three probe files hash-verified
+against `HEAD`, its temporary probe test deleted, `git status` empty.
+
+**Coordinator verification of the decisive claims, at source and by measurement:**
+
+- **B1 reproduced by direct measurement.** Served E-P on `_make_live_fixture` and computed
+  the same payload under the pre-phase settled basis. **Live: `allowance_seconds = 0`,
+  worked `2040`, `share_state = "over_share"`. Settled: `allowance_seconds = 0`, worked
+  `1440`, `share_state = "over_share"`.** The assertion returns the same verdict with the
+  entire phase reverted. The reviewer's reading is exact.
+- **S3 confirmed at source and the arithmetic checked.** The fixture pins
+  `closed_at = now - 1 day` where `now` is the hard-coded `datetime(2026, 8, 20, 12, 0,
+  UTC)` (absolute `2026-08-19T12:00Z`) and then calls `typical_times_statement(workspace_id)`
+  **without** `now` — deliberately, since the row exists to exercise the wall-clock branch.
+  Cutoff is `real_now − 90 days`, filter `latest_closed_at >= cutoff`: 2026-08-19 + 90 days
+  = **2026-11-17**. After that instant the row fails with nothing in the repo having
+  changed. The house form is two files away and correct
+  (`test_budget_allocations_query.py:116`, `closed_at=datetime.now(timezone.utc) - timedelta(days=1)`).
+- **S4 confirmed:** neither substitution site carries D7's comment
+  (`get_task_production_time.py:54`, `get_task_budget_allocations.py:221` — the constructor
+  lines have no comment above them).
+- **N4 confirmed:** `get_working_section_typical_times.py:29` reads
+  `(now or datetime.now(timezone.utc))` while `_common.py:210` reads
+  `now.date() if now is not None else today_utc()` — two conventions for the one construct
+  D4 granted as one form.
+- **S2(b) confirmed** at the source read during implement-r1 consumption: the walk iterates
+  `worker_payload["result"]` flat, not the recursive `walk()` of the cited pattern.
+
+**The reviewer independently reached, and sharpened, the coordinator's F-L4 structural
+argument** — `created_at` is read at exactly one place in the domain module
+(`_governing_step`'s sort key) and reaches no payload field, so on a single-candidate
+section it cannot move a byte; `latest_state_record` is read at **two** places, the sort
+*and* `group_steps_by_section`'s `state_entered_at`, so its omission blanks a payload field
+on every section. Row 4's golden attribution is structurally impossible; row 5's is
+structurally necessary. That is a better statement of the fact than the one this
+coordinator wrote, and it is why the sampled re-measurement was worth commissioning.
+
+**Routing.** B1 + S1–S4 → **fix r4**. S5 → applied above, in place, at this fold (row 4's
+ID set struck; tree provenance stated where it will be read). N1–N6 → carried into the fix
+prompt as do-not-refile, except **N4**, which becomes a one-token production change under
+D4's "one form for both shims". **Lessons folded now, not at closeout:** intention **round
+4f** (§4.1A C's precondition as a lettered clause); master plan §5 **+2 rules** (the
+degenerate *controlling term*; a sweep is not a round); master plan §7's external-stream
+clause gains the sweep sentence.
+
+**The criterion-shape lesson, recorded against this plan.** Four criteria — C2, C4, C6
+row 1, C7 — are written as a headline sentence followed by subordinate clauses, and in all
+four **the headline shipped and the clauses did not**. C6's rows 2–4, written as separate
+lettered rows each with its own named mutation, shipped complete. The criteria were not
+wrong; the shape was. Phase 3's plan is to be written in the lettered-row form throughout.

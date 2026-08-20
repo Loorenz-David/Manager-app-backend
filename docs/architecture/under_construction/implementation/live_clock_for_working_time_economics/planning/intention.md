@@ -1,7 +1,7 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED and PLAN-READY (rounds 4a–4e, 2026-08-20; latest fold **round 4e**)
+status: RESOLVED and PLAN-READY (rounds 4a–4f, 2026-08-20; latest fold **round 4f**)
         — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
         2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
         §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
@@ -893,6 +893,27 @@ E-A: `task_id`, `status`, `allowed_worker_minutes`, `allocation_method`,
 allowance_seconds}`. With the two rows in **B** added, §4.1's table plus this list is
 total over the three serializers.
 
+**C.1 — the `allowance_seconds` claim carries a precondition (added round 4f, plan 2
+review r3 S1).** Listing `allowance_seconds` above as non-worked-derived is true **only
+while no *excluded* step holds an open working record.**
+`budget_division.py:divide_production_budget` computes `charged_seconds` as the sum of
+`total_working_seconds` over **excluded** steps, and from phase 2 onward those rows carry
+the **live** figure. An excluded step with an open working record would therefore make
+every `allowance_seconds` in its section tick downward second by second — the exact
+property this list denies.
+
+**It holds today, and the reason is structural, not incidental:**
+`_step_transition_core.py:_apply_step_transition` sets `closing_record.exited_at = now`
+unconditionally on every transition, so a step cannot enter an excluded state while its
+working record is still open (verified at source twice — mechanism-inventory gate, and
+again at plan 2 review r3). No live defect exists.
+
+The precondition is written here rather than left implicit in a phase plan's prose
+**because phases 3 and 4 cite §4.1A C, not plan 2's C6**. Any future path that moves a
+step to SKIPPED / CANCELLED / FAILED without closing its record breaks this list, and the
+breakage is silent: an allowance that drifts is indistinguishable from one that was always
+that size. Plan 2 C6 row 1 carries the assertion that pins it.
+
 **D. Composition — where HC-5's "one computation per request" is actually at risk.**
 E-P calls `get_task_budget_status(ctx)` and then loads the task's steps again for the
 division (`get_task_production_time.py:get_task_production_time`). If both sides run the
@@ -1648,3 +1669,14 @@ disagreement at a UTC date rollover, on the branch where `actual_worker_seconds`
 `None` and HC-5's own tests cannot see it. This widens phase 2's file perimeter into
 `services/commands/item_economics/`, named explicitly in `plans/plan_2.md` §3 and §7.
 No product semantics, shipped promise, or D1–D9 decision moved.
+
+**Round 4f — 2026-08-20, plan 2 review r3 folded (one upstream finding).** The review's S1:
+§4.1A C lists `allowance_seconds` as non-worked-derived, which is true only while no
+**excluded** step holds an open working record — `divide_production_budget` sums
+`total_working_seconds` over excluded steps into `charged_seconds`, and from phase 2 those
+rows carry the live figure. It holds today because
+`_step_transition_core.py:_apply_step_transition` closes the open record unconditionally on
+every transition, so **no live defect exists**; the precondition is recorded as **§4.1A C.1**
+because §4.1A C is what phases 3–4 cite, and the failure mode is silent (a drifting
+allowance looks exactly like a smaller one). Plan 2 C6 row 1 gains the assertion that pins
+it. No product semantics changed; no D1–D9 decision reopened.
