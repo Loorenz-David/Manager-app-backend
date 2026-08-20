@@ -84,8 +84,12 @@ Anything outside that perimeter is a finding regardless of merit.
   which the one-open-record-per-step unique index may make untestable; if so, say
   so explicitly rather than leaving it unremarked.
 - **The docstrings and comments added by r2/r3 are claims and inherit the
-  mutation rule** (master plan §5). Four to check, each for *truth*, not
-  presence: S1's ("the configured driver normalizes a naive bind before the
+  mutation rule** (master plan §5). **⚠ If you are the session that authored r1:
+  three of these four sentences are your own correction clauses, transcribed into
+  the tree by the implementer. Re-measure them; do not confirm them from recall.**
+  Reviewer prose enters the tree with no second reader, and in the neighbouring
+  pipeline four findings across two rounds were defects in a reviewer's own
+  proposed wording. Four to check, each for *truth*, not presence: S1's ("the configured driver normalizes a naive bind before the
   sweep, so the sweep cannot raise — 0 rows observed"); S2's (`reset/phases/
   delete_step_state_records.py` is the **only** writer — sweep the class, verify
   no other writer exists); N1's (which mutation answers which half of the
