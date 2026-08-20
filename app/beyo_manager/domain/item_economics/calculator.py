@@ -17,10 +17,13 @@ from beyo_manager.domain.items.enums import ItemCurrencyEnum
 from beyo_manager.errors.validation import ValidationError
 
 
-CALCULATION_VERSION: int = 1
+CALCULATION_VERSION: int = 2
 """§6A.10: bump for formula, term-set, rounding, currency, or bucket changes;
 never bump for renames, value-preserving storage widening, API shape, or docs.
 """
+
+PRODUCTION_BUDGET_CAP_PERCENT = Decimal("25")
+"""V1 gross expected-sale-price cap for the production budget."""
 
 # D4: a version mismatch is an intentional skip, not a failed re-derivation.
 REDERIVE_SKIPPED = "rederive_skipped_calculation_version"
@@ -28,6 +31,7 @@ REDERIVE_MISMATCH = "rederive_mismatch"
 
 __all__ = [
     "CALCULATION_VERSION",
+    "PRODUCTION_BUDGET_CAP_PERCENT",
     "REDERIVE_SKIPPED",
     "REDERIVE_MISMATCH",
     "EvaluationSnapshot",
@@ -247,7 +251,7 @@ def calculate_production_budget(
     expected_sale_price_minor: int,
     term_amounts: Iterable[int],
 ) -> int:
-    """Calculate the exact integer budget from the snapshot term amounts."""
+    """Calculate the capped integer budget from the snapshot term amounts."""
     price = _require_money(
         expected_sale_price_minor,
         "expected_sale_price_minor",
@@ -256,7 +260,17 @@ def calculate_production_budget(
     checked_amounts: list[int] = []
     for amount in term_amounts:
         checked_amounts.append(_require_money(amount, "amount_minor"))
-    return price - sum(checked_amounts)
+    residual = price - sum(checked_amounts)
+    with localcontext() as context:
+        context.prec = 50
+        cap_minor = int(
+            (
+                Decimal(price)
+                * PRODUCTION_BUDGET_CAP_PERCENT
+                / Decimal(100)
+            ).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN)
+        )
+    return min(residual, cap_minor)
 
 
 def calculate_cost_per_worker_minute(

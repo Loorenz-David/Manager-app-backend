@@ -325,6 +325,7 @@ def serialize_task_price_scenario(scenario: dict) -> dict:
             "cost_per_worker_minute_ten_thousandths": (
                 price_model.cost_per_worker_minute_ten_thousandths
             ),
+            "budget_cap_percent_milli": price_model.budget_cap_percent_milli,
             "is_purely_proportional": price_model.constant_deduction_minor == 0,
         }
     else:

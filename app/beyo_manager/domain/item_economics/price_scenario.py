@@ -29,6 +29,7 @@ class PriceModel:
     residual_percent_milli: int
     constant_deduction_minor: int
     cost_per_worker_minute_ten_thousandths: int
+    budget_cap_percent_milli: int = 25_000
 
 
 @dataclass(frozen=True)
@@ -98,13 +99,18 @@ def collapse_terms(
 
 
 def budget_minor(price_minor: int, model: PriceModel) -> int:
-    return (
+    residual = (
         round_half_even(
             price_minor * model.residual_percent_milli,
             100_000,
         )
         - model.constant_deduction_minor
     )
+    cap = round_half_even(
+        price_minor * model.budget_cap_percent_milli,
+        100_000,
+    )
+    return min(residual, cap)
 
 
 def allowed_centimin(price_minor: int, model: PriceModel) -> int:
@@ -142,7 +148,11 @@ def break_even_price_minor(
     model: PriceModel,
     typical_total_seconds: int,
 ) -> int | None:
-    if model.residual_percent_milli <= 0 or typical_total_seconds == 0:
+    if (
+        model.residual_percent_milli <= 0
+        or model.budget_cap_percent_milli <= 0
+        or typical_total_seconds == 0
+    ):
         return None
     return _least_price_for_seconds(model, typical_total_seconds)
 

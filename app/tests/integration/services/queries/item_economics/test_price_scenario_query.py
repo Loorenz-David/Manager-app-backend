@@ -766,8 +766,9 @@ async def test_c8_fingerprint_uses_full_ids_fixed_order_and_changes_by_model(
     )
 
     assert first["config_fingerprint"] == (
-        "cmv_full_identifier_01:pcbv_full_identifier_01:v1"
+        "cmv_full_identifier_01:pcbv_full_identifier_01:v2"
     )
+    assert first["model"]["budget_cap_percent_milli"] == 25_000
     assert reread["config_fingerprint"] == first["config_fingerprint"]
     assert changed["config_fingerprint"] != first["config_fingerprint"]
     assert null_model["config_fingerprint"] is None
@@ -826,7 +827,7 @@ async def test_c18_null_domain_forces_null_suggestion_with_break_even(
         },
     )
 
-    assert result["anchors"]["break_even_price_minor"] == 1
+    assert result["anchors"]["break_even_price_minor"] == 3
     assert result["anchors"]["suggested_price_minor"] is None
     assert result["domain"] is None
 

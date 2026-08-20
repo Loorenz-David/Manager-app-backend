@@ -4995,6 +4995,98 @@ nodes:
     confidence: 0.9
     createdAt: 2026-08-20T11:21:10.757Z
     updatedAt: 2026-08-20T11:21:10.757Z
+  - id: decision-item-economics-production-budget-cap-v1
+    type: decision
+    name: Production budget cap V1
+    description: Item-economics production budgets are capped at 25% of the gross
+      expected sale price, rounded to integer minor units with explicit
+      HALF_EVEN, and the formula change bumps CALCULATION_VERSION from 1 to 2.
+      The canonical calculator applies min(residual, cap) for committed and
+      rederived snapshots while preserving negative residuals; version-1
+      snapshots remain historical and re-derivation skips them. The published
+      PriceModel carries the additive non-null budget_cap_percent_milli
+      coefficient at 25000, and the task price-scenario query serializes it
+      explicitly so clients replay the same piecewise allowance, break-even,
+      slider-domain, and suggested-price arithmetic. The cap is hard-coded for
+      V1 and its future versioned-economics-configuration home is outside this
+      change.
+    tags:
+      - item-economics
+      - production-budget
+      - frontend-contract
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: PRODUCTION_BUDGET_CAP_PERCENT
+          startLine: 20
+          endLine: 26
+          summary: The calculator declares CALCULATION_VERSION 2 beside the Decimal 25
+            percent production-budget cap constant.
+          inferenceReason: This is the canonical formula module and directly records both
+            the new cap constant and the required version bump.
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+          startLine: 250
+          endLine: 273
+          summary: The canonical budget function computes a gross-price HALF_EVEN cap
+            under localcontext precision 50 and returns the minimum of residual
+            and cap.
+          inferenceReason: This source owns the committed budget formula and proves the
+            cap is applied inside the domain calculation.
+        - path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: PriceModel
+          startLine: 25
+          endLine: 32
+          summary: PriceModel adds the defaulted integer wire coefficient
+            budget_cap_percent_milli with value 25000.
+          inferenceReason: The scenario domain model is the published price-to-budget
+            contract the frontend replays.
+        - path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: budget_minor
+          startLine: 101
+          endLine: 113
+          summary: The price scenario computes residual and cap affine budgets and returns
+            their minimum.
+          inferenceReason: This is the client-replay arithmetic boundary and establishes
+            the piecewise model.
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 252
+          endLine: 259
+          summary: The task price-scenario query constructs PriceModel with the explicit
+            serialized cap coefficient derived from the canonical Decimal
+            constant.
+          inferenceReason: This query publishes the model to the frontend and makes the
+            additive coefficient explicit on every model payload.
+        - path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: serialize_task_price_scenario
+          startLine: 318
+          endLine: 330
+          summary: The price-scenario serializer emits budget_cap_percent_milli alongside
+            the existing model coefficients.
+          inferenceReason: The serializer is the wire boundary that preserves the non-null
+            additive field for frontend replay.
+        - path: app/tests/unit/domain/item_economics/test_price_scenario.py
+          symbol: test_c22_piecewise_budget_matches_the_capped_calculator_across_crossing
+          startLine: 433
+          endLine: 452
+          summary: The domain test sweeps prices across the residual/cap crossing, asserts
+            monotonicity and binding, and checks the model-vs-calculator error
+            bound.
+          inferenceReason: The test directly verifies the new piecewise contract and its
+            approximation guarantee across the load-bearing crossing.
+        - path: docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_production_budget_cap_20260820.md
+          startLine: 11
+          endLine: 41
+          summary: The dated frontend handoff documents the 25 percent cap, version-2
+            historical behavior, wire field, replay formula, and AT-PRICE
+            consequence.
+          inferenceReason: The handoff is the consumer-facing contract record created by
+            this implementation.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T19:45:02.200Z
+    updatedAt: 2026-08-20T19:45:02.200Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9899,3 +9991,20 @@ edges:
     confidence: 0.99
     createdAt: 2026-08-20T18:38:39.916Z
     updatedAt: 2026-08-20T18:38:39.916Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: governed_by
+    targetNodeId: decision-item-economics-production-budget-cap-v1
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+          startLine: 250
+          endLine: 273
+          summary: The item-economics calculator owns the capped production-budget formula
+            and its versioned rederivation behavior.
+          inferenceReason: The formula is a governing decision of the existing Item
+            Economics domain boundary.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-20T19:45:02.200Z
+    updatedAt: 2026-08-20T19:45:02.200Z

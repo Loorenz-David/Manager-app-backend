@@ -103,13 +103,13 @@ def test_c2_round_half_even_negative_operands_use_floor_semantics(
 
 
 def test_c3_price_percentage_rounding_reaches_a_half_even_tie() -> None:
-    model = PriceModel(50_000, 0, 1_000_000)
+    model = PriceModel(50_000, 0, 1_000_000, budget_cap_percent_milli=100_000)
     assert budget_minor(3, model) == 2
     assert budget_minor(5, model) == 2
 
 
 def test_c3_rate_division_reaches_a_half_even_tie() -> None:
-    model = PriceModel(100_000, 0, 2_000_000)
+    model = PriceModel(100_000, 0, 2_000_000, budget_cap_percent_milli=100_000)
     assert allowed_centimin(5, model) == 2
     assert allowed_centimin(7, model) == 4
 
@@ -270,7 +270,7 @@ def test_c7_collapsed_budget_stays_within_the_integer_error_bound(
 
 
 def test_c8_seconds_conversion_keeps_the_two_step_rounding() -> None:
-    model = PriceModel(100_000, 0, 13_000_000)
+    model = PriceModel(100_000, 0, 13_000_000, budget_cap_percent_milli=100_000)
     direct_shortcut = round_half_even(7 * 600_000, 13_000_000)
     assert direct_shortcut == 0
     assert allowance_seconds(7, model) == 1
@@ -428,3 +428,25 @@ def test_c21_module_has_no_direct_import_from_forbidden_boundaries() -> None:
         for imported in direct_imports
         if imported.startswith(forbidden_prefixes)
     ]
+
+
+def test_c22_piecewise_budget_matches_the_capped_calculator_across_crossing() -> None:
+    terms = [_percent("22.000"), _fixed(150_000)]
+    model = PriceModel(
+        residual_percent_milli=78_000,
+        constant_deduction_minor=150_000,
+        cost_per_worker_minute_ten_thousandths=13_000_000,
+    )
+    prices = range(282_900, 283_101)
+    budgets = [budget_minor(price, model) for price in prices]
+
+    assert all(left <= right for left, right in zip(budgets, budgets[1:]))
+    assert budget_minor(282_900, model) == 70_662
+    assert budget_minor(283_100, model) == 70_775
+    assert budget_minor(283_100, model) < round_half_even(283_100 * 78_000, 100_000) - 150_000
+    for price, model_budget in zip(prices, budgets):
+        persisted_budget = calculate_production_budget(
+            price,
+            calculate_term_amounts(terms, price, None),
+        )
+        assert 2 * abs(model_budget - persisted_budget) <= 2

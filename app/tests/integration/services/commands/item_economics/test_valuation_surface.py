@@ -186,8 +186,8 @@ async def test_preview_status_enumeration_has_sole_predicate_rows_and_never_crea
     if expected_status == "not_evaluated":
         assert response["preview"] == {
             "status": "not_evaluated",
-            "production_budget_minor": 100,
-            "allowed_worker_minutes": "7.68",
+            "production_budget_minor": 25,
+            "allowed_worker_minutes": "1.92",
         }
     else:
         assert response["preview"]["production_budget_minor"] is None
@@ -260,8 +260,8 @@ async def test_valuation_chain_preview_delete_and_history(db_session):
     assert first["item_valuation"]["client_id"].startswith("ival_")
     assert first["preview"] == {
         "status": "not_evaluated",
-        "production_budget_minor": 1_000_000,
-        "allowed_worker_minutes": "76923.08",
+        "production_budget_minor": 250_000,
+        "allowed_worker_minutes": "19230.77",
     }
 
     second = await set_item_valuation(

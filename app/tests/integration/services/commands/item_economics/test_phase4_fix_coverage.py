@@ -9,7 +9,9 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.item_economics.calculator import (
+    CALCULATION_VERSION,
     calculate_allowed_worker_minutes,
+    calculate_production_budget,
     rederive,
 )
 from beyo_manager.domain.item_economics.enums import ItemCostEvaluationKindEnum
@@ -370,16 +372,19 @@ async def test_c4_persisted_rate_is_the_calculator_output_and_rederives_exactly(
         planning_utilization_percent_snapshot=basis.planning_utilization_percent,
         fixed_monthly_cost_minor_snapshot=basis.fixed_monthly_cost_minor,
         cost_per_worker_minute_minor_snapshot=basis.cost_per_worker_minute_minor,
-        production_budget_minor=100000,
-        allowed_worker_minutes=calculate_allowed_worker_minutes(100000, basis.cost_per_worker_minute_minor),
-        calculation_version=1,
+        production_budget_minor=calculate_production_budget(100000, []),
+        allowed_worker_minutes=calculate_allowed_worker_minutes(
+            calculate_production_budget(100000, []),
+            basis.cost_per_worker_minute_minor,
+        ),
+        calculation_version=CALCULATION_VERSION,
         created_by_id=user.client_id,
     )
     result = rederive(evaluation, [])
 
     assert result == (
         Decimal(str(basis.cost_per_worker_minute_minor)),
-        100000,
+        calculate_production_budget(100000, []),
         Decimal(str(evaluation.allowed_worker_minutes)),
     )
 

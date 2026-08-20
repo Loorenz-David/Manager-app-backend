@@ -195,12 +195,18 @@ def test_quantization_tie_table_uses_half_even(site: str, actual: object, expect
 
 
 def test_budget_varies_only_the_snapshot_term_amounts_and_is_order_insensitive() -> None:
-    assert calculate_production_budget(10_000, []) == 10_000
-    assert calculate_production_budget(10_000, [600, 575, 1234]) == 7591
+    assert calculate_production_budget(10_000, []) == 2500
+    assert calculate_production_budget(10_000, [600, 575, 1234]) == 2500
+    assert calculate_production_budget(10_000, [600, 7400]) == 2000
     assert calculate_production_budget(10_000, [600, 11_000]) == -1600
-    assert calculate_production_budget(10_000, [600, 575, 1234]) == calculate_production_budget(
-        10_000, [1234, 600, 575]
+    assert calculate_production_budget(10_000, [600, 7400]) == calculate_production_budget(
+        10_000, [7400, 600]
     )
+
+
+def test_production_budget_cap_rounds_gross_price_half_even() -> None:
+    assert calculate_production_budget(2, []) == 0
+    assert calculate_production_budget(6, []) == 2
 
 
 def test_rate_underflow_varies_only_the_fixed_cost_snapshot() -> None:
@@ -355,8 +361,8 @@ def _evaluation_for_rederive(**overrides: object) -> ItemCostEvaluation:
         "planning_utilization_percent_snapshot": Decimal("75.00"),
         "fixed_monthly_cost_minor_snapshot": 5_760_000,
         "cost_per_worker_minute_minor_snapshot": Decimal("400.0000"),
-        "production_budget_minor": 2166,
-        "allowed_worker_minutes": Decimal("5.42"),
+        "production_budget_minor": 1000,
+        "allowed_worker_minutes": Decimal("2.50"),
         "calculation_version": CALCULATION_VERSION,
         "created_by_id": "usr_test",
     }
@@ -397,11 +403,11 @@ def test_rederive_uses_unsaved_orm_instances_and_only_the_closed_snapshot_fields
         patch.object(ItemCostEvaluation, "task_type_snapshot", property(raising_property)),
         patch.object(ItemCostEvaluation, "return_source_snapshot", property(raising_property)),
     ):
-        assert rederive(evaluation, terms) == (Decimal("400.0000"), 2166, Decimal("5.42"))
+        assert rederive(evaluation, terms) == (Decimal("400.0000"), 1000, Decimal("2.50"))
 
 
 def test_rederive_version_mismatch_returns_named_skip_marker_before_reading_snapshots() -> None:
-    evaluation = _evaluation_for_rederive(calculation_version=2)
+    evaluation = _evaluation_for_rederive(calculation_version=1)
     assert rederive(evaluation, []) == REDERIVE_SKIPPED
 
 
@@ -478,7 +484,7 @@ def test_rederive_malformed_evaluation_rate_returns_integrity_marker_and_cascade
             {
                 "field": "allowed_worker_minutes",
                 "rederived_value": None,
-                "stored_value": Decimal("5.42"),
+                "stored_value": Decimal("2.50"),
                 "error": "ITEM_COST_RATE_UNDERFLOW: cannot calculate allowance with zero rate",
             },
         ],
@@ -535,7 +541,7 @@ def test_rederive_malformed_purchase_snapshot_returns_integrity_marker() -> None
 
 def test_rederive_reports_production_budget_mismatch_payload() -> None:
     result = rederive(
-        _evaluation_for_rederive(production_budget_minor=2165),
+        _evaluation_for_rederive(production_budget_minor=999),
         _valid_rederive_terms(),
     )
 
@@ -544,8 +550,8 @@ def test_rederive_reports_production_budget_mismatch_payload() -> None:
         "mismatches": [
             {
                 "field": "production_budget_minor",
-                "rederived_value": 2166,
-                "stored_value": 2165,
+                "rederived_value": 1000,
+                "stored_value": 999,
                 "error": None,
             }
         ],
@@ -554,7 +560,7 @@ def test_rederive_reports_production_budget_mismatch_payload() -> None:
 
 def test_rederive_reports_allowed_worker_minutes_mismatch_payload() -> None:
     result = rederive(
-        _evaluation_for_rederive(allowed_worker_minutes=Decimal("5.41")),
+        _evaluation_for_rederive(allowed_worker_minutes=Decimal("2.49")),
         _valid_rederive_terms(),
     )
 
@@ -563,8 +569,8 @@ def test_rederive_reports_allowed_worker_minutes_mismatch_payload() -> None:
         "mismatches": [
             {
                 "field": "allowed_worker_minutes",
-                "rederived_value": Decimal("5.42"),
-                "stored_value": Decimal("5.41"),
+                "rederived_value": Decimal("2.50"),
+                "stored_value": Decimal("2.49"),
                 "error": None,
             }
         ],
@@ -590,8 +596,8 @@ def test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload() -> No
             },
             {
                 "field": "allowed_worker_minutes",
-                "rederived_value": Decimal("5.42"),
-                "stored_value": Decimal("5.42"),
+                "rederived_value": Decimal("2.50"),
+                "stored_value": Decimal("2.50"),
                 "error": None,
             },
         ],
@@ -599,7 +605,7 @@ def test_rederive_rate_mismatch_reports_rate_and_allowed_cascade_payload() -> No
 
 
 def test_calculation_version_constant_and_docstring_pin_the_bump_lists() -> None:
-    assert CALCULATION_VERSION == 1
+    assert CALCULATION_VERSION == 2
     assert "§6A.10" in (calculator.__doc__ or "")
     assert "term formula" in (calculator.__doc__ or "").lower()
     assert "renames" in (calculator.__doc__ or "").lower()
@@ -608,6 +614,7 @@ def test_calculation_version_constant_and_docstring_pin_the_bump_lists() -> None
 def test_public_surface_is_exactly_the_registered_calculator_api() -> None:
     assert set(calculator.__all__) == {
         "CALCULATION_VERSION",
+        "PRODUCTION_BUDGET_CAP_PERCENT",
         "REDERIVE_SKIPPED",
         "REDERIVE_MISMATCH",
         "EvaluationSnapshot",

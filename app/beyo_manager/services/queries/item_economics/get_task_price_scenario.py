@@ -14,7 +14,10 @@ from beyo_manager.domain.item_economics.budget_division import (
     _step_state_is_excluded,
     group_steps_by_section,
 )
-from beyo_manager.domain.item_economics.calculator import CALCULATION_VERSION
+from beyo_manager.domain.item_economics.calculator import (
+    CALCULATION_VERSION,
+    PRODUCTION_BUDGET_CAP_PERCENT,
+)
 from beyo_manager.domain.item_economics.enums import (
     CostModelTermCalculationTypeEnum,
     EconomicsStatusEnum,
@@ -252,6 +255,7 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
                 cost_per_worker_minute_ten_thousandths=int(
                     selection.basis_version.cost_per_worker_minute_minor.scaleb(4)
                 ),
+                budget_cap_percent_milli=int(PRODUCTION_BUDGET_CAP_PERCENT.scaleb(3)),
             )
             break_even = break_even_price_minor(
                 price_model,
