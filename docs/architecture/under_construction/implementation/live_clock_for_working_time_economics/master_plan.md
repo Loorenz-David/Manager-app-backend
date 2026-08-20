@@ -354,6 +354,35 @@ restated because they are load-bearing here:
   under the owner's standing authorization; never squashed. The phase is committed again
   at its approval gate.
 
+### Post-phase-2 test-environment work (owner-approved 2026-08-20, do NOT start mid-round)
+
+The mutation protocol's cost is one whole-suite run per named mutation, ~2m30s serial
+(~2,500 tests, one core; `pytest-xdist` is **not** installed — verified). Fix r2's
+fourteen-mutation sweep is therefore ~40 minutes of pytest. Two changes were agreed with
+the owner, **both to start only once phase 2 is APPROVED** — never mid-round, because
+each would invalidate in-flight measurements:
+
+1. **Install `pytest-xdist` and give each worker its own database or schema.** The
+   blocker is not the plugin, it is that this suite's integration tests share one
+   database through the rollback-scoped `tests/conftest.py:db_session`; concurrent
+   workers would see each other's rows and failures would go nondeterministic — poisoning
+   the exact measurements xdist is being bought for. Isolation first, then parallelism,
+   then re-enumerate the baseline failure-ID set under the new runner before trusting a
+   single mutation result.
+2. **Narrow the mutation *set* per round, never the suite.** From review r3 onward only
+   mutations whose criteria changed that round are re-measured (typically 3–4);
+   confirmed measurements stand in the Review log and are cited, not re-run. Fix r2's
+   full sweep is a one-time correction of B4, not the steady state.
+
+**The one thing that does not get narrowed: every mutation run stays whole-suite.**
+Scoping a probe to the phase's own test file destroys both signals the protocol exists
+for — **∅ detection** (a phase-scoped run cannot show that a mutation reddened nothing
+anywhere, and both of this round's blocking findings were ∅) and **removed IDs /
+cross-file coupling** (C6's `latest_state_record` mutation reddened two tests *outside*
+the phase file; a scoped run would have reported the opposite of the truth). xdist is the
+enabler precisely because it makes keeping this rule affordable rather than tempting to
+break.
+
 ### Code facts verified at source (this coordinator, 2026-08-20, tree `a0aaacc`)
 
 - **The full production consumer set of `get_task_budget_status` /
