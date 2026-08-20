@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from urllib.parse import quote
 
 import httpx
@@ -9,12 +10,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import settings
 from beyo_manager.models.tables.items.item_category import ItemCategory
-from beyo_manager.services.queries.items.lookup.base import ItemLookupHandler, ItemLookupResult
+from beyo_manager.services.queries.items.lookup.base import (
+    ItemLookupHandler,
+    ItemLookupResult,
+)
 
 logger = logging.getLogger(__name__)
 
 _PURCHASE_API_BASE = "https://api.beyovintage.se"
 _EXTERNAL_SOURCE_NAME = "purchase_api"
+_PURCHASE_PRICE_TO_SEK_RATE = {
+    "DKK": Decimal("1.5"),
+    "EUR": Decimal("11"),
+    "SEK": Decimal("1"),
+}
+
+
+def _normalize_purchase_price_to_sek(
+    purchase_price: int | float | None,
+    currency: str | None,
+) -> int | float | None:
+    if purchase_price is None:
+        return None
+
+    currency_code = (currency or "").strip().upper()
+    try:
+        rate = _PURCHASE_PRICE_TO_SEK_RATE[currency_code]
+    except KeyError as exc:
+        raise ValueError(
+            f"Purchase API returned purchase_price with unsupported currency {currency_code!r}"
+        ) from exc
+
+    normalized = Decimal(str(purchase_price)) * rate
+    if normalized == normalized.to_integral_value():
+        return int(normalized)
+    return float(normalized)
 
 
 async def _find_category_id_by_name(
@@ -23,11 +53,13 @@ async def _find_category_id_by_name(
     name: str,
 ) -> str | None:
     result = await session.execute(
-        select(ItemCategory.client_id).where(
+        select(ItemCategory.client_id)
+        .where(
             ItemCategory.workspace_id == workspace_id,
             func.lower(ItemCategory.name) == name.lower(),
             ItemCategory.is_deleted.is_(False),
-        ).limit(1)
+        )
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -45,7 +77,9 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
 
         api_key = settings.beyo_vintage_api_key
         if not api_key:
-            logger.warning("BEYO_VINTAGE_API_KEY is not set; skipping purchase API lookup")
+            logger.warning(
+                "BEYO_VINTAGE_API_KEY is not set; skipping purchase API lookup"
+            )
             return None
 
         url = f"{_PURCHASE_API_BASE}/api/partner/items/{quote(article_number, safe='')}"
@@ -66,13 +100,19 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
                 )
                 return None
             if response.status_code == 503:
-                logger.warning("Purchase API unavailable (503) — partner API not configured on remote server")
+                logger.warning(
+                    "Purchase API unavailable (503) — partner API not configured on remote server"
+                )
                 return None
             response.raise_for_status()
             body = response.json()
 
         if not body.get("success"):
-            logger.warning("Purchase API returned success=false for article_number=%r: %s", article_number, body.get("error"))
+            logger.warning(
+                "Purchase API returned success=false for article_number=%r: %s",
+                article_number,
+                body.get("error"),
+            )
             return None
 
         data = body.get("data", {})
@@ -80,13 +120,19 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
         subcategory = data.get("subcategory")
         item_category_id: str | None = None
         if subcategory:
-            item_category_id = await _find_category_id_by_name(session, workspace_id, subcategory)
+            item_category_id = await _find_category_id_by_name(
+                session, workspace_id, subcategory
+            )
 
         raw_photo_urls: list[str] = data.get("photo_urls") or []
         images = [
             f"{_PURCHASE_API_BASE}{path}" if path.startswith("/") else path
             for path in raw_photo_urls
         ]
+        purchase_price = _normalize_purchase_price_to_sek(
+            data.get("purchase_price"),
+            data.get("currency"),
+        )
 
         return ItemLookupResult(
             article_number=data.get("article_number", article_number),
@@ -96,5 +142,5 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             external_id=None,
             external_source=_EXTERNAL_SOURCE_NAME,
             images=images,
-            purchase_price=data.get("purchase_price"),
+            purchase_price=purchase_price,
         )
