@@ -871,3 +871,59 @@ the C6 no-open-excluded assertion fails if an excluded step gains an open record
 per-mutation IDs and the cycle-scoped write perimeter are in the implementer handoff.
 No Architecture Graph delta was recorded: this fix changes test proof and comments plus
 one equivalent shim form, not an architectural boundary.
+
+### Fix r4 consumed — 2026-08-20, coordinator
+
+**Perimeter verified, and it is exactly what the prompt allowed:** three production lines
+across three files — the two D7 comments and N4's single token
+(`(now or …)` → `(now if now is not None else …)`) — plus the phase test file (+199) and
+three pipeline records. `git show a9a143f -- app/beyo_manager/` is four `+`/`-` lines
+total. No golden, no serializer, no router. Checkpoint `a9a143f`.
+
+**Clean suite re-measured at `a9a143f`: 26 / 2478 / 1**, failing-ID set `comm`-diffed
+against §6's enumeration — empty in both directions. Reproduces the handoff. Phase file
+15 → **17 tests**; the ledger's arithmetic reconciles on every row (30/2474, 29/2475,
+35/2469 against 26/2478).
+
+**Findings verified closed:**
+
+- **B1(a) — closed, and the ledger reproduces ID-for-ID.** Coordinator re-applied the
+  settled-substitution mutation at `get_task_production_time.py:get_task_production_time`:
+  **exactly the four IDs claimed, zero removed**, including the new
+  `test_c2_positive_allowance_moves_share_state_under_live_basis`. The fixture asserts
+  `allowance_seconds == 186`, `worked_seconds == 1500`, `left_seconds == -1314`,
+  `share_state == "over_share"` — the exact integers plan §5 C2's decidability note
+  derived (`3.10 min × 60 = 186`; `186 − 1500 = −1314`), and the mutation moves the
+  **category** to `on_track`. The degenerate-allowance defect is genuinely gone.
+- **S3 — closed at source.** `closed_at=datetime.now(UTC) - timedelta(days=1)`
+  (line 1017), the house form, with the `typical_times_statement` call still
+  argument-free so the row keeps exercising the wall-clock branch. The 2026-11-17
+  expiry is removed; nothing in the published baseline will acquire a 27th member on a
+  date.
+- **S4 — closed at both sites**, and the comment names the consequence D7 asked for
+  ("a fallback would silently restore settled values and mask C3's population row").
+- **N4 — closed**, one token, both shims now on the `is None` form.
+
+**F-R4 — the byte-identity rows do not discriminate a clock leak (note, carried to
+phase 3).** Coordinator probe, not owed by the prompt: replacing `ctx.now` with
+`datetime.now(timezone.utc)` at E-P's loader call reddens **the same four IDs as B1(a)**
+— and **`test_c4_frozen_open_record_payloads_are_byte_identical` is not among them.**
+Two serves microseconds apart round to the same integer, so byte-identity is blind to the
+very defect the frontend's criterion 2 sounds like it guards. This is exactly the T1
+defect the mechanism-inventory gate found and rewrote as **T1′** — it has resurfaced one
+level up, in the row written to satisfy the criterion T1′ replaced.
+
+The rows are **not** worthless: the clock leak is caught, loudly, by the C2/C6/C9 value
+rows, and the loader-count assertion (`calls == 2` across two serves) carries real weight.
+But their *name* over-promises, and review r3's justification for adding them — "the only
+guard that would see an open-record determinism regression in a serializer" — is the
+claim now in doubt: **no mutation has yet been found that these rows alone catch.**
+Routed to re-review r5 as the lead probe. If none exists, the honest resolution is to
+record what they guard rather than delete them, and **plan 3 must not lean on them** as
+its determinism guard.
+
+**Disposition: re-review r5, delta-scoped.** Fix r4 authored **+199 lines of new proof**
+with new fixtures (`_make_share_state_fixture`, the byte-identity rows, C6's three
+clauses, C7's recursive walk). This project's whole record says new proof artifacts are
+where defects live, and the coordinator's verification covered B1(a), S3, S4 and N4 — not
+S1's clauses, not S2's walk, not the discriminating power of B1(b)'s rows.
