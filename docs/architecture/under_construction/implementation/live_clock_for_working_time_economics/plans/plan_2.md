@@ -1013,3 +1013,30 @@ live one — pre-existing coverage debt in the budget-division family, recorded 
 in, the trend is convergent: implement r1 carried 4 blocking, review r3 carried 1,
 re-review r5 carries 1, and **the production code has changed by exactly three lines since
 implement r1** (two comments and one token). Expected next state after r6: APPROVED.
+
+### Implementer fix r6 — 2026-08-21, Codex
+
+Fix r6 was implemented as a test-only change. The new two-section fixture has five
+qualifying typicals per section and one open working record. Its settled typical weights
+are 3600 and 1800 seconds; the named B1 mutation adds the first section's live delta of
+600 seconds, producing mutant weights 4200 and 1800. With 4560 distributable seconds,
+the clean E-P and E-A allowances are exactly `(3040, 1520)` and the mutant allowances
+are `(3192, 1368)`. The focused B1 test fails under that mutation.
+
+For S2, the preferred re-anchor was selected: C6 now uses the same positive-allowance
+two-section fixture. Replacing the live seconds with settled seconds in the named
+production call reddens the existing four-ID settled-substitution set, with no removed
+IDs:
+
+`test_c2_c3_c7_live_payloads_reconcile_and_worker_face_stays_money_free`,
+`test_c2_positive_allowance_moves_share_state_under_live_basis`,
+`test_c6_allowances_are_byte_identical_after_settlement_recompute`, and
+`test_c9_settlement_window_drop_is_visible_until_recompute`.
+
+At the clean intended tree `HEAD b099423`, the whole-suite baseline was 26 failed,
+2479 passed, 1 deselected, and 2 warnings; the failure-ID set is unchanged from §6.
+The B1 live-typicals mutation produced 47 failed, 2458 passed, 1 deselected, and 2
+warnings: 21 IDs were added and none removed. The S2 settled-substitution mutation
+produced 30 failed, 2475 passed, 1 deselected, and 2 warnings: exactly the four IDs
+above were added and none removed. The focused phase file passed 18 tests and Ruff was
+clean. No production file was changed and no Architecture Graph delta was recorded.

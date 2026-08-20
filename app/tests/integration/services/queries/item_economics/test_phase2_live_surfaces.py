@@ -16,6 +16,7 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
+from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
@@ -152,6 +153,65 @@ async def _make_share_state_fixture(db_session):
     evaluation.allowed_worker_minutes = Decimal("3.10")
     await db_session.flush()
     return values, now
+
+
+async def _make_two_section_typicals_fixture(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    evaluation = values[10]
+    evaluation.allowed_worker_minutes = Decimal("100.00")
+    token = workspace.client_id
+    second_section = WorkingSection(
+        client_id=f"wsec_phase2_second_{token}",
+        workspace_id=workspace.client_id,
+        name="Finishing",
+    )
+    db_session.add(second_section)
+    await db_session.flush()
+    for section_index, (section_for_groups, group_values) in enumerate(
+        (
+            (section, [1000, 2000, 3600, 5000, 6000]),
+            (second_section, [600, 1200, 1800, 2400, 3000]),
+        )
+    ):
+        for index, seconds in enumerate(group_values):
+            historical_task = Task(
+                client_id=f"tsk_phase2_typical_{token}_{section_index}_{index}",
+                workspace_id=workspace.client_id,
+                task_scalar_id=200 + section_index * 10 + index,
+                task_type=task.task_type,
+                state=TaskStateEnum.ASSIGNED,
+                created_by_id=user.client_id,
+            )
+            historical_step = TaskStep(
+                client_id=f"tsp_phase2_typical_{token}_{section_index}_{index}",
+                workspace_id=workspace.client_id,
+                task_id=historical_task.client_id,
+                working_section_id=section_for_groups.client_id,
+                state=TaskStepStateEnum.COMPLETED,
+                readiness_status=TaskStepReadinessStatusEnum.READY,
+                total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=seconds,
+                closed_at=datetime.now(UTC) - timedelta(days=1),
+                created_by_id=user.client_id,
+            )
+            db_session.add_all([historical_task, historical_step])
+    second_step = TaskStep(
+        client_id=f"tsp_phase2_second_live_{token}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=second_section.client_id,
+        state=TaskStepStateEnum.PENDING,
+        readiness_status=TaskStepReadinessStatusEnum.READY,
+        total_dependencies=0,
+        completed_dependencies=0,
+        total_working_seconds=0,
+        created_by_id=user.client_id,
+    )
+    db_session.add(second_step)
+    await db_session.flush()
+    return values, now, second_section
 
 
 async def _make_ordering_fixture(db_session, *, row: int):
@@ -459,6 +519,47 @@ async def test_c2_positive_allowance_moves_share_state_under_live_basis(db_sessi
 
 
 @pytest.mark.integration
+async def test_b1_live_work_does_not_change_typical_section_weights(db_session):
+    values, now, second_section = await _make_two_section_typicals_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    production_by_section = {
+        row["working_section_id"]: row for row in production["sections"]
+    }
+    assert {
+        section_id: production_by_section[section_id]["allowance_seconds"]
+        for section_id in (section.client_id, second_section.client_id)
+    } == {
+        section.client_id: 3040,
+        second_section.client_id: 1520,
+    }
+
+    allocation = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [task.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    allocation_steps = allocation["budget_allocations"][0]["steps"]
+    allowances_by_section = {}
+    for row in allocation_steps:
+        if row["allowance_seconds"] is not None:
+            allowances_by_section[row["working_section_id"]] = (
+                allowances_by_section.get(row["working_section_id"], 0)
+                + row["allowance_seconds"]
+            )
+    assert allowances_by_section == {
+        section.client_id: 3040,
+        second_section.client_id: 1520,
+    }
+
+
+@pytest.mark.integration
 async def test_c4_each_surface_uses_one_loader_call_and_c5_does_not_persist_live_seconds(
     db_session,
     monkeypatch,
@@ -683,7 +784,7 @@ async def test_c3_population_fold_counts_nonzero_skipped_consumption_on_manager_
 
 @pytest.mark.integration
 async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_session, monkeypatch):
-    values, now = await _make_live_fixture(db_session)
+    values, now, _second_section = await _make_two_section_typicals_fixture(db_session)
     workspace, user, _section, task, *_ = values
     division_inputs: list[list] = []
     production_divide = production_module.divide_production_budget
