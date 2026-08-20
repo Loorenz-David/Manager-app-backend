@@ -1,8 +1,8 @@
 # Master plan — live_clock_for_working_time_economics
 
 ```
-state: GATE PASSED. Intention RESOLVED and PLAN-READY (round 4a, D1–D9, ledger empty).
-       No phases exist yet — implementation planning is the next step.
+state: PLANNED. Four phases (plans/plan_1..4.md), all NOT_STARTED. Next: plan 1
+       projection (round 0) — REQUIRED, see §7.
 date: 2026-08-20
 coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md)
 ```
@@ -42,20 +42,72 @@ calibration file) — never handed to a session.
 
 ## 3. Phase registry & tracker
 
-No phases exist. Phase rows appear here when the implementation-planner produces them,
-newest state first, superseded rows kept as provenance.
+Newest state first; superseded rows kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
+| — | Implementation planning | **DONE** | 2026-08-20 | coordinator | Four phases, split so no payload changes before its guards exist: goldens + clock boundary + loader (1) → the three surfaces (2) → D9 frozen blocks (3, needs the live basis for T13 to discriminate) → closeout handoff + graph delta (4, docs only). Strictly sequential 1→2→3→4 — plans 2 and 3 share files, and the valuation pipeline's parallel doc phase collided on a tripwire despite disjoint perimeters. The four pre-registered decisions resolved as **N-1…N-4** (§4), each grounded in source read this session (`run_service` is a pure error boundary over an already-built ctx, so the boundary is ctx construction; `ItemCostResult` stores `actual_worker_minutes` + `variance_worker_minutes`, which reconstructs the frozen denominator without touching the current evaluation). D5 satisfied: no release before plan 3 approves, all four §4.1 rows ship together. |
+| 1 | Pre-change T5 goldens; `ServiceContext.now` (N-1); the loader `load_live_worked_seconds` (N-3) + its contract proven at loader level (T2/T3/T4/T10, window anchor, HC-1A) | NOT_STARTED | 2026-08-20 | — | `plans/plan_1.md`. Payloads byte-frozen throughout (C1). Projection REQUIRED. |
+| 2 | The three surfaces live: the fold (N-2), E-P one-map composition, E-A batch + `today_utc()`→`ctx.now.date()`; T1′/T5–T9/T11/T12 | NOT_STARTED | 2026-08-20 | — | `plans/plan_2.md`. Frozen-percent wiring untouched until phase 3. Projection REQUIRED. |
+| 3 | D9: the two frozen-percent feed sites (N-4) + T13 both rows, re-commit immunity | NOT_STARTED | 2026-08-20 | — | `plans/plan_3.md`. Projection REQUIRED (money/percent derivation = rule-6). |
+| 4 | Closeout handoff (six §7 obligations, headline: retire the frontend's interim flag) + the five-node graph delta | NOT_STARTED | 2026-08-20 | — | `plans/plan_4.md`. Projection **WAIVED**: documentation only, no mechanism — waiver recorded here per charter. Full review round regardless. |
 | — | Mechanism-inventory gate over the intention's mechanisms (M-1…M-9, §7 trigger table) | **PASSED** | 2026-08-20 | Opus 5 (inventory) + owner (D8–D9) + coordinator (fold) | Nine mechanisms swept, 11 lettered sections added (+758/−5), nothing renumbered. Session verdict `OWNER_DECISIONS_PENDING`; both cards answered the same day (**D8** ship-and-disclose the settlement window, **D9** freeze the frozen blocks whole) and folded at round 4a → **PASS**, no second reviewer session (no card branch changed a contract, only behaviour). Coordinator verified at consumption rather than reading the ledger: perimeter matches `git diff` exactly (the one undeclared `app/` change in the tree — `items/lookup/` — is the owner's concurrent item-lookup work, excluded from every pipeline commit); **12 load-bearing claims re-verified at source** (sync-close + async-enqueue in `_step_transition_core.py`, the flag disjunction and `_BUCKET_STATE` in `averaged_time.py`, `uix_step_state_records_active`, the worker-face `percent_consumed` branch, settlement's single `int(round(Σ))` across users, the 8-member enum, `DivisionStep`, `today_utc()` in E-A's loop, `_MAX_TASK_IDS = 50`, `FALLBACK_POLL_SECONDS = 30`, `max_try = 3`); all four §3.2 worked examples re-followed. **Calibration (seal opened at the fold, §7)**: H1 and H2 found and exceeded — H2's own arithmetic corrected, the per-user denominator is *impossible*, not merely loose; **H3 missed by the sweep** (§8's three-vs-four count), fixed at the fold as a coordinator finding. T1's named mutation proved inert and rewritten as T1′ — the both-sides rule biting a fourth time, this round on the coordinator lineage's own artifact. Unilateral resolutions U1–U9 recorded in the handoff; none reopens D1–D7; ratified by the owner's round-4a acceptance. Commits `da4ebcd` (scaffolding) → `e2e7c24` (gate delta) → gate-close commit. |
 | — | *(prior row — prompt compiled)* | *superseded* | 2026-08-20 | coordinator | Prompt at `prompts/reviewer/2026-08-20_inventory_mechanism_inventory.md`; calibration seal sealed pre-prompt at `prompts/coordinator/2026-08-20_inventory_calibration_seal.md`. Gate REQUIRED, NOT WAIVABLE. Both resolve under `archive/gate_inventory/` after closeout. |
 
 ## 4. Naming registry
 
 Reserved before any code exists, so two sessions cannot pick two names for one thing.
-**Nothing is minted yet** — this feature adds no route, no field, no table (HC-1, HC-4),
-so the only names to reserve are internal seams, and those are the planner's to register
-here before any implementer session.
+This feature adds no route, no field, no table (HC-1, HC-4); the minted names are
+internal seams only.
+
+### The four resolved decisions (planner, 2026-08-20 — grounded in source, not chosen in the abstract)
+
+- **N-1 — HC-3A reading: `ServiceContext` gains `now`.**
+  `now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))` in
+  `services/context.py:ServiceContext` — tz-aware UTC, stamped once at context
+  construction, which **is** the service boundary (`run_service.py:run_service` is a
+  pure error boundary over an already-built ctx and needs no change). `now` is request
+  data like `incoming_data`, not a flag or config value, so the class's standing
+  prohibition is not violated — the docstring says so explicitly. Every service reads
+  `ctx.now` and never a clock; tests freeze it by passing `now=`. Chosen over a
+  threaded parameter because the parameter route forces a signature default on
+  `get_task_budget_status` for its four callers, and **a default that silently reads
+  the clock is the defect T1 exists to catch** (intention §1A HC-3A); `ctx.now` gives
+  the shipped price-scenario endpoint its one clock read with zero code change in that
+  file.
+- **N-2 — the E-B aggregate is replaced by the per-step fold.**
+  `_build_evaluated_status` loads the task's non-deleted steps (no state filter —
+  intention §4.1A A population check) and computes `actual_seconds` as the sum of the
+  loader's per-step figures; the `func.sum` aggregate is deleted. Chosen over
+  keep-and-add because keep-and-add leaves **two code paths producing one number**
+  (E-P passes a map; standalone E-B would sum SQL + shares) — the exact defect class
+  this pipeline exists to remove — and saves nothing (§4.1A A: the per-step figures
+  are needed anyway).
+- **N-3 — the loader.**
+  `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`,
+  `async def load_live_worked_seconds(session, workspace_id, steps, now) ->
+  dict[str, int]` — keyed by step `client_id`, values are intention §3.1A's
+  `settled + int(round(open_share))`. Item-economics owns the seam; analytics keeps
+  the crediting rule (§8). The future alerting scheduler is this function's first
+  external customer (§7 non-goal, §4.1). Threading: `get_task_budget_status(ctx, *,
+  live_seconds=None)` where `None` means "compute from `ctx.now`", never "skip".
+  Allocator rows carrying live figures are **`budget_division.py:DivisionStep`**
+  instances (already exists, carries every field the allocator reads) — never
+  ORM-attribute assignment (HC-1A).
+- **N-4 — the D9 frozen-percent source.**
+  Both feed sites compute
+  `calculate_percent_consumed(result.actual_worker_minutes +
+  result.variance_worker_minutes, result.actual_worker_minutes)` — the denominator
+  reconstructed from the frozen record alone via the identity
+  `allowed ≡ actual + variance` (`calculator.py:calculate_variance_worker_minutes`),
+  so the frozen percent survives a later re-commit with a different allowance
+  (plan 3 C3 is the row that proves it). Feed sites:
+  `division_serializers.py:serialize_task_production_time` (the argument to
+  `:_serialize_production_time_final`) and
+  `serializers.py:serialize_task_budget_status` (the `percent_consumed=` argument to
+  `:_serialize_result`). The identity is verified against the calculator's definition
+  before first use (plan 3 task 1) — a formula asserted in a registry is a claim like
+  any other.
 
 Binding constraints, in force now:
 
@@ -64,24 +116,12 @@ Binding constraints, in force now:
   `averaged_time.py:compute_record_contributions` — **imported, never reimplemented,
   never forked**. A second averaging rule, or a `now − entered_at` elapsed, anywhere in
   this feature is a defect by definition, not a simplification.
-- **The shared loader** (intention §4.1 — takes the step set, the session and `now`,
-  returns `{step_id: live_worked_seconds}`) is the planner's to name; the name is
-  registered in this section before the first implement prompt compiles.
-- **Pre-registered planner decision (intention §4.1, review finding 4) — condition now
-  pinned (gate, round 4):** the fate of the SQL aggregate in
-  `get_task_budget_status.py:_build_evaluated_status`. The two resolutions (per-step
-  fold vs settled-sum-plus-live-term) are arithmetically identical **iff** the rounding
-  locus is §3.1A A's (round the open share per step, add to the integer column) —
-  which the intention now mandates. The gate's practical note stands: keeping the
-  aggregate saves nothing, because the per-step figures are needed anyway for the
-  section and step rows (intention §4.1A A). **The planner still picks one and records
-  it in this section plus the owning phase plan before any implementer session**, and
-  the loader's step set must be exactly "the task's non-deleted steps" — no state
-  filter — or T6's headline-equals-rows breaks (§4.1A A population check).
-- **D9 adds two serializer feed points to the naming surface** (intention §5.3,
-  §4.1A B): whatever the planner names as the frozen-percent source for
-  `division_serializers.py:_serialize_production_time_final` and
-  `serializers.py:_serialize_result` is registered here before implementation.
+- **The shared loader** — resolved: **N-3** above (name, home, signature, threading).
+- **The E-B aggregate decision** (intention §4.1, review finding 4; condition pinned by
+  the gate at §3.1A A) — resolved: **N-2** above. The loader's step set is exactly
+  "the task's non-deleted steps" — no state filter — or T6's headline-equals-rows
+  breaks (§4.1A A population check; plan 2 C3 carries the row).
+- **The D9 frozen-percent source** (intention §5.3, §4.1A B) — resolved: **N-4** above.
 - **`task_steps.total_working_seconds` keeps its exact meaning** — settled,
   concurrency-averaged, recomputed at transitions. No name in this pipeline may imply
   otherwise.
@@ -229,11 +269,15 @@ H1's and H2's territory; none of the specific defects; H3's territory not at all
   the *coordinator's* consumption pass must re-count every counted sentence in a
   delta, every round.
 
-### Projection — pre-declared
+### Projection — pre-declared, now instantiated per phase
 
 REQUIRED for any phase implementing M1 (the live share, the window) or the M2 seam (the
 shared loader, `_build_evaluated_status`, the division-calling services). Waivable, with
 a recorded one-line justification, only for phases that ship documentation alone.
+
+Instantiated against the plan set (2026-08-20): **plans 1, 2 and 3 REQUIRED** (plan 3
+is a money/percent derivation — rule-6 by name); **plan 4 WAIVED** (documentation
+only, no mechanism; waiver recorded in its §3 tracker row).
 
 ### Review
 
