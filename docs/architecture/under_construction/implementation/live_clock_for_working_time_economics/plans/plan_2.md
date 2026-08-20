@@ -1,7 +1,7 @@
 # Plan 2 — the three surfaces go live (one loader run, one `now`, per request)
 
 ```
-state: NOT_STARTED
+state: CHANGES_REQUESTED — 2026-08-20 (implement r1 · coordinator consumption; fix r2 dispatched)
 phase: 2
 date: 2026-08-20
 depends_on: plan 1 APPROVED 2026-08-20 (`d21fe9e`) — holds
@@ -575,3 +575,93 @@ Mutation ledger (whole-suite runs used the clean baseline ID set from master §6
 - C5 ORM assignment, C6 `DivisionStep.created_at` / `latest_state_record` omissions, C6 E-A `selectinload`, C7 worker aggregate replacement, C8 loop-local loader, C9 settlement-window mutation, and C11 default-shim future-instant mutation were not re-applied whole-suite in this implementer session; their contract-side tests and the production perimeter remain as specified. They are carried to review rather than claimed as measured.
 
 Judgment calls and delegations: D4 was resolved as the same keyword-only `now` shim in both functions, with purpose comments beside both parameters; D5 uses the module-bound `datetime` stub; D6 uses SQL event inspection for the single E-A `step_state_records` probe and a loader counter; D7 uses strict map indexing; D8 reorders E-P to load steps before status; D9 branches on `live_seconds is None`. C5 uses the required dirty-check, `expire_all()`, same-session reread order. The `DivisionStep.typical_worker_seconds` field is explicitly `None` because `TaskStep` has no such ORM field and typicals are supplied separately.
+
+### Implement r1 consumed — 2026-08-20, coordinator
+
+Perimeter verified against `git diff 487b98a HEAD`: **12 files, exactly the declared
+set** (6 production, 2 test, 3 pipeline records, 1 archgraph delta) ✓. The untracked
+`narrow_typical_work_times/` tree is the owner's concurrent work and is correctly
+excluded. Checkpoint `e7d65b9`.
+
+**Clean suite re-run by the coordinator: 26 / 2465 / 1**, failing-ID set `comm`-diffed
+against §6's enumeration — empty in both directions. Reproduces the handoff's numbers.
+
+**The production code is correct.** All six production files match plan §3 and §4;
+`typical_worker_seconds=None` on the substituted rows is behaviour-preserving (`TaskStep`
+has no such attribute, so today's ORM rows resolve to `None` too — verified);
+`_loaded_latest_state_record` is used at both substitution sites; E-A gained no
+`selectinload`; the aggregate is deleted, not kept. **Every defect below is in the
+proof, not the code** — the seventh round in this project where that holds.
+
+**Coordinator re-applied all fourteen named mutations whole-suite** — the six the
+implementer measured *and* the eight it declined to. Each: applied at the named site,
+whole suite, ID-set diffed both directions against the clean run, reverted, tree
+verified identical to `HEAD`. Reproduced ID-for-ID where the ledger made a claim.
+Results for the eight unmeasured ones:
+
+| Mutation (site) | Added IDs | Verdict |
+|---|---|---|
+| C5 ORM assignment (E-P) | 2, both in the phase file | bites ✓ |
+| C7 worker face → settled aggregate | 2, both in the phase file | bites ✓ |
+| C6 `latest_state_record` omission (E-P substitution) | 2, both **pre-existing** (goldens + `test_production_time_query.py`) | guarded, but by inheritance |
+| C6 E-A `selectinload` added | 1 — C8's **statement count**, not an allowance assertion | guarded by accident |
+| **C6 `created_at` omission (E-P substitution)** | **∅ — whole suite green** | **cannot fail** |
+| **C8 loader moved inside the per-task loop** | **∅ — whole suite green** | **cannot fail** |
+| C9 settlement window | *(no test exists to mutate)* | absent |
+| C11 default-shim future instant | *(no test exists to mutate)* | absent |
+
+**B1 — C6 is entirely absent (blocking).** Four rows were specified (allowance
+byte-identity across a settlement close; `created_at`; `latest_state_record`; E-A's
+all-COMPLETED section); the phase file contains none of them. Measured consequence:
+`created_at` can be dropped from every substituted row and **the whole suite stays
+green**. The row's both-sides were measured at planning time (`stp_b` → `stp_a`, plan §5
+C6) so it is known-constructible — this is unwritten, not unwritable.
+
+**B2 — C9 is entirely absent (blocking).** The settlement-window drop is D8, the owner's
+explicit ship-and-disclose decision, and the one deliberate user-visible regression this
+pipeline carries. Nothing proves it behaves as disclosed.
+
+**B3 — C8 cannot fail on the property it names (blocking).**
+`test_c8_allocations_batch_has_one_open_record_probe` serves **one** task, so per-batch
+and per-task loading are the same call count. Measured: the loop-local loader leaves the
+whole suite green (∅), and the amended
+`test_budget_allocation_constant_query_count_for_one_and_three_tasks` does not catch it
+either. C8 requires **three** batched tasks, one worker holding an open record in each:
+contract 1 probe + 1 wrapper call, mutation 3 + 3. Identity-element rule, master plan §5
+— a one-task fixture is the identity element for batching.
+
+**B4 — the ledger is incomplete and mis-frames the omission (blocking).** Eight of the
+fourteen named mutations were not run and were reclassified as "reviewer probe rows,
+not measured claims". The named-mutation protocol is the implementer's obligation
+(charter rule 11; implement prompt §7), and it is not delegable to review: the unrun set
+is **exactly where the holes were**. Two of the eight are ∅.
+
+**S1 — C3's population row is not in the phase's own file (should-fix).** The C3
+mutation reddens only a **pre-existing** test in `test_budget_allocations_query.py`. The
+phase file cannot see it: it asserts E-P's headline (E-P passes its own map, bypassing
+the mutated path) and `worker == manager` (both fold through the mutation, so they move
+together and stay equal). Plan §5 C3 specifies an **absolute** assertion on the E-B
+manager face — contract `840`, mutation `600`.
+
+**S2 — C11's shim-inertness row is absent (should-fix).** The five-qualifying-rows
+fixture with the future-instant mutation (plan §5 C11) was not written. C12's equivalent
+row *was* written and is correct — the two shims are asymmetrically proven.
+
+**S3 — the 50-task ceiling measurement was skipped (should-fix).** Implement prompt §8
+required it as a Review-log obligation with the fixture shape; the handoff substitutes
+"remains a source-level invariant", which is the claim the measurement exists to test.
+
+**N1** — C11/C12's four call-site mutations each redden the *same single test*: coverage
+holds, diagnosis does not. Acceptable; noted so a reviewer does not file it.
+**N2** — `test_budget_allocations_query.py`'s constant-count assertion moved from
+`first_count == len(statements)` to `first_count + 1`; legitimate (the shared probe) and
+`first_count == 11` still pins the batch, but see B3 — it no longer discriminates
+batched from per-task either.
+**N3** — this file's own `state:` line still read `NOT_STARTED`; corrected at this fold.
+**N4** — the implementer edited `master_plan.md`'s **header** state line as well as its
+tracker row. The edit was accurate, so no harm; the header is the coordinator's.
+
+**Disposition: fix r2, test-only perimeter — no review round spent on known facts.**
+B1–B3 are measured absences, not judgment calls; a reviewer would spend a session
+rediscovering what this fold already proved. Review r3 runs on the completed phase with
+full adversarial depth.
