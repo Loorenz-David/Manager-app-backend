@@ -1,10 +1,13 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED (round 3, 2026-08-20) — 0 owner cards open (D5–D6 ratified §10.2;
-        D7 recorded round 3). Coordinator review of 2026-08-19 folded (all six
-        findings, owner-dispositioned). NOT plan-ready until the mechanism-inventory
-        gate passes.
+status: RESOLVED (round 4, 2026-08-20) — mechanism contracts added; **2 owner cards
+        open** (§11 round 4; cards live in
+        `handoffs/reviewer/2026-08-20_inventory_mechanism_inventory_handoff.md`).
+        D5–D6 ratified §10.2; D7 recorded round 3. Coordinator review of 2026-08-19
+        folded (all six findings, owner-dispositioned). Mechanism-inventory gate ran
+        round 4 and returned OWNER_DECISIONS_PENDING — **NOT plan-ready** until both
+        cards are answered.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md
@@ -80,6 +83,62 @@ alerting scheduler can never disagree.
   (`decision-money-audience-admin-manager-only`). Making a number live never widens
   who sees it.
 
+### 1A. Hard-constraint contracts (round 4, mechanism-inventory gate)
+
+**HC-1A — "never persisted" is a statement about ORM instances, not only about
+tables.** All three surfaces hand SQLAlchemy `TaskStep` instances, loaded from the
+request session, into `budget_division.py:divide_production_budget`
+(`get_task_production_time.py:get_task_production_time` passes the eager-loaded rows
+directly; `get_task_budget_allocations.py:get_task_budget_allocations` passes
+`task_steps`). Assigning the live figure onto `step.total_working_seconds` marks the
+instance dirty, and the next autoflush or commit on that session writes the live value
+into the settled column — silently, with no test failing and no error raised. It would
+also leak onto an out-of-scope surface:
+`tasks/serializers.py:serialize_task_step` ships `total_working_seconds` straight off
+the ORM attribute.
+
+The contract, binding on every phase:
+
+1. **No code in this pipeline assigns to `TaskStep.total_working_seconds`, ever.** The
+   live figure is carried on a **separate row shape** handed to the allocator —
+   `budget_division.py:DivisionStep` already exists for exactly this and carries every
+   field the allocator reads (`client_id`, `state`, `working_section_id`,
+   `total_working_seconds`, `sequence_order`, `working_section_name_snapshot`,
+   `typical_worker_seconds`, `is_deleted`, `created_at`, `latest_state_record`) — or on
+   an equivalent shape the planner registers. `_value` (`budget_division.py:_value`)
+   already accepts objects and mappings alike, so the allocator needs no change (§4.3).
+2. **The invariant is proven on the production code path** (charter rule 3): after
+   serving each of the three endpoints against a task with an open working record, the
+   `task_steps.total_working_seconds` column re-read from the database is unchanged.
+   See §9A, T9.
+
+**HC-3A — the clock contract.** "One `now` per request" is undefined until three
+things are pinned:
+
+- **Type.** `entered_at` / `exited_at` are `DateTime(timezone=True)`
+  (`step_state_record.py:StepStateRecord`) and arrive **timezone-aware** from the
+  driver. `now` is therefore `datetime.now(timezone.utc)` — aware, UTC. A naive `now`
+  raises `TypeError` inside `concurrency.py:_sweep` at `(end - interval.entered_at)`;
+  this is the one mechanism in the feature that fails loudly, and it is stated so no
+  one "fixes" it with a naive value.
+- **Injection site, given the router's fixed signature.** `run_service.py:run_service`
+  calls every query service as `fn(ctx)`, and `context.py:ServiceContext` carries the
+  standing instruction "Never add boolean flags or config values here". So `now` is
+  either registered as a `ServiceContext` field by the planner (request data, not
+  config — the planner records which reading it takes in the master plan §4) or read at
+  the top of each of the three entry services and threaded down as an explicit
+  parameter. Under the second reading `get_task_budget_status(ctx, ...)` must keep a
+  call-compatible signature for its four callers (master plan §6), which means a
+  default — and **a default that silently reads the clock is the defect T1 exists to
+  catch** (§9A, T1).
+- **Scope — what "one clock read" covers.** It is not true today that the
+  item-economics query family reads no clock (§2.3A). Under HC-3 the residual read
+  inside E-A (`get_task_budget_allocations.py:get_task_budget_allocations` calls
+  `today_utc()` **inside the per-task loop**, so up to 50 independent clock reads per
+  request) comes under the injected `now` as `now.date()`. This is behaviour-preserving
+  except at a UTC date rollover mid-request, where it replaces an inconsistency with a
+  consistent answer, and it is what makes T1 decidable for E-A at all.
+
 ---
 
 ## 2. Grounding — what exists today (verified 2026-08-19, all paths read this session)
@@ -134,6 +193,32 @@ frontend worried about is a property of the **item-economics query family**, not
 the read layer as a whole. This pipeline extends an existing, shipped pattern; it does
 not breach a covenant. (`list_workers_totals.py` is the second precedent.)
 
+### 2.3A The absence claim, corrected and scoped (round 4)
+
+The paragraph above is **false as stated**, and the correction strengthens its
+conclusion rather than weakening it.
+
+- **Search run:** `grep -rnE "datetime\.now|utcnow|func\.now|today_utc|date\.today|time\.time\(|timezone\.utc"` over
+  `app/beyo_manager/services/queries/item_economics/` — the term set deliberately
+  includes `today_utc`, the wrapper that defeated this project family's earlier grep
+  (master plan §5).
+- **Result:** two hits inside the family, one of them inside a surface this pipeline
+  changes. `get_task_budget_allocations.py:get_task_budget_allocations` calls
+  `today_utc()`; `get_economics_configuration_status.py` calls it too.
+  `_common.py:today_utc` is `datetime.now(timezone.utc).date()`.
+- **Therefore:** the item-economics query family **already reads the wall clock**,
+  inside E-A itself. There is no covenant to breach and never was. The consequence
+  that matters is HC-3A's third bullet, not the framing.
+
+Second correction, same paragraph: the sweep's IO wrapper has **five** production
+callers, not two — `get_worker_daily_step_breakdown.py`, `list_workers_totals.py`,
+`estimation_sample.py:load_trusted_step_duration_sample`,
+`reconcile_user_time.py`, and `process_step_transition.py:_recompute_step_time_totals`.
+Three of the five are query-layer reads. `estimation_sample` is the closest existing
+analogue to M1: it consumes `RecordContribution` rows and filters them by
+`is_open` / `step_is_deleted` / `step_is_completed` / `marked_wrong`, which is the same
+filtering shape M1 needs with the `is_open` polarity inverted.
+
 ### 2.4 The consuming surfaces (the freeze, per endpoint)
 
 All three compute worked time from the settled column and only from it:
@@ -174,6 +259,30 @@ This answers the frontend's third open question ("does anything else consume the
 a settled basis?"): yes — the four above — and none of them reads through the
 endpoints this pipeline changes; they read persisted columns this pipeline never
 writes.
+
+### 2.5A The settled-consumer inventory, made total (round 4)
+
+The list above is not total, and §2.5's answer to the frontend's third question is
+therefore incomplete. **Search run:** `grep -rn "total_working_seconds"` over
+`app/beyo_manager/`, excluding the model definitions; every hit classified. The
+complete consumer set of `TaskStep.total_working_seconds`, with what each does under
+M1:
+
+| # | Site (`path:symbol`) | Reads via | Under M1 |
+|---|---|---|---|
+| 1 | `process_item_cost_result.py` — `SUM(total_working_seconds)` writing `item_cost_results` | SQL | settled, untouched (§2.5 row 1) |
+| 2 | `reconcile_user_time.py` family — daily rollups | SQL over the daily tables, not the step column | settled, untouched (§2.5 row 2) |
+| 3 | `process_step_transition.py:_recompute_step_time_totals` — writes the column and `total_cost_minor` | ORM write | settled, untouched (§2.5 row 3) |
+| 4 | `division_serializers.py:_serialize_production_time_final` — the E-P `final` block | dict | **partly live** — see §4.1A |
+| 5 | **`get_working_section_typical_times.py:typical_times_statement`** — `SUM(TaskStep.total_working_seconds)` feeding `typicals_by_section` | SQL | **must stay settled** — see §4.3A |
+| 6 | **`get_worker_clock_out_analytics.py`** — `func.sum(TaskStep.total_working_seconds)` | SQL | settled, untouched; out of scope |
+| 7 | **`tasks/serializers.py:serialize_task_step`** — ships the column on the task/step read surface | ORM attribute | settled, untouched **only if HC-1A holds** |
+| 8 | `task_steps/aggregate_metrics.py:increment_step_time_metrics` | ORM write | **no callers** (stated in its own docstring); inert |
+
+Rows 5–8 are new to this document. Rows 5 and 7 are load-bearing: row 5 is a third
+worked-seconds→allowance path (§4.3A), row 7 is the blast radius of an ORM mutation
+(HC-1A). The corrected list is what ships in the closeout handoff, not the list of
+four.
 
 ### 2.6 In-flight neighbour
 
@@ -234,6 +343,108 @@ open_working_share(s, now) =
 rounded `int(round(·))` per step — the same rounding locus settlement applies to its
 per-state sums.
 
+### 3.1A M1 contract-grade definition (round 4)
+
+§3.1 is a correct sketch. Everything below is what an implementer would otherwise
+resolve silently in code. All of it verified at source at `a0aaacc`.
+
+**A. Output type and rounding locus — pinned.**
+
+```
+live_worked_seconds(s, now) : int
+  = s.total_working_seconds                       # int, already settled-rounded
+  + int(round(open_working_share(s, now)))        # round the SHARE, then add
+```
+
+The rounding is applied to **the open share alone**, never to the sum. Two reasons,
+both load-bearing:
+
+- It is what makes §4.1's "two resolutions are arithmetically identical" **true**.
+  Since `settled_s` and `int(round(open_s))` are both integers,
+  `Σ_s (settled_s + round(open_s)) ≡ (Σ_s settled_s) + Σ_s round(open_s)` — the
+  per-step fold and the SQL-sum-plus-live-term give the same task figure, exactly. Under
+  the other locus (`int(round(settled_s + open_s))`) they do **not**: Python's `round`
+  is banker's rounding, so `round(0 + 0.5) = 0` while `round(1 + 0.5) = 2`, and the two
+  resolutions diverge on any share landing on an exact half-second — which a two-way
+  batch split of an odd second count produces on demand. See §4.1A.
+- `int(round(·))` means **Python's built-in `round`, half-to-even**, matching
+  settlement's `int(round(totals[state][0]))`
+  (`process_step_transition.py:_recompute_step_time_totals`). Not
+  `Decimal.quantize(ROUND_HALF_UP)`, not `math.floor(x + 0.5)`. The difference is one
+  second at exact halves, which is precisely the width of the §3.3 bound.
+
+**B. The output is an `int`, and the two consumers punish a float differently.**
+`budget_division.py:group_steps_by_section`, `:_step_result`, `:_section_step_allowances`
+and `:divide_production_budget` all coerce with `int(_value(step, "total_working_seconds", 0) or 0)`
+— **`int()` truncates**, so a float `1799.6` becomes `1799`, silently, in four places.
+`calculator.py:_require_seconds` uses `_guard_type(..., exact=True)`, so the same float
+raises a `ValidationError` on the money path. A loader returning floats therefore
+produces a payload whose rows are truncated and whose headline is a 500. The loader
+returns `int`.
+
+**C. Input types, as the ORM actually delivers them.**
+
+| value | type at the boundary | note |
+|---|---|---|
+| `entered_at`, `exited_at` | `datetime`, **tz-aware UTC** | `DateTime(timezone=True)`; `exited_at` NULL ⇒ open |
+| `now` | `datetime`, tz-aware UTC | HC-3A |
+| `state` on a `RecordContribution` | `str`, the **bucket key** | `averaged_time.py:_BUCKET_STATE`, not the raw column; `"working"`, `"paused"`, `"ended_shift"` |
+| `credited_user_id`, `created_by_id` | `str | None` | both nullable |
+| `RecordContribution.seconds` | `float` | `0.0` for any record absent from the sweep result — `averaged_time.py:compute_record_contributions` uses `.get(record_id, 0.0)`, so a missing key is never a `KeyError` |
+
+The `state == "working"` filter in §3.1 is correct and cannot be replaced by the raw
+column: the wrapper emits the derived bucket. It is also, for a WORKING record,
+redundant — `_BUCKET_STATE`'s `ended_shift` branch requires `PAUSED` — and is kept as a
+type-level assertion.
+
+**D. The zero-case enumeration is total over the real state vocabulary, and the
+ranking is inert.** `TaskStepStateEnum` (`task_steps/enums.py:TaskStepStateEnum`) has
+eight members: `pending, working, paused, blocked, completed, skipped, failed,
+cancelled`. §3.1's clause 2 ("state is not WORKING") covers the other seven in one
+decidable predicate; every clause yields the same value (`0`), so no precedence between
+the clauses can change an outcome and the "ranked rule" reading is unnecessary. Two
+clauses are additionally **unreachable or redundant today**, recorded so no one reads
+them as live paths:
+
+- *record `is_deleted`* — `compute_record_contributions` already excludes deleted
+  records in its `WHERE`, and **no shipped command ever sets
+  `StepStateRecord.is_deleted = True`**. Verified: the only writer is
+  `reset/phases/delete_step_state_records.py`, which issues a **hard** `DELETE` for a
+  whole workspace. The clause is defense-in-depth (§6A).
+- *record `marked_wrong`* — `averaged_seconds_by_record` drops flagged intervals before
+  the sweep, so the record earns `0.0` through the wrapper anyway.
+
+Three further zero-cases §3.1 does not enumerate, each decidable, each reachable:
+
+- **`entered_at >= now`** (clock skew, or a record written with a future stamp): the
+  sweep skips it (`duration <= 0: continue`) and it neither earns nor divides. Share
+  `0`.
+- **Both `credited_user_id` and `created_by_id` NULL**: `COALESCE(...) == u` matches no
+  row, the sweep never sees the record, share `0`. Settlement skips the same record
+  (`if uid is None: continue`), so the two agree.
+- **`exited_at == entered_at`** (permitted by
+  `ck_step_state_records_exited_after_entered`): duration `0`, share `0`. Not an open
+  record, listed for completeness of the population.
+
+**E. "The open record" is singular by database guarantee, not by convention.**
+`step_state_record.py:StepStateRecord.__table_args__` carries
+`uix_step_state_records_active` — `UNIQUE (workspace_id, step_id) WHERE exited_at IS
+NULL`. It does **not** exclude soft-deleted rows, which is what makes the singularity
+unconditional: at most one row per step has `exited_at IS NULL`, deleted or not. §2.1's
+claim is therefore stronger than "the transition core closes the previous record
+first". Caveat for the planner: the index is declared `postgresql_where`, so the
+guarantee is Postgres-only; the suite runs against the configured Postgres
+(`tests/conftest.py:initialize_database` → `init_db()`), so tests inherit it.
+
+**F. A deleted *step*'s records still divide.** `compute_record_contributions` filters
+`StepStateRecord.is_deleted` but **not** `TaskStep.is_deleted` — it returns
+`step_is_deleted` for the caller to filter. So a deleted step's open batch record still
+counts toward its worker's divisor and reduces a live step's share. This is what
+settlement does too (`_recompute_step_time_totals` filters only by `step_id`), so M1
+and settlement agree and the §3.3 bound is unaffected. It is recorded because it looks
+like a bug and is not: "fixing" it would break parity in the direction the bound cannot
+detect. See §9A, T10.
+
 ### 3.2 Why the share, not the elapsed — the four ways `now − entered_at` is wrong
 
 Recorded in full so the naive form is never "simplified" back in:
@@ -271,6 +482,59 @@ document must give one instruction, and correctness must not hang on a scheduler
 another domain (charter rule 11 — safety binds at the boundary). If the company ever
 runs a night shift, or the sweep misses a night, nothing here needs revisiting.
 
+### 3.2A The four cases, checked by hand; and the window rule, derived (round 4)
+
+**Worked-example audit.** Every number in §3.2 was recomputed against
+`concurrency.py:_sweep` as coded — segment boundaries from
+`sorted({start, end})`, membership `start <= left and end >= right`, `share =
+segment / k`. All four follow their own rule; none is decoration.
+
+| case | contract arithmetic, re-derived | naive form | verdict |
+|---|---|---|---|
+| 1 two workers, one section | two `compute_record_contributions` calls (one per `user_id`), each a single interval, `k = 1` ⇒ 1800 s + 1800 s = **60 min** | divide by the section's open-record count ⇒ 900 + 900 = 30 min | follows |
+| 2 divisor changes mid-interval | points `{9:00, 9:20, 9:30}`; `[9:00,9:20]` k=1 ⇒ A +1200; `[9:20,9:30]` k=2 ⇒ A +300, B +300 ⇒ A = **1500 s (25 m)**, B = 300 s (5 m) | one division by the current count ⇒ A = 900 s (15 m) | follows |
+| 3 divisor on another task | wrapper filters by `user_id` with **no task predicate**, so both intervals enter one sweep ⇒ k=2 ⇒ each **half** | task-scoped fetch sees k=1 ⇒ full | follows |
+| 4 closed record shapes the open one | points `{9:00, 9:20, 9:30}`; `[9:00,9:20]` k=2 ⇒ A +600, B +600; `[9:20,9:30]` k=1 ⇒ A +600 ⇒ A = **1200 s (20 m)** | `now − entered_at` ⇒ 1800 s (30 m) | follows |
+
+In cases 2 and 4 the shares sum back to wall-clock (1500 + 300 = 1800; 1200 + 600 =
+1800), which is the invariant §2.2 names.
+
+**Missing precondition, now stated: cases 2, 3 and 4 require `allows_batch_working =
+True` on every participating step.** `_sweep` divides only among **batchable**
+intervals; a non-batch interval "earns full duration and is excluded from the divisor"
+(`concurrency.py:averaged_seconds_by_record`). Case 4's prose is the one that never
+says "batch" (cases 2 and 3 do), and a T3 fixture built from non-batch steps would
+compute A = 1800 s and the row would fail — or worse, ship with the wrong expected
+number. Case 1 is batchability-agnostic (`k = 1` either way) and stays correct.
+
+**The window rule, derived rather than borrowed.** §3.1 anchors `W_start` at
+`min(entered_at) − 1 day` over the user's open working records, and §3.2 justifies the
+buffer by pointing at settlement's. That is a *borrowed* argument: settlement re-sweeps
+a whole closed population and needs the day on both sides
+(`_recompute_step_time_totals` uses `start − buffer, end + buffer`). M1 reads exactly
+one record's share. The transferable argument is stronger and independent:
+
+> The wrapper's overlap predicate is `entered_at < window_end AND (exited_at IS NULL OR
+> exited_at > window_start)` (`averaged_time.py:compute_record_contributions`). Let
+> `T₀ = min(entered_at)` over the user's open working records. Every record that can
+> alter the open record's share must overlap `[T₀, now]`, hence has `exited_at > T₀` or
+> is itself open. Open records are fetched unconditionally by the `IS NULL` branch. So
+> **`W_start ≤ T₀` is sufficient**, and it is also **necessary**: any `W_start > T₀`
+> drops records exiting in `(T₀, W_start]`, which understates the divisor over the open
+> record's early segments and over-credits — §3.2 case 4 reintroduced through the
+> window, exactly as coordinator finding 3 said.
+
+Two consequences the document did not carry:
+
+1. `W_start = T₀ − 1 day` is sufficient with a full day of slack. The buffer is not
+   load-bearing for the live case; the **anchor** is. Records fetched but not
+   overlapping `[T₀, now]` cannot change the open record's share — the sweep credits per
+   segment, and a non-overlapping record shares no segment with it — so a generous
+   window is harmless as well as unnecessary.
+2. `window_end = now` with a **strict** `entered_at < window_end` means a record whose
+   `entered_at` equals `now` to the microsecond is not fetched. Its duration would be
+   `0` anyway (§3.1A D). No special case is needed; it is recorded so nobody adds one.
+
 ### 3.3 The no-snap invariant
 
 Because M1 and settlement are the **same function** evaluated at two moments, closing
@@ -290,6 +554,85 @@ exists to prevent. Tested as T2, the load-bearing test of this pipeline. (This i
 also the operational meaning of the taxi rule: the meter and the receipt use one
 tariff, so the receipt never surprises.)
 
+### 3.3A The bound, derived; and the drift sources rounding does not cover (round 4)
+
+§3.3 asserts a bound and asserts that rounding is its only source. The first is nearly
+right and stated with the wrong denominator; the second is **false**.
+
+**A. The derivation.** Let `P` be the exact float sum of step `s`'s closed working
+shares before the close, and `s_R` the open record's exact share.
+
+- Settlement writes `int(round(P + s_R))` — **one** rounding of one float sum, across
+  **all** credited users' records for that step
+  (`process_step_transition.py:_recompute_step_time_totals` accumulates
+  `totals["working"][0]` over every contribution before rounding once).
+- M1 serves `int(round(P)) + int(round(s_R))` — **two** roundings (§3.1A A).
+- Each rounding error lies in `[−0.5, +0.5]`, so the real difference lies in
+  `(−1.5, +1.5)`; both quantities are integers, so the difference is an integer with
+  magnitude **≤ 1**. Attained: `P = 1.5, s_R = 1.5` ⇒ `2 + 2 = 4` vs `round(3.0) = 3`.
+
+**B. The denominator is wrong.** "≤ 1 second **per credited user**" cannot be right:
+a step has **at most one** open record (§3.1A E), hence at most one credited user
+contributing an open share, while the settled column is rounded once no matter how many
+users contributed closed records. Per step the bound is flatly **≤ 1 s**. The
+denominator only appears on the aggregates, and it is not users:
+
+> Per step: **≤ 1 s.** On any aggregate over steps (E-B's `actual_worker_seconds`,
+> E-P's section and task figures, E-A's headline): **≤ 1 s per step holding an open
+> working record**, since each per-step term contributes its own ≤ 1 s and the
+> aggregate adds already-rounded integers (§3.1A A, §4.1A).
+
+Concretely, the wrong denominator is falsifiable: one worker batch-working six steps of
+one task holds six open records — six credited-user-1 steps — and the task figure can
+sit 6 s from the post-settlement sum. "≤ 1 s per credited user" claims 1.
+
+**C. Rounding is not the only drift source.** Three others, all verified at source. The
+first is the significant one.
+
+1. **Settlement is asynchronous, so there is a window in which the number falls and
+   recovers.** The transition closes the record *synchronously*
+   (`_step_transition_core.py:apply_step_transition` sets `closing_record.exited_at =
+   now`) and only **enqueues** the recompute — `create_instant_task(...,
+   PROCESS_STEP_TRANSITION)`, routed to `queue:analytics`
+   (`task_router.py`), executed later by
+   `process_step_transition.py:handle_process_step_transition`. The core says so in its
+   own comment: "Time totals recomputed async by the analytics worker."
+   Between commit and worker, the open record is **closed** (so M1's live term is `0`)
+   and the column is **stale** (so the settled term still excludes it). The live figure
+   therefore **drops by the whole just-worked share and then jumps back**.
+   Magnitude: the entire interval — 25 minutes for the motivating card, not 1 second.
+   Duration: normally sub-second (the router is LISTEN/NOTIFY-driven), up to
+   `FALLBACK_POLL_SECONDS = 30` (`task_router.py`) plus processing if a notify is
+   dropped, and **unbounded** if the task exhausts `max_try = 3`
+   (`task_factory.py:create_instant_task`) — in which case the column is only repaired
+   by the next transition on that step, since the recompute is an absolute SET from
+   records rather than an increment.
+   This is a **new** behaviour: today the number is settled-only, so the same lag shows
+   as a delayed *increase*. Under M1 it becomes a visible *decrease*. It is not one of
+   §5.4's two decrease modes. See **owner card 1**.
+2. **`mark_step_time_inaccurate` never recomputes the column.**
+   `mark_step_time_inaccurate.py:mark_step_time_inaccurate` sets the record flag and the
+   **step** flag and dispatches `task:updated` — it enqueues no
+   `PROCESS_STEP_TRANSITION`. So the live term drops to `0` immediately (the step flag
+   makes `marked_wrong` true for every record of the step in
+   `averaged_time.py:compute_record_contributions`, `row.marked_wrong or
+   row.step_marked_wrong`) while the settled column keeps its now-disowned value until
+   the next transition on that step. Live and settled diverge by the **whole settled
+   column**, indefinitely. §6A.
+3. **`remove_task_step` closes the open record without enqueuing a recompute**
+   (`remove_task_step.py` sets `record.exited_at = now`, `step.state = SKIPPED`,
+   `step.is_deleted = True`). No observable drift, because the step leaves every payload
+   at the same instant — recorded so the absence of an outbox task there is not read as
+   a bug to fix.
+
+**D. What §3.3 may correctly claim.** The parity holds **between the live figure and
+the column once settlement has run**, and the rounding-locus argument is the whole
+story *for that comparison*. It does not hold at the instant of the transition, and it
+does not survive a disowning event. The sentence "Nothing else may contribute drift"
+is replaced by this enumeration; T2 tests the eventual parity (it runs
+`_recompute_step_time_totals` itself), and a new row tests the transition-instant
+behaviour so the gap is observed rather than assumed (§9A, T11).
+
 ### 3.4 Cost model
 
 The settled term is a stored column — no history is ever re-swept on read. The live
@@ -308,6 +651,46 @@ overnight close (§3.2 window note) plus the 1-day buffer. The worst request is
 therefore ≤ 50 small, bounded sweeps after one batched open-record probe. The plan
 records one measured worst case at that ceiling (T8); if the measurement embarrasses
 the design, the remedy is restructuring the fetch — never a cache (HC-1).
+
+### 3.4A The cost contract, derived (round 4)
+
+**A. What one sweep call actually costs.** `compute_record_contributions` issues **one**
+SQL statement and then runs **two** in-memory sweeps —
+`averaged_seconds_by_record` and `wasted_seconds_by_record`
+(`averaged_time.py:compute_record_contributions`). M1 never reads `wasted_seconds`, but
+HC-2 forbids forking the function to avoid the second sweep, so the second sweep is a
+knowingly-paid cost, not an oversight. Query-count assertions (T8) count the one
+statement; any wall-clock reasoning must count two sweeps.
+
+**B. The stated ceiling's denominator is wrong.** §3.4 bounds the number of sweeps by
+"the endpoint's 50-task cap". The 50-task cap
+(`get_task_budget_allocations.py:_MAX_TASK_IDS`) bounds **tasks**, not workers. A task
+carries an unbounded number of steps, each of which may hold one open working record
+(§3.1A E) credited to a different user. The derivable bound is:
+
+> sweeps per request  ≤  **min( number of open working records among the batch's
+> non-deleted steps , number of distinct credited users in the workspace )**
+>
+> — the second term because one user's sweep serves every open record they hold, across
+> every task in the batch (§3.4's own "a worker's sweep is shared across all their
+> steps"). Operationally the binding term is **workspace headcount**, not 50.
+
+For E-P and E-B the same bound applies over one task's steps.
+
+**C. The window bound is conditional; correctness is not.** §3.4's "under ~2 days"
+derives from the overnight close. Verified: `auto_clock_out_open_shifts.py:handle_auto_clock_out_open_shifts`
+closes every shift whose latest `STARTED_SHIFT` is `< midnight` of the current UTC day
+and stamps the close **at midnight**; `_clock_worker_shift.py:clock_out_shift_for_user`
+closes the open step records through the `SHIFT_ENDED` transition. So a surviving open
+working record entered at or after the previous midnight — at most ~24 h old — and
+`W_start = entered_at − 1 day` puts the window under 48 h. The derivation holds.
+
+But it holds **only while the sweep runs**. §3.2's window note deliberately refuses to
+let *correctness* depend on that scheduler (charter rule 11), and it is right to. The
+**cost ceiling** does depend on it: a missed night grows the window and the fetched
+population without bound. The two must not be conflated — state the ceiling as
+conditional, or a night the sweep misses reads as a mechanism failure rather than an
+operational one.
 
 ---
 
@@ -351,10 +734,97 @@ top — and the planner picks **one** and records it before any implementer sess
 What is contractual either way: the per-step figures and the task figure derive from
 the same loader output (HC-5), never from two independent reads.
 
+### 4.1A The field inventory, swept key by key; and the aggregate decision, resolved (round 4)
+
+**A. The pre-registered decision (§4.1, coordinator finding 4) is answerable now, and
+the gate answers it.** The two resolutions are arithmetically identical **if and only
+if** the rounding locus is the one §3.1A A pins — round the open share per step, add to
+the integer column. Given that locus:
+
+- per-step fold: `Σ_s ( settled_s + round(open_s) )`
+- keep-the-aggregate: `SUM(total_working_seconds) + Σ_s round(open_s)`
+- both are sums of the same integers, so they are equal for every input.
+
+Under the other locus they are not (§3.1A A). So the planner's choice is genuinely free
+**only because the locus is pinned here**; without it, the "arithmetically identical"
+sentence in §4.1 is false and the choice silently changes payloads. One practical note
+for the planner: keeping the aggregate saves nothing, because the per-step figures are
+needed anyway for the section rows and E-A's step rows — the aggregate would be a
+second read of the same column while the loader already holds it (HC-5's "never from
+two independent reads").
+
+Population check, since the two resolutions must also agree on *which* steps:
+`_build_evaluated_status`'s aggregate spans `TaskStep.workspace_id`, `task_id`,
+`is_deleted.is_(False)` — **no state filter**, so SKIPPED/CANCELLED/FAILED steps are
+included. `budget_division.py:group_steps_by_section` skips only `is_deleted` and keeps
+excluded steps in `group["worked_seconds"]`. The two populations coincide today; the
+loader's step set must be exactly "the task's non-deleted steps" or T6's headline-equals-rows
+assertion breaks for a reason that has nothing to do with liveness.
+
+**B. The §4.1 table is not total.** Every serializer key was walked. Two
+worked-derived keys ship on live surfaces and appear in no row of that table — the
+same construct, twice:
+
+| surface | key | producer | in §4.1? |
+|---|---|---|---|
+| E-P | `final.percent_consumed` | `division_serializers.py:_serialize_production_time_final`, fed the **request-level** percent by `:serialize_task_production_time` | **no** — named only in §5.3 prose |
+| E-B **worker/seller face** | `result.percent_consumed` | `serializers.py:_serialize_result`, `include_monetary=False` branch, fed `status.percent_consumed` by `:serialize_task_budget_status` | **no** — named nowhere |
+
+The manager face's `result` block has no `percent_consumed` key at all (the
+`include_monetary=True` branch), so it stays wholly frozen. This is the master plan's
+standing rule arriving on schedule — *a comment asserting a property is a claim, and you
+sweep the class, not the instance*: §5.3 pinned the E-P instance of this wiring in round
+1 and the identical E-B instance went unmentioned for three rounds.
+
+Both keys go live under M1, by the same mechanism, and §5.3's disposition governs both:
+the wiring is deliberately untouched. §5.3 is extended to the E-B worker face by
+reference. See **owner card 2** — this is the one place where the shipped payload
+contains a frozen block with a ticking field inside it, and D6's reasoning points the
+other way.
+
+**C. Everything else on the three payloads, confirmed non-worked-derived.**
+E-P: `task_id`, `status`, `item_binding`, `allocation_method`,
+`budget.allowed_worker_minutes`, `sections[].{working_section_id, section_name,
+section_name_snapshot, order_list, state, state_entered_at, step_count,
+allowance_seconds, typical{…}}`, `final.{actual_worker_minutes,
+variance_worker_minutes, task_state_snapshot, computed_at}`.
+E-B: `status`, `item_binding`, `production_budget_minor`, `allowed_worker_minutes`,
+`evaluation_id`, `item_id`, and the manager `result` block in full.
+E-A: `task_id`, `status`, `allowed_worker_minutes`, `allocation_method`,
+`steps[].{step_id, working_section_id, section_name_snapshot, typical_worker_seconds,
+allowance_seconds}`. With the two rows in **B** added, §4.1's table plus this list is
+total over the three serializers.
+
+**D. Composition — where HC-5's "one computation per request" is actually at risk.**
+E-P calls `get_task_budget_status(ctx)` and then loads the task's steps again for the
+division (`get_task_production_time.py:get_task_production_time`). If both sides run the
+loader, the request holds two live computations and HC-5 fails silently — the two runs
+differ only by microseconds, so the payload is *nearly* coherent and no assertion at
+whole-second granularity catches it. The contract: **E-P resolves `now` and the live map
+once and passes both into `get_task_budget_status`**, which passes them to
+`_build_evaluated_status`. The four callers of that pair (master plan §6) each declare
+what they pass:
+
+| caller | passes `now` + live map | if it does not |
+|---|---|---|
+| E-B route selector (`item_economics.py:route_get_task_budget_status`) | resolves both itself | — |
+| worker face (`get_task_budget_status_worker.py:get_task_budget_status_worker`, imports `_build_evaluated_status` directly) | resolves both itself | worker face silently stays settled — the D5 split-brain, shipped |
+| E-P (`get_task_production_time.py:get_task_production_time`) | threads its own | two computations per request; HC-5 violated silently |
+| price scenario (`get_task_price_scenario.py:get_task_price_scenario`) | resolves its own | a shipped endpoint from another pipeline reads a clock it never asked for |
+
+The last row is the §2.6 coupling made concrete: `get_task_price_scenario` consumes no
+worked-derived field, yet it will pay the loader's queries and acquire a wall-clock
+read. That is a cost and time-dependence regression on a shipped endpoint, and it is
+unavoidable while it composes `get_task_budget_status` — it is named so the price-scenario
+suite's fixed-`now` retrofit is planned rather than discovered.
+
 ### 4.2 What stays settled on those same responses
 
 `allowance_seconds`, `typical`, section membership and ordering, `allocation_method`,
-`status` readiness values, the E-P `final` block, and every field not derived from
+`status` readiness values, the E-P `final` block **except its `percent_consumed` key**
+(corrected round 4 — the blanket phrasing contradicted §5.3, which is the accurate
+statement; the same correction applies to the E-B worker face's `result.percent_consumed`,
+§4.1A B), and every field not derived from
 worked seconds: byte-identical to today at equal database state (T1/T5). The
 frontend's acceptance criterion 2 — two calls seconds apart with no state change
 differ **only** in time-dependent fields — follows from `divide_production_budget`
@@ -369,6 +839,45 @@ independence from the budget-division pipeline stands). It already computes
 seconds are the M1 figures. Completed-step allowances inside
 `_section_step_allowances` are unaffected: a completed step has no open record, so
 its M1 figure equals its settled column identically.
+
+### 4.3A Allowance independence: three paths, not one (round 4)
+
+§4.3's claim — allowances cannot move — is **true**, but it is grounded on one of
+**three** paths from worked seconds to `allowance_seconds`. The coordinator review
+verified the first and stopped there; the other two are load-bearing and unnamed. All
+three must hold, and each needs its own reason.
+
+| # | Path | Site | Why it cannot move |
+|---|---|---|---|
+| 1 | completed steps' allowances are their worked seconds | `budget_division.py:_section_step_allowances` | a completed step has no open working record ⇒ M1 ≡ settled column (§4.3, verified) |
+| 2 | `charged_seconds` → `distributable_seconds` → every section allowance | `budget_division.py:divide_production_budget` — `charged_seconds = sum(total_working_seconds for step in excluded)` | an *excluded* step (SKIPPED/CANCELLED/FAILED) has no open **working** record ⇒ M1 ≡ settled column |
+| 3 | section **weights** — `typicals_by_section` → `resolved_weights` → `raw_shares` | `get_working_section_typical_times.py:typical_times_statement` — `SUM(TaskStep.total_working_seconds)` | it is a **SQL aggregate over the persisted column**, never fed the loader's output |
+
+**Path 2, verified.** Every route into SKIPPED/CANCELLED/FAILED closes the open record
+first: `_step_transition_core.py:apply_step_transition` sets `closing_record.exited_at =
+now` before opening a record whose `state` is the new terminal state, and
+`remove_task_step.py` explicitly closes open records (`record.exited_at = now`) while
+setting `state = SKIPPED`. So an excluded step's open record — if it has one — is in a
+terminal state, not `working`, and M1 clause 2 returns `0`. The invariant this rests on
+is the transition core's **close-then-open** discipline; if a future path ever assigns a
+terminal `state` without closing the record, live seconds reach `charged_seconds` and
+every section allowance on the payload moves. §9A, T12.
+
+**Path 3, verified and fragile in the other direction.** The typicals statement is a
+grouping subquery with no date predicate (master plan §6) that sums the settled column
+across the workspace's history. It **must never** be handed live figures: a live typical
+would make a section's weight tick while someone works, which moves
+`section_allowances` for every section on the payload, which moves every
+`left_seconds` and every `share_state` — the mixed-basis payload HC-5 exists to
+prevent, arriving through the allowance rather than through the worked figure. Because
+it reads through SQL rather than through the step rows, HC-1A's no-mutation rule is what
+keeps it settled. A future "make it consistent" change here is the most expensive
+mistake available in this feature.
+
+**Restated as one contract line:** `divide_production_budget` receives live worked
+seconds and **nothing else changes about its inputs** — `allowed_worker_minutes`,
+`typicals_by_section` and `section_attributes` are settled-basis values, and
+`allowance_seconds` is byte-identical to today at equal database state (§4.2, T5).
 
 ---
 
@@ -441,6 +950,54 @@ clamp — a clamp keeps displaying time the workspace has explicitly disowned.
   rendered as received. Unchanged from the standing rule (budget-division D7/HC-4);
   restated because the interim frontend gate is deleted at closeout.
 
+### 6A The disowning-event family, verified at source; and what the client is told (round 4)
+
+§6 names "mark-inaccurate, record/step deletion". Read against the commands, that family
+is one event short, one event wide, and missing the two-sided effect of the step flag.
+
+**A. The family, enumerated over the shipped commands.**
+
+| event | command (`path:symbol`) | effect on the live figure | reachable? |
+|---|---|---|---|
+| E1 mark the **open** record inaccurate | `mark_step_time_inaccurate.py:mark_step_time_inaccurate` | the step's live term → `0` at once (record flag **and** step flag) | yes |
+| E2 mark **any closed** record of the step inaccurate | same command | **also** → `0`, because the command sets `step.recorded_time_marked_wrong` and `averaged_time.py:compute_record_contributions` computes `marked_wrong = record OR step` | yes — **not named in §6** |
+| E3 a sibling step's records leave the divisor | E1/E2 on another step of the same worker | other steps' live figures **rise**, retroactively over shared segments, because a flagged interval is dropped before the sweep ("earn nothing, reduce nothing", `concurrency.py:averaged_seconds_by_record`) | yes — **not named in §6** |
+| E4 step removal | `remove_task_step.py` — sets `state = SKIPPED`, `is_deleted = True`, closes open records | the step's whole figure leaves every payload; its records **still divide** siblings (§3.1A F) | yes |
+| E5 record deletion | — | — | **no shipped command soft-deletes a `StepStateRecord`**; the only writer is the workspace reset (`reset/phases/delete_step_state_records.py`), a hard `DELETE` |
+| E6 task deletion | `delete_task.py` | all three endpoints 404 | yes, but not a decrease — a different contract |
+
+E2 and E3 are consequences of the same step-level flag D7 ratified, so they are inside
+D7's intent ("it has poisoned the surrounding timings") and are recorded rather than
+re-opened. E5 is not a capability; naming it to the frontend as a decrease cause would
+be telling another codebase to handle an event our API cannot emit.
+
+**B. The immediate-zero contract, stated precisely.** On E1/E2 the live term becomes
+`0` on the **next request**, with no state transition and no worker involvement — the
+flag is read on every sweep. The **settled** portion does not move: the command
+enqueues no `PROCESS_STEP_TRANSITION`, so `total_working_seconds` keeps its
+now-disowned value until the next transition on that step recomputes it to `0` (§3.3A
+C.2). So a step whose time is disowned mid-work serves `settled_old + 0`, then
+`0` once any later transition settles it. Both drops are intended; they arrive at
+different times, and the second is a **second** decrease from the same user action.
+
+**C. §5.4's two-codebase contract, restated per event.** The closeout handoff tells the
+frontend what to do, not what we believe. Per event, exactly:
+
+- **Any decrease:** render the served value. Smoothing may add elapsed-since-receipt
+  **on top of** the served value; it must **never** clamp the served value to a
+  previously-displayed maximum. A clamp keeps displaying time the workspace has
+  explicitly disowned.
+- **On a drop of ≤ 1 s:** the rounding sense (§3.3A A). Smoothing may absorb it; no
+  visible snap is required.
+- **On a drop larger than 1 s:** treat the served value as authoritative immediately —
+  reset the smoothing baseline to it and continue accruing from time-of-receipt. Do not
+  animate the descent over time; the time is gone at once, not gradually.
+- **On a drop followed within seconds by a return to the previous value:** this is the
+  settlement window (§3.3A C.1), not a disowning event, and the client cannot tell them
+  apart from the payload — by design, since HC-4 forbids an `as_of` field. The rule is
+  the same in both cases: render what is served. See **owner card 1**.
+- **`share_state` is rendered as received, never re-derived** — unchanged standing rule.
+
 ---
 
 ## 7. Non-goals (v1)
@@ -477,6 +1034,15 @@ clamp — a clamp keeps displaying time the workspace has explicitly disowned.
   `…-task-budget-allocations`, `…-task-production-time`) whose current text asserts
   "live non-deleted task-step seconds" from the settled column, plus `reads_from`
   edges to the step-state-record table node as the graph vocabulary allows.
+  **Round 4 — a fifth node belongs in the same batch:**
+  `projection-item-economics-task-price-scenario`, which composes
+  `get_task_budget_status` (§2.6, §4.1A D) and therefore acquires the same transitive
+  read dependency without consuming a worked-derived field. Also verified this round:
+  `projection-item-economics-task-budget-allocations` already records the invariant
+  "the response's time-only fields reconcile with the same non-deleted step set used by
+  budget status" — that is HC-5's cross-surface claim, already in the graph, and the
+  closeout must keep it true rather than restate it. Graph state at the gate:
+  187 nodes / 278 edges, 0 pending, 0 stale, 0 diagnostics.
 
 ---
 
@@ -523,6 +1089,128 @@ silent failure:
   the ceiling row (§3.4): a batch at the 50-task cap with distinct active workers
   performs exactly one batched open-record probe and ≤ one sweep per worker, and the
   plan records the measured worst case at that ceiling.
+
+### 9A Test mechanisms: corrections, preconditions, and four added rows (round 4)
+
+Every T-row was checked for **constructibility as stated**, **decidable assertions**,
+and — where a mutation is named — **both sides computed for the named fixture**. The
+environment supports all of it: the suite runs against the configured Postgres
+(`tests/conftest.py:initialize_database`), integration tests already build real
+`TaskStep`/`StepStateRecord` rows with `try/finally` teardown, `tests/conftest.py`
+ships a `count_queries` fixture (SQL-statement capture) that makes T8 decidable, and
+`test_production_time_query.py` already uses `json.dumps(sort_keys=True)` + `sha256`
+for payload identity, which T1 and T5 reuse.
+
+**T1 — the named mutation does not bite as stated.** "Two executions over identical
+database state produce byte-identical payloads" run milliseconds apart. Introduce the
+mutation (a second wall-clock read inside the loader) and the two runs differ by the
+elapsed wall-clock between them — tens of milliseconds — which `int(round(·))` per step
+collapses to the **same integer** in almost every run. The test would pass under its own
+defect and fail rarely, i.e. it would read as flaky rather than as a guard. Rewrite so
+the mutation is decidable:
+
+> **T1′.** Patch the loader's clock source to a stub that advances by **+5 s** on each
+> call, and assert the two payloads are still byte-identical. Under the contract the
+> stub is never called (the injected `now` is used) and the payloads match; under the
+> mutation the second call shifts every open share by 5 s and at least one
+> `worked_seconds` differs. **Both sides, for a fixture with one open batchable record
+> entered 600 s ago:** contract `600, 600`; mutation `600, 605`. Differ ⇒ red.
+> **Site:** the loader's definition site — and a second row at the **call site**,
+> asserting that each of E-P, E-B and E-A resolves `now` exactly once per request
+> (call-count on the stub == 1), because the function-side and call-site mutations are
+> different defects (charter rule 11) and the composition risk in §4.1A D is a
+> call-site defect.
+
+**T2 — writable as stated; mutation confirmed.** `_recompute_step_time_totals(session,
+workspace_id, step_id, now)` is directly callable; it also writes `total_cost_minor`
+via `_rate`, which returns `None` with no `UserWorkProfile` and costs `0` — harmless.
+It mutates the step, so the fixture owns teardown (charter 11½).
+**Named mutation, both sides computed** (replace the sweep call with `now − entered_at`
+at the **call site** in the loader, not in `concurrency.py`):
+
+| row | contract | mutation | verdict |
+|---|---|---|---|
+| batch row (§3.2 case 2 shape, `allows_batch_working=True`) | live `1500`, settled after close `1500`, \|Δ\| = 0 ≤ 1 | live `1800` vs settled `1500`, \|Δ\| = 300 | **red** ✓ |
+| single-open-record row | live `1800`, settled `1800`, \|Δ\| = 0 | live `1800`, settled `1800`, \|Δ\| = 0 | **green** ✓ |
+
+Precondition the row depends on: the single-open-record fixture's worker must hold **no
+other open interval anywhere** (§3.2 case 3 — the divisor can live on another task), or
+the "green" row goes red for an unrelated reason and the mutation's discrimination is
+lost.
+
+**T3 — writable, with one precondition added.** Rows 2, 3 and 4 require
+`allows_batch_working = True` on every participating step (§3.2A); row 1 requires the
+two records to be credited to **different** users, which is the only reason its expected
+`3600` holds (charter rule 2 companion). Expected values are those re-derived in §3.2A.
+
+**T4 — writable; two rows need their status stated and one row is missing.** The
+`deleted record` row exercises a state **no shipped command produces** (§3.1A D) — the
+fixture sets `is_deleted` directly, and the row is defense-in-depth, which the criterion
+should say so a reviewer does not go looking for the writer. The marked-wrong rows must
+be **two** rows (record flag alone; step flag alone), and the step-flag row must also
+assert the E3 side-effect — that a sibling step's live figure **rises** — or the row
+proves only half of what the flag does (§6A). Missing row, added:
+
+> **T4.5** — a *deleted step* with an open batchable working record, sharing a segment
+> with a live step of the same worker: the deleted step is absent from the payload
+> **and** the live step's share is still halved (§3.1A F). Without this row, an
+> implementer who "correctly" filters deleted steps out of the sweep population breaks
+> parity with settlement in the direction §3.3's bound cannot see.
+
+**T5 — writable, and the sequencing is right.** One fixture note: the strongest "no open
+intervals" fixture is a task whose steps are `PENDING` and therefore hold an **open
+PENDING record** — that proves the state filter rather than merely the absence of
+records. Both fixtures belong in the row.
+
+**T6 — decidable only because §3.1A A pins the locus.** `budget.actual_worker_seconds ==
+Σ sections[].worked_seconds` holds because both sides sum the same per-step integers
+(§4.1A A). Under the other locus the assertion is not guaranteed and would fail
+intermittently on half-second shares.
+
+**T7 — writable as stated.** The existing money-token walk over the payload keys
+(`test_production_time_query.py`) is the pattern; extend it with a live-state row.
+
+**T8 — writable; the ceiling row is not an automated criterion.** `count_queries` makes
+"exactly one batched open-record probe and ≤ one sweep per worker" decidable
+(`compute_record_contributions` issues one statement per call, §3.4A A). But "the plan
+records the measured worst case" is a **measurement**, not an assertion — charter rule 1
+puts it in the Review log, not in the criteria, and the criterion must be the
+query-count shape alone. The ceiling asserted must be §3.4A B's, not §3.4's.
+
+**Four rows this gate adds.**
+
+> **T9 — nothing live is persisted** (HC-1A). Serve each of the three endpoints against
+> a task with an open working record, then re-read `task_steps.total_working_seconds`
+> from the database **in a fresh session** and assert it is unchanged. **Named
+> mutation:** assign the live figure onto `step.total_working_seconds` before calling
+> `divide_production_budget` (site: the loader's call site in each of the three
+> services). Both sides for a step with settled `0` and an open share of `600`:
+> contract column `0`; mutation column `600` after the request's session flushes.
+> Differ ⇒ red. This is the only test standing between the pipeline and writing live
+> values into the settled column.
+>
+> **T10 — the deleted-step divisor** — see T4.5 above; listed here as its own criterion
+> because it guards a *parity* property, not an exclusion property.
+>
+> **T11 — the settlement window is observed, not assumed** (§3.3A C.1). Open a working
+> record, read E-P, close the record through the production transition path **without
+> running the analytics worker**, read E-P again. Assert the second payload's
+> `worked_seconds` equals the pre-work settled value — i.e. **assert the drop exists**.
+> Then run `_recompute_step_time_totals` and assert the value returns within the §3.3
+> bound. The row's purpose is that the behaviour is pinned by a test rather than
+> discovered by the frontend; if owner card 1 chooses to engineer the window away, this
+> row inverts and becomes the guard for that.
+>
+> **T12 — allowances do not move** (§4.3A). One payload, one open working record, and
+> assert `allowance_seconds` on every section and every step row is byte-identical to
+> the same payload with the record closed and settled. **Named mutation:** feed the live
+> figure into `charged_seconds` by including excluded steps in the loader's substitution
+> (site: the loader's call site, where the live row set is built) **with** a fixture
+> whose excluded step carries an open `working` record — which requires constructing a
+> state the transition core cannot produce, so the row's honest form is: assert that no
+> excluded step in the payload has an open working record, and assert `charged_seconds`
+> is computed from settled values. Path 3 (`typical_times_statement`) is covered by
+> T5's byte-identity on `typical`.
 
 ---
 
@@ -684,3 +1372,68 @@ against the tree at `bf470d4`.
 first; the identical reference appears again in §2.4 and was only caught by sweeping
 for the *form* rather than re-reading the fix site — the failure this project has now
 recorded four times, arriving inside the correction of its own class.
+
+**Round 4 — 2026-08-20, mechanism-inventory gate.** Nine mechanisms inventoried,
+ranked by silent-failure risk, and given contract-grade definitions in this document.
+Verdict: **OWNER_DECISIONS_PENDING** — two cards, in
+`handoffs/reviewer/2026-08-20_inventory_mechanism_inventory_handoff.md`. Sections
+added, all lettered so no existing citation renumbers: §1A, §2.3A, §2.5A, §3.1A,
+§3.2A, §3.3A, §3.4A, §4.1A, §4.3A, §6A, §9A. §4.2, §8 and this changelog amended in
+place (no numbers moved).
+
+What the gate changed, and why:
+
+- **A new mechanism nobody had named: settlement is asynchronous** (§3.3A C.1). The
+  transition closes the record synchronously and only *enqueues* the recompute, so
+  between the two the live figure drops by the whole just-worked share and then
+  recovers. Not one of §5.4's two decrease modes, not covered by §3.3's bound, and
+  larger than every other effect in this document combined. **Owner card 1.**
+- **Nothing stops the live figure being persisted** (§1A HC-1A). All three surfaces
+  hand ORM `TaskStep` instances to the allocator; assigning the live value onto
+  `total_working_seconds` marks the row dirty and the next flush writes it into the
+  settled column — the direct negation of HC-1, silent, with no test failing. A new
+  criterion (T9) is the only thing standing in front of it.
+- **The parity bound's denominator was wrong** (§3.3A B). "≤ 1 s per credited user"
+  cannot be right — a step has at most one open record by unique index, so at most one
+  credited user, while the settled column is rounded once across all of them. The bound
+  is ≤ 1 s per step, and on aggregates ≤ 1 s **per step holding an open working
+  record**. One worker batch-working six steps falsifies the old wording by 6 s.
+- **"Rounding is the only drift source" is false** (§3.3A C). Three non-rounding
+  sources, all verified at the commands.
+- **§4.1's "arithmetically identical" is conditional, and the condition is now
+  pinned** (§3.1A A, §4.1A A). The two resolutions coincide **iff** the rounding is
+  applied to the open share per step; under the other reading of §3.1's "rounded
+  `int(round(·)) per step`" they diverge on any exact half-second. The pre-registered
+  planner decision is therefore free — but only because the locus was pinned here.
+- **The allocator has three worked-seconds→allowance paths, not one** (§4.3A). The
+  keystone verification covered `_section_step_allowances`; `charged_seconds` and the
+  typicals aggregate were unnamed. All three hold, each for a different reason, and the
+  reasons are now written down — path 3 in particular, because "making it consistent"
+  later is the most expensive available mistake.
+- **Two live worked-derived keys shipped in no field table** (§4.1A B):
+  `final.percent_consumed` on E-P (named only in §5.3 prose) and
+  `result.percent_consumed` on the E-B **worker face** (named nowhere). Same construct,
+  twice — §5.3 pinned the instance and missed the class. **Owner card 2.**
+- **An absence claim was false** (§2.3A). The item-economics query family already reads
+  the wall clock: `get_task_budget_allocations` calls `today_utc()` inside its per-task
+  loop. Search terms recorded beside the claim. The conclusion survives; the framing
+  does not, and HC-3's scope had to be defined around it (§1A HC-3A).
+- **§2.5's settled-consumer list was not total** (§2.5A) — four named, eight exist.
+  Rows 5 and 7 are load-bearing. The corrected list is what ships to the frontend.
+- **The cost ceiling was bounded by the wrong quantity** (§3.4A B). The 50-task cap
+  bounds tasks, not workers; the real bound is open-record count ∧ workspace headcount.
+  Also: one sweep *call* runs two sweeps, and the window bound is conditional on a
+  scheduler that correctness deliberately does not depend on.
+- **The window argument was borrowed, not transferred** (§3.2A). It holds — for a
+  stronger and simpler reason than settlement's buffer, now derived. `W_start ≤
+  min(entered_at)` is necessary **and** sufficient; the day of buffer is slack.
+- **T1's named mutation does not bite as written** (§9A). Two runs milliseconds apart
+  round to the same integer, so the test passes under its own defect. Rewritten as T1′
+  with both sides computed. T4 needs a missing row, T8's ceiling row is a measurement
+  rather than a criterion, and four rows are added (T9–T12).
+- **Four worked examples audited by hand** against `concurrency.py:_sweep`; all four
+  follow their own rule (§3.2A). Cases 2–4 depend on an unstated precondition —
+  `allows_batch_working = True` — without which a T3 fixture computes different numbers.
+
+Nothing in D1–D7 was reopened. Every finding above is a mechanism, a totality, or a
+derivation; no product semantics changed.
