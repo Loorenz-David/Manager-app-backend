@@ -392,3 +392,28 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   above with the mode/locus rows separated and each isolating arithmetic given;
   routed to fix r3 (`prompts/implementer/2026-08-20_phase1_fix_r3.md`), one row.
   Rule earned → master plan §5.
+
+- **2026-08-20 — phase 1 fix cycle r3 completed (Codex).** Added only C12 row (c)
+  in `test_live_worked_seconds.py`: two batch steps opened together for 63 seconds,
+  with `settled = 1` on the measured step, assert `{33, 32}`. Its docstring records
+  that half-even and half-up agree at `31.5`, so the fixture isolates rounding the
+  share before adding settled seconds. Rows (a) and (b) remain unchanged.
+
+  Focused verification: **23 passed**; Ruff: **all checks passed**. Final clean
+  whole non-e2e suite: **26 failed / 2459 passed / 1 deselected / 2 warnings**;
+  the complete 26-ID failure set is byte-identical to master §6. Checkpoint:
+  `bc309e2 CHECKPOINT (not approved): prove live-clock rounding locus`.
+
+  Required definition-site mutation ledger, all whole-suite and restored to
+  loader hash `6d11b922fbec3031be49adf1313b6d1685bef95659caf81f2b6cb7e918fa82ca`:
+
+  | mutation | observed result |
+  |---|---|
+  | M-locus: accumulate `contribution.seconds`, return `int(round(settled_seconds + live_by_step.get(step_id, 0)))` | First run count was anomalous (**26 failed / 2459 passed / 1 deselected**) despite the new locus ID appearing, so the run was repeated per §6. Repeat: **27 failed / 2458 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_rounding_locus_is_share_before_settled_addition}`; rows (a) and (b) stayed green. |
+  | M-mode: replace `int(round(x))` with `int(math.floor(x + 0.5))` | **27 failed / 2458 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share}`; rows (a) and (c) stayed green. |
+  | M-float: accumulate raw `contribution.seconds` alone | **29 failed / 2456 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_c12_loader_output_values_are_ints, tests/integration/services/queries/item_economics/test_c12_half_even_rounding_is_applied_to_each_half_second_share, tests/integration/services/queries/item_economics/test_c12_rounding_locus_is_share_before_settled_addition}`. |
+
+  `B` means exactly master plan §6's 26 baseline IDs. Every probe temporarily
+  touched only `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`
+  and was reverted byte-identically. No master tracker or Architecture Graph
+  change was made.
