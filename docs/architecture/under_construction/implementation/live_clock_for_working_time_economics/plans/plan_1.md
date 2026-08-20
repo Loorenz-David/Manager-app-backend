@@ -318,3 +318,40 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   Consumption flags routed to review r1 as probes P1–P7 (headline: the naive-`now`
   boundary guard is a sound but unplanned semantic addition whose justification
   needs reconciling and whose own deletion may leave every test green).
+
+- **2026-08-20 — phase 1 fix cycle completed (Codex, round 2).** Resolved review
+  findings B1/B2 and S1/S2, plus notes N1/N3/N7, entirely in
+  `test_live_worked_seconds.py`; no production file or Architecture Graph state
+  changed. B1 now has two isolated non-zero-settled rows: one asserts
+  `settled + share`, and one asserts settled-only with no open record. B2 now has
+  an explicit `isinstance(value, int)` row and an odd-second two-way batch row
+  whose exact 30.5-second shares assert Python half-even `30`. S1 was renamed to
+  `test_c9_naive_now_fails_closed_at_the_loader_boundary` and its docstring records
+  the configured driver's 0-row naive-bind observation under HC-3A/plan C9. S2's
+  deleted-record row names `reset/phases/delete_step_state_records.py` as the
+  only hard-DELETE writer. N1 records the two zero-case mutation halves, N3 pins
+  the second C7 value at 1800, and N7 records D1's two overlapping 30-minute
+  cross-task choice in the test comment.
+
+  Clean focused verification: **22 passed**; Ruff: **all checks passed**. Final
+  whole non-e2e suite: **26 failed / 2458 passed / 1 deselected / 2 warnings**;
+  the complete 26-ID failure set is byte-identical to master §6. The test-only
+  checkpoint is `a4f5b97`.
+
+  Required mutation ledger (each row was applied at the named definition site,
+  measured with the whole non-e2e suite, then reverted and hash-verified). `B`
+  means exactly the 26 IDs enumerated in master §6; the restored production-file
+  hash for every row is
+  `6d11b922fbec3031be49adf1313b6d1685bef95659caf81f2b6cb7e918fa82ca`.
+
+  | mutation / site | observed result |
+  |---|---|
+  | Drop `settled_seconds +` from the returned comprehension, `live_worked_seconds.py:load_live_worked_seconds` definition site | **28 failed / 2456 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c11_nonzero_settled_term_is_added_to_live_share, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c11_nonzero_settled_term_is_returned_without_open_record}` |
+  | Return raw `contribution.seconds` instead of `int(round(...))`, `live_worked_seconds.py:load_live_worked_seconds` definition site | **28 failed / 2456 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_loader_output_values_are_ints, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share}` |
+  | Replace `int(round(x))` with `int(math.floor(x + 0.5))`, `live_worked_seconds.py:load_live_worked_seconds` definition site | **27 failed / 2457 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share}`; the explicit type row stayed green, as required |
+  | Delete the `now` awareness guard, `live_worked_seconds.py:load_live_worked_seconds` definition site | **27 failed / 2457 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c9_naive_now_fails_closed_at_the_loader_boundary}` |
+
+  The mutation probes temporarily touched only
+  `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`; it
+  was restored byte-identically after each probe. No tracker update was made;
+  that remains coordinator-owned.
