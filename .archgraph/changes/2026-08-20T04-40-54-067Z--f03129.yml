@@ -1,0 +1,24 @@
+changeId: 2026-08-20T04-40-54-067Z--f03129
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 583
+        endLine: 617
+      effect: add
+    rationale: Re-linked at the measured current span. 583 is the
+      @pytest.mark.parametrize decorator carrying the twelve status rows, not
+      the def at 601 - the twelve rows the claim is about live in the decorator,
+      so a link starting at the def would exclude the evidence it monitors.
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:40:54.067Z
+graphRevisionBefore: 171d510e274b0c4dcdf99f1b4e86365c44ce5cb9610e29db779d08147a89df18
+graphRevisionAfter: 12085bcc4b27066bed0032c995a8b5269ca0421c01366416d0c1c21f5c42d3f7

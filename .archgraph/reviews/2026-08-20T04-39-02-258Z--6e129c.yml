@@ -1,0 +1,125 @@
+reviewId: 2026-08-20T04-39-02-258Z--6e129c
+reviewedItemIds:
+  - node:endpoint-item-economics-task-price-scenario
+  - node:source-file-item-economics-price-scenario
+  - node:projection-item-economics-task-price-scenario
+  - edge:endpoint-item-economics-task-price-scenario--accepts-->projection-item-economics-task-price-scenario
+  - edge:domain-item-economics--contains-->source-file-item-economics-price-scenario
+  - edge:source-file-item-economics-price-scenario--implements-->projection-item-economics-task-price-scenario
+decisions:
+  - itemId: node:endpoint-item-economics-task-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: 'Re-derived from source before reading the stored claim.
+      routers/api_v1/item_economics.py:385-396 is exactly the decorator through
+      the closing paren: @router.get("/tasks/{task_client_id}/price-scenario"),
+      require_roles([ADMIN, MANAGER]), and _run(get_task_price_scenario, ...)
+      with data={"task_client_id": ...}. The router test at :147-153 asserts
+      calls[0][0] is item_economics.get_task_price_scenario, which is
+      identity-preserving dispatch as claimed. No drift; both anchors exact.'
+  - itemId: node:source-file-item-economics-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "The enumeration was the thing to check and it is exact: the module's
+      only imports are dataclasses, decimal, fractions, typing,
+      item_economics.enums and errors.validation (plus __future__.annotations, a
+      compiler directive). Every symbol the summary names is present as a
+      top-level definition.
+      test_c21_module_has_no_direct_import_from_forbidden_boundaries exists and
+      pins the purity structurally. The 14-211 span ends one line short of
+      slider_domain's closing paren and excludes __all__; left as recorded
+      because it covers every definition the summary claims and a one-line tail
+      nudge is churn, not correction."
+  - itemId: node:projection-item-economics-task-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+            symbol: get_task_price_scenario
+            startLine: 149
+            endLine: 273
+          to:
+            path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+            symbol: get_task_price_scenario
+            startLine: 181
+            endLine: 311
+        - index: 1
+          from:
+            path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+            symbol: test_c1_status_matrix_has_twelve_exact_rows
+            startLine: 387
+            endLine: 419
+          to:
+            path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+            symbol: test_c1_status_matrix_has_twelve_exact_rows
+            startLine: 583
+            endLine: 617
+    rationale: "Claim holds; both addresses moved. Re-read the code first: the
+      function composes budget status, task/item resolution, the current
+      valuation and its byline, preview inputs, the typical block, the collapsed
+      price model with break-even/infeasibility/slider anchors, the non-bound
+      nulling override, the fingerprint and serialization - which is what the
+      summary says. The test's twelve parametrize rows were counted, not
+      assumed: twelve statuses, five True and seven False, matching the
+      inferenceReason exactly. Re-anchored only; summaries and inference reasons
+      untouched."
+  - itemId: edge:endpoint-item-economics-task-price-scenario--accepts-->projection-item-economics-task-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Verified at the same lines as the endpoint node:
+      route_get_task_price_scenario passes get_task_price_scenario to _run, so
+      the endpoint accepts this projection and no adjacent item-economics query.
+      Anchor exact, no drift."
+  - itemId: edge:domain-item-economics--contains-->source-file-item-economics-price-scenario
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "The four reported conflicting-canonical-relationship contradictions
+      are FALSE POSITIVES and were checked rather than deferred to.
+      domain-item-economics already has four contains edges - to
+      projection-item-economics-task-budget-status, -lifetime,
+      -task-budget-allocations and projection-working-section-typical-times -
+      and all four are origin: human_confirmed. A domain containing many things
+      is established, human-verified structure in this graph; the checker
+      appears to treat contains as canonical 1:1 from its source. The claim
+      itself verifies: price_scenario.py sits in
+      beyo_manager/domain/item_economics/ beside budget_division.py and
+      calculator.py, and lines 1-11 are exactly the import block, which imports
+      only that package's enums plus errors.validation."
+  - itemId: edge:source-file-item-economics-price-scenario--implements-->projection-item-economics-task-price-scenario
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "The summary's import list is incomplete and evidence summaries are
+      immutable through both review and maintenance, so reject-and-re-record is
+      the only correction available. It names collapse_terms,
+      break_even_price_minor, infeasible_at_or_below_minor, ceil_to_step,
+      slider_domain and PriceModel - six - but the service imports SEVEN:
+      round_half_even is also imported and is used in _typical_block to quantise
+      each section's typical. Enumeration is one of the two clusters this
+      graph's own review evidence identifies as failure-prone, and a list
+      phrased as exhaustive is a count in disguise. The RELATIONSHIP is true and
+      will be re-recorded immediately with a summary that describes what the
+      evidence shows instead of listing its members. Rejecting rather than
+      deprecating because this was never true-then-superseded; it was incomplete
+      when written."
+retiredItemIds:
+  - edge:source-file-item-economics-price-scenario--implements-->projection-item-economics-task-price-scenario
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:39:02.258Z
+graphRevisionBefore: df61961d9bca41afadc0cb23bc42ae2906a123ff6644b8d330be9368f53a4ac1
+graphRevisionAfter: e1bd1c2cc7e9fe23d0561fe61d7d345933dc82f1d26504a35f99294d063ddc09
+evidenceSummary: 9 evidence entries across 6 files; 2 changed since inference
+humanInstruction: "Owner authorized the graph correction as the final step of
+  the simple_valuation_editor closeout: \"let's perform the closeout ritual and
+  after you are finish with that you can correct the graph\"."
+reviewTokenCorrelation: 6d8c271e9f78

@@ -1,0 +1,22 @@
+changeId: 2026-08-20T04-40-27-951Z--42e400
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 149
+        endLine: 273
+    after: {}
+    rationale: "Second unlink, again alone in its batch: the stale
+      get_task_price_scenario link at 149-273, whose function now spans
+      181-311."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:40:27.951Z
+graphRevisionBefore: 28254072b8c5647d8e85b589a85239250396cb8d0fc9385ae4c20de7033d2270
+graphRevisionAfter: 71bc8d48bf40a9a364dd2c452ad5c8078a9e7a58f6c2cd834c0c60ef284c5576

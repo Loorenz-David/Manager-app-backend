@@ -358,11 +358,33 @@ rather than merely inherited:
   staleness detection, so a drifted span wires that alarm to the wrong region — it fires on
   edits to an unrelated test and stays silent on edits to the rows the claim rests on. A
   monitoring signal pointed at the wrong lines is worse than none.
+- **⚠ CORRECTED at the 2026-08-20 closeout — the first clause of this rule was wrong, and
+  wrong in the expensive direction.** `archgraph_repair_anchors`'s `INTERNAL_ERROR` is **not**
+  caused by the item being pending `ai_inferred`. At closeout it failed on a
+  **`human_confirmed`** node, and then the identical work succeeded **one operation per call**:
+  a 4-op batch (2 `unlink` + 2 `link`) returned `INTERNAL_ERROR` with empty `details` and wrote
+  nothing, while four single-op calls with the same payloads all applied. Re-reading this
+  rule's own evidence, both historical reproductions were multi-operation — *"a re-anchor and
+  an **unlink/link batch**"* — so the original diagnosis attributed to the review state what
+  the batch appears to explain. **Why it mattered:** believing the tool unreachable sends a
+  session to `reject`-and-re-record, which destroys provenance and returns a rebuilt copy to
+  the back of the queue, when a sequence of single calls would have done it. Filed at
+  `archGraph_mapping_mantainance/open/tooling-repair-anchors-batch-and-contains-canonical-check.md`;
+  whether the trigger is *multiple operations* or *mixed kinds* is not established.
+- **The review path's `anchors` reach EVIDENCE entries only — NOT `sourceLinks`** (coordinator,
+  2026-08-20). A `promote` carrying `anchors` repaired both evidence addresses on
+  `projection-item-economics-task-price-scenario` and preserved the old ones under
+  `metadata.evidenceHistory` exactly as documented — and `staleNodeCount` stayed at **1**,
+  because the node's two `sourceLinks` still pointed at the pre-phase-3 spans with
+  `stale: true`. **Staleness is computed from `sourceLinks`, so re-anchoring evidence alone
+  leaves the alarm aimed at the wrong lines while the record reads as repaired.** Fixing them
+  is `unlink` then `link` through `repair_anchors`, one operation per call; the server
+  recomputes `contentHash` itself. Verified: `staleNodeCount` 1 → 0.
 - **A pending `ai_inferred` item can only be corrected through the REVIEW path, and its
   preview must be verified by reading the `anchors` block** (coordinator, 2026-08-19, N9
-  fix). Two attempts failed first, both instructive: `archgraph_repair_anchors` returned
-  `INTERNAL_ERROR`, and `preview_maintenance_changes` refuses pending `ai_inferred` items by
-  design — the review path with an `edit` decision carrying `anchors` is the only route.
+  fix). `preview_maintenance_changes` refuses pending `ai_inferred` items by design — the
+  review path with an `edit` decision carrying `anchors` is the route. *(This rule's original
+  second reason, that `repair_anchors` refuses them, is corrected above.)*
   Then the trap the archgraph skill names fired live: a preview whose `anchors` array had
   been dropped produced **the identical `decisionSetHash`** (`19159d56…`) as the one that
   carried it. Applying it would have recorded a decision and moved nothing. **The hash does

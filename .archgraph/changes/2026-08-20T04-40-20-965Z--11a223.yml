@@ -1,0 +1,21 @@
+changeId: 2026-08-20T04-40-20-965Z--11a223
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 387
+        endLine: 419
+    after: {}
+    rationale: "Isolating which operation kind the tool refuses: a single unlink, no
+      link in the same batch."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:40:20.965Z
+graphRevisionBefore: 7f689f8c136f471704ff81d1ff58f89df9348e62609c2ff37dc7dcba2257f4a7
+graphRevisionAfter: 28254072b8c5647d8e85b589a85239250396cb8d0fc9385ae4c20de7033d2270

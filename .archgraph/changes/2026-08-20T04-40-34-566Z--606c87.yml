@@ -1,0 +1,24 @@
+changeId: 2026-08-20T04-40-34-566Z--606c87
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 181
+        endLine: 311
+      effect: add
+    rationale: "Re-linked at the measured current span: 181 is the async def, 311
+      the closing paren of the serialize call. Single link, alone in its batch,
+      to isolate whether the earlier INTERNAL_ERROR came from the link kind or
+      from batching."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-20T04:40:34.566Z
+graphRevisionBefore: 71bc8d48bf40a9a364dd2c452ad5c8078a9e7a58f6c2cd834c0c60ef284c5576
+graphRevisionAfter: 171d510e274b0c4dcdf99f1b4e86365c44ce5cb9610e29db779d08147a89df18
