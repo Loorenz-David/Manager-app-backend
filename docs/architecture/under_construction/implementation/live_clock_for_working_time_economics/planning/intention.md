@@ -1,13 +1,11 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED (round 4, 2026-08-20) — mechanism contracts added; **2 owner cards
-        open** (§11 round 4; cards live in
-        `handoffs/reviewer/2026-08-20_inventory_mechanism_inventory_handoff.md`).
-        D5–D6 ratified §10.2; D7 recorded round 3. Coordinator review of 2026-08-19
-        folded (all six findings, owner-dispositioned). Mechanism-inventory gate ran
-        round 4 and returned OWNER_DECISIONS_PENDING — **NOT plan-ready** until both
-        cards are answered.
+status: RESOLVED and PLAN-READY (round 4a, 2026-08-20) — mechanism-inventory gate
+        **PASSED**. 0 owner cards open: D8–D9 ratified 2026-08-20 (§10.3), folded at
+        the coordinator's round-4a pass. D5–D6 ratified §10.2; D7 recorded round 3.
+        Coordinator review of 2026-08-19 folded (all six findings,
+        owner-dispositioned). Next: implementation planning.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md
@@ -609,7 +607,9 @@ first is the significant one.
    records rather than an increment.
    This is a **new** behaviour: today the number is settled-only, so the same lag shows
    as a delayed *increase*. Under M1 it becomes a visible *decrease*. It is not one of
-   §5.4's two decrease modes. See **owner card 1**.
+   §5.4's original two decrease modes. **D8 (owner, 2026-08-20) ships it as-is and
+   discloses it**: §6A C carries the client rule, §5.4 carries the handoff obligation
+   as the third decrease mode, and T11 pins the behaviour.
 2. **`mark_step_time_inaccurate` never recomputes the column.**
    `mark_step_time_inaccurate.py:mark_step_time_inaccurate` sets the record flag and the
    **step** flag and dispatches `task:updated` — it enqueues no
@@ -776,11 +776,14 @@ standing rule arriving on schedule — *a comment asserting a property is a clai
 sweep the class, not the instance*: §5.3 pinned the E-P instance of this wiring in round
 1 and the identical E-B instance went unmentioned for three rounds.
 
-Both keys go live under M1, by the same mechanism, and §5.3's disposition governs both:
-the wiring is deliberately untouched. §5.3 is extended to the E-B worker face by
-reference. See **owner card 2** — this is the one place where the shipped payload
-contains a frozen block with a ticking field inside it, and D6's reasoning points the
-other way.
+**D9 (owner, 2026-08-20) reverses §5.3's round-1 disposition for both keys: the frozen
+blocks freeze whole.** `final.percent_consumed` (E-P) and the worker face's
+`result.percent_consumed` (E-B) are decoupled from the request-level percent and derive
+from the frozen result record's own settled figures — a frozen block never carries a
+ticking field. The mechanism (what feeds the two serializer sites) is the planner's to
+pick and register; the contract is that neither key moves with the live basis **nor
+with post-freeze settled changes**. §5.3 is amended accordingly; T13 (§9A) guards both
+sites. HC-4 is untouched: no key is added or removed.
 
 **C. Everything else on the three payloads, confirmed non-worked-derived.**
 E-P: `task_id`, `status`, `item_binding`, `allocation_method`,
@@ -821,10 +824,10 @@ suite's fixed-`now` retrofit is planned rather than discovered.
 ### 4.2 What stays settled on those same responses
 
 `allowance_seconds`, `typical`, section membership and ordering, `allocation_method`,
-`status` readiness values, the E-P `final` block **except its `percent_consumed` key**
-(corrected round 4 — the blanket phrasing contradicted §5.3, which is the accurate
-statement; the same correction applies to the E-B worker face's `result.percent_consumed`,
-§4.1A B), and every field not derived from
+`status` readiness values, the E-P `final` block **whole — `percent_consumed`
+included** (round 4 excepted that key while §5.3's round-1 wiring stood; **D9,
+round 4a, froze it and the E-B worker face's `result.percent_consumed` with their
+blocks**, §4.1A B, §5.3), and every field not derived from
 worked seconds: byte-identical to today at equal database state (T1/T5). The
 frontend's acceptance criterion 2 — two calls seconds apart with no state change
 differ **only** in time-dependent fields — follows from `divide_production_budget`
@@ -904,12 +907,15 @@ fields that were settled-only now reflect open work at request time.
 
 ### 5.3 Two composition details pinned
 
-- **`final` (E-P)** stays a frozen record. Its `percent_consumed` key is today wired
-  to the request-level percent; that wiring is deliberately untouched. Consequence,
-  named rather than hidden: in the rare state where a result exists *and* a step is
-  open in `working` again, `final.percent_consumed` ticks while the other `final`
-  fields stay frozen — exactly what that wiring already does for settled changes
-  after the result froze. Changing `final`'s composition is out of scope (HC-4).
+- **`final` (E-P)** stays a frozen record — **whole, `percent_consumed` included
+  (D9, owner, 2026-08-20; supersedes this bullet's round-1 disposition).** The key is
+  today wired to the request-level percent, which under M1 would tick inside a frozen
+  block; D9 freezes it with its neighbours: it derives from the frozen result record's
+  own settled figures and moves on **no** event after the freeze — not the live basis,
+  not post-freeze settled changes. The same contract governs the E-B worker face's
+  `result.percent_consumed` (§4.1A B). The response *shape* is unchanged — no key
+  added or removed (HC-4); only the value's source moves from the request-level figure
+  to the frozen record. Guarded by T13 (§9A).
 - **`status` OK↔INFEASIBLE** derives from the allowance sign, not from worked
   seconds — the live basis cannot flip it.
 
@@ -922,9 +928,13 @@ stated deletion condition); the correction they are owed on the 2026-08-18 "Live
 time" section (client ticking is superseded by server truth — smoothing from
 time-of-receipt remains legitimate); the answers to their four open questions (§2.3,
 §2.5, §4.1, HC-3/T1); and the note that `worked_seconds` decreases between polls in
-exactly two ways: the ≤ 1s rounding sense of §3.3, and the D7 disowning events
-(mark-inaccurate, record/step deletion), where it drops by the whole disowned share
-at once, deliberately. Client smoothing must snap down to the served value, never
+exactly **three** ways (per-event client rules in §6A C, corrected round 4a): the
+≤ 1 s rounding sense of §3.3; the D7 disowning events per §6A A — mark-inaccurate on
+any record of the step, and step removal; record deletion is **not** a shipped
+capability and is not named to the client — where it drops by the whole disowned
+share at once, deliberately; and the D8 settlement window (§3.3A C.1), a
+dip-and-recover at clock-out that the client renders as served. Client smoothing must
+snap down to the served value, never
 clamp — a clamp keeps displaying time the workspace has explicitly disowned.
 
 ---
@@ -995,7 +1005,7 @@ frontend what to do, not what we believe. Per event, exactly:
 - **On a drop followed within seconds by a return to the previous value:** this is the
   settlement window (§3.3A C.1), not a disowning event, and the client cannot tell them
   apart from the payload — by design, since HC-4 forbids an `as_of` field. The rule is
-  the same in both cases: render what is served. See **owner card 1**.
+  the same in both cases: render what is served. (D8, owner-ratified 2026-08-20.)
 - **`share_state` is rendered as received, never re-derived** — unchanged standing rule.
 
 ---
@@ -1029,7 +1039,10 @@ frontend what to do, not what we believe. Per event, exactly:
   calculator (`calculate_actual_worker_minutes` and downstream) is unchanged — it
   already takes seconds as input and does not care whether they are settled.
 - **Tasks / task-steps** own the records and the settlement worker — untouched.
-- **Graph delta at closeout:** update the three projection nodes'
+- **Graph delta at closeout:** update the four projection nodes'
+  *(count corrected round 4a — this line read "three" above a list of four slugs from
+  round 1 through the round-4 sweep, which added the fifth node below without catching
+  it; coordinator finding at the fold)*
   descriptions (`projection-item-economics-task-budget-status`, `…-worker`,
   `…-task-budget-allocations`, `…-task-production-time`) whose current text asserts
   "live non-deleted task-step seconds" from the settled column, plus `reads_from`
@@ -1211,6 +1224,20 @@ query-count shape alone. The ceiling asserted must be §3.4A B's, not §3.4's.
 > excluded step in the payload has an open working record, and assert `charged_seconds`
 > is computed from settled values. Path 3 (`typical_times_statement`) is covered by
 > T5's byte-identity on `typical`.
+>
+> **T13 — the frozen blocks are frozen (D9, added round 4a).** Fixture: a task with a
+> persisted result whose step is re-opened into `working` with an open record. In one
+> payload the live fields tick (T6's basis) while E-P's `final` block —
+> `percent_consumed` included — and the E-B worker face's `result` block are
+> byte-identical to the same task's pre-open payload. **Named mutation:** re-wire
+> `final.percent_consumed` to the request-level percent (site:
+> `division_serializers.py:serialize_task_production_time`, the call feeding
+> `:_serialize_production_time_final`). Both sides: the fixture's live request percent
+> differs from the frozen record's by construction (the open record adds share), so
+> contract = frozen value, mutation = live value, differ ⇒ red. The worker-face key
+> gets its **own** row at its own site (`serializers.py:serialize_task_budget_status`,
+> the `percent_consumed=` argument) — two sites, two rows (sweep the class, master
+> plan §5).
 
 ---
 
@@ -1254,6 +1281,17 @@ the two owner cards both recomendations are the correct answers."*
 |---|---|---|
 | D5 | Worker-facing surfaces go live in the **same release** — all four §4.1 rows ship together | §4.1; T7 covers the live worker face; §5.4 handoff scope is all three endpoints |
 | D6 | Seconds-derived **money ticks** with its minutes on the manager face (audience unchanged, HC-6) | §4.1 row 2 |
+
+### 10.3 Ratified round 4a (owner, 2026-08-20)
+
+Both mechanism-inventory cards answered in one pass, both recommendations accepted.
+Owner, verbatim: *"about the owner cards the recommendations are the correct
+approach."*
+
+| D | decision | folded into |
+|---|---|---|
+| D8 | The **settlement window ships as-is and is disclosed**: closing a record may briefly drop the live figure by the just-worked share until the async recompute lands (normally sub-second; up to ~30 s on a dropped notify; until the next transition on that step if retries exhaust). No second computation path is built to mask it — D2's mechanism stands exactly as ratified. | §3.3A C.1, §5.4 (third decrease mode), §6A C, T11 |
+| D9 | The **frozen blocks freeze whole**: `final.percent_consumed` (E-P) and the worker face's `result.percent_consumed` (E-B) stop tracking the request-level percent and derive from the frozen result record's own settled figures — moving on no event after the freeze. Shapes unchanged (HC-4). | §5.3, §4.1A B, §4.2, T13 |
 
 **Ledger empty.** No decision in this intention is a guess; each rejected branch is
 recorded with the failure it would have produced, in `owner_decisions.md`.
@@ -1437,3 +1475,16 @@ What the gate changed, and why:
 
 Nothing in D1–D7 was reopened. Every finding above is a mechanism, a totality, or a
 derivation; no product semantics changed.
+
+**Round 4a — 2026-08-20, gate cards ratified; coordinator fold. Gate: PASS.** Owner,
+verbatim: *"about the owner cards the recommendations are the correct approach."*
+Card 1 → **D8** (ship the settlement window, disclose it as the third decrease mode);
+card 2 → **D9** (the frozen blocks freeze whole — the one deliberate behaviour change
+beyond liveness in this pipeline). Folded: §3.3A C.1, §6A C, §4.1A B, §5.3, §5.4, §4.2,
+§10.3; **T13 added** to §9A (two rows, two serializer sites). One coordinator finding
+at the fold, from the sealed calibration file (seal H3): §8 read "the three projection
+nodes" above a list of four slugs from round 1 onward, and the round-4 sweep added a
+fifth node to that list without catching the count — corrected to "four", with the
+provenance note left inline. Status → **RESOLVED and PLAN-READY (round 4a)**.
+Calibration outcome and the gate's tracker row live in `master_plan.md` §3/§7. Next:
+**implementation planning**.

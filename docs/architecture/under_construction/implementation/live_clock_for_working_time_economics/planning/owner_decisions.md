@@ -160,9 +160,91 @@ intra-line. (Audience unchanged: ADMIN/MANAGER only, HC-6.)
 
 ---
 
+## Round 4 cards (mechanism-inventory gate) — ALL ANSWERED (owner, 2026-08-20)
+
+Relayed verbatim from
+`handoffs/reviewer/2026-08-20_inventory_mechanism_inventory_handoff.md`; answered in
+one pass. Owner, verbatim: *"about the owner cards the recommendations are the correct
+approach."* Both recommendations accepted. Cards preserved unedited — the rejected
+branch is what stops a later session from reopening a settled question.
+
+### Card 1 — When a worker stops, the clock briefly shows the time gone. Ship that, or engineer it away?
+
+**Question.** Closing a working step publishes the time a moment *later* than it removes
+it from the live clock. Do we ship that gap and tell the frontend about it, or build the
+extra machinery to close it?
+
+**Story.** Jonas finishes sanding at 14:32 after 25 minutes. He taps "done". For a
+moment — usually a blink, occasionally half a minute — his card and the manager's widget
+both show his 25 minutes **gone**, back to where they were before he started. Then the
+number returns. If the background job that files his time fails three times, it does not
+return until someone touches that step again.
+
+**Branches.**
+- *Ship it, tell them:* costs nothing; the frontend is told to render whatever is
+  served, and a brief dip is possible right after someone stops working.
+- *Engineer it away:* the live figure would be computed from the work records
+  themselves rather than from the filed total — more work per request, and it reopens
+  the mechanism you approved in D2.
+
+**Recommendation.** Ship it and tell them. The gap is normally shorter than a page
+refresh, and hiding it would mean two ways of counting the same minutes — the thing this
+whole pipeline exists to remove.
+
+**On silence.** The gate holds; no decrease contract is written to the frontend.
+
+**Trace.** §3.3A C.1, §5.4, §6A C, §9A T11, closeout obligation 5.
+
+> **ANSWERED — D8 (2026-08-20): ship it and tell them.** The settlement window ships
+> as-is: closing a record may briefly drop the live figure by the just-worked share
+> until the async recompute lands (normally sub-second; up to ~30 s on a dropped
+> notify; until the next transition on that step if retries exhaust). Disclosed to the
+> frontend as the third decrease mode; the client rule is the same as every decrease —
+> render what is served. Folded into intention §3.3A C.1, §5.4, §6A C; pinned by T11.
+> **Consequence created by the answer:** D2's mechanism stays exactly as ratified — no
+> second computation path is built to mask the window.
+
+### Card 2 — Inside the frozen "final" box, one number keeps ticking. Leave it?
+
+**Question.** Both the production-time widget and the worker's budget screen show a
+frozen end-of-job summary. One field inside it — the percentage — is wired to the live
+figure and will now tick while every number beside it stays frozen. Leave that wiring,
+or freeze the percentage with its neighbours?
+
+**Story.** A chair's job is finished and its summary reads "2 h 40 m · 12 % over". A
+week later someone reopens a step to fix a scratch. The summary's minutes stay at 2 h
+40 m, as they should — but the percentage starts climbing while the manager watches.
+Same box, one number moving, the rest frozen.
+
+**Branches.**
+- *Leave it:* no code changes; the box behaves as it already does today, only more
+  visibly.
+- *Freeze it:* the summary is internally consistent; one small change to how that box is
+  built.
+
+**Recommendation.** Freeze it. This is the same one-line-two-answers defect you settled
+in D6 when you said money should tick with its minutes — here the fix points the other
+way, because everything else in that box is a record of what happened.
+
+**On silence.** The gate holds; §5.3's disposition stands and both faces ship ticking.
+
+**Trace.** §4.1A B, §4.2, §5.3, §9A.
+
+> **ANSWERED — D9 (2026-08-20): freeze it.** `final.percent_consumed` (E-P) and the
+> E-B worker face's `result.percent_consumed` are decoupled from the request-level
+> percent and derive from the frozen result record's own settled figures — a frozen
+> block never carries a ticking field. Supersedes §5.3's round-1 "wiring deliberately
+> untouched" disposition. Response shapes unchanged (HC-4). Folded into intention
+> §5.3, §4.1A B, §4.2; guarded by T13.
+> **Consequence created by the answer:** this pipeline now contains one deliberate
+> behaviour change beyond liveness — the frozen-block percent stops moving on *any*
+> event after the freeze, including the post-freeze settled changes it tracked before.
+
+---
+
 ## Ledger status
 
-**Empty as of round 3 (2026-08-20).** D1–D4 settled during shaping, D5–D6 ratified by
-the owner (round 2), D7 ratified from the coordinator review (round 3, all six
-findings dispositioned — see the intention's round-3 changelog). No decision in this
-intention is a guess. Next gate: **mechanism-inventory**.
+**Empty as of round 4a (2026-08-20).** D1–D4 settled during shaping, D5–D6 ratified by
+the owner (round 2), D7 ratified from the coordinator review (round 3), D8–D9 ratified
+from the mechanism-inventory gate (round 4a). No decision in this intention is a
+guess. Gate: **mechanism-inventory PASSED**; next: **implementation planning**.

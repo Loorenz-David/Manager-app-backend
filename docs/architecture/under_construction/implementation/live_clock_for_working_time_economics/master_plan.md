@@ -1,8 +1,8 @@
 # Master plan — live_clock_for_working_time_economics
 
 ```
-state: PRE-PLAN. Intention RESOLVED (round 3); mechanism-inventory gate PROMPT_READY.
-       No phases exist yet — the implementation-planner runs only after the gate PASSES.
+state: GATE PASSED. Intention RESOLVED and PLAN-READY (round 4a, D1–D9, ledger empty).
+       No phases exist yet — implementation planning is the next step.
 date: 2026-08-20
 coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md)
 ```
@@ -47,7 +47,8 @@ newest state first, superseded rows kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| — | Mechanism-inventory gate over the intention's mechanisms (see §7 trigger table) | **PROMPT_READY** | 2026-08-20 | coordinator | Prompt at `prompts/reviewer/2026-08-20_inventory_mechanism_inventory.md`. Calibration seal written and sealed at `prompts/coordinator/2026-08-20_inventory_calibration_seal.md` **before** the prompt was authored; unopened by any session until the gate handoff is consumed. Gate is REQUIRED, NOT WAIVABLE (§7). |
+| — | Mechanism-inventory gate over the intention's mechanisms (M-1…M-9, §7 trigger table) | **PASSED** | 2026-08-20 | Opus 5 (inventory) + owner (D8–D9) + coordinator (fold) | Nine mechanisms swept, 11 lettered sections added (+758/−5), nothing renumbered. Session verdict `OWNER_DECISIONS_PENDING`; both cards answered the same day (**D8** ship-and-disclose the settlement window, **D9** freeze the frozen blocks whole) and folded at round 4a → **PASS**, no second reviewer session (no card branch changed a contract, only behaviour). Coordinator verified at consumption rather than reading the ledger: perimeter matches `git diff` exactly (the one undeclared `app/` change in the tree — `items/lookup/` — is the owner's concurrent item-lookup work, excluded from every pipeline commit); **12 load-bearing claims re-verified at source** (sync-close + async-enqueue in `_step_transition_core.py`, the flag disjunction and `_BUCKET_STATE` in `averaged_time.py`, `uix_step_state_records_active`, the worker-face `percent_consumed` branch, settlement's single `int(round(Σ))` across users, the 8-member enum, `DivisionStep`, `today_utc()` in E-A's loop, `_MAX_TASK_IDS = 50`, `FALLBACK_POLL_SECONDS = 30`, `max_try = 3`); all four §3.2 worked examples re-followed. **Calibration (seal opened at the fold, §7)**: H1 and H2 found and exceeded — H2's own arithmetic corrected, the per-user denominator is *impossible*, not merely loose; **H3 missed by the sweep** (§8's three-vs-four count), fixed at the fold as a coordinator finding. T1's named mutation proved inert and rewritten as T1′ — the both-sides rule biting a fourth time, this round on the coordinator lineage's own artifact. Unilateral resolutions U1–U9 recorded in the handoff; none reopens D1–D7; ratified by the owner's round-4a acceptance. Commits `da4ebcd` (scaffolding) → `e2e7c24` (gate delta) → gate-close commit. |
+| — | *(prior row — prompt compiled)* | *superseded* | 2026-08-20 | coordinator | Prompt at `prompts/reviewer/2026-08-20_inventory_mechanism_inventory.md`; calibration seal sealed pre-prompt at `prompts/coordinator/2026-08-20_inventory_calibration_seal.md`. Gate REQUIRED, NOT WAIVABLE. Both resolve under `archive/gate_inventory/` after closeout. |
 
 ## 4. Naming registry
 
@@ -66,13 +67,21 @@ Binding constraints, in force now:
 - **The shared loader** (intention §4.1 — takes the step set, the session and `now`,
   returns `{step_id: live_worked_seconds}`) is the planner's to name; the name is
   registered in this section before the first implement prompt compiles.
-- **Pre-registered planner decision (intention §4.1, review finding 4):** the fate of
-  the SQL aggregate in `get_task_budget_status.py:_build_evaluated_status`
-  (`func.coalesce(func.sum(TaskStep.total_working_seconds), 0)`) — replace with a
-  per-step fold over the loader's output, or keep it for the settled term and add the
-  loader's open shares. **One is picked and recorded in this section plus the owning
-  phase plan before any implementer session.** (The named-medium rule: this master plan
-  is the record that survives closeout.)
+- **Pre-registered planner decision (intention §4.1, review finding 4) — condition now
+  pinned (gate, round 4):** the fate of the SQL aggregate in
+  `get_task_budget_status.py:_build_evaluated_status`. The two resolutions (per-step
+  fold vs settled-sum-plus-live-term) are arithmetically identical **iff** the rounding
+  locus is §3.1A A's (round the open share per step, add to the integer column) —
+  which the intention now mandates. The gate's practical note stands: keeping the
+  aggregate saves nothing, because the per-step figures are needed anyway for the
+  section and step rows (intention §4.1A A). **The planner still picks one and records
+  it in this section plus the owning phase plan before any implementer session**, and
+  the loader's step set must be exactly "the task's non-deleted steps" — no state
+  filter — or T6's headline-equals-rows breaks (§4.1A A population check).
+- **D9 adds two serializer feed points to the naming surface** (intention §5.3,
+  §4.1A B): whatever the planner names as the frozen-percent source for
+  `division_serializers.py:_serialize_production_time_final` and
+  `serializers.py:_serialize_result` is registered here before implementation.
 - **`task_steps.total_working_seconds` keeps its exact meaning** — settled,
   concurrency-averaged, recomputed at transitions. No name in this pipeline may imply
   otherwise.
@@ -195,6 +204,31 @@ prose. Last time, every defect worth a round was in a mechanism nobody had flagg
 the intention**, added as lettered sections so no existing citation renumbers, with a
 round-4 changelog entry. The implementation-planner starts on `PASS` and nothing else.
 
+**Gate result, 2026-08-20: PASSED** (session verdict `OWNER_DECISIONS_PENDING`; D8–D9
+ratified and folded the same day, round 4a). All nine mechanisms plus two the sweep
+surfaced unprompted (HC-1A ORM-persistence, HC-3A injection-site) left with
+contract-grade definitions. See the §3 tracker row for the full consumption record.
+
+**Calibration outcome — the seal, opened at the fold.** Three hypotheses were sealed in
+`prompts/coordinator/2026-08-20_inventory_calibration_seal.md` before the prompt was
+authored, with an honest contamination statement (the prompt's M-3/M-5 scope rows named
+H1's and H2's territory; none of the specific defects; H3's territory not at all):
+
+- **H1 (composition/`now`-threading)** — found and exceeded: the sweep produced the
+  per-caller declaration table, the `ServiceContext` constraint, and the
+  price-scenario clock regression the seal had not named.
+- **H2 (the bound's denominator)** — found and the seal's own arithmetic corrected: the
+  sealed hypothesis said a multi-user step could legitimately drift ~2 s under the
+  per-user clause; the sweep showed the per-user denominator is **impossible** (one
+  open record per step, by unique index) and settled rounds once across users, so the
+  true bound is ≤ 1 s per step. The gate out-derived its own calibration probe.
+- **H3 (§8's three-vs-four node count)** — **missed by the sweep**, which added a fifth
+  node to that very list without catching the count. Fixed at the fold as a coordinator
+  finding. Lesson, consistent with five prior pipelines: enumeration/count defects
+  survive even a sweep explicitly instructed to treat counted sentences as checklists —
+  the *coordinator's* consumption pass must re-count every counted sentence in a
+  delta, every round.
+
 ### Projection — pre-declared
 
 REQUIRED for any phase implementing M1 (the live share, the window) or the M2 seam (the
@@ -221,7 +255,7 @@ specifically because we promised to signal its removal.
 | 2 | **New dated handoff, never an edit.** The 2026-08-19 document's §2 correction and §3 warning do not expire — only its §1 does. Amend by reference. | frontend convention; orientation §4 |
 | 3 | The correction owed on the 2026-08-18 "Live time" section: client ticking is superseded by server truth; smoothing from time-of-receipt remains legitimate. | intention §5.4 |
 | 4 | Answers to the frontend's four open questions (feasibility/cost §3.4; all-fields-together §4.1; settled-consumers audit §2.5; the determinism test HC-3/T1). | intention §5.4, §11 |
-| 5 | **The decrease semantics, explicitly:** `worked_seconds` drops between polls in exactly two ways — the ≤ 1 s rounding sense (§3.3) and the D7 disowning events (mark-inaccurate, record/step deletion), where it drops by the whole disowned share at once, deliberately. **Client smoothing must snap down to the served value, never clamp** — a clamp keeps displaying time the workspace has explicitly disowned. | intention §5.4, §6, D7 |
+| 5 | **The decrease semantics, explicitly — three modes, per-event rules in intention §6A C** *(corrected round 4a; this row originally said "exactly two ways")*: the ≤ 1 s rounding sense (§3.3A A); the D7 disowning events per §6A A (mark-inaccurate on any record of the step, and step removal — record deletion is NOT a shipped capability and is not named to the client), dropping by the whole disowned share at once, deliberately; and the D8 settlement window (§3.3A C.1), a dip-and-recover at clock-out. **Client smoothing must snap down to the served value, never clamp**; a drop-then-return within seconds is the settlement window and is rendered as served. | intention §5.4, §6A, D7, D8 |
 | 6 | Graph delta: the item-economics projection node descriptions currently asserting settled-only seconds, plus `reads_from` edges to the step-state-record table node as the vocabulary allows. (The intention names four node slugs; the delta is recorded at closeout in one batched apply.) | intention §8 |
 
 ### Commits
