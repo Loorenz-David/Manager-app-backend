@@ -709,3 +709,71 @@ E-A query-count update for the shared live probe: price scenario, live-clock
 goldens, phase-8 status results, phase-8 reviewer probe, budget allocations,
 phase-9 committed-filter structure, and the item-economics router. No Architecture
 Graph delta is owed because this round is test-only.
+
+### Fix r2 consumed — 2026-08-20, coordinator
+
+**Perimeter verified: test-only, exactly as prescribed.** `git show --name-only a28e9e5`
+touched **zero** files under `app/beyo_manager/` — the one file it changed in `app/` is
+`test_phase2_live_surfaces.py` (+542). All five production files listed as mutation-probe
+sites are absent from the commit ✓. Checkpoint `a28e9e5`.
+
+**External-stream check (master plan §7).** The cap stream landed `bb6cc43` *underneath*
+this fix. Its perimeter: `calculator.py`, `price_scenario.py`,
+`domain/item_economics/serializers.py` (+1), `get_task_price_scenario.py`, five test
+files, one frontend handoff, `.archgraph/architecture.yml`. **It touched none of our
+files and no golden — no escalation.** Two entries are marginally wider than the owner's
+description (`serializers.py` and the graph file); recorded, not raised.
+
+**Baseline re-measured on the post-cap tree: 26 / 2476 / 1**, failing-ID set `comm`-diffed
+against §6's enumeration — **empty in both directions**, so the cap's added tests all pass
+and the enumeration still holds. Arithmetic reconciles: 2465 (pre-fix) + 9 new phase tests
++ 2 cap tests = 2476. Phase file 6 → **15 tests**.
+
+**Coordinator re-measured the two mutations that were ∅ last round** — the whole point of
+this cycle — plus the clean run, each whole-suite with both-direction ID diffs and a
+verified revert:
+
+| Mutation | Before fix r2 | After fix r2 (coordinator) |
+|---|---|---|
+| C6 `created_at` omission, E-P substitution site | **∅** | **exactly 1 ID** — `test_c6_created_at_is_carried_into_the_production_division_row` |
+| C8 loader moved inside the per-task loop | **∅** | **exactly 2 IDs** — both new C8 rows |
+
+Both are isolated to their own criterion, zero removed IDs. **B1–B4 and S1–S3 are closed.**
+
+**The C6 fixtures were read at source and are correct**, including the part most likely to
+be got wrong: `_make_ordering_fixture` sets `record_b.entered_at = entered_a if row == 2`,
+so row 2's `entered_at` keys genuinely **tie** and `created_at` is the deciding key, while
+row 3 keeps them distinct and swaps `created_at` against them. The two fixtures are not
+merged, and `client_id` order contradicts `created_at` order as required — which is why
+the mutation moves the governing step from `stp_b` to `stp_a` rather than being inert.
+
+**F-L4 — one ledger row does not reproduce (should-fix, routed to review r3 as a probe).**
+Ledger row 4 (C6 `created_at`) claims **seven** added IDs, including
+`test_prechange_payloads_match_byte_golden_files` and five valuation/calculator/price-scenario
+tests. Coordinator measurement of the same mutation at the same site: **exactly one**. The
+extra six are structurally impossible for this mutation — the golden tasks hold **one step
+per section**, so `_governing_step` has a single candidate and no ordering field can move
+their payload (verified at source, and the same reasoning is already recorded for C1) —
+and the remaining five sit precisely in the areas the **cap stream** touched. Most likely
+cause: that probe's whole-suite run overlapped the cap commit landing, so foreign
+failures were attributed to the mutant. Consequences: (a) row 4's added-ID set is not
+evidence of anything and must not be cited; (b) any other row measured in the same window
+inherits the doubt — review r3 re-measures a sample. Row 5 (`latest_state_record`) is
+**not** affected: its claim of the goldens + `test_c4_c6a_c6b_…` reproduces the
+coordinator's own pre-fix measurement of that mutation exactly.
+This is the first instance in this project of **the external commit stream corrupting a
+measurement** — the hazard master plan §7 was written for, arriving in the same round.
+
+**N5 — C9 has no named production mutation**, correctly. Plan §5 C9 specifies a
+three-point contract (`2040` → `1440` after close without recompute → `2040` after
+`_recompute_step_time_totals`) and names no mutant; the implementer said so plainly
+instead of inventing one. The three-point shape makes vacuity implausible. Review r3
+should still ask whether any single production change could satisfy all three points
+wrongly.
+**N6 — S3's measurement fixture was removed after measuring**, correctly: the 50-task
+ceiling is a Review-log obligation, not a criterion (charter rule 1). Measured: 50 valid
+IDs ⇒ one open-record probe + one worker sweep; 51 ⇒ rejected before querying.
+
+**Disposition: review r3 — the FIRST review of this phase.** Full checklist, not
+delta-scoped: implement r1 went to a coordinator-dispositioned fix without a review round,
+so no reviewer has yet seen any of this phase.
