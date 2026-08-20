@@ -447,6 +447,12 @@ only, no mechanism; waiver recorded in its §3 tracker row).
 
 ### Review
 
+**Perimeter checks consult §7's *Recognized external commit streams* first.** Two owner
+streams commit into this repo while we run; files on those lists are foreign-but-expected,
+everything else outside a session's declared perimeter is still an automatic finding. A
+golden JSON moved by a cap commit is an **escalation**, not an attribution.
+
+
 **Full rounds, not the light MVP round.** The MVP calibration does not buy a cheap
 review here: almost everything this feature ships is rule-6 surface (same finding as the
 valuation editor, and truer here — there is no route/serializer scaffolding to discount).
@@ -467,6 +473,49 @@ specifically because we promised to signal its removal.
 | 4 | Answers to the frontend's four open questions (feasibility/cost §3.4; all-fields-together §4.1; settled-consumers audit §2.5; the determinism test HC-3/T1). | intention §5.4, §11 |
 | 5 | **The decrease semantics, explicitly — three modes, per-event rules in intention §6A C** *(corrected round 4a; this row originally said "exactly two ways")*: the ≤ 1 s rounding sense (§3.3A A); the D7 disowning events per §6A A (mark-inaccurate on any record of the step, and step removal — record deletion is NOT a shipped capability and is not named to the client), dropping by the whole disowned share at once, deliberately; and the D8 settlement window (§3.3A C.1), a dip-and-recover at clock-out. **Client smoothing must snap down to the served value, never clamp**; a drop-then-return within seconds is the settlement window and is rendered as served. | intention §5.4, §6A, D7, D8 |
 | 6 | Graph delta: the item-economics projection node descriptions currently asserting settled-only seconds, plus `reads_from` edges to the step-state-record table node as the vocabulary allows. (The intention names four node slugs; the delta is recorded at closeout in one batched apply.) | intention §8 |
+| 7 | **The approval baseline is a published reference point.** `narrow_typical_work_times` D23 regenerates two goldens keys-only on *this* pipeline's post-approval tree, so the closeout gate commit must state the tree it approves at and the suite baseline measured there (count **and** enumerated failure-ID set). A successor pipeline cannot diff against a baseline we never wrote down. | owner note 2026-08-20 |
+
+### Recognized external commit streams (owner note, 2026-08-20)
+
+Two owner-committed streams run alongside this pipeline. Both are **foreign-but-expected**:
+a reviewer's `git diff` perimeter check attributes files below to their stream instead of
+raising an automatic finding. Anything *outside* these lists is still a finding.
+
+**1. Production budget cap — code, parallel, disjoint perimeter.** Commits prefixed
+`CHECKPOINT (not approved): production budget cap`. Its perimeter:
+
+- `domain/item_economics/calculator.py`
+- `domain/item_economics/price_scenario.py`
+- `services/queries/item_economics/get_task_price_scenario.py` (serializer seam)
+- those files' test files
+- one new dated frontend handoff
+
+Standing facts about it, so no round re-litigates them:
+
+- It bumps `CALCULATION_VERSION` 1 → 2 **deliberately, and this does not contradict this
+  intention's "CALCULATION_VERSION is not bumped" clause** — that clause says the
+  live-clock change does not *warrant* a bump, which remains true. Not a finding.
+- It **must not** move this pipeline's three golden JSONs or any file in our perimeter,
+  and the cap session runs our golden test as its own tripwire. **If any round finds a
+  golden changed by a cap commit, that is a real escalation to the owner — not noise.**
+- **The suite baseline shifts under us:** the cap adds tests. Every round re-measures the
+  baseline on the tree it actually runs on and diffs the *enumerated failure-ID set*
+  (§6), which is the stable comparison basis; raw pass counts are not carried between
+  rounds and never between streams. This is already the standing rule here — the cap
+  stream makes it load-bearing rather than merely prudent.
+- `get_task_price_scenario.py` sits in **both** perimeters in different roles: the cap
+  edits its serializer seam; plan 2 C10 only *reads* it and measures its suite. A change
+  there authored by us is still a finding.
+
+**2. `narrow_typical_work_times` — documents only, downstream of us.** A planning folder
+(`docs/architecture/under_construction/implementation/narrow_typical_work_times/planning/`,
+intention + owner decisions, RESOLVED). It makes typicals item-aware across the four
+consumers of `typical_times_statement`. **Its D23 explicitly serializes it behind this
+pipeline**: it starts only once our phases touching the shared files are APPROVED, and it
+regenerates the production-time and budget-allocations goldens keys-only on *our*
+post-approval baseline. **Do not read it for context** — our intention and plans are
+unchanged by it. Consequence for us: our closeout gate commit is the reference point the
+next pipeline builds on, so it is recorded as closeout obligation 7.
 
 ### Commits
 
