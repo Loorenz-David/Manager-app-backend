@@ -245,3 +245,30 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   re-measured at `2711b58`: 26 failed / 2436 passed / 1 deselected, ID set enumerated
   in master plan §6. Handoff:
   `handoffs/reviewer/2026-08-20_phase1_projection_r0_handoff.md`.
+
+- **2026-08-20 — phase 1 implementation completed (Codex).** Shipped the
+  pre-change T5 goldens and byte-replay assertion at checkpoint `1081a2b`, added
+  `ServiceContext.now`, and implemented `load_live_worked_seconds` with the batched
+  open-WORKING probe, credited-user grouping, minimum-entry one-day-buffered window,
+  shared analytics contribution wrapper, per-share Python rounding, and no ORM
+  assignment. Added the loader-level C3–C10 integration rows; D1 chose two overlapping
+  30-minute cross-task records for row 3 (900 seconds per step), D2 used a throwaway
+  capture script outside the repository, and D3 kept golden fixtures flush-only on the
+  rollback-scoped session. The naive-clock contract is enforced at the loader boundary
+  with the specified `TypeError`; this preserves the loud contract under the configured
+  asyncpg driver's timestamp normalization. Final suite: **26 failed / 2454 passed /
+  1 deselected**, with the complete 26-ID failure set unchanged from master §6.
+  Named mutation ledger (each whole-suite run; `B` means exactly the 26 IDs enumerated
+  in master §6; all rows reverted to loader hash
+  `6d11b922fbec3031be49adf1313b6d1685bef95659caf81f2b6cb7e918fa82ca`):
+
+  | mutation / site | observed red set, expressed as `B ∪ Δ` | revert hash |
+  |---|---|---|
+  | naive `now - entered_at` replacing the wrapper call, loader call site | `B ∪ {test_live_worked_seconds.py::test_c3_row_2_sweep_changes_divisor_mid_interval, test_c3_row_3_cross_task_open_record_is_in_the_divisor, test_c3_row_4_closed_overlap_shapes_the_open_record_share, test_c4_record_marked_wrong_has_no_live_term, test_c4_step_marked_wrong_drops_it_and_releases_sibling_share, test_c5_t2_batch_row_rejoins_settlement_within_one_second, test_c6_deleted_step_still_divides_live_sibling, test_c7_window_anchors_at_minimum_open_entry}` | `6d11b922…fa82ca` |
+  | anchor `max(entered_at)` replacing `min(entered_at)`, loader window definition | `B ∪ {test_live_worked_seconds.py::test_c7_window_anchors_at_minimum_open_entry}` | `6d11b922…fa82ca` |
+  | inserted `datetime.now(now.tzinfo)` and used it as the sweep timestamp, loader definition | `B ∪ {test_live_worked_seconds.py::test_c3_row_1_distinct_workers_are_not_divided_by_section_records, test_c3_row_2_sweep_changes_divisor_mid_interval, test_c3_row_3_cross_task_open_record_is_in_the_divisor, test_c3_row_4_closed_overlap_shapes_the_open_record_share, test_c4_step_marked_wrong_drops_it_and_releases_sibling_share, test_c4_zero_cases_future_entry_and_missing_attribution_are_skipped, test_c5_t2_batch_row_rejoins_settlement_within_one_second, test_c5_t2_single_open_record_rejoins_settlement_within_one_second, test_c6_deleted_step_still_divides_live_sibling, test_c7_window_anchors_at_minimum_open_entry, test_c8_loader_is_deterministic_and_does_not_read_its_module_clock, test_c10_loader_never_persists_live_seconds_on_task_step}` | `6d11b922…fa82ca` |
+
+  Implementation checkpoint: `a7659bc`. Architecture graph delta is one additive
+  batch: inferred `Live worked-seconds loader` projection with `reads_from
+  step_state_records` and `calls compute_record_contributions`; no review item was
+  promoted, rejected, edited, or removed.
