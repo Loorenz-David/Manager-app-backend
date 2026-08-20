@@ -4964,6 +4964,37 @@ nodes:
     confidence: 0.99
     createdAt: 2026-08-19T18:49:23.014Z
     updatedAt: 2026-08-20T04:46:34.640Z
+  - id: projection-live-worked-seconds
+    type: projection
+    name: Live worked-seconds loader
+    description: A request-time projection that combines each input task step's
+      settled working seconds with its currently accruing open WORKING share. It
+      probes open records for the requested steps, groups them by credited
+      worker, and uses the shared analytics contribution wrapper so concurrent
+      batch work on other steps remains in the divisor. It returns a separate
+      client-id keyed mapping and never mutates TaskStep ORM state or persists
+      the live value. Its correctness depends on one injected, timezone-aware
+      request timestamp and the minimum-entered-at window anchor per worker.
+    tags:
+      - item-economics
+      - live-clock
+      - ai-inferred
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 18
+          endLine: 82
+          summary: The loader probes open WORKING records, groups attributed records by
+            user, calls compute_record_contributions with a one-day-buffered
+            minimum anchor, rounds each open share per step, and returns
+            settled-plus-live integers without assigning ORM attributes.
+          inferenceReason: This symbol is the implemented boundary that owns the live
+            worked-seconds projection and its non-persistence contract.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-20T11:21:10.757Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9773,3 +9804,38 @@ edges:
     confidence: 0.94
     createdAt: 2026-08-20T04:39:17.970Z
     updatedAt: 2026-08-20T04:46:34.640Z
+  - sourceNodeId: projection-live-worked-seconds
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 41
+          endLine: 57
+          summary: The loader issues one batched probe over step_state_records for open,
+            non-deleted WORKING intervals and reads
+            credited_user_id/created_by_id for attribution.
+          inferenceReason: The projection's live input is the open interval population in
+            the step-state record table.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-20T11:21:10.757Z
+  - sourceNodeId: projection-live-worked-seconds
+    relationshipType: calls
+    targetNodeId: src-compute-record-contributions
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 60
+          endLine: 70
+          summary: The loader delegates each credited user's windowed contribution
+            calculation to compute_record_contributions.
+          inferenceReason: The projection reuses the established analytics wrapper as its
+            sole averaging and attribution computation.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-20T11:21:10.757Z

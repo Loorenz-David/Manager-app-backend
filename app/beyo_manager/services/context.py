@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,12 +13,15 @@ class ServiceContext:
     - identity   : decoded JWT claims dict from get_jwt_claims()
     - incoming_data: validated request payload (Pydantic .model_dump() or plain dict)
     - session    : the request-scoped AsyncSession from get_db()
+    - now        : request data, stamped once at construction and read by services instead
+                   of any clock; it is neither a boolean flag nor a config value
     - Never add boolean flags or config values here
     """
     identity: dict
     incoming_data: dict
     session: AsyncSession
     query_params: dict = field(default_factory=dict)
+    now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # ── convenience accessors (read from JWT claims) ──────────────────────
     @property
