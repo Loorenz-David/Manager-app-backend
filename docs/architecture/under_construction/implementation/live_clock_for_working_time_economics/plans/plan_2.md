@@ -4,8 +4,22 @@
 state: NOT_STARTED
 phase: 2
 date: 2026-08-20
-depends_on: plan 1 APPROVED (goldens committed, loader + ServiceContext.now shipped)
+depends_on: plan 1 APPROVED 2026-08-20 (`d21fe9e`) — holds
 ```
+
+**What phase 1 shipped, that this phase consumes** (facts, verified at approval):
+
+- `live_worked_seconds.py:load_live_worked_seconds(session, workspace_id, steps, now)
+  -> dict[str, int]` — keyed by step `client_id`, every input step present, values
+  `settled + int(round(open_share))`. Raises `TypeError("load_live_worked_seconds
+  requires an aware UTC now")` on a naive `now`: it **fails closed at its own
+  boundary**, and that guard is load-bearing (intention §1A HC-3A round 4d).
+- `context.py:ServiceContext.now` — aware UTC, stamped once per construction,
+  overridable by `now=`. Every service in this phase reads `ctx.now`; no service
+  reads a clock.
+- Three golden files + `test_live_clock_goldens.py` under
+  `app/tests/integration/services/queries/item_economics/` — captured **before** any
+  live code existed. They are this phase's payload-freeze proof (C1).
 
 ## 1. Goal
 
@@ -21,7 +35,12 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
 
 ## 2. Read first
 
-1. `master_plan.md` §4 (N-1…N-4), §5, §6 (the four-caller table fact).
+1. `master_plan.md` §4 (N-1…N-4), §5 — **including the nine rules earned in phase 1**,
+   which bind here — and §6 (the four-caller table fact; the baseline **26 / 2459 / 1**
+   with its enumerated ID set; the third-flake and `TZ` environment facts).
+1b. `plans/plan_1.md` §5 (C9 and C11/C12 as amended — the shapes this phase's criteria
+   are modelled on), §6's structural-facts note, and §7's Review log: six rounds of
+   findings, every blocking one in a plan or review artifact rather than in code.
 2. Intention §1A (HC-1A, HC-3A scope — E-A's `today_utc()`), §4.1 + §4.1A (the field
    table, the fold, the composition contract and per-caller declaration table), §4.2,
    §4.3 + §4.3A (the three allowance paths — path 3 is the expensive mistake), §2.6
@@ -64,7 +83,7 @@ keep today's request-level wiring until phase 3 (D9). No handoff (phase 4).
   and suites must be untouched); E-P and E-A pass `ctx.now`. No other change to this
   file — its aggregates and grouping are path 3 of §4.3A and stay settled.
 - New/extended test files under
-  `app/tests/integration/services/queries/item_economics/` for C1–C10 below; the
+  `app/tests/integration/services/queries/item_economics/` for C1–C11 below; the
   price-scenario suite (`test_price_scenario*.py`) **only if** C10 finds it red —
   fixed-`ctx.now` fixture additions and nothing else in it.
 
