@@ -59,7 +59,9 @@ No handoff (phase 4).
 2. The two feed-site changes, each with a comment naming the other site and D9's
    one-line reason (resolvable from a clean checkout — no criterion IDs, no round
    numbers).
-3. Tests C1–C5, mutation ledger per master plan §5.
+3. Tests C1, C2, C3, C4a, C4b, C5 — each with its own fixture and its own named
+   mutation; evidence records per master plan §5 (hypothesis, scope, command, tree
+   identity, result, ID delta) at the scope each hypothesis requires.
 
 ## 5. Acceptance criteria
 
@@ -80,15 +82,38 @@ No handoff (phase 4).
   new one with a **different** `allowed_worker_minutes`; the frozen percent is
   byte-identical before and after (it derives from the result row alone). This row is
   why N-4 reconstructs the denominator instead of reading the current evaluation.
-- **C4 — the manager face still has no `percent_consumed` key in its result block**
-  (§4.1A B key-walk row), and the **live** percent on all three surfaces still ticks
-  (one row asserting the budget-block percent moved while `final`'s did not — same
-  payload as C1).
+  **Named mutation (the reconstruction site, whichever file §3 settles on — the
+  expression producing the frozen denominator):** read the *current* evaluation's
+  `allowed_worker_minutes` instead of reconstructing `actual + variance` from the
+  result row ⇒ contract = the two percents equal and asserted as one exact literal,
+  mutation = they differ, red. **The fixture must move `allowed_worker_minutes` by
+  enough to change the quantized percent** — compute both percents by hand before
+  fixing the numbers; a re-commit that lands on the same rounded value is a row that
+  cannot fail.
+- **C4a — the manager face still has no `percent_consumed` key in its result block**
+  (§4.1A B key-walk row), asserted by a recursive key walk, not a `.get()`.
+  **Named mutation (site: `serializers.py:_serialize_result`, the manager branch):**
+  emit `percent_consumed` in that block ⇒ contract = key absent, mutation = key
+  present, red.
+- **C4b — the live percent still ticks on the same payload as C1.** One row asserting
+  the budget-block `percent_consumed` **moved** between the pre-open and open serves
+  while `final`'s did not — both values exact literals, both taken from the C1
+  payloads. **Named mutation (site: the budget-block `percent_consumed` argument at
+  the E-P feed):** feed the frozen value there too ⇒ contract = the two values differ,
+  mutation = they are equal, red. This row is what keeps D9 from freezing the
+  surfaces D6 says must tick.
 - **C5 — the no-drift identity.** In the T5 golden state (zero post-freeze drift, same
   evaluation) the new source produces the **same value** as the old wiring — proven by
   the plan-1 golden test staying green with its files untouched (read-only in this
   phase's diff, as in plan 2 C1). This is the criterion that makes D9 invisible to
-  every frozen task that has not been reopened.
+  every frozen task that has not been reopened. **Named mutation (the same
+  reconstruction site as C3):** replace the reconstructed denominator with
+  `result.actual_worker_minutes` alone ⇒ the golden must **redden**. Contract = golden
+  green, mutation = golden red. Without this the criterion is vacuous in the exact
+  shape phase 2 hit ten times: a golden that never reaches the changed code stays green
+  under every mutation of it, and "the golden is still green" would then be evidence of
+  nothing. If the golden proves not to reach this path, that is a finding — the row
+  needs a fixture that does, not a softer claim.
 
 ## 5A. Carried from phase 2 — read before writing a single criterion
 
@@ -131,4 +156,12 @@ criterion — never in the code.** Four things it earned bind this plan directly
 
 ## 7. Review log
 
-(empty — append-only)
+**2026-08-21 — coordinator, pre-projection amendment (no session spent).** §5 carried
+named mutations on C1 and C2 only, while §5A's own first bullet requires one per
+lettered row (charter rule 11). Added: C3's current-evaluation denominator mutation
+with the quantization warning; C4 split into **C4a** (manager-face key emission) and
+**C4b** (the budget-block percent frozen too), each with its own site and mutation;
+C5's `actual`-alone denominator mutation, which is what makes "the golden stayed
+green" mean anything — an unreached golden is green under every mutation of the code
+it does not reach. §4 task 3 re-lettered to match. No criterion was weakened and none
+was added; every change makes an existing row falsifiable.

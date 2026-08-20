@@ -5,10 +5,11 @@ status: RESOLVED and PLAN-READY (rounds 4a–4g, 2026-08-21; latest fold **round
         — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
         2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
         §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
-        findings, owner-dispositioned). Rounds 4b–4e fold phase-1 and plan-2-projection
+        findings, owner-dispositioned). Rounds 4b–4g fold phase-1 and phase-2
         findings upstream (see the changelog); **4d corrects 4c** on HC-3A's failure
-        site — read 4d as the standing statement. Next: phase 2 implement prompt
-        (planning DONE; phase 1 APPROVED; plan 2 projection folded at 4e).
+        site and **4g corrects 4f**'s closing sentence on §4.1A C.1 — read the later
+        round as the standing statement in both pairs. Next: phase 3 projection
+        (planning DONE; phases 1 and 2 APPROVED — `d21fe9e`, `efd6b99`).
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md
@@ -16,8 +17,8 @@ shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              verbatim: "my intention is for the system to use this live clock
              centralized so that any client ( the frontend, or a scheduler ) can
              make correct decisions."
-date: 2026-08-19 (rounds 1–2) · 2026-08-20 (round 3)
-round: 3
+date: 2026-08-19 (rounds 1–2) · 2026-08-20 (round 3, rounds 4a–4e) · 2026-08-21 (rounds 4f–4g)
+round: 4g (latest fold; the changelog carries every round)
 ```
 
 ---
