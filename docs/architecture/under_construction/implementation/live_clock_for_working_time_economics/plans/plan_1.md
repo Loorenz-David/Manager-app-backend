@@ -417,3 +417,23 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   touched only `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`
   and was reverted byte-identically. No master tracker or Architecture Graph
   change was made.
+
+- **2026-08-20 — fix r3 consumed (coordinator), verified independently; F-C1
+  closed.** Perimeter exactly the declared three files; **`git diff
+  1326dec..HEAD -- app/beyo_manager/` empty — zero production lines across both
+  fix cycles**, loader hash `6d11b922…fa82ca` unchanged. Suite **26 / 2459 / 1**
+  (+1), failure IDs byte-identical to §6's set. The added row
+  `test_c12_rounding_locus_is_share_before_settled_addition` carries the designed
+  shape exactly: `settled=1` step ⇒ 33, `settled=0` step ⇒ 32 at a 31.5 s share.
+  **Coordinator re-applied both isolating mutations whole-suite: M-locus added
+  exactly the locus row (27/2458/1) and M-mode added exactly the mode row
+  (27/2458/1) — neither removed an ID, so the three C12 rows are measurably
+  orthogonal** (the locus row is mode-neutral because `round(31.5)` and
+  `floor(31.5 + 0.5)` both give 32; the mode row is locus-neutral because its
+  `settled = 0` makes both loci agree). Reverts hash-verified. The implementer's
+  own M-locus first run hit the baseline flake (26 failed **with** the new ID —
+  a vanished baseline ID) and they applied §6's repeat rule correctly; the
+  identity of that vanished ID is a probe for r4. Re-review prompt at
+  `prompts/reviewer/2026-08-20_phase1_rereview_r4.md`. r1's N6 routed to
+  `plans/plan_4.md` C6 (owner adjudication — an evidence summary is immutable,
+  so closing it means reject-and-re-record).

@@ -76,6 +76,13 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
 - **C6** — obligation 6 / graph: five nodes updated, edges recorded, `archgraph_status`
   returns 0 stale / 0 diagnostics after the batch; evidence spans verified by reading
   the `anchors` block (the hash does not cover anchors — master plan §5 lineage).
+  **Carried from phase 1 review r1, N6 (its stated carry-forward target):** phase 1's
+  `reads_from` edge summary reads *"issues **one** batched probe"* — a count inside
+  an evidence summary, which is immutable through both review and maintenance
+  (master plan §5: describe what the evidence shows, never how many). It cannot be
+  edited in place; closing it means rejecting and re-recording that item, which is
+  the owner's adjudication to make. This criterion carries the item to the owner
+  with that framing — it is not a licence to re-record unilaterally.
 - **C7** — `pytest tests/unit/docs/` green before and after; suite baseline unchanged.
 
 ## 6. Notes
