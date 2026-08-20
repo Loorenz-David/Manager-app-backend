@@ -115,10 +115,18 @@ things are pinned:
 
 - **Type.** `entered_at` / `exited_at` are `DateTime(timezone=True)`
   (`step_state_record.py:StepStateRecord`) and arrive **timezone-aware** from the
-  driver. `now` is therefore `datetime.now(timezone.utc)` — aware, UTC. A naive `now`
-  raises `TypeError` inside `concurrency.py:_sweep` at `(end - interval.entered_at)`;
-  this is the one mechanism in the feature that fails loudly, and it is stated so no
-  one "fixes" it with a naive value.
+  driver. `now` is therefore `datetime.now(timezone.utc)` — aware, UTC.
+  **The loader fails closed at its own boundary** (round 4c — supersedes this
+  bullet's round-4 claim that a naive `now` raises inside `concurrency.py:_sweep`):
+  measured on the configured driver, a naive `window_end` bind is accepted and
+  silently shifts the overlap fetch — the rows never reach the sweep, so the named
+  site cannot fire and the un-guarded behaviour is a **silently vanished live term**,
+  not an error. The contract is therefore an explicit `TypeError` guard at the top
+  of `live_worked_seconds.py:load_live_worked_seconds`, and it is rule-6
+  load-bearing, not defensive decoration. Named mutation (charter rule 11): deleting
+  the guard (definition site) must turn exactly the loader's naive-`now` test red —
+  measured whole-suite at one added ID, twice independently (review r1; coordinator
+  consumption).
 - **Injection site, given the router's fixed signature.** `run_service.py:run_service`
   calls every query service as `fn(ctx)`, and `context.py:ServiceContext` carries the
   standing instruction "Never add boolean flags or config values here". So `now` is
@@ -354,7 +362,12 @@ open_working_share(s, now) =
     otherwise: the open record's concurrency-averaged share, i.e. the
         RecordContribution.seconds of that record from
         compute_record_contributions(session, workspace_id, u, W_start, now, now)
-        where u       = COALESCE(credited_user_id, created_by_id) of the open record
+        where u       = credited_user_id or created_by_id of the open record
+                        -- settlement's own attribution form (round 4c, review N2):
+                        -- Python `or`, matching _recompute_step_time_totals; the
+                        -- wrapper's SQL filter is COALESCE, and the two differ only
+                        -- on "" — which no shipped writer produces. Matching
+                        -- settlement is what the §3.3 parity requires.
               W_start = min(entered_at) over u's open working records − 1 day
                         -- ONE sweep per user serves all of u's open records (§3.4);
                         -- anchoring on any LATER open record would drop closed
@@ -1516,6 +1529,20 @@ guarded by plan 2 C11). Also fixed, class-swept: two citations of
 `_apply_step_transition` close path for T2's fixture, assertion-order and
 stub-clock corrections) live in `plans/plan_1.md` and its Review log, not here. No
 semantics changed; D1–D9 untouched.
+
+**Round 4c — 2026-08-20, phase 1 review r1 folded (two upstream corrections).**
+(1) HC-3A's failure-site claim retired: on the configured driver a naive bind never
+reaches `concurrency.py:_sweep` — it is accepted at the SQL boundary and silently
+narrows the fetch, so the un-guarded loader loses its live term with no error. The
+contract is now the loader's own boundary guard, fails-closed, with its named
+mutation measured (review r1 S1, three probes; the implementer's unplanned guard is
+absorbed as contract, not merely tolerated). Lesson, master plan §5: **a claim that
+names where a failure surfaces is a mechanism claim and must be probed at that site
+before it ships** — this one was written at the gate and survived it unprobed.
+(2) §3.1's attribution formula restated in settlement's own form
+(`credited_user_id or created_by_id`, review N1/N2): the loader must match
+`_recompute_step_time_totals`, not the SQL `COALESCE`, and the two differ only on
+`""`, which no shipped writer produces. No semantics changed; D1–D9 untouched.
 
 **Round 4a — 2026-08-20, gate cards ratified; coordinator fold. Gate: PASS.** Owner,
 verbatim: *"about the owner cards the recommendations are the correct approach."*

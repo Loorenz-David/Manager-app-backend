@@ -193,8 +193,33 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   stamp is evaluated per construction, at construction time, never shared as a class
   default. (Two unstubbed back-to-back constructions can legally collide at
   microsecond resolution; "distinct stamps" is not a property the mechanism
-  guarantees, and the unstubbed form flakes.) A naive `now` handed to the loader raises
-  `TypeError` inside the sweep (§1A HC-3A — the one loud failure; one row).
+  guarantees, and the unstubbed form flakes.) A naive `now` handed to the loader
+  **fails closed at the loader's own boundary** with `TypeError` (§1A HC-3A as
+  amended round 4c — the sweep cannot raise on this driver; the un-guarded
+  behaviour is a silently vanished live term). The test is named for the boundary,
+  its docstring records why the sweep site cannot fire (the 0-rows naive-bind
+  observation), and the **named mutation** is: delete the boundary guard
+  (definition site) ⇒ exactly this row reds, whole-suite.
+- **C11 — the settled term is load-bearing** (added at review r1, finding B1 — the
+  identity-element rule, master plan §5). Two rows with `settled != 0`: (a) a step
+  with a non-zero settled column **and** an open working record, asserting exactly
+  `settled + share`; (b) a step with a non-zero settled column and **no** open
+  record, asserting exactly the settled value. **Named mutation (definition site,
+  the returned comprehension):** drop the settled term
+  (`settled_seconds + live_by_step.get(step_id, 0)` → `live_by_step.get(step_id,
+  0)`) ⇒ both rows redden — both sides computed per row, whole-suite, ID sets
+  recorded. (Measured before the fix: this mutation's added set was **∅**.)
+- **C12 — the output type and the rounding locus discriminate** (added at review
+  r1, finding B2). (a) A type row: `assert all(isinstance(v, int) for v in
+  result.values())` — `==` cannot express this (`1800.0 == 1800`). (b) A
+  half-second locus row: one worker, two batch steps opened together, elapsed an
+  **odd** second count at the fixed `now`, so each share is exactly `x.5`;
+  asserted as the **half-even** integer (exact literal). **Named mutations:**
+  return the raw float (`+= contribution.seconds`, definition site) ⇒ the type row
+  reddens (and (b)'s value moves); `int(math.floor(x + 0.5))` in place of
+  `int(round(x))` ⇒ the half-second row reddens while the type row stays green —
+  recorded per row, whole-suite. (Measured before the fix: dropping `int(round)`
+  added **∅**.)
 - **C10 — HC-1A at loader level:** after `load_live_worked_seconds` over a step with
   an open record, assert in this order: (1) `session.dirty` contains no `TaskStep` —
   before any expire, because `Session.expire_all()` discards un-flushed attribute
