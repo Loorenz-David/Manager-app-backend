@@ -241,7 +241,7 @@ async def test_c4_step_marked_wrong_drops_it_and_releases_sibling_share(db_sessi
 
 @pytest.mark.integration
 async def test_c4_deleted_record_is_excluded_defensively(db_session):
-    """Only reset/phases/delete_step_state_records.py writes this hard DELETE."""
+    """No shipped command sets ``StepStateRecord.is_deleted = True``; the only hard ``DELETE`` is ``reset/phases/delete_step_state_records.py`` (whole workspace). This row is defense-in-depth (§3.1A D)."""
     workspace, user, section, task, token = await _seed_workspace(db_session)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
     step, _ = await _add_step_record(
@@ -403,11 +403,11 @@ async def test_c9_service_context_stamps_and_honors_aware_utc_now(monkeypatch, d
 
 @pytest.mark.integration
 async def test_c9_naive_now_fails_closed_at_the_loader_boundary(db_session):
-    """HC-3A and plan C9 now place the failure at the loader boundary: the configured driver normalizes a naive bind before the sweep, so the sweep cannot raise (0 rows observed)."""
+    """Measured under §1A HC-3A (round 4d): the naive bind is silently shifted by the client host's local UTC offset (not "normalized"), so the un-guarded behaviour is a wrong live term or a ``TypeError`` from the sweep, depending on the host and the timestamps; either way the loader must fail closed at its own boundary."""
     workspace, user, section, task, token = await _seed_workspace(db_session)
     start = datetime(2026, 1, 10, 9, 0, tzinfo=UTC)
     step, _ = await _add_step_record(db_session, workspace, user, section, task, token, 1, start)
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="load_live_worked_seconds"):
         await load_live_worked_seconds(
             db_session, workspace.client_id, [step], datetime(2026, 1, 10, 9, 10)
         )
@@ -449,7 +449,7 @@ async def test_c12_loader_output_values_are_ints(db_session):
     result = await load_live_worked_seconds(
         db_session, workspace.client_id, [first], start + timedelta(minutes=10)
     )
-    assert all(isinstance(value, int) for value in result.values())
+    assert result and all(isinstance(value, int) for value in result.values())
 
 
 @pytest.mark.integration

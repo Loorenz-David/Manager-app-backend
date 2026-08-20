@@ -29,7 +29,7 @@ async def load_live_worked_seconds(
     mutated.
     """
     if now.tzinfo is None or now.utcoffset() is None:
-        raise TypeError("can't subtract offset-naive and offset-aware datetimes")
+        raise TypeError("load_live_worked_seconds requires an aware UTC now")
 
     settled = {
         step.client_id: int(step.total_working_seconds or 0)

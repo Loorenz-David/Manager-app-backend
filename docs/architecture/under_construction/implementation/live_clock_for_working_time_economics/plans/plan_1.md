@@ -485,3 +485,34 @@ Every criterion is an automated test in this phase's files unless marked otherwi
   **one production line in scope** (the guard's message — coordinator's choice
   between r4's two options, reasoned in the prompt), and the ledger must prove
   host-independence under two `TZ` settings.
+
+- **2026-08-20 — phase 1 fix cycle r5 completed (Codex).** Addressed B1-r4 by
+  changing the loader guard to raise `TypeError("load_live_worked_seconds
+  requires an aware UTC now")` and asserting the boundary marker in C9 with
+  `pytest.raises(TypeError, match="load_live_worked_seconds")`. Replaced the C9
+  docstring with the measured HC-3A round-4d account: a naive bind is silently
+  shifted by the client host's local UTC offset, so the un-guarded behavior is
+  either a wrong live term or a sweep `TypeError`, depending on host and
+  timestamps. Addressed N1-r4 with the requested no-shipped-writer and
+  whole-workspace-DELETE sentence in C4, and N4-r4 with a non-vacuous C12 type
+  assertion (`result and all(...)`).
+
+  Focused phase tests: **22 passed**; Ruff: **all checks passed**. Final clean
+  whole non-e2e suite: **26 failed / 2459 passed / 1 deselected / 2 warnings**;
+  the complete 26-ID failure set is byte-identical to master §6. Restored loader
+  hash: `f8fdf46e8cc00f76b7e051e5f14f1ef33fefa0f7d6a86452fff05e72ee18719d`.
+
+  Required whole-suite mutation ledger, with `B` exactly master plan §6's 26
+  IDs. For every row, both the added-ID and removed-ID sets were computed with
+  sorted `comm` diffs; every removed-ID set was empty. The guard probes were
+  applied at the definition site and reverted to the restored hash above:
+
+  | mutation / environment | observed result |
+  |---|---|
+  | Delete the loader awareness guard, host's own `CEST +0200` | **27 failed / 2458 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c9_naive_now_fails_closed_at_the_loader_boundary}`; added-ID diff exactly C9, removed-ID diff ∅. |
+  | Delete the loader awareness guard, `TZ=UTC` | **27 failed / 2458 passed / 1 deselected** = the same `B ∪ {C9}` set; added-ID diff exactly C9, removed-ID diff ∅. |
+  | M-locus: accumulate raw `contribution.seconds`, return `int(round(settled_seconds + live_by_step.get(step_id, 0)))` | **27 failed / 2458 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_rounding_locus_is_share_before_settled_addition}`; rows (a) and (b) stayed green, removed-ID diff ∅. Fixture sides: `1 + round(31.5) = 33` versus `round(1 + 31.5) = 32`. |
+  | M-mode: replace `int(round(x))` with `int(math.floor(x + 0.5))` | **27 failed / 2458 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share}`; rows (a) and (c) stayed green, removed-ID diff ∅. Fixture sides: half-even `round(30.5) = 30`, half-up `floor(30.5 + 0.5) = 31`. |
+  | M-float: accumulate raw `contribution.seconds` alone | **29 failed / 2456 passed / 1 deselected** = `B ∪ {tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_loader_output_values_are_ints, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_half_even_rounding_is_applied_to_each_half_second_share, tests/integration/services/queries/item_economics/test_live_worked_seconds.py::test_c12_rounding_locus_is_share_before_settled_addition}`; removed-ID diff ∅. Fixture sides: raw `30.5` violates the integer/30 contract and raw `1 + 31.5 = 32.5` violates the locus row's 33. |
+
+  The mutation-probe file was `app/beyo_manager/services/queries/item_economics/live_worked_seconds.py`; every probe was reverted and hash-verified. No master tracker or Architecture Graph state was changed. Checkpoint commit is required by the closing protocol after this log and handoff are written.
