@@ -1,11 +1,13 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED and PLAN-READY (round 4a, 2026-08-20) — mechanism-inventory gate
-        **PASSED**. 0 owner cards open: D8–D9 ratified 2026-08-20 (§10.3), folded at
-        the coordinator's round-4a pass. D5–D6 ratified §10.2; D7 recorded round 3.
-        Coordinator review of 2026-08-19 folded (all six findings,
-        owner-dispositioned). Next: implementation planning.
+status: RESOLVED and PLAN-READY (rounds 4a–4d, 2026-08-20; latest fold **round 4d**)
+        — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
+        2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
+        §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
+        findings, owner-dispositioned). Rounds 4b–4d fold phase-1 findings upstream
+        (see the changelog); **4d corrects 4c** on HC-3A's failure site — read 4d as
+        the standing statement. Next: phase 2 (planning is DONE; phase 1 APPROVED).
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19, following the frontend handoff
              HANDOFF_TO_BACKEND_production_time_live_budget_clock_20260819.md

@@ -1,10 +1,14 @@
 # Master plan — live_clock_for_working_time_economics
 
 ```
-state: PLANNED. Four phases (plans/plan_1..4.md), all NOT_STARTED. Next: plan 1
-       projection (round 0) — REQUIRED, see §7.
-date: 2026-08-20
-coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md)
+state: IN PROGRESS. Gate PASSED; phase 1 APPROVED (`d21fe9e`); phase 2
+       PROMPT_READY (projection r0); phases 3–4 NOT_STARTED.
+       Next: hand `prompts/reviewer/2026-08-20_phase2_projection_r0.md` to a
+       projection session. §3's tracker is the authority on state — this line is a
+       convenience and is refreshed at every gate.
+date: 2026-08-20 (header refreshed after phase 1 approval)
+coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md
+             — that document is SUPERSEDED as an instruction set; see its banner)
 ```
 
 ## 1. Mission
@@ -18,9 +22,9 @@ disagreeing on the same card. Nothing live is ever persisted; no shape, route, f
 role gate or socket event changes. The whole pipeline is a behaviour change behind
 existing contracts.
 
-Authorities: `planning/intention.md` (RESOLVED, round 3, 2026-08-20 — **not plan-ready
-until the mechanism-inventory gate passes**), `planning/owner_decisions.md` (D1–D7,
-ledger empty). Provenance: `planning/coordinator_review_of_intention_20260819.md`
+Authorities: `planning/intention.md` (**RESOLVED and PLAN-READY**, rounds 4a–4d,
+2026-08-20 — the gate passed and its folds are in), `planning/owner_decisions.md`
+(D1–D9, ledger empty). Provenance: `planning/coordinator_review_of_intention_20260819.md`
 (all six findings folded round 3, verified against code by the outgoing coordinator),
 `ORIENTATION_for_new_coordinator_20260820.md`.
 
