@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
 from types import SimpleNamespace
+from decimal import Decimal
+import json
 
 import pytest
 from sqlalchemy import event, select
 
+from beyo_manager.domain.item_economics.budget_division import EXCLUDED_STEP_STATES
 from beyo_manager.domain.item_economics.serializers import serialize_task_budget_status
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -113,6 +115,41 @@ async def _make_live_fixture(db_session):
             created_at=now - timedelta(days=1),
         )
     )
+    await db_session.flush()
+    return values, now
+
+
+async def _make_share_state_fixture(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    evaluation = values[10]
+    settled_steps = (
+        await db_session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == workspace.client_id,
+                TaskStep.task_id == task.client_id,
+                TaskStep.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    for step in settled_steps:
+        step.total_working_seconds = 0
+        if step.state in EXCLUDED_STEP_STATES:
+            step.state = TaskStepStateEnum.PENDING
+
+    live = values[11][1]
+    live.state = TaskStepStateEnum.WORKING
+    live.created_at = now - timedelta(minutes=25)
+    record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.workspace_id == workspace.client_id,
+            StepStateRecord.step_id == live.client_id,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    assert record is not None
+    record.entered_at = now - timedelta(minutes=25)
+    evaluation.allowed_worker_minutes = Decimal("3.10")
     await db_session.flush()
     return values, now
 
@@ -378,10 +415,47 @@ async def test_c2_c3_c7_live_payloads_reconcile_and_worker_face_stays_money_free
         "variance_worker_minutes",
     ):
         assert worker_payload[field] == manager_payload[field]
+
+    settled_steps = (
+        await db_session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == workspace.client_id,
+                TaskStep.task_id == task.client_id,
+                TaskStep.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    assert worker_payload["actual_worker_seconds"] > sum(
+        step.total_working_seconds for step in settled_steps
+    )
+
+    def walk_keys(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                yield key
+                yield from walk_keys(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from walk_keys(child)
+
     assert all(
         not any(token in key.lower() for token in ("_minor", "cost", "price", "currency", "money", "valuation"))
-        for key in worker_payload["result"]
+        for key in walk_keys(worker_payload)
     )
+
+
+@pytest.mark.integration
+async def test_c2_positive_allowance_moves_share_state_under_live_basis(db_session):
+    values, now = await _make_share_state_fixture(db_session)
+    workspace, user, _section, task, *_ = values
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    section = production["sections"][0]
+    assert section["allowance_seconds"] == 186
+    assert section["worked_seconds"] == 1500
+    assert section["left_seconds"] == -1314
+    assert section["share_state"] == "over_share"
 
 
 @pytest.mark.integration
@@ -441,6 +515,72 @@ async def test_c4_each_surface_uses_one_loader_call_and_c5_does_not_persist_live
         )
     ).all()
     assert {client_id: seconds for client_id, seconds in stored}[live_id] == 0
+
+
+@pytest.mark.integration
+async def test_c4_frozen_open_record_payloads_are_byte_identical(db_session, monkeypatch):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    original = production_module.load_live_worked_seconds
+
+    async def counted(*args, **kwargs):
+        counted.calls += 1
+        return await original(*args, **kwargs)
+
+    counted.calls = 0
+    monkeypatch.setattr(production_module, "load_live_worked_seconds", counted)
+    monkeypatch.setattr(status_module, "load_live_worked_seconds", counted)
+    monkeypatch.setattr(allocations_module, "load_live_worked_seconds", counted)
+
+    def payload_bytes(payload):
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+
+    production_payloads = [
+        await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id, now))
+        for _ in range(2)
+    ]
+    assert payload_bytes(production_payloads[0]) == payload_bytes(production_payloads[1])
+    assert counted.calls == 2
+
+    counted.calls = 0
+    manager_payloads = [
+        serialize_task_budget_status(
+            await get_task_budget_status(_ctx(db_session, workspace.client_id, task.client_id, now)),
+            include_monetary=True,
+        )
+        for _ in range(2)
+    ]
+    assert payload_bytes(manager_payloads[0]) == payload_bytes(manager_payloads[1])
+    assert counted.calls == 2
+
+    counted.calls = 0
+    worker_payloads = [
+        serialize_task_budget_status(
+            await get_task_budget_status_worker(
+                _ctx(db_session, workspace.client_id, task.client_id, now, role="worker")
+            ),
+            include_monetary=False,
+        )
+        for _ in range(2)
+    ]
+    assert payload_bytes(worker_payloads[0]) == payload_bytes(worker_payloads[1])
+    assert counted.calls == 2
+
+    counted.calls = 0
+    allocation_payloads = [
+        await get_task_budget_allocations(
+            ServiceContext(
+                identity={"workspace_id": workspace.client_id, "user_id": "usr_phase2", "role_name": "worker"},
+                incoming_data={},
+                query_params={"task_ids": [task.client_id]},
+                session=db_session,
+                now=now,
+            )
+        )
+        for _ in range(2)
+    ]
+    assert payload_bytes(allocation_payloads[0]) == payload_bytes(allocation_payloads[1])
+    assert counted.calls == 2
 
 
 @pytest.mark.integration
@@ -542,9 +682,23 @@ async def test_c3_population_fold_counts_nonzero_skipped_consumption_on_manager_
 
 
 @pytest.mark.integration
-async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_session):
+async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_session, monkeypatch):
     values, now = await _make_live_fixture(db_session)
     workspace, user, _section, task, *_ = values
+    division_inputs: list[list] = []
+    production_divide = production_module.divide_production_budget
+    allocations_divide = allocations_module.divide_production_budget
+
+    def capture_production_division(*args, **kwargs):
+        division_inputs.append(list(args[1]))
+        return production_divide(*args, **kwargs)
+
+    def capture_allocations_division(*args, **kwargs):
+        division_inputs.append(list(args[1]))
+        return allocations_divide(*args, **kwargs)
+
+    monkeypatch.setattr(production_module, "divide_production_budget", capture_production_division)
+    monkeypatch.setattr(allocations_module, "divide_production_budget", capture_allocations_division)
     before_production = await get_task_production_time(
         _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
     )
@@ -556,6 +710,35 @@ async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_se
             session=db_session,
             now=now,
         )
+    )
+    all_steps = (
+        await db_session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == workspace.client_id,
+                TaskStep.task_id == task.client_id,
+                TaskStep.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    excluded_ids = {step.client_id for step in all_steps if step.state in EXCLUDED_STEP_STATES}
+    open_excluded = (
+        await db_session.execute(
+            select(StepStateRecord.step_id).where(
+                StepStateRecord.workspace_id == workspace.client_id,
+                StepStateRecord.step_id.in_(excluded_ids),
+                StepStateRecord.exited_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    assert open_excluded == []
+    settled_charged_seconds = sum(
+        step.total_working_seconds for step in all_steps if step.client_id in excluded_ids
+    )
+    assert settled_charged_seconds == 1440
+    assert all(
+        sum(step.total_working_seconds for step in division if step.state in EXCLUDED_STEP_STATES)
+        == settled_charged_seconds
+        for division in division_inputs
     )
     live = values[11][1]
     record = await db_session.scalar(
@@ -608,6 +791,12 @@ async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_se
         (row["step_id"], row["allowance_seconds"], row["left_seconds"])
         for row in after_steps
     ]
+    assert len(division_inputs) == 4
+    assert all(
+        sum(step.total_working_seconds for step in division if step.state in EXCLUDED_STEP_STATES)
+        == settled_charged_seconds
+        for division in division_inputs
+    )
 
 
 @pytest.mark.integration
@@ -804,7 +993,7 @@ async def test_c9_settlement_window_drop_is_visible_until_recompute(db_session):
 
 @pytest.mark.integration
 async def test_c11_typicals_compatibility_shim_keeps_five_sample_median(db_session):
-    values, now = await _make_live_fixture(db_session)
+    values, _now = await _make_live_fixture(db_session)
     workspace, user, section, task, *_ = values
     for index, seconds in enumerate((1000, 2000, 3600, 5000, 6000)):
         historical_task = Task(
@@ -825,7 +1014,7 @@ async def test_c11_typicals_compatibility_shim_keeps_five_sample_median(db_sessi
             total_dependencies=0,
             completed_dependencies=0,
             total_working_seconds=seconds,
-            closed_at=now - timedelta(days=1),
+            closed_at=datetime.now(UTC) - timedelta(days=1),
             created_by_id=user.client_id,
         )
         db_session.add_all([historical_task, historical_step])

@@ -844,3 +844,30 @@ row 1, C7 — are written as a headline sentence followed by subordinate clauses
 four **the headline shipped and the clauses did not**. C6's rows 2–4, written as separate
 lettered rows each with its own named mutation, shipped complete. The criteria were not
 wrong; the shape was. Phase 3's plan is to be written in the lettered-row form throughout.
+
+### Implementer fix r4 — 2026-08-20, Codex
+
+Fix r4 closed the review findings within the prescribed perimeter. B1 closed with a
+positive-allowance C2 fixture whose exact live values are `allowance_seconds=186`,
+`worked_seconds=1500`, `left_seconds=-1314`, `share_state="over_share"`; the settled
+substitution mutant moved the category to `on_track`. C4 now serves E-P, E-B manager,
+E-B worker, and single-task E-A twice at frozen `ctx.now`, asserting byte identity and
+two calls total per endpoint. C6 asserts no excluded step has an open record, captures
+the division input's settled `charged_seconds=1440`, and compares `typical` blocks across
+settlement/recompute. C7 recursively walks the whole worker payload and asserts its live
+actual exceeds the settled basis. C11 derives `closed_at` from the wall clock while
+retaining the argument-free shim call. S4's two D7 comments and N4's `is not None` shim
+form are the only production edits.
+
+Validation at `HEAD 771ff46` (the tree stayed fixed throughout the sweep): focused phase
+tests **17 passed**; Ruff passed; clean whole suite **26 failed / 2478 passed / 1
+deselected / 2 warnings**, with the 26 failure IDs unchanged from master §6. Whole-suite
+mutation results, with every probe restored: C2 settled substitution **30 / 2474 / 1**,
+four added phase IDs and zero removals; C7 worker settled-basis delegation **29 / 2475 /
+1**, three added phase IDs and zero removals; C11 future-instant default **35 / 2469 / 1**,
+nine added IDs and zero removals, matching the prior ledger row 11. The C4 rows' loader
+counter is non-vacuous because E-P/E-B use committed evaluations and E-A is single-task;
+the C6 no-open-excluded assertion fails if an excluded step gains an open record. Full
+per-mutation IDs and the cycle-scoped write perimeter are in the implementer handoff.
+No Architecture Graph delta was recorded: this fix changes test proof and comments plus
+one equivalent shim form, not an architectural boundary.

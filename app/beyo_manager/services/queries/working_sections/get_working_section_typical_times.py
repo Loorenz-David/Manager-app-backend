@@ -26,7 +26,7 @@ def typical_times_statement(
     now: datetime | None = None,
 ):
     """Build the shared grouped-median statement used by E1 and E2."""
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=TYPICAL_WINDOW_DAYS)
+    cutoff = (now if now is not None else datetime.now(timezone.utc)) - timedelta(days=TYPICAL_WINDOW_DAYS)
     grouped_steps = (
         select(
             TaskStep.working_section_id.label("working_section_id"),

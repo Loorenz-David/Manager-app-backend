@@ -218,6 +218,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 client_id=step.client_id,
                 state=step.state,
                 working_section_id=step.working_section_id,
+                # Strict indexing is deliberate and fail-loud: a fallback would silently restore settled values and mask C3's population row.
                 total_working_seconds=live_seconds[step.client_id],
                 sequence_order=step.sequence_order,
                 working_section_name_snapshot=step.working_section_name_snapshot,
