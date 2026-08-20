@@ -41,6 +41,18 @@ partition key changes, because the partition key is the phase and this work pred
 phases. Historical references to `prompts/reviewer/…` and `handoffs/reviewer/…` for these
 three files resolve there, and are not rewritten.
 
+**Closeout ritual performed 2026-08-19.** All five plans and every prompt and handoff they
+consumed now sit under `archive/plan_<n>/`; `plans/`, `prompts/implementer/`,
+`prompts/reviewer/`, `handoffs/implementer/` and `handoffs/reviewer/` are empty. **State is
+positional and now correct: nothing sits in a live table.**
+
+**The non-rewriting rule above is general, not specific to the gate.** §3's tracker and the
+archived plans cite dozens of `plans/plan_<n>.md`, `prompts/<role>/…` and `handoffs/<role>/…`
+paths as they stood when written. **Those are not rewritten** — each resolves to
+`archive/plan_<n>/<same basename>`, the basenames are unique across the project, and rewriting
+them would edit consumed rows to make a filing decision look like it was always true. The
+charter's own rule against revising a published handoff is the same rule.
+
 ## 3. Phase registry & tracker
 
 Five phases. The two gate rows come first, then one row per phase — **newest state first**;
