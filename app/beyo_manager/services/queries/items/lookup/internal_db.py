@@ -8,6 +8,7 @@ from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.models.tables.images.image import Image
 from beyo_manager.models.tables.images.image_link import ImageLink
+from beyo_manager.models.tables.item_economics.item_valuation import ItemValuation
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.services.queries.items.lookup.base import ItemLookupHandler, ItemLookupResult
 
@@ -57,6 +58,16 @@ class InternalDbLookupHandler(ItemLookupHandler):
             for i, img in enumerate(image_rows)
         ]
 
+        valuation = await session.scalar(
+            select(ItemValuation).where(
+                ItemValuation.workspace_id == workspace_id,
+                ItemValuation.item_id == item.client_id,
+                ItemValuation.superseded_at.is_(None),
+                ItemValuation.is_deleted.is_(False),
+            )
+        )
+        purchase_price_minor = valuation.purchase_cost_minor if valuation is not None else None
+
         return ItemLookupResult(
             article_number=item.article_number,
             sku=item.sku,
@@ -65,4 +76,5 @@ class InternalDbLookupHandler(ItemLookupHandler):
             external_id=item.external_id,
             external_source=None,
             images=images,
+            purchase_price_minor=purchase_price_minor,
         )

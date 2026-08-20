@@ -42,18 +42,18 @@ class _FakeAsyncClient:
 
 
 @pytest.mark.parametrize(
-    ("currency", "purchase_price", "expected_sek"),
+    ("currency", "purchase_price", "expected_sek_minor"),
     [
-        ("EUR", 1250.5, 13755.5),
-        ("DKK", 1250.5, 1875.75),
-        ("SEK", 1250.5, 1250.5),
+        ("EUR", 1250.5, 1375550),
+        ("DKK", 1250.5, 187575),
+        ("SEK", 1250.5, 125050),
     ],
 )
-async def test_purchase_api_lookup_normalizes_purchase_price_to_sek(
+async def test_purchase_api_lookup_normalizes_purchase_price_to_sek_minor(
     monkeypatch,
     currency,
     purchase_price,
-    expected_sek,
+    expected_sek_minor,
 ):
     monkeypatch.setattr(purchase_api.settings, "beyo_vintage_api_key", "test-key")
     monkeypatch.setattr(purchase_api.httpx, "AsyncClient", _FakeAsyncClient)
@@ -65,7 +65,7 @@ async def test_purchase_api_lookup_normalizes_purchase_price_to_sek(
     )
 
     assert result is not None
-    assert _serialize_result(result)["purchase_price"] == expected_sek
+    assert _serialize_result(result)["purchase_price_minor"] == expected_sek_minor
 
 
 async def test_purchase_api_lookup_rejects_purchase_price_without_supported_currency(

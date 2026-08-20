@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from urllib.parse import quote
 
 import httpx
@@ -26,10 +26,10 @@ _PURCHASE_PRICE_TO_SEK_RATE = {
 }
 
 
-def _normalize_purchase_price_to_sek(
+def _normalize_purchase_price_to_sek_minor(
     purchase_price: int | float | None,
     currency: str | None,
-) -> int | float | None:
+) -> int | None:
     if purchase_price is None:
         return None
 
@@ -41,10 +41,8 @@ def _normalize_purchase_price_to_sek(
             f"Purchase API returned purchase_price with unsupported currency {currency_code!r}"
         ) from exc
 
-    normalized = Decimal(str(purchase_price)) * rate
-    if normalized == normalized.to_integral_value():
-        return int(normalized)
-    return float(normalized)
+    normalized_minor = Decimal(str(purchase_price)) * rate * 100
+    return int(normalized_minor.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 async def _find_category_id_by_name(
@@ -129,7 +127,7 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             f"{_PURCHASE_API_BASE}{path}" if path.startswith("/") else path
             for path in raw_photo_urls
         ]
-        purchase_price = _normalize_purchase_price_to_sek(
+        purchase_price_minor = _normalize_purchase_price_to_sek_minor(
             data.get("purchase_price"),
             data.get("currency"),
         )
@@ -142,5 +140,5 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             external_id=None,
             external_source=_EXTERNAL_SOURCE_NAME,
             images=images,
-            purchase_price=purchase_price,
+            purchase_price_minor=purchase_price_minor,
         )
