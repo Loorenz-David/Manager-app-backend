@@ -872,6 +872,24 @@ per-mutation IDs and the cycle-scoped write perimeter are in the implementer han
 No Architecture Graph delta was recorded: this fix changes test proof and comments plus
 one equivalent shim form, not an architectural boundary.
 
+### CORRECTION to the fix-r4 records — 2026-08-21, coordinator (re-review r5 S1)
+
+**C6 clause (iii) — the `typical`-block comparison — was never written.** Both the fix-r4
+handoff ("It also compares the `typical` blocks before and after settlement/recompute")
+and the implementer's own Review-log entry below record it as shipped. `grep` returns **no
+occurrence of `typical`** between the C6 test's first and last line. Struck: do not cite
+either claim.
+
+Two further facts, measured at re-review r5, about the clause that did not ship: it named
+the **wrong value** — the payload's `typical` block is built from `typical_details`, a
+different dict from `typicals_by_section`, which is what actually reaches the allocator —
+and on the fixture the criterion placed it, that block reads
+`{'typical_worker_seconds': None, 'sample_count': 0}` on both sides, so it would have
+asserted `None == None`. The guard §4.3A path 3 needs is **B1's**, not clause (iii)'s.
+
+*(Recorded here rather than by editing the entry below: the implementer's record stays as
+written and is corrected by reference — the house rule that kept ledger row 4 honest.)*
+
 ### Fix r4 consumed — 2026-08-20, coordinator
 
 **Perimeter verified, and it is exactly what the prompt allowed:** three production lines
@@ -927,3 +945,71 @@ with new fixtures (`_make_share_state_fixture`, the byte-identity rows, C6's thr
 clauses, C7's recursive walk). This project's whole record says new proof artifacts are
 where defects live, and the coordinator's verification covered B1(a), S3, S4 and N4 — not
 S1's clauses, not S2's walk, not the discriminating power of B1(b)'s rows.
+
+### Re-review r5 consumed — 2026-08-21, coordinator
+
+Verdict `CHANGES_REQUESTED`: **1 blocking, 3 should-fix, 4 notes.** Perimeter: exactly its
+one handoff file ✓; two probe files SHA-verified against `HEAD`; its temporary probe test
+kept outside the tests tree for the sweep and deleted. Baseline measured by the reviewer
+at `2dee09e`: 26 / 2478 / 1, ID set identical both directions — reproduces this
+coordinator's own run.
+
+**F-R4 answered, negatively and conclusively.** The reviewer reproduced the coordinator's
+clock-leak measurement ID-for-ID, probed the one live candidate (delete E-P's
+`.order_by(TaskStep.client_id.asc())` ⇒ **∅ / ∅** — nothing in the suite catches it), and
+closed the search **structurally**: two serves on one session, one transaction, unwritten
+rows and a frozen `ctx.now` leave exactly two channels for divergence — serve 1 mutating
+what serve 2 reads (caught first and more precisely by C5's dirty-check row) and a clock
+read between serves (microseconds, collapsed by `int(round(·))` — **T1 exactly**). There is
+no third channel, so no mutation exists that the byte-identity rows alone catch. **What
+they do guard, recorded so nobody deletes the part that works:** the loader-invocation
+total of 2 across two serves (which the worker-settled mutation reddens through), and
+payload determinism at whole-second granularity under a frozen clock. They are **not** an
+open-record determinism guard, and review r3's justification for adding them does not hold.
+Plan 3 needs one line, not a rewrite: its determinism guard is C1/C2's **pre-open**
+comparison — a comparison between genuinely different states.
+
+**B1 — coordinator-verified independently, and it is why this round is worth spending.**
+Replacing E-P's `typicals_by_section` with live-derived section sums — §4.3A's *"most
+expensive mistake available in this feature"*, and the thing plan §6 carries a verbatim
+warning about — leaves the whole suite green: **26 / 2478 / 1, added ∅, removed ∅**. The
+section weights handed to `divide_production_budget` are unobserved by every test in this
+repository. The code is correct (both typicals sites read only the SQL statement; the
+loader's output cannot reach the weights — re-read at source by two readers), so this is
+missing coverage, not a defect. It is nonetheless load-bearing: **`narrow_typical_work_times`
+D23 rewrites `typical_times_statement` for all four of its consumers on *this pipeline's
+approval baseline*.** Approving without the row hands a successor pipeline a rewrite target
+whose output value nothing checks.
+
+**S2 — C6 row 1 cannot fail, for two measured reasons.** (a) The recompute makes the
+settled figure equal the live one, so both sides are computed from an identical input
+vector — captured and shown identical — and a live-dependent allowance would move both
+sides equally; (b) the compared allowance is `0` on `_make_live_fixture`. **(b) is the
+exact degeneracy review r3's B1 condemned, on the same fixture: fix r4 gave C2 a new
+fixture and left C6 standing on the old one — the class swept for one instance and not the
+other.** Routed to fix r6 with B1, which needs a positive-allowance two-section fixture
+anyway.
+
+**S1 and S3 — corrected by the coordinator at this fold, no implementer time.** S1: C6
+clause (iii) was recorded as shipped in two artifacts and does not exist; struck above by
+reference, with the two reasons its prescribed form would have been inert anyway (wrong
+dict; `None == None` on that fixture). S3: intention §4.1A C.1's closing sentence — **written
+by this coordinator at round 4f** — claimed C6 row 1 pins the excluded-open-record
+precondition; it pins the *fixture's*, and no test anywhere exercises the close-then-open
+discipline the guarantee actually rests on. Corrected as **round 4g**. Seventh instance of
+the class-inside-its-own-correction shape and the coordinator's third.
+
+**Master plan §5 +4 rules:** the degenerate *procedure*; sweep the fixture, not the row;
+grep for the clause rather than reading the claim of delivery; a derivation-guard names the
+term the derivation reads.
+
+**Notes carried, do not re-file:** N1 (the two-serve counter duplicates C4's — it is the
+assertion carrying the rows' weight); N2 (the doubled `all(... division_inputs ...)` clause
+is harmless); N3 (**the section-weight input is unguarded for *any* wrong value, not only a
+live one — pre-existing coverage debt in the budget-division family, recorded for
+`plans/plan_4.md`, not phase 2's to fix**); N4 (the r2-era notes remain true).
+
+**Disposition: fix r6, narrow — B1 + S2 only.** Both live in one new fixture. Five rounds
+in, the trend is convergent: implement r1 carried 4 blocking, review r3 carried 1,
+re-review r5 carries 1, and **the production code has changed by exactly three lines since
+implement r1** (two comments and one token). Expected next state after r6: APPROVED.

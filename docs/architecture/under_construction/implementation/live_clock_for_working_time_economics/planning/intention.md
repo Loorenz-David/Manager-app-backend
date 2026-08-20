@@ -1,7 +1,7 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED and PLAN-READY (rounds 4a–4f, 2026-08-20; latest fold **round 4f**)
+status: RESOLVED and PLAN-READY (rounds 4a–4g, 2026-08-21; latest fold **round 4g**)
         — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
         2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
         §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
@@ -912,7 +912,20 @@ The precondition is written here rather than left implicit in a phase plan's pro
 **because phases 3 and 4 cite §4.1A C, not plan 2's C6**. Any future path that moves a
 step to SKIPPED / CANCELLED / FAILED without closing its record breaks this list, and the
 breakage is silent: an allowance that drifts is indistinguishable from one that was always
-that size. Plan 2 C6 row 1 carries the assertion that pins it.
+that size.
+
+**What actually pins it, corrected round 4g** (the round-4f sentence claimed plan 2's C6
+row 1 carried the assertion; re-review r5 S3 measured that it does not). Plan 2 C6 clause
+(i) asserts that no excluded step in **its own fixture** holds an open working record —
+that pins the *fixture's* precondition, not the mechanism, because those steps are built
+with no state record at all and nothing on the request path creates one. **The structural
+guarantee rests entirely on `_step_transition_core.py:_apply_step_transition` setting
+`closing_record.exited_at = now` unconditionally on every transition, and no test in this
+repository exercises that close-then-open discipline** (verified by search at re-review
+r5). A future path that opens an excluded state without closing its record would break
+this list silently and redden nothing. Treat that as known, unguarded, and outside this
+pipeline's perimeter — a claim about where the guarantee lives, not a claim that a test
+holds it.
 
 **D. Composition — where HC-5's "one computation per request" is actually at risk.**
 E-P calls `get_task_budget_status(ctx)` and then loads the task's steps again for the
@@ -1680,3 +1693,17 @@ every transition, so **no live defect exists**; the precondition is recorded as 
 because §4.1A C is what phases 3–4 cite, and the failure mode is silent (a drifting
 allowance looks exactly like a smaller one). Plan 2 C6 row 1 gains the assertion that pins
 it. No product semantics changed; no D1–D9 decision reopened.
+
+**Round 4g — 2026-08-21, plan 2 re-review r5 folded (one correction, to round 4f's own
+text).** §4.1A C.1's closing sentence claimed "Plan 2 C6 row 1 carries the assertion that
+pins it." Measured false at re-review r5: C6 clause (i) queries for open records on steps
+constructed with **no state records at all**, so it pins the fixture's precondition rather
+than the mechanism, and the hazard C.1 names — a path moving a step to an excluded state
+without closing its record — would not redden it. A search of `tests/` found no test
+anywhere asserting `exited_at` is set when a step enters an excluded state. Corrected in
+place: the guarantee rests on `_apply_step_transition`'s unconditional close, and nothing
+tests it. **The coordinator wrote the false sentence at round 4f** — a claim that a named
+test pins an invariant is a mechanism claim and inherits the mutation rule (master §5,
+earned at phase 1 review r1 S1), and it was written without probing whether the fixture
+could exercise the hazard. Seventh instance of the class-inside-its-own-correction shape,
+and the coordinator's third.
