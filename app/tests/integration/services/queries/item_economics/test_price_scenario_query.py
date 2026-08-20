@@ -37,6 +37,9 @@ from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.working_sections.working_section import (
+    WorkingSection,
+)
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.context import ServiceContext
 
@@ -232,6 +235,170 @@ async def test_c19_missing_typical_statement_row_uses_defensive_lookup() -> None
     assert result["sections_total"] == 1
     assert result["sections_without_sample"] == 1
     assert result["total_seconds"] == 0
+
+
+@pytest.mark.integration
+async def test_phase5_c3_typical_counts_only_the_requested_tasks_steps(
+    db_session,
+) -> None:
+    # The only _typical_block row that issues real SQL. The other eight drive
+    # _TypicalSession, whose execute(self, _statement) discards the statement and pops
+    # pre-built results, so none of them can observe a WHERE clause — which is the whole
+    # reason TaskStep.task_id was asserted by nothing until this row.
+    token = uuid4().hex[:10]
+    workspace = Workspace(client_id=f"ws_price_task_{token}", name=f"Task {token}")
+    user = User(
+        client_id=f"usr_price_task_{token}",
+        username=f"price_task_{token}",
+        email=f"price_task_{token}@example.test",
+        password="test",
+    )
+    requested_section = WorkingSection(
+        client_id=f"wsec_price_task_req_{token}",
+        workspace_id=workspace.client_id,
+        name=f"Sanding {token}",
+    )
+    other_section = WorkingSection(
+        client_id=f"wsec_price_task_oth_{token}",
+        workspace_id=workspace.client_id,
+        name=f"Lacquering {token}",
+    )
+
+    def _task(suffix, scalar_id):
+        return Task(
+            client_id=f"tsk_price_task_{suffix}_{token}",
+            workspace_id=workspace.client_id,
+            task_scalar_id=scalar_id,
+            task_type=TaskTypeEnum.INTERNAL,
+            state=TaskStateEnum.ASSIGNED,
+        )
+
+    requested_task = _task("requested", 1)
+    other_task = _task("other", 2)
+    history_tasks = [_task(f"history{index}", 3 + index) for index in range(5)]
+    closed_at = datetime.now(timezone.utc)
+
+    def _open_step(task, section, suffix):
+        return TaskStep(
+            client_id=f"tsp_price_task_{suffix}_{token}",
+            workspace_id=workspace.client_id,
+            task_id=task.client_id,
+            working_section_id=section.client_id,
+            state=TaskStepStateEnum.PENDING,
+            readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=0,
+            is_deleted=False,
+        )
+
+    def _completed_step(task, section, seconds, suffix):
+        return TaskStep(
+            client_id=f"tsp_price_task_{suffix}_{token}",
+            workspace_id=workspace.client_id,
+            task_id=task.client_id,
+            working_section_id=section.client_id,
+            state=TaskStepStateEnum.COMPLETED,
+            readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=seconds,
+            recorded_time_marked_wrong=False,
+            closed_at=closed_at,
+            is_deleted=False,
+        )
+
+    steps = [
+        _open_step(requested_task, requested_section, "requested"),
+        _open_step(other_task, other_section, "other"),
+    ]
+    for index, task in enumerate(history_tasks):
+        # Five completed groups per section is exactly TYPICAL_MIN_SAMPLE_SIZE, so both
+        # sections resolve to a real median instead of a null sample: 300 s here, 900 s
+        # on the other section. Without them total_seconds would be 0 under the contract
+        # AND under the mutant, and only sections_total would discriminate.
+        steps.append(
+            _completed_step(task, requested_section, 300, f"history{index}_req")
+        )
+        steps.append(_completed_step(task, other_section, 900, f"history{index}_oth"))
+
+    workspace_id = workspace.client_id
+    user_id = user.client_id
+
+    try:
+        db_session.add_all([workspace, user])
+        await db_session.flush()
+        db_session.add_all([requested_section, other_section])
+        db_session.add_all([requested_task, other_task, *history_tasks])
+        await db_session.flush()
+        db_session.add_all(steps)
+        await db_session.commit()
+
+        result = await module._typical_block(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace_id,
+                    "user_id": user_id,
+                    "role_name": "manager",
+                },
+                incoming_data={"task_client_id": requested_task.client_id},
+                query_params={},
+                session=db_session,
+            ),
+            requested_task.client_id,
+        )
+
+        # The requested task works one section whose typical is 300 s. The other task
+        # works a different section whose typical is 900 s. Drop
+        # TaskStep.task_id == task_id from _typical_block and this reads every step in
+        # the workspace: two participating sections and 300 + 900 = 1200 s. Both of the
+        # first two assertions bite, and total_seconds is the member that reaches
+        # break_even_price_minor, the slider domain and the suggested price.
+        assert result["sections_total"] == 1
+        assert result["total_seconds"] == 300
+        assert result["sections_without_sample"] == 0
+        assert result["is_estimated"] is False
+    finally:
+        await db_session.rollback()
+        await db_session.execute(
+            delete(TaskStep).where(TaskStep.workspace_id == workspace_id)
+        )
+        await db_session.execute(delete(Task).where(Task.workspace_id == workspace_id))
+        await db_session.execute(
+            delete(WorkingSection).where(WorkingSection.workspace_id == workspace_id)
+        )
+        await db_session.execute(delete(User).where(User.client_id == user_id))
+        await db_session.execute(
+            delete(Workspace).where(Workspace.client_id == workspace_id)
+        )
+        await db_session.commit()
+
+    step_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(TaskStep)
+        .where(TaskStep.workspace_id == workspace_id)
+    )
+    task_residue = await db_session.scalar(
+        select(func.count()).select_from(Task).where(Task.workspace_id == workspace_id)
+    )
+    section_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(WorkingSection)
+        .where(WorkingSection.workspace_id == workspace_id)
+    )
+    user_residue = await db_session.scalar(
+        select(func.count()).select_from(User).where(User.client_id == user_id)
+    )
+    workspace_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(Workspace)
+        .where(Workspace.client_id == workspace_id)
+    )
+    assert step_residue == 0
+    assert task_residue == 0
+    assert section_residue == 0
+    assert user_residue == 0
+    assert workspace_residue == 0
 
 
 def _scenario_objects(
@@ -1007,6 +1174,177 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
     )
     user_residue = await db_session.scalar(
         select(func.count()).select_from(User).where(User.client_id == user_id)
+    )
+    workspace_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(Workspace)
+        .where(Workspace.client_id == workspace_id)
+    )
+    assert valuation_residue == 0
+    assert item_residue == 0
+    assert user_residue == 0
+    assert workspace_residue == 0
+
+
+@pytest.mark.integration
+async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
+    db_session,
+    monkeypatch,
+) -> None:
+    # Two items in one workspace, each with its own current valuation. Every other fixture
+    # that reaches this query holds a single item, so until this row there was never a
+    # second item's valuation for the query to return instead, and ItemValuation.item_id
+    # was asserted by nothing.
+    token = uuid4().hex[:10]
+    workspace = Workspace(client_id=f"ws_price_two_{token}", name=f"Two {token}")
+    owner = User(
+        client_id=f"usr_price_owner_{token}",
+        username=f"price_owner_{token}",
+        email=f"price_owner_{token}@example.test",
+        password="test",
+    )
+    neighbour = User(
+        client_id=f"usr_price_neighbour_{token}",
+        username=f"price_neighbour_{token}",
+        email=f"price_neighbour_{token}@example.test",
+        password="test",
+    )
+    requested_item = Item(
+        client_id=f"itm_price_requested_{token}",
+        workspace_id=workspace.client_id,
+        item_major_category_snapshot="wood",
+        quantity=6,
+        created_by_id=owner.client_id,
+    )
+    other_item = Item(
+        client_id=f"itm_price_other_{token}",
+        workspace_id=workspace.client_id,
+        item_major_category_snapshot="wood",
+        quantity=6,
+        created_by_id=neighbour.client_id,
+    )
+    # Both rows are current — superseded_at null, is_deleted false — which the partial
+    # unique index uix_item_valuations_current permits because it is unique per item_id
+    # (models/tables/item_economics/item_valuation.py). So neither of the two predicates
+    # that ARE proven can stand in for item_id here: both rows survive them.
+    other_valuation = ItemValuation(
+        client_id=f"ival_price_other_{token}",
+        workspace_id=workspace.client_id,
+        item_id=other_item.client_id,
+        expected_sale_price_minor=1_000_000,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        created_by_id=neighbour.client_id,
+    )
+    requested_valuation = ItemValuation(
+        client_id=f"ival_price_requested_{token}",
+        workspace_id=workspace.client_id,
+        item_id=requested_item.client_id,
+        expected_sale_price_minor=855_000,
+        currency=ItemCurrencyEnum.SWEDISH_KRONA,
+        created_by_id=owner.client_id,
+    )
+    objects = _scenario_objects()
+    objects.task.client_id = f"tsk_price_two_{token}"
+    objects.task.workspace_id = workspace.client_id
+    workspace_id = workspace.client_id
+    owner_id = owner.client_id
+    neighbour_id = neighbour.client_id
+    requested_valuation_id = requested_valuation.client_id
+    owner_username = owner.username
+
+    async def fake_status(_ctx):
+        return SimpleNamespace(
+            status=EconomicsStatusEnum.NOT_EVALUATED,
+            item_binding="bound",
+        )
+
+    async def fake_task_and_item(_ctx):
+        return objects.task, requested_item
+
+    async def fake_preview(_ctx, _item):
+        return objects.selection, objects.terms
+
+    async def fake_typical(_ctx, _task_id):
+        return {
+            "total_seconds": 12_300,
+            "is_estimated": False,
+            "sections_without_sample": 0,
+            "sections_total": 4,
+            "method": "median_completed_section_totals",
+            "window_days": 90,
+            "min_sample_size": 5,
+        }
+
+    monkeypatch.setattr(module, "get_task_budget_status", fake_status)
+    monkeypatch.setattr(module, "_load_task_and_item", fake_task_and_item)
+    monkeypatch.setattr(module, "_load_preview_inputs", fake_preview)
+    monkeypatch.setattr(module, "_typical_block", fake_typical)
+
+    try:
+        db_session.add_all([workspace, owner, neighbour])
+        await db_session.flush()
+        db_session.add_all([other_item, requested_item])
+        await db_session.flush()
+        # Insert the OTHER item's valuation first and never update either row, so the
+        # neighbour's tuple sits earlier in the heap. The mutant this row exists to catch
+        # (dropping ItemValuation.item_id == item_id) leaves a scan over two rows that
+        # both satisfy every remaining predicate, and scalar() takes the first one — heap
+        # order, not a guarantee, the same mechanism recorded at
+        # test_price_scenario_query.py:test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain.
+        # If this ever stops discriminating, that is what changed.
+        # The assertions below do not depend on any of it: the unmutated query is
+        # determined by item_id, which is unique among current rows.
+        db_session.add(other_valuation)
+        await db_session.flush()
+        db_session.add(requested_valuation)
+        await db_session.commit()
+
+        result = await module.get_task_price_scenario(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace_id,
+                    "user_id": owner_id,
+                    "role_name": "manager",
+                },
+                incoming_data={"task_client_id": objects.task.client_id},
+                query_params={},
+                session=db_session,
+            )
+        )
+
+        # Three ways the neighbour's row would show itself on this item's screen: its ID,
+        # its price and its author's byline, the last of which _current_valuation does not
+        # read itself — get_task_price_scenario looks the user up from whatever row came
+        # back.
+        assert result["saved"]["valuation_id"] == requested_valuation_id
+        assert result["saved"]["expected_sale_price_minor"] == 855_000
+        assert result["saved"]["created_by"]["username"] == owner_username
+    finally:
+        await db_session.rollback()
+        await db_session.execute(
+            delete(ItemValuation).where(ItemValuation.workspace_id == workspace_id)
+        )
+        await db_session.execute(delete(Item).where(Item.workspace_id == workspace_id))
+        await db_session.execute(
+            delete(User).where(User.client_id.in_([owner_id, neighbour_id]))
+        )
+        await db_session.execute(
+            delete(Workspace).where(Workspace.client_id == workspace_id)
+        )
+        await db_session.commit()
+
+    valuation_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(ItemValuation)
+        .where(ItemValuation.workspace_id == workspace_id)
+    )
+    item_residue = await db_session.scalar(
+        select(func.count()).select_from(Item).where(Item.workspace_id == workspace_id)
+    )
+    user_residue = await db_session.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(User.client_id.in_([owner_id, neighbour_id]))
     )
     workspace_residue = await db_session.scalar(
         select(func.count())

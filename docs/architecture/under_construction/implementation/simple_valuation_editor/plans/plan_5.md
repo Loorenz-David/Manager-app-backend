@@ -2,7 +2,7 @@
 
 ```
 plan: 5
-state: PROMPT_READY — 2026-08-19. Baseline 26 / 2431 / 1
+state: APPROVED — implement r1, 2026-08-19. Closing suite 26 / 2433 / 1
 date: 2026-08-19
 gate: projection WAIVED — no new mechanism; both before-states measured whole-suite at
       re-review r4 and quoted below
@@ -161,4 +161,48 @@ comment edits are comment edits. **If a task appears to need more, that is a STO
 
 ## 6. Review log
 
-*(empty)*
+**No review round was spent, and that is a coordinator decision worth recording rather than
+leaving as an absence.**
+
+Every other phase in this project went through at least one review, and every review found
+something real. This one did not, for a reason specific to it: **the class this phase belongs
+to was already swept.** Re-review r4 measured *all five* predicates in the two `WHERE` clauses
+this file contains — that is the whole population, not a sample — and phase 5 closes the two
+it found unproven. There is no unswept class left in this perimeter, which is what the r4
+sweep would otherwise have been re-run to find.
+
+**What the coordinator verified independently, at consumption:**
+
+| | |
+|---|---|
+| Perimeter | exactly plan 5 §2's two files, plus the handoff. No third file. |
+| Comment-only | `git diff -U0 ef55f6d -- get_task_price_scenario.py` filtered of comments is **empty**, re-run after the coordinator's own edit. Zero executable-line changes in production code, now across **five** rounds. |
+| C2 mutation | drop `ItemValuation.item_id` → whole suite **27 / 2432 / 1**, exactly `test_phase5_c2_…` added, none removed |
+| C3 mutation | drop `TaskStep.task_id` → whole suite **27 / 2432 / 1**, exactly `test_phase5_c3_…` added, none removed |
+| Baseline | **26 / 2433 / 1**, failure IDs byte-identical to the set carried since `ef55f6d` |
+| Lint | `ruff check` and `ruff format --check` clean |
+| **The count claim** | the `_typical_block` comment says *"the other eight"* drive the fake session. **Verified as eight distinct test functions**, not eight occurrences — counts are one of the two error-prone classes and this project has been wrong about one before. |
+
+**One coordinator correction, applied at the fold.** Both new comments carried an absence
+claim scoped to *"the suite"* — *"until it existed nothing in the suite did"* and *"every other
+fixture in the suite holds a single item."* Read literally that is false: other test files do
+build several items in one workspace. The true and operative claim is about fixtures **reaching
+this query**, which is what makes the predicate unobservable. Both narrowed to that.
+This is the project's own rule arriving one last time: **an absence claim is only as good as
+the scope it names**, earned twice before — once on a directory, once on a term set, and now
+on a suite.
+
+**Confirmed and not to be re-raised:** the C2 fixture handles the heap-order trap by insert
+order with **no planner GUCs**, and says so at the fixture including that heap order is not a
+guarantee; the C3 fixture takes the richer form deliberately, because without real samples both
+sections resolve to the zero fallback and `total_seconds` would be 0 under contract **and**
+mutant, leaving only `sections_total` to discriminate; both teardowns satisfy rule 11½ with
+residue assertions outside the `try/finally`, and both name the complete set of tables they
+write. `TaskStep.is_deleted` remains described as defence-in-depth with no test, which r4's N-3
+established as the correct outcome rather than a gap.
+
+**The implementer's one self-reported judgement was right.** They first wrote *"no test of it is
+possible"* for `is_deleted` and softened it to the measured statement, on the grounds that r4
+established it *reddens nothing* and *cannot change a result* — not that no test could exist.
+Declining to ship a fresh absolute in the same edit that removes two stale ones is exactly the
+discipline this phase is about.

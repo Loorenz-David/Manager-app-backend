@@ -76,12 +76,16 @@ async def _current_valuation(ctx: ServiceContext, item_id: str) -> ItemValuation
             # already resolved workspace-scoped by
             # get_task_budget_status.py:_load_task_and_item, proven by
             # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
-            # All three below are load-bearing; two are proven. Drop superseded_at and
+            # All three below are load-bearing, and all three are now proven, each by one
+            # row and each measured whole-suite. Drop superseded_at and
             # test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain goes red;
             # drop is_deleted and test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen
-            # goes red. item_id is NOT proven — measured whole-suite at re-review r4, deleting
-            # it reddens nothing, because no fixture holds two items in one workspace. Drop it
-            # in production and this returns another item's valuation: its price, its byline.
+            # goes red; drop item_id and
+            # test_price_scenario_query.py:test_phase5_c2_saved_uses_the_requested_items_own_valuation
+            # goes red. That last row holds two items in one workspace, each with its own
+            # current valuation — until it existed nothing reaching this query did, which is
+            # why item_id was asserted by nothing. Drop it in production and this returns another
+            # item's valuation: its price, its byline.
             ItemValuation.workspace_id == ctx.workspace_id,
             ItemValuation.item_id == item_id,
             ItemValuation.superseded_at.is_(None),
@@ -95,20 +99,23 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
         (
             await ctx.session.execute(
                 select(TaskStep).where(
-                    # Of these three, only task_id is load-bearing, and none of the three
-                    # is proven. workspace_id is redundant defence-in-depth: task_id is
+                    # Of these three, only task_id is load-bearing, and it is now proven.
+                    # workspace_id is redundant defence-in-depth: task_id is
                     # already resolved workspace-scoped by
                     # get_task_budget_status.py:_load_task_and_item, proven by
                     # test_price_scenario_query.py:test_c10_task_resolution_is_workspace_scoped_and_hides_deleted.
                     # is_deleted is defence-in-depth too — budget_division.py:group_steps_by_section
                     # already skips deleted steps in Python, so this predicate cannot change
-                    # a result. task_id IS load-bearing: without it this sums every task's
-                    # steps in the workspace into one task's typical time — a wrong break-even,
-                    # slider domain and suggested price, with no error. Measured whole-suite
-                    # (workspace_id at review r1, the other two at re-review r4): dropping
-                    # any of the three reddens nothing, because every
-                    # _typical_block test uses the _TypicalSession fake, whose execute()
-                    # discards the statement and never issues this SQL.
+                    # a result. Dropping it whole-suite at re-review r4 reddened nothing, and
+                    # for this one that is the correct outcome, not a gap. task_id IS
+                    # load-bearing: without it this sums every task's steps in the workspace
+                    # into one task's typical time — a wrong break-even, slider domain and
+                    # suggested price, with no error. Drop it and
+                    # test_price_scenario_query.py:test_phase5_c3_typical_counts_only_the_requested_tasks_steps
+                    # goes red, measured whole-suite. That row is the only _typical_block test
+                    # that issues this SQL at all: the other eight drive a fake session whose
+                    # execute() discards the statement, which is why task_id went unasserted
+                    # through four rounds.
                     TaskStep.workspace_id == ctx.workspace_id,
                     TaskStep.task_id == task_id,
                     TaskStep.is_deleted.is_(False),
