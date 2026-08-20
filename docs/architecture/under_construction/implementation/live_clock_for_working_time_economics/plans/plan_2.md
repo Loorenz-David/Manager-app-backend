@@ -665,3 +665,47 @@ tracker row. The edit was accurate, so no harm; the header is the coordinator's.
 B1–B3 are measured absences, not judgment calls; a reviewer would spend a session
 rediscovering what this fold already proved. Review r3 runs on the completed phase with
 full adversarial depth.
+
+### Implement fix r2 — 2026-08-20, Codex
+
+Fix r2 closed B1–B4 and S1–S3 with a test-only perimeter. The phase file now has
+the four C6 rows (settlement-close allowance byte identity; `created_at` ordering;
+`latest_state_record` ordering; and all-COMPLETED E-A allowances), the absolute C3
+manager assertion (`840` contract / `600` under the population-filter mutant), the
+C8 three-task and two-worker rows, the C9 settlement-window row, and the C11
+five-sample compatibility-shim row. The production tree is unchanged by this
+round; all temporary probe edits were restored.
+
+Validation: final clean non-e2e suite **26 failed / 2476 passed / 1 deselected /
+2 warnings**. Its 26 failing IDs are exactly master §6's baseline set in both
+directions (added `∅`, removed `∅`). The phase-local file is **15 passed**;
+`ruff check`, compile checks, and `git diff --check` pass. The C8 ceiling was
+measured with 50 visible tasks, one open working record per task, and one active
+worker: one open-record probe and one worker sweep; 51 requested IDs are rejected
+before querying.
+
+Mutation ledger, all whole-suite probes against the clean pre-probe baseline ID
+set, with every revert verified:
+
+| Mutation site | Contract side / mutant side | Added-ID result |
+|---|---|---|
+| C3 `get_task_budget_status.py:_build_evaluated_status` population filter | E-B manager `840` / `600` | 2 IDs: the pre-existing allocation distinction test and `test_c3_population_fold_counts_nonzero_skipped_consumption_on_manager_face`; removed `∅` |
+| C4 E-P `get_task_budget_status(..., live_seconds=...)` | one loader invocation / two independent computations | `test_c4_each_surface_uses_one_loader_call_and_c5_does_not_persist_live_seconds`; removed `∅` |
+| C5 E-P ORM `TaskStep.total_working_seconds` assignment | persisted settled value unchanged / live value `600` written | 5 phase IDs: C2/C3/C7 reconciliation, C4/C5 loader test, C6 allowance row, C6 created-at row, C9 settlement row; removed `∅` |
+| C6 E-P `DivisionStep.created_at` omission | governing `stp_b` / `stp_a` | 8 IDs: phase C6 created-at row plus the existing phase-4, valuation, price-scenario, production-time, and golden guards; removed `∅` |
+| C6 E-P `latest_state_record` omission | governing `stp_b` / `stp_a` | 4 IDs: phase created-at/latest-state rows plus golden and production-time guards; removed `∅` |
+| C6 E-A `selectinload(TaskStep.latest_state_record)` addition | allowances A `(100,0)`, B `(1100,900)` / residual moves to A | 4 IDs: all-completed allowance row, both C8 batch rows, and the existing one-probe row; removed `∅` |
+| C7 worker settled aggregate replacement | worker equals live manager and exceeds settled basis / worker remains settled | 2 phase IDs: C2/C3/C7 reconciliation and C4/C5 loader test; removed `∅` |
+| C8 E-A loader moved into task loop | one worker `1 probe + 1 sweep`; two workers `1 + 2` / three tasks cause `3 probes + 3 sweeps` | the two three-task phase rows; removed `∅` |
+| C9 settlement-window contract | before `2040`, post-close/no worker `1440`, post-recompute `2040` / no independent production mutant is named in plan §5 | contract row passes; no separate named production mutant claimed |
+| C11 typicals default definition | five samples, median `3600` / future cutoff yields sample count `0` | phase shim-inertness row plus the expected typical-times dependent IDs; removed `∅` |
+| C11 E-P typicals call site | stub clock reads `0` / reads module clock | shared C11/C12 call-site phase row; removed `∅` |
+| C11 E-A typicals call site | stub clock reads `0` / reads module clock | shared C11/C12 call-site phase row; removed `∅` |
+| C12 manager preview call site | stub `today_utc` reads `0` / reads module clock | shared C11/C12 call-site phase row; removed `∅` |
+| C12 worker preview call site | stub `today_utc` reads `0` / reads module clock | shared C11/C12 call-site phase row; removed `∅` |
+
+C10's seven-suite perimeter remained green as-is, apart from the already-required
+E-A query-count update for the shared live probe: price scenario, live-clock
+goldens, phase-8 status results, phase-8 reviewer probe, budget allocations,
+phase-9 committed-filter structure, and the item-economics router. No Architecture
+Graph delta is owed because this round is test-only.

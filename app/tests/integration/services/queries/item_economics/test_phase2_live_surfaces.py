@@ -8,13 +8,17 @@ import pytest
 from sqlalchemy import event, select
 
 from beyo_manager.domain.item_economics.serializers import serialize_task_budget_status
-from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
+from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.queries.item_economics import get_task_budget_allocations as allocations_module
+from beyo_manager.services.queries.item_economics import live_worked_seconds as live_module
 from beyo_manager.services.queries.item_economics import get_task_budget_status as status_module
 from beyo_manager.services.queries.item_economics import get_task_production_time as production_module
 from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
@@ -30,6 +34,7 @@ from beyo_manager.services.queries.working_sections.get_working_section_typical_
 from beyo_manager.services.queries.working_sections import (
     get_working_section_typical_times as typicals_module,
 )
+from beyo_manager.services.tasks.analytics.process_step_transition import _recompute_step_time_totals
 
 from tests.integration.services.queries.item_economics.test_budget_allocations_query import _seed
 
@@ -37,9 +42,17 @@ from tests.integration.services.queries.item_economics.test_budget_allocations_q
 UTC = timezone.utc
 
 
-def _ctx(db_session, workspace_id: str, task_id: str, now: datetime, *, role: str = "manager"):
+def _ctx(
+    db_session,
+    workspace_id: str,
+    task_id: str,
+    now: datetime,
+    *,
+    role: str = "manager",
+    user_id: str = "usr_phase2",
+):
     return ServiceContext(
-        identity={"workspace_id": workspace_id, "user_id": "usr_phase2", "role_name": role},
+        identity={"workspace_id": workspace_id, "user_id": user_id, "role_name": role},
         incoming_data={"task_client_id": task_id},
         query_params={},
         session=db_session,
@@ -102,6 +115,225 @@ async def _make_live_fixture(db_session):
     )
     await db_session.flush()
     return values, now
+
+
+async def _make_ordering_fixture(db_session, *, row: int):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    existing_steps = (
+        await db_session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == workspace.client_id,
+                TaskStep.task_id == task.client_id,
+            )
+        )
+    ).scalars().all()
+    for base_step in existing_steps:
+        base_step.is_deleted = True
+
+    entered_a = now - timedelta(hours=3)
+    entered_b = now - timedelta(hours=2)
+    created_a = now - timedelta(hours=1)
+    created_b = now - timedelta(minutes=30)
+    if row == 3:
+        created_a, created_b = created_b, created_a
+
+    step_a = TaskStep(
+        client_id=f"stp_a_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=section.client_id,
+        state=TaskStepStateEnum.WORKING,
+        readiness_status=TaskStepReadinessStatusEnum.READY,
+        total_dependencies=0,
+        completed_dependencies=0,
+        total_working_seconds=0,
+        working_section_name_snapshot="Snapshot A",
+        created_at=created_a,
+        created_by_id=user.client_id,
+    )
+    step_b = TaskStep(
+        client_id=f"stp_b_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=section.client_id,
+        state=TaskStepStateEnum.PENDING,
+        readiness_status=values[11][1].readiness_status,
+        total_dependencies=0,
+        completed_dependencies=0,
+        total_working_seconds=0,
+        working_section_name_snapshot="Snapshot B",
+        created_at=created_b,
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([step_a, step_b])
+    await db_session.flush()
+    record_a = StepStateRecord(
+        client_id=f"ssr_a_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        step_id=step_a.client_id,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=entered_a,
+        exited_at=None,
+        created_by_id=user.client_id,
+        credited_user_id=user.client_id,
+    )
+    record_b = StepStateRecord(
+        client_id=f"ssr_b_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        step_id=step_b.client_id,
+        state=TaskStepStateEnum.PENDING,
+        entered_at=entered_a if row == 2 else entered_b,
+        exited_at=entered_a if row == 2 else entered_b,
+        created_by_id=user.client_id,
+        credited_user_id=user.client_id,
+    )
+    db_session.add_all([record_a, record_b])
+    await db_session.flush()
+    step_a.latest_state_record_id = record_a.client_id
+    step_b.latest_state_record_id = record_b.client_id
+    await db_session.flush()
+    return (values, step_a, step_b), now
+
+
+async def _make_all_completed_fixture(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    existing_steps = (
+        await db_session.execute(
+            select(TaskStep).where(
+                TaskStep.workspace_id == workspace.client_id,
+                TaskStep.task_id == task.client_id,
+            )
+        )
+    ).scalars().all()
+    for base_step in existing_steps:
+        base_step.is_deleted = True
+    step_a = TaskStep(
+        client_id=f"stp_completed_a_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=section.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        readiness_status=values[11][1].readiness_status,
+        total_dependencies=0,
+        completed_dependencies=0,
+        total_working_seconds=100,
+        created_at=now - timedelta(hours=1),
+        created_by_id=user.client_id,
+    )
+    step_b = TaskStep(
+        client_id=f"stp_completed_b_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        task_id=task.client_id,
+        working_section_id=section.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        readiness_status=values[11][1].readiness_status,
+        total_dependencies=0,
+        completed_dependencies=0,
+        total_working_seconds=200,
+        created_at=now,
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([step_a, step_b])
+    await db_session.flush()
+    record_a = StepStateRecord(
+        client_id=f"ssr_completed_a_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        step_id=step_a.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        entered_at=now,
+        exited_at=now,
+        created_by_id=user.client_id,
+    )
+    record_b = StepStateRecord(
+        client_id=f"ssr_completed_b_{workspace.client_id}",
+        workspace_id=workspace.client_id,
+        step_id=step_b.client_id,
+        state=TaskStepStateEnum.COMPLETED,
+        entered_at=now - timedelta(hours=1),
+        exited_at=now - timedelta(hours=1),
+        created_by_id=user.client_id,
+    )
+    db_session.add_all([record_a, record_b])
+    await db_session.flush()
+    step_a.latest_state_record_id = record_a.client_id
+    step_b.latest_state_record_id = record_b.client_id
+    await db_session.flush()
+    db_session.expire(step_a, ["latest_state_record"])
+    db_session.expire(step_b, ["latest_state_record"])
+    return values, step_a, step_b, now
+
+
+async def _make_three_task_batch(db_session, *, two_workers: bool):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    live = values[11][1]
+    live.state = TaskStepStateEnum.WORKING
+    live.created_at = now - timedelta(minutes=10)
+    live_record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.workspace_id == workspace.client_id,
+            StepStateRecord.step_id == live.client_id,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    assert live_record is not None
+    live_record.credited_user_id = user.client_id
+
+    second_user = User(
+        client_id=f"usr_batch_two_{workspace.client_id}",
+        username=f"batch_two_{workspace.client_id}",
+        email=f"batch_two_{workspace.client_id}@example.test",
+        password="secret",
+    )
+    db_session.add(second_user)
+    await db_session.flush()
+    extra_tasks = []
+    extra_steps = []
+    for index in (2, 3):
+        extra_task = Task(
+            client_id=f"tsk_batch_{index}_{workspace.client_id}",
+            workspace_id=workspace.client_id,
+            task_scalar_id=10 + index,
+            task_type=task.task_type,
+            state=TaskStateEnum.ASSIGNED,
+            created_by_id=user.client_id,
+        )
+        extra_step = TaskStep(
+            client_id=f"tsp_batch_{index}_{workspace.client_id}",
+            workspace_id=workspace.client_id,
+            task_id=extra_task.client_id,
+            working_section_id=section.client_id,
+            state=TaskStepStateEnum.WORKING,
+            readiness_status=live.readiness_status,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=0,
+            created_at=now - timedelta(minutes=10),
+            created_by_id=user.client_id,
+        )
+        extra_tasks.append(extra_task)
+        extra_steps.append(extra_step)
+    db_session.add_all([*extra_tasks, *extra_steps])
+    await db_session.flush()
+    for index, step in zip((2, 3), extra_steps):
+        credited = second_user.client_id if two_workers and index == 3 else user.client_id
+        record = StepStateRecord(
+            client_id=f"ssr_batch_{index}_{workspace.client_id}",
+            workspace_id=workspace.client_id,
+            step_id=step.client_id,
+            state=TaskStepStateEnum.WORKING,
+            entered_at=now - timedelta(minutes=10),
+            exited_at=None,
+            created_by_id=user.client_id,
+            credited_user_id=credited,
+        )
+        db_session.add(record)
+        await db_session.flush()
+        step.latest_state_record_id = record.client_id
+    await db_session.flush()
+    return values, [task, *extra_tasks], now
 
 
 @pytest.mark.integration
@@ -298,6 +530,310 @@ async def test_c12_preview_inputs_uses_ctx_clock_and_keeps_command_shim(monkeypa
     monkeypatch.setattr(common_module, "today_utc", lambda: date(2099, 1, 1))
     await common_module._load_preview_inputs(ctx, item)
     assert captured[-1] == date(2099, 1, 1)
+
+
+@pytest.mark.integration
+async def test_c3_population_fold_counts_nonzero_skipped_consumption_on_manager_face(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    values[11][0].is_deleted = True
+    status = await get_task_budget_status(_ctx(db_session, workspace.client_id, task.client_id, now))
+    assert status.actual_worker_seconds == 840
+
+
+@pytest.mark.integration
+async def test_c6_allowances_are_byte_identical_after_settlement_recompute(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, _section, task, *_ = values
+    before_production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    before_allocations = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [task.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    live = values[11][1]
+    record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.workspace_id == workspace.client_id,
+            StepStateRecord.step_id == live.client_id,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    assert record is not None
+    close_at = now
+    await _apply_step_transition(
+        _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id),
+        live,
+        task,
+        record,
+        new_state=TaskStepStateEnum.PAUSED,
+        pause_reason_id=None,
+        description=None,
+        credited_user_id=user.client_id,
+        now=close_at,
+    )
+    await _recompute_step_time_totals(db_session, workspace.client_id, live.client_id, close_at)
+    await db_session.flush()
+    after_production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id)
+    )
+    after_allocations = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [task.client_id]},
+            session=db_session,
+            now=close_at,
+        )
+    )
+    assert [
+        (row["allowance_seconds"], row["left_seconds"])
+        for row in before_production["sections"]
+    ] == [
+        (row["allowance_seconds"], row["left_seconds"])
+        for row in after_production["sections"]
+    ]
+    before_steps = before_allocations["budget_allocations"][0]["steps"]
+    after_steps = after_allocations["budget_allocations"][0]["steps"]
+    assert [
+        (row["step_id"], row["allowance_seconds"], row["left_seconds"])
+        for row in before_steps
+    ] == [
+        (row["step_id"], row["allowance_seconds"], row["left_seconds"])
+        for row in after_steps
+    ]
+
+
+@pytest.mark.integration
+async def test_c6_created_at_is_carried_into_the_production_division_row(db_session):
+    (values, step_a, step_b), now = await _make_ordering_fixture(db_session, row=2)
+    workspace, user, _section, task, *_ = values
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    section = production["sections"][0]
+    assert section["state"] == TaskStepStateEnum.PENDING.value
+    assert section["state_entered_at"] == (now - timedelta(hours=3)).isoformat()
+    assert section["section_name_snapshot"] == "Snapshot B"
+    allocations = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [task.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    step_rows = {row["step_id"]: row for row in allocations["budget_allocations"][0]["steps"]}
+    assert {step_a.client_id, step_b.client_id} == set(step_rows)
+    assert {
+        step_id: (row["allowance_seconds"], row["worked_seconds"], row["section_name_snapshot"])
+        for step_id, row in step_rows.items()
+    } == {
+        step_a.client_id: (600, 10800, "Snapshot A"),
+        step_b.client_id: (600, 0, "Snapshot B"),
+    }
+
+
+@pytest.mark.integration
+async def test_c6_latest_state_record_is_carried_into_the_production_division_row(db_session):
+    (values, _step_a, _step_b), now = await _make_ordering_fixture(db_session, row=3)
+    workspace, user, _section, task, *_ = values
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    section = production["sections"][0]
+    assert section["state"] == TaskStepStateEnum.PENDING.value
+    assert section["state_entered_at"] == (now - timedelta(hours=2)).isoformat()
+    assert section["section_name_snapshot"] == "Snapshot B"
+
+
+@pytest.mark.integration
+async def test_c6_all_completed_e_a_section_keeps_allowances_without_eager_state_load(db_session):
+    values, step_a, step_b, now = await _make_all_completed_fixture(db_session)
+    workspace, user, _section, task, *_ = values
+    allocations = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [task.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    step_rows = {row["step_id"]: row for row in allocations["budget_allocations"][0]["steps"]}
+    assert {
+        step_a.client_id: (step_rows[step_a.client_id]["allowance_seconds"], step_rows[step_a.client_id]["left_seconds"]),
+        step_b.client_id: (step_rows[step_b.client_id]["allowance_seconds"], step_rows[step_b.client_id]["left_seconds"]),
+    } == {
+        step_a.client_id: (100, 0),
+        step_b.client_id: (1100, 900),
+    }
+
+
+@pytest.mark.integration
+async def test_c8_three_task_batch_shares_one_probe_and_one_worker_sweep(db_session, monkeypatch):
+    values, tasks, now = await _make_three_task_batch(db_session, two_workers=False)
+    workspace, user, _section, _task, *_ = values
+    original = live_module.compute_record_contributions
+
+    async def counted(*args, **kwargs):
+        counted.calls += 1
+        return await original(*args, **kwargs)
+
+    counted.calls = 0
+    # D6: SQL text counts the loader's open-record probe; this wrapper counts the
+    # per-worker averaging sweep, the two halves of C8's batch contract.
+    monkeypatch.setattr(live_module, "compute_record_contributions", counted)
+    statements: list[str] = []
+    from beyo_manager.models import database
+
+    engine = database._engine
+    assert engine is not None
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        await get_task_budget_allocations(
+            ServiceContext(
+                identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+                incoming_data={},
+                query_params={"task_ids": [task.client_id for task in tasks]},
+                session=db_session,
+                now=now,
+            )
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+    assert sum(
+        "FROM step_state_records" in statement and "JOIN task_steps" not in statement
+        for statement in statements
+    ) == 1
+    assert counted.calls == 1
+
+
+@pytest.mark.integration
+async def test_c8_three_task_batch_runs_one_sweep_per_active_worker(db_session, monkeypatch):
+    values, tasks, now = await _make_three_task_batch(db_session, two_workers=True)
+    workspace, user, _section, _task, *_ = values
+    original = live_module.compute_record_contributions
+
+    async def counted(*args, **kwargs):
+        counted.calls += 1
+        return await original(*args, **kwargs)
+
+    counted.calls = 0
+    monkeypatch.setattr(live_module, "compute_record_contributions", counted)
+    statements: list[str] = []
+    from beyo_manager.models import database
+
+    engine = database._engine
+    assert engine is not None
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        await get_task_budget_allocations(
+            ServiceContext(
+                identity={"workspace_id": workspace.client_id, "user_id": user.client_id, "role_name": "worker"},
+                incoming_data={},
+                query_params={"task_ids": [task.client_id for task in tasks]},
+                session=db_session,
+                now=now,
+            )
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+    assert sum(
+        "FROM step_state_records" in statement and "JOIN task_steps" not in statement
+        for statement in statements
+    ) == 1
+    assert counted.calls == 2
+
+
+@pytest.mark.integration
+async def test_c9_settlement_window_drop_is_visible_until_recompute(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, _section, task, *_ = values
+    before = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now, user_id=user.client_id)
+    )
+    live = values[11][1]
+    record = await db_session.scalar(
+        select(StepStateRecord).where(
+            StepStateRecord.workspace_id == workspace.client_id,
+            StepStateRecord.step_id == live.client_id,
+            StepStateRecord.exited_at.is_(None),
+        )
+    )
+    assert record is not None
+    close_at = now
+    await _apply_step_transition(
+        _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id),
+        live,
+        task,
+        record,
+        new_state=TaskStepStateEnum.PAUSED,
+        pause_reason_id=None,
+        description=None,
+        credited_user_id=user.client_id,
+        now=close_at,
+    )
+    after_close = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id)
+    )
+    assert after_close["sections"][0]["worked_seconds"] == 1440
+    assert before["sections"][0]["worked_seconds"] == 2040
+    await _recompute_step_time_totals(db_session, workspace.client_id, live.client_id, close_at)
+    await db_session.flush()
+    after_recompute = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id)
+    )
+    assert after_recompute["sections"][0]["worked_seconds"] == 2040
+
+
+@pytest.mark.integration
+async def test_c11_typicals_compatibility_shim_keeps_five_sample_median(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, user, section, task, *_ = values
+    for index, seconds in enumerate((1000, 2000, 3600, 5000, 6000)):
+        historical_task = Task(
+            client_id=f"tsk_typical_phase2_{workspace.client_id}_{index}",
+            workspace_id=workspace.client_id,
+            task_scalar_id=100 + index,
+            task_type=task.task_type,
+            state=TaskStateEnum.ASSIGNED,
+            created_by_id=user.client_id,
+        )
+        historical_step = TaskStep(
+            client_id=f"tsp_typical_phase2_{workspace.client_id}_{index}",
+            workspace_id=workspace.client_id,
+            task_id=historical_task.client_id,
+            working_section_id=section.client_id,
+            state=TaskStepStateEnum.COMPLETED,
+            readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=seconds,
+            closed_at=now - timedelta(days=1),
+            created_by_id=user.client_id,
+        )
+        db_session.add_all([historical_task, historical_step])
+    await db_session.flush()
+    result = await db_session.execute(typical_times_statement(workspace.client_id))
+    row = next(row for row in result if row.client_id == section.client_id)
+    assert row.sample_count == 5
+    assert row.typical_worker_seconds == 3600
 
 
 @pytest.mark.integration
