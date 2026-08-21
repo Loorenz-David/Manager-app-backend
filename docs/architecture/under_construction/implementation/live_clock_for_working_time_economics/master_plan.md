@@ -692,6 +692,16 @@ raising an automatic finding. Anything *outside* these lists is still a finding.
 - `app/beyo_manager/services/infra/shopify/product_sync_client.py`
 - `app/beyo_manager/services/infra/shopify/shop_client.py`
 - `app/scripts/shopify/` (untracked: `__init__.py`, `fields.py`)
+- `app/tests/unit/scripts/test_backfill_from_shopify_fields.py` (untracked)
+
+**⚠ This stream ADDS TESTS, so the baseline moves under you — measured, not assumed.**
+That untracked test file collects **17 tests** (10 test functions, the rest
+parametrizations; `pytest --collect-only`, 2026-08-21). Any L4 run taken while it is
+present therefore reports **+17 collected** against the cited `26 / 2487 / 1` stamp
+*before* anything about this phase is considered. A run that reads `2504 passed` is not a
+regression and not an anomaly — it is this stream. Re-measure and **diff the failing-ID
+set**, which is unaffected by additions that pass; the count alone will mislead every
+reader who does not know this line exists.
 
 Why this one needs different handling from streams 1 and 2: **it lives in the working
 tree, not in git history.** A committed stream is visible to `git log` and excluded from a

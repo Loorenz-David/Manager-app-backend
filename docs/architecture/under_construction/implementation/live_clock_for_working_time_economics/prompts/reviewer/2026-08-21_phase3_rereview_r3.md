@@ -54,14 +54,21 @@ dated them by digest and they appeared **after** fix r2's stamp (the `app/`-scop
 including them hashes `2d7604fe…`, while the declared stamp digest `b50bda39…` matches
 the committed-only diff exactly).
 
+The stream is owner-confirmed and recorded in `master_plan.md` §7 as recognized stream 3.
+It also includes an untracked test file,
+`app/tests/unit/scripts/test_backfill_from_shopify_fields.py`.
+
 Two consequences you must handle rather than absorb:
-1. **Any L4 run you perform includes them**, because they are uncommitted. The 26-ID
-   baseline contains Shopify rows (`test_create_shopify_metafield_preferences.py`), and
-   one of the two named flaky tests is
-   `test_process_shopify_products_integration.py`. If your counts differ from the cited
-   `26 / 2487 / 1`, **capture the failing-ID set first, then attribute** — foreign-stream
-   effect, flake, or real regression are three different answers and a bare count cannot
-   tell them apart.
+1. **Any L4 run you perform includes them**, because they are uncommitted — and that test
+   file **collects 17 tests** (coordinator-measured with `--collect-only`). So a full-suite
+   run taken now reads roughly **`26 / 2504 / 1`**, not the cited `26 / 2487 / 1`, *before*
+   anything about this phase is considered. **That +17 is the stream, not a regression and
+   not an anomaly.** Beyond it: the 26-ID baseline contains a Shopify row
+   (`test_create_shopify_metafield_preferences.py`) and one of the two named flaky tests is
+   `test_process_shopify_products_integration.py`. If anything else moves, **capture the
+   failing-ID set first, then attribute** — foreign stream, flake, and real regression are
+   three different answers and a bare count cannot tell them apart. The failing-ID set is
+   the stable instrument here; additions that pass do not touch it.
 2. Prefer L1/L2 scopes for this delta-scoped round, which keeps you clear of the foreign
    surface entirely. Escalate to L4 only for a hypothesis that genuinely needs it, and
    record the foreign state in that evidence record's tree-identity field (SHA + a
