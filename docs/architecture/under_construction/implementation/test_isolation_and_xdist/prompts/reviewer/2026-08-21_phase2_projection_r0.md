@@ -140,7 +140,8 @@ Contents, in order:
    "one file, this handoff." Any database or file you touched while reality-checking is
    declared here and verified restored.
 
-One scope note: plan 2 §0 records a coordinator decision to split xdist into a later phase,
-and marks it as awaiting owner confirmation. Project against plan 2 **as written**. If the
-split creates a gap — a criterion that only makes sense once workers exist, or a task whose
-correctness cannot be judged serially — that is a ledger row worth having.
+One scope note: `pytest-xdist` moved to a later phase by owner decision **OD-5** — this phase
+is judged entirely serially. That boundary is settled, not open. But if it creates a *gap* —
+a criterion that only becomes decidable once workers exist, or a task whose correctness
+cannot honestly be judged before anything runs in parallel — that is a ledger row worth
+having, and routing it upstream is the right move rather than working around it.

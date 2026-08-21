@@ -268,14 +268,23 @@ A missing or malformed configuration must abort, never "guess" a target.
 
 ## 3. Phasing (isolation before parallelism — the owner's constraint, made a gate)
 
+**Amended 2026-08-21 (OD-5): three phases, not two.** The original two-phase shape is kept
+below as provenance; the middle phase was inserted because phase 1's own outcome created it.
+
 - **Phase 1 — isolation.** Steps 1–5 of the owner's ordering. Ends with the suite passing
   **serially** on per-worker databases with the same failure-ID set, and residue measured at
-  zero. `pytest-xdist` is **not installed** in this phase.
-- **Phase 2 — parallelism.** Steps 6–8. Install xdist, compare serial / `-n 2` / `-n 4` /
-  higher, choose a conservative default, and establish the **new authoritative baseline
-  failure-ID set** with every difference from the old one explained.
+  zero. `pytest-xdist` is **not installed** in this phase. **APPROVED 2026-08-21 (`5ecfe90`).**
+- **Phase 2 — order-independence and per-checkout isolation, still serial.** The
+  preconditions phase 1 created or exposed: OD-3's ~118-test repair, the slot discriminator
+  (§5), B2's surviving no-marker-table shape, Redis isolation, and the two rows that cannot
+  fail. Ends when the failure-ID set is **invariant under collection order**, proven
+  serially. `pytest-xdist` is **still not installed**.
+- **Phase 3 — parallelism.** Steps 6–8, unchanged from what phase 2 originally was. Install
+  xdist, compare serial / `-n 2` / `-n 4` / higher (the machine has 14 cores), choose a
+  conservative default, and establish the **new authoritative baseline failure-ID set** with
+  every difference from the old one explained.
 
-Phase 2 does not start until phase 1 is APPROVED — the same gating that contained defects
+No phase starts until its predecessor is APPROVED — the same gating that contained defects
 inside a phase boundary three times in `live_clock`.
 
 ---
@@ -415,6 +424,25 @@ the repair, the discriminator and the reorder are measured against one another i
 **Phase 1 closes with the number corrected in writing, not with the repair done.** Deliverable 12
 is restated as a class of ~118, with the reorder measurement recorded; the previously published
 "one remaining non-parallel-safe test" understated it by two orders of magnitude.
+
+### OD-5 — xdist moves to its own phase; phase 2 ends at order-independence (2026-08-21)
+
+**Owner: split, recommendation accepted.** §3's phasing is amended above. The reason the
+boundary exists is not tidiness: **OD-3 already binds the ~118-test repair to land *before*
+`pytest-xdist` is installed**, so the two bodies of work were already sequential — the split
+only draws a gate around a boundary the project had committed to.
+
+What it buys: phase 2 ends at a falsifiable claim — *the failure-ID set is invariant under
+collection order, proven serially* — and a CHANGES_REQUESTED on eleven files of test repair
+no longer blocks a parallel measurement that was never the problem. Phase 3 becomes what the
+intention's §1 actually asks for in deliverables 6–14: a measurement phase, mostly evidence.
+
+Unchanged by this decision: the isolation-before-parallelism constraint, OD-3's binding
+sequence, and the requirement that the authoritative baseline be re-enumerated and
+republished **under the new runner** before any mutation result is trusted on it. Only the
+plan boundary moved. `live_clock` phase 4's ⛔ gate is satisfied when **phase 3** closes, not
+phase 2 — the gate's own wording is "xdist + per-worker isolation implemented and the
+baseline re-enumerated under the new runner."
 
 ### OD-4 — the two retirement tests are rewritten against production behaviour (2026-08-21)
 

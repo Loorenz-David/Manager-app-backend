@@ -7,16 +7,14 @@ date: 2026-08-21
 actor: coordinator (authoring)
 depends_on: plan_1 APPROVED (2026-08-21, `5ecfe90`). Gates plan 3 (xdist) and, through it,
             live_clock_for_working_time_economics phase 4.
-scope_fence: pytest-xdist is NOT installed in this phase either. Parallelism is plan 3.
-             See §0 — this split is a coordinator sequencing decision awaiting owner
-             confirmation; if the owner folds xdist back in, this plan absorbs plan 3's
-             tasks and its evidence budget grows by the measurement matrix.
+scope_fence: pytest-xdist is NOT installed in this phase either. Parallelism is plan 3,
+             ratified by the owner as OD-5 (intention §3 amended, §4 OD-5).
 projection_gate: MANDATORY, not waived. This phase touches ordering, derivation/naming
                  keys and destructive database operations — charter rule 6's list, three
                  times over.
 ```
 
-## 0. Why this is a phase of its own (coordinator decision, owner-confirmable)
+## 0. Why this is a phase of its own (OD-5, owner-ratified 2026-08-21)
 
 The intention's §3 phasing named two phases: isolation, then parallelism. Phase 1 shipped
 isolation and, in doing so, **converted dev-data coupling into test-order coupling for ~118
@@ -36,7 +34,8 @@ phase (deliverables 6–14), cheap and mostly evidence.
 
 **What is unchanged:** OD-3's binding sequence, the intention's isolation-before-parallelism
 constraint, and the requirement that the baseline be re-enumerated under the new runner
-before any mutation result is trusted on it. Only the plan boundary moves.
+before any mutation result is trusted on it. Only the plan boundary moves. `live_clock`
+phase 4's ⛔ gate is satisfied when **plan 3** closes, not this one.
 
 ## 1. Goal
 
