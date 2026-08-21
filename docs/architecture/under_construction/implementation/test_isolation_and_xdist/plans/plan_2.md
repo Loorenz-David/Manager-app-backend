@@ -1,7 +1,7 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: CHANGES_REQUESTED — 2026-08-21 (implement r1 consumed; C2 unmet — the two orders differ by one ID; fix r2 authored)
+state: IMPLEMENTED — 2026-08-21 (fix r2; C2 satisfied; 21 failed / 2561 passed / 1 deselected in both orders)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)
@@ -687,3 +687,103 @@ predicted 21 is right, so this is a reporting gap rather than a suspected error.
 **Routing: fix r2, then review.** B1 may not be repairable inside the scope fence — if
 characterising it lands on `allocate_sku_scalar_in_session`, that is a production-domain
 decision and stops for an owner card rather than an improvisation.
+
+**Additional L4 authorization before final pair:** the first closing pair was taken before
+B1's permitted SKU-test repair; two replacement closing runs are authorized because the
+handover tree must be stamped after that repair, not cited from the pre-repair tree.
+
+### 2026-08-21 — fix r2. Verdict: IMPLEMENTED
+
+Resolved the three routed findings. B1's shipped reverse run was characterized before repair:
+the old reviewer-local reversal measured `139 / 2422 / 1`, while the shipped
+`BEYO_TEST_COLLECTION_ORDER=reverse` hook measured `22 / 2560 / 1`; they were not the same
+comparator. On the shipped hook, the SKU test's concurrent scalar assertion passed, but its
+long-lived `db_session` returned a stale identity-mapped `SkuTemplate` with `last_scalar == 0`
+after the two independent allocation sessions committed `2`. The in-scope test repair calls
+`await db_session.refresh(row)` before asserting `last_scalar == 2`; no production file changed.
+
+S1 now uses the bounded fixed probe slot `phase2` instead of a never-reused random slot. A
+module-scoped autouse fixture records the server's `beyo_test_*` membership before the
+criterion module and asserts equality in teardown, including when a test fails. The two
+legacy orphans `beyo_test_shell_gw995` and `beyo_test_shell_template` were verified as
+107-table, marker-bearing databases and removed; post-cleanup membership contained only the
+expected `beyo_test_main_template`.
+
+S2's named mutations were recorded individually in the fix handoff. The infrastructure
+criterion remains `36 passed`; the two final L4 runs on the repaired tree both produced
+`21 failed / 2561 passed / 1 deselected`, with empty `comm` differences in both directions.
+The final failing-ID set is the 21 IDs enumerated in the handoff; the repaired SKU ID and the
+repaired task-step ID are absent. The remaining 21 failures are the pre-existing foreign
+failure stream, not this phase's C2 divergence.
+
+No Architecture Graph delta was recorded: the graph remains valid at revision
+`4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`, and this fix stays
+inside the existing test-isolation boundary; three prior inferred items remain pending human
+review.
+
+### 2026-08-21 — fix r2 implemented (B1, S1, S2, N1)
+
+- B1: characterised as a **test visibility defect, not a production race**. On the shipped-hook
+  reversed run the failure was `assert 0 == 2` at `test_sku_templates_commands.py:132` — the
+  persistence assertion, not `{first, second} == {1, 2}`, which passed. Repaired with
+  `await db_session.refresh(row)`. Also established that the reviewer's local reversal at
+  `87a4b7a` (`139 / 2422 / 1`) and the shipped `BEYO_TEST_COLLECTION_ORDER=reverse` hook
+  (`22 / 2560 / 1`) **do not reverse identically**, so the old figure was never a valid
+  before-side comparator for the shipped hook.
+- S1: the random per-invocation probe slot is replaced with a fixed `phase2` slot, and a
+  module-scoped teardown now asserts `beyo_test_*` membership is identical before and after the
+  criterion module, including when a test fails. The two orphans were removed.
+- S2: one evidence row per named mutation, each naming the reddened criterion rows.
+- Closing pair, both after checkpoint `8429442`: default `21 / 2561 / 1` (~128 s) and reversed
+  `21 / 2561 / 1` (129.26 s). **Failing-ID sets identical, `comm` empty in both directions**,
+  enumerated in the handoff.
+
+**2026-08-21 — fix r2 consumed and verified by the coordinator.** The round lands; two items
+carry to the review rather than to another fix.
+
+**C2 is met.** Default and reversed both read `21 / 2561 / 1` with the failing-ID set identical
+and `comm`-empty in both directions — the claim this phase's boundary was drawn around. The
+enumerated 21 reconciles against the published 22 minus
+`test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task`, and
+spot-checked against `live_clock`'s §6 enumeration the four dev-data artifacts retired by OD-2
+are correctly absent.
+
+**Perimeter is exactly two code files**, cycle-scoped as asked:
+`test_database_isolation.py` (+23/−3, checkpoint `0f08079`) and `test_sku_templates_commands.py`
+(+1, checkpoint `8429442`). No production file in the diff.
+
+**S1 verified by direct query.** The server now holds **`beyo_test_main_template` only** among
+`beyo_test_*` — `beyo_test_shell_gw995` and `beyo_test_shell_template` are gone, and the fixed
+`phase2` slot replaces the per-invocation random one. Plan 1 C8's membership guarantee holds
+again across the phase boundary.
+
+**S2 discharged well, and it produced the finding the criterion was built to produce.** The
+ledger names reddened rows per sub-check, and it reports honestly that the first URL-parse probe
+shape *"stayed green because later validation still rejected the inputs"* — a sub-check whose
+disabling reddened nothing, found and stated rather than filled in silently. That is exactly
+what C4's per-sub-check requirement exists for.
+
+**N1 (note, carried to the review) — the B1 diagnosis is not supported by the session
+configuration.** The handoff explains the failure as an identity-mapped row going stale because
+`db_session` had loaded it before two independent sessions committed. But
+`models/database.py:47` sets **`expire_on_commit=False`**, under which that staleness would be
+**deterministic in every order** — and the test demonstrably passes alone (coordinator-measured
+`4 passed` three times, *before* this repair existed) and passed in the default-order run. So
+either the object is not in the identity map on the path that passes, leaving the
+order-dependent mechanism still unidentified, or the cause was something else.
+**The repair is sound regardless** — `refresh()` makes the assertion read the database
+unconditionally, which is charter rule 3's direction and strictly stronger than what it
+replaced. The concern is scope: if the real cause is order-dependent identity-map state, every
+read-after-commit test in the suite shares the exposure, and this is a class rather than an
+instance. A named probe for the review, not a fix.
+
+**N2 (note) — the L4 count is not stated, and the prose reads as four runs.** The handoff says
+*"this replacement pair was necessary after the first pair exposed B1"*, which reads as a first
+pair taken in this session at `0f08079`; only the two closing runs carry evidence rows. The
+budget was 2 plus 1 pre-authorised for B1's characterisation. If the count was 4, two runs lack
+records and the round is one over; if "the first pair" means implement r1's, it reconciles at 3.
+**The count should be stated, not inferred** — the reconciliation is the coordinator's
+obligation and it cannot be discharged from what is written.
+
+**Routing: review r3.** No further fix round. Phase 2 has had a projection and two build rounds
+but **no independent adversarial pass**, and C2 being met is exactly the moment to buy one.
