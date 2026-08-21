@@ -388,3 +388,43 @@ code and the slot discriminator composes naturally with the worker discriminator
 project lands, not before. Every stream needs the new test infrastructure, so a worktree cut
 today would carry the old shared-database behaviour and would have to be rebased onto the new
 one anyway.
+
+### OD-3 — the ~118 order-dependent tests are repaired in phase 2, before xdist (2026-08-21)
+
+**Owner: defer to phase 2, first item.** Review r3 established, and the coordinator reproduced,
+that OD-1's "nine tests" was an artifact of pytest's default collection order: the template
+carries `roles=0, pause_reasons=0, workspaces=0` while the development database carries
+`roles=4, pause_reasons=8`, so before phase 1 every test found a populated catalog *regardless
+of order*. Under a reversed collection order the suite reads `139 failed / 2422 passed`
+(**+118, −1**), and `test_worker_shift_commands.py` run alone gives **41 failed / 1 passed** —
+the single pass being the one test fix r2 fixtured.
+
+**The cost is not a catalog.** The coordinator tested the cheap hypothesis — seed the four roles
+and eight pause reasons — and it is **refuted**: with the roles seeded the same 41 still fail,
+the signature merely moving to `AttributeError: 'NoneType' object has no attribute 'client_id'`,
+because `test_worker_shift_commands.py:79` does `select(Workspace).order_by(Workspace.client_id)`
+**with no filter** and adopts whatever workspace happens to exist. The class is *helpers that
+borrow arbitrary pre-existing rows*, and the repair is to make each create what it needs —
+roughly eleven files.
+
+**Binding sequence for phase 2:** the repair lands **before** `pytest-xdist` is installed, so the
+first parallel run measures parallelism rather than a pre-existing order dependency surfacing
+under a new distribution. Phase 2 already reopens this code for the slot discriminator (§5), so
+the repair, the discriminator and the reorder are measured against one another in the same round.
+
+**Phase 1 closes with the number corrected in writing, not with the repair done.** Deliverable 12
+is restated as a class of ~118, with the reorder measurement recorded; the previously published
+"one remaining non-parallel-safe test" understated it by two orders of magnitude.
+
+### OD-4 — the two retirement tests are rewritten against production behaviour (2026-08-21)
+
+**Owner: rewrite.** `test_pause_ended_shift_is_still_selectable_through_the_endpoint` documents
+itself as guarding `list_pause_reasons`' `is_deleted` filter; review r3 deleted that filter from
+the production query and ran the full suite to a **byte-identical `22 / 2539 / 1`, added ∅ /
+removed ∅** — so a soft-deleted pause reason could reappear on the worker's pause sheet and
+nothing in the repository would notice. `test_retirement_left_the_guarded_populations_alone`
+asserts "7 preserved references" against seven rows its own fixture inserted four lines earlier.
+
+Rewrite both against production behaviour — soft-delete a fixture row and assert it vanishes from
+the picker — restoring coverage of a live worker-facing screen. Deleting them was the alternative
+and loses that coverage entirely.
