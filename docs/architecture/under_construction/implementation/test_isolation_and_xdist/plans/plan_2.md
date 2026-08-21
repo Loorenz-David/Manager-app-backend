@@ -787,3 +787,63 @@ obligation and it cannot be discharged from what is written.
 
 **Routing: review r3.** No further fix round. Phase 2 has had a projection and two build rounds
 but **no independent adversarial pass**, and C2 being met is exactly the moment to buy one.
+
+### 2026-08-21 — review r3 (independent, NO-WRITE). Verdict: CHANGES_REQUESTED
+
+Full findings, evidence, probe declaration and the reviewer-model comparison:
+`handoffs/reviewer/2026-08-21_phase2_review_r3_handoff.md`. The round ran in NO-WRITE mode so
+two reviewer models could be compared on an identical tree; the Opus review is adopted, two
+Sonnet contributions are folded in (N9, and the boundary check under "verified correct").
+
+**B1 (blocking) — `BEYO_TEST_SLOT` is unreachable through the only surface that documents it.**
+`resolve_test_slot` (`database_isolation.py:33-40`) reads `os.getenv`; the only documentation is
+`.env.example:8-10`; `.env` is parsed by pydantic-settings (`config.py:135-139`), which never
+populates `os.environ`. Measured twice independently: with `BEYO_TEST_SLOT=shopify` in the parsed
+`.env`, `os.getenv` → `None` and the resolver → `beyo_test_main_main`. **Intention §5's hazard
+survives in its original form for anyone who configures the slot where they were told to.**
+Answered as **OD-7**: a settings field, using the `config.py` carve-out plan 1 §3 wrote before
+phase 1 started.
+
+**B2 (blocking — reviewer's S1, escalated by the coordinator, who executed it).**
+`_sweep_legacy_databases` (`:303-306`) is called from `start()` (`:170`), so **every** pytest
+process drops every unqualified `beyo_test_*` database. Reviewer: replacing the sweep body with
+`return` → `36 passed`; removing the legacy alternative from the guard → `36 passed`. **Neither
+branch has a row.** Coordinator, executing the consequence: created `beyo_test_main`, ran
+`pytest tests/unit/test_items_router.py` (three tests, **1.30 s**), and membership went
+`['beyo_test_main', 'beyo_test_main_template']` → `['beyo_test_main_template']`. **A 1.3-second
+unit run destroyed another checkout's live worker database.** §1 goal 2 says two checkouts must
+not destroy each other's databases; with B1 that makes worktrees unsafe by two independent
+mechanisms, which is the capability this phase exists to deliver — hence blocking, not
+should-fix.
+
+**S2** C6(b) was never implemented — deleting the Redis delete loop leaves `36 passed`.
+**S3** the Redis teardown connects unconditionally, so **every** pytest session now requires a
+live Redis (`2 failed, 1 passed` → `2 failed, 1 passed, 1 error` with Redis down) — which makes
+the authoritative failing-ID set a function of Redis availability, landing on plan 3.
+**S4** two `_parse_database_url` sub-checks have no covering row; **coordinator re-measured the
+drivername row at `36 passed`**, file restored byte-identical. C4's own clause, one layer below
+where fix r2 looked.
+**S5** the SKU mechanism is **object lifetime, not collection order** — the instance is absent
+from a `WeakInstanceDict` identity map in all four configurations and the assertion passes
+without the repair. The coordinator's N1 is confirmed and sharpened; class surveyed structurally
+at 13 files with 89 existing `refresh()` calls, a tail rather than an epidemic.
+
+**Nine notes**, of which two are coordinator-authored defects: **N5** — OD-6's closing clause
+forbade the create branch of adopt-or-create (**corrected in the intention at this fold**); and
+**N8** — this project has no master plan, so the charter's environment-topology section has no
+home. **N4** is a live time bomb: `EXPECTED_HEAD`/`EXPECTED_PUBLIC_TABLE_COUNT` are hardcoded, so
+the next Alembic revision wedges the suite until a human edits the file.
+
+**Verified correct, and one condition nobody had measured:** the repaired files run **preceded by
+the poisoning file** in both orders — `91 passed` / `91 passed` / `71 passed`. The guard reads
+strictly stronger than phase 1's in both directions; both wedge shapes clear; C8's hook refuses
+an unrecognised value rather than treating it as off; C7(a) reads a production-produced value.
+**P2 resolves at 5 L4 runs across both build rounds, all authorized** — the coordinator's N2 is
+closed, most decisively by Sonnet's timestamp window (`0f08079` → `8429442` spans 5m09s; the two
+recorded runs already consume ~257 s of it).
+
+**2026-08-21 — review r3 consumed (coordinator). CHANGES_REQUESTED stands; fix r4 authored.**
+Three findings re-measured independently before folding — B1, B2's destruction, and S4's
+drivername row — all confirmed. C2 remains met on its own terms and is not reopened; every
+blocking finding is about a mechanism *adjacent* to the criterion rather than the criterion
+itself, which is why the phase is one fix round from closing rather than back at the start.

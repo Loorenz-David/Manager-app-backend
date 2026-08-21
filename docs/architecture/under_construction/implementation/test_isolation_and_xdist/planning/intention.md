@@ -425,6 +425,32 @@ the repair, the discriminator and the reorder are measured against one another i
 is restated as a class of ~118, with the reorder measurement recorded; the previously published
 "one remaining non-parallel-safe test" understated it by two orders of magnitude.
 
+### OD-7 — the test slot becomes a settings field (2026-08-21)
+
+**Owner: settings field, recommendation accepted.** Raised by review r3 as blocking B1.
+
+`resolve_test_slot` reads the slot with `os.getenv`, while the only place the repository
+documents the variable is `app/.env.example:8-10` — and `.env` is parsed by pydantic-settings,
+which **never populates `os.environ`**. Measured twice, independently by the reviewer and the
+coordinator: with `BEYO_TEST_SLOT=shopify` in the `.env` that `settings` actually reads,
+`os.getenv` returns `None` and the resolver yields `beyo_test_main_main`. **An operator who
+configures the slot exactly where they were told to gets no slot at all**, and the second
+checkout then drops the first's database mid-run — intention §5's hazard, surviving behind a
+variable that looks set.
+
+**Ratified:** add a `BEYO_TEST_SLOT` field to `app/beyo_manager/config.py` and resolve the slot
+from settings with an `os.environ` override, so both `.env` and an exported variable work.
+
+**This does not breach the production fence — it uses a provision written before phase 1
+started.** `plans/plan_1.md` §3: *"Nothing under `app/beyo_manager/` except `config.py` **only
+if** a test-database setting is genuinely required there."* This is that case, and the change is
+one declarative field with no behaviour.
+
+The rejected branch was keeping `os.getenv` and moving the documentation to a tests README. It
+costs nothing in production code but requires remembering to prefix every invocation in a second
+worktree, and **forgetting is silent destruction rather than an error message** — the failure
+mode this project exists to remove.
+
 ### OD-6 — a test may adopt a globally-unique catalog row; everything else it creates (2026-08-21)
 
 **Owner: adopt-or-create for globally-unique catalog rows only, recommendation accepted.**
@@ -463,8 +489,20 @@ ten lines. The probe was reverted and the file verified byte-identical
 (`0c7d0c99efef16f0343b7fbccc9a0a2b4cb25af7f59f3c8cc2ecc9f98c209f39` before and after).
 
 What this does *not* license: a shared catalog seeded once per run. OD-1's ruling stands —
-adopt-or-create happens inside the test's own fixture, per test, and no factory may create a
-globally-unique row inside a test that commits.
+adopt-or-create happens inside the test's own fixture, per test.
+
+**Clause corrected 2026-08-21 (review r3, N5 — coordinator-authored defect).** This paragraph
+originally closed *"and no factory may create a globally-unique row inside a test that commits."*
+That forbids the **create** branch of adopt-or-create: on a fresh database the first committing
+test that needs a `WORKER` role must create it, so the clause contradicted the contract two
+paragraphs above it. The rule intended, and now stated:
+
+> A factory **never creates a globally-unique row unconditionally.** It adopts an existing row
+> when one is present and creates it only when absent. The prohibition is on unconditional
+> creation, not on creation.
+
+`adopt_or_create_role` was right; the wording was wrong. `plans/plan_2.md` §4 task 1 bound 2
+inherits the corrected phrasing.
 
 ### OD-5 — xdist moves to its own phase; phase 2 ends at order-independence (2026-08-21)
 
