@@ -1,7 +1,8 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: IMPLEMENTED — 2026-08-21 (fix r4; C2 closing pair retained; 21 failed / 2561 passed / 1 deselected in both orders)
+state: APPROVED — 2026-08-21 (projection r0 · implement r1 · fix r2 · review r3 · fix r4 · coordinator gate stamp)
+gate_stamp: `11b4d02`, clean — default `21/2561/1` (116.20s), reversed `21/2561/1` (117.83s), comm empty BOTH directions
 hub: ../master_plan.md (tracker, environment §6, gates §7, baselines §8)
 phase: 2
 date: 2026-08-21

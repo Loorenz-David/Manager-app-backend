@@ -109,7 +109,11 @@ Run from `backend/app/`. `PYTHONPATH=.` is required.
 | one-time legacy reclamation | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e'` |
 
 Machine: **14 cores** (`hw.ncpu` = `hw.physicalcpu` = 14). Runner: pytest 8.3.5,
-`asyncio_mode = auto`, exactly one plugin (`pytest-asyncio`). **No randomizer is installed** — a
+`asyncio_mode = auto`, **two** registered third-party plugins — `pytest-asyncio-0.25.3` **and
+`anyio-4.13.0`** (`pytest -VV`). *(Corrected 2026-08-21: this section said "exactly one plugin",
+inherited from phase 1's inspection and never re-checked. Phase 3's task 2 argues that adding a
+plugin changes collection and reporting, so the inventory it reasons from has to be true.)*
+**No randomizer is installed** — a
 `-p no:randomly` in any inherited command is disabling a plugin that does not exist.
 `pytest-xdist` is **not installed** as of phase 2's approval; installing it is phase 3's first
 code change.
@@ -164,6 +168,19 @@ Before any destructive operation, all must hold or the run aborts:
 **Legacy reclamation is opt-in.** Pre-slot names (`beyo_test_template`, `beyo_test_main`,
 `beyo_test_gwN`) are reclaimed only under `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1`. It was
 unconditional for one round, and a 1.30-second unit run dropped another checkout's live database.
+
+### 6.3a Connection budget — the ceiling on worker count
+
+Measured 2026-08-21: PostgreSQL 18.4, **`max_connections = 100`**, ~16 backends already in use by
+the developer's own tools. `.env` sets **`DB_POOL_SIZE=20`** and **`DB_MAX_OVERFLOW=20`**, a
+per-process ceiling of **40**. So ~84 connections are free and **three workers at full pool
+exhaust the server**; `-n auto` on 14 cores is arithmetically impossible without changing one of
+these numbers.
+
+Actual usage is far below the ceiling — `initialize_database` is autouse and function-scoped, so
+a test holds one or two connections, not forty. The ceiling is a risk under load rather than a
+certainty. **Any worker-count decision states the connection budget it checked and records the
+`pg_stat_activity` peak it observed** (phase 3, L15).
 
 ### 6.4 Redis
 

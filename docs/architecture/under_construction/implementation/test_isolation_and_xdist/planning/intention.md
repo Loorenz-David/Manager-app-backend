@@ -442,6 +442,41 @@ the repair, the discriminator and the reorder are measured against one another i
 is restated as a class of ~118, with the reorder measurement recorded; the previously published
 "one remaining non-parallel-safe test" understated it by two orders of magnitude.
 
+### OD-8 — an unstable-test finding does not stop phase 3; it is listed (2026-08-21)
+
+**Owner: continue and list them, recommendation accepted.** Phase 3's task 1 probes whether any
+test's outcome is a function of the suite's shape rather than of the code. Until now the plan said
+task 1 "runs first and nothing else starts until it has an answer" — but mapped **no answer to an
+action**, which would leave the implementer mid-session holding a result with authority neither to
+continue nor to stop.
+
+**The rule, now binding:** a non-empty set is **enumerated and published as a separately-named
+unstable list**, excluded from the authoritative failing-ID set, and the phase **continues** to
+the worker-count matrix. Repairing that class is not phase 3's work.
+
+Why: the measurement is what tells us how large the repair is, and a baseline that names its
+unstable IDs out loud is more useful to the three consuming projects than a delayed one. The
+rejected branches were stopping (parallelism slips a phase for a repair of unknown size) and
+repairing in-phase (the phase's size becomes unknown, which is what phase boundaries exist to
+prevent).
+
+### OD-9 — the shipped default stays serial until parallel and serial agree (2026-08-21)
+
+**Owner: serial default until the differences are repaired, recommendation accepted.** If the
+failing-ID set under parallel execution differs from serial and the repair is outside phase 3's
+fence, the phase **reports the full matrix and changes no shipped default**. `pytest.ini` is left
+as it is.
+
+Why: phase 3's own primary objective is a baseline the organisation can trust, and a caveat
+attached to a number three projects consume is the exact failure this project was started to end.
+An asterisk everyone must remember is an asterisk everyone eventually forgets.
+
+**This does not delay `live_clock`.** Its ⛔ phase-4 gate asks for xdist installed and the baseline
+re-enumerated under the new runner — **not** for parallel-by-default. The gate opens either way.
+
+The speed is not lost, only deferred: the matrix is measured and published, so flipping the
+default later is a one-line change against numbers already in hand.
+
 ### OD-7 — the test slot becomes a settings field (2026-08-21)
 
 **Owner: settings field, recommendation accepted.** Raised by review r3 as blocking B1.
