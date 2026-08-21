@@ -224,7 +224,18 @@ F-14) — see §4 task 4 for the internal half that *is* this phase's.
   written, derivable from this plan without running anything. The expected bite set is
   therefore **two classes**:
   1. the two legacy IDs in the table above (the goldens test and `test_c17`), and
-  2. this phase's own rows that assert the reconstruction — C3, C6a, C6b.
+  2. this phase's own rows that assert the reconstruction — C3, C6a, C6b, **and C6c**.
+
+  > **UPDATED 2026-08-21 (fix r2 consumption).** Class 2 gained **C6c** the moment that
+  > row was added, and the coordinator measured it rather than assuming: the C5 mutant
+  > applied at the E-P site reddens `test_c3…`, `test_c6a…`, `test_c6b…`, **`test_c6c…`**
+  > and `test_c17…` (5 failed / 31 passed across the two files, at `874f02d`; probe
+  > reverted, `division_serializers.py` verified byte-identical at
+  > `d9160f92…`). **Standing maintenance rule this earns:** an enumerated expected-bite
+  > set is a claim with a shelf life — **every row added that asserts the same mechanism
+  > joins the class, and the enumeration is updated in the same cycle that adds the row.**
+  > Left stale, it converts the next round's correct result into a false finding, which
+  > is precisely the failure the class list was written to prevent.
 
   **A finding is an ID outside both classes.** An ID from class 2 is the criteria working.
   Record the union as measured; do not remove a correct row to make a bite set match a
@@ -642,3 +653,48 @@ production serializer files temporarily and were reverted to byte identity; thos
 are not in the cycle's shipped perimeter. No Architecture Graph delta was warranted:
 the cycle changes proof coverage around existing feed sites and creates no architectural
 boundary.
+
+**2026-08-21 — fix r2 consumed (coordinator).** Both should-fix findings genuinely closed;
+verified at source, not read. Tree identity reproduced exactly (declared digest
+`b50bda39…` = `git diff ac953a0 874f02d -- app/`), perimeter exactly the declared five
+files with **nothing under `app/beyo_manager/`**, and the L4 stamp `26 / 2487 / 1` cited
+rather than re-run. **S1 closed:** C6b now carries frozen `15.00 / −15.00` against a
+**positive** current allowance `20.00`, asserts `status == "ok"` on both faces, and its
+comment was rewritten to claim only what the fixture demonstrates — the `null` now has one
+sufficient cause. **S2 closed:** C6c asserts `"150.00"` on both faces from frozen
+`15.00 / −5.00` → reconstructed `10.00`, with the live percent at `120.00` on the same
+fixture so the row is non-vacuous. N1 and N4 present. The implementer corrected the
+coordinator's `+2` forecast to the true `+1` (C6c adds one function; C6b was re-specified,
+not added) — a small thing recorded because the correction ran in the right direction.
+
+**Coordinator finding against the coordinator's own correction.** The C5 expected-bite-set
+classes written yesterday listed class 2 as "C3, C6a, C6b". Measured at `874f02d`: the C5
+mutant at the E-P site reddens **C6c as well** (5 failed / 31 passed over the two phase
+files; probe reverted, `division_serializers.py` byte-identical at `d9160f92…`). The class
+list went stale **one round after it was written**, and left alone it would have converted
+the next round's correct result into a false finding — the exact failure the list exists
+to prevent. Standing rule added to C5: **an enumerated expected set is a claim with a
+shelf life; every row added that asserts the same mechanism joins the class in the same
+cycle that adds the row.**
+
+**Environment, established here and folded to master §6:** fix r2 reported that the
+configured *testing* database lacks `cost_model_versions`, and the report is accurate.
+Measured: `app/.env` points the suite at the **development** database
+(`…:5433/beyo_manager`) — so every baseline in this pipeline, including phase 2's
+published approval baseline, was taken there — while `app/.env.testing` designates
+`…:5432/app_test`, which is stamped at `67cfba8fcb2d` with 96 tables and has neither
+`cost_model_versions` nor `item_cost_results`. This is the starting input for the
+per-worker-database work that gates phase 4: the isolation work begins by building a
+correctly migrated test database and re-enumerating the 26-ID baseline there, not by
+adding workers. `migrations/env.py` still carries its `connection.rollback()` guard
+(line 167) against the trap where `alembic upgrade` exits 0 and persists nothing — assert
+the DDL after migrating, never the exit code.
+
+**Round spent rather than skipped, reason recorded:** C6c and the re-specified C6b are new
+criteria guarding a money-adjacent number, and they have had exactly one author and one
+reader — the coordinator, who wrote the criterion they implement. Every occasion this
+pipeline let replacement text into the tree with no independent reader cost a later round.
+Re-review r3 prompt at `prompts/reviewer/2026-08-21_phase3_rereview_r3.md`, delta-scoped,
+with the settled ground above marked do-not-re-spend and P5 asking the one question that
+bears on the approval gate: whether a baseline measured on the development database is
+acceptable evidence to approve on.
