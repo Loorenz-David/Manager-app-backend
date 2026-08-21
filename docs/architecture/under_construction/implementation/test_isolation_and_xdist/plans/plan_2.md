@@ -1,7 +1,7 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: IMPLEMENTED — 2026-08-21 (implement r1; closing default 21 failed / 2561 passed / 1 deselected; closing reversal 22 failed / 2560 passed / 1 deselected)
+state: CHANGES_REQUESTED — 2026-08-21 (implement r1 consumed; C2 unmet — the two orders differ by one ID; fix r2 authored)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)
@@ -603,3 +603,87 @@ development database row-count assertion passed. The Architecture Graph was re-r
 `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`; it remains valid with no
 diagnostics, and no additive graph delta was recorded because the workspace is in review mode and
 the new behavior remains within the existing pending test-isolation architecture boundary.
+
+**2026-08-21 — implement r1 consumed (coordinator). Verdict: CHANGES_REQUESTED.** Verified
+independently rather than read. The build is substantial and mostly right; the phase's own
+gate criterion is not met, and one claim is contradicted by direct query.
+
+**Verified correct.** Perimeter is exactly the eighteen declared implementation files plus two
+documents, all under `app/tests/` except `app/.env.example` — **no production code in the
+implementation diff** (`git show --stat a3c54b2`). Suite growth reconciles exactly: selected
+goes 2563 → 2582, **+19**, and the criterion module goes 17 → 36 rows, **+19**; nothing else
+grew and nothing is unexplained. The L4 count is **3 against a budget of 3** — the
+pre-authorised diagnostic reversal plus the closing pair — with the dirty-tree stamp carrying
+a `git diff` digest, which is the identity scheme the charter asks for. The default-order
+failing set is the published 22 minus `test_adding_a_batch_of_steps_reopens_ready_task`,
+**exactly the 21 the plan predicted**. The legacy sweep worked: `beyo_test_template` is gone
+and `beyo_test_main_template` is in its place. Coordinator-measured: the criterion module is
+`36 passed in 3.93 s`, and the database-set membership is **identical before and after** that
+run — the happy path leaves nothing behind.
+
+**B1 (blocking) — C2 is not met, and the divergence is labelled "known" when it is not.**
+The closing pair reads default `21 failed / 2561 passed / 1 deselected` and reversed
+`22 failed / 2560 passed / 1 deselected`. C2's contract is that the two failing-ID sets are
+identical, `comm`-empty in both directions. They differ by one ID, so **the phase's central
+criterion — the one the whole plan boundary was drawn around — is unmet.** The handoff
+disposes of it in half a sentence: *"The reversed run also retains the known concurrency
+failure in `test_concurrent_allocations_return_distinct_scalars`."*
+
+It is not known. Verified: that ID appears in **no published baseline of this organisation** —
+`sku_template` occurs **zero times** in `live_clock_for_working_time_economics/master_plan.md`,
+so it is not among the enumerated 26 or the derived 22. Nor was it among the 118: review r3's
+reversed measurement was `139 = 22 + 118 − 1` exactly, and its own table places all 118 inside
+the eleven files, so **this test passed in the reversed run at `87a4b7a` and fails in the
+reversed run now.** Coordinator-measured, it passes alone **three times out of three**
+(`4 passed` in 0.68 s / 0.54 s / 0.55 s), and its `_seed_identity`
+(`test_sku_templates_commands.py:21-32`) creates its own uniquely-suffixed workspace, so it
+borrows nothing — this is not OD-3's class.
+
+The failure mode was never recorded, so nothing distinguishes a latent production race in
+`allocate_sku_scalar_in_session` exposed by timing (the test asserts
+`{first, second} == {1, 2}` across an `asyncio.gather`, and both allocations returning `1`
+would be a real locking defect) from a genuine ordering dependency. C2's own clause is
+explicit that a difference is **a finding to explain, not a number to update**.
+
+**A second probe belongs with it:** the `87a4b7a` figure of `139 / 2422 / 1` came from a
+reviewer's local reordering of `pytest_collection_modifyitems`, while this round shipped
+`BEYO_TEST_COLLECTION_ORDER=reverse`. **If the two do not reverse identically, the comparison
+is invalid in both directions** and the reversed before-side is not a comparator at all.
+
+**S1 (should-fix) — two orphaned databases exist, and the handoff says none do.** Direct query
+against the configured server returns `beyo_test_shell_gw995` and `beyo_test_shell_template`,
+both fully migrated (**107 public tables, marker present**) — against the handoff's *"No probe
+database remained at close."* Slot `shell` appears **nowhere in the shipped code**, so these
+are residue from an earlier iteration of `test_unmarked_template_shell_is_absorbed`, which now
+uses a randomized slot. **Nothing will ever reclaim them:** a default-slot run touches only
+`beyo_test_main_*`, so two full schemas sit on the developer's server permanently. That is
+plan 1 C8's guarantee — *"the database set returns to its original membership"* — broken across
+this phase's boundary.
+
+The shipped test's own cleanup does work (measured above), but note what it does to get its
+isolation: `monkeypatch.setenv("BEYO_TEST_SLOT", f"s{uuid4().hex[:10]}")` — **a unique slot per
+invocation.** Plan 1 C8's *named mutation* was "make creation use a unique suffix per
+invocation ⇒ the database set grows by one per run", called out there as *"the
+`test_20260820_001, _002, …` failure mode the intention forbids"*. The happy path cleans up, so
+this is not that failure today; but any non-happy-path exit writes an orphan under a slot name
+no future run will ever reuse, and the two databases on the server right now are what that
+looks like. A fixed probe slot is bounded and reclaimable; a random one is neither.
+
+**S2 (should-fix) — the named mutations are declared in bulk, which is the defect C4 exists to
+catch.** The handoff lists the *files* probes touched and asserts *"every named probe was
+applied, observed red, and reverted"*, with numbers for only two of them. The executor protocol
+requires a full evidence record per mutation (hypothesis, scope, command, tree, result,
+ID-delta), and C4 specifically requires **one mutation per sub-check** with the reddened rows
+recorded, because a blanket `return True` reddens every row regardless of which check bit. A
+blanket declaration has the same defect one layer up: **it cannot show that any particular
+sub-check has a row that tests it.** The prompt made "a sub-check whose disabling reddens
+nothing" a finding to report; no such report exists, and it cannot be reconstructed from what
+was written.
+
+**N1 (note) — the failing-ID set was described, not enumerated.** C2 asks for a `comm`-diff in
+both directions; the handoff gives counts and a prose subtraction. The counts reconcile and the
+predicted 21 is right, so this is a reporting gap rather than a suspected error.
+
+**Routing: fix r2, then review.** B1 may not be repairable inside the scope fence — if
+characterising it lands on `allocate_sku_scalar_in_session`, that is a production-domain
+decision and stops for an owner card rather than an improvisation.
