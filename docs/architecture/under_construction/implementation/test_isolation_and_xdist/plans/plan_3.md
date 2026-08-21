@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: PROJECTED — 2026-08-21 (projection r0 consumed; 25 ledger rows routed; OD-8 and OD-9 answered)
+state: PROMPT_READY — 2026-08-21 (projection r0 consumed, 25 rows routed, OD-8/OD-9 answered; implement r1 authored)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
