@@ -156,3 +156,39 @@ spans recorded alongside a symbol are worth re-deriving from the symbol at revie
 than trusting**, and the two that excluded a decorator are the sharper lesson: when a test's
 evidence is its `@pytest.mark.parametrize` table, an anchor starting at the `def` points at the
 assertion and misses the data it is asserting over.
+
+---
+
+## Addendum to Finding 1 — 2026-08-21 — pipeline coordinator (`live_clock` phase-3 closeout)
+
+**The review path batches fine. Finding 1's defect does not generalise to it.**
+
+Clearing this repo's review queue took **one `archgraph_preview_review_decisions` call
+carrying 13 `promote` decisions**, followed by one `archgraph_apply_review_decisions`.
+No `INTERNAL_ERROR`, no partial application: all 13 moved `ai_inferred → human_confirmed`
+in a single audited record (`.archgraph/reviews/2026-08-21T08-50-39-304Z--eed27f.yml`).
+
+So the one-operation-per-call constraint recorded above is **specific to
+`archgraph_repair_anchors` / the maintenance path**, and a session should not generalise
+it into "this server cannot batch". That matters in the expensive direction: a 13-item
+queue adjudicated one call at a time is 26 round trips for no reason.
+
+**Finding 1's open question is still open.** Its unresolved half was *"whether the trigger
+is more than one operation or mixed operation kinds"*, and this session did not test it —
+all eight maintenance operations here (2 unlink + 2 link per stale node) were issued one
+per call precisely because the finding says to. The cheap experiment it proposes — one
+two-`unlink` batch on a node that can spare it — remains undone.
+
+**A second, smaller data point for the closing note's anchor lesson.** Repairing the two
+stale nodes required re-deriving four spans, and **all four stored spans were wrong**:
+
+| Link | Stored | Re-derived | Kind of wrong |
+|---|---|---|---|
+| `…task-production-time` → `get_task_production_time` | 23–45 | **26–121** | ended mid-function after the symbol grew |
+| `…task-production-time` → `test_c4_c6a_c6b_…` | 106–158 | **108–160** | off by two at both ends |
+| `…task-price-scenario` → `get_task_price_scenario` | 181–311 | **184–315** | drifted under a parallel stream |
+| `…task-price-scenario` → `test_c1_status_matrix_…` | 583–617 | **583–615** | start correct (the `parametrize` table), end over-reached into trailing blanks |
+
+That is now **ten of fifteen** anchors inspected across two closeouts that did not point
+where they claimed. The closing note above says line spans are worth re-deriving from the
+symbol rather than trusted; at this hit rate it is not a precaution, it is the procedure.

@@ -499,19 +499,37 @@ restated because they are load-bearing here:
   at `+02:00` did not bite at all under `TZ=UTC`).
 - The suite leaves residue rows (`task_steps`, `step_state_records`) from tests outside
   this pipeline; row-count drift is never evidence of a code change.
-- **Architecture graph — SUPERSEDED 2026-08-21, the "inherited clean" line is no longer
-  true.** It read "0 pending, 0 stale, 0 diagnostics as of `0bab586`". Plan 3's
-  projection reported **9 pending, 2 stale** and the coordinator reproduced it
-  independently at `6508ce1` (`archgraph_status`: `pendingReviewCount: 9`,
-  `staleNodeCount: 2`, `diagnostics: []`, 189 nodes / 285 edges). Three of the nine are
-  the phase-1 items already tracked for owner adjudication at `plans/plan_4.md` C6; the
-  **other six and both stale nodes accrued without any session declaring them**, and no
-  handoff in this pipeline claims a graph write since phase 1 — the phase-2 rounds each
-  declared "no Architecture Graph delta". Two consequences, both binding: the count is an
-  **owner-adjudication backlog that grew silently**, so phase 4's delta lands on a dirty
-  graph unless it is cleared; and "the graph is clean" is not a fact any session may cite
-  from this section again — re-measure it. Diagnostics remain 0. Agents still never
-  promote, reject or edit review items. Two open tooling findings sit in
+- **Architecture graph — CLEARED 2026-08-21: 0 pending, 0 stale, 0 diagnostics**
+  (`archgraph_status` revision `fbe0f7c3…`, 190 nodes / 288 edges). Read the history
+  below before citing that, because "the graph is clean" is exactly the sentence that
+  went stale last time.
+  - **What it drifted to first.** The line here previously read "inherited clean as of
+    `0bab586`". Plan 3's projection reported **9 pending / 2 stale**, reproduced by the
+    coordinator at `6508ce1`, and it reached **13 pending** by the time it was cleared —
+    stream 3 added four items mid-session. Every one was attributable **by timestamp**,
+    which is what dissolved the "accrued silently" worry: 3 from phase 1 (11:21 on
+    2026-08-20), 4 from phase 2's consumer edges (18:38), 2 from the owner's
+    production-budget-cap stream (19:45), 4 from the shopify stream (08:16 on 08-21).
+    The phase-2 four are the ones this pipeline's own rounds each declared as "no
+    Architecture Graph delta" — that claim was wrong, and only the timestamps showed it.
+  - **The two stale nodes, and their causes.** `projection-item-economics-task-production-time`
+    (drifted by *our* phase 2/3 — `get_task_production_time` grew 23–45 → **26–121**, so
+    the stored span ended mid-function) and `projection-item-economics-task-price-scenario`
+    (drifted by the owner's cap stream — 181–311 → **184–315**). Both repaired by
+    unlink+link with **spans re-derived from the symbol, never trusted** — the ledger's
+    own lesson, and all four stored spans were wrong. One operation per call, per the
+    open tooling finding.
+  - **The 13 were promoted on owner adjudication 2026-08-21**, seven with per-item
+    coordinator verification recorded in the review record and six (the cap and shopify
+    streams) explicitly marked *promoted on owner authorization, not coordinator
+    verification* — the pipeline has never reviewed those implementations and the audit
+    trail says so. Review record `.archgraph/reviews/2026-08-21T08-50-39-304Z--eed27f.yml`.
+  - **N6 is closed by decision, not by rebuild.** The owner promoted the `reads_from`
+    edge as-is over the count in its summary ("issues one batched probe"), because the
+    count is true, its anchor is exact, and phase 2's C8 regression-tests it — where
+    reject-and-re-record would have destroyed provenance to delete one tested word.
+  - Agents still never promote, reject or edit review items. This queue was cleared
+    because the owner adjudicated it. Two open tooling findings sit in
   `implementation/archGraph_mapping_mantainance/open/` — read them before any
   `archgraph_repair_anchors` call (one operation per call; batches fail) and before
   trusting a `conflicting-canonical-relationship` diagnostic.

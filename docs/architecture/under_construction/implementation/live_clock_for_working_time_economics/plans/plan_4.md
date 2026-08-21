@@ -76,7 +76,19 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
 - **C6** — obligation 6 / graph: five nodes updated, edges recorded, `archgraph_status`
   returns 0 stale / 0 diagnostics after the batch; evidence spans verified by reading
   the `anchors` block (the hash does not cover anchors — master plan §5 lineage).
-  **AMENDED 2026-08-21 — the baseline this row assumed is gone.** It was written when
+  **RESOLVED 2026-08-21 — the backlog this row carried is cleared; the row now guards
+  only this phase's own delta.** The owner adjudicated the whole queue: **13 items
+  promoted, 0 pending, 0 stale, 0 diagnostics** (revision `fbe0f7c3…`, review record
+  `.archgraph/reviews/2026-08-21T08-50-39-304Z--eed27f.yml`). Both stale nodes were
+  repaired with spans re-derived from source. **N6 is closed by decision, not rebuild** —
+  the `reads_from` edge was promoted as-is over the count in its summary, because the
+  count is true, its anchor exact, and phase 2's C8 regression-tests it. So (ii) below is
+  discharged and this criterion reduces to (i): **phase 4's own five-node delta must be
+  clean, on a graph that is clean when it lands.** Re-measure `archgraph_status` at that
+  point rather than citing this line — the previous version of this sentence went stale
+  twice.
+
+  **Superseded context, kept as provenance — the baseline this row originally assumed:** It was written when
   master §6 recorded the graph as 0 pending / 0 stale. Measured at `6508ce1` by plan 3's
   projection and reproduced by the coordinator: **9 pending, 2 stale**, 0 diagnostics.
   Six of the nine pending items and both stale nodes accrued with **no session declaring
