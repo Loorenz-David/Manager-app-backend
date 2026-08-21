@@ -523,7 +523,9 @@ async def test_full_declared_state_loop_rebuilds_all_declared_time_without_idle_
     ]
 
 
-async def test_clock_out_reconstructs_middle_from_step_history(db_session) -> None:
+async def test_clock_out_reconstructs_middle_from_step_history(
+    db_session, worker_shift_reference_data
+) -> None:
     # Reproduces the "analytics worker was down during the shift" case: step activity is
     # recorded but the live reconcile never ran, so no working/pause/idle shift records
     # exist. Clock-out must rebuild the full middle from step history.

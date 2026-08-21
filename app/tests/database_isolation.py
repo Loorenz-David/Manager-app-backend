@@ -111,6 +111,7 @@ class DatabaseIsolation:
             )
         )
         self._app_root = Path(__file__).resolve().parents[1]
+        self.configured_row_counts_before_run: dict[str, int] | None = None
         self._started = False
 
     @property
@@ -126,6 +127,10 @@ class DatabaseIsolation:
 
     async def start(self) -> None:
         try:
+            if not TEST_DATABASE_PATTERN.fullmatch(self.configured_database_name):
+                self.configured_row_counts_before_run = await self.row_counts(
+                    self.configured_database_name
+                )
             await self._ensure_template()
             await self._drop_database_if_exists(self.worker_database_name)
             await self._create_database_from_template(self.worker_database_name)
@@ -248,11 +253,6 @@ class DatabaseIsolation:
             await self._create_database(TEMPLATE_DATABASE_NAME)
             await self._set_marker(TEMPLATE_DATABASE_NAME)
             await self._migrate_and_assert(TEMPLATE_DATABASE_NAME)
-            await self._restore_baseline_data(TEMPLATE_DATABASE_NAME)
-            await self._set_marker(
-                TEMPLATE_DATABASE_NAME,
-                baseline_source=self.configured_database_name,
-            )
             return
 
         inspection = await self.inspect(TEMPLATE_DATABASE_NAME)
@@ -263,7 +263,7 @@ class DatabaseIsolation:
         if (
             inspection.head_revision == EXPECTED_HEAD
             and inspection.public_table_count == EXPECTED_PUBLIC_TABLE_COUNT
-            and await self._baseline_present(TEMPLATE_DATABASE_NAME)
+            and not await self._has_legacy_baseline_source(TEMPLATE_DATABASE_NAME)
         ):
             return
 
@@ -271,126 +271,25 @@ class DatabaseIsolation:
         await self._create_database(TEMPLATE_DATABASE_NAME)
         await self._set_marker(TEMPLATE_DATABASE_NAME)
         await self._migrate_and_assert(TEMPLATE_DATABASE_NAME)
-        await self._restore_baseline_data(TEMPLATE_DATABASE_NAME)
-        await self._set_marker(
-            TEMPLATE_DATABASE_NAME,
-            baseline_source=self.configured_database_name,
-        )
 
-    async def _baseline_present(self, database_name: str) -> bool:
+    async def _has_legacy_baseline_source(self, database_name: str) -> bool:
         connection = await _connect(self._url, database_name)
         try:
-            try:
-                source = await connection.fetchval(
-                    f"""
-                    SELECT baseline_source
-                    FROM {MARKER_SCHEMA}.{MARKER_TABLE}
-                    WHERE marker_key = $1
+            return bool(
+                await connection.fetchval(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = $1
+                      AND table_name = $2
+                      AND column_name = 'baseline_source'
                     """,
-                    MARKER_KEY,
+                    MARKER_SCHEMA,
+                    MARKER_TABLE,
                 )
-            except asyncpg.UndefinedColumnError:
-                return False
-            return source == self.configured_database_name
+            )
         finally:
             await connection.close()
-
-    def _postgres_cli_database_args(self, database_name: str) -> list[str]:
-        return [
-            "--host",
-            "127.0.0.1" if self._url.host == "localhost" else str(self._url.host),
-            "--port",
-            str(self._url.port or 5432),
-            "--username",
-            str(self._url.username),
-            "--dbname",
-            database_name,
-        ]
-
-    async def _preseeded_table_exclusions(self, database_name: str) -> list[str]:
-        connection = await _connect(self._url, database_name)
-        try:
-            tables = await connection.fetch(
-                """
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                ORDER BY table_name
-                """
-            )
-            exclusions: list[str] = []
-            for row in tables:
-                table_name = row["table_name"]
-                count = await connection.fetchval(
-                    f'SELECT count(*) FROM public."{table_name}"'
-                )
-                if count:
-                    exclusions.extend(["--exclude-table-data", f"public.{table_name}"])
-            return exclusions
-        finally:
-            await connection.close()
-
-    def _postgres_cli_environment(self) -> dict[str, str]:
-        if self._url.password is None:
-            raise UnsafeDatabaseError("DATABASE_URL must include a password for PostgreSQL tools")
-        environment = os.environ.copy()
-        environment["PGHOST"] = "127.0.0.1" if self._url.host == "localhost" else str(self._url.host)
-        environment["PGPORT"] = str(self._url.port or 5432)
-        environment["PGUSER"] = str(self._url.username)
-        environment["PGPASSWORD"] = self._url.password
-        return environment
-
-    async def _restore_baseline_data(self, database_name: str) -> None:
-        """Restore baseline rows while retaining migration-owned seed rows."""
-        exclusions = await self._preseeded_table_exclusions(database_name)
-        exclusions.extend(
-            ["--exclude-table-data", f"{MARKER_SCHEMA}.{MARKER_TABLE}"]
-        )
-        if (self._app_root / "docker-compose.yml").exists():
-            dump_command = [
-                "docker", "compose", "exec", "-T", "postgres", "pg_dump",
-                "--format=custom", "--data-only", "--no-owner", "--no-privileges",
-                "--exclude-table=alembic_version", *exclusions,
-                "--username", str(self._url.username), "--dbname", self.configured_database_name,
-            ]
-            restore_command = [
-                "docker", "compose", "exec", "-T", "postgres", "pg_restore",
-                "--data-only", "--no-owner", "--no-privileges", "--exit-on-error",
-                "--disable-triggers", "--username", str(self._url.username),
-                "--dbname", database_name,
-            ]
-            command_environment = os.environ.copy()
-            command_environment.pop("PGPASSWORD", None)
-        else:
-            dump_command = [
-                "pg_dump", "--format=custom", "--data-only", "--no-owner", "--no-privileges",
-                "--exclude-table=alembic_version", *exclusions,
-                *self._postgres_cli_database_args(self.configured_database_name),
-            ]
-            restore_command = [
-                "pg_restore", "--data-only", "--no-owner", "--no-privileges", "--exit-on-error",
-                "--disable-triggers", *self._postgres_cli_database_args(database_name),
-            ]
-            command_environment = self._postgres_cli_environment()
-
-        dump_result = subprocess.run(
-            dump_command, cwd=self._app_root, env=command_environment,
-            capture_output=True, check=False,
-        )
-        if dump_result.returncode != 0:
-            raise RuntimeError(
-                "Could not snapshot baseline database: "
-                f"{dump_result.stderr.decode(errors='replace').strip()}"
-            )
-        restore_result = subprocess.run(
-            restore_command, cwd=self._app_root, env=command_environment,
-            input=dump_result.stdout, capture_output=True, check=False,
-        )
-        if restore_result.returncode != 0:
-            raise RuntimeError(
-                "Could not restore baseline database: "
-                f"{restore_result.stderr.decode(errors='replace').strip()}"
-            )
 
     async def _migrate_and_assert(self, database_name: str) -> None:
         env = os.environ.copy()
@@ -461,9 +360,7 @@ class DatabaseIsolation:
         finally:
             await connection.close()
 
-    async def _set_marker(
-        self, database_name: str, *, baseline_source: str | None = None
-    ) -> None:
+    async def _set_marker(self, database_name: str) -> None:
         connection = await _connect(self._url, database_name)
         try:
             await connection.execute(
@@ -474,30 +371,20 @@ class DatabaseIsolation:
                 CREATE TABLE IF NOT EXISTS {MARKER_SCHEMA}.{MARKER_TABLE} (
                     marker_key text PRIMARY KEY,
                     database_name text NOT NULL,
-                    baseline_source text,
                     created_at timestamptz NOT NULL DEFAULT now()
                 )
                 """
             )
             await connection.execute(
-                f"ALTER TABLE {MARKER_SCHEMA}.{MARKER_TABLE} "
-                "ADD COLUMN IF NOT EXISTS baseline_source text"
-            )
-            await connection.execute(
                 f"""
                 INSERT INTO {MARKER_SCHEMA}.{MARKER_TABLE}
-                    (marker_key, database_name, baseline_source)
-                VALUES ($1, $2, $3)
+                    (marker_key, database_name)
+                VALUES ($1, $2)
                 ON CONFLICT (marker_key) DO UPDATE
-                SET database_name = EXCLUDED.database_name,
-                    baseline_source = COALESCE(
-                        EXCLUDED.baseline_source,
-                        {MARKER_SCHEMA}.{MARKER_TABLE}.baseline_source
-                    )
+                SET database_name = EXCLUDED.database_name
                 """,
                 MARKER_KEY,
                 database_name,
-                baseline_source,
             )
         finally:
             await connection.close()

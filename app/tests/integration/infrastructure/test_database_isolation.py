@@ -95,12 +95,10 @@ async def test_application_database_seam_points_at_worker(isolated_database: Dat
 
 @pytest.mark.asyncio
 async def test_dev_database_counts_are_untouched(isolated_database: DatabaseIsolation) -> None:
-    assert await isolated_database.row_counts(isolated_database.configured_database_name) == {
-        "workspaces": 11253,
-        "users": 9809,
-        "tasks": 2445,
-        "working_sections": 1955,
-    }
+    before = isolated_database.configured_row_counts_before_run
+    assert before is not None
+    after = await isolated_database.row_counts(isolated_database.configured_database_name)
+    assert after == before
     active_database_name = make_url(settings.database_url).database
     assert active_database_name == isolated_database.worker_database_name
 
@@ -113,9 +111,10 @@ async def test_fixed_name_reabsorbs_an_interrupted_worker(
     before = set(await probe.database_names())
     await probe._create_database(probe.worker_database_name)
     await probe._set_marker(probe.worker_database_name)
+    assert set(await probe.database_names()) == before | {probe.worker_database_name}
     try:
         await probe.start()
-        assert probe.worker_database_name in await probe.database_names()
+        assert set(await probe.database_names()) == before | {probe.worker_database_name}
     finally:
         await probe.stop()
     assert set(await probe.database_names()) == before

@@ -256,7 +256,9 @@ async def _seed_open_working_step(db_session, workspace: Workspace, worker: User
     return step
 
 
-async def test_kiosk_full_loop_from_floor_sign_in_to_clock_out(db_session) -> None:
+async def test_kiosk_full_loop_from_floor_sign_in_to_clock_out(
+    db_session, kiosk_reference_data
+) -> None:
     code = uuid4().hex[:8]
     workspace, device_manager, worker = await _seed_kiosk_workspace(
         db_session, clock_in_code=code
@@ -343,7 +345,9 @@ async def test_kiosk_full_loop_from_floor_sign_in_to_clock_out(db_session) -> No
     assert closed["clocked_in"] is False
 
 
-async def test_kiosk_clock_out_reports_working_steps_it_force_closed(db_session) -> None:
+async def test_kiosk_clock_out_reports_working_steps_it_force_closed(
+    db_session, kiosk_reference_data
+) -> None:
     workspace, device_manager, worker = await _seed_kiosk_workspace(
         db_session, clock_in_code=uuid4().hex[:8]
     )
@@ -362,7 +366,9 @@ async def test_kiosk_clock_out_reports_working_steps_it_force_closed(db_session)
     assert clock_out_result["analytics"] is None
 
 
-async def test_kiosk_roster_matches_worker_without_a_clock_code_by_email(db_session) -> None:
+async def test_kiosk_roster_matches_worker_without_a_clock_code_by_email(
+    db_session, kiosk_reference_data
+) -> None:
     """Rollout needs no backfill: email matching works while clock_in_code is NULL."""
     _, device_manager, worker = await _seed_kiosk_workspace(db_session, clock_in_code=None)
     claims = await _floor_claims(db_session, device_manager)

@@ -29,7 +29,9 @@ async def _any_workspace_with_catalog(db_session) -> str:
     return workspace_id
 
 
-async def test_constraint_rejects_a_step_record_carrying_both_explanations(db_session):
+async def test_constraint_rejects_a_step_record_carrying_both_explanations(
+    db_session, transition_reason_reference_data
+):
     """T2, enforced by the database rather than by every future writer remembering."""
     workspace_id = await _any_workspace_with_catalog(db_session)
     step_id = await db_session.scalar(
@@ -69,7 +71,9 @@ async def test_constraint_rejects_a_step_record_carrying_both_explanations(db_se
     await db_session.rollback()
 
 
-async def test_constraint_does_not_reject_the_declared_state_projection(db_session):
+async def test_constraint_does_not_reject_the_declared_state_projection(
+    db_session, transition_reason_reference_data
+):
     """The one documented exception — and the reason the constraint is table-scoped.
 
     A declaration-sourced segment on `user_shift_state_records` carries
@@ -123,7 +127,9 @@ async def test_constraint_does_not_reject_the_declared_state_projection(db_sessi
     await db_session.rollback()
 
 
-async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(db_session):
+async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(
+    db_session, transition_reason_reference_data
+):
     """It stays because a worker picks it, and `list_pause_reasons` filters `is_deleted`.
 
     Asserted through the query service rather than by reading the row, because the filter — not the
@@ -152,7 +158,9 @@ async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(db_ses
     )
 
 
-async def test_retirement_left_the_guarded_populations_alone(db_session):
+async def test_retirement_left_the_guarded_populations_alone(
+    db_session, transition_reason_reference_data
+):
     """`pause_case_created` is a stale value with 7 historical references phase 3 preserved."""
     anchor_refs = await db_session.scalar(
         text(

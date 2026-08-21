@@ -15,6 +15,9 @@ from beyo_manager.models.database import close_db, get_db, init_db
 from tests.database_isolation import DatabaseIsolation, start_database_isolation
 
 
+pytest_plugins = ("tests.fixtures.phase1_reference_data",)
+
+
 @pytest.fixture(scope="session")
 def isolated_database() -> Generator[DatabaseIsolation, None, None]:
     """Provision one fresh marked database for this pytest process."""

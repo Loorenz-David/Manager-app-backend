@@ -141,7 +141,9 @@ async def _shift_records(db_session, workspace_id: str, user_id: str):
     )
 
 
-async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None:
+async def test_backfill_matches_sweep_read_and_is_idempotent(
+    db_session, backfill_shift_reference_data
+) -> None:
     workspace, worker, step = await _seed_worker_day(db_session)
     work_date = date(2026, 7, 15)
     base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
