@@ -1,7 +1,7 @@
 # Plan 1 — per-worker database isolation, proven serially
 
 ```
-state: IMPLEMENTED
+state: APPROVED — 2026-08-21 (implement r1 · fix r2 · review r3 · fix r4 · coordinator verification)
 phase: 1
 date: 2026-08-21
 actor: codex (fix r4)
@@ -510,3 +510,70 @@ collection to answer. That generative step is the round's entire value.
   probe files are `app/tests/database_isolation.py` and
   `app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py`; the latter is restored
   byte-for-byte and is not part of the intended change. No Architecture Graph delta was made.
+
+**2026-08-21 — fix r4 consumed and verified by the coordinator (no r5 dispatched).** Three of
+four items land cleanly; one is half-fixed and carries to phase 2; two process violations are
+corrected here.
+
+**The L4 stamp this round did not take, taken by the coordinator.** Result at the r4 tree:
+**22 failed / 2541 passed / 1 deselected in 107.51 s**. The failing-ID set is **byte-identical to
+the published 22** — `comm` empty in both directions — and the count reconciles exactly against
+2563 selected (the +2 over the previous 2561 being this round's two new criterion rows).
+
+**B2 — the primary window is genuinely closed, verified at the exact point of failure.**
+Reproduced the window with the module's own code: `_create_database_from_template('beyo_test_gw997')`
+followed by *no* `_set_marker` now reports `marker_present = True`, the guard **accepts**, and the
+database drops cleanly. Before the fix that same sequence returned `0` from the guard's predicate
+and wedged permanently. The relaxation is safe: the marker check dropped only its
+`database_name` clause, and the other three fail-closed conditions — exact name pattern,
+not-the-configured-database, URL parses — all remain, so a marked database still cannot be dropped
+unless it is also named `beyo_test_*` and is not the configured one.
+
+**FINDING (should-fix, carried to phase 2) — B2 is half-fixed; the same wedge survives in a second
+shape.** A `beyo_test_*` database that lacks the marker **table** entirely — rather than carrying
+an inherited marker row — still wedges. Measured: created `beyo_test_gw996` as a plain database
+and called `_drop_database_if_exists`, which **raised `UndefinedTableError: relation
+"beyo_test_metadata.database_marker" does not exist`** and left the database in place. This is
+reachable on the path every first run takes: `_ensure_template` does `_create_database(TEMPLATE)`
+then `_set_marker(TEMPLATE)` as two steps, so an interrupt between them leaves
+`beyo_test_template` with no marker table and every later run fails at template setup. It is also
+reachable if anyone hand-creates a `beyo_test_*` database.
+**Severity is availability, not safety** — the guard errs toward refusing, which is the correct
+direction, and nothing unsafe is ever dropped. The exposure is far narrower than the original
+(one first-run window rather than every worker creation), and the correct repair is a policy
+decision — a `beyo_test_*` shell with no marker table and no schema is definitionally a
+half-created artifact of this tooling and should be droppable — which belongs with the phase-2
+work that reopens the naming and guard for the slot discriminator. **Carried, not fixed here.**
+
+**VIOLATION (corrected here) — a published handoff was edited in place.** Fix r4's perimeter
+included `handoffs/implementer/2026-08-21_phase1_fix_r2_handoff.md`, rewriting its recorded
+measurement `2540 → 2539` and replacing its deliverable 12. The charter forbids this absolutely
+and this organisation keeps a memory on it. The harm is not the number — 2539 is right — it is
+that the r2 handoff now recorded `2539` as *what that session observed*, when it observed 2540,
+so the provenance of the error was destroyed and a future reader could no longer see that the
+round mis-stated its own count. **The coordinator restored the file to its published state**; the
+correction lives here and in the r4 handoff, which is where corrections belong.
+**The prompt invited it** — it said "correct it wherever the baseline is published", which reads
+as an instruction to edit the old document. Coordinator defect; the phrasing should have been
+"state the correction in this handoff; never edit a published one."
+
+**DEVIATION (corrected here) — the closing L4 stamp was skipped and an invalid citation used in
+its place.** The handoff cites the prior `22 / 2539 / 1` as "the prior matching L4 stamp … valid
+for the unchanged application-wide tree". The tree was **not** unchanged: this round modified
+`app/tests/database_isolation.py`, which executes at session start for every test, and the
+handoff's own header records "`HEAD 584d0f2` plus the intended code diff". A stamp taken before
+that change does not cover it. **The prompt over-corrected and caused this**: it allowed exactly
+one L4 run while warning three times that re-running is a finding, and the round concluded that
+running nothing was safest. Coordinator defect. The rule wanted is "one stamp, and it must be on
+the tree you hand over"; the coordinator took it instead.
+
+**Verdict: phase 1 is APPROVED with two carry-forwards** (below). No r5 is dispatched — the two
+blocking findings of r3 are discharged, the residual is narrow, availability-only, and lands in
+code phase 2 reopens by design.
+
+| Carried item | Destination |
+|---|---|
+| B2's second shape — a `beyo_test_*` database with no marker table still wedges the run | **phase 2**, with the slot discriminator, which reopens the same guard |
+| The ~118 order-dependent tests (OD-3) | **phase 2, first item, before xdist** |
+| Redis is not isolated (r3 N4); Unicode digits accepted by the name pattern (N1); `\Z` over `$` (N2); host/port not compared (N3); C6's positional coverage (N5); `test_no_row_is_system_managed_any_more` vacuous (N8) | **phase 2** notes |
+| Three `ai_inferred` archgraph items from this project | owner adjudication |

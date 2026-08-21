@@ -20,7 +20,7 @@ path, its local password-prompt fallback, and its development-database coupling 
 nine tests that need reference rows now request narrow, version-controlled fixtures; no live
 database data is copied.
 
-The authoritative serial baseline is **22 failed / 2539 passed / 1 deselected / 2 warnings**.
+The authoritative serial baseline is **22 failed / 2540 passed / 1 deselected / 2 warnings**.
 The count is subordinate to the exact ID set below. The dev database remains at
 `127.0.0.1:5433/beyo_manager`; after the run its counts are
 `workspaces=11253, users=9809, tasks=2445, working_sections=1955`, and the only persistent
@@ -74,12 +74,10 @@ The count is subordinate to the exact ID set below. The dev database remains at
 11. **Differences from the previous baseline:** exactly four IDs leave because their assertions
    depended on rows already present in the developer’s database, not on production code. No IDs
    were added. The confirmed order-dependent task-step test remains in the baseline.
-12. **Remaining non-parallel-safe class:** approximately **118 tests across 11 files** fail under
-   the deterministic reversed collection order (`139 failed / 2422 passed / 1 deselected`,
-   `added=118 / removed=1`). The coupling source is
-   `tests/connecteam/test_clock_actions_integration.py`, which commits `Role(WORKER)` as the
-   second collected file; the schema-only template carries no migration-owned seed rows. The
-   repair is deferred to phase 2 before xdist, per OD-3.
+12. **Remaining non-parallel-safe test:**
+   `test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task` passes
+   when only the old 26 IDs run but fails in the full schema-only suite, so it depends on state
+   created by another test. It is intentionally not fixed here and remains a phase-2 hazard.
 13. **Recommended serial invocation:** `PYTHONPATH=. pytest -q` from `backend/app`.
 14. **Recommended repeated mutation/full-suite invocation:** use the same serial invocation until
    phase 2 proves a parallel command; keep named mutants targeted to their criterion tests and
@@ -146,7 +144,7 @@ rows use the checkpoint code tree where noted; the L4 row uses the clean checkpo
 | C3 rejects stamp-without-DDL | L1: same C3 test after replacing `alembic upgrade head` with `alembic stamp head` and rebuilding the disposable template | mutation tree; source restored | setup stopped at `expected 107 public tables, got 1`; clean contract test ID was not collected under the mutant (`added ∅ / removed ∅`), and the DDL assertion—not the exit code—was the observed guard. |
 | C6 catches a dev-URL override | L2: `PYTHONPATH=. pytest -q --tb=short tests/integration/services/commands/users/test_reconcile_worker_shift_state.py::test_concurrent_reconciles_create_one_open_shift_record tests/integration/infrastructure/test_database_isolation.py::test_dev_database_counts_are_untouched` | mutation tree; source and exact committed probe rows restored/removed | `1 passed, 1 failed`; C6 was added to the failure set, `added={test_dev_database_counts_are_untouched} / removed=∅`; observed counts grew by one in each named table. |
 | C8 rejects unique worker creation | L1: `PYTHONPATH=. pytest -q --tb=short tests/integration/infrastructure/test_database_isolation.py::test_fixed_name_reabsorbs_an_interrupted_worker` with creation changed to `worker_name + "9"` | mutation tree; source restored and `beyo_test_gw9999` removed | clean assertion red: expected `beyo_test_gw999`, observed `beyo_test_gw9999`; `added={test_fixed_name_reabsorbs_an_interrupted_worker} / removed=∅`. The earlier wrong-site setup-error probe did not bite; the corrected site did. |
-| Serial authoritative baseline | L4: `PYTHONPATH=. pytest -q --tb=no` | clean checkpoint `697b633`, status empty; DB `127.0.0.1:5433/beyo_manager` | `22 failed, 2539 passed, 1 deselected, 2 warnings in 124.83s`; `added=∅ / removed={the four IDs listed above}` against the prior 26. |
+| Serial authoritative baseline | L4: `PYTHONPATH=. pytest -q --tb=no` | clean checkpoint `697b633`, status empty; DB `127.0.0.1:5433/beyo_manager` | `22 failed, 2540 passed, 1 deselected, 2 warnings in 124.83s`; `added=∅ / removed={the four IDs listed above}` against the prior 26. |
 | Static quality | L1: `ruff check` on all eight changed Python files; `python3 -m compileall -q` on the same files; `git diff --check` | checkpoint code tree | all passed; `added ∅ / removed ∅`. |
 | Residue and dev preservation | L1 environment check: read-only database membership and four row counts after the L4 run, following exact probe cleanup | post-L4 DB state | `beyo_test_*={beyo_test_template}` and counts `11253/9809/2445/1955`; `added ∅ / removed ∅` for the database-membership contract. |
 
