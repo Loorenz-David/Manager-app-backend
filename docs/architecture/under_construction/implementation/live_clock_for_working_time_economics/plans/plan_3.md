@@ -248,11 +248,50 @@ F-14) — see §4 task 4 for the internal half that *is* this phase's.
   - **C6b — frozen allowance ≤ 0.** Fixture: stored figures whose sum is ≤ 0 (e.g.
     `actual 15.00 / variance −15.00`). Assert the frozen key is `null` — because
     `calculate_percent_consumed` has no denominator, not because of `status`.
+    **The current evaluation must carry a POSITIVE allowance** (so the payload's `status`
+    is `ok`) — see the correction below; a fixture whose current allowance is also ≤ 0
+    gives the `null` two independent sufficient causes and proves neither.
     **Named mutation:** substitute any positive fallback denominator (e.g. `actual`
     alone, which is > 0 here) ⇒ contract = `null`, mutation = a number, red.
-  Row (a) is the one the owner decided; **row (b) is what stops a future "just null it
-  whenever status is infeasible" edit from passing**, and neither row can be satisfied
-  by the other's fixture.
+  Row (a) is the one the owner decided; **row (a) is also what stops a future "just null
+  it whenever status is infeasible" edit from passing**; row (b) stops a positive-fallback
+  denominator.
+
+  > **CORRECTED 2026-08-21 (review r1, S1 — measured).** This paragraph originally read
+  > *"row (b) is what stops a future 'just null it whenever status is infeasible' edit
+  > from passing"*. False, and measured false: C6b as built sets the current evaluation's
+  > `allowed_worker_minutes = 0.00`, so its own payload is `infeasible` and a
+  > status-blanking implementation returns exactly the `null` it asserts — **C6b passes
+  > under the edit it was said to stop.** The status-blanking mutant at both sites reddens
+  > **C6a only**. Two consequences: the attribution is swapped above (and in intention
+  > §5.3A and the master plan tracker), and **C6b's fixture must be re-specified with a
+  > positive current allowance**, so its `null` has exactly one sufficient cause — charter
+  > rule 2's companion condition, the same shape the charter cites from plan 3 round 2 B1.
+  > Note the fixture's own comment claims the percentage is "undefined independently of
+  > the current status" — a prose claim its fixture cannot demonstrate, because that
+  > fixture holds the status at `infeasible`.
+  - **C6c — the over-budget region** (review r1, S2 — added 2026-08-21). A finished job
+    that overran its budget is OD-10's own first premise row and the most consequential
+    number the frozen block serves, and **no test in the repository constrains it**:
+    every fixture pinning a numeric frozen percent sits at or below `100.00`
+    (C1/C2/C4b/C4c at `100.00`, C3 at `80.00`, C6a at `15.00`, both goldens at `15.00`,
+    `test_c17` at `20.00`), and C6b's negative variance is chosen to land the
+    reconstruction on exactly `0.00`. Measured: clamping the frozen percent at `100.00`
+    at both sites leaves the **whole suite green — ∅ added, ∅ removed**.
+    Fixture: stored `actual_worker_minutes = 15.00` / `variance_worker_minutes = −5.00`
+    → reconstructed allowance `10.00` → frozen **`"150.00"`**, with the current evaluation
+    left at a positive allowance so `status` stays `ok`. Assert on **both** faces, as C6a
+    does. **Named mutation, applied at each reconstruction site:** clamp the frozen
+    percent at `100.00` ⇒ contract `"150.00"`, mutation `"100.00"`, red.
+    **Scope: L1** — this is a named-row bite question once the row exists; the ∅ that
+    justified adding it was the L4 absence claim, already measured and recorded here.
+    *Coordinator note, sharper than the finding:* the region is not merely untested, it is
+    **already computed on every suite run and observed by nothing** —
+    `test_phase8_serializers.py:_result()` carries `actual 2.00 / variance −1.00`, so the
+    worker payload built in `test_budget_status_worker_surface_excludes_money` currently
+    serves `result.percent_consumed == "200.00"` while that test asserts only
+    `allowed_worker_minutes` and four key absences. A clamp changes `200.00` to `100.00`
+    there and nothing notices.
 
 ## 5A. Carried from phase 2 — read before writing a single criterion
 
@@ -301,7 +340,18 @@ it (live worked 2040 s open / 1440 s pre-open, from plan 2's own asserted figure
 So on this fixture **C1, C2 and C4b bite** (the numerators differ) but **C3's and C5's
 denominator mutations are inert** — the reconstructed allowance `20.00` equals the
 evaluation's `20.00`, which is exactly the degeneracy. Reuse it for the first group;
-C3, C5 and C6 need their own figures. Every row states both sides as literals before
+C3, C5 and C6 need their own figures.
+
+**The degeneracy is one worse than this section originally recorded** (review r1, S2).
+That fixture also puts the frozen percent at exactly **`100.00`** — the boundary of a
+whole family of plausible edits ("a percentage cannot exceed 100"). Four of the phase's
+rows are pinned at the one value a clamp cannot move, and until C6c was added, **no
+fixture anywhere in the repository constrained the frozen percent above 100**. The rule
+generalizes and is now a standing one: §5A says compute the verdict under both bases
+before choosing a fixture — that was applied to the **numerator** and not to the
+**output's range**. For a derived quantity whose own authority names regions (OD-10's
+premise table names three: over-budget-but-positive, non-positive, and ordinary), **the
+criteria enumerate the regions**, not merely vary the input terms. Every row states both sides as literals before
 it is written (master §5's F-C1 rule: place the fixture where the two forms differ, and
 compute that *before* choosing it).
 
@@ -498,3 +548,60 @@ recorded-not-retargeted disposition covers the entire class rather than one inst
 
 Review r1 prompt at `prompts/reviewer/2026-08-21_phase3_review_r1.md`; seven probes, with
 the settled ground above marked do-not-re-spend.
+
+**2026-08-21 — review r1 (Opus 5). `CHANGES_REQUESTED` — 0 blocking, 2 should-fix, 6
+notes. No production line is in scope for the fix cycle.** Handoff at
+`handoffs/reviewer/2026-08-21_phase3_review_r1_handoff.md`. Tree `184f48a`, clean;
+`git diff 5b8329b HEAD -- app/ docs/domains/` is empty, so the implementer's L4 stamp was
+**cited, not reproduced**, and the round's budget went to two mutant shapes no ledger has
+run.
+
+**S1 — intention §5.3A names the wrong C6 row, measured.** §5.3A says row (b) reddens on a
+"blank whenever `status == infeasible`" edit. It does not: C6b's fixture sets the current
+allowance to `0.00`, so its payload's status *is* `infeasible` and a status-blanking
+implementation produces exactly the `null` C6b asserts. **C6a** is the guard. Probe (L1,
+status-blanking mutant applied at **both** sites, phase file): **1 failed / 24 passed**,
+the single red `+test_c6a_frozen_percent_survives_infeasible_current_evaluation`, C6b
+green, no removals. The implementer's ledger already carried the disproof — its
+status-blanking rows report one ID where the prose implies two — but was read only in the
+"did C6a bite?" direction. Same inversion in this §5 C6 and in `master_plan.md` §3.
+**Correction:** swap the attribution in all three; row (a) kills status-blanking, row (b)
+kills a positive-fallback denominator. Optionally give C6b's *current* evaluation a
+positive allowance so its `null` has one sufficient cause instead of two (charter rule-2
+companion).
+
+**S2 — the frozen percent's over-budget region is unguarded repository-wide; ∅/∅ at L4.**
+Every row pinning a numeric frozen percent sits at or below 100 % — C1/C2/C4b/C4c at
+exactly `100.00`, C3 `80.00`, C6a `15.00`, both goldens `15.00`, `test_c17` `20.00` — and
+C6b, the only negative-variance row, is placed where the reconstructed allowance is exactly
+`0.00` and the answer is `null`. So `variance < 0` **with a positive allowance** — OD-10's
+own first table row, a finished job that overran — is never evaluated. Probe: clamp the
+frozen percent at `100.00` at both sites (absence claim ⇒ **L4**, charter trigger (d));
+`26 failed / 2486 passed / 1 deselected`, failing-ID set `comm`-diffed against §6's
+enumerated 26 → **∅ added, ∅ removed**; focused surface 100 passed. **§5B's degeneracy is
+one worse than recorded:** `variance = 0.00` also puts the frozen percent at exactly
+`100.00`, the boundary of this whole mutant family, so four of seven rows sit on the one
+value a clamp cannot move. **Correction — new row C6c**, beside C6b: stored `actual 15.00 /
+variance −5.00` ⇒ allowance `10.00` ⇒ frozen `"150.00"`, current evaluation left positive
+so `status` stays `ok`, asserted on both faces; named mutation = the clamp.
+
+**Notes.** N1 — C3 never asserts `before["budget"]` (`"120.00"`), so the live percent is
+shown landing, not moving; its discrimination rests wholly on `before["final"]`, which is
+sound. N2 — C4b inside `test_c1` is **sufficient**: each mutation trips a different
+assertion with its own literal; the residue is that C1's mutant short-circuits before
+C4b's asserts, so only C4b's own mutation evidences it. N3 — T13 asks for E-B `result`
+block byte-identity; C2/C4c pin only the percent key (E-P gets the full block via C1).
+N4 — `test_c17`'s record is durable but lives where its readers will not look; one comment
+above the test closes it. N5 — the site comments name the other site in prose, not
+`path:symbol`. N6 — the frozen value is computed on the manager face and discarded
+(harmless; it is why the manager-side fixture was forced open).
+
+**Verified correct:** N-4's argument order against the calculator signature; the
+`result is not None` guard complete via `_empty_status`; HC-4; C4a structural and
+non-vacuous; **P7 absence claim at L4** — terms `percent_consumed` / `percentConsumed` /
+`percent-consumed` over `app/beyo_manager/`, exactly two production producers, both
+changed (price-scenario, item-lifetime and the third `_serialize_result` producer emit
+none); **P5 doc sweep** — both corrected statements are true, and `api.md` and the
+2026-08-18 handoff sit at the no-drift point so their examples remain valid after D9;
+the corrected docstring; the perimeter, goldens untouched. Both probes reverted,
+SHA-256 byte-identical, tree clean; no archgraph call made.

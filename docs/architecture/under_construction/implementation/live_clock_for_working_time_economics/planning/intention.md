@@ -1460,7 +1460,19 @@ The frozen percent is `calculate_percent_consumed` applied to the reconstructed
 denominator, and it is `null` **iff that reconstructed denominator is ≤ 0** — never
 because of the current evaluation's allowance, and never because of `status`. A future
 edit that blanks the frozen percent whenever `status == "infeasible"` reintroduces
-exactly the coupling D9 removes; `plans/plan_3.md` C6 row (b) exists to redden on it.
+exactly the coupling D9 removes; **`plans/plan_3.md` C6 row (a) is what reddens on it.**
+
+> **CORRECTED 2026-08-21 (review r1, S1 — measured).** This sentence originally named
+> **row (b)**. Row (b) does not redden on that edit and never could: its fixture sets the
+> *current* evaluation's `allowed_worker_minutes = 0.00`, so its payload's `status` is
+> itself `infeasible`, and a status-based blanking implementation produces exactly the
+> `null` row (b) asserts — it passes. The row that bites is **(a)**, the one holding a
+> **positive** reconstructed allowance beside an `infeasible` current status. Measured at
+> `184f48a`: the status-blanking mutant applied at both sites reddens
+> `test_c6a_frozen_percent_survives_infeasible_current_evaluation` **only**, with
+> `test_c6b…` green. The coordinator wrote the inversion at round 4h and repeated it in
+> `plans/plan_3.md` §5 C6 and the master plan tracker; both are corrected. Row (b)'s
+> own guard duty is the *positive-fallback* denominator, which it does discharge.
 
 **Ledger empty.** No decision in this intention is a guess; each rejected branch is
 recorded with the failure it would have produced, in `owner_decisions.md`.
