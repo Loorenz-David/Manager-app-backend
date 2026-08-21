@@ -1,26 +1,50 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from sqlalchemy.engine import make_url
 
 from beyo_manager.config import settings
 from beyo_manager.models import database as database_module
+from beyo_manager.services.infra.redis.keys import make_key
+from tests.conftest import pytest_collection_modifyitems
 from tests.database_isolation import (
     EXPECTED_HEAD,
     EXPECTED_PUBLIC_TABLE_COUNT,
+    MARKER_SCHEMA,
     DatabaseIsolation,
     UnsafeDatabaseError,
+    _connect,
     assert_disposable_database,
+    resolve_template_database_name,
+    resolve_test_slot,
     resolve_worker_database_name,
 )
 
 
 @pytest.mark.parametrize(
-    ("worker_id", "expected"),
-    [("gw0", "beyo_test_gw0"), ("gw11", "beyo_test_gw11"), (None, "beyo_test_main")],
+    ("worker_id", "slot", "expected"),
+    [
+        ("gw0", "alpha", "beyo_test_alpha_gw0"),
+        ("gw11", "alpha", "beyo_test_alpha_gw11"),
+        (None, "alpha", "beyo_test_alpha_main"),
+        (None, None, "beyo_test_main_main"),
+    ],
 )
-def test_worker_name_resolution(worker_id: str | None, expected: str) -> None:
-    assert resolve_worker_database_name(worker_id) == expected
+def test_worker_name_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    worker_id: str | None,
+    slot: str | None,
+    expected: str,
+) -> None:
+    monkeypatch.delenv("BEYO_TEST_SLOT", raising=False)
+    assert resolve_worker_database_name(worker_id, slot=slot) == expected
+
+
+def test_template_name_is_per_slot() -> None:
+    assert resolve_template_database_name("alpha") == "beyo_test_alpha_template"
+    assert resolve_template_database_name("main") == "beyo_test_main_template"
 
 
 def test_worker_name_resolution_rejects_unknown_worker() -> None:
@@ -28,35 +52,148 @@ def test_worker_name_resolution_rejects_unknown_worker() -> None:
         resolve_worker_database_name("worker-1")
 
 
+@pytest.mark.parametrize("slot", ["Alpha", "al pha", "alpha_beta", "", "a" * 13])
+def test_slot_resolution_rejects_invalid_values(slot: str) -> None:
+    with pytest.raises(UnsafeDatabaseError):
+        resolve_test_slot(slot)
+
+
+def test_collection_order_hook_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BEYO_TEST_COLLECTION_ORDER", raising=False)
+    items = ["first", "second", "third"]
+    pytest_collection_modifyitems(None, items)
+    assert items == ["first", "second", "third"]
+
+
+def test_collection_order_hook_reverses_once_and_rejects_unknown_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BEYO_TEST_COLLECTION_ORDER", "reverse")
+    items = ["first", "second", "third"]
+    pytest_collection_modifyitems(None, items)
+    assert items == ["third", "second", "first"]
+
+    monkeypatch.setenv("BEYO_TEST_COLLECTION_ORDER", "backwards")
+    with pytest.raises(pytest.UsageError):
+        pytest_collection_modifyitems(None, items)
+
+
+def test_default_redis_key_uses_the_process_prefix() -> None:
+    key = make_key("phase2", "probe")
+    assert settings.redis_key_prefix != "beyo_manager"
+    assert key.startswith(f"{settings.redis_key_prefix}:phase2:")
+
+
 @pytest.mark.parametrize(
-    ("database_name", "configured_url", "marker_present"),
+    ("database_name", "configured_url", "target_url", "marker_present", "public_table_count"),
     [
-        ("beyo_manager", "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager", True),
+        (
+            "beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            True,
+            107,
+        ),
         (
             "beyo_test_gw0; DROP DATABASE beyo_manager",
             "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_gw0; DROP DATABASE beyo_manager",
             True,
+            0,
         ),
         (
-            "beyo_test_gw0",
-            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_gw0",
+            "beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0",
             True,
+            107,
         ),
+        ("beyo_test_main_gw0", None, "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0", True, 0),
+        ("beyo_test_main_gw0", "not-a-database-url", "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0", True, 0),
         (
-            "beyo_test_gw0",
+            "beyo_test_main_gw0",
             "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
-            False,
+            "postgresql+asyncpg://postgres:postgres@other-host:5433/beyo_test_main_gw0",
+            True,
+            0,
         ),
-        ("beyo_test_gw0", None, True),
-        ("beyo_test_gw0", "not-a-database-url", True),
+        (
+            "beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5434/beyo_test_main_gw0",
+            True,
+            0,
+        ),
+        (
+            "beyo_test_main_gw٠",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw٠",
+            True,
+            107,
+        ),
+        (
+            "beyo_test_main_gw0\n",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0",
+            True,
+            107,
+        ),
+        (
+            "beyo_test_Alpha_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_Alpha_gw0",
+            True,
+            107,
+        ),
+        (
+            "beyo_test_alpha_beta_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_alpha_beta_gw0",
+            True,
+            107,
+        ),
+        (
+            "beyo_test_aaaaaaaaaaaaa_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_aaaaaaaaaaaaa_gw0",
+            True,
+            107,
+        ),
     ],
 )
 def test_destructive_guard_rejects_every_unsafe_case(
-    database_name: str, configured_url: str | None, marker_present: bool
+    database_name: str,
+    configured_url: str | None,
+    target_url: str | None,
+    marker_present: bool,
+    public_table_count: int,
 ) -> None:
     with pytest.raises(UnsafeDatabaseError):
         assert_disposable_database(
-            database_name, configured_url, marker_present=marker_present
+            database_name,
+            configured_url,
+            target_database_url=target_url,
+            marker_present=marker_present,
+            public_table_count=public_table_count,
+        )
+
+
+def test_unmarked_empty_database_is_allowed_but_populated_one_is_not() -> None:
+    target = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0"
+    assert_disposable_database(
+        "beyo_test_main_gw0",
+        "postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager",
+        target_database_url=target,
+        marker_present=False,
+        public_table_count=0,
+    )
+    with pytest.raises(UnsafeDatabaseError):
+        assert_disposable_database(
+            "beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager",
+            target_database_url=target,
+            marker_present=False,
+            public_table_count=1,
         )
 
 
@@ -106,7 +243,7 @@ async def test_dev_database_counts_are_untouched(isolated_database: DatabaseIsol
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "mark_leftover",
-    [pytest.param(True, id="explicitly-marked"), pytest.param(False, id="inherited-marker")],
+    [pytest.param(True, id="explicitly-marked")],
 )
 async def test_fixed_name_reabsorbs_an_interrupted_worker(
     isolated_database: DatabaseIsolation,
@@ -122,14 +259,11 @@ async def test_fixed_name_reabsorbs_an_interrupted_worker(
         await probe.start()
         assert set(await probe.database_names()) == before | {probe.worker_database_name}
     finally:
-        # The pre-fix guard cannot drop a worker that still carries the template's marker name.
-        # Mark it for cleanup after a failed mutant run without hiding the assertion failure.
         if await probe._database_exists(probe.worker_database_name):
-            if not await probe._marker_present(probe.worker_database_name):
-                await probe._set_marker(probe.worker_database_name)
             if probe._started:
                 await probe.stop()
             else:
+                await probe._set_marker(probe.worker_database_name)
                 await probe._drop_database_if_exists(probe.worker_database_name)
     assert set(await probe.database_names()) == before
 
@@ -159,3 +293,94 @@ async def test_start_cleans_worker_when_interrupted_during_creation(
                 await probe.stop()
             else:
                 await probe._drop_database_if_exists(probe.worker_database_name)
+
+
+@pytest.mark.asyncio
+async def test_empty_unmarked_worker_is_droppable_but_populated_one_is_not(
+    isolated_database: DatabaseIsolation,
+) -> None:
+    empty_probe = DatabaseIsolation(settings.database_url, worker_id="gw997")
+    populated_probe = DatabaseIsolation(settings.database_url, worker_id="gw996")
+    try:
+        await empty_probe._create_database(empty_probe.worker_database_name)
+        await empty_probe._drop_database_if_exists(empty_probe.worker_database_name)
+        assert not await empty_probe._database_exists(empty_probe.worker_database_name)
+
+        await populated_probe._create_database_from_template(populated_probe.worker_database_name)
+        connection = await _connect(populated_probe._url, populated_probe.worker_database_name)
+        try:
+            await connection.execute(f'DROP SCHEMA "{MARKER_SCHEMA}" CASCADE')
+        finally:
+            await connection.close()
+        with pytest.raises(UnsafeDatabaseError):
+            await populated_probe._drop_database_if_exists(populated_probe.worker_database_name)
+        assert await populated_probe._database_exists(populated_probe.worker_database_name)
+    finally:
+        if await populated_probe._database_exists(populated_probe.worker_database_name):
+            await populated_probe._set_marker(populated_probe.worker_database_name)
+            await populated_probe._drop_database_if_exists(populated_probe.worker_database_name)
+
+
+@pytest.mark.asyncio
+async def test_unmarked_template_shell_is_absorbed(
+    isolated_database: DatabaseIsolation,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BEYO_TEST_SLOT", f"s{uuid4().hex[:10]}")
+    probe = DatabaseIsolation(settings.database_url, worker_id="gw995")
+    original_set_marker = probe._set_marker
+
+    async def interrupt_template(database_name: str) -> None:
+        if database_name == probe.template_database_name:
+            raise KeyboardInterrupt
+        await original_set_marker(database_name)
+
+    monkeypatch.setattr(probe, "_set_marker", interrupt_template)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            await probe.start()
+        assert await probe._database_exists(probe.template_database_name)
+        assert not await probe._marker_present(probe.template_database_name)
+
+        monkeypatch.setattr(probe, "_set_marker", original_set_marker)
+        await probe.start()
+        assert (await probe.inspect(probe.template_database_name)).marker_present
+    finally:
+        if probe._started:
+            await probe.stop()
+        elif await probe._database_exists(probe.worker_database_name):
+            await probe._set_marker(probe.worker_database_name)
+            await probe._drop_database_if_exists(probe.worker_database_name)
+        if await probe._database_exists(probe.template_database_name):
+            await probe._drop_database_if_exists(probe.template_database_name)
+
+
+@pytest.mark.asyncio
+async def test_teardown_residue_proxy_detects_a_declared_probe_database_mutation(
+    isolated_database: DatabaseIsolation,
+) -> None:
+    probe = DatabaseIsolation(settings.database_url, worker_id="gw994")
+    await probe._create_database_from_template(probe.worker_database_name)
+    probe_url = probe._url.set(database=probe.worker_database_name).render_as_string(
+        hide_password=False
+    )
+    checker = DatabaseIsolation(probe_url, worker_id="gw993")
+    try:
+        checker.configured_row_counts_before_run = await checker.row_counts(
+            checker.configured_database_name
+        )
+        connection = await _connect(probe._url, probe.worker_database_name)
+        try:
+            await connection.execute(
+                """
+                INSERT INTO workspaces (client_id, name, time_zone, created_at)
+                VALUES ('ws_phase2_residue_probe', 'phase2 residue probe', 'UTC', now())
+                """
+            )
+        finally:
+            await connection.close()
+        with pytest.raises(AssertionError, match="row counts changed"):
+            await checker.assert_configured_database_unchanged()
+    finally:
+        if await probe._database_exists(probe.worker_database_name):
+            await probe._drop_database_if_exists(probe.worker_database_name)

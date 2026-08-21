@@ -29,6 +29,7 @@ def isolated_database() -> Generator[DatabaseIsolation, None, None]:
     try:
         yield isolation
     finally:
+        asyncio.run(isolation.assert_configured_database_unchanged())
         settings.database_url = original_database_url
         asyncio.run(isolation.stop())
 
@@ -47,18 +48,33 @@ async def initialize_database() -> None:
     await close_db()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def isolated_redis_prefix() -> Generator[str, None, None]:
     prefix = f"{settings.redis_key_prefix}:test:{uuid4().hex[:8]}"
-    old = os.environ.get("REDIS_KEY_PREFIX")
-    os.environ["REDIS_KEY_PREFIX"] = prefix
+    old = settings.redis_key_prefix
+    settings.redis_key_prefix = prefix
     try:
         yield prefix
     finally:
-        if old is None:
-            os.environ.pop("REDIS_KEY_PREFIX", None)
-        else:
-            os.environ["REDIS_KEY_PREFIX"] = old
+        client = redis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            for key in client.scan_iter(f"{prefix}:*"):
+                client.delete(key)
+        finally:
+            client.close()
+        settings.redis_key_prefix = old
+
+
+def pytest_collection_modifyitems(config, items) -> None:
+    order = os.getenv("BEYO_TEST_COLLECTION_ORDER")
+    if order is None:
+        return
+    if order == "reverse":
+        items.reverse()
+        return
+    raise pytest.UsageError(
+        "BEYO_TEST_COLLECTION_ORDER must be unset or set to 'reverse'"
+    )
 
 
 @pytest_asyncio.fixture

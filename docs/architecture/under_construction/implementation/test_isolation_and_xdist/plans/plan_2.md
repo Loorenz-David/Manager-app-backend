@@ -1,7 +1,7 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: PROMPT_READY — 2026-08-21 (projection r0 consumed, 16 rows routed; implement r1 authored)
+state: IMPLEMENTED — 2026-08-21 (implement r1; closing default 21 failed / 2561 passed / 1 deselected; closing reversal 22 failed / 2560 passed / 1 deselected)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)
@@ -555,3 +555,51 @@ repair prescription that reproduced the very class it was removing (F10). All th
 row-that-cannot-fail class in its planning form — **the twelfth, thirteenth and fourteenth
 instances this organisation has recorded**, and the first caught before implementation. The
 gate paid for itself in one round.
+
+### 2026-08-21 — implement r1. Verdict: IMPLEMENTED
+
+Built the serial order-independence and per-checkout isolation repair. Task 1 used one
+shared-factory strategy for the eleven named files: `create_test_workspace` creates a
+workspace owned by the current test and `adopt_or_create_role` respects the globally unique
+`Role.name` catalog contract. Task 1b repaired the twelfth task-step file with the same
+adopt-or-create rule, and its paired clock-actions/task-steps run passed.
+
+Task 2 added strict checkout-slot resolution with `BEYO_TEST_SLOT`, slot-qualified worker and
+template names, and a permanent sweep of pre-slot legacy names. Task 3 changed
+`assert_disposable_database` to take explicit configured and target URLs plus marker and
+public-table evidence; it now normalizes `localhost`/`127.0.0.1`, rejects endpoint or full
+configured-database collisions, and permits only an empty unmarked shell. Template and worker
+creation paths mark databases before they can be interrupted, and only
+`UndefinedTableError` is tolerated around inspection probes. Task 4 added literal public-table
+and marker/schema checks, including reabsorption of an empty interrupted template shell.
+
+Task 5 made the Redis prefix isolation fixture session-scoped autouse by overriding
+`settings.redis_key_prefix` at call time and deleting only its generated prefix at teardown.
+Task 6 added the shipped, default-off `BEYO_TEST_COLLECTION_ORDER=reverse` collection hook.
+Task 7 moved the pause-reason ownership assertion to the production creation path and added a
+configured-database residue check in isolation teardown.
+
+Delegations and judgments: `BEYO_TEST_SLOT` was chosen because it is explicit, lowercase, and
+operator-visible in `app/.env.example`; the legacy-name sweep is permanent for compatibility
+with old worktrees; Redis isolation is autouse because the default key builders read settings at
+call time; and collection reversal is opt-in so ordinary runs retain the established order.
+No fixture scope was widened, xdist was not installed, no `-n` or parallel run was used, and no
+production file remains changed. The twelfth file is intentionally part of the paired evidence,
+not the alone-file count.
+
+Evidence: infrastructure criterion `36 passed`; retirement criterion `5 passed`; the twelve
+file-scoped C1 runs passed; the paired clock-actions/task-steps run passed; static ruff and
+compile checks passed. The three L4 runs were the authorized diagnostic reversal (`22 failed /
+2560 passed / 1 deselected`), mandatory closing default (`21 failed / 2561 passed / 1
+deselected`), and closing reversal (`22 failed / 2560 passed / 1 deselected`). The repaired task
+step ID is absent from the closing default failure set. The remaining differences are attributed
+to the pre-existing foreign failure stream; the reversed run also retained the known concurrency
+failure in `test_concurrent_allocations_return_distinct_scalars`.
+
+All named mutation probes were applied at their hypothesis sites, observed red, and reverted;
+the production pause-reason probe at `create_pause_reason.py:36` was the sole probe under
+`app/beyo_manager/`. Probe databases were removed by the isolation cleanup and the configured
+development database row-count assertion passed. The Architecture Graph was re-read at revision
+`4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`; it remains valid with no
+diagnostics, and no additive graph delta was recorded because the workspace is in review mode and
+the new behavior remains within the existing pending test-isolation architecture boundary.

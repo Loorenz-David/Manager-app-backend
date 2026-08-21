@@ -11,7 +11,6 @@ from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_declared_state_record import (
@@ -24,6 +23,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.users.get_current_worker_shift_state import (
     get_current_worker_shift_state,
 )
+from tests.fixtures.phase2_row_factories import adopt_or_create_role, create_test_workspace
 
 
 async def _seed_user(db_session, label: str) -> User:
@@ -39,11 +39,9 @@ async def _seed_user(db_session, label: str) -> User:
 
 
 async def _seed_workspace_worker(db_session, label: str = "current-worker") -> tuple[Workspace, User]:
-    workspace = await db_session.scalar(select(Workspace).order_by(Workspace.client_id))
+    workspace = await create_test_workspace(db_session, "current-worker-workspace")
     worker = await _seed_user(db_session, label)
-    worker_role = (
-        await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-    ).scalar_one()
+    worker_role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = await db_session.scalar(
         select(WorkspaceRole).where(
             WorkspaceRole.workspace_id == workspace.client_id,

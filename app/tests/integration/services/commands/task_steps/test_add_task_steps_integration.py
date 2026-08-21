@@ -14,7 +14,6 @@ from beyo_manager.models.tables.execution.execution_payload import ExecutionPayl
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
@@ -25,6 +24,7 @@ from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.commands.task_steps.add_task_steps import add_task_steps
 from beyo_manager.services.context import ServiceContext
+from tests.fixtures.phase2_row_factories import adopt_or_create_role
 
 
 def _ctx(db_session, *, workspace_id: str, user_id: str, task_id: str, steps: list[dict]) -> ServiceContext:
@@ -80,7 +80,7 @@ async def test_adding_a_batch_of_steps_reopens_ready_task(db_session, monkeypatc
         workspace_id=workspace.client_id,
         name=f"Section B {suffix}",
     )
-    worker_role = Role(client_id=f"role_{suffix}", name=RoleNameEnum.WORKER)
+    worker_role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_worker_role = WorkspaceRole(
         client_id=f"wsr_{suffix}",
         workspace_id=workspace.client_id,

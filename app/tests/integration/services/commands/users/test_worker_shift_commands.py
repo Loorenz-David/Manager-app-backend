@@ -19,7 +19,6 @@ from beyo_manager.errors.permissions import PermissionDenied
 from beyo_manager.errors.validation import ConflictError, ValidationError
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.execution.execution_task import ExecutionTask
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
@@ -58,6 +57,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.tasks.users.auto_clock_out_open_shifts import (
     handle_auto_clock_out_open_shifts,
 )
+from tests.fixtures.phase2_row_factories import adopt_or_create_role, create_test_workspace
 
 
 pytestmark = pytest.mark.asyncio
@@ -76,11 +76,9 @@ async def _seed_user(db_session, label: str) -> User:
 
 
 async def _seed_workspace_worker(db_session) -> tuple[Workspace, User]:
-    workspace = await db_session.scalar(select(Workspace).order_by(Workspace.client_id))
+    workspace = await create_test_workspace(db_session, "shift-workspace")
     worker = await _seed_user(db_session, "shift-worker")
-    worker_role = (
-        await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-    ).scalar_one()
+    worker_role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = await db_session.scalar(
         select(WorkspaceRole).where(
             WorkspaceRole.workspace_id == workspace.client_id,

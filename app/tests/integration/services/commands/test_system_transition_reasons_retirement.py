@@ -13,8 +13,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select, text
 
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.workspaces.workspace import Workspace
+from beyo_manager.services.commands.pause_reasons.create_pause_reason import create_pause_reason
+from beyo_manager.services.context import ServiceContext
 
 
 pytestmark = pytest.mark.asyncio
@@ -196,8 +201,29 @@ async def test_retirement_left_the_guarded_populations_alone(
 
 
 async def test_no_row_is_system_managed_any_more(db_session):
-    """The flag is inert contract. Nothing sets it, nothing reads it for behaviour."""
-    remaining = await db_session.scalar(
-        text("SELECT count(*) FROM pause_reasons WHERE is_system_managed = true")
+    """The production create path must return a non-system-managed pause reason."""
+    workspace = Workspace(name="retirement-production-path")
+    user = User(
+        username="retirement-production-user",
+        email="retirement-production-user@example.com",
+        password="test-password-hash",
     )
-    assert remaining == 0
+    db_session.add_all([workspace, user])
+    await db_session.flush()
+
+    result = await create_pause_reason(
+        ServiceContext(
+            identity={
+                "workspace_id": workspace.client_id,
+                "user_id": user.client_id,
+                "role_name": "manager",
+            },
+            incoming_data={
+                "name": "Production-created pause reason",
+                "pause_type": PauseTypeEnum.PERSONAL.value,
+            },
+            session=db_session,
+        )
+    )
+
+    assert result["pause_reason"]["is_system_managed"] is False

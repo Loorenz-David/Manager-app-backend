@@ -29,7 +29,6 @@ from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.cases.case import Case
 from beyo_manager.models.tables.cases.case_type import CaseType
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -45,6 +44,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.worker_stats.list_workers_linear_timeline import (
     list_workers_linear_timeline,
 )
+from tests.fixtures.phase2_row_factories import adopt_or_create_role
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -539,9 +539,7 @@ async def _seed_roster_worker(db_session, workspace_id: str) -> User:
         password="secret",
     )
     db_session.add(user)
-    role = (
-        await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-    ).scalar_one()
+    role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = WorkspaceRole(
         client_id=f"wsr_{suffix}",
         workspace_id=workspace_id,
