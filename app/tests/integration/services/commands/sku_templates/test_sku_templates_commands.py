@@ -129,6 +129,7 @@ async def test_concurrent_allocations_return_distinct_scalars(db_session):
     first, second = await asyncio.gather(_allocate(), _allocate())
     assert {first, second} == {1, 2}
     row = await db_session.scalar(select(SkuTemplate).where(SkuTemplate.client_id == created["client_id"]))
+    await db_session.refresh(row)
     assert row.last_scalar == 2
 
 
