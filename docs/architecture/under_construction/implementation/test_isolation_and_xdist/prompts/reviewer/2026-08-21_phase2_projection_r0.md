@@ -41,7 +41,9 @@ this gate exists to produce, not an obstacle to route around.
 
 ## 3. Gate check — stop and report if any is false
 
-- Branch `feat/test-isolation-xdist`, HEAD `5ecfe90`, `git status --porcelain` clean.
+- Branch `feat/test-isolation-xdist`, `git status --porcelain` clean, and HEAD's `app/` tree
+  identical to the phase-1 approval commit: `git diff 5ecfe90 HEAD -- app/` is **empty**
+  (commits after it are documentation only). No code has moved since phase 1 was approved.
 - `plans/plan_1.md` frontmatter reads `state: APPROVED`.
 - `plans/plan_2.md` exists with `state: NOT_STARTED` and an empty §7 Review log.
 - `pytest-xdist` is **not** installed and no `-n` flag appears anywhere in the repository.
