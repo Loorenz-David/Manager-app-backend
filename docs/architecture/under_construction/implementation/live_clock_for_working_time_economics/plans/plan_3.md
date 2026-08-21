@@ -433,3 +433,21 @@ class-inside-its-own-correction shape and the coordinator's fourth.
 
 **Not a licence to relax the row:** C5 stays at L4 and stays per-site. Its two site
 observations are what bound the set; the correction only fixes what counts as a surprise.
+
+**2026-08-21 — implementer r1 (Codex).** Implemented D9 using the default two-site
+shape (P3-D1): E-P and E-B compute the frozen percentage from the stored result figures
+inside their existing `result is not None` branches, and each site comment names the
+other feed site. P3-D2 was resolved by extending `test_phase2_live_surfaces.py`; P3-D3
+was resolved with comments beside each fixture's hand-computed literals. The two
+enumerated hand-built fixture files were widened only to use `Decimal` minute values,
+and the two internal numerics documents now distinguish live infeasible nulls from
+frozen-result nulls. The false live-percentage docstring was corrected; the unused
+worker serializer and published frontend handoff remain out of scope.
+
+The pre-existing `test_c17_frozen_final_uses_live_percent_without_money` remains green
+by coincidence (20.00 / 100.00 on both live and frozen bases); this is recorded rather
+than retargeted. Named mutations reddened at every required site and were reverted.
+C5's L4 per-site unions were the 26-ID baseline plus the golden and `test_c17` legacy
+IDs, plus this phase's C3/C6a/C6b rows; no IDs outside the two plan classes appeared.
+No Architecture Graph delta was warranted: the change rewires existing serializer
+feed sites and adds no new architectural boundary.

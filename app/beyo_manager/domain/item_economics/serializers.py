@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
+
 
 def _date(value: object) -> str | None:
     return value.isoformat() if value is not None else None
@@ -232,6 +234,14 @@ def serialize_task_budget_status(
     include_monetary: bool,
 ) -> dict:
     """Serialize the manager or worker budget-status view."""
+    frozen_percent_consumed = None
+    if status.result is not None:
+        # The production-time serializer names this feed site: both freeze the
+        # percentage from the stored result so the worker result block never ticks.
+        frozen_percent_consumed = calculate_percent_consumed(
+            status.result.actual_worker_minutes + status.result.variance_worker_minutes,
+            status.result.actual_worker_minutes,
+        )
     payload = {
         "status": _enum_value(status.status),
         "item_binding": status.item_binding,
@@ -244,7 +254,7 @@ def serialize_task_budget_status(
             _serialize_result(
                 status.result,
                 include_monetary=include_monetary,
-                percent_consumed=status.percent_consumed,
+                percent_consumed=frozen_percent_consumed,
             )
             if status.result is not None
             else None

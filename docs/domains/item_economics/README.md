@@ -98,8 +98,10 @@ not an item worth nothing; a task with no committed evaluation has no budget, no
 budget of zero.
 
 The concrete rule: for every status except `ok` and `infeasible`, the status payload's
-numeric fields are `null`. Never `0`, never omitted. `percent_consumed` is `null` for
-`infeasible` too. The one carve-out is the valuation endpoint's `preview` key, where the
+numeric fields are `null`. Never `0`, never omitted. The live `percent_consumed` is
+`null` for `infeasible`; a frozen result's `percent_consumed` uses its own stored
+figures and is `null` only when its reconstructed allowance is non-positive. The one
+carve-out is the valuation endpoint's `preview` key, where the
 computable preview state (`not_evaluated`) carries fully computed
 `production_budget_minor` and `allowed_worker_minutes` — see [api.md](api.md).
 

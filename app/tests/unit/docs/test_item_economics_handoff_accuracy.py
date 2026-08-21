@@ -10,6 +10,7 @@ package, because commands run from ``backend/app/``.
 
 import re
 from pathlib import Path
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -263,9 +264,9 @@ def test_the_published_status_vocabulary_is_exactly_the_enum() -> None:
 def _status(*, with_result: bool) -> SimpleNamespace:
     result = SimpleNamespace(
         actual_worker_seconds=7200,
-        actual_worker_minutes="120.00",
+        actual_worker_minutes=Decimal("120.00"),
         consumed_cost_minor=150000,
-        variance_worker_minutes="40.00",
+        variance_worker_minutes=Decimal("40.00"),
         variance_cost_minor=50000,
         task_state_snapshot="ready",
         task_closed_at=None,
@@ -276,12 +277,12 @@ def _status(*, with_result: bool) -> SimpleNamespace:
         status=SimpleNamespace(value="ok"),
         item_binding="bound",
         actual_worker_seconds=7200,
-        actual_worker_minutes="120.00",
-        remaining_worker_minutes="40.00",
-        percent_consumed="75.00",
-        variance_worker_minutes="40.00",
+        actual_worker_minutes=Decimal("120.00"),
+        remaining_worker_minutes=Decimal("40.00"),
+        percent_consumed=Decimal("75.00"),
+        variance_worker_minutes=Decimal("40.00"),
         production_budget_minor=200000,
-        allowed_worker_minutes="160.00",
+        allowed_worker_minutes=Decimal("160.00"),
         consumed_cost_minor=150000,
         variance_cost_minor=50000,
         evaluation_id="ice_1",

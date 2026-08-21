@@ -45,8 +45,10 @@ ordered sequences in `domain/item_economics/configuration.py`
 6–10), never in enum iteration.
 
 **Numerics rule.** For every value except `ok` and `infeasible`, the payload's numeric
-fields are `null` — never `0`, never omitted. `percent_consumed` is `null` for
-`infeasible` as well. The single carve-out is the valuation endpoint's `preview` key,
+fields are `null` — never `0`, never omitted. The live `percent_consumed` is `null`
+for `infeasible`, while a frozen result's `percent_consumed` is derived from its own
+stored figures and is `null` only when its reconstructed allowance is non-positive.
+The single carve-out is the valuation endpoint's `preview` key,
 where the computable state `not_evaluated` carries fully computed
 `production_budget_minor` and `allowed_worker_minutes`.
 

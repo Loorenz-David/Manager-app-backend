@@ -10,6 +10,7 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_MIN_SAMPLE_SIZE,
     TYPICAL_WINDOW_DAYS,
 )
+from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
 
 
 def _decimal(value: object) -> str | None:
@@ -66,7 +67,7 @@ def _enum_value(value: object) -> object:
 
 
 def _serialize_production_time_final(result: object, percent_consumed: object | None) -> dict:
-    """Serialize the frozen result with the live percentage and no money."""
+    """Serialize the frozen result with its frozen percentage and no money."""
 
     return {
         "actual_worker_minutes": _decimal(result.actual_worker_minutes),
@@ -113,6 +114,14 @@ def serialize_task_production_time(row: dict) -> dict:
     percent_consumed = row.get("percent_consumed")
     result = row.get("result")
     division = row["division"]
+    frozen_percent_consumed = None
+    if result is not None:
+        # The budget-status serializer names this feed site: both freeze the
+        # percentage from the stored result so the final block never ticks.
+        frozen_percent_consumed = calculate_percent_consumed(
+            result.actual_worker_minutes + result.variance_worker_minutes,
+            result.actual_worker_minutes,
+        )
     return {
         "task_id": row["task_id"],
         "status": _enum_value(status),
@@ -126,7 +135,7 @@ def serialize_task_production_time(row: dict) -> dict:
             "percent_consumed": _decimal(percent_consumed),
         },
         "final": (
-            _serialize_production_time_final(result, percent_consumed)
+            _serialize_production_time_final(result, frozen_percent_consumed)
             if result is not None
             else None
         ),

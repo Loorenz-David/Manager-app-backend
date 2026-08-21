@@ -16,6 +16,8 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
+from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
+from beyo_manager.domain.item_economics.enums import ItemCostEvaluationKindEnum
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.services.context import ServiceContext
@@ -118,6 +120,47 @@ async def _make_live_fixture(db_session):
     )
     await db_session.flush()
     return values, now
+
+
+async def _recommit_with_allowed_minutes(db_session, values, now: datetime, allowed: str):
+    """Create the current evaluation that changes only the live denominator."""
+    old = values[10]
+    replacement = ItemCostEvaluation(
+        client_id=f"ice_phase3_recommit_{values[0].client_id}",
+        workspace_id=old.workspace_id,
+        task_id=old.task_id,
+        item_id=old.item_id,
+        # Insert as a projection first so the self-FK and current-evaluation
+        # uniqueness constraints can be crossed in two valid database steps.
+        kind=ItemCostEvaluationKindEnum.PROJECTION,
+        label=old.label,
+        task_type_snapshot=old.task_type_snapshot,
+        return_source_snapshot=old.return_source_snapshot,
+        expected_sale_price_minor=old.expected_sale_price_minor,
+        purchase_cost_minor=old.purchase_cost_minor,
+        currency=old.currency,
+        cost_model_version_id=old.cost_model_version_id,
+        production_cost_group_id=old.production_cost_group_id,
+        production_cost_basis_version_id=old.production_cost_basis_version_id,
+        monthly_paid_hours_snapshot=old.monthly_paid_hours_snapshot,
+        planning_utilization_percent_snapshot=old.planning_utilization_percent_snapshot,
+        fixed_monthly_cost_minor_snapshot=old.fixed_monthly_cost_minor_snapshot,
+        cost_per_worker_minute_minor_snapshot=old.cost_per_worker_minute_minor_snapshot,
+        production_budget_minor=old.production_budget_minor,
+        allowed_worker_minutes=Decimal(allowed),
+        calculation_version=old.calculation_version,
+        committed_at=now,
+        promoted_from_id=old.client_id,
+        created_by_id=old.created_by_id,
+    )
+    db_session.add(replacement)
+    await db_session.flush([replacement])
+    old.superseded_at = now
+    old.superseded_by_id = replacement.client_id
+    await db_session.flush()
+    replacement.kind = ItemCostEvaluationKindEnum.COMMITTED
+    await db_session.flush()
+    return replacement
 
 
 async def _make_share_state_fixture(db_session):
@@ -502,6 +545,184 @@ async def test_c2_c3_c7_live_payloads_reconcile_and_worker_face_stays_money_free
         not any(token in key.lower() for token in ("_minor", "cost", "price", "currency", "money", "valuation"))
         for key in walk_keys(worker_payload)
     )
+
+
+@pytest.mark.integration
+async def test_c1_ep_final_freezes_while_budget_percent_ticks(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    entered_at = now - timedelta(minutes=10)
+
+    pre_open = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, entered_at)
+    )
+    open_now = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now)
+    )
+
+    # P3-D3 C1/C4b: settled 20.00 + zero open share gives frozen 100.00 and
+    # live 120.00 before opening; ten minutes of open share gives live 170.00.
+    assert pre_open["final"]["percent_consumed"] == "100.00"
+    assert open_now["final"] == pre_open["final"]
+    assert pre_open["budget"]["percent_consumed"] == "120.00"
+    assert open_now["budget"]["percent_consumed"] == "170.00"
+
+
+@pytest.mark.integration
+async def test_c2_worker_result_percent_uses_frozen_result_figures(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    worker = await get_task_budget_status_worker(
+        _ctx(
+            db_session,
+            workspace.client_id,
+            task.client_id,
+            now - timedelta(minutes=10),
+            role="worker",
+        )
+    )
+    payload = serialize_task_budget_status(worker, include_monetary=False)
+
+    # P3-D3 C2: actual 20.00 / (actual 20.00 + variance 0.00) = 100.00 exactly.
+    assert payload["result"]["percent_consumed"] == "100.00"
+
+
+@pytest.mark.integration
+async def test_c3_recommit_changes_live_denominator_not_frozen_percent(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    result = await db_session.scalar(
+        select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
+    )
+    assert result is not None
+    # P3-D3 C3: frozen actual 20.00 + variance 5.00 = allowance 25.00,
+    # so the frozen percent is 80.00; the replacement evaluation uses 30.00
+    # while the live pre-open basis remains 24.00 minutes.
+    result.variance_worker_minutes = Decimal("5.00")
+    await db_session.flush()
+
+    before = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now - timedelta(minutes=10))
+    )
+    replacement = await _recommit_with_allowed_minutes(db_session, values, now, "30.00")
+    assert replacement.allowed_worker_minutes == Decimal("30.00")
+    after = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now - timedelta(minutes=10))
+    )
+    worker = await get_task_budget_status_worker(
+        _ctx(
+            db_session,
+            workspace.client_id,
+            task.client_id,
+            now - timedelta(minutes=10),
+            role="worker",
+        )
+    )
+    worker_payload = serialize_task_budget_status(worker, include_monetary=False)
+
+    assert before["final"]["percent_consumed"] == "80.00"
+    assert after["final"]["percent_consumed"] == "80.00"
+    assert after["budget"]["percent_consumed"] == "80.00"
+    assert worker_payload["result"]["percent_consumed"] == "80.00"
+
+
+@pytest.mark.integration
+async def test_c4a_manager_result_block_has_no_percent_consumed_key(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    manager = await get_task_budget_status(
+        _ctx(db_session, workspace.client_id, task.client_id, now)
+    )
+    payload = serialize_task_budget_status(manager, include_monetary=True)
+
+    def walk_keys(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                yield key
+                yield from walk_keys(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from walk_keys(child)
+
+    assert "percent_consumed" not in set(walk_keys(payload["result"]))
+
+
+@pytest.mark.integration
+async def test_c4c_worker_top_level_percent_still_ticks(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    entered_at = now - timedelta(minutes=10)
+
+    pre_open = await get_task_budget_status_worker(
+        _ctx(db_session, workspace.client_id, task.client_id, entered_at, role="worker")
+    )
+    open_now = await get_task_budget_status_worker(
+        _ctx(db_session, workspace.client_id, task.client_id, now, role="worker")
+    )
+    pre_payload = serialize_task_budget_status(pre_open, include_monetary=False)
+    open_payload = serialize_task_budget_status(open_now, include_monetary=False)
+
+    # P3-D3 C4c: the worker's live top-level percent is 120.00 before the
+    # open share and 170.00 after it; its nested result remains 100.00.
+    assert pre_payload["percent_consumed"] == "120.00"
+    assert open_payload["percent_consumed"] == "170.00"
+    assert open_payload["result"]["percent_consumed"] == "100.00"
+
+
+@pytest.mark.integration
+async def test_c6a_frozen_percent_survives_infeasible_current_evaluation(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    result = await db_session.scalar(
+        select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
+    )
+    assert result is not None
+    # P3-D3 C6a: frozen 15.00 / (15.00 + 85.00) = 15.00 even when current
+    # allowance is 0.00 and status is infeasible.
+    result.actual_worker_minutes = Decimal("15.00")
+    result.variance_worker_minutes = Decimal("85.00")
+    values[10].allowed_worker_minutes = Decimal("0.00")
+    await db_session.flush()
+
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now)
+    )
+    worker = await get_task_budget_status_worker(
+        _ctx(db_session, workspace.client_id, task.client_id, now, role="worker")
+    )
+    worker_payload = serialize_task_budget_status(worker, include_monetary=False)
+
+    assert production["status"] == "infeasible"
+    assert production["final"]["percent_consumed"] == "15.00"
+    assert worker_payload["status"] == "infeasible"
+    assert worker_payload["result"]["percent_consumed"] == "15.00"
+
+
+@pytest.mark.integration
+async def test_c6b_frozen_non_positive_allowance_returns_null_percent(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    result = await db_session.scalar(
+        select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
+    )
+    assert result is not None
+    # P3-D3 C6b: frozen 15.00 + (-15.00) = 0.00, so the percentage is
+    # undefined independently of the current status.
+    result.actual_worker_minutes = Decimal("15.00")
+    result.variance_worker_minutes = Decimal("-15.00")
+    values[10].allowed_worker_minutes = Decimal("0.00")
+    await db_session.flush()
+
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now)
+    )
+    worker = await get_task_budget_status_worker(
+        _ctx(db_session, workspace.client_id, task.client_id, now, role="worker")
+    )
+    worker_payload = serialize_task_budget_status(worker, include_monetary=False)
+
+    assert production["final"]["percent_consumed"] is None
+    assert worker_payload["result"]["percent_consumed"] is None
 
 
 @pytest.mark.integration

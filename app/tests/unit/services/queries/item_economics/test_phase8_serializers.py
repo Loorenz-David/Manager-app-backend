@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -17,9 +18,9 @@ from beyo_manager.domain.item_economics.serializers import (
 def _result() -> SimpleNamespace:
     return SimpleNamespace(
         actual_worker_seconds=120,
-        actual_worker_minutes="2.00",
+        actual_worker_minutes=Decimal("2.00"),
         consumed_cost_minor=30,
-        variance_worker_minutes="-1.00",
+        variance_worker_minutes=Decimal("-1.00"),
         variance_cost_minor=-10,
         task_state_snapshot="resolved",
         task_closed_at=None,
@@ -52,12 +53,12 @@ def test_budget_status_worker_surface_excludes_money() -> None:
         status=EconomicsStatusEnum.OK,
         item_binding="bound",
         actual_worker_seconds=120,
-        actual_worker_minutes="2.00",
-        remaining_worker_minutes="8.00",
-        percent_consumed="20.00",
-        variance_worker_minutes="-8.00",
+        actual_worker_minutes=Decimal("2.00"),
+        remaining_worker_minutes=Decimal("8.00"),
+        percent_consumed=Decimal("20.00"),
+        variance_worker_minutes=Decimal("-8.00"),
         production_budget_minor=100,
-        allowed_worker_minutes="10.00",
+        allowed_worker_minutes=Decimal("10.00"),
         consumed_cost_minor=30,
         variance_cost_minor=70,
         evaluation_id="eval",
