@@ -680,11 +680,39 @@ publishes the tree it approves at and the suite measured there.
 count moved by phase test additions (+23 phase 1, +18 phase 2) and by the cap stream's own
 tests (+2, landed under fix r2). Compare against the **ID set**, never the count.
 
-### Recognized external commit streams (owner note, 2026-08-20)
+### Recognized external commit streams (owner note, 2026-08-20; **third stream added 2026-08-21**)
 
-Two owner-committed streams run alongside this pipeline. Both are **foreign-but-expected**:
+**Three** owner streams run alongside this pipeline. All are **foreign-but-expected**:
 a reviewer's `git diff` perimeter check attributes files below to their stream instead of
 raising an automatic finding. Anything *outside* these lists is still a finding.
+
+**3. Shopify infra — owner work in progress, and the first stream that is UNCOMMITTED**
+(owner confirmed 2026-08-21). Perimeter:
+
+- `app/beyo_manager/services/infra/shopify/product_sync_client.py`
+- `app/beyo_manager/services/infra/shopify/shop_client.py`
+- `app/scripts/shopify/` (untracked: `__init__.py`, `fields.py`)
+
+Why this one needs different handling from streams 1 and 2: **it lives in the working
+tree, not in git history.** A committed stream is visible to `git log` and excluded from a
+measurement by choosing a tree; an uncommitted one is **inside every test run while being
+invisible to every commit-based check**. Binding consequences:
+
+- **Dating it is still possible, and was done.** Fix r2's declared stamp digest
+  `b50bda39…` matches the *committed-only* `app/` diff, while the `app/` diff *including*
+  this stream hashes `2d7604fe…` — proving the stream appeared **after** fix r2's stamp,
+  so that stamp is clean of it. This is what the dirty-tree half of the charter's
+  tree-identity scheme is for; use it the same way next time rather than guessing.
+- **The baseline overlaps this stream's surface.** The enumerated 26 contains
+  `test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`,
+  and one of the two named flaky tests is
+  `test_process_shopify_products_integration.py::test_process_shopify_products_fans_out_to_all_active_workspace_shops_and_enqueues_one_task`.
+  A count that moves has **three** candidate causes here — this stream, the flake, a real
+  regression — so **capture the failing-ID set and attribute; never conclude from a count.**
+- **The phase-3 approval gate must state which it measured.** Its baseline is published
+  for `narrow_typical_work_times` D23, so the gate records the tree identity *including*
+  the dirty digest, or is measured on a tree where this stream is committed or absent.
+  Prefer L1/L2 evidence for rounds that do not need L4 at all.
 
 **1. Production budget cap — code, parallel, disjoint perimeter.** Commits prefixed
 `CHECKPOINT (not approved): production budget cap`. Its perimeter:
