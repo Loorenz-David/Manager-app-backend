@@ -88,7 +88,16 @@ Each came from a measured defect. These supplement the charter, never replace it
 7. **A single-occurrence failing-ID difference triggers re-measurement, never attribution.** This
    project lost one round to a difference labelled "known" and part of another to one labelled
    "pre-existing order seams". In both cases the label preceded the evidence.
-8. **The closing stamp is defined by the tree, not by the count.** Two rounds read a numeric L4
+8. **A gate check must not assert a state the act of dispatching changes.** Three times now a
+   coordinator-authored precondition went stale between writing and dispatch: a prompt pinned
+   `HEAD 5ecfe90` and the authoring commit invalidated it within the minute; plan_2's frontmatter
+   was left at `IMPLEMENTED` because an approval script's replacement silently no-opped; and a
+   phase-3 gate check demanded `state: PROJECTED` while authoring the prompt moved the plan to
+   `PROMPT_READY`, correctly blocking a session. **Write the check against what the gate protects,
+   in a form dispatch cannot falsify** — `git diff <sha> HEAD -- app/` is empty, not `HEAD` equals
+   a sha; the state a live prompt implies, not the state it was written under. And assert every
+   scripted edit, because a silent no-op is indistinguishable from success.
+9. **The closing stamp is defined by the tree, not by the count.** Two rounds read a numeric L4
    budget as forbidding a re-stamp after they had invalidated their own. *(A charter amendment
    is proposed to the owner; until it lands, prompts state it explicitly.)*
 

@@ -24,7 +24,14 @@ reuse"**) and `/Users/davidloorenz/agent-skills/implementation-executor.md`.
 ## 2. Gate check — stop and report if any is false
 
 - `plans/plan_2.md` frontmatter reads `state: APPROVED` **and** carries a `gate_stamp:` line.
-- `plans/plan_3.md` reads `state: PROJECTED` and its §7 carries the projection-r0 routing table.
+- `plans/plan_3.md` reads **`state: PROMPT_READY`** — the state a plan carries once its prompt is
+  authored and awaiting a session (charter: `PROJECTED → PROMPT_READY → IMPLEMENTING`). Its §7
+  carries the projection-r0 routing table. *(Corrected 2026-08-21: this line said `PROJECTED`,
+  the state plan_3 held while this prompt was being written; flipping it to `PROMPT_READY` at
+  dispatch invalidated the coordinator's own gate check, and an implement session correctly
+  stopped on it. The gate protects "the projection is folded and this prompt is live", which
+  holds.)*
+- **Flip it to `IMPLEMENTING` when you start**, and to `IMPLEMENTED` at close (§9.4).
 - `planning/intention.md` §4 contains **OD-8** and **OD-9**. Task 1 and task 5 are not executable
   without them.
 - `pytest-xdist` is **not** installed and no `-n` appears in any pytest configuration. Installing
