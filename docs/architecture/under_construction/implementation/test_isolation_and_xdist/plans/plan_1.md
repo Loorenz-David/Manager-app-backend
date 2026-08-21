@@ -287,3 +287,57 @@ dev-data restore survives F1, this needs to fail closed rather than prompt.
   review-log entry are the cycle documents. No Architecture Graph mutation was made; current
   graph revision remains `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`
   with three pending reviews and no diagnostics. Phase 2 remains out of scope.
+
+**2026-08-21 — fix r2 consumed (coordinator). OD-1 and OD-2 are discharged; one published
+number is wrong.** Verified independently rather than read.
+
+**Perimeter: exactly the eight declared files, all under `app/tests/`, no production code**
+(`git show --name-only 697b633`). Their stamp is tree-valid for the current tree —
+`git diff 697b633 HEAD -- app/` is empty, the only commits since being documentation — and the
+handoff correctly identified `ec9cbb3` as a foreign doc-only commit rather than treating it as
+perimeter drift.
+
+**OD-1 discharged, and the fixtures are the right shape.** The `pg_dump`/`pg_restore` path and
+its password-prompt fallback are gone; the template is migrated-and-marked only.
+`tests/fixtures/phase1_reference_data.py` is **142 lines, four fixtures — one per test group —
+and three helpers**, each seeding a handful of explicitly named `phase1-*` rows, with docstrings
+that state the narrowness as the point (*"Only the role and pause catalog row looked up by the
+backfill test helpers"*). This is what the fix prompt asked for and not what it warned against:
+no broad reference dataset, no live-data copy.
+
+**F3 closed properly.** `test_dev_database_counts_are_untouched` now captures
+`configured_row_counts_before_run` and asserts `after == before`. A red finally carries
+information — it can only mean the suite wrote to the dev database, not that the owner added a
+workspace.
+
+**OD-2 confirmed by independent measurement.** Coordinator run at `ec9cbb3` (app/ identical to
+the checkpoint): **22 failed / 2539 passed / 1 deselected in 108.72 s**. The failing-ID set is
+**byte-identical to the handoff's published 22** — `comm`-diffed empty in both directions — and
+against the old 26 the delta is **removed = the four dev-data artifacts, added = ∅**, exactly as
+claimed and exactly matching the four the coordinator had named independently before the fix
+round ran.
+
+**Residue and safety verified after a full run:** the server holds only `beyo_test_template`
+alongside the three real databases; dev counts are **11253/9809/2445/1955**, unchanged; and the
+two rows the C6 mutation committed into the development database
+(`ws_01M0HX8YBXK0WWHWNVQCAKGN0F`, `usr_01M0HX8YBVZYZT2RYT126QQRNC`) are **gone, verified by
+direct query**. Disclosing a destructive probe on the dev database and cleaning it verifiably is
+the right handling.
+
+**FINDING (should-fix) — the published pass count is off by one, and it is the number being
+published.** The handoff states the authoritative baseline as `22 failed / **2540** passed / 1
+deselected`, twice. Collection is **2561 selected** (2562 total, 1 deselected), so
+`22 + 2540 = 2562` exceeds what can run; the coordinator measured `22 + 2539 = 2561`, which
+accounts for every selected test exactly. **The correct figure is 2539.** The failing-ID set —
+the half that everything downstream consumes — is correct, which is a small vindication of the
+schema this project adopted: the count is subordinate, and the count is the only thing that was
+wrong. It still must be corrected before phase 2, `live_clock` phase 4 and
+`narrow_typical_work_times` D23 build on it.
+
+**Carried for the reviewer, not resolved here:** C3's named mutation produced a **setup abort**
+(`expected 107 public tables, got 1`) rather than a red test row, so its ID delta reads
+`∅ / ∅` — the correct outcome, since the guard refuses to build a bad template before any test
+can report a false green, but an evidence shape indistinguishable at a glance from "the mutation
+did nothing". The handoff states it honestly; a reviewer should confirm the reading. Same class
+as the C8 probe, which this round re-measured cleanly at the corrected site after disclosing that
+the earlier one "did not bite".
