@@ -136,7 +136,7 @@ class DatabaseIsolation:
             await self._create_database_from_template(self.worker_database_name)
             await self._set_marker(self.worker_database_name)
             self._started = True
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             await self._drop_database_if_exists(self.worker_database_name, best_effort=True)
             raise
 
@@ -241,10 +241,9 @@ class DatabaseIsolation:
                 f"""
                 SELECT 1
                 FROM {MARKER_SCHEMA}.{MARKER_TABLE}
-                WHERE marker_key = $1 AND database_name = $2
+                WHERE marker_key = $1
                 """,
                 MARKER_KEY,
-                database_name,
             )
         )
 

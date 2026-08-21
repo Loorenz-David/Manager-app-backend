@@ -1,12 +1,12 @@
 # Plan 1 — per-worker database isolation, proven serially
 
 ```
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 phase: 1
 date: 2026-08-21
-actor: claude-opus-5 (review r3)
-note: isolation machinery sound; the "nine tests" figure is an artifact of collection order
-      (B1) and the interrupted-run wedge defeats C8 (B2). Two owner cards open.
+actor: codex (fix r4)
+note: fix r4 closes B2, S1, S2 and N7; the ~118-test order-dependent class remains phase 2 work
+      under OD-3, and no xdist or parallel execution was introduced.
 depends_on: nothing. Gates live_clock_for_working_time_economics phase 4.
 scope_fence: pytest-xdist is NOT installed in this phase. Parallelism is phase 2.
 ```
@@ -467,3 +467,46 @@ byte-for-byte, fixture narrowness and residue — and never asked whether the nu
 decided on was itself order-dependent. The prompt's P6 asked only whether any of the 22 shared
 the known order-dependent signature; the reviewer generalised it to the whole suite and reordered
 collection to answer. That generative step is the round's entire value.
+
+### 2026-08-21 — fix r4 implemented (B2, S1, S2, N7)
+
+- Outcome: phase-1 fix r4 is implemented. No production application file was changed, and
+  `pytest-xdist`, `-n`, and parallel execution remain out of scope.
+- B2: the disposable-marker predicate now accepts the inherited template marker by its exact
+  `marker_key`; `_set_marker` still rewrites the worker's `database_name` before tests run. This
+  is the smallest fix that makes the `CREATE DATABASE ... TEMPLATE ...` interruption window
+  droppable without weakening the name, configured-database, URL, or marker-key guards. Startup
+  cleanup now catches `KeyboardInterrupt` as well as ordinary exceptions.
+- C8: added explicit and inherited-marker rows. Added a separate interruption test that injects
+  `KeyboardInterrupt` after worker creation and asserts the exact worker is removed. The probe
+  teardown can clean a failed mutant without hiding its assertion.
+- S1/S2: replaced both fixture-count assertions with production `list_pause_reasons` assertions.
+  Each test soft-deletes one named fixture row, asserts it is absent from the picker, and asserts
+  the other live row remains. The retired-population test no longer counts rows inserted by its
+  own fixture.
+- N7/B1 documentation: the published baseline is corrected to **22 failed / 2539 passed / 1
+  deselected**. Deliverable 12 now records the approximately 118 tests across 11 files, the
+  reversed-order measurement (`139 / 2422 / 1`, `added=118 / removed=1`), and the
+  `test_clock_actions_integration.py` `Role(WORKER)` coupling. The schema-only template carries
+  no migration-owned seed rows; repair remains phase 2 work under OD-3.
+- Targeted verification: `tests/integration/infrastructure/test_database_isolation.py` — **17
+  passed**; `tests/integration/services/commands/test_system_transition_reasons_retirement.py`
+  — **5 passed**; combined phase surface — **21 passed**. The matching authoritative L4 baseline
+  remains the previously verified **22 / 2539 / 1**; no application-wide suite was run in this
+  session because the requested scope was phase tests only.
+- Mutation evidence: restoring the database-name predicate made the inherited-marker C8 row fail
+  with `UnsafeDatabaseError`; removing `KeyboardInterrupt` from startup cleanup left the exact
+  worker and failed the cleanup assertion; removing `PauseReason.is_deleted.is_(False)` made the
+  soft-deleted-picker test fail. Each source was restored and checksum-verified. Probe databases
+  `beyo_test_gw999` and `beyo_test_gw998` were removed; no probe rows were committed to the
+  configured database.
+- Judgment: accepting the template marker by key is safe because the marker table is created by
+  this isolation module and the separate exact-name, configured-URL, PostgreSQL-URL, and marker
+  presence checks remain fail-closed. The retirement tests intentionally protect the observable
+  worker picker contract rather than claiming a clean-schema test can replay historical migration
+  order.
+- Perimeter: code/tests are the three files under `app/tests/` changed in this cycle; documents
+  are this review-log entry, the corrected r2 handoff, and the r4 implementer handoff. Mutation
+  probe files are `app/tests/database_isolation.py` and
+  `app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py`; the latter is restored
+  byte-for-byte and is not part of the intended change. No Architecture Graph delta was made.

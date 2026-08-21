@@ -104,17 +104,58 @@ async def test_dev_database_counts_are_untouched(isolated_database: DatabaseIsol
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mark_leftover",
+    [pytest.param(True, id="explicitly-marked"), pytest.param(False, id="inherited-marker")],
+)
 async def test_fixed_name_reabsorbs_an_interrupted_worker(
     isolated_database: DatabaseIsolation,
+    mark_leftover: bool,
 ) -> None:
     probe = DatabaseIsolation(settings.database_url, worker_id="gw999")
     before = set(await probe.database_names())
-    await probe._create_database(probe.worker_database_name)
-    await probe._set_marker(probe.worker_database_name)
-    assert set(await probe.database_names()) == before | {probe.worker_database_name}
     try:
+        await probe._create_database_from_template(probe.worker_database_name)
+        if mark_leftover:
+            await probe._set_marker(probe.worker_database_name)
+        assert set(await probe.database_names()) == before | {probe.worker_database_name}
         await probe.start()
         assert set(await probe.database_names()) == before | {probe.worker_database_name}
     finally:
-        await probe.stop()
+        # The pre-fix guard cannot drop a worker that still carries the template's marker name.
+        # Mark it for cleanup after a failed mutant run without hiding the assertion failure.
+        if await probe._database_exists(probe.worker_database_name):
+            if not await probe._marker_present(probe.worker_database_name):
+                await probe._set_marker(probe.worker_database_name)
+            if probe._started:
+                await probe.stop()
+            else:
+                await probe._drop_database_if_exists(probe.worker_database_name)
     assert set(await probe.database_names()) == before
+
+
+@pytest.mark.asyncio
+async def test_start_cleans_worker_when_interrupted_during_creation(
+    isolated_database: DatabaseIsolation,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = DatabaseIsolation(settings.database_url, worker_id="gw998")
+    create_from_template = probe._create_database_from_template
+
+    async def create_then_interrupt(database_name: str) -> None:
+        await create_from_template(database_name)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(probe, "_create_database_from_template", create_then_interrupt)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            await probe.start()
+        assert not await probe._database_exists(probe.worker_database_name)
+    finally:
+        if await probe._database_exists(probe.worker_database_name):
+            if not await probe._marker_present(probe.worker_database_name):
+                await probe._set_marker(probe.worker_database_name)
+            if probe._started:
+                await probe.stop()
+            else:
+                await probe._drop_database_if_exists(probe.worker_database_name)

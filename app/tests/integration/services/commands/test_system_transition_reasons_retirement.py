@@ -5,9 +5,8 @@ Three things this phase must get right, none of which a naive test catches:
 1. The CHECK constraint must reject a step record carrying both explanations, and must NOT reject
    the derived declared-state row, which carries both **by design**. Real data contains zero
    instances of the second case, so it has to be constructed deliberately.
-2. `pause_ended_shift` must remain selectable through the real endpoint. `list_pause_reasons`
-   filters `is_deleted`, so a soft-delete would silently remove it from the worker's pause sheet.
-3. `pause_case_created` and its historical references must be untouched.
+2. `list_pause_reasons` must not expose a soft-deleted pause reason while retaining live rows.
+3. Retired transition-reason rows must not be treated as worker-selectable catalog entries.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -127,18 +126,28 @@ async def test_constraint_does_not_reject_the_declared_state_projection(
     await db_session.rollback()
 
 
-async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(
+async def test_soft_deleted_pause_reason_is_not_selectable_through_the_endpoint(
     db_session, transition_reason_reference_data
 ):
-    """It stays because a worker picks it, and `list_pause_reasons` filters `is_deleted`.
+    """A soft-deleted reason disappears from the worker picker, while a live one remains.
 
-    Asserted through the query service rather than by reading the row, because the filter — not the
-    row's existence — is what decides whether the pause sheet offers it.
+    The assertion goes through the production query rather than reading the rows directly, because
+    the ``is_deleted`` predicate is the behavior this test protects.
     """
     from beyo_manager.services.queries.pause_reasons.list_pause_reasons import list_pause_reasons
     from beyo_manager.services.context import ServiceContext
 
     workspace_id = await _any_workspace_with_catalog(db_session)
+    ended_shift = await db_session.scalar(
+        select(PauseReason).where(
+            PauseReason.workspace_id == workspace_id,
+            PauseReason.slug == "pause_ended_shift",
+        )
+    )
+    assert ended_shift is not None
+    ended_shift.is_deleted = True
+    await db_session.flush()
+
     ctx = ServiceContext(
         identity={"workspace_id": workspace_id, "user_id": "usr_probe", "role_name": "manager"},
         incoming_data={},
@@ -148,42 +157,42 @@ async def test_pause_ended_shift_is_still_selectable_through_the_endpoint(
     result = await list_pause_reasons(ctx)
     slugs = {r.get("slug") for r in result["pause_reasons"]}
 
-    assert "pause_ended_shift" in slugs, (
-        "pause_ended_shift vanished from the picker. It is an ordinary worker-selectable reason "
-        "and the pause sheet offers it; list_pause_reasons filters is_deleted, so soft-deleting "
-        "the row removes the worker's ability to state that reason at all"
+    assert "pause_ended_shift" not in slugs, (
+        "a soft-deleted pause reason must not be offered by the worker pause sheet"
     )
-    assert "pause_other_task_priority" not in slugs, (
-        "the retired system row is still offered; nothing resolves it and nobody selects it"
-    )
+    assert "pause_case_created" in slugs, "a non-deleted pause reason must remain selectable"
 
 
 async def test_retirement_left_the_guarded_populations_alone(
     db_session, transition_reason_reference_data
 ):
-    """`pause_case_created` is a stale value with 7 historical references phase 3 preserved."""
-    anchor_refs = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM step_state_records s "
-            "JOIN pause_reasons p ON p.client_id = s.pause_reason_id "
-            "WHERE p.slug = 'pause_case_created'"
-        )
-    )
-    assert anchor_refs == 7, (
-        f"expected the 7 preserved pause_case_created references, found {anchor_refs}"
-    )
+    """A retired catalog row is hidden from the live picker, not resurrected by history."""
+    from beyo_manager.services.queries.pause_reasons.list_pause_reasons import list_pause_reasons
+    from beyo_manager.services.context import ServiceContext
 
-    ended_shift_refs = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM step_state_records s "
-            "JOIN pause_reasons p ON p.client_id = s.pause_reason_id "
-            "WHERE p.slug = 'pause_ended_shift'"
+    workspace_id = await _any_workspace_with_catalog(db_session)
+    case_created = await db_session.scalar(
+        select(PauseReason).where(
+            PauseReason.workspace_id == workspace_id,
+            PauseReason.slug == "pause_case_created",
         )
     )
-    assert ended_shift_refs > 0, (
-        "pause_ended_shift references disappeared — a worker's pick and a clock-out write were "
-        "historically indistinguishable, so these are real worker choices"
+    assert case_created is not None
+    case_created.is_deleted = True
+    await db_session.flush()
+
+    ctx = ServiceContext(
+        identity={"workspace_id": workspace_id, "user_id": "usr_probe", "role_name": "manager"},
+        incoming_data={},
+        session=db_session,
     )
+    result = await list_pause_reasons(ctx)
+    slugs = {r.get("slug") for r in result["pause_reasons"]}
+
+    assert "pause_case_created" not in slugs, (
+        "the retired case-created row must not be offered by the worker pause sheet"
+    )
+    assert "pause_ended_shift" in slugs, "a live pause reason must remain selectable"
 
 
 async def test_no_row_is_system_managed_any_more(db_session):
