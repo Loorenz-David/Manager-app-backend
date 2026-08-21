@@ -1,0 +1,71 @@
+reviewId: 2026-08-21T19-07-04-618Z--74a853
+reviewedItemIds:
+  - node:infrastructure-test-database-isolation
+  - node:test-database-isolation-contract
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+decisions:
+  - itemId: node:infrastructure-test-database-isolation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Every claim re-derived at source against HEAD 6b2177b, tree clean.
+      start() 167-185: row-count snapshot guarded by TEST_DATABASE_PATTERN,
+      legacy sweep gated on BEYO_RECLAIM_LEGACY_TEST_DATABASES == '1',
+      ensure-template, drop, create-from-template, mark, and a best-effort drop
+      on (Exception, KeyboardInterrupt). _drop_database_if_exists 463-489:
+      exists-check, inspect, assert_disposable_database, pg_terminate_backend,
+      DROP. conftest.isolated_database 22-37: raises without DATABASE_URL, swaps
+      settings.database_url, asserts the configured database unchanged,
+      restores, stops. Template is schema-only: _has_legacy_baseline_source
+      345-362 forces a rebuild when baseline_source is present, and reference
+      rows come from tests/fixtures/phase1_reference_data.py. Renamed from
+      'Serial' because the worker id has been in the name since phase 1 and
+      phase 3 installs xdist."
+  - itemId: node:test-database-isolation-contract
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Every claim re-derived at source against HEAD 6b2177b, tree clean.
+      Name grammar TEST_DATABASE_PATTERN line 17-19 with [0-9] not \d and \Z not
+      $; slot resolution os.environ -> settings.test_slot -> 'main' at 36-43,
+      invalid values raise rather than normalise (config.py:26 declares
+      test_slot with alias BEYO_TEST_SLOT). resolve_worker_database_name 46-55
+      yields beyo_test_<slot>_<worker>, serial default beyo_test_main_main,
+      confirmed by the parametrised rows at test_database_isolation.py:54-57.
+      _migrate_and_assert 364-414 asserts head, table count, three required
+      tables and the marker. test_dev_database_counts_are_untouched 277-311
+      compares against configured_row_counts_before_run, not a fixed number.
+      Five-check invariant read line by line at assert_disposable_database
+      90-107 plus _parse_database_url 62-73.
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Direction checked against the registry: configured_by is canonically
+      node -> configuration, the source is the infrastructure node and the
+      target is the configuration node, so the lifecycle is configured BY the
+      contract and not the reverse. Evidence re-derived at _ensure_template
+      314-343: reuse requires marker, EXPECTED_HEAD, EXPECTED_PUBLIC_TABLE_COUNT
+      and no legacy baseline_source column; a marker-less template with tables
+      raises rather than being replaced (330-332), a marker-less empty shell is
+      absorbed (324-329). Endpoints remain distinct: the contract fixes the name
+      grammar, the slot resolution order and the invariant, while the
+      infrastructure node owns the lifecycle that obeys them. Noted for the
+      owner: the contract's anchors sit in the same module as the
+      implementation, so the split is real but thin."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.238
+timestamp: 2026-08-21T19:07:04.618Z
+graphRevisionBefore: 771a24bff70b089d56e507b395c2cfd2be25430600fffe12bada846501f4bb56
+graphRevisionAfter: f5bf3a735f10587511c59b8dcca26cb24ec3f1089f28530d2c7e609bb08ac149
+evidenceSummary: 7 evidence entries across 3 files; no drift detected
+humanInstruction: "Owner-delegated promotion
+  (prompts/maintenance/2026-08-21_archgraph_verify_and_promote.md §1) plus the
+  owner's follow-up instruction, verbatim: \"you can reject and re-record them
+  to keep them correct and accurate\". All seven evidence claims across the
+  three items were re-derived at source against HEAD 6b2177b on a clean tree
+  before this promotion; no code was changed and no tests were run."
+reviewTokenCorrelation: b51ab9763292
