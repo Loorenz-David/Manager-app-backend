@@ -344,3 +344,47 @@ Expected new baseline once OD-1's nine are fixed: **~22 inherited failures**, en
 published with database identity and tree identity per the schema `live_clock`'s phase 3 earned.
 `live_clock` phase 4 and `narrow_typical_work_times` D23 consume that number, so it is published
 once, honestly, rather than carried forward because it is familiar.
+
+---
+
+## 5. Open design question — concurrent checkouts (raised 2026-08-21, owner planning git worktrees)
+
+**The isolation design is per-*worker*, not per-*checkout*, and that breaks the owner's plan to
+run parallel work trees.** `resolve_worker_database_name` derives the name from
+`PYTEST_XDIST_WORKER` alone — serial → `beyo_test_main`, xdist → `beyo_test_gw0…` — and
+`TEMPLATE_DATABASE_NAME` is the single fixed `beyo_test_template`. **Nothing in either name is
+derived from which checkout is running.**
+
+Consequences if two git worktrees run pytest at the same time, which is precisely what worktrees
+are for:
+
+1. **Worker-database collision.** Both resolve to `beyo_test_main`. The second run's startup
+   does `DROP IF EXISTS` and **destroys the first run's database mid-run**. The first run then
+   fails in ways that look like flakiness and are not.
+2. **Template clobbering, and it is the worse half.** Both share `beyo_test_template`. Two
+   checkouts on different branches are very likely at **different migration heads**, so each run
+   sees the other's template as stale and rebuilds it — repeatedly, out from under a live run.
+   The failures would be nondeterministic and would look like the suite's own instability.
+
+Neither is a defect in what was built — the plan specified bounded names keyed to worker
+topology and that is what it delivered. It is a **requirement that did not exist when the plan
+was written** and does now.
+
+**Proposed shape (not yet decided):** add a *slot* discriminator ahead of the worker id —
+`beyo_test_<slot>_<worker>`, where `slot` comes from an environment variable defaulting to
+`main`, so each worktree declares its own. The guard pattern widens to
+`^beyo_test_[a-z0-9]{1,12}_(template|main|gw\d+)$` and stays strict. Boundedness is preserved:
+the database count becomes *slots × (workers + 1)*, and a slot only exists because a human
+declared one — no per-invocation growth. **Name the template per slot as well**, or better, key
+it to the migration head (`…_template_<head>`), which makes "rebuild when the schema changes"
+fall out of the naming instead of needing a comparison.
+
+**Recommended sequencing:** do **not** fold this into fix r2 — a session is editing those files
+right now, and this is a new requirement rather than a correction to the round's findings. Take
+it as the first item of **phase 2**, before xdist, since phase 2 already reopens exactly this
+code and the slot discriminator composes naturally with the worker discriminator.
+
+**And the owner's own instinct is the operative conclusion:** create the worktrees *after* this
+project lands, not before. Every stream needs the new test infrastructure, so a worktree cut
+today would carry the old shared-database behaviour and would have to be rebased onto the new
+one anyway.
