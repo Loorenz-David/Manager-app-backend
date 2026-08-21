@@ -605,3 +605,40 @@ none); **P5 doc sweep** — both corrected statements are true, and `api.md` and
 2026-08-18 handoff sit at the no-drift point so their examples remain valid after D9;
 the corrected docstring; the perimeter, goldens untouched. Both probes reverted,
 SHA-256 byte-identical, tree clean; no archgraph call made.
+
+**2026-08-21 — Codex, fix r2. `IMPLEMENTED` pending checkpoint.** Resolved S1 by
+keeping C6b's frozen `actual 15.00 + variance -15.00 = 0.00` and changing its current
+allowance to positive `20.00`; the test now asserts both current statuses are `ok`, so
+the frozen `null` has one sufficient cause. Added C6c with frozen `15.00 + (-5.00) =
+10.00`, exact `150.00` on E-P final and E-B worker result, and positive current
+allowance/status on both faces. Added C3's `before["budget"]["percent_consumed"] ==
+"120.00"` and the one-line C17 fixture-coincidence comment. No production file was
+changed.
+
+**Fix-r2 evidence ledger.** The intended tree at the L4 stamp was `HEAD
+ac953a073d8b319ade40be45a478769289903061`, asserted dirty, diff digest
+`b50bda39cf505b208897233ed3e90121ec2e9c41c12f96e354cbc77b76d14d2f`; clean status was
+asserted after every probe revert. The configured testing database was not used because
+its schema lacks `cost_model_versions`; the serial suite ran against the repository's
+configured development database.
+
+| Hypothesis / scope | Exact command or mutation | Result | Failure-ID delta; row that did not bite |
+|---|---|---:|---|
+| C3/C6b/C6c/C17 targeted L1 | `PYTHONPATH=. pytest -q -m integration tests/integration/services/queries/item_economics/test_phase2_live_surfaces.py tests/integration/services/queries/item_economics/test_production_time_query.py -k 'test_c3_recommit_changes_live_denominator_not_frozen_percent or test_c6b_frozen_non_positive_allowance_returns_null_percent or test_c6c_frozen_percent_preserves_over_budget_region or test_c17_frozen_final_uses_live_percent_without_money'` | 4 passed / 32 deselected | ∅ / ∅; none of the four rows was expected to bite under the unmutated tree |
+| C6b positive-fallback, E-P reconstruction site, L1; mutant tree digest `0ee52aba…` | Substitute `result.actual_worker_minutes` for the reconstructed denominator in `division_serializers.py:serialize_task_production_time` | 1 failed | `+test_phase2_live_surfaces.py::test_c6b_frozen_non_positive_allowance_returns_null_percent`, ∅ removed; C6c did not bite |
+| C6b positive-fallback, E-B reconstruction site, L1; mutant tree digest `4630dd66…` | Substitute `status.result.actual_worker_minutes` for the reconstructed denominator in `serializers.py:serialize_task_budget_status` | 1 failed | same C6b ID, ∅ removed; C6c did not bite |
+| C6c clamp, E-P reconstruction site, L1; mutant tree digest `29ceaee0…` | Clamp the reconstructed percent at `100.00` in `division_serializers.py:serialize_task_production_time` | 1 failed | `+test_phase2_live_surfaces.py::test_c6c_frozen_percent_preserves_over_budget_region`, ∅ removed; C6b did not bite |
+| C6c clamp, E-B reconstruction site, L1; mutant tree digest `b0e98467…` | Clamp the reconstructed percent at `100.00` in `serializers.py:serialize_task_budget_status` | 1 failed | same C6c ID, ∅ removed; C6b did not bite |
+| Status-blanking complement, E-P, L1; mutant tree digest `079be8c3…` | Blank the frozen final whenever the current status is `infeasible` | 1 failed / 1 passed | `+test_c6a_frozen_percent_survives_infeasible_current_evaluation`, ∅ removed; C6b did not bite because its corrected status is `ok` |
+| Status-blanking complement, E-B, L1; mutant tree digest `7845f916…` | Blank the frozen worker result whenever the current status is `infeasible` | 1 failed / 1 passed | same C6a ID, ∅ removed; C6b did not bite because its corrected status is `ok` |
+| Changed phase surfaces L1 | `PYTHONPATH=. pytest -q --tb=no -o log_cli=false -m integration tests/integration/services/queries/item_economics/test_phase2_live_surfaces.py tests/integration/services/queries/item_economics/test_production_time_query.py` | 35 passed / 1 deselected | ∅ / ∅ |
+| Authoritative cycle close L4 | `PYTHONPATH=. pytest -q --tb=no -o log_cli=false -m 'not e2e'` | 26 failed / 2487 passed / 1 deselected / 2 warnings | failure-ID set captured from the run matches all 26 IDs in §6: ∅ added / ∅ removed; this is +1 pass over the prior `26 / 2486 / 1`, because C6c is exactly one new test function |
+| Ruff comparator | `ruff check app --output-format concise --statistics` | 136 pre-existing errors | changed files introduce none; targeted phase2 file is clean, the production-test file retains its three pre-existing F401s |
+
+The prompt forecast `+2` passed over `26 / 2486 / 1` does not match the tree's
+enumerated change: C6c adds one test function and C6b remains one function, so the
+observed `+1` is the reconciled count. All mutation probes touched only the two
+production serializer files temporarily and were reverted to byte identity; those files
+are not in the cycle's shipped perimeter. No Architecture Graph delta was warranted:
+the cycle changes proof coverage around existing feed sites and creates no architectural
+boundary.

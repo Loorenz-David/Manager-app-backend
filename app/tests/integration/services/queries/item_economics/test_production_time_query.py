@@ -277,6 +277,7 @@ async def test_c14_c16_flat_time_only_degradation_and_tenant_boundary(db_session
 
 
 @pytest.mark.integration
+# The asserted equality is fixture coincidence after D9: frozen 20.00 / 80.00 reconstructs 100.00, matching live 20.00 / 100.00.
 async def test_c17_frozen_final_uses_live_percent_without_money(db_session):
     values = await _seed(db_session)
     workspace, user, section, task, *_ = values

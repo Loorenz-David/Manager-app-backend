@@ -621,6 +621,7 @@ async def test_c3_recommit_changes_live_denominator_not_frozen_percent(db_sessio
     worker_payload = serialize_task_budget_status(worker, include_monetary=False)
 
     assert before["final"]["percent_consumed"] == "80.00"
+    assert before["budget"]["percent_consumed"] == "120.00"
     assert after["final"]["percent_consumed"] == "80.00"
     assert after["budget"]["percent_consumed"] == "80.00"
     assert worker_payload["result"]["percent_consumed"] == "80.00"
@@ -707,10 +708,11 @@ async def test_c6b_frozen_non_positive_allowance_returns_null_percent(db_session
     )
     assert result is not None
     # P3-D3 C6b: frozen 15.00 + (-15.00) = 0.00, so the percentage is
-    # undefined independently of the current status.
+    # undefined solely because the frozen basis is non-positive; the current
+    # evaluation remains positive and therefore has status "ok".
     result.actual_worker_minutes = Decimal("15.00")
     result.variance_worker_minutes = Decimal("-15.00")
-    values[10].allowed_worker_minutes = Decimal("0.00")
+    values[10].allowed_worker_minutes = Decimal("20.00")
     await db_session.flush()
 
     production = await get_task_production_time(
@@ -721,8 +723,39 @@ async def test_c6b_frozen_non_positive_allowance_returns_null_percent(db_session
     )
     worker_payload = serialize_task_budget_status(worker, include_monetary=False)
 
+    assert production["status"] == "ok"
+    assert worker_payload["status"] == "ok"
     assert production["final"]["percent_consumed"] is None
     assert worker_payload["result"]["percent_consumed"] is None
+
+
+@pytest.mark.integration
+async def test_c6c_frozen_percent_preserves_over_budget_region(db_session):
+    values, now = await _make_live_fixture(db_session)
+    workspace, _user, _section, task, *_ = values
+    result = await db_session.scalar(
+        select(ItemCostResult).where(ItemCostResult.task_id == task.client_id)
+    )
+    assert result is not None
+    # P3-D3 C6c: frozen 15.00 / (15.00 - 5.00) = 150.00; the current
+    # positive allowance keeps both payload statuses at "ok".
+    result.actual_worker_minutes = Decimal("15.00")
+    result.variance_worker_minutes = Decimal("-5.00")
+    values[10].allowed_worker_minutes = Decimal("20.00")
+    await db_session.flush()
+
+    production = await get_task_production_time(
+        _ctx(db_session, workspace.client_id, task.client_id, now)
+    )
+    worker = await get_task_budget_status_worker(
+        _ctx(db_session, workspace.client_id, task.client_id, now, role="worker")
+    )
+    worker_payload = serialize_task_budget_status(worker, include_monetary=False)
+
+    assert production["status"] == "ok"
+    assert production["final"]["percent_consumed"] == "150.00"
+    assert worker_payload["status"] == "ok"
+    assert worker_payload["result"]["percent_consumed"] == "150.00"
 
 
 @pytest.mark.integration
