@@ -425,6 +425,47 @@ the repair, the discriminator and the reorder are measured against one another i
 is restated as a class of ~118, with the reorder measurement recorded; the previously published
 "one remaining non-parallel-safe test" understated it by two orders of magnitude.
 
+### OD-6 — a test may adopt a globally-unique catalog row; everything else it creates (2026-08-21)
+
+**Owner: adopt-or-create for globally-unique catalog rows only, recommendation accepted.**
+This amends OD-3's repair contract, which phase 2 plan §4 had stated as the unqualified *"a
+test may not read a row it did not create."* That rule is **unsatisfiable for one of the
+three row classes it covers**, and the phase-2 projection proved it rather than argued it.
+
+`Role.name` carries `unique=True` (`models/tables/roles/role.py:17-21`) — the database permits
+exactly one `worker` row in existence. `tests/connecteam/test_clock_actions_integration.py`
+creates one and **commits** it, and four of the eleven files commit too. So a factory that
+creates its own `WORKER` role inside any committing test collides with whatever committed
+first: measured, `UniqueViolationError: duplicate key value violates unique constraint
+"ix_roles_name"`. The strict rule would trade ~118 failures that appear when order changes
+for a different set that appears when it does not.
+
+The other two classes have no such constraint — `Workspace.name` is not unique
+(`workspace.py:14`) and `PauseReason` is unique only on `(workspace_id, slug)` with
+workspaces created per test (`pause_reason.py:60`) — so both are created per test.
+
+**The amended contract:**
+
+> For the workspace and pause-catalog classes, a test creates the rows it needs and may not
+> read a row it did not create. For **globally-unique catalog rows** (today: `Role`), a test
+> uses **adopt-or-create** — take the existing row if present, create it if absent. It may
+> never assume one is present.
+
+This is not a new pattern: `tests/fixtures/phase1_reference_data.py:22-28` `_role()` is
+already adopt-or-create, so the strict rule as written forbade the shape the approved phase-1
+fixtures use.
+
+**Verified sufficient before dispatch, not assumed.** The coordinator applied exactly this
+composition — create-your-own `Workspace`, adopt-or-create `Role` — to the single helper
+`_seed_workspace_worker` in the worst file, `test_worker_shift_commands.py:78-89`. Run alone
+that file goes from **41 failed / 1 passed** to **42 passed in 4.48 s**. One helper, roughly
+ten lines. The probe was reverted and the file verified byte-identical
+(`0c7d0c99efef16f0343b7fbccc9a0a2b4cb25af7f59f3c8cc2ecc9f98c209f39` before and after).
+
+What this does *not* license: a shared catalog seeded once per run. OD-1's ruling stands —
+adopt-or-create happens inside the test's own fixture, per test, and no factory may create a
+globally-unique row inside a test that commits.
+
 ### OD-5 — xdist moves to its own phase; phase 2 ends at order-independence (2026-08-21)
 
 **Owner: split, recommendation accepted.** §3's phasing is amended above. The reason the
