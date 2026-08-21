@@ -242,9 +242,72 @@ way, because everything else in that box is a record of what happened.
 
 ---
 
+## Ratified at the phase-3 projection gate (2026-08-21)
+
+### OD-10 — May a finished job show a percentage on a task whose budget has since gone to zero?
+
+*Card as relayed by the plan-3 projection (verbatim, unedited):*
+
+**Question.** When a task's current budget is zero or negative, should the *frozen*
+historical percentage still show its own number, or go blank like the live one?
+
+**Story.** A chair was priced at 4 000 kr, worked for 15 minutes of a 100-minute budget,
+and the finished-job block froze at 15 %. Weeks later you re-price the chair down to
+where production leaves no budget at all. The screen now says the task is *infeasible* —
+no budget — while the finished-job block beside it still reads 15 %, which is exactly
+what that job actually consumed at the time. Our published documentation says the
+percentage is blank whenever a task is infeasible, so the two disagree.
+
+**Branches.**
+- *Keep its own number (15 %)* — the historical block stays an honest record; the
+  published "blank when infeasible" line becomes wrong and must be corrected.
+- *Blank it whenever the task is currently infeasible* — matches the published line;
+  a settled historical block starts changing because of a decision made afterwards,
+  which is the thing we are removing this month.
+
+**Recommendation.** Keep its own number, and correct the two documentation lines — a
+frozen block that reacts to a later re-pricing is the defect this whole phase exists to
+delete.
+
+**On silence.** The gate holds; no criterion is written for this boundary and the phase
+does not start.
+
+**Trace.** intention §5.3 / §4.1A B / §10.3 D9; `docs/domains/item_economics/states.md`
+"Numerics rule"; `docs/domains/item_economics/README.md` "The concrete rule";
+plan 3 §5 (no row at this boundary); findings F-4, F-11.
+
+> **ANSWERED — OD-10 (2026-08-21).** Owner, verbatim: *"yes, the recommendation is the
+> correct answer."* The frozen `final.percent_consumed` (E-P) and
+> `result.percent_consumed` (E-B worker face) keep their own reconstructed number even
+> when the payload's current `status` is `infeasible`. The frozen block reports what
+> that job was actually measured against; it does not blank because of a re-pricing
+> that happened afterwards. **The documents promising otherwise are corrected, not the
+> code.** Folded into intention §10.4 and the new lettered section §5.3A; guarded by
+> plan 3 C6's two rows.
+> **Consequence created by the answer:** three shipped documents become wrong on this
+> line and must be corrected — `docs/domains/item_economics/states.md` and
+> `docs/domains/item_economics/README.md` (internal, phase 3), and the published
+> `HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md` (phase 4, as a **new
+> dated handoff** — master plan §7 obligation 2 forbids editing a published one).
+> **Numbering note:** minted `OD-10`, not `D10`. `D4`–`D9` already denote *delegations*
+> in `plans/plan_2.md` §6 as well as owner decisions here; master plan §4 now carries
+> the disambiguation.
+
+**Premise correction recorded with the answer.** The owner's first reading of
+`infeasible` was "worked time has grown past the budget". It is not: a budget that
+shrinks but stays positive yields `status: ok` with a percent above 100 and a negative
+`remaining_worker_minutes` (already shipping, untouched by D9), while `infeasible` is
+the allowance at or below zero, where the percent is `null` because a percentage of zero
+is undefined. Only the second case is what OD-10 decides. Grounded at source:
+`calculator.py:calculate_production_budget` has no floor at zero, and
+`get_task_budget_status.py:_build_evaluated_status` reads `INFEASIBLE if allowed <= 0`.
+
+---
+
 ## Ledger status
 
-**Empty as of round 4a (2026-08-20).** D1–D4 settled during shaping, D5–D6 ratified by
+**Empty as of round 4h (2026-08-21).** D1–D4 settled during shaping, D5–D6 ratified by
 the owner (round 2), D7 ratified from the coordinator review (round 3), D8–D9 ratified
-from the mechanism-inventory gate (round 4a). No decision in this intention is a
-guess. Gate: **mechanism-inventory PASSED**; next: **implementation planning**.
+from the mechanism-inventory gate (round 4a), **OD-10 ratified at the phase-3 projection
+gate (2026-08-21)**. No decision in this intention is a guess. Gate:
+**mechanism-inventory PASSED**; phases 1 and 2 APPROVED; next: **phase 3 implementation**.

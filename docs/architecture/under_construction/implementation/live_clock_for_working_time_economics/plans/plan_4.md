@@ -76,6 +76,19 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
 - **C6** — obligation 6 / graph: five nodes updated, edges recorded, `archgraph_status`
   returns 0 stale / 0 diagnostics after the batch; evidence spans verified by reading
   the `anchors` block (the hash does not cover anchors — master plan §5 lineage).
+  **AMENDED 2026-08-21 — the baseline this row assumed is gone.** It was written when
+  master §6 recorded the graph as 0 pending / 0 stale. Measured at `6508ce1` by plan 3's
+  projection and reproduced by the coordinator: **9 pending, 2 stale**, 0 diagnostics.
+  Six of the nine pending items and both stale nodes accrued with **no session declaring
+  them** — every phase-2 round declared "no Architecture Graph delta". So "0 stale after
+  the batch" is no longer a statement about this phase's own delta and cannot be met by
+  doing this phase's work correctly. Split the row: (i) **this phase's delta is clean** —
+  the five nodes it touches carry accurate spans and canonical edge directions, and it
+  adds no stale node and no diagnostic; (ii) **the pre-existing 9 pending / 2 stale are
+  reported to the owner with their measured origin**, adjudication being human-owned as
+  always — agents never promote, reject or edit review items. Meeting (i) does not
+  require clearing (ii), and a handoff claiming an all-clean graph without separating the
+  two is a finding.
   **Carried from phase 1 review r1, N6 (its stated carry-forward target):** phase 1's
   `reads_from` edge summary reads *"issues **one** batched probe"* — a count inside
   an evidence summary, which is immutable through both review and maintenance
@@ -83,6 +96,24 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   edited in place; closing it means rejecting and re-recording that item, which is
   the owner's adjudication to make. This criterion carries the item to the owner
   with that framing — it is not a licence to re-record unilaterally.
+- **C8 — the OD-10 correction to the published frontend handoff** (added 2026-08-21 from
+  plan 3's projection, ledger row L15 / finding F-14). The frontend was promised, in
+  `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md`'s
+  status table (line ~513), *"`infeasible` | the allowance is zero or negative | the
+  budget does not buy any work; `percent_consumed` is `null`"*. After phase 3 that stays
+  true of the **live** copy and becomes false of the **frozen** copy, which serves its own
+  reconstructed number (OD-10, intention §5.3A). The closeout handoff states the
+  distinction explicitly: live `percent_consumed` is still `null` when the current
+  allowance is ≤ 0; the frozen `final.percent_consumed` / `result.percent_consumed` carry
+  their own value and are `null` only if the **frozen** allowance was ≤ 0.
+  **New dated document, never an edit** — obligation 2 governs, and the 2026-08-15
+  handoff is exactly the kind of published artifact
+  [[feedback-never-rewrite-a-published-handoff]] was earned on. Note the guard gap that
+  makes this a real risk rather than a formality: `tests/unit/docs/test_item_economics_handoff_accuracy.py`
+  treats that document as a contract **by key set only**, so this rule can drift without
+  a single test reddening — verified at source. The internal
+  `docs/domains/item_economics/` half of the same correction is **phase 3's**, not this
+  phase's (plan 3 §4 task 3).
 - **C7** — `pytest tests/unit/docs/` green before and after; suite baseline unchanged.
 
 ## 6. Notes

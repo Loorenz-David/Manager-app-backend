@@ -1,8 +1,10 @@
 # Intention: Live Clock for Working-Time Economics (live worked-seconds basis for the present-tense read surfaces)
 
 ```
-status: RESOLVED and PLAN-READY (rounds 4a–4g, 2026-08-21; latest fold **round 4g**)
-        — mechanism-inventory gate **PASSED**. 0 owner cards open: D8–D9 ratified
+status: RESOLVED and PLAN-READY (rounds 4a–4h, 2026-08-21; latest fold **round 4h**)
+        — mechanism-inventory gate **PASSED**. 0 owner cards open: **OD-10 ratified
+        2026-08-21** (§10.4, §5.3A — the frozen percent keeps its own number at a
+        non-positive current allowance); D8–D9 ratified
         2026-08-20 (§10.3), folded at the coordinator's round-4a pass. D5–D6 ratified
         §10.2; D7 recorded round 3. Coordinator review of 2026-08-19 folded (all six
         findings, owner-dispositioned). Rounds 4b–4g fold phase-1 and phase-2
@@ -1423,6 +1425,43 @@ approach."*
 | D8 | The **settlement window ships as-is and is disclosed**: closing a record may briefly drop the live figure by the just-worked share until the async recompute lands (normally sub-second; up to ~30 s on a dropped notify; until the next transition on that step if retries exhaust). No second computation path is built to mask it — D2's mechanism stands exactly as ratified. | §3.3A C.1, §5.4 (third decrease mode), §6A C, T11 |
 | D9 | The **frozen blocks freeze whole**: `final.percent_consumed` (E-P) and the worker face's `result.percent_consumed` (E-B) stop tracking the request-level percent and derive from the frozen result record's own settled figures — moving on no event after the freeze. Shapes unchanged (HC-4). | §5.3, §4.1A B, §4.2, T13 |
 
+### 10.4 Ratified at the phase-3 projection gate (owner, 2026-08-21)
+
+Raised by the plan-3 projection as its only owner card, and answered in the same
+session. Owner, verbatim: *"yes, the recommendation is the correct answer."*
+
+| D | decision | folded into |
+|---|---|---|
+| **OD-10** | **The frozen percent keeps its own number at a non-positive *current* allowance.** `final.percent_consumed` (E-P) and the worker face's `result.percent_consumed` (E-B) serve their own reconstructed value even when the payload's current `status` is `infeasible` — the frozen block reports what that job was measured against, and does not blank because of a re-pricing that happened afterwards. **The documents promising otherwise are corrected, not the code.** | this §10.4; §5.3A below; `plans/plan_3.md` §5 C6 (two rows); the doc corrections at `plans/plan_3.md` §4 task 4 and `plans/plan_4.md` (frontend handoff) |
+
+**Why it needed the owner and not a plan amendment:** the reconstruction is `None`
+exactly when the **frozen** allowance was ≤ 0, and that condition is independent of
+the payload's current `status` — so after D9 a task can serve `status: "infeasible"`
+beside a frozen block carrying a real percentage. Three shipped documents promise the
+opposite (§5.3A). Nothing in the suite reddens on the divergence.
+
+**The premise correction that came with it, recorded because it will recur:**
+`infeasible` does **not** mean "worked time has grown past the budget". Both states
+arise from re-pricing an item, and they are different:
+
+| re-pricing outcome | allowance | `status` | live `percent_consumed` | touched by D9? |
+|---|---|---|---|---|
+| budget shrinks but stays positive; worked time exceeds it | e.g. `10.00` | `ok` | `"150.00"`, with a negative `remaining_worker_minutes` | no — already ships this way |
+| budget shrinks to nothing (cost terms ≥ price) | `≤ 0` | `infeasible` | `null` — no denominator exists | **yes — this is OD-10** |
+
+At a zero allowance the manager does not go blind: `actual_worker_minutes`,
+`variance_worker_minutes` and `remaining_worker_minutes` are subtractions and keep
+serving real numbers. Only the *percentage* is null, because a percentage of zero is
+undefined — arithmetic, not policy, and untouched by this phase.
+
+### 5.3A (lettered amendment to §5.3 — OD-10's contract)
+
+The frozen percent is `calculate_percent_consumed` applied to the reconstructed
+denominator, and it is `null` **iff that reconstructed denominator is ≤ 0** — never
+because of the current evaluation's allowance, and never because of `status`. A future
+edit that blanks the frozen percent whenever `status == "infeasible"` reintroduces
+exactly the coupling D9 removes; `plans/plan_3.md` C6 row (b) exists to redden on it.
+
 **Ledger empty.** No decision in this intention is a guess; each rejected branch is
 recorded with the failure it would have produced, in `owner_decisions.md`.
 
@@ -1708,3 +1747,27 @@ test pins an invariant is a mechanism claim and inherits the mutation rule (mast
 earned at phase 1 review r1 S1), and it was written without probing whether the fixture
 could exercise the hazard. Seventh instance of the class-inside-its-own-correction shape,
 and the coordinator's third.
+
+**Round 4h — 2026-08-21, plan 3 projection r0 folded (one owner decision, one lettered
+contract section).** The projection derived and then measured N-4's identity across every
+boundary it could reach — over-budget, zero allowance, negative allowance, zero actual —
+and found **no failing input**: `actual + variance` reconstructs `allowed` exactly,
+because `calculate_variance_worker_minutes` is `allowed − actual` with no quantize and no
+clamp, and both columns are `Numeric(12, 2)` `nullable=False` with a single writer. The
+coordinator re-derived it independently at nine quantization-stressing values the ledger
+never tried (sub-cent actuals, three-decimal inputs, half-even boundaries such as
+`actual = 99.995` against `allowed = 100.00`): identity holds and both percent routes
+agree at every one. **The identity is therefore not the risk; its output's one undefined
+region is.** `calculate_percent_consumed` returns `None` when its denominator is ≤ 0, so
+the frozen percent is `null` exactly when the *frozen* allowance was ≤ 0 — a condition
+independent of the payload's current `status`, which is set from the *current*
+evaluation. After D9 a task can therefore serve `status: "infeasible"` beside a frozen
+block carrying a real percentage. Three shipped documents promise the opposite and
+nothing in the suite reddens on it. Routed to the owner and ratified as **OD-10**
+(§10.4): the frozen block keeps its own number and the documents are corrected. New
+lettered section **§5.3A** carries the resulting contract — `null` **iff** the
+reconstructed denominator is ≤ 0, never because of `status` — and plan 3's C6 row (b)
+exists to redden on the edit that would reintroduce the coupling. Round 4a's "plan §4
+task 1 verifies the identity" obligation is refined by the same measurement: the
+verification is not *whether* the identity holds (it does, unconditionally) but *where
+its output is undefined*, and that is the criterion §5 lacked.
