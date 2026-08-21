@@ -284,6 +284,21 @@ below as provenance; the middle phase was inserted because phase 1's own outcome
   conservative default, and establish the **new authoritative baseline failure-ID set** with
   every difference from the old one explained.
 
+  **First gate, added at phase 2's approval (2026-08-21) — prove invariance under *perturbation*,
+  not only under reversal.** Phase 2 measured that default order and one deterministic reversal
+  produce identical failing-ID sets. It also produced counter-evidence to the general claim, in
+  its own fix-r4 verification: with eight extra criterion rows temporarily present, the failing-ID
+  set **differed**. Inserting rows is a far smaller perturbation than distributing every test
+  across workers, which is the first thing phase 3 does. **So phase 3 does not begin its
+  worker-count matrix until it has characterised what a collection perturbation does to the
+  failing-ID set on a serial runner** — otherwise the first `-n 4` measurement mixes parallelism
+  with an unquantified order sensitivity, and the new authoritative baseline inherits both.
+
+  Binding consequence for the baseline: **a single-occurrence failing-ID difference triggers
+  re-measurement, never attribution.** Phase 2 lost a round to a difference that was labelled
+  "known" and a second to one labelled "pre-existing order seams"; in both cases the label
+  preceded the evidence.
+
 No phase starts until its predecessor is APPROVED — the same gating that contained defects
 inside a phase boundary three times in `live_clock`.
 

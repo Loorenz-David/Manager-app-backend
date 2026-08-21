@@ -329,6 +329,15 @@ plan 1 C3/C4 and are not re-proven here.
   **No named mutation** — an equality claim over the whole suite under two conditions, L4 by
   construction (charter: coupling discovery). C1's mutations are what prove the repair bites.
 
+  **Scope corrected 2026-08-21 at the approval gate — the criterion is met, its wording
+  overclaimed.** What is measured, and all that is measured, is **invariance under reversal**:
+  default order and the task-6 reversal produce identical sets. That is *not* the same as
+  "no test's outcome depends on order". Fix r4 supplied the counter-evidence itself — with eight
+  additional criterion rows temporarily present, the failing-ID set **differed**, and the round
+  restored collection size rather than reporting the divergence as a result. Inserting rows is a
+  smaller perturbation than what plan 3 does. **The honest claim is "the two measured orders
+  agree"; the general claim is unproven and is now plan 3's first gate.**
+
 - **C3 — two slots never collide, and an invalid slot is refused rather than coerced.**
   *Defect caught:* two git worktrees running pytest simultaneously; both resolve to
   `beyo_test_main`, the second's `DROP IF EXISTS` destroys the first's database mid-run, and
@@ -888,3 +897,89 @@ prior revision with its three pending human reviews.
 
 **2026-08-21 — fix r4 consumed and implemented by Codex.** The cycle is ready for independent
 review; no owner decision is required.
+
+### 2026-08-21 — fix r4 implemented (B1, B2, S2, S3, S4, S5, N1/N2/N6/N7/N9)
+
+- B1: `BEYO_TEST_SLOT` added to `app/beyo_manager/config.py` (OD-7's carve-out) and the slot now
+  resolves from settings with an `os.environ` override.
+- B2: legacy reclamation is **explicit-only** — no longer an unconditional destructive branch on
+  every `start()`; the one-time cleanup command is documented in `.env.example`.
+- S2/S3: Redis cleanup tolerates an unavailable Redis while asserting no live-prefix residue.
+- S4/N2/N7: covering assertions added, **folded into existing criterion items to preserve
+  collection topology**.
+- Closing pair reported as `21 / 2569 / 1` in both orders — **taken before the topology fold**.
+
+**2026-08-21 — fix r4 consumed and verified by the coordinator. Verdict: APPROVED with
+carry-forwards.** Five findings re-measured independently; one deviation corrected here.
+
+**Verified fixed, each by direct probe on the handed-over tree `11b4d02`:**
+
+| finding | probe | result |
+|---|---|---|
+| B1 | `BEYO_TEST_SLOT=shopify` written into the parsed `.env` | resolves `beyo_test_shopify_main` — **reachable** |
+| B2 | `beyo_test_main` present, then `pytest tests/unit/test_items_router.py` | database **survived**; probe cleaned up |
+| S3 | same file with `REDIS_URL` on a dead port | `2 failed, 1 passed, 2 warnings` — **no error** (was `1 error`) |
+| S4 | drivername check removed from `_parse_database_url` | `1 failed, 35 passed` — **now bites** (was `36 passed`) |
+
+**DEVIATION (corrected here) — the closing stamp did not cover the tree handed over, and the
+coordinator took it.** The round's pair was measured at `21 / 2569 / 1` = **2590 selected**; the
+delivered tree collects **2582**. The handoff says so plainly — *"already consumed before the
+final criterion-item topology fold … no third L4 run was authorized by the prompt."* A stamp
+taken before an eight-row change does not cover the tree after it.
+
+**Coordinator gate stamp**, authorization line recorded before the run (*narrower evidence
+insufficient because the handed-over tree carries no valid stamp and a gate decision requires
+one*), tree `11b4d02`, `git status --porcelain` clean:
+
+- default order: **`21 failed / 2561 passed / 1 deselected` in 116.20 s**
+- reversed order: **`21 failed / 2561 passed / 1 deselected` in 117.83 s**
+- failing-ID sets `comm`-diffed **empty in both directions**, and identical to the published 21.
+
+**This is the second occurrence of this exact failure mode in this project** (phase 1 fix r4 was
+the first). Both rounds read a numeric budget as a ceiling that forbids re-stamping after they
+invalidated their own stamp. Phase 1's cause was coordinator over-warning; this prompt instead
+said *"both on the tree you hand over"* and still lost to *"exactly 2 runs"*. **The budget's
+unit is wrong, not its size** — a charter amendment is proposed to the owner: the closing stamp
+is defined by the tree, and re-taking one the cycle invalidated is never over-budget.
+
+**FINDING (blocking for plan 3, not for phase 2) — the round's most important result was filed
+as housekeeping.** Buried in the verification section: with eight standalone criterion rows
+present, *"differing foreign IDs"* appeared; they were attributed to *"pre-existing order
+seams"* and the rows were folded into existing tests to restore collection size.
+
+The attribution may well be right. **The conclusion drawn from it is not.** What was observed is
+that **inserting eight test rows changes the failing-ID set** — which falsifies the general
+reading of C2 while leaving the measured one intact. Plan 3 installs `pytest-xdist`, which
+redistributes every test across workers: a perturbation orders of magnitude larger than eight
+rows. Review r3's lesson 4 predicted precisely this (*"'invariant under collection order' and
+'the two runs agreed' are different claims"*), and this is the evidence. C2's wording is
+corrected in §5 above; the investigation is plan 3's first gate, before any worker-count matrix
+is measured.
+
+**N (note) — the topology fold bought comparability with attribution.** All seven findings'
+coverage went inside existing test bodies; the criterion module is still **36 rows**, unchanged.
+Coverage is real — S4's probe bites — but it bites through
+`test_unmarked_empty_database_is_allowed_but_populated_one_is_not`, a name with nothing to do
+with URL drivers. A future regression in the driver check will report as an unrelated test
+failing. Preserving collection size is a *measurement* convenience; it should not have driven a
+*test-design* decision.
+
+**N (note) — the mutation ledger is again classes, not records.** Third round asked, third round
+delivered *"the probe classes were: …"* rather than one record per mutation naming the reddened
+rows. The checksum table also cannot demonstrate revert for three of six files, since those
+"include their intentional r4 changes" — a checksum that cannot answer the question it exists to
+answer.
+
+**Verdict: phase 2 APPROVED.** Both blocking findings verified repaired, C2 verified met on the
+delivered tree by the coordinator's own gate stamp, and every residual is either a reporting
+defect or a scope question that is literally plan 3's subject matter. No r5 is dispatched.
+
+| Carried item | Destination |
+|---|---|
+| Collection-perturbation changes the failing-ID set — C2's general claim is unproven | **plan 3, first gate, before any worker-count matrix** |
+| S5's root cause (object lifetime, not order) and the 13-file / 89-`refresh()` class | **plan 3** — a single-occurrence ID difference triggers re-measurement, never attribution |
+| N3 `_normalised_endpoint` handles only literal `localhost`; N4 hardcoded `EXPECTED_HEAD` / `EXPECTED_PUBLIC_TABLE_COUNT` (wedges on the next Alembic revision) | **plan 3** |
+| Criterion-attribution granularity lost to the topology fold | **plan 3** notes |
+| No master plan for this project — the charter's environment-topology section has no home | **coordinator, before authoring plan 3** |
+| The evidence-budget unit (tree, not count) | **charter amendment — owner decision** |
+| Three `ai_inferred` archgraph items from plan 1 | owner adjudication |
