@@ -214,6 +214,17 @@ naturally per-worker.
 - **Current authoritative baseline: `26 failed / 2515 passed / 1 deselected`**, failure-ID set
   = the 26 enumerated in `live_clock_for_working_time_economics/master_plan.md` §6, measured on
   a clean tree (the shopify stream is committed as of `c0e5407`). **This is the "before" row.**
+- **Runner inventory: pytest 8.3.5, and exactly one plugin — `pytest-asyncio`.** `pytest-xdist`
+  is **not** installed (as phase 1 requires) and **no randomizer is installed**, so a
+  `-p no:randomly` seen in an earlier session's command was disabling a plugin that does not
+  exist. Two consequences, both for phase 2: **test execution order is deterministic today**
+  (collection order), so the stability of the 26-ID set has never been tested against
+  reordering; and **xdist will be the first thing in this repository's history to change that
+  order.** The intention's correctness gate lists "tests depending on execution order" first
+  for good reason — under `--dist load` any order-coupling that exists has simply never been
+  exercised. Phase 2 should prefer `--dist loadfile` initially (keeps a file's tests on one
+  worker, so file-local ordering survives) and treat a switch to finer distribution as a
+  separate, measured step.
 
 ### 2.3 The design the measurements point to
 
