@@ -2,13 +2,19 @@
 
 ```
 state: IN PROGRESS. Gate PASSED; phase 1 APPROVED (`d21fe9e`); **phase 2 APPROVED**
-       (`efd6b99`, 2026-08-21, six rounds); **phase 3 PROJECTED and routed — PROMPT_READY
-       (implement r1)**; phase 4 NOT_STARTED. **0 owner cards open** (OD-10 ratified
-       2026-08-21).
-       Next: hand `prompts/implementer/2026-08-21_phase3_implement_r1.md` to an
-       implementer session. Test-evidence policy (charter, 2026-08-21) is live; phase 3
-       is its pilot. **Environment: the graph is NOT clean** — 9 pending / 2 stale,
-       measured; §6 supersedes the old "inherited clean" line.
+       (`efd6b99`, 2026-08-21, six rounds); **phase 3 APPROVED** (2026-08-21, three
+       rounds, gate measurement `26 / 2515 / 1` at `808eead`); phase 4 **BLOCKED**.
+       **0 owner cards open** (OD-10 ratified 2026-08-21).
+       **Next is NOT a phase-4 prompt.** Phase 4 is gated (§6 ⛔) behind the
+       test-environment work: build a correctly migrated test database, then
+       `pytest-xdist` with per-worker isolation, then **re-enumerate the failure-ID
+       baseline under the new runner**. Phase 4 compiles only after that.
+       Test-evidence policy (charter, 2026-08-21) is live; phase 3 was its pilot and
+       spent **zero L4 runs** in its final round.
+       **Environment: the graph is NOT clean** (9 pending / 2 stale **plus stream 3's
+       uncommitted node** — re-measure, never cite); **the suite runs on the DEVELOPMENT
+       database** (§6); **recognized stream 3 is uncommitted and live** — attribute any
+       count movement to it before concluding.
        §3's tracker is the authority on state — this line is a convenience and is
        refreshed at every gate.
 date: 2026-08-20 (header refreshed after phase 1 approval)
@@ -56,7 +62,9 @@ Newest state first; superseded rows kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 3 | D9 + OD-10's boundary | **REVIEWING** (re-review r3) | 2026-08-21 | Codex (fix r2) + coordinator (consumption) | **Fix r2 consumed — both should-fix closed, verified at source. Suite 26 / 2487 / 1 (+1), cited not re-run.** Digest `b50bda39…` reproduces exactly as `git diff ac953a0 874f02d -- app/`; perimeter exactly five files, **nothing under `app/beyo_manager/`** across the whole cycle. **S1 closed:** C6b re-specified to frozen `15.00 / −15.00` against a **positive** current allowance, `status == "ok"` asserted on both faces, comment rewritten to claim only what the fixture shows — the `null` now has one sufficient cause. **S2 closed:** C6c asserts `"150.00"` on both faces (frozen `15.00 / −5.00` → allowance `10.00`), non-vacuous against a live `120.00`. N1, N4 present. The implementer corrected the coordinator's `+2` forecast to the true `+1`. **Coordinator finding against the coordinator's own correction:** yesterday's C5 expected-bite-set class 2 ("C3, C6a, C6b") went **stale one round after it was written** — measured, the C5 mutant now also reddens **C6c** (5 failed / 31 passed, probe reverted byte-identical). Left alone it would have turned the next round's correct result into a false finding, the exact failure the list prevents. Standing rule added: **an enumerated expected set is a claim with a shelf life — a row that asserts the same mechanism joins the class in the cycle that adds it.** **Environment established and folded to §6:** every baseline in this pipeline — including phase 2's published one — was measured against the **development** database (`…:5433/beyo_manager`), while `.env.testing` designates `…:5432/app_test`, stamped `67cfba8fcb2d` with 96 tables and **missing `cost_model_versions` and `item_cost_results`**. That is the starting input for the per-worker-DB work gating phase 4: build a migrated test database and re-enumerate the baseline there **before** adding workers. **Round spent rather than skipped, reason recorded:** C6c and the re-specified C6b guard a money-adjacent number and have had one author and one reader — the coordinator who wrote their criterion. Re-review r3 prompt `prompts/reviewer/2026-08-21_phase3_rereview_r3.md`, delta-scoped; P5 asks whether a dev-database baseline is acceptable evidence to approve on. |
+| 3 | D9: the frozen blocks freeze whole — both feed sites (N-4), T13's two rows, re-commit immunity, **OD-10's boundary** | **APPROVED** | 2026-08-21 | Codex (r1, fix r2) + Opus 5 (projection r0, review r1, re-review r3) + coordinator | **Three rounds; 0 blocking outstanding; 9 phase rows; gate measurement 26 / 2515 / 1 at `808eead` (dirty — stream 3), failing-ID set `comm`-diffed empty BOTH directions against §6's 26.** Ships the frozen percent at both feed sites: `calculate_percent_consumed(actual + variance, actual)` inside the existing `result is not None` branch, reciprocal site comments, the falsified docstring corrected, and the two internal `docs/domains/` numerics lines split into live-vs-frozen. **The production code was correct at implement r1 and never changed again** — `git diff 5b8329b HEAD -- app/beyo_manager/` is empty across both later rounds. **Every blocking-or-should-fix finding in all three rounds was in a plan, a criterion, an intention section or a coordinator note; none in the code** — now the third consecutive phase for which that holds. Findings by author: **S1** (the coordinator's inverted C6 attribution, in three documents — C6b measurably *passed* under the edit it was documented as stopping); **S2** (the over-budget region guarded by nothing in the repository, ∅/∅ at L4 under a clamp-at-100 mutant → **C6c**, `"150.00"` on both faces); **N7/N8/N9** (all three coordinator artifacts: a correction whose premise its own order invalidated; an unmeasured justifying number, `120.00` where `170.00` is measured; a stream perimeter that under-declared tool-recorded state and went stale twice in a day). **Eleventh instance of the row-that-cannot-fail class and a fifth shape — degenerate output range**; §5B now binds criteria to enumerate the regions their authority names, and P2 closed that enumeration (three OD-10 regions + the `100.00` boundary pinned four times + the `≤ 0` inequality pinned at exactly zero by probe C). **The evidence policy's clearest round yet:** re-review r3 spent **zero L4 runs**, five probes, ~25 s of pytest, and produced a new structural fact (C6b and C6c partition the negative-variance space; neither covers the other). The coordinator cited two stamps by cryptographic tree identity rather than re-running them, and dated a foreign stream against a measurement by digest. **Four rules earned into §5** (shelf-life of enumerated sets and corrections; a justifying number is a claim; perimeters cover tool-recorded state; per-file digests beat an aggregate while a foreign stream is live). Checkpoints `5b8329b` → `874f02d`. Baseline published per obligation 7 with **database and dirty-tree identity**, a schema amendment this phase earned. **Carried, non-blocking:** the archgraph backlog (9 pending / 2 stale **plus stream 3's uncommitted node/edge** — re-measure at phase 4, never cite) and r1's N6 → owner adjudication at `plans/plan_4.md` C6; the `percent < 0` unreachability basis (writer, not guard) → plan 4 notes. **Phase 4 remains BLOCKED** on the ⛔ test-environment gate. |
+| 3 | D9 + OD-10's boundary | **APPROVED** (re-review r3) | 2026-08-21 | Opus 5 (re-review r3) | **0 blocking, 0 should-fix, 3 notes — all documentation drift in coordination artifacts, none in code or criteria.** Handoff `handoffs/reviewer/2026-08-21_phase3_rereview_r3_handoff.md`. Tree `808eead` (four coordinator doc commits above the checkpoint; `git diff 874f02d HEAD -- app/` **empty**, so the gate's substance holds and the prompt's SHA was stale), dirty via the shopify stream, `app/` diff digest `f0722645…` identical across every probe and measurement — then moved to `020e77c9…` after the last revert because the stream modified a further file mid-round (N9), with **no phase-3 file moving**, proven per-file (`d9160f92…` / `65558c51…` / `16cb98a9…` / `90da6486…`); `division_serializers.py`'s digest also corroborates the coordinator's C5-probe revert from a second session. **Lesson: while an uncommitted foreign stream is live, per-file digests over the reviewed perimeter are the revert instrument; an aggregate `app/` digest conflates a leaked probe with the owner saving a file.** **Zero L4 runs** — every hypothesis was a named-row bite, so all six evidence rows are L1 over the two phase files, which kept the foreign stream's +17 tests out of every measurement (~25 s of pytest for five new mutant shapes). **S1 closed on the merits:** C6b's `null` has exactly one sufficient cause — `status == "ok"` on both faces closes the status channel, `result is not None` the absent-result channel, a fallback denominator yields a number, and the row bites on the **exact zero** boundary (probe: weaken `calculate_percent_consumed` to `allowed < 0` ⇒ C6b red on the frozen side, C6a on the live side). **S2 closed, and C6c is non-redundant:** a **variance-sign blanking** implementation (no ledger had run it) leaves **C6c alone red, 1 failed / 34 passed, C6b green** — C6b and C6c partition the negative-variance space at the zero-allowance boundary and neither covers the other's half. **N-4's argument order is now mutation-guarded, not merely read-correct:** argument transposition reddens C3/C6a/C6b/C6c/`test_c17` at E-P (5f/30p) and C3/C6a/C6b/C6c at E-B (4f/31p), reproducing the recorded C5 site asymmetry independently. **§5B's region corollary closes:** all three OD-10 regions carry an exact literal, the `100.00` boundary is pinned four times, and `percent < 0` is **unreachable by construction** (`calculate_actual_worker_minutes` over a non-negative seconds count, single writer). **No blast radius** from the fix cycle; 35 passed / 1 deselected over both phase files. **Notes:** N7 — intention §5.3A's S1 correction still asserts C6b's old `allowed = 0.00` premise, which fix r2 deleted; conclusion survives for the opposite reason, but a reader reconciling document to tree could "restore" the `0.00` and undo S1. N8 — **the "non-vacuous against a live **`170.00`** (measured at re-review r3; C6c serves at `now`, the **open** state — `120.00` is the pre-open value C6c never serves, and was the coordinator's unmeasured figure, N8)" figure in this table's prior row and in `plans/plan_3.md` §7 is wrong; measured `170.00`** (C6c serves at `now`, the open state); non-vacuity unaffected. N9 — **the shopify stream moved twice during this round and §7's perimeter covers neither move:** `.archgraph/architecture.yml` gained an uncommitted delta at 10:16:07 (1 node + 1 edge, `ai_inferred`), and ~1 h later the **tracked, existing** `app/tests/unit/services/infra/shopify/test_product_sync_client.py` was modified. Widen §7's stream-3 perimeter to `.archgraph/architecture.yml`, `.archgraph/.internal/` and `app/tests/unit/services/infra/shopify/`; re-measure the graph at phase 4 rather than citing §6's 9/2; and **narrow §7's "additions that pass do not touch the failing-ID set"** — true of the stream's untracked new file, false of an edit to an existing test file, and the enumerated 26 already carries a shopify row with a shopify flake beside it. **P5 answered, no owner card:** a dev-database baseline **is** acceptable evidence here — §6's ⛔ GATE step 1 already binds phase 3 to the serial runner, the dev DB is at head while `app_test` lacks `cost_model_versions`/`item_cost_results` outright, and the phase rests on DB-independent mutation bites. One correction owed: §7's published-baselines table records neither database nor dirty-tree digest — the gate publishes failure-ID set + tree identity + **database identity**, count subordinate. Probes: five across four files, all reverted byte-identical; no schema change, no committed rows, no archgraph call. |
+| 3 | D9 + OD-10's boundary | **REVIEWING** (re-review r3) | 2026-08-21 | Codex (fix r2) + coordinator (consumption) | **Fix r2 consumed — both should-fix closed, verified at source. Suite 26 / 2487 / 1 (+1), cited not re-run.** Digest `b50bda39…` reproduces exactly as `git diff ac953a0 874f02d -- app/`; perimeter exactly five files, **nothing under `app/beyo_manager/`** across the whole cycle. **S1 closed:** C6b re-specified to frozen `15.00 / −15.00` against a **positive** current allowance, `status == "ok"` asserted on both faces, comment rewritten to claim only what the fixture shows — the `null` now has one sufficient cause. **S2 closed:** C6c asserts `"150.00"` on both faces (frozen `15.00 / −5.00` → allowance `10.00`), non-vacuous against a live **`170.00`** (measured at re-review r3; C6c serves at `now`, the **open** state — `120.00` is the pre-open value C6c never serves, and was the coordinator's unmeasured figure, N8). N1, N4 present. The implementer corrected the coordinator's `+2` forecast to the true `+1`. **Coordinator finding against the coordinator's own correction:** yesterday's C5 expected-bite-set class 2 ("C3, C6a, C6b") went **stale one round after it was written** — measured, the C5 mutant now also reddens **C6c** (5 failed / 31 passed, probe reverted byte-identical). Left alone it would have turned the next round's correct result into a false finding, the exact failure the list prevents. Standing rule added: **an enumerated expected set is a claim with a shelf life — a row that asserts the same mechanism joins the class in the cycle that adds it.** **Environment established and folded to §6:** every baseline in this pipeline — including phase 2's published one — was measured against the **development** database (`…:5433/beyo_manager`), while `.env.testing` designates `…:5432/app_test`, stamped `67cfba8fcb2d` with 96 tables and **missing `cost_model_versions` and `item_cost_results`**. That is the starting input for the per-worker-DB work gating phase 4: build a migrated test database and re-enumerate the baseline there **before** adding workers. **Round spent rather than skipped, reason recorded:** C6c and the re-specified C6b guard a money-adjacent number and have had one author and one reader — the coordinator who wrote their criterion. Re-review r3 prompt `prompts/reviewer/2026-08-21_phase3_rereview_r3.md`, delta-scoped; P5 asks whether a dev-database baseline is acceptable evidence to approve on. |
 | 3 | D9 + OD-10's boundary | **IMPLEMENTED** (fix r2) | 2026-08-21 | Codex | 26 failed / 2487 passed / 1 deselected / 2 warnings; baseline failure IDs ∅ added / ∅ removed. C6b re-specified with positive current allowance; C6c exact frozen `150.00`; N1/N4 closed. Handoff: `handoffs/implementer/2026-08-21_phase3_fix_r2_handoff.md`. |
 | 3 | *(prior row — fix r2 dispatched)* | *superseded (PROMPT_READY, fix r2)* | 2026-08-21 | Opus 5 (review r1) + coordinator (fold) | See current row above; fix prompt `prompts/implementer/2026-08-21_phase3_fix_r2.md`. |
 | 3 | D9: the two frozen-percent feed sites (N-4) + T13 both rows, re-commit immunity, **OD-10's boundary** | **CHANGES_REQUESTED** (review r1) | 2026-08-21 | Opus 5 (review r1) | **0 blocking, 2 should-fix, 6 notes — the production code is correct and no production line is in scope for the fix cycle.** Handoff `handoffs/reviewer/2026-08-21_phase3_review_r1_handoff.md`. Tree `184f48a`; `git diff 5b8329b HEAD -- app/ docs/domains/` empty, so the L4 stamp was **cited, not reproduced** — the first review round in this project to spend its whole budget on variation. Two mutant shapes no ledger had run. **S1: intention §5.3A names the wrong guard.** It says C6 row (b) reddens on a "blank whenever `status == infeasible`" edit; row (b)'s own fixture sets the current allowance to `0.00`, so its status *is* `infeasible` and the blanking edit produces exactly the `null` it asserts. Measured at L1 with the mutant at **both** sites: 1 failed / 24 passed, the single red is **C6a**, C6b green. The implementer's ledger already held the disproof (one ID where the prose implies two) and was read only in the "did C6a bite?" direction. Same inversion in `plans/plan_3.md` §5 C6 and in this table's PROMPT_READY row. **S2: the frozen percent's over-budget region has no guard anywhere in the repository.** Every numeric frozen literal in the phase is ≤ 100 (`100.00` ×4, `80.00`, `15.00`, goldens `15.00`, `test_c17` `20.00`), and C6b — the only negative-variance row — is placed exactly where the reconstructed allowance is `0.00` and the answer is `null`, so `variance < 0` *with a positive allowance* (OD-10's own first table row: a job that overran) is never evaluated. Clamp-at-100 mutant at both sites, **L4** as an absence claim: `26 / 2486 / 1`, ID set `comm`-diffed against §6's 26 → **∅ added, ∅ removed**; focused surface 100 passed. **§5B's degeneracy is one worse than recorded** — `variance = 0.00` also lands the frozen percent on exactly `100.00`, the boundary of the whole mutant family. Fix scope: new row **C6c** (`actual 15.00 / variance −5.00` ⇒ `"150.00"`, current allowance positive), the three attribution swaps, plus notes N1/N4. Notes: C4b-inside-`test_c1` judged **sufficient** (each mutation trips its own literal); C3 shows the live percent landing not moving; T13's E-B block byte-identity is proven only on the percent key; `test_c17`'s record is durable but sits where its readers will not look. Verified correct: N-4's argument order, the `result is not None` guard complete via `_empty_status`, HC-4, C4a structural, the P7 absence claim at L4 (two producers, both changed), and the P5 doc sweep (both corrections true; `api.md` and the 2026-08-18 handoff sit at the no-drift point and stay valid). Probes reverted, SHA-256 byte-identical, tree clean, no archgraph call. |
@@ -228,6 +236,39 @@ restated because they are load-bearing here:
   will commit `step_state_records`; cleanup runs on the failure path too.
 
 ### Rules earned by this pipeline (each from a measured defect)
+
+- **Any enumerated set describing something still in motion carries the date and the tree
+  it was measured at** — and a correction inherits the shelf life of the thing it corrects
+  (phase 3, three consecutive rounds, three different artifact types). Measured instances:
+  the **C5 expected-bite-set** went stale one round after it was written, when C6c joined
+  the class it enumerates; **intention §5.3A**'s S1 correction diagnosed a fixture *and
+  ordered it changed*, and the very next fix cycle falsified its premise while leaving its
+  conclusion true; **master §7's stream-3 perimeter** under-declared twice in one day and
+  its "additions that pass do not touch the failing-ID set" clause was true of the stream
+  as first observed and false a day later. All three read as timeless present-tense fact.
+  Two consequences: **(a)** when a correction both diagnoses a state and orders it changed,
+  the diagnosis goes in the **past tense** with the order beside it, **in every document
+  that receives the fold** — not only where the fix is executed; **(b)** an enumerated
+  expected set is updated **in the same cycle** that adds a member to the class it names,
+  or it converts the next round's correct result into a false finding.
+- **A justifying number is a claim and inherits the mutation rule** (phase 3, N8). The
+  coordinator wrote that C6c was "non-vacuous against a live `120.00`"; the measured value
+  is `170.00`, because C6c serves at the **open** state and `120.00` is the pre-open value
+  it never serves. The conclusion survived only because both candidates differ from
+  `150.00`. §5B already requires computing both sides before *choosing* a fixture — the
+  same discipline binds the justification written **afterwards**, which had been done by
+  inspection.
+- **A stream/write perimeter covers documents, code AND tool-recorded state** (phase 3,
+  N9). §7's stream perimeters were written code-only while the charter's handoff rule
+  already names all three, so they under-declared by construction — and the omission hid a
+  foreign stream writing `.archgraph/architecture.yml`. Perimeters of every kind use the
+  handoff schema.
+- **While an uncommitted foreign stream is live, an aggregate-diff digest is the wrong
+  revert instrument; use per-file digests over the reviewed perimeter** (phase 3,
+  re-review r3). The reviewer's `app/`-scoped digest went stale between its last probe and
+  its last artifact write through no action of its own — the owner saved a file. An
+  aggregate digest conflates "my probe leaked" with "someone else edited the tree"; per-file
+  digests over the files under review separate them and are what carried the claim.
 
 - **Every term of a defining equation gets a criterion that varies it away from its
   identity element** (phase 1 review r1, B1). All 17 loader fixtures pinned
@@ -671,9 +712,22 @@ A successor pipeline cannot diff against a baseline we never wrote down.
 goldens keys-only on **this pipeline's post-approval tree**, so each phase approval
 publishes the tree it approves at and the suite measured there.
 
+**Schema amended 2026-08-21 (re-review r3, P5). A baseline is published as
+`failure-ID set + tree identity + database identity`, with the count explicitly
+subordinate.** Phases 1 and 2 were published as a count against a bare SHA, which omits
+two things that determine what the count means: (i) **which database** it ran on — every
+measurement in this pipeline was taken against the *development* database, not
+`app_test` (§6), and a count taken against a mutable database shared with manual work is
+not reproducible by a successor; and (ii) **whether the tree was dirty**, which from
+2026-08-21 it is, by +17 collected tests from recognized stream 3. The **failure-ID set is
+the durable half** — stable across 12+ runs and `comm`-diffed empty in both directions at
+every stamp of every phase — and it is what a successor should diff against. The count is
+context, not contract.
+
 | Phase | Approved | Tree | Suite (coordinator-measured on that tree) | Failure-ID set |
 |---|---|---|---|---|
 | 1 | 2026-08-20 | `d21fe9e` | 26 failed / 2459 passed / 1 deselected | §6's enumeration, unchanged |
+| **3** | **2026-08-21** | **`808eead`** + dirty (recognized stream 3) — `app/` diff digest recorded in `plans/plan_3.md` §7 | **26 failed / 2515 passed / 1 deselected**, of which **+28 passed is stream 3, attributed test-by-test** (its phase-clean equivalent is fix r2's `26 / 2487 / 1` at `874f02d`) | **§6's enumeration, unchanged — `comm`-diffed empty in BOTH directions by the coordinator at the gate** |
 | **2** | **2026-08-21** | **`efd6b99`** (approval gate commit follows it) | **26 failed / 2479 passed / 1 deselected** | **§6's enumeration, unchanged — `comm`-diffed empty in both directions** |
 
 **The enumerated failure-ID set in §6 has not changed across either approval.** The pass
@@ -691,17 +745,59 @@ raising an automatic finding. Anything *outside* these lists is still a finding.
 
 - `app/beyo_manager/services/infra/shopify/product_sync_client.py`
 - `app/beyo_manager/services/infra/shopify/shop_client.py`
-- `app/scripts/shopify/` (untracked: `__init__.py`, `fields.py`)
+- `app/scripts/shopify/` (untracked: `__init__.py`, `fields.py`, `backfill_from_shopify.py`)
 - `app/tests/unit/scripts/test_backfill_from_shopify_fields.py` (untracked)
+- **`app/tests/unit/services/infra/shopify/`** — an **existing, tracked** test file
+  (`test_product_sync_client.py`) is edited by this stream (added at re-review r3, N9)
+- **`.archgraph/architecture.yml` and `.archgraph/.internal/`** — this stream writes
+  **tool-recorded state**: an uncommitted node `command-shopify-backfill-expected-sold-price`
+  (`origin: ai_inferred`, confidence `0.9`) plus a `calls` edge, with evidence spans into
+  `app/scripts/shopify/`. No session in this pipeline has called the graph (added at
+  re-review r3, N9).
+
+**⚠ The perimeter above was under-declared twice in one day, and the schema is the reason.**
+The charter requires a *handoff's* write perimeter to cover "documents, code, and
+tool-recorded state"; §7's **stream** perimeters were being written as code-only, so they
+under-declare by construction. **Stream perimeters follow the handoff schema.** A stream
+perimeter is also a **live claim, not a one-time note** — this one moved twice during a
+single review round — so each entry carries the date it was measured.
 
 **⚠ This stream ADDS TESTS, so the baseline moves under you — measured, not assumed.**
 That untracked test file collects **17 tests** (10 test functions, the rest
 parametrizations; `pytest --collect-only`, 2026-08-21). Any L4 run taken while it is
-present therefore reports **+17 collected** against the cited `26 / 2487 / 1` stamp
+present therefore reports **+17 collected** *(measured 2026-08-21 ~10:00; **stale by
+~13:00 — see the box below**)* against the cited `26 / 2487 / 1` stamp
 *before* anything about this phase is considered. A run that reads `2504 passed` is not a
 regression and not an anomaly — it is this stream. Re-measure and **diff the failing-ID
-set**, which is unaffected by additions that pass; the count alone will mislead every
-reader who does not know this line exists.
+set**; the count alone will mislead every reader who does not know this line exists.
+
+> **THE `+17` WENT STALE WITHIN THREE HOURS — measured at the phase-3 approval gate.**
+> That figure was written **specifically to stop a later round misreading a count**, and
+> it became wrong faster than any other number in this pipeline. At the gate the suite read
+> **26 / 2515 / 1**, i.e. **+28** over the `2487` stamp, not `+17`. Attributed exactly, to
+> the test:
+>
+> | source | then | at the gate | delta |
+> |---|---|---|---|
+> | `tests/unit/scripts/test_backfill_from_shopify_fields.py` (untracked, all new) | 17 | **22** | +22 |
+> | `tests/unit/services/infra/shopify/test_product_sync_client.py` (tracked, edited) | 6 committed | **12** | +6 (6 test functions added, 0 removed) |
+> | **total foreign** | | | **+28 — the whole delta** |
+>
+> Nothing of phase 3's is in that number. **The lesson is the one this pipeline earned
+> three times over and then demonstrated on itself: a count describing a live stream is a
+> claim with a shelf life, and dating it is not optional.** The instrument that did not
+> move is the failing-ID set — 26, `comm`-diffed empty in both directions against the
+> enumeration above, exactly as at every prior stamp.
+
+**NARROWED 2026-08-21 (re-review r3, N9) — the sentence above originally continued
+"…which is unaffected by additions that pass". That is now too strong.** It was true of the
+stream as first observed (a new untracked test file, additive only). The stream has since
+edited an **existing tracked test file**, and an edit to an existing test **can move the
+failing-ID set in either direction** — while the enumerated 26 already contains a Shopify
+row and one of the two named flaky tests is a Shopify integration test. Binding: **an
+unchanged ID set is not self-evident while this stream is uncommitted; attribute it.**
+Three candidate causes for any movement — this stream, the flake, a real regression — and
+only a per-ID diff separates them.
 
 Why this one needs different handling from streams 1 and 2: **it lives in the working
 tree, not in git history.** A committed stream is visible to `git log` and excluded from a

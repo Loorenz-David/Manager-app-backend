@@ -1,7 +1,7 @@
 # Plan 3 — D9: the frozen blocks freeze whole
 
 ```
-state: NOT_STARTED
+state: APPROVED — 2026-08-21 (projection r0 · implement r1 · review r1 · fix r2 · re-review r3)
 phase: 3
 date: 2026-08-20
 depends_on: plan 2 APPROVED 2026-08-21 (`efd6b99`) — holds. The live basis exists, so
@@ -662,8 +662,9 @@ rather than re-run. **S1 closed:** C6b now carries frozen `15.00 / −15.00` aga
 **positive** current allowance `20.00`, asserts `status == "ok"` on both faces, and its
 comment was rewritten to claim only what the fixture demonstrates — the `null` now has one
 sufficient cause. **S2 closed:** C6c asserts `"150.00"` on both faces from frozen
-`15.00 / −5.00` → reconstructed `10.00`, with the live percent at `120.00` on the same
-fixture so the row is non-vacuous. N1 and N4 present. The implementer corrected the
+`15.00 / −5.00` → reconstructed `10.00`, with the live percent at **`170.00`** on the same
+fixture so the row is non-vacuous (measured at re-review r3 — N8 corrected the
+coordinator's unmeasured `120.00`, which is the pre-open value C6c never serves). N1 and N4 present. The implementer corrected the
 coordinator's `+2` forecast to the true `+1` (C6c adds one function; C6b was re-specified,
 not added) — a small thing recorded because the correction ran in the right direction.
 
@@ -698,3 +699,140 @@ Re-review r3 prompt at `prompts/reviewer/2026-08-21_phase3_rereview_r3.md`, delt
 with the settled ground above marked do-not-re-spend and P5 asking the one question that
 bears on the approval gate: whether a baseline measured on the development database is
 acceptable evidence to approve on.
+
+**2026-08-21 — re-review r3 (Opus 5). `APPROVED` — 0 blocking, 0 should-fix, 3 notes.**
+Handoff at `handoffs/reviewer/2026-08-21_phase3_rereview_r3_handoff.md`. Tree `808eead`
+(four coordinator doc commits above the checkpoint; `git diff 874f02d HEAD -- app/` empty,
+so the gate's substance holds and the prompt's SHA was merely stale), **dirty** via the
+recognized shopify stream, `git diff HEAD -- app/` digest `f0722645…` — identical across
+every probe and every measurement. That aggregate digest then moved to `020e77c9…` after
+the last probe was reverted, because the stream modified a further file mid-round (N9);
+**no phase-3 file moved with it**, proven per-file: `division_serializers.py` `d9160f92…`
+(also the coordinator's fix-r2 digest, so that revert is corroborated from a second
+session), `serializers.py` `65558c51…`, `calculator.py` `16cb98a9…`,
+`test_phase2_live_surfaces.py` `90da6486…`. **While an uncommitted foreign stream is live,
+per-file digests over the reviewed perimeter are the right revert instrument and an
+aggregate `app/` digest is not** — the aggregate conflates a leaked probe with the owner
+saving a file. **Zero L4 runs:** every hypothesis was
+a named-row bite question, so all six evidence rows are L1 over the two phase files, which
+also kept the foreign stream's +17 tests out of every measurement.
+
+**Both should-fix findings close on the merits.** S1: C6b's `null` now has exactly one
+sufficient cause — status `ok` asserted on both faces closes the status channel,
+`result is not None` closes the absent-result channel, a fallback denominator yields a
+number, and probe C shows the row bites on the *exact zero* boundary rather than on sign.
+S2: C6c is non-vacuous (frozen `150.00` against a measured live `170.00`), crosses two
+distinct producers, and — the sharper result — is **non-redundant**: a variance-sign
+blanking implementation (probe B, E-P site, a shape no ledger had run) leaves **C6c alone
+red at 1 failed / 34 passed with C6b green**, because that implementation returns exactly
+the `null` C6b asserts. C6b and C6c partition the negative-variance space at the
+zero-allowance boundary and neither covers the other's half.
+
+**N-4's argument order is now mutation-guarded, not merely read-correct.** New mutant shape
+— **argument transposition** at each reconstruction site. E-P: 5 failed / 30 passed
+(C3, C6a, C6b, C6c, `test_c17`). E-B: 4 failed / 31 passed (the same four minus `test_c17`).
+The E-P-only `test_c17` asymmetry reproduces the recorded C5 site asymmetry independently.
+C1/C2/C4b/C4c stay green under it — the `variance = 0.00` degeneracy again, which is
+exactly the reason C3/C6a/C6b/C6c exist.
+
+**§5B's region corollary closes.** OD-10 names three regions and all three now carry an
+exact literal: `≤ 0 → null` (C6b), ordinary (C3 `80.00`, C6a `15.00`, goldens `15.00`,
+`test_c17` `20.00`), over-budget (C6c `150.00`). The `100.00` boundary is pinned four times
+(C1/C2/C4b/C4c). Below `0` is **unreachable by construction**, not untested:
+`actual_worker_minutes` is `calculate_actual_worker_minutes(actual_worker_seconds)` over a
+non-negative seconds count, single writer `process_item_cost_result.py`, so with a positive
+denominator the output range is `[0, ∞)`. A negative *reconstructed* allowance is reachable
+and falls in the same `≤ 0` branch C6b guards. Probe C (weaken `calculate_percent_consumed`
+to `allowed < 0`) reddens C6b on the frozen side and C6a on the live side — the inequality
+separating two regions is pinned, not just the regions.
+
+**No blast radius from the fix cycle.** C6b's edits are `db_session`-scoped; the
+`values[10].allowed_worker_minutes = Decimal("20.00")` line restates the fixture's own value
+as a defensive pin rather than dead scaffolding. No row's expected value coincides with one
+it must tell apart: C6b `null`/live `170.00`; C6c `150.00`/live `170.00`; C6a `15.00`/live
+`null`; C3 `before` final `80.00` against budget `120.00 → 80.00`, which is what N1's added
+assertion buys. Regression over both phase files: 35 passed / 1 deselected.
+
+**Notes.** N7 — `planning/intention.md` §5.3A's S1 correction still asserts *"its fixture
+sets the current evaluation's `allowed_worker_minutes = 0.00`"*, a premise fix r2 deleted;
+the conclusion (row (a) is the status-blanking guard) survives but for the opposite reason,
+and a reader reconciling document to tree could "restore" the `0.00` and undo S1. §5 C6's
+copy is safe because it ends with the re-specification order; §5.3A carries no such clause.
+N8 — the *"non-vacuous against a live **`170.00`** (measured at re-review r3; C6c serves at `now`, the **open** state — `120.00` is the pre-open value C6c never serves, and was the coordinator's unmeasured figure, N8)"* justification for C6c in §7 above and in
+`master_plan.md` §3 is wrong: C6c serves at `now` (open), so the live percent is `170.00`;
+`120.00` is the pre-open value C6c never serves. Measured `('170.00', '170.00')`.
+Non-vacuity is unaffected. N9 — **the shopify stream moved twice during this round and
+`master_plan.md` §7's perimeter for it covers neither move.** At 10:16:07
+`.archgraph/architecture.yml` gained an uncommitted delta (node
+`command-shopify-backfill-expected-sold-price` + one `calls` edge, `ai_inferred`, 0.9,
+evidence spans in `app/scripts/shopify/`), and about an hour later
+`app/tests/unit/services/infra/shopify/test_product_sync_client.py` — a **tracked, existing**
+test file — was modified. This session made no `archgraph_*` call and touched neither.
+Widen §7's stream-3 perimeter to `.archgraph/architecture.yml`, `.archgraph/.internal/` and
+`app/tests/unit/services/infra/shopify/`; re-measure the graph at phase 4 rather than citing
+§6's 9-pending/2-stale; and **narrow §7's "additions that pass do not touch the failing-ID
+set" clause** — it is true of the stream's untracked new file and false of an edit to an
+existing test file, and the enumerated 26 already carries a shopify row with a shopify flake
+beside it.
+
+**P5 answered — no owner card.** A development-database baseline **is** acceptable evidence
+to approve this phase: master §6's ⛔ GATE step 1 already binds phase 3 to the current serial
+runner; the dev database is at head while `app_test` lacks `cost_model_versions` and
+`item_cost_results` outright, so it is the *more* faithful environment today; and what
+carries the phase is per-row mutation bites over serializer arithmetic, which are
+DB-independent in substance. The exposure is provenance, one line wide: **`master_plan.md`
+§7's published-baselines table records neither the database nor a dirty-tree digest.** The
+gate should publish failure-ID set + tree identity (SHA + dirty-diff digest) + database
+identity, count subordinate.
+
+**Mutation-probe declaration.** Five probes across four files, each reverted and verified
+byte-identical: `division_serializers.py` `d9160f92…` (2 probes), `serializers.py`
+`65558c51…` (1), `calculator.py` `16cb98a9…` (1), `test_phase2_live_surfaces.py`
+`90da6486…` (1 read-out probe). No schema change, no committed rows, no migration — every
+run used the rollback-scoped `db_session` fixture. No archgraph call.
+
+**2026-08-21 — re-review r3 consumed; PHASE APPROVED (coordinator).** Verdict APPROVED,
+0 blocking, 0 should-fix, 3 notes — **all three in coordinator artifacts, none in the code
+or the tests.** Every probe revert corroborated: the reviewer's four declared post-revert
+digests match the tree exactly, and `division_serializers.py` hashes `d9160f92…`, the same
+value the coordinator recorded after its own C5 probe — **one session's revert proven from
+another's ledger.**
+
+All three notes verified at source before folding, all three mine. **N7:** intention §5.3A's
+S1 correction diagnosed C6b's fixture *and ordered it changed*; fix r2 executed the order,
+so the premise ("its fixture sets the current allowance to `0.00`") is now false against
+the tree while its conclusion stays true — a reader reconciling it could have "restored"
+the `0.00` and undone what S1 bought. Rewritten in the past tense with the amendment
+beside it. **N8:** C6c was justified as "non-vacuous against a live `120.00`"; C6c serves
+at `now`, the **open** state, so the live value is `170.00` — `120.00` is the pre-open
+figure C6c never serves. The conclusion survived by luck (both differ from `150.00`).
+Corrected in two places. **N9:** stream 3's perimeter omitted `.archgraph/architecture.yml`
+and an existing tracked shopify test file, and its "additions that pass do not touch the
+failing-ID set" clause was true of the stream as first observed and false a day later.
+Perimeter widened to the handoff schema (documents · code · tool-recorded state) and the
+clause narrowed.
+
+**One refinement the reviewer's P2 slightly overstated, recorded rather than reopened:**
+`percent < 0` is called unreachable "by construction". `_require_seconds` guards **type
+only, not sign** — the invariant lives in the writer (`process_item_cost_result.py` derives
+the value from a seconds counter), not in a guard. The region is genuinely unreachable
+through the production path today; the basis is the writer's behaviour, not an enforced
+bound. Carried to `plans/plan_4.md` notes.
+
+**Approval-gate measurement, taken by the coordinator on the tree being approved:**
+`PYTHONPATH=. pytest -m 'not e2e'` at HEAD `808eead`, working tree **dirty** with
+recognized stream 3, `app/` diff digest `020e77c9f83027258aef20c53665b9d9fa87042befde6a3eddf5f5c858d61730`, 135.08 s.
+**26 failed / 2515 passed / 1 deselected / 2 warnings.** The failing-ID set is
+**identical to master §6's enumerated 26, `comm`-diffed empty in BOTH directions.**
+The `+28` passed over fix r2's `2487` is **entirely stream 3, attributed test-by-test**:
+`test_backfill_from_shopify_fields.py` 17 → **22** (+22, all new) and
+`test_product_sync_client.py` 6 → **12** (+6 added, 0 removed). Nothing of phase 3's is in
+that delta. **The `+17` this coordinator recorded in master §7 at ~10:00 to prevent a
+misread count was itself stale by ~13:00** — a fourth instance of the shelf-life shape, and
+the first to land on a line written expressly to stop that class of error.
+
+**APPROVED.** The production code was correct at implement r1 and **never changed again** —
+`git diff 5b8329b HEAD -- app/beyo_manager/` is empty across both later rounds. Three
+rounds, and every blocking-or-should-fix finding sat in a plan, a criterion, an intention
+section or a coordinator note. Phase 4 is **BLOCKED** on the test-environment work per
+master §6's ⛔ gate; the next action is that work, not a phase-4 prompt.
