@@ -1,0 +1,29 @@
+changeId: 2026-08-21T08-45-32-665Z--9fc4a4
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+        symbol: test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot
+        startLine: 106
+        endLine: 158
+    after: {}
+    rationale: "Stale source link:
+      test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot moved
+      to 108-160 (stored 106-158) and the file hash drifted. Unlink so the
+      corrected span can be re-linked; an overlapping-but-different link is
+      refused."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:45:32.665Z
+graphRevisionBefore: bbdcc4cffbb239581c6b06a906c12f1b9964f9d12f0a6dae3a6a0d05e3f2be2f
+graphRevisionAfter: 8e19cf8a6ae8928aa3be5163daad7dad895f37b43aa7540be6d2b3b08b40cb4c
+humanInstruction: "Owner asked the coordinator to correct the archgraph before
+  the test-environment work. Repairing the two stale nodes; spans re-derived
+  from source rather than trusted (ledger lesson: 6 of 11 anchors were wrong).
+  One operation per call per tooling Finding 1."
+changeTokenCorrelation: 331934778a05

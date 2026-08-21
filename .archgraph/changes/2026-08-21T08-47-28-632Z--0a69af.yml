@@ -1,0 +1,24 @@
+changeId: 2026-08-21T08-47-28-632Z--0a69af
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 184
+        endLine: 315
+      effect: add
+    rationale: "Re-link at the re-derived span: async def at 184, function closes at
+      315, __all__ follows at 318."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:47:28.632Z
+graphRevisionBefore: cfce0bab55d458f76ec8ccec34aca55edbde680353e697a65d6636c335f85915
+graphRevisionAfter: 631daedafc82320fbbdac7beebb1e4c9a1f4a5c9f2b3bfdf121f9526a0c20b2b
+humanInstruction: Third of four for the price-scenario node.
+changeTokenCorrelation: a4b4cb2ebaf7

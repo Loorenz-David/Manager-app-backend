@@ -1,0 +1,27 @@
+changeId: 2026-08-21T08-45-56-543Z--d5b403
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+        symbol: get_task_production_time
+        startLine: 26
+        endLine: 121
+      effect: add
+    rationale: "Re-link at the span re-derived from the symbol: async def at line
+      26, closing paren at 121 (__all__ follows at 124). Replaces the stale
+      23-45, which predated phase 2's step-loading and live_seconds threading
+      and now ended mid-function."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:45:56.543Z
+graphRevisionBefore: 7157c8e2f8a6523ff5a25fd616a9db1299d6cda58839ad8642de95ae94e0d09c
+graphRevisionAfter: 8fa7fc50dbc582a0c1ef53e38663e75a4e0622932a2c2837f3cf39f8ac724e34
+humanInstruction: Third of four. Re-link get_task_production_time at its
+  re-derived span 26-121, re-hashing the file at apply time.
+changeTokenCorrelation: 5bbb591776e8

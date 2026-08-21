@@ -4663,7 +4663,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-20T04:46:34.640Z
+    updatedAt: 2026-08-21T08:46:09.249Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -4673,16 +4673,16 @@ nodes:
         linkedAt: 2026-08-17T20:59:49.438Z
       - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
         symbol: get_task_production_time
-        startLine: 23
-        endLine: 45
-        contentHash: c633e80b9dcf75ff815015e34076f570c8f981c577424b828f1795a858421ec9
-        linkedAt: 2026-08-17T20:59:49.438Z
+        startLine: 26
+        endLine: 121
+        contentHash: 488eb5ed5ca42d82fe699cca0008b188ce697539b2fe5e26b0fad4f10b600774
+        linkedAt: 2026-08-21T08:45:56.515Z
       - path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
         symbol: test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot
-        startLine: 106
-        endLine: 158
-        contentHash: c815e764d03eabd8f7088c0d07c45707c60ecc612b6767120d0fa4647aa6645b
-        linkedAt: 2026-08-17T20:59:49.438Z
+        startLine: 108
+        endLine: 160
+        contentHash: a3915521b3a85445ebe4ade4ef7815cc243f58712f6d6129d2c3e219e4fb4449
+        linkedAt: 2026-08-21T08:46:09.249Z
   - id: endpoint-item-economics-task-production-time
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/production-time
@@ -4904,20 +4904,20 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-20T04:40:54.047Z
+    updatedAt: 2026-08-21T08:47:41.638Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: get_task_price_scenario
-        startLine: 181
-        endLine: 311
-        contentHash: 4a3dd8fc24d145b0eaa8f094e6bb84bb60e9620384565b2a39ba99a8e0d179ee
-        linkedAt: 2026-08-20T04:40:34.534Z
+        startLine: 184
+        endLine: 315
+        contentHash: 89cc8a63fedb2907fd499dee9b0492b030ac59b2db4c384c2186a8f51ed96050
+        linkedAt: 2026-08-21T08:47:28.601Z
       - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
         symbol: test_c1_status_matrix_has_twelve_exact_rows
         startLine: 583
-        endLine: 617
-        contentHash: 6e53ba0c1aa4d2c5855df517c70abe6db0752a5158dd01e90f8e547f67a41480
-        linkedAt: 2026-08-20T04:40:54.047Z
+        endLine: 615
+        contentHash: 06f31eed1e40520d0bd475f111fdeeedc33415c8203e88e3055cc9a50688a5c6
+        linkedAt: 2026-08-21T08:47:41.638Z
   - id: domain-purchase-api-sek-price-normalization
     type: domain
     name: Purchase API SEK price normalization
@@ -4991,10 +4991,10 @@ nodes:
             settled-plus-live integers without assigning ORM attributes.
           inferenceReason: This symbol is the implemented boundary that owns the live
             worked-seconds projection and its non-persistence contract.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-20T11:21:10.757Z
-    updatedAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - id: decision-item-economics-production-budget-cap-v1
     type: decision
     name: Production budget cap V1
@@ -5083,10 +5083,43 @@ nodes:
             consequence.
           inferenceReason: The handoff is the consumer-facing contract record created by
             this implementation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T19:45:02.200Z
-    updatedAt: 2026-08-20T19:45:02.200Z
+    updatedAt: 2026-08-21T08:50:39.277Z
+  - id: command-shopify-backfill-expected-sold-price
+    type: command
+    name: backfill_from_shopify (CLI)
+    description: "Manually-run CLI orchestrator that backfills app fields from
+      Shopify for one workspace: resolves the target user by username to a
+      workspace and its ACTIVE Shopify integration, matches items to Shopify
+      variants by article_number ↔ barcode (exact match), and routes each
+      enabled field through a registered backfiller. Today's sole backfiller
+      maps the variant listing price to the item valuation expected sale price,
+      inheriting purchase cost and currency from the current row, skipping
+      unchanged triples and currency conflicts, and writing only through
+      set_item_valuation. Dry-run is the default; the apply step re-verifies the
+      current valuation triple and owns its transaction per item."
+    metadata:
+      evidence:
+        - path: app/scripts/shopify/backfill_from_shopify.py
+          symbol: _run
+          summary: "Typer CLI: resolve user/workspace/integration, fetch variant pricing
+            by barcode, decide per field, apply updates through
+            set_item_valuation."
+          inferenceReason: New standalone backfill orchestrator added in this change.
+        - path: app/scripts/shopify/fields.py
+          symbol: ExpectedSoldPriceBackfiller
+          summary: Pure decide
+            (not_found/ambiguous/no_price/unsupported_currency/currency_conflict/unchanged
+            vs update) and apply with drift re-check inside an owned
+            transaction.
+          inferenceReason: The field-backfiller registry is the extension point for future
+            Shopify-sourced fields.
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-21T08:16:07.269Z
+    updatedAt: 2026-08-21T08:50:39.277Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -9910,10 +9943,10 @@ edges:
             credited_user_id/created_by_id for attribution.
           inferenceReason: The projection's live input is the open interval population in
             the step-state record table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-20T11:21:10.757Z
-    updatedAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: projection-live-worked-seconds
     relationshipType: calls
     targetNodeId: src-compute-record-contributions
@@ -9927,10 +9960,10 @@ edges:
             calculation to compute_record_contributions.
           inferenceReason: The projection reuses the established analytics wrapper as its
             sole averaging and attribution computation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-20T11:21:10.757Z
-    updatedAt: 2026-08-20T11:21:10.757Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: projection-item-economics-task-production-time
     relationshipType: reads_from
     targetNodeId: projection-live-worked-seconds
@@ -9942,10 +9975,10 @@ edges:
             budget status and DivisionStep substitution.
           inferenceReason: The projection's request-time worked-seconds basis is the
             shared live-worked-seconds projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T18:38:39.916Z
-    updatedAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: projection-item-economics-task-budget-status
     relationshipType: reads_from
     targetNodeId: projection-live-worked-seconds
@@ -9957,10 +9990,10 @@ edges:
             from the shared loader using ctx.now.
           inferenceReason: The budget-status projection derives its actual-worker-seconds
             headline from the live-worked-seconds projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T18:38:39.916Z
-    updatedAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: projection-item-economics-task-budget-status-worker
     relationshipType: reads_from
     targetNodeId: projection-live-worked-seconds
@@ -9972,10 +10005,10 @@ edges:
             budget-status implementation.
           inferenceReason: The worker projection inherits the same live-worked-seconds
             basis through the shared status implementation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T18:38:39.916Z
-    updatedAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: projection-item-economics-task-budget-allocations
     relationshipType: reads_from
     targetNodeId: projection-live-worked-seconds
@@ -9987,10 +10020,10 @@ edges:
             visible steps and uses it for headlines and DivisionStep rows.
           inferenceReason: The allocation projection derives present-tense worked seconds
             from the shared live-worked-seconds projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T18:38:39.916Z
-    updatedAt: 2026-08-20T18:38:39.916Z
+    updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: domain-item-economics
     relationshipType: governed_by
     targetNodeId: decision-item-economics-production-budget-cap-v1
@@ -10004,7 +10037,56 @@ edges:
             and its versioned rederivation behavior.
           inferenceReason: The formula is a governing decision of the existing Item
             Economics domain boundary.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-20T19:45:02.200Z
-    updatedAt: 2026-08-20T19:45:02.200Z
+    updatedAt: 2026-08-21T08:50:39.277Z
+  - sourceNodeId: command-shopify-backfill-expected-sold-price
+    relationshipType: calls
+    targetNodeId: command-item-economics-set-item-valuation
+    description: The apply step performs its valuation write exclusively by invoking
+      set_item_valuation with a script-built ServiceContext, so chain
+      supersession, preview, and audit semantics hold.
+    metadata:
+      evidence:
+        - path: app/scripts/shopify/fields.py
+          symbol: ExpectedSoldPriceBackfiller.apply
+          summary: Builds ServiceContext and awaits set_item_valuation inside
+            session.begin().
+          inferenceReason: The orchestrator delegates all valuation writes to the
+            canonical command.
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-21T08:16:07.269Z
+    updatedAt: 2026-08-21T08:50:39.277Z
+  - sourceNodeId: command-shopify-backfill-expected-sold-price
+    relationshipType: reads_from
+    targetNodeId: table-item
+    description: Candidate selection reads workspace items with a non-null article_number.
+    metadata:
+      evidence:
+        - path: app/scripts/shopify/backfill_from_shopify.py
+          symbol: _resolve_run_context
+          summary: select(Item) filtered by workspace, is_deleted false, article_number
+            not null.
+          inferenceReason: Direct read site in the resolve phase.
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-21T08:16:07.269Z
+    updatedAt: 2026-08-21T08:50:39.277Z
+  - sourceNodeId: command-shopify-backfill-expected-sold-price
+    relationshipType: reads_from
+    targetNodeId: table-item-valuation
+    description: Reads each item's current valuation for the decision triple, and
+      re-reads it at apply time to detect drift before writing.
+    metadata:
+      evidence:
+        - path: app/scripts/shopify/backfill_from_shopify.py
+          symbol: _resolve_run_context
+          summary: select(ItemValuation) current rows for all candidate items.
+          inferenceReason: Direct read site; the apply-time drift re-check in fields.py
+            reads the same predicate.
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-21T08:16:07.269Z
+    updatedAt: 2026-08-21T08:50:39.277Z

@@ -1,0 +1,27 @@
+changeId: 2026-08-21T08-47-05-720Z--c7f5ad
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 583
+        endLine: 617
+    after: {}
+    rationale: "Stale: the status-matrix test's body now ends at 615 (stored 583-617
+      over-reached into two trailing blanks) and the file hash drifted under the
+      owner's production-budget-cap stream. Unlink to re-link at the corrected
+      span."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:47:05.720Z
+graphRevisionBefore: c1f28cfefbaa4a1b560845a27127db4f2cadb431d1f5270c2bea2f85c908e82d
+graphRevisionAfter: b0801b572d16a677b4fcb98b631f10c9be3e0087a757bb75623bd96607b186a1
+humanInstruction: Repairing the second stale node (price-scenario). Its drift is
+  caused by the owner's production-budget-cap stream, not by this pipeline. One
+  operation per call.
+changeTokenCorrelation: 6c2223ec82b6

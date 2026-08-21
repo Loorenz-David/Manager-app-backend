@@ -1,0 +1,28 @@
+changeId: 2026-08-21T08-47-41-667Z--2e2d24
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 583
+        endLine: 615
+      effect: add
+    rationale: Re-link at the re-derived span. The start is unchanged at 583 -
+      deliberately the @pytest.mark.parametrize table, since that decorator
+      carries the twelve status rows the test asserts over; only the end moved,
+      from 617 (which over-reached into trailing blanks) to the last assertion
+      at 615.
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:47:41.667Z
+graphRevisionBefore: 631daedafc82320fbbdac7beebb1e4c9a1f4a5c9f2b3bfdf121f9526a0c20b2b
+graphRevisionAfter: 47e55ff91d00b940be14f799fcb80b28af865a7a7c9210df9721bbc3004e8caf
+humanInstruction: Fourth of four. Completes the stale-node repair; both stale
+  nodes should now be clear.
+changeTokenCorrelation: 834ea633d14f

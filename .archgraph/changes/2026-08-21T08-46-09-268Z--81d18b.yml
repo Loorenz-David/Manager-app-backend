@@ -1,0 +1,28 @@
+changeId: 2026-08-21T08-46-09-268Z--81d18b
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+        symbol: test_c4_c6a_c6b_c25a_c25b_grouped_row_preserves_state_and_snapshot
+        startLine: 108
+        endLine: 160
+      effect: add
+    rationale: "Re-link at the span re-derived from the symbol:
+      @pytest.mark.integration at 108, async def at 109, body ends at 160 (next
+      decorator at 163). The decorator is included deliberately - the ledger's
+      closing note records two anchors that excluded their own decorator and so
+      missed the data being asserted over."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:46:09.268Z
+graphRevisionBefore: 8fa7fc50dbc582a0c1ef53e38663e75a4e0622932a2c2837f3cf39f8ac724e34
+graphRevisionAfter: c1f28cfefbaa4a1b560845a27127db4f2cadb431d1f5270c2bea2f85c908e82d
+humanInstruction: Fourth of four. Re-link the grouped-row test at 108-160,
+  decorator included per the ledger's anchor lesson.
+changeTokenCorrelation: bf257b19c08d

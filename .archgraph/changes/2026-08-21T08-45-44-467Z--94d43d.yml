@@ -1,0 +1,27 @@
+changeId: 2026-08-21T08-45-44-467Z--94d43d
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+        symbol: get_task_production_time
+        startLine: 23
+        endLine: 45
+    after: {}
+    rationale: "Stale source link: get_task_production_time grew to 26-121 under
+      phase 2's live-seconds threading (stored 23-45, which now ends
+      mid-function) and the file hash drifted. Unlink so the corrected span can
+      be re-linked."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:45:44.467Z
+graphRevisionBefore: 8e19cf8a6ae8928aa3be5163daad7dad895f37b43aa7540be6d2b3b08b40cb4c
+graphRevisionAfter: 7157c8e2f8a6523ff5a25fd616a9db1299d6cda58839ad8642de95ae94e0d09c
+humanInstruction: Second of four single-operation calls repairing
+  projection-item-economics-task-production-time. Unlink the drifted
+  get_task_production_time link before re-linking at its re-derived span 26-121.
+changeTokenCorrelation: f82721a6ef11

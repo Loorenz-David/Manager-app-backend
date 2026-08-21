@@ -1,0 +1,146 @@
+reviewId: 2026-08-21T08-50-39-304Z--eed27f
+reviewedItemIds:
+  - node:projection-live-worked-seconds
+  - edge:projection-live-worked-seconds--calls-->src-compute-record-contributions
+  - edge:projection-live-worked-seconds--reads_from-->table-step-state-record
+  - edge:projection-item-economics-task-production-time--reads_from-->projection-live-worked-seconds
+  - edge:projection-item-economics-task-budget-status--reads_from-->projection-live-worked-seconds
+  - edge:projection-item-economics-task-budget-status-worker--reads_from-->projection-live-worked-seconds
+  - edge:projection-item-economics-task-budget-allocations--reads_from-->projection-live-worked-seconds
+  - node:decision-item-economics-production-budget-cap-v1
+  - edge:domain-item-economics--governed_by-->decision-item-economics-production-budget-cap-v1
+  - node:command-shopify-backfill-expected-sold-price
+  - edge:command-shopify-backfill-expected-sold-price--calls-->command-item-economics-set-item-valuation
+  - edge:command-shopify-backfill-expected-sold-price--reads_from-->table-item
+  - edge:command-shopify-backfill-expected-sold-price--reads_from-->table-item-valuation
+decisions:
+  - itemId: node:projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified at source 2026-08-21: load_live_worked_seconds
+      spans 18-82 in a file of 85 lines, exactly as anchored. The summary's
+      claims each check out - it probes open WORKING records, groups attributed
+      records by user, calls compute_record_contributions with a buffered
+      anchor, and returns settled-plus-live integers with no ORM attribute
+      assignment (HC-1A). No contradictions."
+  - itemId: edge:projection-live-worked-seconds--calls-->src-compute-record-contributions
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified at source 2026-08-21: the anchor 60-70 contains
+      the await compute_record_contributions(...) call at line 63. The loader
+      delegates all averaging/attribution to the established analytics wrapper
+      rather than reimplementing it, which is the intention's one-crediting-rule
+      constraint (HC-2)."
+  - itemId: edge:projection-live-worked-seconds--reads_from-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Owner-adjudicated 2026-08-21 over review finding N6, which objected
+      that the summary contains a count (\"issues one batched probe\") where
+      master plan 5 says describe what the evidence shows, never how many.
+      Promoted as-is deliberately: the count is true (verified - a single select
+      over step_state_records filtered on exited_at IS NULL, state WORKING, not
+      deleted), the anchor 41-57 is exact, and the count is uniquely
+      well-guarded - phase 2's C8 criterion tests one probe plus one sweep per
+      worker with a named mutation that reddens. Reject-and-re-record was the
+      alternative and would destroy provenance and re-queue a rebuilt copy to
+      remove one true, tested word."
+  - itemId: edge:projection-item-economics-task-production-time--reads_from-->projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified: phase 2 (APPROVED efd6b99) made E-P load one
+      live_seconds map and thread it into budget status and DivisionStep
+      substitution. Criterion C4's named mutation (passing live_seconds=None at
+      the E-P call site) reddens exactly the one-loader-call row, so this edge's
+      claim carries a regression test."
+  - itemId: edge:projection-item-economics-task-budget-status--reads_from-->projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified: phase 2 replaced E-B's SQL aggregate with the
+      per-step fold over the loader's map (named decision N-2), so budget status
+      now reads its worked-seconds basis from this projection. The manager face
+      is exercised by C2/C3."
+  - itemId: edge:projection-item-economics-task-budget-status-worker--reads_from-->projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified: the worker face imports
+      _build_evaluated_status directly and therefore consumes the same live map.
+      Phase 2's S2 mutation (delegating with settled step totals) reddens the
+      worker rows, so the edge is guarded independently of the manager face."
+  - itemId: edge:projection-item-economics-task-budget-allocations--reads_from-->projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Coordinator-verified: phase 2 made E-A issue one batch loader call
+      before the task loop. Criterion C8's named mutation (moving the loader
+      inside the loop) reddens the batching rows, so this edge's claim is
+      regression-tested."
+  - itemId: node:decision-item-economics-production-budget-cap-v1
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. This node belongs to the owner's production-budget-cap
+      stream (recognized external stream 1), whose implementation this pipeline
+      has deliberately never reviewed - its perimeter is disjoint from the
+      live-clock perimeter by design. The owner adjudicated the queue in one
+      pass.
+  - itemId: edge:domain-item-economics--governed_by-->decision-item-economics-production-budget-cap-v1
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. Belongs to recognized external stream 1 (production budget
+      cap). Note for future readers: a governed_by edge from a populated domain
+      may draw a conflicting-canonical-relationship false positive, per the open
+      tooling finding on hierarchical relationship types."
+  - itemId: node:command-shopify-backfill-expected-sold-price
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. This node belongs to the owner's shopify backfill work
+      (recognized external stream 3), which is uncommitted in the working tree
+      at promotion time and was created by that stream's own session, not by
+      this pipeline.
+  - itemId: edge:command-shopify-backfill-expected-sold-price--calls-->command-item-economics-set-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. Recognized external stream 3. Its evidence spans point into
+      app/scripts/shopify/, which is untracked at promotion time - so this
+      claim's anchors reference files not yet in git history.
+  - itemId: edge:command-shopify-backfill-expected-sold-price--reads_from-->table-item
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. Recognized external stream 3.
+  - itemId: edge:command-shopify-backfill-expected-sold-price--reads_from-->table-item-valuation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Promoted on owner authorization 2026-08-21, NOT on coordinator
+      verification. Recognized external stream 3.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:50:39.304Z
+graphRevisionBefore: 47e55ff91d00b940be14f799fcb80b28af865a7a7c9210df9721bbc3004e8caf
+graphRevisionAfter: fbe0f7c30b71c408391df62d691d31d0349c8bcc9f4b416cf31e8a2a9a6ad636
+evidenceSummary: 21 evidence entries across 13 files; no drift detected
+humanInstruction: "Owner adjudicated the whole queue on 2026-08-21 in response
+  to a coordinator-prepared decision surface: promote all 13, and promote the N6
+  reads_from edge as-is rather than reject-and-re-record. The seven live-clock
+  items carry coordinator verification recorded per-item; the six items
+  belonging to the owner's cap and shopify streams are promoted on owner
+  authorization only, and each rationale says so explicitly."
+reviewTokenCorrelation: e30b01d29323

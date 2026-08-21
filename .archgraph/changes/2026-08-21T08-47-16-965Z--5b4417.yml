@@ -1,0 +1,24 @@
+changeId: 2026-08-21T08-47-16-965Z--5b4417
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 181
+        endLine: 311
+    after: {}
+    rationale: "Stale: get_task_price_scenario now spans 184-315 (stored 181-311)
+      after the owner's production-budget-cap stream edited this file. Unlink to
+      re-link at the re-derived span."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.227
+timestamp: 2026-08-21T08:47:16.965Z
+graphRevisionBefore: b0801b572d16a677b4fcb98b631f10c9be3e0087a757bb75623bd96607b186a1
+graphRevisionAfter: cfce0bab55d458f76ec8ccec34aca55edbde680353e697a65d6636c335f85915
+humanInstruction: Second of four for the price-scenario node.
+changeTokenCorrelation: "449730284806"
