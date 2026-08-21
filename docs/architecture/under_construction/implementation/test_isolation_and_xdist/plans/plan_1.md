@@ -2,6 +2,7 @@
 
 ```
 state: APPROVED — 2026-08-21 (implement r1 · fix r2 · review r3 · fix r4 · coordinator verification)
+hub: ../master_plan.md (tracker, environment §6, gates §7, baselines §8)
 phase: 1
 date: 2026-08-21
 actor: codex (fix r4)

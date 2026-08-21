@@ -2,6 +2,7 @@
 
 ```
 state: IMPLEMENTED — 2026-08-21 (fix r4; C2 closing pair retained; 21 failed / 2561 passed / 1 deselected in both orders)
+hub: ../master_plan.md (tracker, environment §6, gates §7, baselines §8)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)

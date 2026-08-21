@@ -2,7 +2,9 @@
 
 ```
 status: SHAPED (owner intention 2026-08-21) + coordinator inspection folded (round 1)
-role: intention (project root artifact)
+role: intention (semantic authority — §1 is the owner's words, unrewritten)
+hub: ../master_plan.md — tracker, environment topology, gates, published baselines.
+     Environment facts are cited from there, never restated here or in prompts.
 owner_decision: this work GATES phase 4 of live_clock_for_working_time_economics
                 (that pipeline's master_plan §6 ⛔ block)
 date: 2026-08-21
