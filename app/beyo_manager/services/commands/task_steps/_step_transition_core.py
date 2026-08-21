@@ -48,6 +48,9 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.task_steps._cascade_completion import cascade_step_completion
+from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
+    apply_upholstery_installation_side_effect,
+)
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import _apply_inaccurate_time_flag
 from beyo_manager.services.commands.tasks._task_state_transitions import (
@@ -67,6 +70,7 @@ class StepTransitionApplied:
     auto_paused_item: dict | None = None  # set only if the guard auto-paused another step
     readiness_changed_items: list[dict] = field(default_factory=list)  # downstream steps whose readiness changed
     task_became_ready: bool = False  # True if this transition flipped the whole task to READY
+    upholstery_events: list = field(default_factory=list)  # see _upholstery_installation_side_effect
 
 
 async def _apply_step_transition(
@@ -242,6 +246,20 @@ async def _apply_step_transition(
         if new_state == TaskStepStateEnum.COMPLETED:
             readiness_changes = await cascade_step_completion(ctx.session, ctx.workspace_id, step)
 
+    # TEMPORARY bridge: "upholstery installation" section steps auto-advance the
+    # task's fabric requirement in lockstep. See _upholstery_installation_side_effect
+    # module docstring for scope. Mirrors the equivalent call in the single-step path
+    # (transition_step_state.py) — this core has no other hook for it.
+    upholstery_events = await apply_upholstery_installation_side_effect(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        task_id=task.client_id,
+        step=step,
+        new_state=new_state,
+        actor_id=ctx.user_id,
+        now=now,
+    )
+
     # Per-step outbox event for analytics worker (atomic with domain write)
     await create_instant_task(
         session=ctx.session,
@@ -285,4 +303,5 @@ async def _apply_step_transition(
             for dep, _ in readiness_changes
         ],
         task_became_ready=task_became_ready,
+        upholstery_events=upholstery_events,
     )

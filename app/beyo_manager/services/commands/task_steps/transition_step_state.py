@@ -34,6 +34,9 @@ from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligati
     mark_step_obligations_acknowledged,
 )
 from beyo_manager.services.commands.task_steps._cascade_completion import cascade_step_completion
+from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
+    apply_upholstery_installation_side_effect,
+)
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
     _apply_inaccurate_time_flag,
@@ -399,6 +402,18 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         # 8. Extension point for section-specific side effects (stub)
         await _dispatch_section_side_effects(step, request.new_state, ctx.session)
 
+        # 8b. TEMPORARY bridge: "upholstery installation" section steps auto-advance
+        # the task's fabric requirement in lockstep. See module docstring for scope.
+        upholstery_events = await apply_upholstery_installation_side_effect(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            task_id=task.client_id,
+            step=step,
+            new_state=request.new_state,
+            actor_id=ctx.user_id,
+            now=now,
+        )
+
         # 9. Publish outbox event for analytics worker (atomic with domain write)
         payload = StepTransitionPayload(
             step_id=step.client_id,
@@ -508,6 +523,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 extra={"new_readiness": dep_step.readiness_status.value},
             )
         )
+    pending_events.extend(upholstery_events)
     await event_bus.dispatch(pending_events)
     return {
         "step_id": step.client_id,

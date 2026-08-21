@@ -155,6 +155,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
         step_pin_union: set[str] = set()
         # Keyed by client_id; last write wins (monotone toward READY within a batch).
         readiness_by_step: dict[str, str] = {}
+        upholstery_events: list = []
         for item in request.items:
             step = steps_by_id[item.step_id]
             task = tasks_by_id[step.task_id]
@@ -177,6 +178,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
             step_pin_union.update(applied.step_pin_user_ids)
             for r in applied.readiness_changed_items:
                 readiness_by_step[r["client_id"]] = r["new_readiness"]
+            upholstery_events.extend(applied.upholstery_events)
             applied.new_record.pause_reason = pause_reason  # already validated above; avoids a second fetch
             result_items.append(
                 {
@@ -268,6 +270,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
                 extra={"new_readiness": new_readiness},
             )
         )
+    pending_events.extend(upholstery_events)
     await event_bus.dispatch(pending_events)
 
     return {"items": result_items}

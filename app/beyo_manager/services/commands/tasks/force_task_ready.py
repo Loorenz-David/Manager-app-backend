@@ -57,6 +57,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
+from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
+    apply_upholstery_installation_side_effect,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.commands.tasks.requests import parse_force_task_ready_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -85,6 +88,7 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
 
     step_changed_items: list[dict] = []
     skipped_step_ids: list[str] = []
+    upholstery_events: list = []
     task: Task
 
     async with maybe_begin(ctx.session):
@@ -174,6 +178,37 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
             step_changed_items.append(applied.step_changed_item)
             skipped_step_ids.append(step.client_id)
 
+            # DECISION (2026-08-21, made by the product owner in conversation — not
+            # inferred from the code): a forced-ready item is real and done, just
+            # untracked by the clock. SKIPPED here only means "we didn't record step
+            # times," not "the work didn't happen" — unlike a normal SKIPPED close via
+            # the worker-facing endpoints, which really can mean the work was skipped.
+            # So for the one section wired to fabric consumption today ("upholstery
+            # installation"), simulate the same requirement transition a COMPLETED
+            # close would have produced, even though the step's own persisted state
+            # is SKIPPED (that state still governs worker-stats/credit, which is
+            # deliberately NOT being claimed here — see "Why SKIPPED and not
+            # COMPLETED" above). `apply_upholstery_installation_side_effect` only
+            # acts on steps in that section, so this is a no-op for every other step.
+            #
+            # This is a business call, not a structural one, and it may not hold up:
+            # if force-ready ever becomes a route for closing out items that were
+            # genuinely NOT finished (not just untimed), this will incorrectly
+            # consume fabric for work that didn't happen. Revisit if that surfaces —
+            # e.g. by adding an explicit opt-in flag on the force-ready request
+            # instead of inferring "done" from every forced close.
+            upholstery_events.extend(
+                await apply_upholstery_installation_side_effect(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    task_id=task.client_id,
+                    step=step,
+                    new_state=TaskStepStateEnum.COMPLETED,
+                    actor_id=ctx.user_id,
+                    now=now,
+                )
+            )
+
         # With at least one step, the final `_apply_step_transition` above already ran
         # the predicate and flipped the task. This call is what covers the stepless task,
         # and no-ops otherwise (it early-returns once the state is READY) — so both cases
@@ -254,6 +289,7 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
     pending_events.append(
         build_workspace_event(task, "task:state-changed", extra={"new_state": TaskStateEnum.READY.value})
     )
+    pending_events.extend(upholstery_events)
     await event_bus.dispatch(pending_events)
 
     return {
