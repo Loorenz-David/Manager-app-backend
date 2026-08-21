@@ -211,7 +211,24 @@ F-14) — see §4 task 4 for the internal half that *is* this phase's.
   **Scope: L4 (full suite)** — this is a coupling-discovery hypothesis about a bite set
   outside this phase's own test file, and a bite set can only be *bounded* by the full
   suite (charter L4 trigger (d)). The projection's L2 measurement above is a **floor,
-  not a ceiling**; treat any additional ID as a finding, not noise.
+  not a ceiling**.
+
+  **CORRECTED 2026-08-21 (coordinator, mid-round — this clause was wrong as written).**
+  It previously read "treat any additional ID as a finding, not noise." That instruction
+  mislabels the expected case, because **the bite set above was measured on a tree where
+  this phase's own rows did not yet exist.** C5's mutation and **C6b's named mutation are
+  literally the same edit** — both replace the reconstructed denominator with
+  `result.actual_worker_minutes` alone (compare this row with C6b) — so C6b *must* redden
+  under it, and C3 and C6a assert exact reconstructed literals, so they redden too unless
+  their literal happens to be `100.00`. That overlap is a property of the criteria as
+  written, derivable from this plan without running anything. The expected bite set is
+  therefore **two classes**:
+  1. the two legacy IDs in the table above (the goldens test and `test_c17`), and
+  2. this phase's own rows that assert the reconstruction — C3, C6a, C6b.
+
+  **A finding is an ID outside both classes.** An ID from class 2 is the criteria working.
+  Record the union as measured; do not remove a correct row to make a bite set match a
+  stale expectation.
   **One more trap in the instrument:** `test_prechange_payloads_match_byte_golden_files`
   is a **single** test function looping over all three goldens and asserting in sequence
   (verified at source — one test function in the file), so it short-circuits on the first
@@ -399,3 +416,20 @@ three-decimal inputs, and half-even boundaries such as `actual = 99.995` against
 `allowed = 100.00` — and holds at every one, so §4 task 1 could be downgraded from
 "verify it" to "cite it, and handle the boundary instead". (2) The `D`-namespace
 collision was one fold from shipping a third meaning of `D10`.
+
+**2026-08-21 — coordinator correction, mid-round (implement r1 in flight).** C5's scope
+clause instructed "treat any additional ID as a finding, not noise." Wrong as written,
+and wrong in a way this project has now seen eight times: **the expected bite set was
+measured by the projection on a tree where this phase's own rows did not exist.** C5's
+named mutation and **C6b's named mutation are the same edit** — both substitute
+`result.actual_worker_minutes` as the denominator — so C6b must redden under C5's probe,
+and C3/C6a assert exact reconstructed literals so they redden too. The overlap is
+derivable from this plan's own text without running anything, and **the coordinator
+wrote both rows in the same fold**. The implementer measured exactly this (two legacy IDs
+plus C3, C6a, C6b) and classified it correctly as necessary rather than anomalous, which
+is the right call; the criterion is now corrected to say so, in two classes, with the
+finding condition narrowed to an ID outside both. Eighth instance of the
+class-inside-its-own-correction shape and the coordinator's fourth.
+
+**Not a licence to relax the row:** C5 stays at L4 and stays per-site. Its two site
+observations are what bound the set; the correction only fixes what counts as a surprise.
