@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable, Sequence
+from typing import Any
+
+from beyo_manager.errors.external_service import (
+    ShopifyGraphQLNonRetryableError,
+    ShopifyGraphQLRetryableError,
+)
 from beyo_manager.services.infra.shopify.graphql_client import (
     execute_shopify_graphql,
     quote_shopify_search_term,
@@ -8,6 +16,13 @@ from beyo_manager.services.infra.shopify.graphql_client import (
 
 IdentityType = str
 _VARIANTS_FIRST = 10
+
+# Batched barcode pricing lookup: one search request covers many barcodes.
+BARCODE_LOOKUP_PAGE_SIZE = 250
+_BARCODE_LOOKUP_MAX_PAGES = 20
+_MAX_ATTEMPTS = 5
+_RETRY_BASE_SECONDS = 1.0
+_RETRY_MAX_SECONDS = 30.0
 
 FIND_PRODUCT_VARIANTS_BY_IDENTITY_QUERY = """
 query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
@@ -25,6 +40,30 @@ query FindProductVariantsByIdentity($searchQuery: String!, $first: Int!) {
           id
         }
       }
+    }
+  }
+}
+"""
+
+FIND_PRODUCT_VARIANT_PRICING_BY_BARCODE_QUERY = """
+query FindProductVariantPricingByBarcode($searchQuery: String!, $first: Int!, $after: String) {
+  productVariants(first: $first, query: $searchQuery, after: $after) {
+    edges {
+      node {
+        id
+        sku
+        barcode
+        price
+        product {
+          id
+          title
+          status
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
     }
   }
 }
@@ -184,6 +223,122 @@ async def find_product_variant_by_identity(
         identity_type="barcode",
         identity_value=barcode,
     )
+
+
+def group_variants_by_barcode(
+    variant_nodes: Sequence[dict],
+    barcodes: Sequence[str],
+) -> dict[str, list[dict]]:
+    """Bucket variant nodes under the requested barcode they exactly match.
+
+    Shopify's search is fuzzy, so a batched lookup returns nodes for barcodes
+    nobody asked about and near-misses of the ones we did. Every requested
+    barcode gets a key: an empty list means "no exact match", which is what
+    keeps a batched lookup indistinguishable from N single lookups.
+    """
+    buckets: dict[str, list[dict]] = {}
+    for barcode in barcodes:
+        cleaned = _clean_str(barcode)
+        if cleaned is not None:
+            buckets.setdefault(cleaned, [])
+    for node in variant_nodes:
+        cleaned = _clean_str((node or {}).get("barcode"))
+        if cleaned is not None and cleaned in buckets:
+            buckets[cleaned].append(node)
+    return buckets
+
+
+async def find_product_variant_pricing_by_barcodes(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    barcodes: Sequence[str],
+) -> dict[str, list[dict]]:
+    """Look up listing prices for many barcodes in one search request.
+
+    Returns a bucket per requested barcode. Paginates until the connection is
+    exhausted so a barcode can never be reported missing merely because its
+    match fell beyond the first page, and retries throttled/transient failures
+    with exponential backoff.
+    """
+    unique_barcodes = list(
+        dict.fromkeys(
+            cleaned for cleaned in (_clean_str(barcode) for barcode in barcodes) if cleaned is not None
+        )
+    )
+    if not unique_barcodes:
+        return {}
+
+    search_query = " OR ".join(
+        f"barcode:{quote_shopify_search_term(barcode)}" for barcode in unique_barcodes
+    )
+    nodes: list[dict] = []
+    after: str | None = None
+    for page in range(1, _BARCODE_LOOKUP_MAX_PAGES + 1):
+        variables = {
+            "searchQuery": search_query,
+            "first": BARCODE_LOOKUP_PAGE_SIZE,
+            "after": after,
+        }
+        data = await _call_with_retry(
+            lambda variables=variables: execute_shopify_graphql(
+                shop_domain=shop_domain,
+                access_token_encrypted=access_token_encrypted,
+                query=FIND_PRODUCT_VARIANT_PRICING_BY_BARCODE_QUERY,
+                variables=variables,
+                operation_name="find_product_variant_pricing_by_barcodes",
+            ),
+            operation_name="find_product_variant_pricing_by_barcodes",
+        )
+        connection = data.get("productVariants") or {}
+        edges = connection.get("edges") or []
+        nodes.extend(((edge or {}).get("node") or {}) for edge in edges)
+        page_info = connection.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            break
+        after = _clean_str(page_info.get("endCursor"))
+        if after is None:
+            break
+        if page == _BARCODE_LOOKUP_MAX_PAGES:
+            # Truncating here would report exact matches as missing, so fail
+            # loudly and let the caller fall back to per-barcode lookups.
+            raise ShopifyGraphQLNonRetryableError(
+                "Shopify barcode lookup exceeded the page budget.",
+                error_code="barcode_lookup_page_budget_exceeded",
+            )
+
+    return group_variants_by_barcode(nodes, unique_barcodes)
+
+
+async def find_product_variant_pricing_by_barcode(
+    *,
+    shop_domain: str,
+    access_token_encrypted: str,
+    barcode: str,
+) -> list[dict]:
+    """Return variants whose barcode matches exactly, with their listing price."""
+    buckets = await find_product_variant_pricing_by_barcodes(
+        shop_domain=shop_domain,
+        access_token_encrypted=access_token_encrypted,
+        barcodes=[barcode],
+    )
+    cleaned = _clean_str(barcode)
+    return buckets.get(cleaned, []) if cleaned is not None else []
+
+
+async def _call_with_retry(
+    operation: Callable[[], Awaitable[Any]],
+    *,
+    operation_name: str,
+) -> Any:
+    del operation_name  # kept in the helper contract for call-site observability/debugging
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            return await operation()
+        except ShopifyGraphQLRetryableError:
+            if attempt == _MAX_ATTEMPTS:
+                raise
+            await asyncio.sleep(min(_RETRY_BASE_SECONDS * (2 ** (attempt - 1)), _RETRY_MAX_SECONDS))
 
 
 async def create_shopify_product(
