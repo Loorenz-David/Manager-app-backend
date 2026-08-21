@@ -115,7 +115,7 @@ Run from `backend/app/`. `PYTHONPATH=.` is required.
 | full suite, reversed collection | `BEYO_TEST_COLLECTION_ORDER=reverse PYTHONPATH=. pytest -m 'not e2e'` |
 | collection size only | `PYTHONPATH=. pytest -m 'not e2e' --collect-only -q` |
 | isolation criterion module | `PYTHONPATH=. pytest -q tests/integration/infrastructure/test_database_isolation.py` |
-| one-time legacy reclamation | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e'` |
+| one-time legacy reclamation (serial-only; do not combine with xdist) | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e'` |
 
 Machine: **14 cores** (`hw.ncpu` = `hw.physicalcpu` = 14). Runner: pytest 8.3.5,
 `asyncio_mode = auto`, **two** registered third-party plugins — `pytest-asyncio-0.25.3` **and
@@ -124,8 +124,8 @@ inherited from phase 1's inspection and never re-checked. Phase 3's task 2 argue
 plugin changes collection and reporting, so the inventory it reasons from has to be true.)*
 **No randomizer is installed** — a
 `-p no:randomly` in any inherited command is disabling a plugin that does not exist.
-`pytest-xdist` is **not installed** as of phase 2's approval; installing it is phase 3's first
-code change.
+`pytest-xdist==3.6.1` is now pinned in the development manifest for phase 3; no `-n` or
+`--dist` default is shipped, so bare pytest remains the serial comparator and default.
 
 ### 6.2 Database topology
 
@@ -191,6 +191,11 @@ a test holds one or two connections, not forty. The ceiling is a risk under load
 certainty. **Any worker-count decision states the connection budget it checked and records the
 `pg_stat_activity` peak it observed** (phase 3, L15).
 
+Phase 3 measured total `pg_stat_activity` peaks while running the full suite with the completed
+criterion module and the monitor's own connection included: `-n 2` = 21, `-n 4` = 23, and
+`-n 6` = 25. All are below the server ceiling; `-n 6` is retained as an evidence row, not as the
+default, because the parallel failure-ID set is not equal to the serial set.
+
 ### 6.4 Redis
 
 Not a hard dependency, deliberately. `isolated_redis_prefix` is session-scoped **autouse** and
@@ -203,11 +208,11 @@ a function of Redis availability.
 
 ### 6.5 Schema constants — and the time bomb
 
-`database_isolation.py` hardcodes `EXPECTED_HEAD = "c1d2e3f4a5b6"` and
-`EXPECTED_PUBLIC_TABLE_COUNT = 107`. **The next Alembic revision makes `_ensure_template` rebuild
-and `_migrate_and_assert` then raise `RuntimeError`, wedging the suite until a human edits the
-file.** Known, carried to phase 3, deliberately not fixed inside phase 2's fence
-(review r3 N4).
+`database_isolation.py` derives the Alembic head from the migration scripts and asserts a required
+table set after migration. The template's total public-table count is observed for diagnostics and
+disposability checks, but is not a schema contract; migration-owned journal tables are deliberately
+outside ORM metadata. A temporary new revision therefore invalidates the template by head and is
+reconciled without editing a constant. This is the phase-3 resolution of the carried N4 time bomb.
 
 ### 6.6 Collection order
 
@@ -252,6 +257,7 @@ half; compare against it, never the count.
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
+| **3** | 2026-08-21 | closing checkpoint recorded in the implementer handoff, clean | **serial closing runs: 21 failed / 2573 passed / 1 deselected** in 139.96 s and 141.62 s; parallel evidence: `-n 2` = 21/2573 on one run and 22/2572 on the re-measurement, `-n 4` and `-n 6` = 22/2572 | **serial 21-ID set** from phase 2; parallel adds `tests/integration/services/queries/app_update_presentations/test_get_active_presentation_integration.py::test_selected_users_only_targeting`, so it is not absorbed |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 

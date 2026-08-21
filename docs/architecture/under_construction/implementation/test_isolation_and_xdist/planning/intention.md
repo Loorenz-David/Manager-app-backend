@@ -587,3 +587,38 @@ asserts "7 preserved references" against seven rows its own fixture inserted fou
 Rewrite both against production behaviour — soft-delete a fixture row and assert it vanishes from
 the picker — restoring coverage of a live worker-facing screen. Deleting them was the alternative
 and loses that coverage entirely.
+
+## 6. Phase 3 delivery record — implementation evidence
+
+Phase 3 selected fixed, bounded, per-process databases copied from a migrated template. The
+template is protected by a per-slot PostgreSQL advisory lock across inspection, rebuild, worker
+drop, and copy. The shipped default remains serial because the parallel suite has one additional,
+repeatable `app_update_presentations` failure at `-n 4` and `-n 6`; it is reported separately from
+the serial authority rather than absorbed into it.
+
+| condition | wall time | databases used during the run | persistent residue | failures / workers |
+|---|---:|---|---|---|
+| before, phase 2 approved | 116.20 s | `beyo_test_main_template`, `beyo_test_main` | template only | 21 / serial |
+| after, serial closing | 139.96 s and 141.62 s | `beyo_test_main_template`, `beyo_test_main` | template only | 21 / serial |
+| after, `-n 2` | 71.90 s | template plus `gw0`, `gw1` | template only | 21 / 2 workers |
+| after, `-n 4` | 52.08–52.38 s | template plus `gw0`–`gw3` | template only | 22 / 4 workers |
+| after, `-n 6` | 48.78 s | template plus `gw0`–`gw5` | template only | 22 / 6 workers |
+
+The authoritative serial failure-ID set is the phase-2 21-ID set; the only parallel-only addition
+is the `app_update_presentations::test_selected_users_only_targeting` ID named in the master-plan
+baseline. The phase-3 handoff carries the exact closing wall time, tree identity, residue query,
+and complete ID enumeration.
+
+```text
+pytest process (serial: main; xdist: gwN)
+  -> resolve slot + worker name
+  -> acquire advisory lock for beyo_test_<slot>_template
+  -> inspect template (marker, derived Alembic head, required tables)
+  -> create/rebuild marked template when stale or absent
+  -> drop stale beyo_test_<slot>_<worker> if present
+  -> CREATE DATABASE worker TEMPLATE template
+  -> redirect settings.database_url and use a per-process Redis prefix
+  -> run tests
+  -> dispose pools, terminate stragglers, DROP worker database
+  -> release advisory lock; retain only the bounded template
+```

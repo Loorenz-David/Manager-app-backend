@@ -129,7 +129,7 @@ async def test_reassigned_list_and_count_agree_and_include_acknowledged_rows(db_
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("state", list(TERMINAL_STEP_STATES))
+@pytest.mark.parametrize("state", sorted(TERMINAL_STEP_STATES, key=lambda state: state.value))
 async def test_reassigned_list_excludes_terminal_steps(db_session, state):
     workspace, worker, _, _, _, _ = await _seed(db_session, state=state)
     result = await list_reassigned_steps(_ctx(db_session, workspace.client_id, worker.client_id, limit=50, offset=0, q=None, string_filters=None, unacknowledged_only="false"))

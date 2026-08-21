@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
+from uuid import uuid4
+
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
@@ -13,13 +19,14 @@ from beyo_manager.services.infra.redis.keys import make_key
 from tests.conftest import pytest_collection_modifyitems
 from tests.database_isolation import (
     EXPECTED_HEAD,
-    EXPECTED_PUBLIC_TABLE_COUNT,
     LEGACY_RECLAIM_ENV,
+    REQUIRED_PUBLIC_TABLES,
     MARKER_SCHEMA,
     DatabaseIsolation,
     UnsafeDatabaseError,
     _connect,
     assert_disposable_database,
+    migration_head_revision,
     resolve_template_database_name,
     resolve_test_slot,
     resolve_worker_database_name,
@@ -31,21 +38,25 @@ async def assert_test_database_membership_is_reclaimed(
     isolated_database: DatabaseIsolation,
 ):
     """Require this criterion module to reclaim every disposable database it creates."""
-    before = {
-        name
-        for name in await isolated_database.database_names()
-        if name.startswith("beyo_test_")
+    owned_names = {
+        isolated_database.template_database_name,
+        isolated_database.worker_database_name,
     }
-    yield
-    after = {
-        name
-        for name in await isolated_database.database_names()
-        if name.startswith("beyo_test_")
-    }
-    assert after == before, (
-        "criterion module changed beyo_test_* database membership: "
-        f"before={sorted(before)}, after={sorted(after)}"
-    )
+    before = set(await isolated_database.database_names()) & owned_names
+    sibling = DatabaseIsolation(settings.database_url, worker_id="gw990")
+    await sibling.start()
+    try:
+        yield
+    finally:
+        after = set(await isolated_database.database_names()) & owned_names
+        try:
+            assert after == before, (
+                "criterion module changed this worker's database membership: "
+                f"before={sorted(before)}, after={sorted(after)}"
+            )
+        finally:
+            if sibling._started:
+                await sibling.stop()
 
 
 @pytest.mark.parametrize(
@@ -64,6 +75,7 @@ def test_worker_name_resolution(
     expected: str,
 ) -> None:
     monkeypatch.delenv("BEYO_TEST_SLOT", raising=False)
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
     assert resolve_worker_database_name(worker_id, slot=slot) == expected
 
     monkeypatch.setattr(settings, "test_slot", "shopify")
@@ -82,6 +94,11 @@ def test_worker_name_resolution_rejects_unknown_worker() -> None:
         resolve_worker_database_name("worker-1")
 
 
+def test_worker_name_resolution_uses_xdist_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw17")
+    assert resolve_worker_database_name() == "beyo_test_main_gw17"
+
+
 @pytest.mark.parametrize("slot", ["Alpha", "al pha", "alpha_beta", "", "a" * 13])
 def test_slot_resolution_rejects_invalid_values(slot: str) -> None:
     with pytest.raises(UnsafeDatabaseError):
@@ -93,6 +110,20 @@ def test_collection_order_hook_is_off_by_default(monkeypatch: pytest.MonkeyPatch
     items = ["first", "second", "third"]
     pytest_collection_modifyitems(None, items)
     assert items == ["first", "second", "third"]
+
+
+def test_collection_probe_hook_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BEYO_TEST_COLLECTION_PROBE", raising=False)
+    items = ["regular", "phase3-probe"]
+    pytest_collection_modifyitems(None, items)
+    assert items == ["regular", "phase3-probe"]
+
+
+def test_collection_probe_hook_accepts_explicit_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BEYO_TEST_COLLECTION_PROBE", "off")
+    items = ["regular", "phase3-probe"]
+    pytest_collection_modifyitems(None, items)
+    assert items == ["regular", "phase3-probe"]
 
 
 def test_collection_order_hook_reverses_once_and_rejects_unknown_values(
@@ -241,17 +272,172 @@ def test_unmarked_empty_database_is_allowed_but_populated_one_is_not() -> None:
             )
 
 
+@pytest.mark.parametrize(
+    ("configured_host", "target_host"),
+    [
+        ("localhost", "LOCALHOST"),
+        ("localhost", "::1"),
+        ("127.0.0.1", "0.0.0.0"),
+        ("localhost", "localhost."),
+    ],
+)
+def test_endpoint_aliases_are_confined_to_same_server(
+    configured_host: str,
+    target_host: str,
+) -> None:
+    configured = f"postgresql+asyncpg://postgres:postgres@{configured_host}:5433/beyo_manager"
+    target_host_part = f"[{target_host}]" if ":" in target_host else target_host
+    target = (
+        "postgresql+asyncpg://postgres:postgres@"
+        f"{target_host_part}:5433/beyo_test_main_gw0"
+    )
+    assert_disposable_database(
+        "beyo_test_main_gw0",
+        configured,
+        target_database_url=target,
+        marker_present=True,
+    )
+
+
+def test_endpoint_with_different_host_is_still_refused() -> None:
+    with pytest.raises(UnsafeDatabaseError):
+        assert_disposable_database(
+            "beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager",
+            target_database_url=(
+                "postgresql+asyncpg://postgres:postgres@other-host:5433/"
+                "beyo_test_main_gw0"
+            ),
+            marker_present=True,
+        )
+
+
+async def _remove_probe_databases(probe: DatabaseIsolation) -> None:
+    for database_name in (probe.worker_database_name, probe.template_database_name):
+        if await probe._database_exists(database_name):
+            if not await probe._marker_present(database_name):
+                inspection = await probe.inspect(database_name)
+                assert inspection.public_table_count == 0
+            await probe._drop_database_if_exists(database_name)
+
+
+async def _assert_concurrent_starts_succeed(probes: list[DatabaseIsolation]) -> None:
+    results = await asyncio.gather(*(probe.start() for probe in probes), return_exceptions=True)
+    assert results == [None] * len(probes), results
+    assert len({probe.worker_database_name for probe in probes}) == len(probes)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_starts_survive_absent_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BEYO_TEST_SLOT", "p3absent")
+    probes = [
+        DatabaseIsolation(settings.database_url, worker_id="gw900"),
+        DatabaseIsolation(settings.database_url, worker_id="gw901"),
+    ]
+    await _remove_probe_databases(probes[0])
+    try:
+        await _assert_concurrent_starts_succeed(probes)
+    finally:
+        for probe in probes:
+            if probe._started:
+                await probe.stop()
+        await _remove_probe_databases(probes[0])
+
+
+@pytest.mark.asyncio
+async def test_concurrent_starts_survive_stale_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BEYO_TEST_SLOT", "p3stale")
+    seed = DatabaseIsolation(settings.database_url, worker_id="gw902")
+    probes = [
+        DatabaseIsolation(settings.database_url, worker_id="gw903"),
+        DatabaseIsolation(settings.database_url, worker_id="gw904"),
+    ]
+    await _remove_probe_databases(seed)
+    try:
+        await seed.start()
+        await seed.stop()
+        connection = await _connect(seed._url, seed.template_database_name)
+        try:
+            await connection.execute("UPDATE alembic_version SET version_num = 'stale'")
+        finally:
+            await connection.close()
+        await _assert_concurrent_starts_succeed(probes)
+    finally:
+        for probe in [seed, *probes]:
+            if probe._started:
+                await probe.stop()
+        await _remove_probe_databases(seed)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_starts_survive_current_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BEYO_TEST_SLOT", "p3current")
+    seed = DatabaseIsolation(settings.database_url, worker_id="gw905")
+    probes = [
+        DatabaseIsolation(settings.database_url, worker_id="gw906"),
+        DatabaseIsolation(settings.database_url, worker_id="gw907"),
+    ]
+    await _remove_probe_databases(seed)
+    try:
+        await seed.start()
+        await seed.stop()
+        await _assert_concurrent_starts_succeed(probes)
+    finally:
+        for probe in [seed, *probes]:
+            if probe._started:
+                await probe.stop()
+        await _remove_probe_databases(seed)
+
+
+@pytest.mark.asyncio
+async def test_new_migration_rebuilds_template_without_pinned_schema_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app_root = Path(__file__).resolve().parents[3]
+    versions_dir = app_root / "migrations" / "versions"
+    previous_head = migration_head_revision(app_root)
+    revision_id = f"p3c6{uuid4().hex[:10]}"
+    revision_file = versions_dir / "phase3_c6_temporary_revision.py"
+    assert not revision_file.exists()
+    revision_file.write_text(
+        "revision = %r\n"
+        "down_revision = %r\n"
+        "branch_labels = None\n"
+        "depends_on = None\n\n"
+        "def upgrade():\n    pass\n\n"
+        "def downgrade():\n    pass\n"
+        % (revision_id, previous_head)
+    )
+    monkeypatch.setenv("BEYO_TEST_SLOT", "p3c6")
+    probe = DatabaseIsolation(settings.database_url, worker_id="gw908")
+    try:
+        heads = ScriptDirectory.from_config(Config(str(app_root / "alembic.ini"))).get_heads()
+        assert heads == [revision_id]
+        await probe.start()
+        inspection = await probe.inspect(probe.template_database_name)
+        assert inspection.head_revision == revision_id
+        assert REQUIRED_PUBLIC_TABLES <= await probe.public_table_names(
+            probe.template_database_name
+        )
+    finally:
+        if probe._started:
+            await probe.stop()
+        await _remove_probe_databases(probe)
+        revision_file.unlink(missing_ok=True)
+
+
 @pytest.mark.asyncio
 async def test_template_has_migrated_head_and_full_schema(isolated_database: DatabaseIsolation) -> None:
     inspection = await isolated_database.inspect(isolated_database.template_database_name)
     assert inspection.head_revision == EXPECTED_HEAD
-    assert inspection.public_table_count == EXPECTED_PUBLIC_TABLE_COUNT
     assert inspection.marker_present
-    assert {
-        "cost_model_versions",
-        "item_cost_results",
-        "step_state_records",
-    } <= await isolated_database.public_table_names(
+    assert REQUIRED_PUBLIC_TABLES <= await isolated_database.public_table_names(
         isolated_database.template_database_name
     )
 
@@ -261,7 +447,9 @@ async def test_worker_is_a_faithful_template_copy(isolated_database: DatabaseIso
     template = await isolated_database.inspect(isolated_database.template_database_name)
     worker = await isolated_database.inspect(isolated_database.worker_database_name)
     assert worker.head_revision == template.head_revision == EXPECTED_HEAD
-    assert worker.public_table_count == template.public_table_count == EXPECTED_PUBLIC_TABLE_COUNT
+    assert REQUIRED_PUBLIC_TABLES <= await isolated_database.public_table_names(
+        isolated_database.worker_database_name
+    )
     assert worker.marker_present
 
 
@@ -322,16 +510,21 @@ async def test_fixed_name_reabsorbs_an_interrupted_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     probe = DatabaseIsolation(settings.database_url, worker_id="gw999")
-    before = set(await probe.database_names())
+    owned_worker_names = {probe.worker_database_name}
+    before = set(await probe.database_names()) & owned_worker_names
     legacy_name = "beyo_test_gw999"
     other_slot_name = "beyo_test_alpha_main"
     try:
         await probe._create_database_from_template(probe.worker_database_name)
         if mark_leftover:
             await probe._set_marker(probe.worker_database_name)
-        assert set(await probe.database_names()) == before | {probe.worker_database_name}
+        assert set(await probe.database_names()) & owned_worker_names == (
+            before | {probe.worker_database_name}
+        )
         await probe.start()
-        assert set(await probe.database_names()) == before | {probe.worker_database_name}
+        assert set(await probe.database_names()) & owned_worker_names == (
+            before | {probe.worker_database_name}
+        )
 
         for database_name in (legacy_name, other_slot_name):
             if await probe._database_exists(database_name):
@@ -360,7 +553,7 @@ async def test_fixed_name_reabsorbs_an_interrupted_worker(
                 if not await probe._marker_present(database_name):
                     await probe._set_marker(database_name)
                 await probe._drop_database_if_exists(database_name)
-    assert set(await probe.database_names()) == before
+    assert set(await probe.database_names()) & owned_worker_names == before
 
 
 @pytest.mark.asyncio

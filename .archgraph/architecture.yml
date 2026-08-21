@@ -5262,6 +5262,32 @@ nodes:
     confidence: 0.95
     createdAt: 2026-08-21T19:06:32.727Z
     updatedAt: 2026-08-21T19:07:04.596Z
+  - id: infrastructure-template-copy-contention-lock
+    type: infrastructure
+    name: Per-slot template-copy advisory lock
+    description: Serializes template inspection, rebuild, worker-database drop, and
+      template copy for each test slot, so concurrent pytest-xdist processes
+      cannot both rebuild or copy the same PostgreSQL template unsafely.
+    tags:
+      - test-isolation
+      - postgresql
+      - pytest-xdist
+    metadata:
+      evidence:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._template_operation_lock
+          startLine: 344
+          endLine: 359
+          summary: The async context manager holds a PostgreSQL advisory lock keyed by the
+            slot's template database name across template ensure, worker drop,
+            and worker creation, and releases it after the protected region.
+          inferenceReason: The lock's scope covers the full template lifecycle and worker
+            copy, which is the architectural mechanism that makes same-slot
+            concurrent worker starts safe.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-21T21:18:27.881Z
+    updatedAt: 2026-08-21T21:18:27.881Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10257,3 +10283,23 @@ edges:
     confidence: 0.92
     createdAt: 2026-08-21T19:06:32.727Z
     updatedAt: 2026-08-21T19:07:04.596Z
+  - sourceNodeId: infrastructure-test-database-isolation
+    relationshipType: contains
+    targetNodeId: infrastructure-template-copy-contention-lock
+    description: The per-slot lock is a contained mechanism of the per-process test
+      database isolation lifecycle.
+    metadata:
+      evidence:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 197
+          endLine: 209
+          summary: DatabaseIsolation.start invokes the protected template and worker-copy
+            region as one lifecycle step.
+          inferenceReason: The start method establishes that the advisory-lock mechanism
+            is part of the existing isolation lifecycle rather than an unrelated
+            utility.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-21T21:18:27.881Z
+    updatedAt: 2026-08-21T21:18:27.881Z

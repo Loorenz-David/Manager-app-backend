@@ -92,6 +92,28 @@ def isolated_redis_prefix() -> Generator[str, None, None]:
 
 
 def pytest_collection_modifyitems(config, items) -> None:
+    def probe_marker(item):
+        marker_lookup = getattr(item, "get_closest_marker", None)
+        return marker_lookup(probe_marker_name) if marker_lookup else None
+
+    probe_mode = os.getenv("BEYO_TEST_COLLECTION_PROBE")
+    probe_marker_name = "phase3_collection_probe"
+    if probe_mode is None or probe_mode == "off":
+        items[:] = [item for item in items if probe_marker(item) is None]
+    elif probe_mode not in {"prefix", "middle", "suffix"}:
+        raise pytest.UsageError(
+            "BEYO_TEST_COLLECTION_PROBE must be unset, 'off', or set to 'prefix', 'middle', or 'suffix'"
+        )
+    else:
+        items[:] = [
+            item
+            for item in items
+            if (
+                (marker := probe_marker(item)) is None
+                or marker.kwargs.get("position") == probe_mode
+            )
+        ]
+
     order = os.getenv("BEYO_TEST_COLLECTION_ORDER")
     if order is None:
         return

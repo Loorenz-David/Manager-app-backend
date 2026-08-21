@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 import re
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import asyncpg
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy.engine import URL, make_url
 
 from beyo_manager.config import settings
@@ -25,8 +29,24 @@ DEFAULT_TEST_SLOT = "main"
 MARKER_SCHEMA = "beyo_test_metadata"
 MARKER_TABLE = "database_marker"
 MARKER_KEY = "test_database_v1"
-EXPECTED_HEAD = "c1d2e3f4a5b6"
-EXPECTED_PUBLIC_TABLE_COUNT = 107
+REQUIRED_PUBLIC_TABLES = frozenset(
+    {"cost_model_versions", "item_cost_results", "step_state_records"}
+)
+
+
+def migration_head_revision(app_root: Path | None = None) -> str:
+    """Read the single Alembic head from the migration scripts."""
+    root = app_root or Path(__file__).resolve().parents[1]
+    script_directory = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+    heads = script_directory.get_heads()
+    if len(heads) != 1:
+        raise RuntimeError(f"Expected one migration head, found {heads!r}")
+    return heads[0]
+
+
+# Kept as a compatibility export for existing criterion assertions. Runtime
+# decisions derive the value again so a new migration is observed immediately.
+EXPECTED_HEAD = migration_head_revision()
 
 
 class UnsafeDatabaseError(RuntimeError):
@@ -74,7 +94,17 @@ def _parse_database_url(database_url: str | None) -> URL:
 
 
 def _normalised_endpoint(url: URL) -> tuple[str, int]:
-    host = "127.0.0.1" if url.host == "localhost" else url.host
+    host = (url.host or "").rstrip(".").lower()
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if host in {"localhost", "localhost.localdomain", "ip6-localhost"}:
+            host = "127.0.0.1"
+    else:
+        if address.is_loopback or address.is_unspecified:
+            host = "127.0.0.1"
+        else:
+            host = address.compressed
     return host, url.port or 5432
 
 
@@ -172,10 +202,10 @@ class DatabaseIsolation:
                 )
             if os.getenv(LEGACY_RECLAIM_ENV) == "1":
                 await self._sweep_legacy_databases()
-            await self._ensure_template()
-            await self._drop_database_if_exists(self.worker_database_name)
-            await self._create_database_from_template(self.worker_database_name)
-            await self._set_marker(self.worker_database_name)
+            async with self._template_operation_lock():
+                await self._ensure_template()
+                await self._drop_database_if_exists(self.worker_database_name)
+                await self._create_database_from_template(self.worker_database_name)
             self._started = True
         except (Exception, KeyboardInterrupt):
             try:
@@ -311,8 +341,26 @@ class DatabaseIsolation:
             if LEGACY_TEST_DATABASE_PATTERN.fullmatch(database_name):
                 await self._drop_database_if_exists(database_name)
 
+    @asynccontextmanager
+    async def _template_operation_lock(self):
+        """Serialize template inspection, rebuild, and worker copying per slot."""
+        connection = await self._maintenance_connection()
+        try:
+            await connection.fetchval(
+                "SELECT pg_advisory_lock(hashtextextended($1, 0))",
+                self.template_database_name,
+            )
+            yield
+        finally:
+            await connection.fetchval(
+                "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+                self.template_database_name,
+            )
+            await connection.close()
+
     async def _ensure_template(self) -> None:
         template_name = self.template_database_name
+        expected_head = migration_head_revision(self._app_root)
         if not await self._database_exists(template_name):
             await self._create_database(template_name)
             await self._set_marker(template_name)
@@ -331,8 +379,8 @@ class DatabaseIsolation:
                 f"Existing {template_name} lacks the disposable marker; refusing to replace it"
             )
         if (
-            inspection.head_revision == EXPECTED_HEAD
-            and inspection.public_table_count == EXPECTED_PUBLIC_TABLE_COUNT
+            inspection.head_revision == expected_head
+            and REQUIRED_PUBLIC_TABLES <= await self.public_table_names(template_name)
             and not await self._has_legacy_baseline_source(template_name)
         ):
             return
@@ -382,7 +430,6 @@ class DatabaseIsolation:
             )
 
         inspection = await self.inspect(database_name)
-        required_tables = {"cost_model_versions", "item_cost_results", "step_state_records"}
         connection = await _connect(self._url, database_name)
         try:
             table_rows = await connection.fetch(
@@ -395,17 +442,13 @@ class DatabaseIsolation:
         finally:
             await connection.close()
         table_names = {row["table_name"] for row in table_rows}
-        if inspection.head_revision != EXPECTED_HEAD:
+        expected_head = migration_head_revision(self._app_root)
+        if inspection.head_revision != expected_head:
             raise RuntimeError(
                 f"Migration DDL assertion failed for {database_name}: "
-                f"expected head {EXPECTED_HEAD}, got {inspection.head_revision!r}"
+                f"expected head {expected_head}, got {inspection.head_revision!r}"
             )
-        if inspection.public_table_count != EXPECTED_PUBLIC_TABLE_COUNT:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: expected "
-                f"{EXPECTED_PUBLIC_TABLE_COUNT} public tables, got {inspection.public_table_count}"
-            )
-        missing_tables = required_tables - table_names
+        missing_tables = REQUIRED_PUBLIC_TABLES - table_names
         if missing_tables:
             raise RuntimeError(
                 f"Migration DDL assertion failed for {database_name}: missing {sorted(missing_tables)}"

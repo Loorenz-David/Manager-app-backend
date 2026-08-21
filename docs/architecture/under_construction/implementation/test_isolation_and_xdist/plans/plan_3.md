@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: PROMPT_READY — 2026-08-21 (projection r0 consumed, 25 rows routed, OD-8/OD-9 answered; implement r1 authored)
+state: IMPLEMENTED — 2026-08-21 (Codex; 21 failed / 2573 passed / 1 deselected on the serial closing run; parallel-only app-update instability published)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -450,3 +450,63 @@ The gate found them before an implementer built on either.
 *"the boundary holds, but only if card 1 is answered before the session starts"* — is right, and
 OD-8 now maps every outcome of task 1 to an action, converting a phase-splitting question into a
 branch the implementer can execute.
+
+### 2026-08-21 — implement r1 (Codex). Verdict: IMPLEMENTED
+
+Implementation is complete within the phase perimeter. The infrastructure now uses a PostgreSQL
+advisory lock keyed by the slot template across the entire ensure/rebuild/drop/copy region; derives
+the Alembic head at runtime; asserts required migrated tables instead of a pinned public-table
+count; resolves xdist worker names from `PYTEST_XDIST_WORKER`; and keeps Redis keys process-scoped.
+The criterion module observes worker-local names, sibling disjointness, bounded cleanup, all three
+template contention paths, endpoint aliases, and new-migration rebuilds. A collection-neutral,
+DB+Redis-touching perturbation harness is disabled by default and enabled only through the named
+environment switch.
+
+#### Delegations and judgments
+
+| delegation | decision | reason |
+|---|---|---|
+| positional axis / harness | file-level path order; three marked modules at `tests/connecteam`, `tests/integration`, and `tests/unit`, selected by `BEYO_TEST_COLLECTION_PROBE` | reproduces the mechanism-bearing DB+Redis rows while keeping every worker's collection identical; unset and `off` remove the probes |
+| `n` and positions | `n = 3`; `prefix`, `middle`, `suffix` | fixed before row 0, enough to exercise the three path positions under the repository's testpath order |
+| dependency manifest | development manifest pin `pytest-xdist==3.6.1` | xdist is a test-runner dependency; the existing owner change in `requirements.txt` was preserved and recorded in the handoff, while `requirements-dev.txt` is the development contract |
+| template contention | serialise with a PostgreSQL advisory lock | one lock covers inspection, rebuild, worker drop, and copy; retries would leave a race window and per-worker templates would defeat bounded slot topology |
+| legacy reclamation | serial-only command, documented in master-plan §6.1 | a global legacy sweep has cross-worker scope and is an opt-in maintenance action, not part of every worker's startup |
+| N3 endpoint normalisation | implement and test | fail-closed endpoint comparison remains safe while accepting equivalent loopback spellings (`LOCALHOST`, `::1`, `0.0.0.0`, and trailing-dot localhost) |
+
+#### Resource-class disposition
+
+| class | disposition | evidence / boundary |
+|---|---|---|
+| execution order | isolated | file-level probes and `loadfile`; the parallel-only failure is separately enumerated |
+| module/session mutable state | isolated | per-process worker database and Redis prefix; no shared mutable fixture was found |
+| shared filesystem state | isolated | the C6 migration file is unique, disposable, applied only to a probe database, and removed in `finally` |
+| fixed ports | not reached | this suite does not start a fixed-port service |
+| Redis | isolated | `isolated_redis_prefix` is process-scoped and teardown deletes only that prefix |
+| background workers | not reached | no external background worker is started by the phase matrix |
+| global caches | declared | no shared cache mutation was identified; cache behavior remains outside this phase's isolation guarantee |
+| environment mutation | isolated | worker/slot and probe switches are explicit; fixtures restore settings and monkeypatches |
+| timestamps | declared | timestamp-sensitive tests remain in the inherited suite and are not hidden or rewritten here |
+| unique constraints | isolated | each process has a fresh database; globally unique catalog fixtures use adopt-or-create where required |
+| processes outside pytest | declared | PostgreSQL and Redis are external services; destructive operations are guarded and the external residue query is recorded |
+
+#### Mutation evidence
+
+Every named mutation was applied locally and reverted after its red test:
+
+| criterion / mutation site | result |
+|---|---|
+| C2: remove `_template_operation_lock` | absent-template and stale-template contention rows failed with duplicate-database / missing-database errors; current-template row remained green |
+| C3(a): ignore `PYTEST_XDIST_WORKER` in resolver | worker observer failed because multiple workers resolved to the same `main` name |
+| C3(c): restore global membership assertion | live sibling probe caused teardown failure with the unexpected sibling database in the `after` set |
+| C6: pin `_migrate_and_assert` to stale `EXPECTED_HEAD` | temporary-revision rebuild failed with the new derived head, proving the dynamic-head criterion |
+| C7: restore literal-only localhost normalization | all four equivalent endpoint rows failed; the genuinely different-host refusal remained green |
+
+The collection perturbation rows 0, 0b, and the three declared positions retained the published
+21-ID set, so the unstable union is empty. The post-install serial comparator and the parallel
+matrix retain the same 21 serial IDs. `-n 4` and `-n 6` reproducibly add only
+`test_get_active_presentation_integration.py::test_selected_users_only_targeting`; it is not
+absorbed into the authoritative baseline, and the shipped default therefore remains serial.
+
+The phase budget is **11 L4 runs** (`n + 8` for `n = 3`): rows 0, 0b, 1–3, post-install serial,
+`-n 2`, `-n 4`, `-n 6`, closing serial, and the second closing serial. Targeted criteria and
+mutation probes are L1/L2 evidence outside that count.
