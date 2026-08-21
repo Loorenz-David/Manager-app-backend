@@ -451,3 +451,50 @@ C5's L4 per-site unions were the 26-ID baseline plus the golden and `test_c17` l
 IDs, plus this phase's C3/C6a/C6b rows; no IDs outside the two plan classes appeared.
 No Architecture Graph delta was warranted: the change rewires existing serializer
 feed sites and adds no new architectural boundary.
+
+**2026-08-21 — implement r1 consumed (coordinator).** Verified rather than read, and
+**this is the first consumption in the pipeline that cited a stamp instead of re-running
+it.** Tree identity checked cryptographically: the handoff declares the L4 stamp at
+`HEAD 88c8f5f` with dirty-diff digest `d2ca0320…`; the checkpoint `5b8329b` (parent
+`88c8f5f`) reproduces that digest **exactly** over `app/` + `docs/domains/`, which proves
+the shipped content is byte-identical to what was measured and that only coordination
+documents were added afterwards — precisely what the handoff claimed. Under the retired
+policy this would have cost a 2m47 re-run to learn less.
+
+**Perimeter: exact.** Ten declared items, ten files in `5b8329b`, no others. Tool-recorded
+state independently confirmed: `archgraph_status` returns revision `120c4c38…`,
+**byte-identical to the coordinator's own measurement taken before this session**, with
+9 pending / 2 stale unchanged — so the "no graph writes" claim is proven, not accepted.
+Lint claims verified by a different question than the one asked: ruff is clean on the five
+changed files **and** the repo-wide 136 errors are unchanged from the parent commit, so
+"introduces none" holds.
+
+**Arithmetic reconciles across every row.** 2479 + 7 new tests = 2486 passed. Every L4
+row totals 2512 collected (26+2486, 31+2481, 30+2482). The C5 site asymmetry is
+internally consistent and could not have been guessed: E-P reddens `test_c17` and E-B does
+not, because `test_c17` is a production-time test — and **neither reddens C1 or C2**,
+which is exactly right, since those sit on the `variance = 0.00` fixture where
+`actual` and `actual + variance` coincide and C5's mutation is inert by construction.
+A fabricated ledger does not have that property.
+
+**Criteria checked at assertion level, not by ID.** C4b lives inside `test_c1` (declared),
+but the two criteria have **independent assertions with exact literals** — final
+`100.00` / block byte-identity for C1, budget `120.00 → 170.00` for C4b — so each
+mutation trips its own. C6a and C6b are jointly complete: C6a (status `infeasible`
+asserted on **both** surfaces, frozen `15.00`) kills a status-based blanking
+implementation, C6b (frozen `15.00 + (−15.00) = 0.00` → `null`) kills a positive-fallback
+one, and neither fixture satisfies the other's predicate. C3 escapes §5B's degeneracy by
+setting `variance = 5.00` (allowance `25.00`, frozen `80.00`, re-commit `30.00`), and its
+`before` assertion is what discriminates frozen from live — worth noting because in its
+**after** state live and frozen coincide at `80.00`; nothing load-bearing rests on that
+coincidence today, and `after["budget"] == "80.00"` doubles as proof the re-commit was
+observable at all. The shipped doc corrections were read as claims: both now state the
+live/frozen split and the "null only when the reconstructed allowance is non-positive"
+rule, which matches intention §5.3A exactly.
+
+**Coordinator class sweep, not in the handoff:** `test_c17` is the **only** test in the
+repository asserting `final.percent == budget.percent` (grep over `tests/`), so the
+recorded-not-retargeted disposition covers the entire class rather than one instance.
+
+Review r1 prompt at `prompts/reviewer/2026-08-21_phase3_review_r1.md`; seven probes, with
+the settled ground above marked do-not-re-spend.
