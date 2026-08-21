@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 from sqlalchemy.engine import make_url
 
@@ -21,6 +19,28 @@ from tests.database_isolation import (
     resolve_test_slot,
     resolve_worker_database_name,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def assert_test_database_membership_is_reclaimed(
+    isolated_database: DatabaseIsolation,
+):
+    """Require this criterion module to reclaim every disposable database it creates."""
+    before = {
+        name
+        for name in await isolated_database.database_names()
+        if name.startswith("beyo_test_")
+    }
+    yield
+    after = {
+        name
+        for name in await isolated_database.database_names()
+        if name.startswith("beyo_test_")
+    }
+    assert after == before, (
+        "criterion module changed beyo_test_* database membership: "
+        f"before={sorted(before)}, after={sorted(after)}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -326,7 +346,7 @@ async def test_unmarked_template_shell_is_absorbed(
     isolated_database: DatabaseIsolation,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("BEYO_TEST_SLOT", f"s{uuid4().hex[:10]}")
+    monkeypatch.setenv("BEYO_TEST_SLOT", "phase2")
     probe = DatabaseIsolation(settings.database_url, worker_id="gw995")
     original_set_marker = probe._set_marker
 
