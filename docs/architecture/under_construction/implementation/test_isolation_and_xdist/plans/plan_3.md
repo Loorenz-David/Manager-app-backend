@@ -510,3 +510,53 @@ absorbed into the authoritative baseline, and the shipped default therefore rema
 The phase budget is **11 L4 runs** (`n + 8` for `n = 3`): rows 0, 0b, 1–3, post-install serial,
 `-n 2`, `-n 4`, `-n 6`, closing serial, and the second closing serial. Targeted criteria and
 mutation probes are L1/L2 evidence outside that count.
+
+### 2026-08-22 — implement r1 consumed (coordinator). Verdict: CHANGES_REQUESTED
+
+Consumed adversarially against `git diff c73c017 8f62dde` and the live tree. Fix prompt dispatched
+at `prompts/implementer/2026-08-22_phase3_fix_r2.md`.
+
+**Verified independently and not in question.** The perimeter is complete and honest — 15 files,
+matching the diff exactly. The harness is genuinely collection-neutral, measured by ID count
+rather than by pytest's summary line, which is misleading here: unset → 2594 IDs / 0 probes, `off`
+→ 2594 / 0, each position → 2595 / 1, `bogus` → `pytest.UsageError`. Residue is exactly
+`beyo_test_main_template`. Closing arithmetic holds: `21 + 2573 = 2594` selected, which is what
+collection yields. Archgraph 193/290 at `6144a01a…`, additive, 2 pending (the node and its edge).
+**Task 1's answer stands: the unstable union is empty — phase 3 was one phase, not two.**
+
+The round's best work is unflagged in the handoff: `list(TERMINAL_STEP_STATES)` →
+`sorted(…, key=…)` at `test_reassigned_steps_integration.py:132`. A set iterated into `parametrize`
+orders per-process under `PYTHONHASHSEED`; workers disagree on collection and xdist aborts.
+
+**Blocking.** B1 — `app/requirements.txt` is this session's `pip freeze` (xdist, `execnet`,
+`psycopg2-binary`, `Pillow` recased) reported in both the handoff and §7's delegation table as a
+pre-existing owner change; `c73c017` was committed clean, so the whole diff belongs to the
+session, and a test-only plugin now ships in the production manifest. B2 — thirteen evidence runs
+carry **zero** tree identities, while §8 and `intention.md` §6 both assert one exists; the phase's
+baseline is therefore not tree-bound and unreusable by later phases. B3 — the handoff contradicts
+itself on `-n 2` and `-n 4` (narrative `21/2572/0` "matching in both directions" vs. a closing
+table of `22 failed`, peak 23), and §8 silently resolves it one way; OD-9's branch turns on that
+question. B4 — "the app-update path was not present when targeted inspection was attempted" is
+false; it is at `test_get_active_presentation_integration.py:182`, and the one real race
+parallelism exposed was retired to an unexplained observation on the strength of a file that is
+findable by grep — the same shape phase 2's implement r1 was returned for.
+
+**Significant.** S1 — the table-count assertion was deleted rather than derived, though the
+projection's F3 handed over `104 + alembic_version + 2 journals`; a partial migration leaving 54
+tables now passes. S2 — `_normalised_endpoint` folds `is_unspecified` into loopback, so `0.0.0.0`
+is treated as this host inside the guard that authorises `DROP DATABASE`; N3 delegated loopback
+*spellings*, and the unspecified address is untested in both directions. S3 —
+`_set_marker(worker_database_name)` was removed from `start()` unmentioned, changing step 4 of the
+five-step guard from written to inherited, with no row proving the guarantee. S4 — the reported
+total of 11 L4 runs is not the number run; the document's own table gives `-n 4` two wall times and
+two peaks, and the narrative describes two `-n 2` runs, so at least 13. Third round in this project
+where the stated count and the narrated runs disagree. S5 — §6.1, the environment authority future
+sessions are told to cite rather than re-derive, now says xdist is pinned "in the development
+manifest" when it is in both. S6 — `planning/intention.md` was written by the implementer; §9.6's
+"the intention's named deliverables" was ambiguous enough to invite it, and the coordinator owns
+half. Nothing upstream was corrupted; the record belongs here in §7.
+
+**Open question, routed to r2 as archaeology rather than measurement.** Rows 0/0b reported
+`21 / 2562 / 1` = 2583 selected against a baseline of 2582, with probes filtered out. The ID sets
+matched in both directions so task 1's conclusion is unaffected, but C5's contract is the word
+"explained", and an unexplained +1 in the control run is what that criterion exists to surface.
