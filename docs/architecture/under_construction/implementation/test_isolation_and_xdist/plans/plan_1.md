@@ -1,9 +1,12 @@
 # Plan 1 — per-worker database isolation, proven serially
 
 ```
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 phase: 1
 date: 2026-08-21
+actor: claude-opus-5 (review r3)
+note: isolation machinery sound; the "nine tests" figure is an artifact of collection order
+      (B1) and the interrupted-run wedge defeats C8 (B2). Two owner cards open.
 depends_on: nothing. Gates live_clock_for_working_time_economics phase 4.
 scope_fence: pytest-xdist is NOT installed in this phase. Parallelism is phase 2.
 ```
@@ -341,3 +344,126 @@ can report a false green, but an evidence shape indistinguishable at a glance fr
 did nothing". The handoff states it honestly; a reviewer should confirm the reading. Same class
 as the C8 probe, which this round re-measured cleanly at the corrected site after disclosing that
 the earlier one "did not bite".
+
+### 2026-08-21 — review r3 (independent). Verdict: CHANGES_REQUESTED
+
+Full technical detail, evidence ledger, probe declaration and owner cards:
+`handoffs/reviewer/2026-08-21_phase1_review_r3_handoff.md`.
+
+**B1 (blocking) — "nine tests need reference data" is an artifact of pytest's default collection
+order; the measured figure is ≥127.** `tests/connecteam/test_clock_actions_integration.py` is the
+**second file collected** and commits `Role(RoleNameEnum.WORKER)` (`:166`, `:198`); ~118 later
+tests resolve roles and catalog rows from that commit. L4 coupling discovery, same tree, same
+command, one deterministic reordering of `pytest_collection_modifyitems`: default order
+`22 / 2539 / 1` (107.29 s) → reversed order `139 / 2422 / 1` (101.13 s), `added = 118 /
+removed = 1`, reproduced twice. All 118 carry the same `NoResultFound` signature, across 11
+files; `test_worker_shift_commands.py` alone gives `41 failed / 1 passed`. The configured
+database holds `roles=4, pause_reasons=8`, so before this phase order was irrelevant — phase 1
+correctly removed dev-data coupling for four tests and converted it into **test-order coupling**
+for ~118. OD-1 was ratified on "nine … not 100+", which resolved intention §1's escape clause;
+the measured figure crosses that threshold. Also: OD-1's "migration-owned seed rows only" is
+empty in practice — `49bd666da846::upgrade` returns immediately when no workspace exists, and
+the built template holds `roles=0, pause_reasons=0, workspaces=0, users=0`. No perimeter code
+change is required; the published characterisation (fix-r2 handoff deliverables 11/12/15) is what
+is wrong. See owner card 1.
+
+**B2 (blocking) — C8's contract fails at the interruption point it does not test.**
+`start()` creates then marks in two steps (`database_isolation.py:136-137`). A database created
+`TEMPLATE beyo_test_template` inherits a marker row whose `database_name` reads
+`beyo_test_template`, and `_marker_present_on_connection` (`:236-249`) requires the name to match
+the database itself — so in that window `marker_present = False` and the guard refuses to drop it
+permanently. `except Exception` (`:139`) does not catch `KeyboardInterrupt`; when it does run,
+`best_effort=True` (`:140`) swallows the refusal (`:420-422`). Measured on the real path: after
+an interruption at that point, `pytest tests/unit/test_items_router.py` → `UnsafeDatabaseError:
+Database lacks the disposable marker: 'beyo_test_main'`, 3 errors, 0 tests run, until a human
+drops the database. C8's test pre-marks the leftover with its own name (`:113`), so it exercises
+only the half that cannot fail. Fix: make create-and-mark atomic for the guard, and add a C8 row
+that leaves a database behind **without** re-marking it.
+
+**S1 (should-fix) — `test_retirement_left_the_guarded_populations_alone` asserts only its own
+fixture.** The body (`test_system_transition_reasons_retirement.py:161-186`) is two raw `COUNT`s
+with no call into `beyo_manager`; the fixture inserts exactly 7 `pause_case_created` and 1
+`pause_ended_shift` records after all migrations run, so no migration change can move either
+count. Proven: `range(7)` → `range(8)` in the fixture reddens it. Charter rule 2 companion.
+
+**S2 (should-fix) — the `is_deleted` filter on the worker pause sheet is unguarded suite-wide.**
+The test's second assertion (`"pause_other_task_priority" not in slugs`) used to bite because the
+dev database holds that slug soft-deleted; the fixture never creates it. L4 absence claim:
+deleting `PauseReason.is_deleted.is_(False)` from `list_pause_reasons.py:17-20` leaves the full
+suite at `22 / 2539 / 1`, `added ∅ / removed ∅`. See owner card 2.
+
+**Notes.** N1 `\d` is Unicode-aware, so `beyo_test_gw٠`/`gw๐`/`gw０` pass the guard's pattern —
+no unsafe `DROP` results, `_quoted_identifier` refuses them; use `[0-9]+`. N2 `^…$` is safe only
+because callers use `fullmatch` (`.match()` accepts `'beyo_test_main\n'`); use `\Z`. N3 the
+"not the configured database" check compares names, never host/port — the axis of the recorded
+concurrent-checkout hazard, already routed to phase 2. N4 Redis is not isolated:
+`isolated_redis_prefix` mutates `os.environ` while production reads `settings.redis_key_prefix`,
+measured to stay `'beyo_manager'`; its teardown deletes a namespace nothing writes to. N5 C6's
+proxy covers only the tests ordered before it. **N6 — P2 resolved:** the setup abort is the
+correct, stronger outcome, and the criterion row is load-bearing — with the lifecycle count
+assertion removed **and** `alembic stamp` substituted, `test_template_has_migrated_head_and_full_schema`
+reddens `assert 1 == 107` and takes C4's row with it (`2 failed, 13 passed`). N7 the pass count
+is `2539`, confirmed independently. N8 `test_no_row_is_system_managed_any_more` is now vacuous.
+
+**Verified correct.** Perimeter is exactly the eight files of `697b633`, no production code.
+Baseline independently re-derived at `87a4b7a`: `22 / 2539 / 1`, failing-ID set `comm`-empty in
+both directions against the published 22. The guard refused case variants, trailing whitespace,
+embedded newlines, a dotless-i homoglyph, the configured database, missing and malformed URLs, an
+empty marker table and a foreign marker row. The backfill, kiosk and worker-shift fixtures supply
+preconditions only and pass P1; they `flush()` rather than commit, leaving no residue. After
+three full runs, two template rebuilds and every probe: only `beyo_test_template` remains, dev
+counts are `11253/9809/2445/1955`, and `workspaces LIKE 'phase1-%'` is 0. `pytest-xdist` is not
+installed.
+
+**2026-08-21 — review r3 consumed (coordinator). CHANGES_REQUESTED stands; both blocking
+findings reproduce.** This review found what the coordinator's own consumption missed entirely.
+
+**B1 confirmed, independently.** Running
+`tests/integration/services/commands/users/test_worker_shift_commands.py` alone gives **`41
+failed, 1 passed`** — the reviewer's exact figure, and the single pass is the one test fix r2
+gave a fixture. The masking mechanism is confirmed by direct query: the built template holds
+**`roles=0, pause_reasons=0, workspaces=0`**, while the development database holds **`roles=4,
+pause_reasons=8`**. Before this phase every test found a populated catalog *regardless of order*;
+phase 1 removed that and **converted dev-data coupling into test-order coupling** for ~118 tests.
+OD-1's "migration-owned seed rows" clause is also false as written — the template carries none.
+
+**The coordinator's cheaper hypothesis was tested and REFUTED, which strengthens the finding.**
+It looked like the class might be one authored catalog (4 roles + 8 pause reasons) rather than
+~11 files of work. Seeded the four roles into the template and re-ran the file: still **41
+failed**, but the signature *moved* from `NoResultFound` to
+`AttributeError: 'NoneType' object has no attribute 'client_id'`. The cause is deeper than a
+missing lookup row — `test_worker_shift_commands.py:79` does
+`select(Workspace).order_by(Workspace.client_id)` **with no filter**, adopting whatever workspace
+happens to exist. These helpers do not need a catalog; they **borrow arbitrary pre-existing
+rows**, and the repair is to make each helper create what it needs. The reviewer's ~11-files
+estimate stands; the coordinator's was wrong. Probe reverted — contaminated template dropped,
+rebuilt clean (`roles=0`), criterion file back to `15 passed`.
+
+**B2 confirmed, mechanism exact.** Created `beyo_test_gw888` with
+`CREATE DATABASE … TEMPLATE beyo_test_template` and queried it: it inherits a marker row reading
+**`database_name=beyo_test_template`**, and the guard's own predicate
+(`marker_key = 'test_database_v1' AND database_name = 'beyo_test_gw888'`) returns **0**. Between
+`_create_database` and `_set_marker` the worker database is un-droppable **by its own guard**,
+permanently — and `except Exception` does not catch the `KeyboardInterrupt` a developer uses to
+stop a slow suite. C8 cannot see it because it marks the leftover with its own name first. Probe
+dropped, verified absent. **The safety mechanism, working exactly as designed, wedges the entire
+suite until a human intervenes.**
+
+**Also confirmed at source:** N7 (published `2540` is wrong, `2539` is right) matches the
+coordinator's own finding; N1's Unicode-digit acceptance is real but defence-in-depth holds
+because `_quoted_identifier` is ASCII-only; and N4's Redis finding — `isolated_redis_prefix`
+mutates `os.environ` while production key builders read `settings.redis_key_prefix`, parsed at
+import — is a genuine unisolated shared resource phase 2 must treat as shared.
+
+**Two owner cards relayed verbatim.** Card 1 routes the ~118-test repair (fix in phase 1 / defer
+to phase 2 / accept); card 2 decides whether the two retirement tests are rewritten against
+production behaviour or retired. **S2 is the sharper half of card 2**: deleting
+`PauseReason.is_deleted.is_(False)` from `list_pause_reasons` leaves the full suite
+byte-identical — `22 / 2539 / 1`, `added ∅ / removed ∅`. A soft-deleted pause reason could
+reappear on the worker's pause sheet and **nothing in this repository would notice.**
+
+**What the coordinator missed.** The consumption verified perimeter, the 22-ID baseline
+byte-for-byte, fixture narrowness and residue — and never asked whether the number OD-1 was
+decided on was itself order-dependent. The prompt's P6 asked only whether any of the 22 shared
+the known order-dependent signature; the reviewer generalised it to the whole suite and reordered
+collection to answer. That generative step is the round's entire value.
