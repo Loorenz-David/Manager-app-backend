@@ -47,7 +47,7 @@ Newest first; superseded rows kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 3 | Parallelism: install xdist, serial / `-n 2` / `-n 4` / higher matrix, conservative default, **new authoritative baseline re-enumerated under the new runner** | **NOT_STARTED** | — | — | **Gated**: see §7's perturbation gate. Does not begin its worker matrix until collection-perturbation sensitivity is characterised on a *serial* runner. Carries six items from phase 2's closeout table. |
+| 3 | Parallelism: install xdist, serial / `-n 2` / `-n 4` / higher matrix, conservative default, **new authoritative baseline re-enumerated under the new runner** | **PROJECTED_PENDING** | 2026-08-21 | coordinator | **Gated**: see §7's perturbation gate. Does not begin its worker matrix until collection-perturbation sensitivity is characterised on a *serial* runner. Carries six items from phase 2's closeout table. `plans/plan_3.md` authored 2026-08-21; projection r0 prompt compiled and awaiting a session. |
 | 2 | Order-independence and per-checkout isolation, still serial | **APPROVED** | 2026-08-21 | Codex (r1, fix r2, fix r4) + Opus 5 (projection r0, review r3) + Sonnet 5 (review r3 comparison) + coordinator (gate stamp) | **Five rounds.** Repaired the ~118-test order class across 12 files under OD-6's adopt-or-create contract; added the slot discriminator, the fail-closed slot resolver, endpoint confinement, both wedge shapes, Redis isolation, and the collection-order hook. **The projection gate paid for itself in one round** — four of seven criteria would have shipped as tests that pass whether the code is right or wrong, three of them coordinator-authored. Review r3 found two blocking defects nobody else had: an inert `BEYO_TEST_SLOT` and a sweep that dropped other checkouts' live databases on every process. Gate stamp taken by the coordinator because the round's own pair predated an eight-row change. |
 | 1 | Per-worker database isolation, proven serially | **APPROVED** | 2026-08-21 | Codex (r1, fix r2, fix r4) + Opus 5 (review r3) + coordinator | Four rounds. Established the seam (`settings.database_url`, re-read per test), the fail-closed guard, the migrated template, and bounded worker names. Converted dev-data coupling into **test-order** coupling for ~118 tests — discovered by review r3, deferred to phase 2 as OD-3. |
 
@@ -139,15 +139,22 @@ leave a template behind, which is the `test_20260820_001, _002, …` growth the 
 
 Before any destructive operation, all must hold or the run aborts:
 
-1. the name matches `^beyo_test_[a-z0-9]{1,12}_(template|main|gw[0-9]+)\Z` — `[0-9]` not `\d`
-   (Unicode digits), `\Z` not `$` (trailing newline);
+1. the name matches the slot-scoped pattern
+   `^beyo_test_[a-z0-9]{1,12}_(template|main|gw[0-9]+)\Z` — `[0-9]` not `\d` (Unicode digits),
+   `\Z` not `$` (trailing newline) — **or** the legacy pattern
+   `^beyo_test_(template|main|gw[0-9]+)\Z`. *(Corrected 2026-08-21 after the graph-maintenance
+   session found this section narrower than the code: `assert_disposable_database:90-93` accepts
+   either, and it must — §6.3's own legacy reclamation could not drop anything if the guard
+   rejected legacy names.)*
 2. **endpoint confinement** — the target's normalised `(host, port)` matches the configured
    server; this tooling does not operate on a server it was not pointed at;
 3. **configured-database identity** — the target is not the configured `(host, port, database)`
    tuple; name comparison alone can be fooled;
 4. the database carries the disposability marker (`beyo_test_metadata.database_marker`,
    `marker_key = 'test_database_v1'`) — **or** is a marker-less shell with **zero `public`
-   tables**, which is definitionally a half-created artifact of this tooling;
+   tables**, which is definitionally a half-created artifact of this tooling. Note the default:
+   `public_table_count` is `None` unless supplied, and `None != 0`, so an unmarked database is
+   refused unless a caller has actually counted its tables — fail-closed by omission;
 5. the URL parses, uses a PostgreSQL driver, and carries host, username and database.
 
 `_quoted_identifier` is ASCII-only as defence-in-depth behind the pattern. Only
