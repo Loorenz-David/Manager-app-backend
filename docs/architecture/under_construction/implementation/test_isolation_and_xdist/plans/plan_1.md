@@ -254,3 +254,36 @@ adjudicates; agents never promote.
 **F6 (note) — the baseline snapshot shells out to `pg_dump`/`pg_restore` via Docker Compose with
 a local CLI fallback that "requires a password"**, which would hang a non-interactive run. If the
 dev-data restore survives F1, this needs to fail closed rather than prompt.
+
+### 2026-08-21 — fix r2 implemented (OD-1, OD-2, C6, C8)
+
+- Outcome: implemented the owner decisions. The template is schema-only and no longer reads the
+  configured development database. Removed `_restore_baseline_data`, all `pg_dump`/`pg_restore`
+  helpers, the baseline-source marker column, and the local password-prompt fallback.
+- Reference data: added `tests/fixtures/phase1_reference_data.py` and attached four narrow
+  fixtures only to the nine named tests. The fixtures provide exactly the roles, catalog rows,
+  workspace/user/task-step population, and seven historical `pause_case_created` references
+  their assertions require. No live rows are copied.
+- C6: replaced absolute development counts with a session-start snapshot compared after the
+  suite. The named dev-URL mutation reddened after a preceding commit-writing test grew all four
+  counts by one. A C8 disposable-probe URL is excluded from the snapshot path.
+- C8: strengthened the database-set assertions on both sides of fixed-name reabsorption. The
+  corrected unique-suffix mutation reddened cleanly (`beyo_test_gw9999` appeared instead of
+  `beyo_test_gw999`); its artifact and the earlier wrong-site `beyo_test_main9` probe were
+  removed. The wrong-site probe did not bite and produced setup error, so it is not counted as
+  successful mutation evidence.
+- Verification: targeted fixture surface `9 passed`; infrastructure criteria `15 passed`;
+  closing L4 at clean checkpoint `697b633` on `127.0.0.1:5433/beyo_manager`:
+  `22 failed / 2540 passed / 1 deselected / 2 warnings in 124.83s`.
+  Failure-ID delta against the prior 26 is `added=∅`, `removed=4`: the two seed-item economics
+  rows, the client-supplied Shopify preference row, and the invalid task-date-order row. Each
+  leaves because it depends on development-database contents rather than code. The
+  `test_add_task_steps_integration::test_adding_a_batch_of_steps_reopens_ready_task` ID remains
+  in the baseline and is recorded as the first confirmed order-dependent test.
+- Mutation ledger: C3 stamp-without-DDL stopped at the 107-table assertion; C6 and C8 cleanly
+  reddened at their named sites; every source mutation was reverted. C1/C2/C4/C5 were unchanged
+  by this cycle and retain r1 evidence. `ruff`, compilation, and `git diff --check` passed.
+- Perimeter: checkpoint commit `697b633` contains eight code/test files. This handoff and this
+  review-log entry are the cycle documents. No Architecture Graph mutation was made; current
+  graph revision remains `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`
+  with three pending reviews and no diagnostics. Phase 2 remains out of scope.
