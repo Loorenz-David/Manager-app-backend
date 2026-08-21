@@ -1,7 +1,7 @@
 # Plan 1 — per-worker database isolation, proven serially
 
 ```
-state: NOT_STARTED
+state: IMPLEMENTED
 phase: 1
 date: 2026-08-21
 depends_on: nothing. Gates live_clock_for_working_time_economics phase 4.
@@ -136,4 +136,41 @@ Each row is lettered, carries one named mutation, and states both sides.
 
 ## 7. Review log
 
-(empty — append-only)
+### 2026-08-21 — implementation r1
+
+- Outcome: implemented phase 1 serial PostgreSQL isolation. No `pytest-xdist`, `-n` flag,
+  parallel run, production-domain edit, or individual test repair was introduced.
+- Implementation: added `app/tests/database_isolation.py`; wired the session lifecycle and
+  `settings.database_url` seam in `app/tests/conftest.py`; added the C1-C8 criterion tests in
+  `app/tests/integration/infrastructure/test_database_isolation.py`.
+- Design judgment: the first schema-only template preserved DDL but changed the inherited
+  failure set (32 failures, including missing reference-data assumptions). The corrected
+  template runs the real migration, then restores development baseline rows with a portable
+  data-only dump/restore while excluding migration-owned preseeded table data and the isolation
+  marker. This preserves the suite's existing baseline without changing production code.
+- Safety: all destructive operations use a maintenance connection and require the exact
+  `beyo_test_(template|main|gwN)` name, a non-configured URL, and the disposable marker before
+  terminating sessions or dropping a database. Development pgAdmin sessions were not touched.
+- Findings: removed the dead/broken `async_engine` and `count_queries` fixtures from `conftest.py`
+  as in-perimeter cleanup; the duplicated local `executed_statements` fixtures were left alone.
+  The function-scoped `initialize_database` lifecycle was intentionally not widened.
+- Evidence: criterion suite `15 passed`; final serial suite `2535 passed, 26 failed, 1
+  deselected, 2 warnings in 169.71s`, with both `comm` directions empty against the 26 IDs in
+  `live_clock_for_working_time_economics/master_plan.md` §6. The preceding full run had the same
+  26 inherited IDs plus only the then-removed worker-content assertion; after removing that
+  order-sensitive assertion, the closing run matched exactly. Development counts before and
+  after were `workspaces=11253, users=9809, tasks=2445, working_sections=1955`; after cleanup,
+  the only `beyo_test_*` database was `beyo_test_template`.
+- Mutation evidence: constant worker resolver failed 2/4 resolver cases; guard `return` failed
+  all 6 rejection rows; migration `stamp` failed the 107-table assertion; removing `TEMPLATE`
+  failed faithful-copy schema checks; removing the settings override failed the worker-URL
+  seam; pointing the override at development failed the active-database assertion; and a
+  unique-suffix worker mutation left residue (cleaned by dropping the exact mutation-created
+  `beyo_test_main9` artifact). The source was restored and criterion tests passed afterward.
+- Architecture Graph: recorded inferred infrastructure node
+  `infrastructure-test-database-isolation`, configuration node
+  `test-database-isolation-contract`, and their `configured_by` relationship in one additive
+  batch. Resulting graph revision:
+  `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`.
+- Review state: ready for independent phase review; no owner decision is required for this
+  implementation.

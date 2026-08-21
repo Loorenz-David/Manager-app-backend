@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Generator
 from uuid import uuid4
@@ -7,11 +8,32 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 import redis
-from sqlalchemy import event as sa_event
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.config import settings
 from beyo_manager.models.database import close_db, get_db, init_db
+from tests.database_isolation import DatabaseIsolation, start_database_isolation
+
+
+@pytest.fixture(scope="session")
+def isolated_database() -> Generator[DatabaseIsolation, None, None]:
+    """Provision one fresh marked database for this pytest process."""
+    if not settings.database_url:
+        raise RuntimeError("DATABASE_URL is required before test database isolation starts")
+    original_database_url = settings.database_url
+    isolation = start_database_isolation(original_database_url)
+    settings.database_url = isolation.worker_database_url
+    try:
+        yield isolation
+    finally:
+        settings.database_url = original_database_url
+        asyncio.run(isolation.stop())
+
+
+@pytest.fixture(scope="session", autouse=True)
+def configure_isolated_database(isolated_database: DatabaseIsolation) -> None:
+    """Make the process-wide application seam resolve to the worker database."""
+    return None
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -36,13 +58,6 @@ def isolated_redis_prefix() -> Generator[str, None, None]:
             os.environ["REDIS_KEY_PREFIX"] = old
 
 
-@pytest.fixture(scope="session")
-def async_engine():
-    # Lazy import: _engine is None at module load time; init_db() must run first.
-    from beyo_manager.models.database import _engine
-    return _engine
-
-
 @pytest_asyncio.fixture
 async def db_session() -> AsyncSession:
     async for session in get_db():
@@ -58,19 +73,3 @@ def redis_client(isolated_redis_prefix: str):
     finally:
         for key in client.scan_iter(f"{isolated_redis_prefix}:*"):
             client.delete(key)
-
-
-@pytest.fixture
-def count_queries(async_engine):
-    """Collect SQL statements executed during a test to detect N+1 regressions.
-    Expected maximum: 1 + len(selectinloads) per list fetch.
-    """
-    queries: list[str] = []
-
-    @sa_event.listens_for(async_engine.sync_engine, "before_cursor_execute")
-    def _count(conn, cursor, statement, parameters, context, executemany):
-        queries.append(statement)
-
-    yield queries
-
-    sa_event.remove(async_engine.sync_engine, "before_cursor_execute", _count)
