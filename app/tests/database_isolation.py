@@ -11,6 +11,8 @@ from pathlib import Path
 import asyncpg
 from sqlalchemy.engine import URL, make_url
 
+from beyo_manager.config import settings
+
 
 TEST_DATABASE_PATTERN = re.compile(
     r"^beyo_test_[a-z0-9]{1,12}_(?:template|main|gw[0-9]+)\Z"
@@ -18,6 +20,7 @@ TEST_DATABASE_PATTERN = re.compile(
 LEGACY_TEST_DATABASE_PATTERN = re.compile(r"^beyo_test_(?:template|main|gw[0-9]+)\Z")
 TEST_DATABASE_PREFIX = "beyo_test_"
 TEST_SLOT_ENV = "BEYO_TEST_SLOT"
+LEGACY_RECLAIM_ENV = "BEYO_RECLAIM_LEGACY_TEST_DATABASES"
 DEFAULT_TEST_SLOT = "main"
 MARKER_SCHEMA = "beyo_test_metadata"
 MARKER_TABLE = "database_marker"
@@ -34,7 +37,7 @@ def resolve_test_slot(slot: str | None = None) -> str:
     """Resolve the explicitly declared, bounded slot for this checkout."""
     slot = os.getenv(TEST_SLOT_ENV) if slot is None else slot
     if slot is None:
-        slot = DEFAULT_TEST_SLOT
+        slot = settings.test_slot or DEFAULT_TEST_SLOT
     if not re.fullmatch(r"[a-z0-9]{1,12}", slot):
         raise UnsafeDatabaseError(f"Unsupported test slot: {slot!r}")
     return slot
@@ -167,7 +170,8 @@ class DatabaseIsolation:
                 self.configured_row_counts_before_run = await self.row_counts(
                     self.configured_database_name
                 )
-            await self._sweep_legacy_databases()
+            if os.getenv(LEGACY_RECLAIM_ENV) == "1":
+                await self._sweep_legacy_databases()
             await self._ensure_template()
             await self._drop_database_if_exists(self.worker_database_name)
             await self._create_database_from_template(self.worker_database_name)
@@ -187,6 +191,8 @@ class DatabaseIsolation:
         await self._drop_database_if_exists(self.worker_database_name)
 
     async def assert_configured_database_unchanged(self) -> None:
+        if self.configured_row_counts_before_run is None:
+            return
         after = await self.row_counts(self.configured_database_name)
         assert after == self.configured_row_counts_before_run, (
             "configured database row counts changed during the test session"

@@ -26,6 +26,7 @@ from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
+from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.domain.workspaces.enums import WorkspaceSpecializationEnum
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.users.list_users import list_users
@@ -206,7 +207,11 @@ async def roster(db_session):
         await db_session.execute(
             delete(WorkspaceMembership).where(WorkspaceMembership.user_id.in_(fixture.user_ids))
         )
+        await db_session.execute(
+            delete(WorkspaceRole).where(WorkspaceRole.workspace_id == fixture.workspace_id)
+        )
         await db_session.execute(delete(User).where(User.client_id.in_(fixture.user_ids)))
+        await db_session.execute(delete(Workspace).where(Workspace.client_id == fixture.workspace_id))
         await db_session.commit()
 
 

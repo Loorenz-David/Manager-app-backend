@@ -87,7 +87,7 @@ async def test_adding_a_batch_of_steps_reopens_ready_task(db_session, monkeypatc
         role_id=worker_role.client_id,
         is_system=True,
     )
-    db_session.add_all([workspace, user, worker_a, worker_b, worker_role])
+    db_session.add_all([workspace, user, worker_a, worker_b])
     await db_session.flush()
     db_session.add(workspace_worker_role)
     await db_session.flush()

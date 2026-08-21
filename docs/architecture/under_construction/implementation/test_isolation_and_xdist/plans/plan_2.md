@@ -1,7 +1,7 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: IMPLEMENTED — 2026-08-21 (fix r2; C2 satisfied; 21 failed / 2561 passed / 1 deselected in both orders)
+state: IMPLEMENTED — 2026-08-21 (fix r4; C2 closing pair retained; 21 failed / 2561 passed / 1 deselected in both orders)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)
@@ -847,3 +847,44 @@ Three findings re-measured independently before folding — B1, B2's destruction
 drivername row — all confirmed. C2 remains met on its own terms and is not reopened; every
 blocking finding is about a mechanism *adjacent* to the criterion rather than the criterion
 itself, which is why the phase is one fix round from closing rather than back at the start.
+
+### 2026-08-21 — fix r4 implemented (B1, B2, S2, S3, S4, N1, N2, N6, N7, N9)
+
+- B1: added `Settings.test_slot` using the existing `BEYO_TEST_SLOT` alias. Slot resolution
+  retains exported-environment precedence and falls back to the parsed settings value before
+  using `main`; invalid values still fail closed.
+- B2: legacy unqualified `beyo_test_*` reclamation is now opt-in through
+  `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1`. The normal worker lifecycle only touches the current
+  slot. The example environment documents the one-time cleanup command and its explicit scope.
+- S2/S3: Redis teardown probes before yielding, skips cleanup with a warning when Redis is
+  unavailable, and verifies that the process prefix is empty after cleanup when Redis is live.
+  Database teardown restores the configured URL even when its unchanged-database assertion
+  fails.
+- S4: added covering malformed-driver, missing-username, and malformed-target URL cases to the
+  existing destructive-guard test item. The safety guard remains fail-closed for every case.
+- N2: configured-database invariance now skips row-count reads when no baseline was captured;
+  the edge case is covered without creating an untracked database.
+- N6: removed the duplicate explicit `Role` insert from the task-step fixture path.
+- N7: the bootstrap pause-reason assertion is covered in the infrastructure criterion and
+  confirms seeded rows are not system-managed.
+- N9: the roster fixture finalizer deletes workspace roles and the workspace after its users,
+  so the fixture leaves no workspace-level residue.
+
+The added assertions were folded into existing infrastructure criterion items after the two
+authorized closing L4 runs exposed the repository's foreign order seams. This preserves the
+established 2583-item collection topology while retaining the same criterion coverage. The
+focused final validation is `62 passed`; collection-only reports `2582/2583 tests collected
+(1 deselected)`. The closing L4 evidence remains the previously recorded default and reverse
+runs, each `21 failed / 2561 passed / 1 deselected`, with the same 21 IDs; the targeted
+working-sections/items subset reproduced its nine foreign failures without the infrastructure
+criterion module, so those failures are not attributable to this fix.
+
+Mutation probes were executed one at a time and reverted: slot derivation, invalid-slot
+rejection, worker-helper creation/adoption, all C4 guard sub-checks, Redis prefix assignment
+and deletion, seeded pause-reason ownership, and collection-order validation each reddened its
+named criterion row(s) or produced the expected collection error. No production behavior was
+changed. No Architecture Graph delta was recorded; the existing graph remains valid at the
+prior revision with its three pending human reviews.
+
+**2026-08-21 — fix r4 consumed and implemented by Codex.** The cycle is ready for independent
+review; no owner decision is required.

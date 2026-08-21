@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
 from beyo_manager.config import settings
 from beyo_manager.models import database as database_module
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.workspaces.workspace import Workspace
+from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import seed_pause_reasons
 from beyo_manager.services.infra.redis.keys import make_key
 from tests.conftest import pytest_collection_modifyitems
 from tests.database_isolation import (
     EXPECTED_HEAD,
     EXPECTED_PUBLIC_TABLE_COUNT,
+    LEGACY_RECLAIM_ENV,
     MARKER_SCHEMA,
     DatabaseIsolation,
     UnsafeDatabaseError,
@@ -60,6 +65,11 @@ def test_worker_name_resolution(
 ) -> None:
     monkeypatch.delenv("BEYO_TEST_SLOT", raising=False)
     assert resolve_worker_database_name(worker_id, slot=slot) == expected
+
+    monkeypatch.setattr(settings, "test_slot", "shopify")
+    assert resolve_worker_database_name() == "beyo_test_shopify_main"
+    monkeypatch.setenv("BEYO_TEST_SLOT", "alpha")
+    assert resolve_worker_database_name() == "beyo_test_alpha_main"
 
 
 def test_template_name_is_per_slot() -> None:
@@ -216,6 +226,20 @@ def test_unmarked_empty_database_is_allowed_but_populated_one_is_not() -> None:
             public_table_count=1,
         )
 
+    for target in (
+        "mysql://postgres:postgres@127.0.0.1:5433/beyo_test_main_gw0",
+        "postgresql+asyncpg://:postgres@127.0.0.1:5433/beyo_test_main_gw0",
+        "not-a-database-url",
+    ):
+        with pytest.raises(UnsafeDatabaseError):
+            assert_disposable_database(
+                "beyo_test_main_gw0",
+                "postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager",
+                target_database_url=target,
+                marker_present=True,
+                public_table_count=0,
+            )
+
 
 @pytest.mark.asyncio
 async def test_template_has_migrated_head_and_full_schema(isolated_database: DatabaseIsolation) -> None:
@@ -251,13 +275,40 @@ async def test_application_database_seam_points_at_worker(isolated_database: Dat
 
 
 @pytest.mark.asyncio
-async def test_dev_database_counts_are_untouched(isolated_database: DatabaseIsolation) -> None:
+async def test_dev_database_counts_are_untouched(
+    isolated_database: DatabaseIsolation,
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     before = isolated_database.configured_row_counts_before_run
     assert before is not None
     after = await isolated_database.row_counts(isolated_database.configured_database_name)
     assert after == before
     active_database_name = make_url(settings.database_url).database
     assert active_database_name == isolated_database.worker_database_name
+
+    untracked = DatabaseIsolation(
+        "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_test_main"
+    )
+
+    async def unexpected_row_count(_database_name: str) -> dict[str, int]:
+        raise AssertionError("row counts should not be read without a baseline")
+
+    monkeypatch.setattr(untracked, "row_counts", unexpected_row_count)
+    await untracked.assert_configured_database_unchanged()
+
+    workspace = Workspace(name="phase2-bootstrap-pause-reasons")
+    db_session.add(workspace)
+    await db_session.flush()
+    pause_reason_ids = await seed_pause_reasons(db_session, workspace.client_id)
+    rows = (
+        await db_session.scalars(
+            select(PauseReason).where(PauseReason.workspace_id == workspace.client_id)
+        )
+    ).all()
+    assert set(pause_reason_ids.values()) == {row.client_id for row in rows}
+    assert rows
+    assert all(row.is_system_managed is False for row in rows)
 
 
 @pytest.mark.asyncio
@@ -268,9 +319,12 @@ async def test_dev_database_counts_are_untouched(isolated_database: DatabaseIsol
 async def test_fixed_name_reabsorbs_an_interrupted_worker(
     isolated_database: DatabaseIsolation,
     mark_leftover: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     probe = DatabaseIsolation(settings.database_url, worker_id="gw999")
     before = set(await probe.database_names())
+    legacy_name = "beyo_test_gw999"
+    other_slot_name = "beyo_test_alpha_main"
     try:
         await probe._create_database_from_template(probe.worker_database_name)
         if mark_leftover:
@@ -278,13 +332,34 @@ async def test_fixed_name_reabsorbs_an_interrupted_worker(
         assert set(await probe.database_names()) == before | {probe.worker_database_name}
         await probe.start()
         assert set(await probe.database_names()) == before | {probe.worker_database_name}
+
+        for database_name in (legacy_name, other_slot_name):
+            if await probe._database_exists(database_name):
+                await probe._set_marker(database_name)
+                await probe._drop_database_if_exists(database_name)
+        await probe._create_database(legacy_name)
+        await probe._create_database(other_slot_name)
+
+        monkeypatch.delenv(LEGACY_RECLAIM_ENV, raising=False)
+        await probe.stop()
+        await probe.start()
+        await probe.stop()
+        assert await probe._database_exists(legacy_name)
+        assert await probe._database_exists(other_slot_name)
+
+        monkeypatch.setenv(LEGACY_RECLAIM_ENV, "1")
+        await probe.start()
+        await probe.stop()
+        assert not await probe._database_exists(legacy_name)
+        assert await probe._database_exists(other_slot_name)
     finally:
-        if await probe._database_exists(probe.worker_database_name):
-            if probe._started:
-                await probe.stop()
-            else:
-                await probe._set_marker(probe.worker_database_name)
-                await probe._drop_database_if_exists(probe.worker_database_name)
+        if probe._started:
+            await probe.stop()
+        for database_name in (probe.worker_database_name, legacy_name, other_slot_name):
+            if await probe._database_exists(database_name):
+                if not await probe._marker_present(database_name):
+                    await probe._set_marker(database_name)
+                await probe._drop_database_if_exists(database_name)
     assert set(await probe.database_names()) == before
 
 
