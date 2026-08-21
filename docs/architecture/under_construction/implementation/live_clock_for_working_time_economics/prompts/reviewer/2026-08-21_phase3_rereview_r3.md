@@ -41,10 +41,31 @@ Application root: `backend/app/` (suite: `PYTHONPATH=. pytest -m 'not e2e'`)
 ## 3. Gate check — stop and report if any is false
 
 - `master_plan.md` §3 shows phase 3 at **REVIEWING (re-review r3)**.
-- HEAD is **`874f02d`** (`CHECKPOINT (not approved): phase 3 fix r2`) and
-  `git status --porcelain` is empty.
+- HEAD is **`874f02d`** (`CHECKPOINT (not approved): phase 3 fix r2`).
 - `git diff 5b8329b 874f02d -- app/beyo_manager/` is **empty** (no production change
-  across the fix cycle).
+  across the fix cycle). *This* is the perimeter condition, not a clean `git status`.
+
+**⚠ A foreign, uncommitted change stream is in the working tree — read before you run
+anything.** `app/beyo_manager/services/infra/shopify/product_sync_client.py` (+47),
+`…/shop_client.py` (+27) and an untracked `app/scripts/shopify/` are modified by work
+outside this pipeline. **They are not yours: do not commit, revert, stash or review
+them**, and their presence is not a perimeter finding against fix r2 — the coordinator
+dated them by digest and they appeared **after** fix r2's stamp (the `app/`-scoped diff
+including them hashes `2d7604fe…`, while the declared stamp digest `b50bda39…` matches
+the committed-only diff exactly).
+
+Two consequences you must handle rather than absorb:
+1. **Any L4 run you perform includes them**, because they are uncommitted. The 26-ID
+   baseline contains Shopify rows (`test_create_shopify_metafield_preferences.py`), and
+   one of the two named flaky tests is
+   `test_process_shopify_products_integration.py`. If your counts differ from the cited
+   `26 / 2487 / 1`, **capture the failing-ID set first, then attribute** — foreign-stream
+   effect, flake, or real regression are three different answers and a bare count cannot
+   tell them apart.
+2. Prefer L1/L2 scopes for this delta-scoped round, which keeps you clear of the foreign
+   surface entirely. Escalate to L4 only for a hypothesis that genuinely needs it, and
+   record the foreign state in that evidence record's tree-identity field (SHA + a
+   `git diff` digest, since the tree is dirty).
 
 ## 4. Evidence — what NOT to re-run
 
