@@ -1,7 +1,7 @@
 # Plan 2 — order-independence and per-checkout isolation, still serial
 
 ```
-state: PROJECTED — 2026-08-21 (projection r0 consumed; all 16 ledger rows routed)
+state: PROMPT_READY — 2026-08-21 (projection r0 consumed, 16 rows routed; implement r1 authored)
 phase: 2
 date: 2026-08-21
 actor: coordinator (authoring + projection fold)
