@@ -174,3 +174,83 @@ Each row is lettered, carries one named mutation, and states both sides.
   `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`.
 - Review state: ready for independent phase review; no owner decision is required for this
   implementation.
+
+**2026-08-21 — implement r1 consumed (coordinator). Verdict: CHANGES_REQUESTED pending one
+owner decision.** The isolation machinery is well built and the guard is genuinely sound;
+what needs deciding is a design change the handoff made mid-implementation and declared as
+"0 owner decisions required".
+
+**Verified correct.** Perimeter is exactly the six declared files with **no production code**
+(`git show --name-only da01592`). The fail-closed guard checks name pattern → configured-DB
+identity → marker, raising `UnsafeDatabaseError` on each, with `_quoted_identifier` as a second
+line against injection. Teardown is clean: after the run the server holds only `beyo_manager`,
+`beyo_test_template` (declared persistent), `housing_parser_plan1_20260807` and `postgres` — no
+worker databases, and the C8 probe artifact `beyo_test_main9` is gone. Suite growth reconciles
+exactly: **+20 collected = 15 (this phase's new module) + 5 (`test_backfill_from_shopify_fields.py`
+growing 22 → 27 in the owner's shopify commit `c0e5407`)**. Nothing unexplained, nothing from the
+owner's parallel upholstery work, which is purely additive (74 insertions, 0 deletions) and
+touches no step-state closing semantics.
+
+**The design changed, and the change is the finding (F1, blocking).** The plan specified a
+schema-only template. The delivered design runs **`pg_dump --data-only` from the configured
+DEVELOPMENT database** and restores it into the template
+(`database_isolation.py:_restore_baseline_data`). That achieves *schema* isolation while
+**deepening data coupling to the dev database** — the coupling this project exists to remove.
+The intention's escape clause was conditional: *"Do not spend the project manually repairing
+100+ individual tests **unless investigation proves that is necessary**."* Investigation proves
+it is **nine tests across four files**, not 100+ — so the cheaper option was in reach and was
+never surfaced as a decision.
+
+**Measured independently by the coordinator, full suite, schema-only template
+(`26 / 2515 / 1` original → their `26 / 2535 / 1` → clean `32 / 2529 / 1`):**
+
+| configuration | failures | wall time |
+|---|---|---|
+| original, shared dev database, no isolation | 26 | **135 s** |
+| delivered: isolation **+ dev-data restore** | 26 | **169.7 s** |
+| **clean isolation, schema-only template** | 32 | **109.1 s** |
+
+**Clean isolation is 26 s faster than the original and 60 s faster than what shipped.** The
+dev-data restore costs roughly a minute per run, every run, and the project's secondary
+objective is speed.
+
+**F2 (should-fix) — "four baseline IDs disappeared" shipped as a bare count.** It is the most
+consequential fact in the run and it is now enumerated. **Four of the 26 inherited failures are
+artifacts of dev-database contents, not code** — they pass on a clean schema:
+`test_seed_item_economics_configuration.py::test_human_successors_permanently_freeze_bootstrap_basis_and_model`,
+`…::test_person_owned_configuration_and_section_membership_are_not_overridden`,
+`test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`,
+`test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged`.
+So roughly **one sixth of the baseline three approved phases were measured against is a
+property of the developer's database, not of the code.**
+The handoff's count of four is **correct for the full-suite condition** — a coordinator run over
+only the 26 IDs produced **five**, the extra being
+`test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task`, which
+therefore depends on **cross-test state rather than dev data**. That is an execution-order
+dependency, and it is a phase-2 hazard: xdist will be the first thing in this repository's
+history to reorder tests.
+
+**The nine tests that genuinely need reference data** (the other new failure is the phase's own
+C6 row): one in `test_backfill_worker_shift_state_records.py`, four in
+`test_system_transition_reasons_retirement.py`, three in `test_kiosk_floor_flow.py`, one in
+`test_worker_shift_commands.py`.
+
+**F3 (should-fix) — C6 hardcodes the owner's database contents.**
+`test_dev_database_counts_are_untouched` asserts the dev database holds exactly
+`workspaces: 11253, users: 9809, tasks: 2445, working_sections: 1955`. The criterion asked for
+counts *unchanged from before the run* — a relative invariant. As written it is absolute, so it
+reddens whenever the owner touches their own database (an upholstery backfill script is running
+in parallel right now), and **a red carries no information**: it cannot distinguish "isolation
+broke" from "the owner added a workspace". Rewrite as before/after within the run.
+
+**F4 (note) — C8's mutation errored rather than reddened**, leaving `beyo_test_main9` to be
+removed by hand. An errored mutation is a weaker observation than a red one; the row deserves a
+clean re-measurement.
+
+**F5 (note) — the architecture graph is pending again**: two nodes and one edge, `ai_inferred`,
+from this phase's additive batch. It was cleared to 0 pending earlier the same day. Owner
+adjudicates; agents never promote.
+
+**F6 (note) — the baseline snapshot shells out to `pg_dump`/`pg_restore` via Docker Compose with
+a local CLI fallback that "requires a password"**, which would hang a non-interactive run. If the
+dev-data restore survives F1, this needs to fail closed rather than prompt.

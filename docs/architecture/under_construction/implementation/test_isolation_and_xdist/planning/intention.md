@@ -277,3 +277,70 @@ A missing or malformed configuration must abort, never "guess" a target.
 
 Phase 2 does not start until phase 1 is APPROVED — the same gating that contained defects
 inside a phase boundary three times in `live_clock`.
+
+---
+
+## 4. Owner decisions
+
+### OD-1 — the template carries schema only; the nine data-dependent tests get fixtures (2026-08-21)
+
+Raised because phase 1 shipped a design the plan did not specify: the template was seeded with
+a `pg_dump --data-only` of the **development** database, so every test's outcome remained a
+function of that database's contents. **Owner: clean isolation, fix the nine.**
+
+Ratified: the template is **schema-only** (migration-owned seed rows only, plus the disposability
+marker). The reference data the nine tests need is supplied explicitly rather than inherited from
+whatever happens to be in dev. The `pg_dump`/`pg_restore` path — and with it finding F6's
+password-prompt fragility — is removed.
+
+The evidence that decided it, coordinator-measured:
+
+| configuration | failures | wall time |
+|---|---|---|
+| original, shared dev database, no isolation | 26 | 135 s |
+| as delivered: isolation **+ dev-data restore** | 26 | 169.7 s |
+| **schema-only template** | 32 | **109.1 s** |
+
+Clean isolation is **26 s faster than the original and 60 s faster than what shipped**, before
+xdist contributes anything. The intention's own clause — *"do not repair 100+ individual tests
+**unless investigation proves that is necessary**"* — resolves the other way once the number is
+measured: it is **nine tests across four files**, not 100+.
+
+**The nine** (each currently passing only because dev rows exist):
+`test_backfill_worker_shift_state_records.py::test_backfill_matches_sweep_read_and_is_idempotent`;
+`test_system_transition_reasons_retirement.py` ×4
+(`…constraint_does_not_reject_the_declared_state_projection`,
+`…constraint_rejects_a_step_record_carrying_both_explanations`,
+`…pause_ended_shift_is_still_selectable_through_the_endpoint`,
+`…retirement_left_the_guarded_populations_alone`);
+`test_kiosk_floor_flow.py` ×3 (`…clock_out_reports_working_steps_it_force_closed`,
+`…full_loop_from_floor_sign_in_to_clock_out`,
+`…roster_matches_worker_without_a_clock_code_by_email`);
+`test_worker_shift_commands.py::test_clock_out_reconstructs_middle_from_step_history`.
+
+### OD-2 — the authoritative baseline is republished at ~22, with every difference explained (2026-08-21)
+
+**Owner: republish as ~22, explained.** Four of the 26 inherited failures are **artifacts of
+dev-database contents, not code defects** — they pass on a clean schema, so roughly one sixth of
+the baseline that three approved phases were measured against was never a statement about the
+code:
+
+1. `test_seed_item_economics_configuration.py::test_human_successors_permanently_freeze_bootstrap_basis_and_model`
+2. `test_seed_item_economics_configuration.py::test_person_owned_configuration_and_section_membership_are_not_overridden`
+3. `test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`
+4. `test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged`
+
+Each is the same shape — a test that assumes an empty or clean database and meets rows that a
+developer's day left behind (a seed that is already seeded, a "create" whose row already exists).
+
+**A fifth is order-dependent, not data-dependent.**
+`test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task` passes when
+only the 26 baseline IDs are run and fails in a full suite on the same schema-only database, so
+it depends on **state another test creates**. It stays in the baseline and is flagged for phase 2:
+**xdist will be the first thing in this repository's history to reorder tests**, and this is the
+first confirmed member of the class that will break when it does.
+
+Expected new baseline once OD-1's nine are fixed: **~22 inherited failures**, enumerated and
+published with database identity and tree identity per the schema `live_clock`'s phase 3 earned.
+`live_clock` phase 4 and `narrow_typical_work_times` D23 consume that number, so it is published
+once, honestly, rather than carried forward because it is familiar.
