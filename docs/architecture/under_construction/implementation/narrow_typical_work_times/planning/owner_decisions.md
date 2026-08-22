@@ -155,13 +155,83 @@ response-contract changes are confined to the three task surfaces (§7.2–§7.4
 
 ---
 
+## Settled at the mechanism-inventory gate fold (2026-08-22)
+
+**D25 — a narrowed median of zero is not a known typical (card C).** Owner, 2026-08-22:
+*"the recommended option is the correct approach"* — **Require a real figure.** A section
+whose narrowed history has enough samples but a median of zero is not "known"; the task
+falls back to section-wide figures throughout, the same answer it gives today. Rationale
+as recommended in the card: the promise of the feature is "narrow to comparable work",
+and a population of zeros is not evidence about how long comparable work takes; counting
+it lets the least-informative section decide the basis for every other section on the
+task. Folded as intention §4C: the reconciliation quantifier and `BROADEN_TO_SECTION`'s
+first rung require a **usable** narrowed median (`> 0`); `ANSWER_AS_ASKED` analytics
+deliberately still reports a zero median verbatim (an honest statistic, HC-3/D17/D19).
+Recorded consequence: under `item_narrowed_uniform` no participating section reaches
+layer 2 at all, and `typical_worker_seconds: 0` beside `typical_basis: "item_narrowed"`
+is unreachable on every task surface. The card's full text is preserved below for
+provenance.
+
+<details>
+<summary>Card C as relayed (answered 2026-08-22)</summary>
+
+**Question.** When a section's item-narrowed history has enough samples but they all
+measure zero seconds, should that count as "we know the typical time for this item" — or
+should the task fall back to the section-wide figure?
+
+**Story.** Assembly is a section your workers complete on the spot: they mark it done
+without ever starting the clock, so its recorded time keeps coming back as zero. A chair
+task comes in, and over the last ninety days there are eight chair tasks whose Assembly
+recorded zero. The system sees eight chair samples — plenty — and declares "we have
+chair-specific history for this whole task". Assembly's own typical is then zero, so it
+gets an emergency stand-in figure anyway, and every other section on that chair
+(Cutting, Painting) is told to use chair-specific numbers. Meanwhile a chair task whose
+Assembly simply has *four* real samples is treated as having too little chair history,
+and the whole task falls back to generic figures. The section we know least about is
+treated as sufficient; the one with thin but real evidence is not. Allowances — the
+minutes each section is given out of the budget — move either way.
+
+**Branches.**
+- **Count it (today's written rule).** Eight zero-second chair samples are "enough chair
+  history". The task uses chair-specific figures everywhere, and Assembly quietly gets a
+  stand-in number. Allowances shift toward the chair-specific split.
+- **Require a real figure.** A section whose narrowed history is all zeros is not
+  "known", so the task uses generic section-wide figures throughout — the same answer it
+  gives today, before this feature.
+
+**Recommendation.** **Require a real figure** — because the whole promise of this feature
+is "narrow to comparable work", and a population of zeros is not evidence about how long
+comparable work takes; counting it lets the least-informative section decide the basis
+for every other section on the task.
+
+**On silence.** The gate holds. Implementation planning does not start; no guess is made,
+because the two branches produce different allowances on real tasks.
+
+**Trace.** Intention §3.3 (`has_narrowed`), §4.3 (the reconciliation quantifier), §4B
+(the corrected reachability invariant), §4.5 (the `<= 0` layer-2 trigger), §11A rows
+T10b / T21.
+
+</details>
+
+---
+
 ## Open — ⚠ OWNER DECISIONS REQUIRED (0)
 
-None. Both cards answered 2026-08-20.
+None. Card C answered 2026-08-22 → D25.
 
 ---
 
 ## Ledger
 
-**Empty as of round 3 (2026-08-20).** D1–D24 all settled (cards A → D24 and
-B → D23 answered 2026-08-20). The intention is RESOLVED.
+**Empty as of the round-6 fold (2026-08-22).** D1–D25 all settled (cards A → D24 and
+B → D23 answered 2026-08-20; card C → D25 answered 2026-08-22). The intention is
+RESOLVED again; the implementation-planner may start.
+
+Three contradictions the gate resolved **unilaterally by contract** are listed for
+ratification in
+`handoffs/reviewer/20260822_mechanism_inventory_gate_handoff.md` §5 — they change no
+sentence the owner has approved, but each decides which side of a contradiction wins:
+the corrected reachability invariant (intention §4B), the `is_estimated` definition
+(§6B), and price-scenario's move to the injected request clock (§4A K1). Ratification
+was relayed to the owner at the fold; a veto arrives as a new amendment, not an edit to
+the gate's record.

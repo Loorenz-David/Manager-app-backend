@@ -1,22 +1,32 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: RESOLVED (round 3, 2026-08-20) — 0 owner cards open. D1–D24 settled
-        (card A → D24: typical-times route unchanged in V1; card B → D23: serial,
-        live-clock first). Next: **mechanism-inventory gate**.
-        **UNBLOCKED 2026-08-22:** D23's precondition is satisfied — every live-clock
-        phase touching the shared files is APPROVED and merged (`57d8c25`), and the
-        post-live-clock baseline the goldens regenerate against is published. So the
-        gate is no longer the only thing that may run; implementation may follow it.
-        **⚠ Read §2A first — the grounding drifted while this document waited, and one
-        drifted citation is a contract (`typical_times_statement` gained an injected
-        clock that §3's proposed signature erases).**
+status: RESOLVED (round 6, 2026-08-22) — **0 owner cards open. D1–D25 settled**
+        (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
+        known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
+        satisfied 2026-08-22 — every live-clock phase touching the shared files is
+        APPROVED and merged (`57d8c25`) and the post-live-clock baseline is published.
+        **The mechanism-inventory gate has run and its contracts are written (§2B, §3A,
+        §3B, §4A, §4B, §4C, §6A, §6B, §6C, §11A). Next: implementation-planner.**
+        Three gate resolutions (§4B, §6B, §4A K1) are listed for owner ratification in
+        the gate handoff §5; a veto arrives as a new amendment.
+        **⚠ Read §2A and §2B first.** §2A found the drift; §2B is the full sweep and
+        supersedes §2's "all paths current" header. One drifted citation is a contract
+        (`typical_times_statement` gained an injected clock that §3's proposed
+        signature erases) — resolved in §4A K1.
+        **⚠ Section-letter precedence:** where a lettered section and the numbered
+        section it amends disagree, the letter wins. §4A supersedes the signature and
+        call forms in §3.1, §4.2 and §5; §4B supersedes §4.4's stated invariant and its
+        proof; §4C (D25) amends §3.4's BROADEN rung, §4.3's quantifier, §4B's residual
+        reachability and §11A rows T10b/T16b; §6B supersedes §6.4's `is_estimated`
+        definition.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19/20 (no raw_intention.md; three
              architecture projection passes, each owner-corrected, preceded this
              document — the corrections are folded, not appended)
-date: 2026-08-20
-round: 1
+date: 2026-08-20 (rounds 1–4) · 2026-08-22 (round 5, mechanism-inventory gate; round 6,
+      D25 fold)
+round: 6
 ```
 
 ---
@@ -239,6 +249,129 @@ sits there.
 and a header asserting "all paths current" ages worse than the citations under it, because
 it is the sentence nobody re-checks. Date the grounding, and re-ground at the gate.
 
+
+### 2B. Re-grounding sweep, measured 2026-08-22 (mechanism-inventory gate — amendment, nothing above renumbers)
+
+§2A swept **five** citations and labelled itself a sample. This section is the sweep §13
+step 1a owes: **every** code citation in §2.1, §2.2 (F-A…F-J) and §§3–12, checked at
+source against the tree at `dcfe849` (`app/` byte-identical to the published baseline
+tree `dc76db8`). Address AND substance were checked; a line that moved but says the same
+thing is drift, a line that says something different is a finding.
+
+#### Citations that hold, address and substance
+
+`get_working_section_typical_times.py:21` (HC-1 anchor) · `budget_division.py:15-17`
+(constants) · `budget_division.py:19-25` (`EXCLUDED_STEP_STATES`) ·
+`budget_division.py:264` and `:324` (the two fallback reads) · `:285-305` (the
+`allowed_worker_minutes is None` early return) · `:309-312` (`allocated_groups`) ·
+`:317-333` (weights iterate `allocated_groups` only) · `:332` (`Fraction(1,1)`) ·
+`task_item.py:52-58` (`uix_task_items_primary_active`, `role = 'primary' AND removed_at
+IS NULL`) · `item.py:30,33,34,35-37,40` (F-I's six item fields, nullabilities as stated)
+· `item_category.py:24` (`major_category`) · `item_cost_result.py:23-32` (actuals +
+`calculation_version`; no typical column) · `_create_item_in_session.py:82`
+(`item_category_snapshot = category.name`) · `test_live_clock_goldens.py:325-332` (the
+byte-golden assertion) · commits `0b85701` and `1081a2b` · `working_sections.py:131`
+(route) · all **four** role gates in §2.1's table (typical-times, production-time,
+budget-allocations ADMIN/MANAGER/WORKER/SELLER; price-scenario ADMIN/MANAGER —
+`item_economics.py:350, :374, :388`) · F-J's "zero `sqlalchemy`/`models.tables` imports
+across all eight `domain/item_economics/` files" (8 `.py` files, 0 hits).
+
+#### Address drift — substance unchanged
+
+| §2 citation | Today | |
+|---|---|---|
+| `get_working_section_typical_times.py:21-63` (the statement) | `21-69` | moved |
+| `get_task_budget_status.py:51-78` (`_load_task_and_item`) | `54-81` | moved |
+| F-A `production-time` calls budget-status `:26` | **`:48`** | moved (`:26` is now the `def`) |
+| F-A price-scenario `:194-195` (calls it AND re-loads the item) | `:195-196` | moved |
+| F-A `budget_allocations.py:74-94` (`primary_by_task`/`item_by_id`) | `75-96` | moved |
+| F-C `production_time.py:28-38` (step load) | `30-41` | moved |
+| F-C `budget_allocations.py:110-118` (step load) | `111-119` | moved |
+| F-C `price_scenario.py:119-121` (step load) | `122-124` | moved |
+| F-C `price_scenario.py:128-132` (non-excluded predicate) | `131-135` | moved |
+| F-E `budget_division.py:349-359` (excluded render) | `351-360` | moved |
+| F-G `price_scenario.py:157` (`terminal = Fraction(0,1)`) | **`:160`** | moved |
+| F-H fixture "no COMPLETED steps" `:1-8` | `1-9` | moved |
+| §6.2 price-scenario "from its `item` (`:195`)" | `:196` | moved |
+| §2.1 call sites `:68` / `:55` / `:45` / `:137` | `74` / `81` / `46` / `140` | moved (§2A) |
+
+#### Substance changes — each one feeds a contract below
+
+- **S-1 (F-A). `TaskBudgetStatus` no longer "carries only `item_id`".** It carries
+  `result: ItemCostResult | None` (`get_task_budget_status.py:51`), added by the
+  live-clock pipeline, and `item_id` is at `:50`, not `:47`. Consumed on the wire
+  (`get_task_production_time.py:117`). §6.2 row 1's "no payload change" claim now
+  applies to a **13-field** dataclass with two construction helpers. → **§6A**.
+- **S-2 (F-A). The published `item_id` and the loaded primary `Item` can be different
+  items.** On the evaluated path `item_id = evaluation.item_id` (`:198`), and
+  `item_binding == "mismatched"` marks exactly the case where it differs from
+  `item.client_id` (`:118`). The intention never says which of the two derives the
+  narrowing spec. → **§6A**.
+- **S-3 (F-A / §6.2). A fifth `TaskBudgetStatus` construction surface exists and appears
+  in no table in this document:** `get_task_budget_status_worker.py` (the WORKER/SELLER
+  money-redacted face) calls `_load_task_and_item`, `_empty_status` (`:38`, `:48`) and
+  `_build_evaluated_status` (`:53`), and its own comment says it "must not inherit a
+  future manager change". `_empty_status` has **four** call sites across the two files.
+  → **§6A**.
+- **S-4 (F-F). `DivisionStep(typical_worker_seconds=…)` now has two PRODUCTION
+  constructors.** `get_task_production_time.py:50-62` and
+  `get_task_budget_allocations.py:217-229` both build `DivisionStep(...,
+  typical_worker_seconds=None, ...)`, introduced by live-clock phase 2 (`e7d65b9`,
+  2026-08-20). F-F's "its only constructors are 8 test call sites plus fakes" is false as
+  of that commit. F-F's **conclusion** survives — the field is still always `None` in
+  production — but its stated **reason** ("both fallback reads receive ORM `TaskStep`
+  rows lacking the attribute") is now wrong: production hands `DivisionStep` dataclasses
+  that **do** have the attribute, explicitly set to `None`. D18's removal therefore edits
+  two production files, not only tests. → **§6C**.
+- **S-5 (F-C). The three step loads are no longer identical.** The WHERE predicates still
+  agree exactly (`workspace_id`, `task_id`/`task_id.in_`, `is_deleted.is_(False)`), which
+  is what §6.1 rests on — but `production_time.py:30-41` now adds
+  `selectinload(TaskStep.latest_state_record)` and `.order_by(TaskStep.client_id.asc())`,
+  which the other two lack. §6.1's shared function takes `steps` and is unaffected;
+  F-C's word "identical" is not.
+- **S-6 (§7.4). `serializers.py:353` is not the typical pass-through.** The
+  price-scenario typical pass-through is `serializers.py:364` (`"typical":
+  scenario["typical"]`); `:353` is now the item block's `"label"`. Also relevant to §7.2
+  and §7.3: production-time's section typical and budget-allocations' step rows are **not**
+  pass-throughs — `division_serializers.py:102-108` and `:36-47` enumerate their keys
+  explicitly, with `typical.get("sample_count", 0)`-style defaults. New fields must be
+  added there by name.
+- **S-7 (§2.1). "Task's section ids" means two different sets.** Production-time scopes
+  the statement to **every** step's section (`get_task_production_time.py:65`);
+  price-scenario scopes it to the **participating** sections only
+  (`get_task_price_scenario.py:136`). T6 already asserts the restriction; §2.1's table
+  blurs it.
+- **S-8 (grounding for §4.4). `TaskStep.total_working_seconds` is `Integer, nullable=False,
+  default=0`** (`models/base/aggregate_metrics.py:6`). Two consequences: a group's
+  `SUM` is never NULL (so a met sample floor implies a non-NULL median), and a group's
+  `SUM` **can legitimately be 0**. → **§4B**.
+
+#### Count checks — every counted sentence, both directions
+
+| Counted sentence | Counted thing | Verdict |
+|---|---|---|
+| §1/title "four consumers" | §2.1 table = 4 rows | ✅ |
+| §6.2 header "Per consumer (**all four**…)" | its own table = **6** rows; and 7 surfaces once S-3's worker face is included | ❌ — the header counts a different set from the table under it |
+| §2A "**Five** citations checked at source" | its table = **6** rows | ❌ |
+| §2A "**Four of five** call sites moved" | the table holds **4** call sites (all moved) + 2 definition anchors (1 moved, 1 held) | ❌ in both readings: 4 of 4 call sites moved; 5 of 6 cited locations moved |
+| §2.2 "F-A…F-J" | 10 facts, A–J present | ✅ |
+| §8 "two terminals" | table = 2 rows | ✅ |
+| §11.1 "T1…T21" | 21 rows | ✅ (but only **19 distinct** mutations — T13 shares T12's, T4 names one swap serving two rows) |
+| §11.1 "the **8** `DivisionStep(typical_worker_seconds=…)` test constructors in `test_budget_division.py`" | `DivisionStep(` appears 8× in that file, but only **6** pass the field (1 factory `step()` at `:13-22` + 5 direct at `:245,250,264,269,274`); the real edit surface is the **20** `typical=` argument passes; and **2 production** constructors are unlisted (S-4) | ❌ |
+| F-J "all **eight** `domain/item_economics/` files" | 8 `.py` files | ✅ |
+| §7.2 `sections_by_basis` {0,2,1} vs `participating_section_count: 3` | 0+2+1 = 3 | ✅ |
+| §7.2 `sample_count: 61` under `typical_basis: "section_wide"` vs `section_sample_count: 61` | equal, per §3.6 | ✅ |
+| §3.7 "complete set after this pipeline" | 5 rows carrying 6 constants (row 2 carries two) | ✅ |
+| §10 "All settled decisions **D1–D22** are recorded verbatim in `owner_decisions.md`" | that file records **D1–D24** verbatim | ❌ — undercount; the following sentence names D23/D24 separately, so the intent is clear and the sentence is still false |
+| §10 digest D1…D22 | 22 entries | ✅ |
+| Header `round: 1` vs `status: RESOLVED (round 3…)` vs changelog "Round 4" | three different round numbers in one document | ❌ — this amendment makes it round **5** |
+| §12 measurement matrix | 5 shapes × 2 statements = **10** measurements; §12 states no count | ⚠️ the planner must enumerate them; an unstated count is where a matrix silently ships at 6 |
+| §5 diagram's task-economics branch | names 3 consumers; working-sections is the 4th and is not drawn | ⚠️ not a count claim, but the diagram omits a member the text counts |
+| Published baseline "21-ID failing set" (frontend handoff §7) | 21 IDs listed | ✅ |
+| F-H "byte-exact goldens cover **two of the four** payloads … for production-time, budget-status and budget-allocations" | the test asserts over **3** payloads; two of them are members of §2.1's four consumers, budget-status is a fifth surface | ⚠️ self-consistent only under that reading — §11.2's 3-row table is the authority; F-H's phrasing is ambiguous, not wrong |
+
+**Nothing found in this sweep invalidates any of D1–D24.**
+
 ---
 
 ## 3. Domain model & vocabulary
@@ -246,7 +379,7 @@ it is the sentence nobody re-checks. Date the grounding, and re-ground at the ga
 All new pure objects live in `domain/item_economics/typical_filters.py` (new file).
 All are `@dataclass(frozen=True)`; the spec is hashable (frozensets/tuples only).
 
-### 3.1 `TypicalFilterSpec` — what population was requested
+### 3.1 `TypicalFilterSpec` — what population was requested (**⚠ the statement signature quoted here predates the injected clock — see §4A K1; canonicalization and the per-field predicate table are §3A**)
 
 ```
 TypicalFilterSpec(
@@ -307,7 +440,7 @@ Raw statistics and threshold predicates ONLY — **no basis property of any kind
 Both populations are always gathered regardless of policy: the query gathers facts;
 the domain decides what they mean.
 
-### 3.4 `TypicalResolutionPolicy` — what a thin requested population resolves to
+### 3.4 `TypicalResolutionPolicy` — what a thin requested population resolves to (**⚠ D25/§4C: the `BROADEN_TO_SECTION` first rung additionally requires a narrowed median `> 0`**)
 
 ```
 TypicalResolutionPolicy.BROADEN_TO_SECTION   # task economics: usable value preferred
@@ -380,6 +513,119 @@ answered from: `section_sample_count` under `BROADEN_TO_SECTION`,
 | `COMPARABILITY_PROFILE` | `primary_item_category_v1` | new |
 | `RECONCILIATION_METHOD` | `uniform_basis_v1` | new |
 
+
+### 3A. `TypicalFilterSpec` — canonicalization and the per-field predicate contract (mechanism-inventory gate, 2026-08-22)
+
+§3.1 states combination semantics in prose ("AND across fields; OR within a collection
+field; unknown never matches"). Prose is not a predicate translation, and this object is
+also the **dedupe key** for §6.2's batch — a rule-6 mechanism twice over. The contract:
+
+**C1 — canonicalization at construction (`__post_init__`).** Two distinct in-memory
+values must never mean the same population, because §6.2 dedupes by value and a
+duplicate spec becomes a second, redundant population with a different index.
+
+- A collection field that is set but **empty** (`frozenset()`) is normalized to `None`.
+  Consequence: `is_narrowing` is exactly "at least one field is not `None`", and any
+  non-`None` collection field is non-empty by construction. (Rejected alternative:
+  treating `frozenset()` as "matches nothing" — it is indistinguishable from a
+  parse bug in `parse_spec_from_query_params`, and it produces a narrowed population of
+  0 that `BROADEN_TO_SECTION` then silently answers section-wide, which is HC-3's shape.)
+- A range field `(lo, hi)` with `lo` and `hi` both `None` is **kept** — it is not a
+  no-op; see C2.
+- A range field with `lo > hi` raises `ValueError` at construction. An empty band would
+  otherwise make `narrowed_sample_count = 0` for every section, which under
+  `BROADEN_TO_SECTION` answers section-wide with no signal that the question was
+  unanswerable.
+- Every field's canonical form is fixed so that `__eq__`/`__hash__` (the frozen
+  dataclass's own, field-wise) **is** the dedupe key. **No spec hash, digest or
+  fingerprint is introduced anywhere in this pipeline** — the founding failure of this
+  gate was "a cheap, stable hash", and nothing here needs one.
+
+**C2 — per-field predicate table.** `build_item_match(spec) -> (needs_category_join,
+predicate | None)`. `predicate is None` exactly when `spec.is_narrowing` is False.
+
+| Field (when not `None`) | Predicate | Its NULL/unknown row |
+|---|---|---|
+| `item_category_ids` | `Item.item_category_id IN (ids)` | `item_category_id IS NULL` ⇒ SQL `NULL` ⇒ not TRUE ⇒ excluded |
+| `major_categories` | `ItemCategory.major_category IN (values)` | no category ⇒ outer-joined `ItemCategory` is NULL ⇒ excluded |
+| `width_cm = (lo, hi)` | `Item.width_in_cm IS NOT NULL AND (>= lo if lo is not None) AND (<= hi if hi is not None)` | NULL width ⇒ FALSE |
+| `height_cm`, `depth_cm` | as `width_cm` | as `width_cm` |
+| `can_have_upholstery` | `Item.can_have_upholstery IS <value>` (column is `nullable=False`) | no NULL row on the column; absence of the item is handled by C3 |
+| `designers` | `Item.designer IN (names)` | `designer IS NULL` ⇒ excluded |
+
+The explicit `IS NOT NULL` in the range rows is load-bearing: it is what makes
+`(None, None)` mean **"the dimension is known"** rather than "no constraint".
+`(None, None)` sets a field, so `is_narrowing` is True, and the population it selects is
+"items whose width is recorded" — a real, non-empty narrowing. State it in the field's
+docstring; an implementer reading `(None, None)` as a no-op writes `TRUE` and the
+population silently doubles.
+
+**C3 — the conjunction is coalesced to FALSE, not left NULL.** "Unknown never matches"
+is implemented once, at the top: the group-level match value is
+`coalesce(<conjunction>, FALSE)`. A task with no active PRIMARY `TaskItem`, or whose
+`Item` row is deleted, produces `FALSE` — not `NULL`. Three-valued logic happens to give
+the right answer inside `count(...) FILTER (WHERE …)` today; it stops giving the right
+answer the first time anyone writes `NOT item_match`, and nothing would fail.
+
+**C4 — `needs_category_join`** is `spec.major_categories is not None`, per spec. With K
+specs the statement emits the `ItemCategory` join iff **any** spec needs it, and only
+those specs' predicates reference it.
+
+**C5 — join predicates live in `ON`, never in the statement's `WHERE`.** LEFT OUTER JOIN
+`TaskItem` ON `(task_id, workspace_id, role == PRIMARY, removed_at IS NULL)`; LEFT OUTER
+JOIN `Item` ON `(client_id == TaskItem.item_id, workspace_id, is_deleted IS FALSE)`;
+LEFT OUTER JOIN `ItemCategory` ON `(client_id == Item.item_category_id)`. Moving any of
+those predicates into `WHERE` converts the LEFT into an effective INNER and silently
+drops primary-less tasks from the **section-wide** population as well. See §11A for the
+named mutation this requires, which T18's current mutation does not produce.
+
+### 3B. Basis and count totality — the rules §3.4/§3.6 leave undecided (mechanism-inventory gate, 2026-08-22)
+
+**B1 — a non-narrowing spec never produces a narrowed basis.** When `spec.is_narrowing`
+is False, the narrowed columns are numerically equal to the section columns (§4A, K2), so
+a `has_narrowed`-first implementation returns `typical_basis = "item_narrowed"` and, via
+§4.3's quantifier, `task_typical_basis = "item_narrowed_uniform"` — for a task whose
+`applied_filter` is `null`. Both are false statements on the wire, and §3.6's own rule
+("every basis field describes the value it sits next to") forbids them. **Contract:**
+`spec.is_narrowing is False` ⇒ `typical_basis ∈ {section_wide, insufficient_sample}` and
+`task_typical_basis = "section_wide_uniform"`, unconditionally, without consulting the
+narrowed columns. This is the case T3's fixture produces (a primary item with no
+category), and no pre-existing test constrains a field that does not exist yet — so
+without this row the defect ships green.
+
+**B2 — a zero statistic is a statistic, not an insufficient sample.**
+`SelectedTypical.typical_worker_seconds` carries the value the SQL returned, **verbatim,
+including `0`**; `typical_basis` names the population it came from. `insufficient_sample`
+is reserved for a NULL value (the floor was not met). Layer 2's trigger (`value is None
+or value <= 0`, §4.5) is independent of `typical_basis`. Consequence, stated so it is not
+reported as a bug: a wire row may read `typical_worker_seconds: 0, typical_basis:
+"item_narrowed", sample_count: 7` beside an `allowance_seconds` computed from the neutral
+weight. §6.4's disclosure clause therefore reads **"null or zero selected"**, not "null
+selected" — see §11A for the second criterion row this implies. (**⚠ D25/§4C:** on task
+surfaces the reachable zero form is `section_wide` + `0`; `item_narrowed` + `0` is
+unreachable there and remains reachable only on the deferred analytics surface.)
+
+**B3 — `sample_count` for a participating section is `section_sample_count` whenever the
+basis is `insufficient_sample`.** §3.6 defers to "the population the policy would have
+answered from", but participating sections do not pass through
+`resolve_section_typical` at all (§4.3 gives them the uniform basis directly; the policy
+argument reaches only excluded sections and the analytics path). Task economics is
+`BROADEN_TO_SECTION` by construction (§5), so the answer is `section_sample_count`.
+State it, or the rule is undefined on the exact rows where it is read.
+
+**B4 — a section with no evidence row is total, not a `KeyError`.** The statement
+outer-joins from `WorkingSection` and therefore returns a row for every live, non-deleted
+section — but a task's steps may name a section that is soft-deleted, in which case the
+section is absent from both the statement's rows and from production-time's
+`section_by_id` (which filters `is_deleted.is_(False)`). **Contract:** a section id
+present in the task's steps and absent from the statement's rows yields
+`SectionTypicalEvidence(narrowed_sample_count=0, section_sample_count=0, both seconds
+None)`, `typical_basis = "insufficient_sample"`, `sample_count = 0` — never a lookup
+error. This keeps §7's "always present, non-nullable, explicit default" promise total,
+and it replaces the accidental cover that `_step_result`'s two-argument
+`typicals.get(section_id, <step attr>)` provides today and that D18's removal deletes
+(§6C). Reachability of the soft-deleted-section shape is not proven here; the contract is
+total either way and costs one branch.
 ---
 
 ## 4. The three layers (exact semantics)
@@ -390,7 +636,7 @@ For each (section, spec): compute both populations in one pass; resolve per §3.
 Both populations are always computed — strict mode discards nothing at the SQL
 layer; policy is applied purely, after the facts are in hand (§2 F-J, §5).
 
-### 4.2 The query mechanism (facts only, policy-blind)
+### 4.2 The query mechanism (facts only, policy-blind) (**⚠ signature and result shape SUPERSEDED by §4A**)
 
 `typical_times_statement(workspace_id, *, specs: Sequence[TypicalFilterSpec] = ())`.
 
@@ -420,7 +666,7 @@ layer; policy is applied purely, after the facts are in hand (§2 F-J, §5).
   chunking, the split is `log()`ed — never a silent cap. Acceptance is conditional
   on measurement (§12).
 
-### 4.3 Layer 1.5 — task reconciliation (`uniform_basis_v1`)
+### 4.3 Layer 1.5 — task reconciliation (`uniform_basis_v1`) (**⚠ D25/§4C: the quantifier below quantifies `has_usable_narrowed`, not `has_narrowed`**)
 
 Inputs: evidence for every section in the task; the participating set from the
 single shared `participating_sections(steps)` (§6.1).
@@ -445,14 +691,14 @@ otherwise (including the empty participating set)
   emitted `typical_worker_seconds` is identically an integer produced by the SQL —
   never a product or ratio of two of them (T5 asserts this property).
 
-### 4.4 The reachability invariant
+### 4.4 The reachability invariant (**⚠ SUPERSEDED by §4B — the invariant below is false in both of its halves; do not build a criterion from it**)
 
 Narrowed ⊆ section-wide (per §3.1 unknown-never-matches) ⇒ `has_narrowed ⇒
 has_section` ⇒ under `item_narrowed_uniform` **no participating section can reach
 layer 2**. Layer 2 is reachable only under `section_wide_uniform` (or on excluded
 sections whose ladder bottoms out). Test T10.
 
-### 4.5 Layer 2 — terminal business fallback (per consumer; §8)
+### 4.5 Layer 2 — terminal business fallback (per consumer; §8) (**the `<= 0` clause here is what breaks §4.4 — see §4B**)
 
 Applied only where `SelectedTypical.typical_worker_seconds` is `None` **or `<= 0`**
 (zero typicals are unusable today — `test_c3_zero_typical_is_not_usable...` — and
@@ -461,6 +707,241 @@ terminal only when no usable value exists in the task. Division: `terminal =
 Fraction(1,1)` (weight-neutral). Price-scenario: `terminal = Fraction(0,1)`
 (contribution-neutral). Never serialized (§6.4).
 
+
+### 4A. The statement contract — signature, clock, result shape, HC-4 scope (mechanism-inventory gate, 2026-08-22)
+
+**This section supersedes the signature and call forms written in §3.1, §4.2 and §5**,
+which were authored before `typical_times_statement` gained its injected clock (§2A). It
+adds nothing to them semantically; it makes them compile against the real function and
+pins the shape §4.2 deliberately left to "internal strategy".
+
+**K1 — the signature.**
+
+```python
+def typical_times_statement(
+    workspace_id: str,
+    *,
+    now: datetime | None = None,
+    specs: Sequence[TypicalFilterSpec] = (),
+): ...
+```
+
+Both parameters keyword-only; `now` keeps its existing name, position among keywords and
+default. Per-consumer clock after V1:
+
+| Consumer | `now` | `specs` |
+|---|---|---|
+| `get_task_production_time` | `ctx.now` — **unchanged** | derived spec (K ≤ 1) |
+| `get_task_budget_allocations` | `ctx.now` — **unchanged** | deduped specs (K ≥ 0) |
+| `get_task_price_scenario` | **`ctx.now` — CHANGED from its own wall-clock read** | derived spec (K ≤ 1) |
+| `get_working_section_typical_times` | default (its own wall-clock read) — **unchanged** | `()` |
+
+**Why price-scenario moves and working-sections does not.** HC-2 requires every
+task-scoped consumer to observe *identical* layer-1 evidence for the same task and
+section, **including identical counts**. The 90-day cutoff is derived from the clock, so
+two surfaces reading the clock at different instants can straddle the boundary for a
+group whose `max(closed_at)` sits at it, and disagree on `sample_count` and therefore on
+the median. That is an HC-2 violation with no error, and it also makes T6 undecidable:
+a test that freezes the clock for production-time but not for price-scenario cannot
+assert cross-service equality deterministically. The neighbouring pipeline's HC-3A names
+the default read as "the compatibility shim for its callers **outside this pipeline** (the
+working-sections surface and the price-scenario typical block, both settled-basis and out
+of scope)" — this pipeline brings price-scenario into scope for the same evidence, so the
+shim's stated justification lapses for it and only for it. `ServiceContext.now` is always
+present (`context.py:24`, `default_factory`), so the change is a one-line argument, no
+payload key moves, and price-scenario becomes deterministic within a request.
+`/working-sections/typical-times` is task-free, HC-2 does not bind it, and D24 requires it
+byte-identical — it keeps the default. **Listed for owner ratification: this extends the
+live-clock determinism contract to a fourth surface that pipeline deliberately excluded.**
+
+**K2 — the result contract for K distinct specs.** §4.2 correctly refuses to contract the
+*execution strategy*; the *result shape* must be contracted, because §6.2 makes "one
+statement call for the batch" and `SectionTypicalEvidence` carries no spec identity.
+
+```
+len(specs) == 0  ->  columns (client_id, name, sample_count, typical_worker_seconds)
+                     — today's shape, today's SQL (HC-4)
+
+len(specs) == K >= 1  ->  columns
+                     (client_id, name, spec_index,
+                      section_sample_count,  section_typical_worker_seconds,
+                      narrowed_sample_count, narrowed_typical_worker_seconds)
+                     exactly one row per (live non-deleted working section x spec_index)
+```
+
+- `spec_index ∈ [0, K)` **positionally indexes the caller's own `specs` sequence.** It is
+  not a hash, not a spec serialization, not a category id. The caller holds the sequence
+  it passed, so the mapping needs no canonicalization contract and cannot drift (§3A C1).
+- **Row cardinality is total**: every live section appears once per `spec_index`, sections
+  with no qualifying history included (counts 0, seconds NULL). This preserves today's
+  outer-join-from-`WorkingSection` behaviour per index.
+- **The `section_*` columns are spec-independent and must be byte-equal across every
+  `spec_index` for a given section.** This is the observable form of §4.2's
+  "FILTER, never WHERE" rule and it is what makes §4.4's subset claim true (§4B).
+- Domain mapping: `(client_id, spec_index) -> SectionTypicalEvidence`. Neither
+  `spec_index` nor any column name appears in a domain object or on the wire.
+
+**K3 — shape is a function of `K`, never of `is_narrowing`.** A caller that dedupes 50
+tasks' specs and gets back a *different row shape* depending on whether every derived spec
+happened to be empty would take a different parsing branch on a data-dependent condition —
+a first-order silent failure. Therefore:
+
+- `K == 0` ⇒ today's shape and today's SQL. This is the only condition HC-4 binds on.
+- `K >= 1` ⇒ the keyed shape, **even if every spec is non-narrowing**; for a
+  non-narrowing index the match is the constant TRUE, no item joins are emitted for it,
+  and `narrowed_* == section_*` by construction.
+- **Callers normalize before calling:** the sequence passed contains only *narrowing*
+  specs. A task whose derived spec is non-narrowing maps to `spec_index = None` and takes
+  `narrowed_* := section_*` (and, by §3B B1, a section-wide basis). If every task's spec
+  is non-narrowing the caller passes `specs=()` and gets the K == 0 shape. This is what
+  makes "empty spec ≡ no spec" (§3.1) true at the SQL boundary rather than only in prose.
+
+**K4 — the two-population FILTER arithmetic, composed.**
+
+```
+qualifying   := grouped_steps.c.latest_closed_at >= cutoff
+match_k      := coalesce(<spec k's item match>, FALSE)          -- 3A C3, group-level
+
+section_sample_count   := count(task_id) FILTER (WHERE qualifying)
+section_typical        := CASE WHEN section_sample_count  >= TYPICAL_MIN_SAMPLE_SIZE
+                          THEN cast(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY group_seconds)
+                                          FILTER (WHERE qualifying)) AS INTEGER) END
+narrowed_sample_count  := count(task_id) FILTER (WHERE qualifying AND match_k)
+narrowed_typical       := CASE WHEN narrowed_sample_count >= TYPICAL_MIN_SAMPLE_SIZE
+                          THEN cast(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY group_seconds)
+                                          FILTER (WHERE qualifying AND match_k)) AS INTEGER) END
+```
+
+- **The min-sample rule is applied per population, against that population's own count.**
+  Today the module has one `sample_count` local reused by both the count column and the
+  `CASE` threshold (`get_working_section_typical_times.py:47, :50`); the obvious
+  copy-paste is to reuse it for the narrowed `CASE` too. Named mutation in §11A.
+- **`match_k` must reach the outer aggregate as a non-aggregate column.** That is the
+  real composition constraint behind §4.2's `bool_or` sketch: if the item joins are
+  attached inside the `grouped_steps` subquery, the match must be selected there as
+  `bool_or(match_k)`; if they are attached outside, to `grouped_steps.c.task_id`, the
+  match is already per (section, task) and no `bool_or` exists. Both are permitted —
+  §4.2's "internal strategy is not contract" stands — but each carries the same
+  obligation, expressed as three behavioural criteria with their own mutations (§11A):
+  section columns invariant to specs; per-group `SUM` invariant to specs; a primary-less
+  task in `section_*` and not in `narrowed_*`. PostgreSQL permits `FILTER` on ordered-set
+  aggregates and the current statement already relies on it, so no CTE is forced.
+
+**K5 — HC-4, scoped precisely.** HC-4's byte-identity claim binds on **`len(specs) == 0`,
+at both clock forms**. The cutoff enters as a bound parameter (`latest_closed_at >=
+cutoff`, a Python `datetime`), so it does not appear in the compiled string and the string
+is `now`-independent: `typical_times_statement(ws)` and `typical_times_statement(ws,
+now=X)` must both compile to the string today's corresponding call compiles to. T11
+therefore compiles **without `literal_binds`** (with it, the cutoff inlines and the
+comparison becomes a clock race), runs at **both** clock forms, and compares against a
+**frozen literal snapshot** of the pre-refactor string — see §11A, where T11's named
+mutation is currently inert.
+
+HC-4's second clause ("every consumer that passes no spec produces its current payload
+unchanged") reaches, after V1, only `/working-sections/typical-times` (D24). The other
+three pass `specs=()` exactly when every derived spec is non-narrowing — T3's case — and
+there "unchanged" means **every pre-existing numeric field unchanged**, not byte-identical,
+since §7.2/§7.3 add keys. §11.2's keys-only golden criterion is the same statement; T3's
+wording is normative and must not be paraphrased.
+
+### 4B. The reachability invariant, corrected (mechanism-inventory gate, 2026-08-22) (**⚠ strengthened by §4C / D25 — the deliberate `<= 0` reachability described below is closed for participating sections by the owner's ruling**)
+
+**§4.4 as written is false, twice, and T10 asserts it.**
+
+1. **The chain proves the wrong thing.** Under `item_narrowed_uniform` the selected value
+   is the *narrowed* value. `has_narrowed ⇒ has_section` says nothing about whether the
+   narrowed value can reach layer 2.
+2. **`<= 0` is a real hole.** §4.5 fires layer 2 where the selected value is `None`
+   **or `<= 0`**, deliberately (`test_c3_zero_typical_is_not_usable_and_uses_the_median`,
+   `test_price_scenario_query.py:119`). `TaskStep.total_working_seconds` is
+   `Integer, nullable=False, default=0` (§2B S-8), so a COMPLETED step can carry 0
+   seconds and a group's `SUM` can be 0. Five or more qualifying same-category groups all
+   summing to 0 give `narrowed_sample_count = 5` ⇒ `has_narrowed` ⇒
+   `item_narrowed_uniform` ⇒ selected value `0` ⇒ **layer 2 fires on a participating
+   section under `item_narrowed_uniform`.**
+
+**The correct invariant:**
+
+> Under `item_narrowed_uniform`, no participating section reaches layer 2 **through a
+> NULL selected value**: `narrowed_sample_count >= TYPICAL_MIN_SAMPLE_SIZE ⇒
+> narrowed_typical_worker_seconds IS NOT NULL`, because the statement's `CASE` returns
+> non-NULL exactly when that population's own count meets the floor, and `percentile_cont`
+> over one or more non-NULL `group_seconds` is non-NULL — every group's `SUM` is non-NULL
+> because the column is `nullable=False` (§2B S-8).
+> Layer 2 remains reachable under `item_narrowed_uniform` **only** through §4.5's `<= 0`
+> clause, and that path is deliberate.
+
+**And the subset claim's real reason.** Narrowed ⊆ section-wide holds because the
+item match is applied **only inside the aggregate FILTER** and `qualifying AND match_k`
+⊆ `qualifying` (§4A K4). §3.1's "unknown never matches" is what makes the subset *strict*
+in the presence of unknowns; it is not what makes it a subset. A criterion built from
+§4.4's stated reason tests the wrong mechanism.
+
+T10 splits into two rows; see §11A.
+
+### 4C. D25 — a usable narrowed median is required (owner answer to card C, folded by the coordinator, 2026-08-22)
+
+**Owner ruling (card C → D25, 2026-08-22): "Require a real figure."** A narrowed
+population whose median is zero is not "knowing the typical time for this item"; the task
+falls back to section-wide figures throughout. Verbatim record in `owner_decisions.md`.
+
+**Contract.**
+
+- `SectionTypicalEvidence` gains one derived predicate:
+  `has_usable_narrowed -> has_narrowed and narrowed_typical_worker_seconds > 0`.
+  `has_narrowed` itself is unchanged — it remains §3.3's pure count predicate (and per
+  §4B, `has_narrowed` already implies the median is non-NULL, so `> 0` is the only new
+  condition).
+- **§4.3's quantifier quantifies `has_usable_narrowed`, not `has_narrowed`:**
+  `item_narrowed_uniform` requires the participating set non-empty AND every
+  participating section `has_usable_narrowed`; otherwise `section_wide_uniform`.
+- **§3.4's `BROADEN_TO_SECTION` first rung gains the same condition:** the narrowed
+  value is selected only when the floor is met AND the narrowed median is `> 0`; a
+  zero-median narrowed population steps to the section rung. This is the per-section
+  form of the same ruling and governs excluded sections' independent resolution (§4.3).
+  The section rung is unchanged: a zero **section-wide** median is still published
+  verbatim (§3B B2) and still reaches layer 2 via §4.5.
+- **`ANSWER_AS_ASKED` is deliberately NOT changed.** The analytics surface answers the
+  narrowed question as asked, and a sufficient-count median of `0` IS the honest answer
+  (HC-3, D17, D19). The asymmetry is the two policies' whole point: economics prefers
+  usable values; analytics reports the asked statistic.
+- **No SQL change.** Both populations are computed exactly as §4A specifies; D25 is a
+  pure layer-1.5 rule — one predicate, one quantifier argument, one ladder rung.
+
+**Consequences.**
+
+- **§4B's residual reachability closes.** Under `item_narrowed_uniform` no participating
+  section reaches layer 2 **at all**: a NULL selected value is impossible (§4B's
+  corrected invariant) and a `<= 0` one is excluded by this ruling. Layer 2 on a
+  participating section is reachable only under `section_wide_uniform` (a zero or
+  insufficient section-wide median). §4.5's trigger, `apply_business_fallback`, T4 and
+  T21 are untouched — zero remains unusable wherever it is selected.
+- **On the wire, `typical_worker_seconds: 0` beside `typical_basis: "item_narrowed"` is
+  unreachable on every task surface** (participating rows by the quantifier; excluded
+  rows by the BROADEN rung). The reachable zero-statistic form is `section_wide` + `0`.
+  On the deferred `ANSWER_AS_ASKED` statistics surface, `item_narrowed` + `0` remains
+  reachable and honest. §3B B2's example reads accordingly.
+- **§11A T10b is superseded as written** — its fixture (5 same-category groups summing
+  0) now produces `section_wide_uniform`, which becomes the assertion, not the setup.
+  Corrected row **T10b′**: section A: 5 same-category groups summing 0 (narrowed count
+  5, median 0); section B: narrowed count ≥ 5, median 600 — contract:
+  `task_typical_basis = "section_wide_uniform"` (A's zero median disqualifies the task)
+  and both sections take section-wide values. Named mutation: in the reconciliation
+  quantifier (`typical_filters`, definition), quantify `has_narrowed` instead of
+  `has_usable_narrowed` — mutation yields `item_narrowed_uniform`, A's row
+  `0 / item_narrowed` with layer 2 firing on a participating section. Both sides: the
+  emitted `task_typical_basis` strings differ (`section_wide_uniform` vs
+  `item_narrowed_uniform`); exact-literal assertion on that field is the bite.
+- **§11A T16b's fixture moves to the reachable shape**; its assertion (a zero statistic
+  is disclosed as a statistic, never as `insufficient_sample`) is unchanged. Corrected
+  fixture: a `section_wide_uniform` task with a participating section whose
+  **section-wide** median is 0 at count ≥ floor — contract row:
+  `typical_worker_seconds: 0, typical_basis: "section_wide", sample_count: <n>`,
+  `allowance_seconds` present. Named mutation unchanged (publish
+  `null` / `insufficient_sample` for the zero-valued statistic).
+
+Trace: card C (`owner_decisions.md` D25) · §3.3 · §3.4 · §4.3 · §4B · §3B B2 ·
+§11A T10b/T16b · §4.5 and T21 (deliberately unchanged).
 ---
 
 ## 5. Task economics vs analytics (the two pathways)
@@ -528,7 +1009,7 @@ coincide with the section-wide ratios. **The contract changes even where an
 individual numeric result does not.** This wording is normative for the frontend
 handoff (§11.3).
 
-### 6.4 Layer-2 visibility (HC-2's third clause, per surface)
+### 6.4 Layer-2 visibility (HC-2's third clause, per surface) (**⚠ the `is_estimated` definition below is SUPERSEDED by §6B — taken literally it reverses a shipped payload value; the disclosure clause reads "null OR ZERO selected", per §3B B2**)
 
 - Division surfaces: a null-selected section publishes `typical_worker_seconds:
   null, typical_basis: "insufficient_sample"` **with its computed
@@ -540,6 +1021,128 @@ handoff (§11.3).
   the task reconciled to `section_wide_uniform`. This is a semantic clarification
   to an approved contract and gets an explicit line in the handoff (§11.3).
 
+
+### 6A. `TaskBudgetStatus` — the additive contract and its five construction surfaces (mechanism-inventory gate, 2026-08-22)
+
+§6.2 row 1 mutates a dataclass consumed by a shipped endpoint from another pipeline
+(`get_task_price_scenario.py:195`) and by a WORKER/SELLER face this document never names
+(§2B S-3). The lineage has already paid one round for a `TaskBudgetStatus` claim.
+
+**A1 — additive only.** Exactly one new field, appended last, with a default. No existing
+field's name, type, order or value changes; `_empty_status`'s and
+`_build_evaluated_status`'s existing outputs are untouched; the budget-status serializer
+is untouched; `golden_budget_status.json` is unchanged. `TaskBudgetStatus` today carries
+**13** fields including `result: ItemCostResult | None` (§2B S-1) — the "carries only
+`item_id`" grounding in F-A is stale and is not a basis for reasoning about the change.
+
+**A2 — carry the derived spec, not the `Item`.** The new field is
+`typical_filter_spec: TypicalFilterSpec | None = None`, computed once by
+`derive_spec_from_primary_item` at the load site. Carrying the `Item` instead would put a
+mutable ORM instance on a read-model dataclass that crosses three services, and would
+leave each consumer to re-derive — the fork HC-1 exists to prevent, one layer up.
+
+**A3 — which item derives it.** The **active PRIMARY `Item` loaded by
+`_load_task_and_item`**, never `evaluation.item_id`. The spec describes "work comparable
+to the task at hand" (§1); the evaluation's item is a historical binding, and
+`item_binding == "mismatched"` already exists to flag when the two differ (§2B S-2).
+Recorded consequence, so it is not later "fixed": on a `mismatched` task,
+`typical_resolution.applied_filter` describes the current primary item while `item_id`
+names the evaluated one. That combination is a criterion row.
+
+**A4 — `None` is ambiguous, and the ambiguity has an expiry date.** `_empty_status`
+receives no item and would default the field to `None`, which is indistinguishable from
+"a primary item that has no `item_category_id`". In V1 both collapse to
+`TypicalFilterSpec()` (§3.2) so the ambiguity is harmless. **It stops being harmless the
+moment `COMPARABILITY_PROFILE` v2 adds a non-category axis** — the exact silent-policy
+drift D11 exists to prevent. Either pass the item through at all **four** `_empty_status`
+call sites (`get_task_budget_status.py:121, :132`;
+`get_task_budget_status_worker.py:38, :48`), or record this expiry beside the field's
+default. The v2 return path (§9) inherits the obligation.
+
+**A5 — the worker face is a row of §6.2's table.** `get_task_budget_status_worker` calls
+`_load_task_and_item`, both construction helpers, and returns `TaskBudgetStatus` to a
+money-redacted serializer. It gains the field and **must not publish it**; its own comment
+("must not inherit a future manager change") is the standing instruction. With it, §6.2's
+table is **seven** rows, not the "all four" its header claims (§2B count check).
+
+### 6B. `is_estimated` — the clarification reverses a payload value (mechanism-inventory gate, 2026-08-22)
+
+Today (`get_task_price_scenario.py:175`):
+`is_estimated = (sections_total == 0) or (sections_without_sample > 0)`, where
+`sections_total = len(participating)`.
+
+§6.4 redefines it as **"layer 2 fired for ≥ 1 participating section"**. Taken literally —
+and it is written as an exact definition — a task with **zero participating sections** has
+zero sections where layer 2 fired, so `is_estimated` becomes **False** where today it is
+**True**, beside `total_seconds: 0`. A manager reading the price scenario of a task with
+no live steps would see "measured, and it is zero" instead of "estimated". §6.4 calls
+itself "a semantic clarification to an approved contract"; as written it is a behaviour
+change to a shipped payload, in the direction of over-confidence.
+
+**Contract:**
+
+```
+is_estimated := (participating_section_count == 0)
+                OR (layer 2 fired for >= 1 participating section)
+```
+
+The `participating_section_count == 0` disjunct is **retained verbatim**. The
+clarification replaces only the second disjunct's *definition*: "layer 2 fired" means the
+**selected** typical was `None` or `<= 0` for that section — which is exactly the set
+`sections_without_sample` counts today, so the value is unchanged in every case, and
+§6.4's genuine content survives intact ("`section_wide_uniform` alone does not set it").
+
+**The two existing fields §7.4 keeps, defined under the new regime** (the intention names
+them in its CURRENT block and adds only `typical_resolution`, so both ship on):
+
+- `sections_total` := `participating_section_count`. Meaning unchanged.
+- `sections_without_sample` := the count of **participating** sections whose **selected**
+  typical is `None` or `<= 0` — i.e. exactly where layer 2 fired. Under
+  `section_wide_uniform`, a section with a usable section-wide value is **not** counted
+  even though its narrowed sample was thin. This is §3.6's naming rule applied; the
+  tempting misreading is "sections without a *narrowed* sample", which would silently
+  re-scope a published field.
+
+### 6C. Typicals stay settled-basis — restating the neighbouring pipeline's most expensive mistake (mechanism-inventory gate, 2026-08-22)
+
+The archived `live_clock_for_working_time_economics` intention, §4.3A, closes with one
+contract line: *"`divide_production_budget` receives live worked seconds and **nothing
+else changes about its inputs** — `allowed_worker_minutes`, `typicals_by_section` and
+`section_attributes` are settled-basis values."* Its path-3 paragraph calls a "make it
+consistent" change here **"the most expensive mistake available in this feature"**, and
+records that no guard against it existed anywhere in the repository until that pipeline's
+phase 2 round 6.
+
+**This pipeline is the first change to those inputs since**: §6.2 replaces
+`typicals_by_section: Mapping[str, int | None]` with `Mapping[str, SelectedTypical]`. The
+contract line must therefore be restated, not silently superseded:
+
+> Every `typical_worker_seconds` inside every `SelectedTypical` handed to
+> `divide_production_budget` originates from the statement's SQL aggregate over the
+> **persisted** `TaskStep.total_working_seconds` column. No value produced by
+> `load_live_worked_seconds` reaches a typical, a sample count, or the item-match
+> predicate, on any path. Layer-2 terminals are `Fraction`s in weight space and are never
+> seconds (§8, §6.4). `allowance_seconds` remains byte-identical to today at equal
+> database state whenever the resolved weights are unchanged.
+
+Why it is not self-evident: after this pipeline, production-time and budget-allocations
+hand `divide_production_budget` `DivisionStep`s whose `total_working_seconds` **is** the
+live figure, alongside typicals that must not be. The two live in the same call. The
+named mutation is in §11A.
+
+**And the D18 removal surface, corrected (§2B S-4).** Removing
+`DivisionStep.typical_worker_seconds` edits **two production files** —
+`get_task_production_time.py:50-62` and `get_task_budget_allocations.py:217-229` — not
+only the test constructors §11.1 lists. Two further consequences:
+
+- `_step_result`'s `typicals.get(section_id, _value(step, "typical_worker_seconds"))`
+  (`budget_division.py:264`) uses the **two-argument** `.get`: its default fires only on a
+  **missing key**, never on a `None` value. Removing the field turns it into a plain
+  lookup whose miss must be contracted — that is §3B B4, which is what today's accidental
+  default has been covering.
+- `budget_division.py:324`'s fallback read sits inside `if typical is None`, so it does
+  execute in production today and always yields `None`. It is deleted with the field; the
+  surrounding branch is not.
 ---
 
 ## 7. Response contracts (current → proposed, all surfaces)
@@ -783,6 +1386,49 @@ deleted from the card path. One batched call per feed page (≤50 task ids) rema
 the cards' single economics source. `typical-times` stays a task-free benchmark
 surface per D24.
 
+
+### 11A. Test-matrix corrections — five inert named mutations, ten added rows (mechanism-inventory gate, 2026-08-22)
+
+Every mutation below was checked by the standing rule: **state the value under the
+contract and the value under the mutation, and confirm they differ.** All arithmetic here
+is done on paper, from the code cited in §2B; nothing in this gate was executed.
+§11.1's rows are otherwise unchanged and remain authoritative.
+
+#### Inert as written — each reads perfectly well in prose
+
+| Row | Why the mutation cannot redden it | Repair |
+|---|---|---|
+| **T5** | The mutation names "a fallback value" inside `reconcile_task_typicals`, which produces `SelectedTypical`s only — layer-2 fallbacks live in `apply_business_fallback` (§4.5, §8) and are **never serialized** (§6.4), so no mutation of one can change an emitted `typical_worker_seconds`. Under the contract and under the mutation the emitted value is the same SQL integer. | Mutate a **selected** value: in `reconcile_task_typicals` (definition), emit a participating section's value multiplied by the ratio of two others. Contract emits `600`; mutation emits `600 × (900/300) = 1800`. |
+| **T7** | "Reintroduce a private predicate in one service" is inert when the copy is **faithful** — and a faithful copy is what an implementer writes. Contract: three services agree. Mutation: three services still agree. | Name the disagreeing form: reintroduce a private predicate in one service that **omits `FAILED`** from the excluded set. Contract: all three select `{A, B}`; mutation: one selects `{A, B, C}`. |
+| **T11** | "Compiles to today's SQL string" is vacuous if the expected side is obtained by calling the same function: `f(x) == f(x)` survives any mutation of `f`. | The expected side is a **frozen literal snapshot** of the pre-refactor compiled string, captured once and committed. Compile **without `literal_binds`** (with it the bound cutoff inlines and the assertion becomes a clock race), and run the row at **both** clock forms (§4A K5). Contract: string equals the snapshot; mutation (unconditional item joins): the string gains `LEFT OUTER JOIN task_items … LEFT OUTER JOIN items …`. |
+| **T14** | `apply_business_fallback` computes `filled = median(usable) if usable else terminal`, so a non-`Fraction` `terminal` is never touched when any usable value exists — annotations do not enforce. Contract and mutation both return the median; no `TypeError` is raised. | Bind the rule at the boundary (charter rule 11): `apply_business_fallback` validates `isinstance(terminal, Fraction)` on entry and fails closed. The mutation becomes "delete the entry guard", and the row bites on **any** fixture rather than only on the empty-`usable` one. Keep an empty-`usable` fixture as the second row. |
+| **T19** | The bite depends on a strategy §4.2 deliberately leaves free. With the item joins **inside** the `grouped_steps` subquery, dropping `role == PRIMARY` fans the join to 3 rows and makes the group `SUM` `3S` — but the subquery still emits **one row per (section, task)**, so `count(task_id)` is `1` in both populations and T19's "counts once in both populations" stays green. It bites only under the outer-attachment strategy. | Assert the **value** as well as the count: the section's median is `S`, not `3S`. And enumerate the two fixtures rule 2 requires — secondaries of the **same** category as the primary (membership unchanged, only the value/count move) and one secondary of a **different** category (membership itself moves for a task whose primary does not match). |
+
+#### Rows the contracts above add (ten: T10a replaces T10; nine are new)
+
+| # | Case | Asserts | Named mutation (file · definition-vs-call-site) | Both sides |
+|---|---|---|---|---|
+| **T10a** | replaces T10 | under `item_narrowed_uniform`, no participating section's selected value is `NULL` | `typical_filters` (definition): define `has_narrowed` as `narrowed_sample_count >= 0` | narrowed count 3 (below floor), value `NULL` — contract: task is `section_wide_uniform`; mutation: `item_narrowed_uniform` with every participating selected `NULL` ⇒ layer 2 on a participating section |
+| **T10b** (**⚠ superseded by §4C / D25 — use row T10b′ there**) | **new** — §4B | a participating section whose narrowed median is exactly `0` under `item_narrowed_uniform` **does** reach layer 2, in both consumers | treat `0` as usable in `apply_business_fallback` (definition) — **the same mutation T21 bites on; recorded per rule 12** | section A: 5 same-category groups summing 0; section B: median 600 — contract: A's weight/duration comes from `median({600}) = 600`, price-scenario total `1200`, `is_estimated` true; mutation: A resolves to `0`, total `600`, `is_estimated` false |
+| **T18b** | **new** — §3A C5 | a join predicate moved from `ON` into the statement's `WHERE` is caught | `_typical_item_filter` / statement (definition): move `role == PRIMARY` (and, as a second row, `removed_at IS NULL`) out of the `ON` clause into `WHERE` | history with one primary-less task — contract: `section_sample_count = N`; mutation: `N − 1`. T18's own `outerjoin → join` mutation does not produce this form, which is the likelier slip |
+| **T22** | **new** — §4A K4 | the narrowed `CASE` threshold reads the **narrowed** count | statement (definition): compare `section_sample_count >= TYPICAL_MIN_SAMPLE_SIZE` inside the narrowed `CASE` | section population 70, narrowed 2 — contract: `narrowed_typical = NULL`, and under `ANSWER_AS_ASKED` the analytics answer is `null`/`insufficient_sample`; mutation: a two-sample median is published, the exact HC-3 violation. SQL-layer sibling of T12, which mutates the policy branch |
+| **T23** | **new** — §3B B1 | a non-narrowing spec never yields a narrowed basis | `typical_filters` (definition): consult `has_narrowed` before checking `spec.is_narrowing` | T3's fixture (primary item with no category) — contract: `task_typical_basis = "section_wide_uniform"`, per-section `section_wide`, `applied_filter: null`; mutation: `item_narrowed_uniform` / `item_narrowed` beside a null filter. **T3 does not constrain this**: it asserts numeric identity, and these are new string fields |
+| **T24** | **new** — §6C | typicals handed to `divide_production_budget` are settled-basis | `get_task_production_time` (call site): pass `live_seconds[step]` into one section's typical | a task with an open WORKING record, served twice at two `ctx.now` values over identical database state — contract: every `allowance_seconds` identical across the two calls; mutation: the section's weight ticks, `total_weight` changes, `_largest_remainder` redistributes, and **every** section's allowance moves. Asserting this on price-scenario requires §4A K1's clock injection |
+| **T25** | **new** — §4A K2 | the `section_*` columns are byte-equal across every `spec_index` and equal to the `K == 0` call's columns | statement (definition): apply the item match as a `WHERE` instead of inside the aggregate `FILTER` | narrowed population 6, section population 20 — contract: `section_sample_count = 20` at every index; mutation: `6`. The general form of T18, which today covers only the primary-less-task case |
+| **T26** | **new** — §4A K4 | the per-group `SUM` entering the percentile is identical with and without specs | statement / `_typical_item_filter` (definition): drop `removed_at IS NULL` from the `TaskItem` `ON` clause | a task with one removed primary and one current one — contract: group sum `S`; mutation: `2S` under the inner-attachment strategy, and `count(task_id) = 2` under the outer one. **Bites under either strategy**, which is why it exists |
+| **T16b** (**⚠ fixture amended by §4C / D25 — zero arises via a section-wide median on a `section_wide_uniform` task**) | **new** — §3B B2 | the **zero**-selected division row discloses correctly | `_step_result` / the serializer (definition): publish `null` + `insufficient_sample` for a zero-valued statistic | a section with 7 same-category groups all summing 0 — contract: `typical_worker_seconds: 0`, `typical_basis: "item_narrowed"`, `sample_count: 7`, `allowance_seconds` present; mutation: `null` / `insufficient_sample` / the section count. §6.4's disclosure clause reads "null **or zero** selected" |
+| **T27** | **new** — §8 | `is_estimated` stays true for a task with no participating sections | `_typical_block` (definition): drop the `sections_total == 0` disjunct | a task whose every section is excluded — contract: `is_estimated: true`, `total_seconds: 0`; mutation: `is_estimated: false` beside `total_seconds: 0` (§6B) |
+
+#### One correction to §8's stated reason
+
+§8 says the division terminal `Fraction(1, 1)` is correct because "0 starves the section
+of allowance". It does more than that: with `terminal = 0` and no usable typical anywhere
+in the task, **every** resolved weight is `0`, `total_weight` is `0`, and
+`budget_division.py:338-343`'s `… / total_weight` raises `ZeroDivisionError`. The terminal
+is a division-by-zero guard stated in a parenthesis — the shape the corpus rule "every
+`max(`, `min(` and `or 0` in a contract is a candidate criterion row" exists to catch. T4's
+swap mutation therefore reddens by **raising**, not by asserting a different number; the
+criterion says so, and D22's reason is stronger than it reads.
 ---
 
 ## 12. Performance acceptance condition (conditional acceptance, owner ruling)
@@ -848,3 +1494,41 @@ surface per D24.
   §11.3 gains the worker-card re-pointing instruction: fallback typicals come from
   `budget-allocations` steps; the cached join is deleted from the card path. No
   backend scope change; no new decision — a recorded consequence of D24 + HC-2.
+- **Round 5 (2026-08-22) — mechanism-inventory gate.** Adversarial standalone session.
+  Two deliverables, both written as lettered amendments so no existing citation moves.
+  **(a) Re-grounding sweep (§2B)**, the sweep §13 step 1a owed after §2A's five-citation
+  sample: every citation in §2.1, §2.2 and §§3–12 checked at source for address **and**
+  substance; 14 addresses drifted, 8 substance changes found (F-A's `TaskBudgetStatus`
+  grew a field and a fifth construction surface; F-F's "no production constructors" is
+  false since `e7d65b9`; F-C's "identical step loads" no longer identical; §7.4's
+  serializer citation points at the wrong block), and every counted sentence re-counted
+  in both directions — six count defects, none touching D1–D24.
+  **(b) Mechanism contracts (§3A, §3B, §4A, §4B, §6A, §6B, §6C, §11A)** for the
+  spec's canonicalization and dedupe identity, the per-field predicate table with its
+  NULL rows, the statement's clock × spec signature and its keyed result shape for K
+  specs, the two-population FILTER arithmetic, basis/count totality, the
+  `TaskBudgetStatus` additive contract, `is_estimated`, and the settled-basis guard the
+  neighbouring pipeline calls the most expensive mistake available here.
+  Three internal contradictions were resolved unilaterally by contract and are listed
+  for ratification in the gate handoff: §4.4's reachability invariant is false and is
+  corrected in §4B; §6.4's `is_estimated` definition reverses a shipped payload value
+  and is corrected in §6B; price-scenario moves to the injected clock (§4A K1), which
+  extends the live-clock determinism contract to a fourth surface that pipeline
+  deliberately excluded.
+  §11A records **five inert named mutations** (T5, T7, T11, T14, T19 — each computed on
+  both sides) and adds **ten** rows the new contracts require.
+  One question could not be settled without the owner and is opened as **card C → D25**
+  (does a narrowed median of exactly zero count as a sufficient narrowed sample?).
+  Ledger no longer empty; status is gate-run-with-one-card, not RESOLVED.
+- **Round 6 (2026-08-22) — coordinator fold of the gate.** Card C answered by the owner
+  ("the recommended option is the correct approach" → **Require a real figure**),
+  recorded as **D25** and folded as **§4C**: the reconciliation quantifier and
+  `BROADEN_TO_SECTION`'s first rung require a usable narrowed median (`> 0`);
+  `ANSWER_AS_ASKED` deliberately still reports a zero median verbatim. Consequences:
+  §4B's residual `<= 0` reachability closes for participating sections
+  (`item_narrowed_uniform` now cannot reach layer 2 at all); `item_narrowed` + `0` is
+  unreachable on task surfaces; §11A row T10b is superseded by T10b′ and T16b's fixture
+  moves to the section-wide-zero shape (both recorded in §4C; the §11A rows carry
+  pointers). Inline pointers added to §3.4, §4.3, §4B and §3B B2. The gate's three
+  unilateral resolutions (§4B, §6B, §4A K1) were relayed to the owner for ratification
+  at this fold. Ledger empty; status RESOLVED; next: **implementation-planner**.
