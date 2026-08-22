@@ -233,5 +233,6 @@ ratification in
 sentence the owner has approved, but each decides which side of a contradiction wins:
 the corrected reachability invariant (intention §4B), the `is_estimated` definition
 (§6B), and price-scenario's move to the injected request clock (§4A K1). Ratification
-was relayed to the owner at the fold; a veto arrives as a new amendment, not an edit to
-the gate's record.
+was relayed to the owner at the fold as three cards with recommendations to ratify.
+**Ratified 2026-08-22** — the owner answered "go" to the relay (R1 additionally implied
+by the D25 answer). The contracts stand as written; the record is closed.
