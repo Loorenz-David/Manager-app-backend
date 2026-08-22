@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: CHANGES_REQUESTED — 2026-08-22 (review r3: 0 blocking / 2 should-fix / 3 notes; fix r4 dispatched; OD-11 closed the graph queue; projection WAIVED, docs-only)
+state: IMPLEMENTED — 2026-08-22 (fix r4: 2 should-fix + 2 notes closed; docs-only; graph queue already closed)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -660,3 +660,20 @@ so it is not a finding; the *reasoning pattern* is worth naming, because justify
 re-run by a directory that merely **contains** the read surface is how a two-minute L4 gets
 justified next time. The read surface, not its parent directory, is the unit of tree
 identity.
+
+### 2026-08-22 — Codex, fix r4
+
+Implemented the four corrections from review r3 within the declared perimeter. In the
+published frontend handoff, removed the record-deletion sentence from §5 mode 2; clarified
+that smoothing snaps its **smoothing baseline** to the served value; and amended §7's
+baseline block with the two named intermittent tests, the unrecoverable third intermittent
+test, the rule that one run is not evidence and must be repeated with an ID diff, plus the
+Redis-unreachable diagnostic of 23 failed / 2 errors rather than 21. No other handoff
+section changed, no application code changed, and no graph state was written.
+
+**Judgment calls and deviations.** None. All four quoted corrections were implemented
+as written. The graph was not revisited because review r3 and the prompt explicitly record
+the queue as adjudicated and closed; no graph work remains in this cycle.
+
+**Evidence.** Pre-edit L1 guard: `PYTHONPATH=. pytest tests/unit/docs/` from `app/` →
+59 passed. The post-edit guard and its final tree identity are recorded in the fix handoff.

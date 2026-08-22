@@ -96,19 +96,19 @@ There are exactly three client-visible decrease modes:
 1. **Rounding sense.** A decrease of at most 1 second is the rounding bound. Smoothing
    may absorb it; a visible snap is not required.
 2. **Disowning.** Marking any record of a step inaccurate, or removing the step, can
-   remove the step's live contribution. Record deletion is not a shipped client event
-   and is not a cause to handle. A drop larger than 1 second is authoritative: snap
-   down immediately to the served value, reset the smoothing baseline, and accrue from
-   the new time of receipt. Never clamp to the previous maximum, and do not animate the
-   descent: render the drop in one step rather than easing the value down over time —
+   remove the step's live contribution. A drop larger than 1 second is authoritative:
+   snap down immediately to the served value, reset the smoothing baseline, and accrue
+   from the new time of receipt. Never clamp to the previous maximum, and do not animate
+   the descent: render the drop in one step rather than easing the value down over time —
    the time is gone at once, not gradually.
 3. **Settlement window.** Closing a working record can briefly make the served value
    dip before the asynchronous settlement recomputation returns it to the settled
    value. If it drops and returns within seconds, render both served values as given;
    do not hide the dip or infer which internal event caused it.
 
-For every mode, smoothing may add elapsed time after receipt, but it must snap down to
-the served value rather than clamp. Render `share_state` as received. There is no
+For every mode, smoothing may add elapsed time after receipt, but its **smoothing
+baseline** must snap down to the served value rather than clamp. Render `share_state` as
+received. There is no
 `as_of` field by design, so the client does not distinguish a settlement-window dip
 from another served decrease. See intention §§3.3, 3.3A, 5.4, and 6A C.
 
@@ -148,6 +148,15 @@ count is context; the failing-ID set is the durable comparator.
   app/` is empty), so a measurement taken on today's tree is comparable without
   checking anything out.
 - **Result:** 21 failed / 2576 passed, collection 2597, measured in 50.61 seconds.
+- **Known instability:** at least two named tests in this suite are intermittent and are
+  not members of the 21:
+  `test_phase4_fix_coverage.py::test_c3_real_concurrent_open_insert_translates_the_loser[model]`
+  and
+  `test_process_shopify_products_integration.py::test_process_shopify_products_fans_out_to_all_active_workspace_shops_and_enqueues_one_task`.
+  A third intermittent test's identity is unrecoverable. A single run is therefore not
+  evidence — repeat and ID-diff before concluding that the set has changed.
+- **Redis diagnostic:** if Redis is not reachable at `settings.redis_url`, this machine
+  measures 23 failed / 2 errors, not 21.
 - **Relation to the previous baseline:** this 21-ID set is a strict subset of the
   previously published 26-ID set: five IDs were removed and zero were added. The
   subset relation was checked by document arithmetic; the five removed IDs are named
