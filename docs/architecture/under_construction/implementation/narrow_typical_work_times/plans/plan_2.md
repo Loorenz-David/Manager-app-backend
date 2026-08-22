@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: IMPLEMENTED
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -530,3 +530,9 @@ knows which criterion owns the phase's sharpest hazard.
   counting a substring the predicate also contains, C13(a) unable to discriminate the
   bound-value changes C1's own limitation defers to it, and the recurring
   fixture-below-the-sample-floor defect in C8/C9/C13. State → `PROJECTED`.
+- **2026-08-22 · implementation round 1 · Codex · IMPLEMENTED.** Task 0 transcribed the
+  corrected criteria into parser, predicate, snapshot, integration, and measurement
+  tests before production edits. Implemented C0 and the outer `spec_index` statement
+  with active-primary item matching; focused perimeter and named mutation probes are
+  green on the repaired tree. The committed cost document carries all ten matrix cells
+  plus the 50×20 API-ceiling row. Checkpoint and handoff follow.

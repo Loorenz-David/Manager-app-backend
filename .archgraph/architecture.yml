@@ -5501,6 +5501,72 @@ nodes:
         endLine: 23
         contentHash: 265b327832831bfc7e3b4af416fcde04cadf27eb047b41ab08df08b4234e8edd
         linkedAt: 2026-08-22T20:04:39.774Z
+  - id: source-file-working-section-typical-item-filter
+    type: source_file
+    name: app/beyo_manager/services/queries/working_sections/_typical_item_filter.py
+    description: Query-layer helper that translates one canonical TypicalFilterSpec
+      into a NULL-safe SQLAlchemy item predicate and reports whether the
+      optional ItemCategory join is required. It keeps collection membership OR
+      semantics, field criteria AND semantics, explicit recorded-dimension
+      checks, and coalesces unknown SQL truth to false.
+    tags:
+      - narrow_typical_work_times
+      - plan_2
+      - query
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/_typical_item_filter.py
+          symbol: build_item_match
+          startLine: 13
+          endLine: 49
+          summary: build_item_match emits category, major-category, range, upholstery, and
+            designer predicates; range predicates require a non-NULL recorded
+            dimension and the final conjunction is wrapped in coalesce(...,
+            false()).
+          inferenceReason: This new query-layer module is the single translation point for
+            the phase's item-filter semantics and controls whether the category
+            join is structurally present.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-22T21:42:46.367Z
+    updatedAt: 2026-08-22T21:42:46.367Z
+  - id: source-symbol-working-section-typical-times-statement-narrowing
+    type: source_symbol
+    name: typical_times_statement — ordered filter projection query
+    description: The phase-2 statement builder accepts an ordered sequence of
+      TypicalFilterSpec values. It preserves an exact no-spec branch, and for
+      K>0 returns one live-section × spec-index row with narrowed and
+      section-wide aggregates; task membership is attached through the active
+      PRIMARY TaskItem and live Item.
+    tags:
+      - narrow_typical_work_times
+      - plan_2
+      - projection
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: typical_times_statement
+          startLine: 28
+          endLine: 142
+          summary: The statement uses an outer VALUES spec-index cross join, grouped
+            completed section totals, bound workspace predicates, active PRIMARY
+            task-item attachment, optional category join, and per-index FILTER
+            aggregates.
+          inferenceReason: These clauses implement the changed query contract for the
+            existing Working section typical times projection while leaving the
+            empty-spec snapshot branch intact.
+        - path: app/tests/integration/services/queries/working_sections/test_typical_times_narrowing.py
+          symbol: test_cardinality_is_section_cross_spec_total_and_history_less_sections_are_materialized
+          startLine: 199
+          endLine: 224
+          summary: Integration coverage asserts total live-section × K cardinality and
+            materialization of a section with no qualifying history.
+          inferenceReason: The test directly verifies the projection's new row topology
+            and outer-attachment behavior.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-22T21:42:46.367Z
+    updatedAt: 2026-08-22T21:42:46.367Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10675,3 +10741,24 @@ edges:
     confidence: 0.99
     createdAt: 2026-08-22T20:04:39.774Z
     updatedAt: 2026-08-22T20:04:39.774Z
+  - sourceNodeId: source-symbol-working-section-typical-times-statement-narrowing
+    relationshipType: implements
+    targetNodeId: projection-working-section-typical-times
+    description: The phase-2 statement builder implements the
+      ordered-spec/narrowed-population extension of the existing working-section
+      typical-times projection.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: typical_times_statement
+          startLine: 28
+          endLine: 142
+          summary: The changed statement builder returns the phase-2 projection shape for
+            ordered filter specs and retains the pre-refactor shape for an empty
+            sequence.
+          inferenceReason: The symbol is the concrete query implementation of the existing
+            projection's amended contract.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-22T21:42:46.367Z
+    updatedAt: 2026-08-22T21:42:46.367Z

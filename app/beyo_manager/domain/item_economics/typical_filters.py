@@ -79,7 +79,7 @@ def _optional_values(params: Mapping[str, object], key: str) -> frozenset[str] |
     raw = params.get(key)
     if raw is None:
         return None
-    if isinstance(raw, (str, bytes)):
+    if isinstance(raw, (str, bytes, bytearray, memoryview, Mapping)):
         raise ValidationError(f"{key} must be a sequence of values.")
     try:
         values = iter(raw)  # type: ignore[arg-type]
@@ -92,6 +92,8 @@ def _optional_categories(params: Mapping[str, object]) -> frozenset[ItemMajorCat
     raw = params.get("major_categories")
     if raw is None:
         return None
+    if isinstance(raw, (str, bytes, bytearray, memoryview, Mapping)):
+        raise ValidationError("major_categories must be a sequence of values.")
     categories: set[ItemMajorCategoryEnum] = set()
     try:
         for value in raw:  # type: ignore[union-attr]
@@ -115,6 +117,9 @@ def _optional_range(
 
 
 def parse_spec_from_query_params(params: Mapping[str, object]) -> TypicalFilterSpec:
+    upholstery = params.get("can_have_upholstery")
+    if upholstery is not None and not isinstance(upholstery, bool):
+        raise ValidationError("can_have_upholstery must be a boolean.")
     try:
         return TypicalFilterSpec(
             item_category_ids=_optional_values(params, "item_category_ids"),
@@ -122,7 +127,7 @@ def parse_spec_from_query_params(params: Mapping[str, object]) -> TypicalFilterS
             width_cm=_optional_range(params, "width_cm_min", "width_cm_max"),
             height_cm=_optional_range(params, "height_cm_min", "height_cm_max"),
             depth_cm=_optional_range(params, "depth_cm_min", "depth_cm_max"),
-            can_have_upholstery=params.get("can_have_upholstery"),
+            can_have_upholstery=upholstery,
             designers=_optional_values(params, "designers"),
         )
     except ValueError as exc:

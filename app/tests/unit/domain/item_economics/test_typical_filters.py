@@ -391,6 +391,26 @@ def test_parser_rejects_bare_strings_and_non_iterable_repeatable_values(params):
         parse_spec_from_query_params(params)
 
 
+@pytest.mark.parametrize(
+    ("params", "family"),
+    [
+        ({"item_category_ids": bytearray(b"ab")}, "item_category_ids"),
+        ({"item_category_ids": memoryview(b"ab")}, "item_category_ids"),
+        ({"item_category_ids": {"cat_a": 1}}, "item_category_ids"),
+        ({"major_categories": {"wood": 1}}, "major_categories"),
+        ({"major_categories": "wood"}, "major_categories"),
+    ],
+)
+def test_parser_rejects_mapping_and_byte_iterable_repeatable_values(params, family):
+    with pytest.raises(ValidationError, match=family):
+        parse_spec_from_query_params(params)
+
+
+def test_parser_rejects_non_boolean_upholstery_value():
+    with pytest.raises(ValidationError, match="can_have_upholstery"):
+        parse_spec_from_query_params({"can_have_upholstery": "yes"})
+
+
 def test_median_preserves_even_odd_and_sorting_rules():
     assert median([Fraction(600), Fraction(900)]) == Fraction(750)
     assert median([Fraction(300), Fraction(600), Fraction(900)]) == Fraction(600)
