@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: IMPLEMENTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -527,3 +527,28 @@ phase 4's allowances would move silently (the exact drift L1 names).
   7, 8, 11, §2/§4 corrections (R2 path, R3 no-`__init__`, §4A K5 read-first), criteria
   C2/C4/C6/C7/C8/C11/C13/C14/C15 amended, **C16–C18 added** (59 → 62 project criteria).
   C8-split option consciously not exercised. State → PROJECTED.
+
+- **2026-08-22 · implementation round 1 · Codex · IMPLEMENTED.** Captured the
+  pre-refactor PostgreSQL SQL snapshot before production edits; added the pure
+  typical-filter specification, evidence/policy/resolution/reconciliation engine,
+  business fallback, median, and shared participating-section rule; moved and
+  re-exported the three typical constants without changing their values; moved
+  `_median` verbatim as `median`; added the phase test files and snapshot guard.
+  The local Protocol annotation for `derive_spec_from_primary_item` is the
+  delegated F-J choice; no `models.tables` or SQL imports enter the domain. The
+  focused phase perimeter passed 49 tests, and the named mutation probes were run
+  at whole-file L1 scope and reverted; their ledger is in
+  `handoffs/implementer/20260822_plan1_implementation_handoff.md`.
+
+  Capture command (verbatim):
+
+  ```text
+  PYTHONPATH=. .venv/bin/python -c 'from datetime import datetime, timezone; from tests.unit.services.queries.working_sections.test_typical_times_sql_identity import SNAPSHOT_PATH, compile_typical_times_sql; no_clock = compile_typical_times_sql(); fixed_clock = compile_typical_times_sql(now=datetime(2026, 8, 22, tzinfo=timezone.utc)); assert no_clock == fixed_clock; SNAPSHOT_PATH.write_text(no_clock); assert SNAPSHOT_PATH.read_text() == no_clock'
+  ```
+
+  Judgment calls: the parser accepts the already-typed query-parameter mapping and
+  translates client-triggerable range/category failures to `ValidationError`; the
+  domain constructor retains `ValueError`; `None` specs canonicalize to the empty
+  spec; and missing section evidence is materialized as a zero-evidence row. The
+  snapshot file has no trailing newline and is not to be regenerated. The one
+  authoritative L4 stamp is recorded in the handoff after the checkpoint commit.

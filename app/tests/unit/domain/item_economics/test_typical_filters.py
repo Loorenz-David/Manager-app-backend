@@ -1,0 +1,262 @@
+from fractions import Fraction
+
+import pytest
+
+from beyo_manager.domain.item_economics.typical_constants import TYPICAL_MIN_SAMPLE_SIZE
+from beyo_manager.domain.item_economics import typical_constants
+from beyo_manager.domain.item_economics import budget_division
+from beyo_manager.domain.item_economics.typical_filters import (
+    COMPARABILITY_PROFILE,
+    RECONCILIATION_METHOD,
+    SectionTypicalEvidence,
+    TypicalFilterSpec,
+    TypicalResolutionPolicy,
+    apply_business_fallback,
+    derive_spec_from_primary_item,
+    median,
+    parse_spec_from_query_params,
+    reconcile_task_typicals,
+    resolve_section_typical,
+)
+from beyo_manager.domain.items.enums import ItemMajorCategoryEnum
+from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.items.item import Item
+
+
+def evidence(section="section", narrowed_count=7, narrowed=600, section_count=61, section_value=900):
+    return SectionTypicalEvidence(section, narrowed, narrowed_count, section_value, section_count)
+
+
+def test_empty_collections_are_canonical_and_hashable():
+    for field in ("item_category_ids", "major_categories", "designers"):
+        spec = TypicalFilterSpec(**{field: frozenset()})
+        assert spec == TypicalFilterSpec()
+        assert hash(spec) == hash(TypicalFilterSpec())
+        assert spec.is_narrowing is False
+
+
+def test_ranges_validate_each_boundary_and_keep_unbounded_sides():
+    for field in ("width_cm", "height_cm", "depth_cm"):
+        with pytest.raises(ValueError):
+            TypicalFilterSpec(**{field: (81, 80)})
+        assert TypicalFilterSpec(**{field: (80, 80)}).is_narrowing is True
+        assert TypicalFilterSpec(**{field: (60, None)}).is_narrowing is True
+        assert TypicalFilterSpec(**{field: (None, 80)}).is_narrowing is True
+
+
+def test_none_none_range_is_recorded_and_narrowing():
+    spec = TypicalFilterSpec(width_cm=(None, None))
+    assert spec.is_narrowing is True
+    assert spec != TypicalFilterSpec()
+
+
+def test_frozen_spec_is_the_value_dedupe_key():
+    assert len(
+        {
+            TypicalFilterSpec(item_category_ids=frozenset({"a", "b"})),
+            TypicalFilterSpec(item_category_ids=frozenset({"b", "a"})),
+        }
+    ) == 1
+    assert len(
+        {
+            TypicalFilterSpec(item_category_ids=frozenset({"a"})),
+            TypicalFilterSpec(item_category_ids=frozenset({"b"})),
+        }
+    ) == 2
+
+
+def test_constants_move_without_changing_exports_or_values():
+    assert budget_division.TYPICAL_METHOD is typical_constants.TYPICAL_METHOD
+    assert budget_division.TYPICAL_WINDOW_DAYS is typical_constants.TYPICAL_WINDOW_DAYS
+    assert budget_division.TYPICAL_MIN_SAMPLE_SIZE is typical_constants.TYPICAL_MIN_SAMPLE_SIZE
+    assert typical_constants.TYPICAL_METHOD == "median_completed_section_totals"
+    assert typical_constants.TYPICAL_WINDOW_DAYS == 90
+    assert typical_constants.TYPICAL_MIN_SAMPLE_SIZE == 5
+
+
+def test_derive_spec_is_total_on_real_item_instances():
+    assert derive_spec_from_primary_item(None) == TypicalFilterSpec()
+    no_category = Item(client_id="itm_no_category", item_category_id=None)
+    categorized = Item(client_id="itm_category", item_category_id="cat_a")
+    assert derive_spec_from_primary_item(no_category) == TypicalFilterSpec()
+    assert derive_spec_from_primary_item(categorized) == TypicalFilterSpec(
+        item_category_ids=frozenset({"cat_a"})
+    )
+
+
+def test_evidence_predicates_cover_floor_zero_and_none():
+    floor = TYPICAL_MIN_SAMPLE_SIZE
+    rows = [
+        (SectionTypicalEvidence("a", 600, floor - 1, 900, floor), False, True, False),
+        (SectionTypicalEvidence("b", 600, floor, 900, floor - 1), True, False, True),
+        (SectionTypicalEvidence("c", 0, floor, 900, floor), True, True, False),
+        (SectionTypicalEvidence("d", 1, floor, 900, floor), True, True, True),
+        (SectionTypicalEvidence("e", None, floor, 900, floor), True, True, False),
+    ]
+    for row, has_narrowed, has_section, usable in rows:
+        assert row.has_narrowed is has_narrowed
+        assert row.has_section is has_section
+        assert row.has_usable_narrowed is usable
+
+
+@pytest.mark.parametrize(
+    ("spec", "narrowed", "section", "policy", "expected"),
+    [
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 3)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 0, 7)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2)),
+        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
+        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("section_wide", 600, 61)),
+    ],
+)
+def test_resolution_grid(spec, narrowed, section, policy, expected):
+    result = resolve_section_typical(
+        SectionTypicalEvidence("section", narrowed[1], narrowed[0], section[1], section[0]),
+        spec,
+        policy,
+    )
+    assert (result.typical_basis, result.typical_worker_seconds, result.sample_count) == expected
+
+
+def test_reconciliation_uses_uniform_usable_narrowed_basis_and_materializes_missing_rows():
+    evidence_by_section = {
+        "a": evidence("a", 7, 600, 61, 900),
+        "b": evidence("b", 7, 0, 61, 1200),
+    }
+    result = reconcile_task_typicals(
+        evidence_by_section,
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"a", "b", "ghost"}),
+        frozenset({"a", "b", "ghost"}),
+    )
+    assert result.task_typical_basis == "section_wide_uniform"
+    assert result.selected["ghost"].typical_basis == "insufficient_sample"
+    assert result.selected["ghost"].sample_count == 0
+    assert result.selected["ghost"].participates is True
+
+
+def test_reconciliation_requires_every_participant_to_have_a_usable_narrowed_value():
+    result = reconcile_task_typicals(
+        {
+            "zero": evidence("zero", 5, 0, 61, 900),
+            "usable": evidence("usable", 7, 600, 61, 1200),
+        },
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"zero", "usable"}),
+        frozenset({"zero", "usable"}),
+    )
+    assert result.task_typical_basis == "section_wide_uniform"
+
+
+def test_reconciliation_excluded_sections_resolve_independently_and_empty_is_not_uniform_narrowed():
+    selected = reconcile_task_typicals(
+        {"excluded": evidence("excluded", 7, 600, 2, None)},
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset(),
+        frozenset({"excluded"}),
+    )
+    assert selected.task_typical_basis == "section_wide_uniform"
+    assert selected.selected["excluded"].typical_basis == "item_narrowed"
+    assert selected.selected["excluded"].participates is False
+
+
+def test_reconciliation_excludes_thin_rows_from_the_uniform_quantifier():
+    selected = reconcile_task_typicals(
+        {
+            "participant": evidence("participant", 7, 600, 61, 900),
+            "excluded": evidence("excluded", 2, None, 61, 900),
+        },
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"participant"}),
+        frozenset({"participant", "excluded"}),
+    )
+    assert selected.task_typical_basis == "item_narrowed_uniform"
+    assert selected.selected["excluded"].typical_basis == "section_wide"
+
+
+def test_reconciliation_uses_excluded_evidence_independently_in_the_other_direction():
+    selected = reconcile_task_typicals(
+        {
+            "participant": evidence("participant", 2, None, 61, 900),
+            "excluded": evidence("excluded", 7, 600, 61, 900),
+        },
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"participant"}),
+        frozenset({"participant", "excluded"}),
+    )
+    assert selected.task_typical_basis == "section_wide_uniform"
+    assert selected.selected["excluded"].typical_basis == "item_narrowed"
+
+
+def test_reconciliation_none_spec_is_unfiltered_and_narrowing_is_carried_by_identity():
+    evidence_by_section = {"a": evidence("a")}
+    no_spec = reconcile_task_typicals(evidence_by_section, None, frozenset({"a"}), frozenset({"a"}))
+    assert no_spec.task_typical_basis == "section_wide_uniform"
+    assert no_spec.applied_filter is None
+
+    spec = TypicalFilterSpec(item_category_ids=frozenset({"cat"}))
+    narrowed = reconcile_task_typicals(evidence_by_section, spec, frozenset({"a"}), frozenset({"a"}))
+    assert narrowed.task_typical_basis == "item_narrowed_uniform"
+    assert narrowed.applied_filter is spec
+    assert narrowed.reconciliation_method == RECONCILIATION_METHOD
+    assert narrowed.comparability_profile == COMPARABILITY_PROFILE
+
+
+def test_missing_participant_row_forces_section_wide_uniform_basis():
+    result = reconcile_task_typicals(
+        {"present": evidence("present", 7, 600, 61, 900)},
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"present", "ghost"}),
+        frozenset({"present", "ghost"}),
+    )
+    assert result.task_typical_basis == "section_wide_uniform"
+
+
+def test_reconciliation_preserves_sql_values_without_pace_model():
+    result = reconcile_task_typicals(
+        {name: evidence(name, 7, value, 61, 1000) for name, value in (("a", 600), ("b", 900), ("c", 300))},
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"a", "b", "c"}),
+        frozenset({"a", "b", "c"}),
+    )
+    assert {row.typical_worker_seconds for row in result.selected.values()} == {300, 600, 900}
+    assert all(row.sample_count == 7 for row in result.selected.values())
+
+
+def test_business_fallback_has_typed_distinct_terminals_and_zero_is_unusable():
+    with pytest.raises(TypeError):
+        apply_business_fallback([600, 900], terminal=1)  # type: ignore[arg-type]
+    assert apply_business_fallback([None, None], terminal=Fraction(1, 1)) == [Fraction(1), Fraction(1)]
+    assert apply_business_fallback([None, None], terminal=Fraction(0, 1)) == [Fraction(0), Fraction(0)]
+    assert apply_business_fallback([0, 600, 900], terminal=Fraction(1, 1)) == [Fraction(750), Fraction(600), Fraction(900)]
+
+
+def test_parser_handles_typed_params_absence_none_enums_and_client_errors():
+    assert parse_spec_from_query_params({}) == TypicalFilterSpec()
+    assert parse_spec_from_query_params({"item_category_ids": ["a", "b"]}).item_category_ids == frozenset({"a", "b"})
+    assert parse_spec_from_query_params({"width_cm_min": 60}).width_cm == (60, None)
+    assert parse_spec_from_query_params({"width_cm_max": 80}).width_cm == (None, 80)
+    assert parse_spec_from_query_params({"width_cm_min": None, "item_category_ids": None}) == TypicalFilterSpec()
+    assert parse_spec_from_query_params({"major_categories": ["wood", "seat"]}).major_categories == frozenset(
+        {ItemMajorCategoryEnum.WOOD, ItemMajorCategoryEnum.SEAT}
+    )
+    assert parse_spec_from_query_params({"can_have_upholstery": False}).can_have_upholstery is False
+    assert parse_spec_from_query_params({"unknown": "ignored"}) == TypicalFilterSpec()
+    assert parse_spec_from_query_params({"item_category_ids": []}) == TypicalFilterSpec()
+    with pytest.raises(ValidationError):
+        parse_spec_from_query_params({"width_cm_min": 81, "width_cm_max": 80})
+    with pytest.raises(ValidationError):
+        parse_spec_from_query_params({"major_categories": ["stone"]})
+
+
+def test_median_preserves_even_odd_and_sorting_rules():
+    assert median([Fraction(600), Fraction(900)]) == Fraction(750)
+    assert median([Fraction(300), Fraction(600), Fraction(900)]) == Fraction(600)
+    assert median([Fraction(900), Fraction(300), Fraction(600)]) == Fraction(600)

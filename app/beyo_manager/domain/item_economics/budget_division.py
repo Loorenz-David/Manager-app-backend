@@ -8,13 +8,16 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from fractions import Fraction
 from typing import Any
 
+from beyo_manager.domain.item_economics.typical_constants import (
+    TYPICAL_METHOD,
+    TYPICAL_MIN_SAMPLE_SIZE,
+    TYPICAL_WINDOW_DAYS,
+)
+from beyo_manager.domain.item_economics.typical_filters import median
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 
 
-TYPICAL_WINDOW_DAYS = 90
-TYPICAL_MIN_SAMPLE_SIZE = 5
-TYPICAL_METHOD = "median_completed_section_totals"
 ALLOCATION_METHOD = "static_proportional_section_v1"
 EXCLUDED_STEP_STATES = frozenset(
     {
@@ -64,14 +67,6 @@ def _as_fraction(value: Any) -> Fraction:
 def _budget_seconds(allowed_worker_minutes: Decimal | int | str) -> int:
     minutes = allowed_worker_minutes if isinstance(allowed_worker_minutes, Decimal) else Decimal(str(allowed_worker_minutes))
     return int((minutes * Decimal(60)).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN))
-
-
-def _median(values: Sequence[Fraction]) -> Fraction:
-    ordered = sorted(values)
-    middle = len(ordered) // 2
-    if len(ordered) % 2:
-        return ordered[middle]
-    return (ordered[middle - 1] + ordered[middle]) / 2
 
 
 def _sort_key(step: Any) -> tuple[bool, int, str]:
@@ -210,6 +205,14 @@ def _step_state_is_excluded(step: Any) -> bool:
     return _state_value(_value(step, "state")) in {state.value for state in EXCLUDED_STEP_STATES}
 
 
+def participating_sections(steps: Sequence[Any]) -> frozenset[str]:
+    return frozenset(
+        str(_value(step, "working_section_id"))
+        for step in steps
+        if not bool(_value(step, "is_deleted", False)) and not _step_state_is_excluded(step)
+    )
+
+
 def _step_state_is_open(step: Any) -> bool:
     return _state_value(_value(step, "state")) not in {state.value for state in TERMINAL_STEP_STATES}
 
@@ -329,7 +332,7 @@ def divide_production_budget(
             resolved_weights[section_id] = _as_fraction(typical)
         else:
             resolved_weights[section_id] = Fraction(0, 1)
-    fallback = _median(usable) if usable else Fraction(1, 1)
+    fallback = median(usable) if usable else Fraction(1, 1)
     for section_id, weight in list(resolved_weights.items()):
         if weight <= 0:
             resolved_weights[section_id] = fallback
@@ -408,4 +411,5 @@ __all__ = [
     "DivisionStep",
     "divide_production_budget",
     "group_steps_by_section",
+    "participating_sections",
 ]
