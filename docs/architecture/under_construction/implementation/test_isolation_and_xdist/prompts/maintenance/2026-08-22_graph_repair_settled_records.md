@@ -24,7 +24,11 @@ That authority covers **exactly the three records named in §3** and nothing els
 edge and pending item in the graph is out of bounds.
 
 Workspace root: `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend`
-Branch `feat/test-isolation-xdist`. HEAD `8501a51`, clean.
+Branch `feat/test-isolation-xdist`, worktree clean. **The gate is `git diff 8501a51 HEAD -- app/
+.archgraph/` returning empty**, not `HEAD` equalling any particular sha — commits after `8501a51`
+are documentation only, including the one that added this prompt. *(An earlier version of this line
+named a bare HEAD, which the act of committing this prompt falsified; a session correctly flagged
+the mismatch. Master plan standing rule 8.)*
 
 **Read first, by absolute path:** `/Users/davidloorenz/agent-skills/pipeline-charter.md`
 (its **project-affordance** section on the architecture graph, and **"The owner layer"**).
@@ -38,6 +42,13 @@ hours ago, including the one override and its reasoning.
   revision `0dd6785a…`.
 - `git status --porcelain` is empty.
 - `permissionMode` is `review`; `allowMaintenance` and `allowAnchorRepair` are both true.
+  **`allowAnchorRepair` is a launch-time server flag, not graph state** — if it reads `false`, this
+  session's MCP server was started without `--auto-anchor-repair` and no amount of graph inspection
+  will change it. Stop and report that specifically; it is a configuration fix on the operator's
+  side, not something to work around. *(This happened on 2026-08-22: the Codex server's argument
+  list carried `--uto-anchor-repair`, a typo the server accepted silently instead of rejecting, so
+  the flag was simply absent. The session stopped at this gate, correctly.)*
+- `git diff 8501a51 HEAD -- app/ .archgraph/` is empty.
 
 If the revision has moved, someone has written to the graph since review r4 — stop and report
 rather than repairing on top of an unknown change.

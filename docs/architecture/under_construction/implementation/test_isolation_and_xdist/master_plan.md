@@ -139,7 +139,7 @@ Run from `backend/app/`. `PYTHONPATH=.` is required.
 |---|---|
 | full suite (shipped default, authoritative) | `PYTHONPATH=. pytest -m 'not e2e'` |
 | full suite (serial comparator) | `PYTHONPATH=. pytest -m 'not e2e' -n 0` |
-| full suite, reversed collection | `BEYO_TEST_COLLECTION_ORDER=reverse PYTHONPATH=. pytest -m 'not e2e'` |
+| full suite, reversed collection | `BEYO_TEST_COLLECTION_ORDER=reverse PYTHONPATH=. pytest -m 'not e2e' -n 0` |
 | collection size only | `PYTHONPATH=. pytest -m 'not e2e' --collect-only -q` |
 | isolation criterion module | `PYTHONPATH=. pytest -q tests/integration/infrastructure/test_database_isolation.py` |
 | one-time legacy reclamation (serial-only; do not combine with xdist) | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e' -n 0` |
@@ -230,8 +230,10 @@ overrides `settings.redis_key_prefix` per process — the setting, not `os.envir
 production key builder (`services/infra/redis/keys.py:6`, `routers/utils/rate_limit.py:24,34`,
 `services/infra/auth.py:7`, `services/infra/sleep/activity_tracker.py:15`,
 `logout_user.py:53`) reads the attribute at call time. Teardown deletes the process prefix
-**best-effort**: an unreachable Redis produces warnings, not errors, so the failing-ID set is not
-a function of Redis availability.
+**best-effort**: an unreachable Redis produces warnings, not errors for that isolation-prefix
+fixture. The two logout integration rows that assert against Redis by name, and the `redis_client`
+fixture's teardown, are not availability-tolerant; the published baseline therefore requires
+Redis to be reachable at `settings.redis_url`.
 
 ### 6.5 Schema constants — and the time bomb
 
@@ -291,7 +293,7 @@ teardown has no `ConnectionError` guard. §6.4 asserts the opposite and is wrong
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | *not yet — fix r3, pending review* | **`b96802f`**, clean at all three L4 runs | **shipped default:** 21 failed / 2576 passed (52.62 s; second run 53.26 s); **serial comparator:** 21 failed / 2575 passed / 1 skipped / 1 deselected (150.70 s); `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; both shipped-default runs and the serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
+| **3** | *not yet — fix r3, pending review* | **`b96802f`**, clean at all three L4 runs | **Precondition:** Redis reachable at `settings.redis_url`. **Shipped default:** 21 failed / 2576 passed (52.62 s; second run 53.26 s); **serial comparator:** 21 failed / 2575 passed / 1 skipped / 1 deselected (150.70 s); `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; both shipped-default runs and the serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 

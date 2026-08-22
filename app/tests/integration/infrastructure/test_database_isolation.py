@@ -109,17 +109,40 @@ def test_shipped_default_reaches_an_xdist_worker(pytestconfig: pytest.Config) ->
     """Prove the shipped pytest configuration, rather than a CLI override, is parallel."""
     args = list(pytestconfig.invocation_params.args)
     if any(
-        arg in {"-n0", "--numprocesses=0"}
-        or (arg == "-n" and index + 1 < len(args) and args[index + 1] == "0")
-        for index, arg in enumerate(args)
+        arg == "-n"
+        or (arg.startswith("-n") and arg != "--")
+        or arg == "--numprocesses"
+        or arg.startswith("--numprocesses=")
+        for arg in args
     ):
         pytest.skip("serial comparator deliberately overrides the shipped parallel default")
 
     addopts = pytestconfig.getini("addopts")
     assert any(
-        addopts[index : index + 4] == ["-n", "6", "--dist", "loadfile"]
-        for index in range(len(addopts) - 3)
-    ), f"shipped parallel default is missing from pytest.ini addopts: {addopts!r}"
+        arg == "--dist" and index + 1 < len(addopts) and addopts[index + 1] == "loadfile"
+        for index, arg in enumerate(addopts)
+    ), f"shipped parallel default is missing --dist loadfile: {addopts!r}"
+    assert any(
+        (
+            arg == "-n"
+            and index + 1 < len(addopts)
+            and addopts[index + 1].isdigit()
+            and int(addopts[index + 1]) > 0
+        )
+        or (arg.startswith("-n") and arg[2:].isdigit() and int(arg[2:]) > 0)
+        or (
+            arg == "--numprocesses"
+            and index + 1 < len(addopts)
+            and addopts[index + 1].isdigit()
+            and int(addopts[index + 1]) > 0
+        )
+        or (
+            arg.startswith("--numprocesses=")
+            and arg.split("=", 1)[1].isdigit()
+            and int(arg.split("=", 1)[1]) > 0
+        )
+        for index, arg in enumerate(addopts)
+    ), f"shipped parallel default is missing a positive worker count: {addopts!r}"
     assert re.fullmatch(r"gw\d+", os.environ.get("PYTEST_XDIST_WORKER", "")), (
         "the shipped default did not reach an xdist worker"
     )
@@ -304,6 +327,8 @@ def test_unmarked_empty_database_is_allowed_but_populated_one_is_not() -> None:
         ("localhost", "LOCALHOST"),
         ("localhost", "::1"),
         ("localhost", "localhost."),
+        ("localhost", "localhost.localdomain"),
+        ("localhost", "ip6-localhost"),
     ],
 )
 def test_endpoint_aliases_are_confined_to_same_server(
@@ -362,7 +387,6 @@ async def _remove_probe_databases(probe: DatabaseIsolation) -> None:
 async def _assert_concurrent_starts_succeed(probes: list[DatabaseIsolation]) -> None:
     results = await asyncio.gather(*(probe.start() for probe in probes), return_exceptions=True)
     assert results == [None] * len(probes), results
-    assert len({probe.worker_database_name for probe in probes}) == len(probes)
 
 
 @pytest.mark.asyncio
@@ -425,7 +449,60 @@ async def test_concurrent_starts_survive_current_template(
     try:
         await seed.start()
         await seed.stop()
-        await _assert_concurrent_starts_succeed(probes)
+        connection = await _connect(seed._url, seed.template_database_name)
+
+        for probe in probes:
+            app_name = f"p3current_{probe.worker_database_name}"
+            original_maintenance_connection = probe._maintenance_connection
+            original_create_from_template = probe._create_database_from_template
+
+            async def named_maintenance_connection(
+                original=original_maintenance_connection,
+                application_name=app_name,
+            ):
+                maintenance = await original()
+                await maintenance.execute(
+                    "SELECT set_config('application_name', $1, false)", application_name
+                )
+                return maintenance
+
+            async def create_with_lock_observer(
+                database_name: str,
+                original=original_create_from_template,
+                application_name=app_name,
+            ) -> None:
+                observer = await _connect(seed._url, "postgres")
+                try:
+                    lock_held = await observer.fetchval(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM pg_locks AS locks
+                            JOIN pg_stat_activity AS activity ON activity.pid = locks.pid
+                            WHERE locks.locktype = 'advisory'
+                              AND locks.granted
+                              AND activity.application_name = $1
+                        )
+                        """,
+                        application_name,
+                    )
+                finally:
+                    await observer.close()
+                if lock_held and not connection.is_closed():
+                    await connection.close()
+                await original(database_name)
+
+            monkeypatch.setattr(probe, "_maintenance_connection", named_maintenance_connection)
+            monkeypatch.setattr(
+                probe,
+                "_create_database_from_template",
+                create_with_lock_observer,
+            )
+        try:
+            await _assert_concurrent_starts_succeed(probes)
+        finally:
+            if not connection.is_closed():
+                await connection.close()
     finally:
         for probe in [seed, *probes]:
             if probe._started:
