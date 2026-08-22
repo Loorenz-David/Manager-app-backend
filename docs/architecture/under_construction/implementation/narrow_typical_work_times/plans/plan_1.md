@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -735,3 +735,20 @@ phase 4's allowances would move silently (the exact drift L1 names).
   participating section IDs are contractually a subset of `section_ids`; no guard was
   added. Named mutations were run at L1 whole-file scope and reverted; the one
   authoritative L4 stamp is recorded in the round-2 handoff.
+
+- **2026-08-22 · implementation fix round 3 · Codex · IMPLEMENTED.** Closed the two
+  blocking findings, three should-fix findings, and two recorded test-guard findings
+  in the fix prompt. C8 now has the non-narrowing task-scope row (g), full per-section
+  tuples for rows (a), (b), (e), (f), and (j), and the recorded row (c) fixture. C7
+  distinguishes `has_section` from `has_narrowed` with row (n) and asserts all six
+  `SelectedTypical` fields on rows (h)/(m). `_optional_values` now rejects bare
+  strings, bytes, and non-iterables with `ValidationError`; C14 rows (o)/(p)/(q)
+  are parametrized so each malformed shape is independently exercised. A committed
+  package-wide purity test covers C4(c) and C17, pinning the one unrelated
+  `serializers.py` `config_fingerprint` exception. Named mutation probes all reddened
+  at L1 whole-file scope and were reverted; focused phase verification is 40 passed.
+  The authoritative L4 stamp and both-direction 21-ID comparator delta are recorded
+  in `handoffs/implementer/20260822_plan1_fix_round3_handoff.md`. **L4 authorization
+  before run:** execute `PYTHONPATH=. pytest -m 'not e2e'` from `backend/app` on the
+  checkpoint tree; Redis reachability is checked first, and the 21-ID comparator is
+  recorded in both directions.

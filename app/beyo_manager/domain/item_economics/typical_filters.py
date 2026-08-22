@@ -79,7 +79,13 @@ def _optional_values(params: Mapping[str, object], key: str) -> frozenset[str] |
     raw = params.get(key)
     if raw is None:
         return None
-    return frozenset(str(value) for value in raw)  # type: ignore[union-attr]
+    if isinstance(raw, (str, bytes)):
+        raise ValidationError(f"{key} must be a sequence of values.")
+    try:
+        values = iter(raw)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise ValidationError(f"{key} must be a sequence of values.") from exc
+    return frozenset(str(value) for value in values)
 
 
 def _optional_categories(params: Mapping[str, object]) -> frozenset[ItemMajorCategoryEnum] | None:

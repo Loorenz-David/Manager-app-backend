@@ -5457,7 +5457,50 @@ nodes:
     origin: ai_inferred
     confidence: 0.94
     createdAt: 2026-08-22T16:55:41.605Z
-    updatedAt: 2026-08-22T16:55:41.605Z
+    updatedAt: 2026-08-22T20:04:39.774Z
+    sourceLinks:
+      - path: app/beyo_manager/domain/item_economics/typical_filters.py
+        symbol: _optional_values
+        startLine: 78
+        endLine: 88
+        contentHash: 4e85f0d2dfb773b0939953fc195bac574cbc37c3b6c44813b86f1bc23f11ca7b
+        linkedAt: 2026-08-22T20:04:39.774Z
+  - id: test-item-economics-domain-purity-guards
+    type: test
+    name: Item Economics domain purity guards
+    description: Unit guards that keep the item-economics domain free of
+      spec-identity hashing and ORM/SQLAlchemy imports, while pinning the one
+      unrelated serializer configuration fingerprint exception.
+    metadata:
+      evidence:
+        - path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_spec_identity_hashing
+          startLine: 13
+          endLine: 23
+          summary: The test walks every item-economics domain module, pins
+            serializers.py's config_fingerprint exception, and rejects all other
+            hashing terms.
+          inferenceReason: The committed test makes the domain purity and identity-absence
+            constraints executable across the entire package.
+        - path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+          startLine: 26
+          endLine: 29
+          summary: The test walks every item-economics domain module and rejects
+            sqlalchemy and models.tables terms.
+          inferenceReason: The committed test prevents later phases from introducing
+            persistence dependencies into the pure domain package.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-22T20:04:39.774Z
+    updatedAt: 2026-08-22T20:04:39.774Z
+    sourceLinks:
+      - path: app/tests/unit/domain/item_economics/test_domain_purity.py
+        symbol: test_item_economics_domain_has_no_spec_identity_hashing
+        startLine: 13
+        endLine: 23
+        contentHash: 265b327832831bfc7e3b4af416fcde04cadf27eb047b41ab08df08b4234e8edd
+        linkedAt: 2026-08-22T20:04:39.774Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10614,3 +10657,21 @@ edges:
     confidence: 0.94
     createdAt: 2026-08-22T16:55:41.605Z
     updatedAt: 2026-08-22T16:55:41.605Z
+  - sourceNodeId: test-item-economics-domain-purity-guards
+    relationshipType: verifies
+    targetNodeId: domain-item-economics-typical-filters
+    description: The package-wide purity tests verify the pure typical-time domain boundary.
+    metadata:
+      evidence:
+        - path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+          startLine: 26
+          endLine: 29
+          summary: The test scans the domain package for forbidden SQLAlchemy and
+            model-table dependencies.
+          inferenceReason: The test directly verifies the boundary claimed by the pure
+            typical-time domain node.
+    origin: ai_inferred
+    confidence: 0.99
+    createdAt: 2026-08-22T20:04:39.774Z
+    updatedAt: 2026-08-22T20:04:39.774Z

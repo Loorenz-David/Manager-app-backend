@@ -9,6 +9,7 @@ from beyo_manager.domain.item_economics.typical_filters import (
     COMPARABILITY_PROFILE,
     RECONCILIATION_METHOD,
     SectionTypicalEvidence,
+    SelectedTypical,
     TypicalFilterSpec,
     TypicalResolutionPolicy,
     apply_business_fallback,
@@ -100,30 +101,42 @@ def test_evidence_predicates_cover_floor_zero_and_none():
 
 
 @pytest.mark.parametrize(
-    ("spec", "narrowed", "section", "policy", "expected"),
+    ("spec", "narrowed", "section", "policy", "expected", "assert_full_object"),
     [
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 3)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 0, 7)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7)),
-        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2)),
-        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
-        (TypicalFilterSpec(), (3, None), (4, 800), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 4)),
-        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("section_wide", 600, 61)),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 3), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 0), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 0, 7), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 540, 7), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7), False),
+        (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2), False),
+        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61), True),
+        (TypicalFilterSpec(), (3, None), (4, 800), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 4), False),
+        (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("section_wide", 600, 61), True),
+        (TypicalFilterSpec(), (61, 600), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 3), False),
     ],
 )
-def test_resolution_grid(spec, narrowed, section, policy, expected):
+def test_resolution_grid(spec, narrowed, section, policy, expected, assert_full_object):
+    source_evidence = SectionTypicalEvidence("section", narrowed[1], narrowed[0], section[1], section[0])
     result = resolve_section_typical(
-        SectionTypicalEvidence("section", narrowed[1], narrowed[0], section[1], section[0]),
+        source_evidence,
         spec,
         policy,
     )
-    assert (result.typical_basis, result.typical_worker_seconds, result.sample_count) == expected
+    if assert_full_object:
+        assert result == SelectedTypical(
+            working_section_id="section",
+            typical_worker_seconds=expected[1],
+            typical_basis=expected[0],
+            evidence=source_evidence,
+            participates=False,
+            sample_count=expected[2],
+        )
+    else:
+        assert (result.typical_basis, result.typical_worker_seconds, result.sample_count) == expected
 
 
 def test_reconciliation_uses_uniform_usable_narrowed_basis_and_materializes_missing_rows():
@@ -147,6 +160,24 @@ def test_reconciliation_uses_uniform_usable_narrowed_basis_and_materializes_miss
     assert result.selected["ghost"].evidence.section_typical_worker_seconds is None
     assert result.selected["ghost"].sample_count == 0
     assert result.selected["ghost"].participates is True
+    assert (
+        result.selected["a"].typical_worker_seconds,
+        result.selected["a"].typical_basis,
+        result.selected["a"].sample_count,
+        result.selected["a"].participates,
+    ) == (900, "section_wide", 61, True)
+    assert (
+        result.selected["b"].typical_worker_seconds,
+        result.selected["b"].typical_basis,
+        result.selected["b"].sample_count,
+        result.selected["b"].participates,
+    ) == (1200, "section_wide", 61, True)
+    assert (
+        result.selected["ghost"].typical_worker_seconds,
+        result.selected["ghost"].typical_basis,
+        result.selected["ghost"].sample_count,
+        result.selected["ghost"].participates,
+    ) == (None, "insufficient_sample", 0, True)
 
 
 def test_reconciliation_requires_every_participant_to_have_a_usable_narrowed_value():
@@ -160,6 +191,31 @@ def test_reconciliation_requires_every_participant_to_have_a_usable_narrowed_val
         frozenset({"zero", "usable"}),
     )
     assert result.task_typical_basis == "section_wide_uniform"
+
+
+def test_reconciliation_row_c_has_a_below_floor_participant_fixture():
+    result = reconcile_task_typicals(
+        {
+            "below_floor": evidence("below_floor", 3, None, 61, 900),
+            "usable": evidence("usable", 7, 600, 61, 1200),
+        },
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"below_floor", "usable"}),
+        frozenset({"below_floor", "usable"}),
+    )
+    assert result.task_typical_basis == "section_wide_uniform"
+    assert (
+        result.selected["below_floor"].typical_worker_seconds,
+        result.selected["below_floor"].typical_basis,
+        result.selected["below_floor"].sample_count,
+        result.selected["below_floor"].participates,
+    ) == (900, "section_wide", 61, True)
+    assert (
+        result.selected["usable"].typical_worker_seconds,
+        result.selected["usable"].typical_basis,
+        result.selected["usable"].sample_count,
+        result.selected["usable"].participates,
+    ) == (1200, "section_wide", 61, True)
 
 
 def test_reconciliation_excluded_sections_resolve_independently_and_empty_is_not_uniform_narrowed():
@@ -186,6 +242,18 @@ def test_reconciliation_excludes_thin_rows_from_the_uniform_quantifier():
     )
     assert selected.task_typical_basis == "item_narrowed_uniform"
     assert selected.selected["excluded"].typical_basis == "section_wide"
+    assert (
+        selected.selected["participant"].typical_worker_seconds,
+        selected.selected["participant"].typical_basis,
+        selected.selected["participant"].sample_count,
+        selected.selected["participant"].participates,
+    ) == (600, "item_narrowed", 7, True)
+    assert (
+        selected.selected["excluded"].typical_worker_seconds,
+        selected.selected["excluded"].typical_basis,
+        selected.selected["excluded"].sample_count,
+        selected.selected["excluded"].participates,
+    ) == (900, "section_wide", 61, False)
 
 
 def test_reconciliation_uses_excluded_evidence_independently_in_the_other_direction():
@@ -200,6 +268,44 @@ def test_reconciliation_uses_excluded_evidence_independently_in_the_other_direct
     )
     assert selected.task_typical_basis == "section_wide_uniform"
     assert selected.selected["excluded"].typical_basis == "item_narrowed"
+    assert (
+        selected.selected["participant"].typical_worker_seconds,
+        selected.selected["participant"].typical_basis,
+        selected.selected["participant"].sample_count,
+        selected.selected["participant"].participates,
+    ) == (900, "section_wide", 61, True)
+    assert (
+        selected.selected["excluded"].typical_worker_seconds,
+        selected.selected["excluded"].typical_basis,
+        selected.selected["excluded"].sample_count,
+        selected.selected["excluded"].participates,
+    ) == (600, "item_narrowed", 7, False)
+
+
+def test_reconciliation_non_narrowing_spec_stays_section_wide_for_participants():
+    result = reconcile_task_typicals(
+        {
+            "a": evidence("a", 7, 600, 61, 900),
+            "b": evidence("b", 7, 600, 61, 1200),
+        },
+        TypicalFilterSpec(),
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert result.task_typical_basis == "section_wide_uniform"
+    assert result.applied_filter is None
+    assert (
+        result.selected["a"].typical_worker_seconds,
+        result.selected["a"].typical_basis,
+        result.selected["a"].sample_count,
+        result.selected["a"].participates,
+    ) == (900, "section_wide", 61, True)
+    assert (
+        result.selected["b"].typical_worker_seconds,
+        result.selected["b"].typical_basis,
+        result.selected["b"].sample_count,
+        result.selected["b"].participates,
+    ) == (1200, "section_wide", 61, True)
 
 
 def test_reconciliation_none_spec_is_unfiltered_and_narrowing_is_carried_by_identity():
@@ -214,6 +320,12 @@ def test_reconciliation_none_spec_is_unfiltered_and_narrowing_is_carried_by_iden
     assert narrowed.applied_filter is spec
     assert narrowed.reconciliation_method == RECONCILIATION_METHOD
     assert narrowed.comparability_profile == COMPARABILITY_PROFILE
+    assert (
+        narrowed.selected["a"].typical_worker_seconds,
+        narrowed.selected["a"].typical_basis,
+        narrowed.selected["a"].sample_count,
+        narrowed.selected["a"].participates,
+    ) == (600, "item_narrowed", 7, True)
 
 
 def test_missing_participant_row_forces_section_wide_uniform_basis():
@@ -264,6 +376,19 @@ def test_parser_handles_typed_params_absence_none_enums_and_client_errors():
         parse_spec_from_query_params({"width_cm_min": 81, "width_cm_max": 80})
     with pytest.raises(ValidationError):
         parse_spec_from_query_params({"major_categories": ["stone"]})
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"item_category_ids": "cat_a"},
+        {"designers": "dsg_a"},
+        {"item_category_ids": 5},
+    ],
+)
+def test_parser_rejects_bare_strings_and_non_iterable_repeatable_values(params):
+    with pytest.raises(ValidationError):
+        parse_spec_from_query_params(params)
 
 
 def test_median_preserves_even_odd_and_sorting_rules():
