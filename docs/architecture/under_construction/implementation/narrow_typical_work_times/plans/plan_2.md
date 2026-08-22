@@ -121,6 +121,23 @@ cross-file bite sets and run at L2 (`tests/unit/services/queries/working_section
 *Perimeter*: the snapshot file itself is unchanged in this phase's `git diff`. Verified by
 the reviewer's perimeter check, not by a test.
 
+> **⚠ What a green C1 does and does not prove (plan-1 review, S3, measured 2026-08-22).**
+> The snapshot is compiled **without `literal_binds`** — correct, because with it the
+> 90-day cutoff inlines and the assertion becomes a clock race. The consequence is that
+> **every bound value is invisible to this instrument**: the percentile, the sample
+> floor, the cutoff, the step-state filter and the workspace id all render as `%(...)s`
+> placeholders. Measured on the plan-1 tree: changing `func.percentile_cont(0.5)` to
+> `0.6` leaves the compiled string **byte-identical** and C15 passes; the control
+> (`latest_closed_at >= cutoff` → `> cutoff`, a structural change) reddens it.
+> So a green C1 means **"the no-spec branch's SQL *shape* is unchanged"** — not "the
+> no-spec branch behaves identically". "The typical is a median" and "the population is
+> COMPLETED steps" are guarded by **nothing** in phases 1–2.
+> `TYPICAL_WINDOW_DAYS` / `TYPICAL_MIN_SAMPLE_SIZE` are separately guarded by plan 1's
+> C16(b); the percentile and the state filter are not.
+> **Therefore:** if this phase touches the percentile, the state filter or any bound
+> value of the no-spec branch, C1 will not catch it — say so in the Review log and cover
+> it with an integration row against real rows, never with C1 alone.
+
 **C2 — the result shape is a function of `K`, never of `is_narrowing` (§4A K3).**
 Rows, asserting the **exact column-name tuple** each time:
 (a) `specs=()` → `("client_id", "name", "sample_count", "typical_worker_seconds")`.

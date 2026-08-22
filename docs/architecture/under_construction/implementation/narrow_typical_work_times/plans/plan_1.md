@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: REVIEWING
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -209,10 +209,16 @@ population doubles.
 TypicalFilterSpec(item_category_ids=frozenset({"b","a"}))}) == 1`.
 (b) two specs meaning different populations stay `2`.
 (c) **absence, root and terms stated (projection L16 — the root is the §6.6 claim's
-scope, not one module)**: under `app/beyo_manager/domain/item_economics/`, run from the
-repository root, none of the tokens `hashlib`, `sha1`, `sha256`, `md5`, `fingerprint`,
-`digest` appears in any module this pipeline adds or modifies (pre-existing modules are
-sampled by the same grep and were clean at projection time).
+scope, not one module) — and it ships as a COMMITTED TEST, not a session grep**
+(review N1, charter rule 1: acceptance criteria are met by automated tests; the
+exemption is environment-lifecycle checks only, and this is not one). A test walks every
+`*.py` under `app/beyo_manager/domain/item_economics/` and asserts that none of the
+tokens `hashlib`, `sha1`, `sha256`, `md5`, `fingerprint`, `digest` appears — with **one
+named, asserted exception**: `serializers.py`'s pre-existing `config_fingerprint`, a
+price-scenario *configuration* fingerprint unrelated to spec identity. Pin the exception
+by name so that removing it does not silently widen the claim, and so that a *second*
+fingerprint anywhere in the package reddens.
+*Mutation* — add `import hashlib` to `typical_filters.py` → the test reddens.
 *Mutation* — `TypicalFilterSpec` (definition): declare the dataclass `eq=False`.
 *Both sides* — contract (a) `1`; mutation (a) `2`.
 *Defect caught*: two specs meaning the same population become two `spec_index` values (a
@@ -274,6 +280,26 @@ the proof that the AS_ASKED branch never reads `has_section`.
 | k | narrowing | (7, 540) | (3, None) | AS_ASKED | `item_narrowed` / `540` / `7` |
 | l | narrowing | (2, None) | (3, None) | AS_ASKED | `insufficient_sample` / `None` / `2` — differs from row (g) only in the section columns, proving AS_ASKED never reads them |
 | m | **non-narrowing** | (61, 600) — as row (h) | (61, 600) | **AS_ASKED** | `section_wide` / `600` / `61` — **T17 lands here**: byte-identical `SelectedTypical` to row (h)'s, asserted as two literal rows, not `f(a) == f(b)` |
+| n | **non-narrowing** | (61, 600) | **(3, None)** | BROADEN | `insufficient_sample` / `None` / `3` — **the predicates disagree here** (review S1(a)) |
+
+**Row (n) exists because rows (h)/(m)/(i) cannot tell `has_section` from `has_narrowed`**:
+(h) and (m) set the two populations equal by construction, and (i) makes both predicates
+`False`. Measured at review: mutating the non-narrowing branch's `evidence.has_section`
+to `evidence.has_narrowed` left the whole phase suite green. Row (n) is the only row where
+the two predicates differ, so it is the only row that can prove which one the
+short-circuit reads. Generalisable, and now a standing rule (master plan §9): *when a
+criterion proves "this branch never reads X", at least one row must make X's value differ
+from the value the branch does read.*
+
+**Assertion shape for C7 (review S1(b)).** Rows (a)–(g) and (i)–(l) assert the
+`(typical_basis, typical_worker_seconds, sample_count)` triple. **Rows (h) and (m) assert
+the entire `SelectedTypical`** — all six fields, including `participates` and `evidence` —
+because T17's claim is *object* identity across the two policies, and a three-field
+projection proves identity only of the projection. Measured at review: setting
+`participates=True` in both returns of the non-narrowing branch left the suite green; the
+field survives today only because `reconcile_task_typicals` overwrites it at the sole call
+site, so a phase-2+ consumer calling `resolve_section_typical` directly inherits an
+unconstrained field.
 Rows (j)–(l) are SQL-impossible (the narrowed population is a subset of the section
 population) but dataclass-permitted — the totality this criterion proves (projection L4).
 *Mutations, one per sub-check* — all in `resolve_section_typical` (definition):
@@ -289,6 +315,13 @@ numeric identity and these are new string fields.)
 (v) return `section_sample_count` in the AS_ASKED insufficient branch → **row (g)** flips
 `2` → `61` (and row (l) flips `2` → `3`) — the other half of §3.6's split `sample_count`
 rule, which mutation (iv) alone leaves uncovered (projection L6).
+(vi) *(review fold, S1(a))* in the **non-narrowing** branch, consult
+`evidence.has_narrowed` instead of `evidence.has_section` → **row (n)** flips
+`insufficient_sample`/`None`/`3` → `section_wide`/`None`/`3`. Rows (h), (i), (m) do not
+bite — recorded; measured green at review before row (n) existed.
+(vii) *(review fold, S1(b))* return `participates=True` from both returns of the
+non-narrowing branch → **rows (h) and (m)** flip, on the full-object assertion only. No
+other row bites — recorded; measured green at review under the three-field projection.
 *Defect caught, row f vs row b*: the two policies must diverge on **identical evidence** —
 economics prefers usable values, analytics reports the asked statistic. A single shared
 branch is HC-3.
@@ -298,15 +331,25 @@ branch is HC-3.
 |---|---|---|
 | a | 2 participating, both `has_usable_narrowed` | `item_narrowed_uniform`, both take narrowed values |
 | b | A: narrowed count 5, median **0**; B: narrowed count 7, median 600 | **`section_wide_uniform`**, both take section-wide values (T10b′) |
-| c | A: narrowed count 3 (below floor); B: usable | `section_wide_uniform` (T10a) |
+| c | A: narrowed count 3 (below floor); B: usable | `section_wide_uniform` (T10a) — **the recorded non-biting control for mutation (ii)**, not a detection row (review N2) |
 | d | participating set **empty**, one excluded section with usable narrowed evidence | `section_wide_uniform` |
 | e | 2 participating all usable-narrowed + 1 **excluded** section that is thin | `item_narrowed_uniform`; the excluded row shows its **section-wide** value (T9) |
 | f | mirrored: participating on `section_wide_uniform` + a well-sampled narrowed **excluded** section | `section_wide_uniform`; the excluded row shows `item_narrowed` |
-| g | **non-narrowing** spec | `section_wide_uniform`, `applied_filter is None` |
-| h | one participating id in `section_ids` **absent from `evidence_by_section`** + one usable-narrowed participant | **`section_wide_uniform`** — the zero-evidence row is materialized for every id in `section_ids` *before* the quantifier runs (task 7 (a), projection L2); the ghost's row shows `insufficient_sample` / `None` / `0` |
+| g | **non-narrowing** spec — `TypicalFilterSpec()`, **not `None`** (that is row (i)); every participant usable-narrowed | `section_wide_uniform`, `applied_filter is None`, each participant on its section-wide tuple |
+| h | one participating id in `section_ids` **absent from `evidence_by_section`** + one usable-narrowed participant | **`section_wide_uniform`** — the zero-evidence row is materialized for every id in `section_ids` *before* the quantifier runs (task 7 (a), projection L2); the ghost's row shows `insufficient_sample` / `None` / `0`. **⚠ Keep this row single-cause** (review N4): its twin fixture in the tree reaches `section_wide_uniform` for *two* independent reasons (a zero median *and* a missing section), which is harmless only because this single-cause row exists beside it. Do not collapse the pair. |
 | i | `spec=None`, all participants usable-narrowed | `section_wide_uniform`, `applied_filter is None` — `None` behaves exactly like a non-narrowing spec (task 7 (b), projection L3) |
 | j | a **narrowing** spec, all participants usable-narrowed | `item_narrowed_uniform`, **`applied_filter is spec`** — carried by identity, verbatim |
 *Mutations, one per sub-check* — all in `reconcile_task_typicals` (definition):
+(0) *(review fold, B1 — the task-scope short-circuit)* `effective_spec.is_narrowing` →
+`(spec is not None)` in the `narrowed_uniform` conjunction → **row (g)** flips
+`section_wide_uniform` → `item_narrowed_uniform`, with each participant's tuple moving to
+the narrowed value and count **while `applied_filter` stays `None`**. Row (i) is the
+recorded non-biting control (`spec is None` is false there by construction).
+⚠ `reconcile_task_typicals` carries its **own** copy of the narrowing decision, separate
+from `resolve_section_typical`'s §3B B1 short-circuit; row (g) is the only row that
+constrains it, and intention §3B B1 names this mutant's exact output as the defect it
+forbids — *"`item_narrowed_uniform` for a task whose `applied_filter` is `null`. Both are
+false statements on the wire."* One of the five Critical-ranked mechanisms.
 (i) `all(...)` → `any(...)` → **row (b)** flips `section_wide_uniform` →
 `item_narrowed_uniform` (and A's row becomes `0`/`item_narrowed`). Row (a) does not bite.
 (ii) quantify `has_narrowed` instead of `has_usable_narrowed` → **row (b)** flips; **row (c)
@@ -320,13 +363,32 @@ does not** (its count is below the floor either way) — recorded per rule 12.
 (vi) quantify over `evidence_by_section`'s keys instead of `participating_section_ids`
 (i.e., skip the materialization) → **row (h)** flips `section_wide_uniform` →
 `item_narrowed_uniform` (projection L2's mutation). Rows (a)–(g) do not bite on (vi).
-(vii) set `participates=True` for every section → **rows (e) and (f)** flip the excluded
-row's `participates` `False` → `True` (projection L20 — otherwise an inverted
-`participates` is invisible until it surfaces as a wrong `participating_section_count`
-on the wire in phase 4).
-*Both sides* are exact-literal assertions on the `task_typical_basis` **string** and on each
-section's `(typical_worker_seconds, typical_basis, sample_count, participates)` tuple
-(projection L20 adds the fourth element).
+(vii) set `participates=True` for every section → the excluded row's `participates` flips
+`False` → `True` (projection L20 — otherwise an inverted `participates` is invisible until
+it surfaces as a wrong `participating_section_count` on the wire in phase 4).
+**Row attribution corrected at the review fold (N3):** the plan named rows (e)/(f); in the
+tree the bite lands on **row (d)'s fixture and the ghost row**, which are where
+`participates` is actually asserted. The mechanism is guarded; the attribution was wrong.
+(viii) *(review fold, B2)* in the **participating, non-uniform** branch, publish
+`narrowed_typical_worker_seconds` instead of `section_typical_worker_seconds` → **row
+(b)** flips: the zero-median section's tuple goes `(900, section_wide, 61)` →
+`(0, section_wide, 61)` and the usable one `(1200, section_wide, 61)` →
+`(600, section_wide, 61)`. This is §3.6's naming rule and §3B B2 violated directly — a
+value drawn from the narrowed population wearing a `section_wide` label — and in row
+(b)'s case the published value is `0`, i.e. **the D25 defect re-entering one layer below
+the predicate built to prevent it**.
+(ix) *(review fold, B2)* same branch, publish `narrowed_sample_count` instead of
+`section_sample_count` → **row (b)** flips both participating `sample_count`s `61` → `5`
+and `61` → `7`. This is §3B B3, whose whole reason for existing is that participating
+sections **bypass `resolve_section_typical`** and are governed by this code.
+
+***Both sides* are exact-literal assertions on the `task_typical_basis` string AND on each
+section's `(typical_worker_seconds, typical_basis, sample_count, participates)` tuple.**
+⚠ **This sentence is a criterion, not a summary** — it is the one line no session
+implemented, and it carried three of the review's findings. Rows **(a), (b), (e), (f),
+(j)** each assert the full tuple for **every** section they name, participating ones
+included. Before the review, no test anywhere asserted what a *participating* section
+publishes under `section_wide_uniform`, and both mutants above left the phase suite green.
 
 **C9 — no hidden pace model (T5, repaired).** Fixture: three participating sections with
 narrowed values `600`, `900`, `300`, all usable.
@@ -410,6 +472,19 @@ unrecognised category answers a different narrowed question); (m)
 `{"designers": ["dsg_a", "dsg_b"]}` → `frozenset({"dsg_a", "dsg_b"})`; (n)
 `{"item_category_ids": []}` → the field stays `None` (§3A C1 canonicalization through
 the parser path).
+**Added at the review fold (S2 — measured on the round-2 tree, no mutation needed):**
+(o) `{"item_category_ids": "cat_a"}` → **`ValidationError`**. Before the fix this
+returned a spec narrowed to `frozenset({'c','a','t','_'})` — a narrowing spec over a
+population of **zero** items, which `BROADEN_TO_SECTION` then answers section-wide with
+no signal. A `str` structurally satisfies `Sequence[str]`, so §3C's original grammar did
+not exclude it. (p) `{"designers": "dsg_a"}` → `ValidationError` (same shape, second
+family — the rule is per-family, not per-site). (q) `{"item_category_ids": 5}` →
+**`ValidationError`**, not the bare `TypeError`/HTTP 500 it raised before; the boundary
+is now **symmetric** with `{"major_categories": 5}`, which already raised
+`ValidationError`.
+*Mutation* — `_optional_values` (definition): drop the `str`/non-iterable rejection →
+rows (o) and (p) flip from `ValidationError` to a silently character-split frozenset,
+and row (q) flips to `TypeError`.
 *Mutations, one per sub-check* — all in `parse_spec_from_query_params` (definition):
 (i) emit `(None, None)` when neither bound is supplied → **row (f)** flips `is_narrowing`
 `False` → `True` and the spec stops equalling `TypicalFilterSpec()`.
@@ -434,7 +509,8 @@ compiled the same way equals the **same** snapshot.
 *Mutation* — `get_working_section_typical_times.typical_times_statement` (definition):
 delete `WorkingSection.is_deleted.is_(False)` from the outer `WHERE`.
 *Both sides* — contract: both strings equal the snapshot; mutation: the string loses
-`working_sections.is_deleted = false` and both rows go red.
+`working_sections.is_deleted IS false` and both rows go red. (Rendering corrected at the
+review fold, N5: the compiled text is `IS false`, not `= false`. Prose only.)
 *Notes*: compile **without** `literal_binds` — with it the cutoff inlines and the assertion
 becomes a clock race. The original T11 (`compiles to today's SQL string`, expected side
 obtained by calling the same function) was vacuous: `f(x) == f(x)` survives any mutation of
@@ -460,12 +536,18 @@ flips `90` → `91`.
 live import sites would follow it.
 
 **C17 — F-J holds in the phase that creates the new domain module (projection L17).**
-Absence, root and terms stated, run from the repository root: no `sqlalchemy` and no
-`models.tables` import anywhere under `app/beyo_manager/domain/item_economics/`.
+Absence, root and terms stated — and, per review N1, **a committed test rather than a
+session grep**: a test walks every `*.py` under
+`app/beyo_manager/domain/item_economics/` and asserts that no line imports `sqlalchemy`
+or `models.tables`. Share the package walk with C4(c); the two criteria differ only in
+their term sets.
 *Mutation* — `typical_filters.py` (definition): add
 `from beyo_manager.models.tables.items.item import Item`.
-*Both sides* — contract: the grep finds nothing; mutation: one hit. (L10 is exactly the
+*Both sides* — contract: no hits; mutation: one hit, the test reddens. (L10 is exactly the
 pressure that produces this import; the delegated `Protocol` is the sanctioned path.)
+*Why a test and not a grep*: nothing in the committed suite went red under the grep form,
+so phases 4 and 5 — which do touch this package — inherited an unguarded claim. The
+review re-measured both greps as correct; the defect was the **form**, not the reading.
 
 **C18 — `median`'s even-length rule is byte-for-byte the old `_median`'s (projection L1).**
 Rows: (a) `median([Fraction(600), Fraction(900)]) == Fraction(750)` — even length takes
@@ -583,6 +665,37 @@ phase 4's allowances would move silently (the exact drift L1 names).
   failed / 0 collection errors**, ID delta ∅/∅. State → `REVIEWING`; review prompt
   `prompts/reviewer/20260822_plan1_review_prompt.md` (Opus 5, full review of both rounds,
   L4 budget spent on the `TZ=UTC` variation §10 requires and no session has run).
+
+- **2026-08-22 · review round 1 · Opus 5 · CHANGES_REQUESTED → folded same day.** Full
+  two-round review (`handoffs/reviewer/20260822_plan1_review_handoff.md`): 2 blocking,
+  3 should-fix, 4 recorded, **zero owner cards**. The engine's behaviour was re-derived
+  against the intention and found correct at every site; the snapshot is genuinely
+  pre-refactor (`git diff dc76db8 8feae38` on the statement is empty) and genuinely a
+  literal; the `_median` bridge creates no cycle; every commit matched its declared
+  perimeter. **What failed is the test layer over `reconcile_task_typicals`:** three
+  mutants — each a false statement on the wire in phase 4 — left the phase suite at
+  33 passed. B1: C8 row (g) absent, so the task-scope narrowing short-circuit (a
+  *second* copy of the decision, §3B B1, Critical-ranked) has no test that can fail.
+  B2: C8's closing sentence — the per-section tuple assertions — was never implemented,
+  so nothing asserts what a **participating** section publishes under
+  `section_wide_uniform`; the narrowed-value-under-a-section_wide-label mutant publishes
+  `0`, D25's defect one layer below the predicate built to stop it. S1: C7 could not
+  distinguish `has_section` from `has_narrowed` (rows equal by construction), and rows
+  (h)/(m) asserted 3 of 6 fields so `participates` was unconstrained. S2: the parser
+  read a bare `str` character-wise — `{"item_category_ids": "cat_a"}` narrowed to
+  `{'c','a','t','_'}`, a population of zero — with an asymmetric error boundary
+  (500 for one family, 422 for another).
+  **Routing.** Intention §3C + master plan §6.8 gain the bare-`str`/non-iterable
+  rejection (S2's semantics). Master plan §9 gains four earned rules, incl. **a
+  criterion's closing sentence is a criterion** (C8's closing line carried three
+  findings) and **absence criteria ship as tests, never session greps** (N1 — both
+  re-measured *correct*; the defect was the form). S3 — the snapshot compiled without
+  `literal_binds` freezes **structure, not values**; `percentile_cont(0.5)` → `0.6`
+  leaves the string byte-identical (I verified the bind rendering myself) — recorded in
+  `plans/plan_2.md` C1 and master plan §9, **no phase-1 change**. N2/N3/N4/N5 corrected
+  in this file. C4(c), C7, C8, C14, C15, C17 amended. Fix prompt:
+  `prompts/implementer/20260822_plan1_fix_round3_prompt.md` (F1–F7; F3 is the only
+  production change). State → `CHANGES_REQUESTED`.
 
 - **2026-08-22 · coordinator consumption pass · CHANGES_REQUESTED before review.**
   Verified at source: the engine's logic is correct at every site checked (ladder,

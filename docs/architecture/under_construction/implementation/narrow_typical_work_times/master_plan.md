@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Fix round 2 closed C7 row (i), C14 rows (c)/(h)/(m), and C10's seconds/evidence assertions; production logic unchanged. L4 stamp and mutation ledger are in the round-2 handoff. `_median` alias remains; removal is routed to phase 5. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `CHANGES_REQUESTED` | 2026-08-22 | coordinator | Review round 1 (Opus 5) **CHANGES_REQUESTED**: 2 blocking + 3 should-fix + 4 recorded, 0 owner cards. Engine behaviour, snapshot provenance, perimeters and the `_median` bridge all verified sound; the gaps are in the test layer over `reconcile_task_typicals` (three mutants left the suite green). Fix round 3 dispatched (F1–F7; F3 is the only production change). S3 recorded to plan 2 C1 + §9; four rules earned into §9. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
@@ -361,6 +361,10 @@ TypicalFilterSpec`.
 - An inverted band (`lo > hi`) raises **`ValidationError`** at the parser boundary
   (§3C); `TypicalFilterSpec.__post_init__` keeps `ValueError` for direct construction.
 - An empty sequence for a repeatable family canonicalizes with §3A C1 (→ `None`).
+- **A bare `str`/`bytes`, or any non-iterable, is rejected with `ValidationError` for
+  every repeatable family** — symmetrically (intention §3C, plan-1 review S2). A `str`
+  structurally satisfies `Sequence[str]`; iterating it character-wise yields a spec that
+  narrows to a population of zero, silently.
 
 ### 6.9 Test files and fixtures
 
@@ -509,6 +513,27 @@ in §2. Restated here only where they bite hardest on *this* feature:
   private name across modules. Neither the plan, the projection, nor the coordinator
   checked; the full suite found it as **27 collection errors**. The bridge alias is
   routed out in plan 5 task 0.
+- **A criterion's closing sentence is a criterion.** Earned at plan 1's review: C8's
+  closing line — *"both sides are exact-literal assertions … on each section's tuple"* —
+  was the one line no session implemented, and it carried **three** of the review's
+  findings while the row table above it looked complete. When a criterion states its
+  assertion *shape* in prose after its rows, that prose gets its own enumerated mutation,
+  or it lapses silently.
+- **When a criterion proves "this branch never reads X", at least one row must make X's
+  value differ from the value the branch does read.** Plan 1's C7 proved policy
+  independence with rows whose two populations were equal by construction, so no row
+  could tell `has_section` from `has_narrowed`; the mutation swapping them left the whole
+  phase suite green.
+- **"Identical object" criteria must name the fields the assertion compares.** A row that
+  differs from another only in a field the assertion projects away is a duplicate: C7's
+  T17 pair asserted three of six fields, so it proved identity of the projection, and
+  `participates` survived unconstrained.
+- **Absence criteria ship as committed tests, never as a session grep** (charter rule 1;
+  the exemption is environment-lifecycle checks only). Plan 1's C4(c) and C17 were both
+  re-measured *correct* at review — the defect was the form: nothing in the suite went
+  red, so later phases inherited an unguarded claim. A package walk asserting a term set
+  costs a few lines; pin any known exception **by name** so removing it does not silently
+  widen the claim.
 - **Report measured values, not remembered ones.** Two phase-1 handoff claims restated
   measurements inaccurately (a snapshot byte value; an absence grep called "empty" that
   returns one out-of-scope hit). Neither changed a conclusion, and both cost review time
@@ -522,6 +547,16 @@ in §2. Restated here only where they bite hardest on *this* feature:
 - **A clause that cannot be tested yet is marked `structurally held`** with the named
   trigger that converts it into a real assertion — never left looking testable when it is
   not. This project has exactly one: §3A C3's `coalesce(..., FALSE)` (plan 2, C11).
+- **A snapshot compiled without `literal_binds` freezes SQL *structure*, not values**
+  (plan-1 review S3, measured 2026-08-22). Every bound value — the percentile, the
+  sample floor, the 90-day cutoff, the step-state filter, the workspace id — renders as
+  `%(...)s` and cannot move the frozen string: `percentile_cont(0.5)` → `0.6` leaves it
+  byte-identical and the test passes. Compiling without `literal_binds` is still the
+  right trade (with it the cutoff inlines and the assertion becomes a clock race), but
+  **a green HC-4 snapshot criterion means "the shape did not change", never "the
+  behaviour did not change"**. Any phase that changes a bound value of a snapshotted
+  statement covers it with an integration assertion over real rows. Recorded beside the
+  inherited criterion in `plans/plan_2.md` C1.
 - **`typical_times_no_spec_sql.txt` is written once, in phase 1, and never regenerated**
   (plan-1 projection fold, ledger L12). A red C15 in any later phase is a **finding**,
   never a regeneration — re-capturing from a changed tree restores exactly the

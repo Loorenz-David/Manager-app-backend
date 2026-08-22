@@ -656,6 +656,18 @@ statistics route would turn a user typo (`width_cm_min=81&width_cm_max=80`) into
   String→int coercion and boolean spelling are the future route's FastAPI declarations,
   outside the parser's contract. Unknown *keys* are ignored (§6.8); unknown *values* of a
   known enum family are rejected.
+- **A bare `str` is not a sequence of ids, and a non-iterable is not a sequence at all**
+  (added at the plan-1 review fold, 2026-08-22, finding S2 — measured, not hypothetical).
+  A `str` satisfies `Sequence[str]` structurally, so the round-1 parser iterated it
+  character-wise: `{"item_category_ids": "cat_a"}` produced a spec narrowed to
+  `{'c','a','t','_'}` — **a narrowing spec over a population of zero items**, which
+  `BROADEN_TO_SECTION` then answers section-wide with no signal that the question was
+  unanswerable. That is HC-3's shape reached through the parser. **Contract:** for every
+  repeatable family, a `str`/`bytes` value and any non-iterable value raise
+  `ValidationError`, exactly as an unrecognised enum value does. The error boundary is
+  **symmetric across families** — the round-1 asymmetry (a non-iterable
+  `major_categories` raised `ValidationError`/422 while a non-iterable
+  `item_category_ids` raised a bare `TypeError`/500) is the defect this clause closes.
 
 The route itself remains deferred (§9); this section binds the parser it ships early.
 
