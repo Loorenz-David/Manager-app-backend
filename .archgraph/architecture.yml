@@ -5122,11 +5122,26 @@ nodes:
     updatedAt: 2026-08-21T08:50:39.277Z
   - id: infrastructure-test-database-isolation
     type: infrastructure
-    name: Serial test database isolation
-    description: Per-process PostgreSQL test-database lifecycle that creates a
-      marked worker database from a schema-and-baseline template, redirects the
-      application seam to it, and drops only approved disposable databases
-      during teardown.
+    name: Per-process test database isolation
+    description: "Gives each pytest process its own disposable PostgreSQL database,
+      created fresh from a migrated template and dropped at session end, so the
+      suite never reads or writes the development database. It owns the
+      per-process lifecycle end to end — template provisioning, worker-database
+      creation from that template, the disposability marker, redirection of the
+      application's database seam (settings.database_url) and teardown — but not
+      the data the tests then need: the template carries migrated schema only,
+      and every reference row is created by fixtures, so there is no seeded
+      baseline inside it. Database names are slot-scoped, so two checkouts of
+      this repository pointed at one PostgreSQL server cannot destroy each
+      other's databases. What must stay true: every destructive operation passes
+      the fail-closed disposability invariant before a DROP, so no name,
+      endpoint or identity mistake can reach the configured database; pre-slot
+      legacy names are reclaimed only under an explicit opt-in environment flag,
+      never by default; and the session restores the original database URL and
+      asserts the development database's row counts are unchanged before it
+      stops. The mechanism is per-process by construction rather than serial —
+      the worker id is part of the name, so running under pytest-xdist changes
+      the worker id, not the design."
     tags:
       - tests
       - postgresql
@@ -5135,42 +5150,103 @@ nodes:
       evidence:
         - path: app/tests/database_isolation.py
           symbol: DatabaseIsolation.start
-          startLine: 127
-          endLine: 136
-          summary: The session lifecycle ensures the template, reabsorbs a fixed worker
-            name, creates the worker from the template, and marks it before use;
-            failures trigger best-effort cleanup.
+          startLine: 234
+          endLine: 252
+          summary: Session start snapshots the configured database's row counts unless the
+            configured database is itself a test database, reclaims pre-slot
+            legacy databases only when BEYO_RECLAIM_LEGACY_TEST_DATABASES is set
+            to 1, ensures the template exists and is current, then drops any
+            leftover of the slot-scoped worker name, recreates it from the
+            template and marks it. Any exception or KeyboardInterrupt triggers a
+            best-effort drop of that worker database before re-raising.
           inferenceReason: This is the executable ownership boundary for process-local
             test database creation and cleanup.
         - path: app/tests/database_isolation.py
           symbol: DatabaseIsolation._drop_database_if_exists
-          startLine: 502
-          endLine: 534
-          summary: Destructive database operations require a strict disposable-name
-            pattern, a non-configured database URL, and a marker before
-            terminating sessions or dropping a database.
-          inferenceReason: These checks are the safety invariant that prevents the test
-            lifecycle from targeting the development database.
+          startLine: 539
+          endLine: 565
+          summary: "The single destructive path. It returns early if the database does not
+            exist, inspects it, and passes the result to
+            assert_disposable_database (lines 81-107) before terminating other
+            backends and issuing DROP DATABASE. That guard enforces five checks:
+            a disposable name pattern (slot-scoped or legacy), endpoint
+            confinement to the configured server, non-identity with the
+            configured (host, port, database) tuple, a disposability marker OR
+            zero public tables, and a parseable PostgreSQL URL carrying host,
+            username and database."
+          inferenceReason: These five checks are the fail-closed safety invariant that
+            prevents the test lifecycle from ever targeting the development
+            database.
         - path: app/tests/conftest.py
           symbol: isolated_database
-          startLine: 18
-          endLine: 30
-          summary: The session fixture starts isolation, swaps settings.database_url to
-            the worker URL for the test process, and restores the original URL
-            before teardown.
+          startLine: 22
+          endLine: 37
+          summary: The session-scoped fixture refuses to run without a configured
+            DATABASE_URL, starts isolation, and points settings.database_url at
+            the worker database for the whole process. On teardown it asserts
+            the configured database's row counts are unchanged, then restores
+            the original URL and stops isolation, which drops the worker
+            database.
           inferenceReason: This fixture is the integration seam connecting the
             infrastructure lifecycle to all application tests.
-    origin: ai_inferred
+      evidenceHistory:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 167
+          endLine: 185
+          summary: Session start snapshots the configured database's row counts unless the
+            configured database is itself a test database, reclaims pre-slot
+            legacy databases only when BEYO_RECLAIM_LEGACY_TEST_DATABASES is set
+            to 1, ensures the template exists and is current, then drops any
+            leftover of the slot-scoped worker name, recreates it from the
+            template and marks it. Any exception or KeyboardInterrupt triggers a
+            best-effort drop of that worker database before re-raising.
+          inferenceReason: This is the executable ownership boundary for process-local
+            test database creation and cleanup.
+          supersededAt: 2026-08-22T10:56:56.164Z
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+          startLine: 463
+          endLine: 489
+          summary: "The single destructive path. It returns early if the database does not
+            exist, inspects it, and passes the result to
+            assert_disposable_database (lines 81-107) before terminating other
+            backends and issuing DROP DATABASE. That guard enforces five checks:
+            a disposable name pattern (slot-scoped or legacy), endpoint
+            confinement to the configured server, non-identity with the
+            configured (host, port, database) tuple, a disposability marker OR
+            zero public tables, and a parseable PostgreSQL URL carrying host,
+            username and database."
+          inferenceReason: These five checks are the fail-closed safety invariant that
+            prevents the test lifecycle from ever targeting the development
+            database.
+          supersededAt: 2026-08-22T10:56:56.164Z
+    origin: human_confirmed
     confidence: 0.96
-    createdAt: 2026-08-21T09:42:12.243Z
-    updatedAt: 2026-08-21T09:42:12.243Z
+    createdAt: 2026-08-21T19:06:32.727Z
+    updatedAt: 2026-08-22T10:56:56.164Z
   - id: test-database-isolation-contract
     type: configuration
     name: Test database isolation contract
-    description: The phase-1 contract fixes worker-name resolution, migration-head
-      and public-table assertions, baseline reference-row preservation,
-      application URL redirection, and development-database count invariants for
-      serial test execution.
+    description: "The rules that decide which PostgreSQL database a test process may
+      create, reuse and destroy, and the operator-facing switches that select
+      them. It fixes the name grammar — beyo_test_<slot>_(template|main|gw<n>),
+      slot [a-z0-9]{1,12}, resolved from the BEYO_TEST_SLOT environment
+      variable, then settings.test_slot, then the default 'main', with invalid
+      values raising rather than being normalised — the template acceptance
+      rules (marker present, Alembic head and public-table count both as
+      expected, and no legacy baseline_source column), and the five-part
+      fail-closed invariant every destructive operation must satisfy: disposable
+      name pattern, endpoint confinement to the configured server, non-identity
+      with the configured (host, port, database) tuple, marker present or a
+      table-less shell, and a parseable PostgreSQL URL carrying host, username
+      and database. It also carries the opt-in reclamation flag
+      BEYO_RECLAIM_LEGACY_TEST_DATABASES, without which pre-slot database names
+      are left untouched. What must stay true: the name set stays bounded by
+      construction — slots times workers-plus-one, and a slot exists only
+      because a human declared one — the template is never named after a
+      migration head, and the development database is compared against a
+      snapshot taken at session start rather than against any fixed row count."
     tags:
       - tests
       - pytest
@@ -5179,32 +5255,163 @@ nodes:
       evidence:
         - path: app/tests/database_isolation.py
           symbol: resolve_worker_database_name
-          startLine: 26
-          endLine: 35
-          summary: Worker IDs resolve to the bounded names beyo_test_main or
-            beyo_test_gwN, rejecting unknown IDs.
-          inferenceReason: The bounded resolver defines the stable database identity
-            contract for serial execution and future worker processes.
+          startLine: 103
+          endLine: 112
+          summary: Worker ids resolve to slot-scoped names of the form
+            beyo_test_<slot>_<worker>. The worker segment is 'main' when
+            PYTEST_XDIST_WORKER is unset or empty and must otherwise match
+            gw<n>; anything else raises UnsafeDatabaseError. The serial default
+            is beyo_test_main_main. The unslotted names beyo_test_main and
+            beyo_test_gwN are legacy and can no longer be produced here.
+          inferenceReason: The bounded resolver defines the database identity contract for
+            serial execution and for xdist worker processes, and the slot
+            segment is what keeps two checkouts on one server from colliding.
         - path: app/tests/database_isolation.py
           symbol: DatabaseIsolation._migrate_and_assert
-          startLine: 395
-          endLine: 439
-          summary: Template creation runs the real Alembic upgrade and asserts the
-            expected head, 107 public tables, and required tables.
-          inferenceReason: The lifecycle contract is anchored to the actual schema rather
-            than a command exit code alone.
+          startLine: 449
+          endLine: 490
+          summary: "Template migration runs a real Alembic upgrade in a subprocess and
+            then asserts the DDL actually landed: the expected head revision,
+            the expected public-table count, three required tables, and the
+            disposability marker. A zero exit code alone is never accepted as
+            evidence that the migration persisted anything."
+          inferenceReason: The lifecycle contract is anchored to asserted schema rather
+            than a command exit code, which this project's Alembic env.py trap
+            is known to fake.
         - path: app/tests/integration/infrastructure/test_database_isolation.py
           symbol: test_dev_database_counts_are_untouched
-          startLine: 97
-          endLine: 105
-          summary: The infrastructure tests assert fixed development row counts and that
-            the active application database is the worker database.
-          inferenceReason: These tests encode the externally observable isolation and
-            non-mutation guarantee.
-    origin: ai_inferred
+          startLine: 614
+          endLine: 647
+          summary: The test compares the configured database's row counts against the
+            snapshot taken at session start rather than against any fixed
+            number, asserts the active application database is the worker
+            database, and asserts that an isolation instance carrying no
+            baseline never reads row counts at all.
+          inferenceReason: This test encodes the externally observable non-mutation
+            guarantee for the development database, in the only form that can
+            distinguish broken isolation from the owner adding a workspace.
+      evidenceHistory:
+        - path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+          startLine: 46
+          endLine: 55
+          summary: Worker ids resolve to slot-scoped names of the form
+            beyo_test_<slot>_<worker>. The worker segment is 'main' when
+            PYTEST_XDIST_WORKER is unset or empty and must otherwise match
+            gw<n>; anything else raises UnsafeDatabaseError. The serial default
+            is beyo_test_main_main. The unslotted names beyo_test_main and
+            beyo_test_gwN are legacy and can no longer be produced here.
+          inferenceReason: The bounded resolver defines the database identity contract for
+            serial execution and for xdist worker processes, and the slot
+            segment is what keeps two checkouts on one server from colliding.
+          supersededAt: 2026-08-22T10:56:56.164Z
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+          startLine: 364
+          endLine: 414
+          summary: "Template migration runs a real Alembic upgrade in a subprocess and
+            then asserts the DDL actually landed: the expected head revision,
+            the expected public-table count, three required tables, and the
+            disposability marker. A zero exit code alone is never accepted as
+            evidence that the migration persisted anything."
+          inferenceReason: The lifecycle contract is anchored to asserted schema rather
+            than a command exit code, which this project's Alembic env.py trap
+            is known to fake.
+          supersededAt: 2026-08-22T10:56:56.164Z
+        - path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+          startLine: 277
+          endLine: 311
+          summary: The test compares the configured database's row counts against the
+            snapshot taken at session start rather than against any fixed
+            number, asserts the active application database is the worker
+            database, and asserts that an isolation instance carrying no
+            baseline never reads row counts at all.
+          inferenceReason: This test encodes the externally observable non-mutation
+            guarantee for the development database, in the only form that can
+            distinguish broken isolation from the owner adding a workspace.
+          supersededAt: 2026-08-22T10:56:56.164Z
+    origin: human_confirmed
     confidence: 0.95
-    createdAt: 2026-08-21T09:42:12.243Z
-    updatedAt: 2026-08-21T09:42:12.243Z
+    createdAt: 2026-08-21T19:06:32.727Z
+    updatedAt: 2026-08-22T10:56:56.164Z
+  - id: infrastructure-template-copy-contention-lock
+    type: infrastructure
+    name: Per-slot template-copy advisory lock
+    description: Serializes template inspection, rebuild, worker-database drop, and
+      template copy for each test slot, so concurrent pytest-xdist processes
+      cannot both rebuild or copy the same PostgreSQL template unsafely.
+    tags:
+      - test-isolation
+      - postgresql
+      - pytest-xdist
+    metadata:
+      evidence:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._template_operation_lock
+          startLine: 381
+          endLine: 396
+          summary: The async context manager holds a PostgreSQL advisory lock keyed by the
+            slot's template database name across template ensure, worker drop,
+            and worker creation, and releases it after the protected region.
+          inferenceReason: The lock's scope covers the full template lifecycle and worker
+            copy, which is the architectural mechanism that makes same-slot
+            concurrent worker starts safe.
+      evidenceHistory:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._template_operation_lock
+          startLine: 344
+          endLine: 359
+          summary: The async context manager holds a PostgreSQL advisory lock keyed by the
+            slot's template database name across template ensure, worker drop,
+            and worker creation, and releases it after the protected region.
+          inferenceReason: The lock's scope covers the full template lifecycle and worker
+            copy, which is the architectural mechanism that makes same-slot
+            concurrent worker starts safe.
+          supersededAt: 2026-08-22T09:54:23.207Z
+    origin: human_confirmed
+    confidence: 0.94
+    createdAt: 2026-08-21T21:18:27.881Z
+    updatedAt: 2026-08-22T09:54:23.207Z
+  - id: configuration-shipped-pytest-parallel-default
+    type: configuration
+    name: Shipped pytest parallel default
+    description: "The repository's operator-facing pytest default runs the
+      non-end-to-end suite with six xdist workers using file-preserving loadfile
+      distribution. It owns runner topology only; database isolation and worker
+      naming remain the responsibility of the test isolation infrastructure. The
+      explicit -n 0 invocation is the serial comparator and is not the shipped
+      mode. What must stay true: the configuration reaches a real gw<n> worker,
+      and raising the worker count requires a fresh connection-budget and
+      scheduling measurement."
+    tags:
+      - tests
+      - pytest
+      - pytest-xdist
+      - configuration
+    metadata:
+      evidence:
+        - path: app/pytest.ini
+          startLine: 1
+          endLine: 2
+          summary: The shipped pytest addopts include -n 6 and --dist loadfile alongside
+            the strict runner settings.
+          inferenceReason: This configuration is the executable source of the repository's
+            default parallel runner topology.
+        - path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_shipped_default_reaches_an_xdist_worker
+          startLine: 108
+          endLine: 125
+          summary: The criterion requires the configured -n 6 --dist loadfile tokens and a
+            PYTEST_XDIST_WORKER value matching gw<n>, while exempting only the
+            explicit -n 0 comparator.
+          inferenceReason: The criterion makes the shipped configuration's operational
+            reachability observable and prevents a command-line worker override
+            from masking a missing default.
+    origin: human_confirmed
+    confidence: 0.94
+    createdAt: 2026-08-22T09:12:40.934Z
+    updatedAt: 2026-08-22T09:54:23.207Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10176,20 +10383,78 @@ edges:
     createdAt: 2026-08-21T08:16:07.269Z
     updatedAt: 2026-08-21T08:50:39.277Z
   - sourceNodeId: infrastructure-test-database-isolation
+    relationshipType: contains
+    targetNodeId: infrastructure-template-copy-contention-lock
+    description: The per-slot lock is a contained mechanism of the per-process test
+      database isolation lifecycle.
+    metadata:
+      evidence:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 234
+          endLine: 252
+          summary: DatabaseIsolation.start invokes the protected template and worker-copy
+            region as one lifecycle step.
+          inferenceReason: The start method establishes that the advisory-lock mechanism
+            is part of the existing isolation lifecycle rather than an unrelated
+            utility.
+      evidenceHistory:
+        - path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 197
+          endLine: 209
+          summary: DatabaseIsolation.start invokes the protected template and worker-copy
+            region as one lifecycle step.
+          inferenceReason: The start method establishes that the advisory-lock mechanism
+            is part of the existing isolation lifecycle rather than an unrelated
+            utility.
+          supersededAt: 2026-08-22T09:54:23.207Z
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-21T21:18:27.881Z
+    updatedAt: 2026-08-22T09:54:23.207Z
+  - sourceNodeId: infrastructure-test-database-isolation
+    relationshipType: configured_by
+    targetNodeId: configuration-shipped-pytest-parallel-default
+    description: The test database isolation lifecycle is exercised under the
+      shipped six-worker loadfile runner, while the explicit serial comparator
+      remains available for baseline comparison.
+    metadata:
+      evidence:
+        - path: app/pytest.ini
+          startLine: 1
+          endLine: 2
+          summary: The default runner invokes xdist with six workers and loadfile
+            distribution.
+          inferenceReason: The lifecycle's operational concurrency is selected by this
+            configuration.
+    origin: human_confirmed
+    confidence: 0.9
+    createdAt: 2026-08-22T09:12:40.934Z
+    updatedAt: 2026-08-22T09:54:23.207Z
+  - sourceNodeId: infrastructure-test-database-isolation
     relationshipType: configured_by
     targetNodeId: test-database-isolation-contract
-    description: The lifecycle is constrained by the phase-1 isolation contract.
+    description: The lifecycle's database names, template-reuse rules and
+      destructive-operation guard are all decided by the isolation contract;
+      changing the contract changes what this lifecycle may create, reuse or
+      drop.
     metadata:
       evidence:
         - path: app/tests/database_isolation.py
           symbol: DatabaseIsolation._ensure_template
-          startLine: 246
-          endLine: 278
-          summary: Template reuse is accepted only after marker, migration-head,
-            public-table-count, and baseline-source checks.
+          startLine: 398
+          endLine: 428
+          summary: An existing template is reused only when it carries the disposable
+            marker, its Alembic head equals the head derived at runtime from the
+            migration scripts, it contains every required public table, and it
+            lacks the legacy baseline column; a marked template failing any of
+            those is dropped and rebuilt. A marker-less template is not rebuilt
+            by default — it is refused outright with UnsafeDatabaseError if it
+            still has public tables, and absorbed only if it is an empty shell.
           inferenceReason: The implementation is configured by explicit invariants that
-            govern when a template is safe to reuse.
-    origin: ai_inferred
+            govern when a template is safe to reuse or refuse.
+    origin: human_confirmed
     confidence: 0.92
-    createdAt: 2026-08-21T09:42:12.243Z
-    updatedAt: 2026-08-21T09:42:12.243Z
+    createdAt: 2026-08-22T12:04:55.131Z
+    updatedAt: 2026-08-22T12:05:10.864Z

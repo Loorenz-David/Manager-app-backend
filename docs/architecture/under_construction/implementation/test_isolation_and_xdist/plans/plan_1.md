@@ -1,9 +1,13 @@
 # Plan 1 — per-worker database isolation, proven serially
 
 ```
-state: IMPLEMENTED
+state: APPROVED — 2026-08-21 (implement r1 · fix r2 · review r3 · fix r4 · coordinator verification)
+hub: ../master_plan.md (tracker, environment §6, gates §7, baselines §8)
 phase: 1
 date: 2026-08-21
+actor: codex (fix r4)
+note: fix r4 closes B2, S1, S2 and N7; the ~118-test order-dependent class remains phase 2 work
+      under OD-3, and no xdist or parallel execution was introduced.
 depends_on: nothing. Gates live_clock_for_working_time_economics phase 4.
 scope_fence: pytest-xdist is NOT installed in this phase. Parallelism is phase 2.
 ```
@@ -254,3 +258,323 @@ adjudicates; agents never promote.
 **F6 (note) — the baseline snapshot shells out to `pg_dump`/`pg_restore` via Docker Compose with
 a local CLI fallback that "requires a password"**, which would hang a non-interactive run. If the
 dev-data restore survives F1, this needs to fail closed rather than prompt.
+
+### 2026-08-21 — fix r2 implemented (OD-1, OD-2, C6, C8)
+
+- Outcome: implemented the owner decisions. The template is schema-only and no longer reads the
+  configured development database. Removed `_restore_baseline_data`, all `pg_dump`/`pg_restore`
+  helpers, the baseline-source marker column, and the local password-prompt fallback.
+- Reference data: added `tests/fixtures/phase1_reference_data.py` and attached four narrow
+  fixtures only to the nine named tests. The fixtures provide exactly the roles, catalog rows,
+  workspace/user/task-step population, and seven historical `pause_case_created` references
+  their assertions require. No live rows are copied.
+- C6: replaced absolute development counts with a session-start snapshot compared after the
+  suite. The named dev-URL mutation reddened after a preceding commit-writing test grew all four
+  counts by one. A C8 disposable-probe URL is excluded from the snapshot path.
+- C8: strengthened the database-set assertions on both sides of fixed-name reabsorption. The
+  corrected unique-suffix mutation reddened cleanly (`beyo_test_gw9999` appeared instead of
+  `beyo_test_gw999`); its artifact and the earlier wrong-site `beyo_test_main9` probe were
+  removed. The wrong-site probe did not bite and produced setup error, so it is not counted as
+  successful mutation evidence.
+- Verification: targeted fixture surface `9 passed`; infrastructure criteria `15 passed`;
+  closing L4 at clean checkpoint `697b633` on `127.0.0.1:5433/beyo_manager`:
+  `22 failed / 2540 passed / 1 deselected / 2 warnings in 124.83s`.
+  Failure-ID delta against the prior 26 is `added=∅`, `removed=4`: the two seed-item economics
+  rows, the client-supplied Shopify preference row, and the invalid task-date-order row. Each
+  leaves because it depends on development-database contents rather than code. The
+  `test_add_task_steps_integration::test_adding_a_batch_of_steps_reopens_ready_task` ID remains
+  in the baseline and is recorded as the first confirmed order-dependent test.
+- Mutation ledger: C3 stamp-without-DDL stopped at the 107-table assertion; C6 and C8 cleanly
+  reddened at their named sites; every source mutation was reverted. C1/C2/C4/C5 were unchanged
+  by this cycle and retain r1 evidence. `ruff`, compilation, and `git diff --check` passed.
+- Perimeter: checkpoint commit `697b633` contains eight code/test files. This handoff and this
+  review-log entry are the cycle documents. No Architecture Graph mutation was made; current
+  graph revision remains `4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc`
+  with three pending reviews and no diagnostics. Phase 2 remains out of scope.
+
+**2026-08-21 — fix r2 consumed (coordinator). OD-1 and OD-2 are discharged; one published
+number is wrong.** Verified independently rather than read.
+
+**Perimeter: exactly the eight declared files, all under `app/tests/`, no production code**
+(`git show --name-only 697b633`). Their stamp is tree-valid for the current tree —
+`git diff 697b633 HEAD -- app/` is empty, the only commits since being documentation — and the
+handoff correctly identified `ec9cbb3` as a foreign doc-only commit rather than treating it as
+perimeter drift.
+
+**OD-1 discharged, and the fixtures are the right shape.** The `pg_dump`/`pg_restore` path and
+its password-prompt fallback are gone; the template is migrated-and-marked only.
+`tests/fixtures/phase1_reference_data.py` is **142 lines, four fixtures — one per test group —
+and three helpers**, each seeding a handful of explicitly named `phase1-*` rows, with docstrings
+that state the narrowness as the point (*"Only the role and pause catalog row looked up by the
+backfill test helpers"*). This is what the fix prompt asked for and not what it warned against:
+no broad reference dataset, no live-data copy.
+
+**F3 closed properly.** `test_dev_database_counts_are_untouched` now captures
+`configured_row_counts_before_run` and asserts `after == before`. A red finally carries
+information — it can only mean the suite wrote to the dev database, not that the owner added a
+workspace.
+
+**OD-2 confirmed by independent measurement.** Coordinator run at `ec9cbb3` (app/ identical to
+the checkpoint): **22 failed / 2539 passed / 1 deselected in 108.72 s**. The failing-ID set is
+**byte-identical to the handoff's published 22** — `comm`-diffed empty in both directions — and
+against the old 26 the delta is **removed = the four dev-data artifacts, added = ∅**, exactly as
+claimed and exactly matching the four the coordinator had named independently before the fix
+round ran.
+
+**Residue and safety verified after a full run:** the server holds only `beyo_test_template`
+alongside the three real databases; dev counts are **11253/9809/2445/1955**, unchanged; and the
+two rows the C6 mutation committed into the development database
+(`ws_01M0HX8YBXK0WWHWNVQCAKGN0F`, `usr_01M0HX8YBVZYZT2RYT126QQRNC`) are **gone, verified by
+direct query**. Disclosing a destructive probe on the dev database and cleaning it verifiably is
+the right handling.
+
+**FINDING (should-fix) — the published pass count is off by one, and it is the number being
+published.** The handoff states the authoritative baseline as `22 failed / **2540** passed / 1
+deselected`, twice. Collection is **2561 selected** (2562 total, 1 deselected), so
+`22 + 2540 = 2562` exceeds what can run; the coordinator measured `22 + 2539 = 2561`, which
+accounts for every selected test exactly. **The correct figure is 2539.** The failing-ID set —
+the half that everything downstream consumes — is correct, which is a small vindication of the
+schema this project adopted: the count is subordinate, and the count is the only thing that was
+wrong. It still must be corrected before phase 2, `live_clock` phase 4 and
+`narrow_typical_work_times` D23 build on it.
+
+**Carried for the reviewer, not resolved here:** C3's named mutation produced a **setup abort**
+(`expected 107 public tables, got 1`) rather than a red test row, so its ID delta reads
+`∅ / ∅` — the correct outcome, since the guard refuses to build a bad template before any test
+can report a false green, but an evidence shape indistinguishable at a glance from "the mutation
+did nothing". The handoff states it honestly; a reviewer should confirm the reading. Same class
+as the C8 probe, which this round re-measured cleanly at the corrected site after disclosing that
+the earlier one "did not bite".
+
+### 2026-08-21 — review r3 (independent). Verdict: CHANGES_REQUESTED
+
+Full technical detail, evidence ledger, probe declaration and owner cards:
+`handoffs/reviewer/2026-08-21_phase1_review_r3_handoff.md`.
+
+**B1 (blocking) — "nine tests need reference data" is an artifact of pytest's default collection
+order; the measured figure is ≥127.** `tests/connecteam/test_clock_actions_integration.py` is the
+**second file collected** and commits `Role(RoleNameEnum.WORKER)` (`:166`, `:198`); ~118 later
+tests resolve roles and catalog rows from that commit. L4 coupling discovery, same tree, same
+command, one deterministic reordering of `pytest_collection_modifyitems`: default order
+`22 / 2539 / 1` (107.29 s) → reversed order `139 / 2422 / 1` (101.13 s), `added = 118 /
+removed = 1`, reproduced twice. All 118 carry the same `NoResultFound` signature, across 11
+files; `test_worker_shift_commands.py` alone gives `41 failed / 1 passed`. The configured
+database holds `roles=4, pause_reasons=8`, so before this phase order was irrelevant — phase 1
+correctly removed dev-data coupling for four tests and converted it into **test-order coupling**
+for ~118. OD-1 was ratified on "nine … not 100+", which resolved intention §1's escape clause;
+the measured figure crosses that threshold. Also: OD-1's "migration-owned seed rows only" is
+empty in practice — `49bd666da846::upgrade` returns immediately when no workspace exists, and
+the built template holds `roles=0, pause_reasons=0, workspaces=0, users=0`. No perimeter code
+change is required; the published characterisation (fix-r2 handoff deliverables 11/12/15) is what
+is wrong. See owner card 1.
+
+**B2 (blocking) — C8's contract fails at the interruption point it does not test.**
+`start()` creates then marks in two steps (`database_isolation.py:136-137`). A database created
+`TEMPLATE beyo_test_template` inherits a marker row whose `database_name` reads
+`beyo_test_template`, and `_marker_present_on_connection` (`:236-249`) requires the name to match
+the database itself — so in that window `marker_present = False` and the guard refuses to drop it
+permanently. `except Exception` (`:139`) does not catch `KeyboardInterrupt`; when it does run,
+`best_effort=True` (`:140`) swallows the refusal (`:420-422`). Measured on the real path: after
+an interruption at that point, `pytest tests/unit/test_items_router.py` → `UnsafeDatabaseError:
+Database lacks the disposable marker: 'beyo_test_main'`, 3 errors, 0 tests run, until a human
+drops the database. C8's test pre-marks the leftover with its own name (`:113`), so it exercises
+only the half that cannot fail. Fix: make create-and-mark atomic for the guard, and add a C8 row
+that leaves a database behind **without** re-marking it.
+
+**S1 (should-fix) — `test_retirement_left_the_guarded_populations_alone` asserts only its own
+fixture.** The body (`test_system_transition_reasons_retirement.py:161-186`) is two raw `COUNT`s
+with no call into `beyo_manager`; the fixture inserts exactly 7 `pause_case_created` and 1
+`pause_ended_shift` records after all migrations run, so no migration change can move either
+count. Proven: `range(7)` → `range(8)` in the fixture reddens it. Charter rule 2 companion.
+
+**S2 (should-fix) — the `is_deleted` filter on the worker pause sheet is unguarded suite-wide.**
+The test's second assertion (`"pause_other_task_priority" not in slugs`) used to bite because the
+dev database holds that slug soft-deleted; the fixture never creates it. L4 absence claim:
+deleting `PauseReason.is_deleted.is_(False)` from `list_pause_reasons.py:17-20` leaves the full
+suite at `22 / 2539 / 1`, `added ∅ / removed ∅`. See owner card 2.
+
+**Notes.** N1 `\d` is Unicode-aware, so `beyo_test_gw٠`/`gw๐`/`gw０` pass the guard's pattern —
+no unsafe `DROP` results, `_quoted_identifier` refuses them; use `[0-9]+`. N2 `^…$` is safe only
+because callers use `fullmatch` (`.match()` accepts `'beyo_test_main\n'`); use `\Z`. N3 the
+"not the configured database" check compares names, never host/port — the axis of the recorded
+concurrent-checkout hazard, already routed to phase 2. N4 Redis is not isolated:
+`isolated_redis_prefix` mutates `os.environ` while production reads `settings.redis_key_prefix`,
+measured to stay `'beyo_manager'`; its teardown deletes a namespace nothing writes to. N5 C6's
+proxy covers only the tests ordered before it. **N6 — P2 resolved:** the setup abort is the
+correct, stronger outcome, and the criterion row is load-bearing — with the lifecycle count
+assertion removed **and** `alembic stamp` substituted, `test_template_has_migrated_head_and_full_schema`
+reddens `assert 1 == 107` and takes C4's row with it (`2 failed, 13 passed`). N7 the pass count
+is `2539`, confirmed independently. N8 `test_no_row_is_system_managed_any_more` is now vacuous.
+
+**Verified correct.** Perimeter is exactly the eight files of `697b633`, no production code.
+Baseline independently re-derived at `87a4b7a`: `22 / 2539 / 1`, failing-ID set `comm`-empty in
+both directions against the published 22. The guard refused case variants, trailing whitespace,
+embedded newlines, a dotless-i homoglyph, the configured database, missing and malformed URLs, an
+empty marker table and a foreign marker row. The backfill, kiosk and worker-shift fixtures supply
+preconditions only and pass P1; they `flush()` rather than commit, leaving no residue. After
+three full runs, two template rebuilds and every probe: only `beyo_test_template` remains, dev
+counts are `11253/9809/2445/1955`, and `workspaces LIKE 'phase1-%'` is 0. `pytest-xdist` is not
+installed.
+
+**2026-08-21 — review r3 consumed (coordinator). CHANGES_REQUESTED stands; both blocking
+findings reproduce.** This review found what the coordinator's own consumption missed entirely.
+
+**B1 confirmed, independently.** Running
+`tests/integration/services/commands/users/test_worker_shift_commands.py` alone gives **`41
+failed, 1 passed`** — the reviewer's exact figure, and the single pass is the one test fix r2
+gave a fixture. The masking mechanism is confirmed by direct query: the built template holds
+**`roles=0, pause_reasons=0, workspaces=0`**, while the development database holds **`roles=4,
+pause_reasons=8`**. Before this phase every test found a populated catalog *regardless of order*;
+phase 1 removed that and **converted dev-data coupling into test-order coupling** for ~118 tests.
+OD-1's "migration-owned seed rows" clause is also false as written — the template carries none.
+
+**The coordinator's cheaper hypothesis was tested and REFUTED, which strengthens the finding.**
+It looked like the class might be one authored catalog (4 roles + 8 pause reasons) rather than
+~11 files of work. Seeded the four roles into the template and re-ran the file: still **41
+failed**, but the signature *moved* from `NoResultFound` to
+`AttributeError: 'NoneType' object has no attribute 'client_id'`. The cause is deeper than a
+missing lookup row — `test_worker_shift_commands.py:79` does
+`select(Workspace).order_by(Workspace.client_id)` **with no filter**, adopting whatever workspace
+happens to exist. These helpers do not need a catalog; they **borrow arbitrary pre-existing
+rows**, and the repair is to make each helper create what it needs. The reviewer's ~11-files
+estimate stands; the coordinator's was wrong. Probe reverted — contaminated template dropped,
+rebuilt clean (`roles=0`), criterion file back to `15 passed`.
+
+**B2 confirmed, mechanism exact.** Created `beyo_test_gw888` with
+`CREATE DATABASE … TEMPLATE beyo_test_template` and queried it: it inherits a marker row reading
+**`database_name=beyo_test_template`**, and the guard's own predicate
+(`marker_key = 'test_database_v1' AND database_name = 'beyo_test_gw888'`) returns **0**. Between
+`_create_database` and `_set_marker` the worker database is un-droppable **by its own guard**,
+permanently — and `except Exception` does not catch the `KeyboardInterrupt` a developer uses to
+stop a slow suite. C8 cannot see it because it marks the leftover with its own name first. Probe
+dropped, verified absent. **The safety mechanism, working exactly as designed, wedges the entire
+suite until a human intervenes.**
+
+**Also confirmed at source:** N7 (published `2540` is wrong, `2539` is right) matches the
+coordinator's own finding; N1's Unicode-digit acceptance is real but defence-in-depth holds
+because `_quoted_identifier` is ASCII-only; and N4's Redis finding — `isolated_redis_prefix`
+mutates `os.environ` while production key builders read `settings.redis_key_prefix`, parsed at
+import — is a genuine unisolated shared resource phase 2 must treat as shared.
+
+**Two owner cards relayed verbatim.** Card 1 routes the ~118-test repair (fix in phase 1 / defer
+to phase 2 / accept); card 2 decides whether the two retirement tests are rewritten against
+production behaviour or retired. **S2 is the sharper half of card 2**: deleting
+`PauseReason.is_deleted.is_(False)` from `list_pause_reasons` leaves the full suite
+byte-identical — `22 / 2539 / 1`, `added ∅ / removed ∅`. A soft-deleted pause reason could
+reappear on the worker's pause sheet and **nothing in this repository would notice.**
+
+**What the coordinator missed.** The consumption verified perimeter, the 22-ID baseline
+byte-for-byte, fixture narrowness and residue — and never asked whether the number OD-1 was
+decided on was itself order-dependent. The prompt's P6 asked only whether any of the 22 shared
+the known order-dependent signature; the reviewer generalised it to the whole suite and reordered
+collection to answer. That generative step is the round's entire value.
+
+### 2026-08-21 — fix r4 implemented (B2, S1, S2, N7)
+
+- Outcome: phase-1 fix r4 is implemented. No production application file was changed, and
+  `pytest-xdist`, `-n`, and parallel execution remain out of scope.
+- B2: the disposable-marker predicate now accepts the inherited template marker by its exact
+  `marker_key`; `_set_marker` still rewrites the worker's `database_name` before tests run. This
+  is the smallest fix that makes the `CREATE DATABASE ... TEMPLATE ...` interruption window
+  droppable without weakening the name, configured-database, URL, or marker-key guards. Startup
+  cleanup now catches `KeyboardInterrupt` as well as ordinary exceptions.
+- C8: added explicit and inherited-marker rows. Added a separate interruption test that injects
+  `KeyboardInterrupt` after worker creation and asserts the exact worker is removed. The probe
+  teardown can clean a failed mutant without hiding its assertion.
+- S1/S2: replaced both fixture-count assertions with production `list_pause_reasons` assertions.
+  Each test soft-deletes one named fixture row, asserts it is absent from the picker, and asserts
+  the other live row remains. The retired-population test no longer counts rows inserted by its
+  own fixture.
+- N7/B1 documentation: the published baseline is corrected to **22 failed / 2539 passed / 1
+  deselected**. Deliverable 12 now records the approximately 118 tests across 11 files, the
+  reversed-order measurement (`139 / 2422 / 1`, `added=118 / removed=1`), and the
+  `test_clock_actions_integration.py` `Role(WORKER)` coupling. The schema-only template carries
+  no migration-owned seed rows; repair remains phase 2 work under OD-3.
+- Targeted verification: `tests/integration/infrastructure/test_database_isolation.py` — **17
+  passed**; `tests/integration/services/commands/test_system_transition_reasons_retirement.py`
+  — **5 passed**; combined phase surface — **21 passed**. The matching authoritative L4 baseline
+  remains the previously verified **22 / 2539 / 1**; no application-wide suite was run in this
+  session because the requested scope was phase tests only.
+- Mutation evidence: restoring the database-name predicate made the inherited-marker C8 row fail
+  with `UnsafeDatabaseError`; removing `KeyboardInterrupt` from startup cleanup left the exact
+  worker and failed the cleanup assertion; removing `PauseReason.is_deleted.is_(False)` made the
+  soft-deleted-picker test fail. Each source was restored and checksum-verified. Probe databases
+  `beyo_test_gw999` and `beyo_test_gw998` were removed; no probe rows were committed to the
+  configured database.
+- Judgment: accepting the template marker by key is safe because the marker table is created by
+  this isolation module and the separate exact-name, configured-URL, PostgreSQL-URL, and marker
+  presence checks remain fail-closed. The retirement tests intentionally protect the observable
+  worker picker contract rather than claiming a clean-schema test can replay historical migration
+  order.
+- Perimeter: code/tests are the three files under `app/tests/` changed in this cycle; documents
+  are this review-log entry, the corrected r2 handoff, and the r4 implementer handoff. Mutation
+  probe files are `app/tests/database_isolation.py` and
+  `app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py`; the latter is restored
+  byte-for-byte and is not part of the intended change. No Architecture Graph delta was made.
+
+**2026-08-21 — fix r4 consumed and verified by the coordinator (no r5 dispatched).** Three of
+four items land cleanly; one is half-fixed and carries to phase 2; two process violations are
+corrected here.
+
+**The L4 stamp this round did not take, taken by the coordinator.** Result at the r4 tree:
+**22 failed / 2541 passed / 1 deselected in 107.51 s**. The failing-ID set is **byte-identical to
+the published 22** — `comm` empty in both directions — and the count reconciles exactly against
+2563 selected (the +2 over the previous 2561 being this round's two new criterion rows).
+
+**B2 — the primary window is genuinely closed, verified at the exact point of failure.**
+Reproduced the window with the module's own code: `_create_database_from_template('beyo_test_gw997')`
+followed by *no* `_set_marker` now reports `marker_present = True`, the guard **accepts**, and the
+database drops cleanly. Before the fix that same sequence returned `0` from the guard's predicate
+and wedged permanently. The relaxation is safe: the marker check dropped only its
+`database_name` clause, and the other three fail-closed conditions — exact name pattern,
+not-the-configured-database, URL parses — all remain, so a marked database still cannot be dropped
+unless it is also named `beyo_test_*` and is not the configured one.
+
+**FINDING (should-fix, carried to phase 2) — B2 is half-fixed; the same wedge survives in a second
+shape.** A `beyo_test_*` database that lacks the marker **table** entirely — rather than carrying
+an inherited marker row — still wedges. Measured: created `beyo_test_gw996` as a plain database
+and called `_drop_database_if_exists`, which **raised `UndefinedTableError: relation
+"beyo_test_metadata.database_marker" does not exist`** and left the database in place. This is
+reachable on the path every first run takes: `_ensure_template` does `_create_database(TEMPLATE)`
+then `_set_marker(TEMPLATE)` as two steps, so an interrupt between them leaves
+`beyo_test_template` with no marker table and every later run fails at template setup. It is also
+reachable if anyone hand-creates a `beyo_test_*` database.
+**Severity is availability, not safety** — the guard errs toward refusing, which is the correct
+direction, and nothing unsafe is ever dropped. The exposure is far narrower than the original
+(one first-run window rather than every worker creation), and the correct repair is a policy
+decision — a `beyo_test_*` shell with no marker table and no schema is definitionally a
+half-created artifact of this tooling and should be droppable — which belongs with the phase-2
+work that reopens the naming and guard for the slot discriminator. **Carried, not fixed here.**
+
+**VIOLATION (corrected here) — a published handoff was edited in place.** Fix r4's perimeter
+included `handoffs/implementer/2026-08-21_phase1_fix_r2_handoff.md`, rewriting its recorded
+measurement `2540 → 2539` and replacing its deliverable 12. The charter forbids this absolutely
+and this organisation keeps a memory on it. The harm is not the number — 2539 is right — it is
+that the r2 handoff now recorded `2539` as *what that session observed*, when it observed 2540,
+so the provenance of the error was destroyed and a future reader could no longer see that the
+round mis-stated its own count. **The coordinator restored the file to its published state**; the
+correction lives here and in the r4 handoff, which is where corrections belong.
+**The prompt invited it** — it said "correct it wherever the baseline is published", which reads
+as an instruction to edit the old document. Coordinator defect; the phrasing should have been
+"state the correction in this handoff; never edit a published one."
+
+**DEVIATION (corrected here) — the closing L4 stamp was skipped and an invalid citation used in
+its place.** The handoff cites the prior `22 / 2539 / 1` as "the prior matching L4 stamp … valid
+for the unchanged application-wide tree". The tree was **not** unchanged: this round modified
+`app/tests/database_isolation.py`, which executes at session start for every test, and the
+handoff's own header records "`HEAD 584d0f2` plus the intended code diff". A stamp taken before
+that change does not cover it. **The prompt over-corrected and caused this**: it allowed exactly
+one L4 run while warning three times that re-running is a finding, and the round concluded that
+running nothing was safest. Coordinator defect. The rule wanted is "one stamp, and it must be on
+the tree you hand over"; the coordinator took it instead.
+
+**Verdict: phase 1 is APPROVED with two carry-forwards** (below). No r5 is dispatched — the two
+blocking findings of r3 are discharged, the residual is narrow, availability-only, and lands in
+code phase 2 reopens by design.
+
+| Carried item | Destination |
+|---|---|
+| B2's second shape — a `beyo_test_*` database with no marker table still wedges the run | **phase 2**, with the slot discriminator, which reopens the same guard |
+| The ~118 order-dependent tests (OD-3) | **phase 2, first item, before xdist** |
+| Redis is not isolated (r3 N4); Unicode digits accepted by the name pattern (N1); `\Z` over `$` (N2); host/port not compared (N3); C6's positional coverage (N5); `test_no_row_is_system_managed_any_more` vacuous (N8) | **phase 2** notes |
+| Three `ai_inferred` archgraph items from this project | owner adjudication |

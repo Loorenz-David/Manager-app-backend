@@ -19,7 +19,6 @@ from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.errors.validation import ConflictError, ValidationError
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import (
@@ -30,6 +29,7 @@ from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.commands.users.update_user_admin import update_user_admin
 from beyo_manager.services.context import ServiceContext
+from tests.fixtures.phase2_row_factories import adopt_or_create_role, create_test_workspace
 
 
 pytestmark = pytest.mark.asyncio
@@ -58,9 +58,7 @@ class _Fixture:
         self._db_session.add(user)
         await self._db_session.flush()
         user_id = user.client_id
-        role = (
-            await self._db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-        ).scalar_one()
+        role = await adopt_or_create_role(self._db_session, RoleNameEnum.WORKER)
         workspace_role = await self._db_session.scalar(
             select(WorkspaceRole)
             .where(
@@ -135,9 +133,8 @@ class _Fixture:
 
 @pytest_asyncio.fixture
 async def admin_fixture(db_session):
-    workspace_id = await db_session.scalar(
-        select(Workspace.client_id).order_by(Workspace.client_id).limit(1)
-    )
+    workspace = await create_test_workspace(db_session, "clock-code")
+    workspace_id = workspace.client_id
     suffix = uuid4().hex
     admin = User(
         username=f"code-admin-{suffix}",
@@ -161,7 +158,11 @@ async def admin_fixture(db_session):
                 WorkspaceMembership.user_id.in_(fixture.user_ids)
             )
         )
+        await db_session.execute(
+            delete(WorkspaceRole).where(WorkspaceRole.workspace_id == fixture.workspace_id)
+        )
         await db_session.execute(delete(User).where(User.client_id.in_(fixture.user_ids)))
+        await db_session.execute(delete(Workspace).where(Workspace.client_id == fixture.workspace_id))
         await db_session.commit()
 
 

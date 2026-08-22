@@ -22,15 +22,15 @@ from beyo_manager import create_app
 from beyo_manager.config import settings
 from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.models.database import get_db
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
-from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
+from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.domain.workspaces.enums import WorkspaceSpecializationEnum
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.users.list_users import list_users
+from tests.fixtures.phase2_row_factories import adopt_or_create_role, create_test_workspace
 
 
 pytestmark = pytest.mark.asyncio
@@ -77,9 +77,7 @@ class _Roster:
         )
         self._db_session.add(user)
         await self._db_session.flush()
-        role = (
-            await self._db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-        ).scalar_one()
+        role = await adopt_or_create_role(self._db_session, RoleNameEnum.WORKER)
         specialization_clause = (
             WorkspaceRole.specialization.is_(None)
             if specialization is None
@@ -195,9 +193,8 @@ def executed_statements():
 
 @pytest_asyncio.fixture
 async def roster(db_session):
-    workspace_id = await db_session.scalar(
-        select(Workspace.client_id).order_by(Workspace.client_id).limit(1)
-    )
+    workspace = await create_test_workspace(db_session, "roster")
+    workspace_id = workspace.client_id
     # A label unique to this test run keeps the `q` filter scoped to our own rows.
     fixture = _Roster(db_session, workspace_id, f"rosteruser{uuid4().hex}")
     try:
@@ -210,7 +207,11 @@ async def roster(db_session):
         await db_session.execute(
             delete(WorkspaceMembership).where(WorkspaceMembership.user_id.in_(fixture.user_ids))
         )
+        await db_session.execute(
+            delete(WorkspaceRole).where(WorkspaceRole.workspace_id == fixture.workspace_id)
+        )
         await db_session.execute(delete(User).where(User.client_id.in_(fixture.user_ids)))
+        await db_session.execute(delete(Workspace).where(Workspace.client_id == fixture.workspace_id))
         await db_session.commit()
 
 

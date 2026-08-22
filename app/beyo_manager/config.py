@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # Database - must use asyncpg driver: postgresql+asyncpg://...
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    test_slot: str | None = Field(default=None, alias="BEYO_TEST_SLOT")
 
     # Redis
     redis_url: str | None = Field(default=None, alias="REDIS_URL")

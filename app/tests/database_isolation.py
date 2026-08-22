@@ -1,39 +1,119 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 import re
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import asyncpg
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy.engine import URL, make_url
 
+from beyo_manager.config import settings
+from beyo_manager.models import Base
 
-TEST_DATABASE_PATTERN = re.compile(r"^beyo_test_(?:template|main|gw\d+)$")
+
+TEST_DATABASE_PATTERN = re.compile(
+    r"^beyo_test_[a-z0-9]{1,12}_(?:template|main|gw[0-9]+)\Z"
+)
+LEGACY_TEST_DATABASE_PATTERN = re.compile(r"^beyo_test_(?:template|main|gw[0-9]+)\Z")
 TEST_DATABASE_PREFIX = "beyo_test_"
-TEMPLATE_DATABASE_NAME = "beyo_test_template"
+TEST_SLOT_ENV = "BEYO_TEST_SLOT"
+LEGACY_RECLAIM_ENV = "BEYO_RECLAIM_LEGACY_TEST_DATABASES"
+DEFAULT_TEST_SLOT = "main"
 MARKER_SCHEMA = "beyo_test_metadata"
 MARKER_TABLE = "database_marker"
 MARKER_KEY = "test_database_v1"
-EXPECTED_HEAD = "c1d2e3f4a5b6"
-EXPECTED_PUBLIC_TABLE_COUNT = 107
+REQUIRED_PUBLIC_TABLES = frozenset(
+    {"cost_model_versions", "item_cost_results", "step_state_records"}
+)
+NON_METADATA_PUBLIC_TABLES = frozenset(
+    {"alembic_version", "ended_shift_collapse_journal", "item_valuation_migration_journal"}
+)
+
+
+def migration_head_revision(app_root: Path | None = None) -> str:
+    """Read the single Alembic head from the migration scripts."""
+    root = app_root or Path(__file__).resolve().parents[1]
+    script_directory = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+    heads = script_directory.get_heads()
+    if len(heads) != 1:
+        raise RuntimeError(f"Expected one migration head, found {heads!r}")
+    return heads[0]
+
+
+def expected_public_tables() -> set[str]:
+    """Return the complete public schema inventory for a migrated test database."""
+    return set(Base.metadata.tables) | set(NON_METADATA_PUBLIC_TABLES)
+
+
+def assert_migrated_schema(
+    database_name: str,
+    *,
+    actual_head: str | None,
+    expected_head: str,
+    table_names: set[str],
+) -> None:
+    """Assert migration DDL against runtime-derived metadata and bookkeeping tables."""
+    if actual_head != expected_head:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"expected head {expected_head}, got {actual_head!r}"
+        )
+    expected_tables = expected_public_tables()
+    missing_tables = expected_tables - table_names
+    if missing_tables:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"missing {sorted(missing_tables)}"
+        )
+    expected_count = len(Base.metadata.tables) + len(NON_METADATA_PUBLIC_TABLES)
+    if len(table_names) != expected_count:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"expected {expected_count} public tables, got {len(table_names)}"
+        )
+
+
+# Kept as a compatibility export for existing criterion assertions. Runtime
+# decisions derive the value again so a new migration is observed immediately.
+EXPECTED_HEAD = migration_head_revision()
 
 
 class UnsafeDatabaseError(RuntimeError):
     """Raised before a destructive operation targets an unapproved database."""
 
 
-def resolve_worker_database_name(worker_id: str | None = None) -> str:
-    """Map pytest-xdist's worker id to the bounded database name for that process."""
+def resolve_test_slot(slot: str | None = None) -> str:
+    """Resolve the explicitly declared, bounded slot for this checkout."""
+    slot = os.getenv(TEST_SLOT_ENV) if slot is None else slot
+    if slot is None:
+        slot = settings.test_slot or DEFAULT_TEST_SLOT
+    if not re.fullmatch(r"[a-z0-9]{1,12}", slot):
+        raise UnsafeDatabaseError(f"Unsupported test slot: {slot!r}")
+    return slot
+
+
+def resolve_worker_database_name(
+    worker_id: str | None = None, *, slot: str | None = None
+) -> str:
+    """Map the checkout slot and pytest-xdist worker id to a bounded database name."""
     worker_id = worker_id if worker_id is not None else os.getenv("PYTEST_XDIST_WORKER")
     if worker_id is None or worker_id == "":
         worker_id = "main"
-    if worker_id != "main" and not re.fullmatch(r"gw\d+", worker_id):
+    if worker_id != "main" and not re.fullmatch(r"gw[0-9]+", worker_id):
         raise UnsafeDatabaseError(f"Unsupported pytest worker id: {worker_id!r}")
-    return f"{TEST_DATABASE_PREFIX}{worker_id}"
+    return f"{TEST_DATABASE_PREFIX}{resolve_test_slot(slot)}_{worker_id}"
+
+
+def resolve_template_database_name(slot: str | None = None) -> str:
+    return f"{TEST_DATABASE_PREFIX}{resolve_test_slot(slot)}_template"
 
 
 def _parse_database_url(database_url: str | None) -> URL:
@@ -50,22 +130,47 @@ def _parse_database_url(database_url: str | None) -> URL:
     return parsed
 
 
+def _normalised_endpoint(url: URL) -> tuple[str, int]:
+    host = (url.host or "").rstrip(".").lower()
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if host in {"localhost", "localhost.localdomain", "ip6-localhost"}:
+            host = "127.0.0.1"
+    else:
+        if address.is_loopback:
+            host = "127.0.0.1"
+        else:
+            host = address.compressed
+    return host, url.port or 5432
+
+
 def assert_disposable_database(
     database_name: str,
     configured_database_url: str | None,
     *,
+    target_database_url: str | None,
     marker_present: bool,
+    public_table_count: int | None = None,
 ) -> None:
-    """Fail closed unless ``database_name`` is a marked, non-configured test DB."""
-    if not TEST_DATABASE_PATTERN.fullmatch(database_name):
+    """Fail closed unless the target is an approved database on the configured server."""
+    if not (
+        TEST_DATABASE_PATTERN.fullmatch(database_name)
+        or LEGACY_TEST_DATABASE_PATTERN.fullmatch(database_name)
+    ):
         raise UnsafeDatabaseError(f"Database name is not disposable: {database_name!r}")
 
     configured = _parse_database_url(configured_database_url)
-    if configured.database == database_name:
+    target = _parse_database_url(target_database_url)
+    configured_endpoint = _normalised_endpoint(configured)
+    target_endpoint = _normalised_endpoint(target)
+    if target_endpoint != configured_endpoint:
+        raise UnsafeDatabaseError("Refusing to destroy a database on a different PostgreSQL server")
+    if (*target_endpoint, target.database) == (*configured_endpoint, configured.database):
         raise UnsafeDatabaseError(
             f"Refusing to destroy the configured database: {database_name!r}"
         )
-    if not marker_present:
+    if not marker_present and public_table_count != 0:
         raise UnsafeDatabaseError(f"Database lacks the disposable marker: {database_name!r}")
 
 
@@ -103,7 +208,8 @@ class DatabaseIsolation:
     def __init__(self, configured_database_url: str, *, worker_id: str | None = None) -> None:
         self.configured_database_url = configured_database_url
         self._url = _parse_database_url(configured_database_url)
-        self.worker_database_name = resolve_worker_database_name(worker_id)
+        self.slot = resolve_test_slot()
+        self.worker_database_name = resolve_worker_database_name(worker_id, slot=self.slot)
         connection_host = "127.0.0.1" if self._url.host == "localhost" else self._url.host
         self.worker_database_url = str(
             self._url.set(host=connection_host, database=self.worker_database_name).render_as_string(
@@ -111,11 +217,12 @@ class DatabaseIsolation:
             )
         )
         self._app_root = Path(__file__).resolve().parents[1]
+        self.configured_row_counts_before_run: dict[str, int] | None = None
         self._started = False
 
     @property
     def template_database_name(self) -> str:
-        return TEMPLATE_DATABASE_NAME
+        return resolve_template_database_name(self.slot)
 
     @property
     def configured_database_name(self) -> str:
@@ -126,13 +233,22 @@ class DatabaseIsolation:
 
     async def start(self) -> None:
         try:
-            await self._ensure_template()
-            await self._drop_database_if_exists(self.worker_database_name)
-            await self._create_database_from_template(self.worker_database_name)
-            await self._set_marker(self.worker_database_name)
+            if not TEST_DATABASE_PATTERN.fullmatch(self.configured_database_name):
+                self.configured_row_counts_before_run = await self.row_counts(
+                    self.configured_database_name
+                )
+            if os.getenv(LEGACY_RECLAIM_ENV) == "1":
+                await self._sweep_legacy_databases()
+            async with self._template_operation_lock():
+                await self._ensure_template()
+                await self._drop_database_if_exists(self.worker_database_name)
+                await self._create_database_from_template(self.worker_database_name)
             self._started = True
-        except Exception:
-            await self._drop_database_if_exists(self.worker_database_name, best_effort=True)
+        except (Exception, KeyboardInterrupt):
+            try:
+                await self._drop_database_if_exists(self.worker_database_name)
+            except (UnsafeDatabaseError, asyncpg.PostgresError):
+                pass
             raise
 
     async def stop(self) -> None:
@@ -141,12 +257,23 @@ class DatabaseIsolation:
         self._started = False
         await self._drop_database_if_exists(self.worker_database_name)
 
+    async def assert_configured_database_unchanged(self) -> None:
+        if self.configured_row_counts_before_run is None:
+            return
+        after = await self.row_counts(self.configured_database_name)
+        assert after == self.configured_row_counts_before_run, (
+            "configured database row counts changed during the test session"
+        )
+
     async def inspect(self, database_name: str) -> DatabaseInspection:
         connection = await _connect(self._url, database_name)
         try:
-            head_revision = await connection.fetchval(
-                "SELECT version_num FROM alembic_version"
-            )
+            try:
+                head_revision = await connection.fetchval(
+                    "SELECT version_num FROM alembic_version"
+                )
+            except asyncpg.exceptions.UndefinedTableError:
+                head_revision = None
             public_table_count = await connection.fetchval(
                 """
                 SELECT count(*)
@@ -231,166 +358,93 @@ class DatabaseIsolation:
     async def _marker_present_on_connection(
         self, connection: asyncpg.Connection, database_name: str
     ) -> bool:
-        return bool(
-            await connection.fetchval(
-                f"""
-                SELECT 1
-                FROM {MARKER_SCHEMA}.{MARKER_TABLE}
-                WHERE marker_key = $1 AND database_name = $2
-                """,
-                MARKER_KEY,
-                database_name,
+        try:
+            return bool(
+                await connection.fetchval(
+                    f"""
+                    SELECT 1
+                    FROM {MARKER_SCHEMA}.{MARKER_TABLE}
+                    WHERE marker_key = $1 AND database_name = $2
+                    """,
+                    MARKER_KEY,
+                    database_name,
+                )
             )
-        )
+        except asyncpg.exceptions.UndefinedTableError:
+            return False
+
+    async def _sweep_legacy_databases(self) -> None:
+        for database_name in await self.database_names():
+            if LEGACY_TEST_DATABASE_PATTERN.fullmatch(database_name):
+                await self._drop_database_if_exists(database_name)
+
+    @asynccontextmanager
+    async def _template_operation_lock(self):
+        """Serialize template inspection, rebuild, and worker copying per slot."""
+        connection = await self._maintenance_connection()
+        try:
+            await connection.fetchval(
+                "SELECT pg_advisory_lock(hashtextextended($1, 0))",
+                self.template_database_name,
+            )
+            yield
+        finally:
+            await connection.fetchval(
+                "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+                self.template_database_name,
+            )
+            await connection.close()
 
     async def _ensure_template(self) -> None:
-        if not await self._database_exists(TEMPLATE_DATABASE_NAME):
-            await self._create_database(TEMPLATE_DATABASE_NAME)
-            await self._set_marker(TEMPLATE_DATABASE_NAME)
-            await self._migrate_and_assert(TEMPLATE_DATABASE_NAME)
-            await self._restore_baseline_data(TEMPLATE_DATABASE_NAME)
-            await self._set_marker(
-                TEMPLATE_DATABASE_NAME,
-                baseline_source=self.configured_database_name,
-            )
+        template_name = self.template_database_name
+        expected_head = migration_head_revision(self._app_root)
+        if not await self._database_exists(template_name):
+            await self._create_database(template_name)
+            await self._set_marker(template_name)
+            await self._migrate_and_assert(template_name)
             return
 
-        inspection = await self.inspect(TEMPLATE_DATABASE_NAME)
+        inspection = await self.inspect(template_name)
         if not inspection.marker_present:
+            if inspection.public_table_count == 0:
+                await self._drop_database_if_exists(template_name)
+                await self._create_database(template_name)
+                await self._set_marker(template_name)
+                await self._migrate_and_assert(template_name)
+                return
             raise UnsafeDatabaseError(
-                "Existing beyo_test_template lacks the disposable marker; refusing to replace it"
+                f"Existing {template_name} lacks the disposable marker; refusing to replace it"
             )
         if (
-            inspection.head_revision == EXPECTED_HEAD
-            and inspection.public_table_count == EXPECTED_PUBLIC_TABLE_COUNT
-            and await self._baseline_present(TEMPLATE_DATABASE_NAME)
+            inspection.head_revision == expected_head
+            and REQUIRED_PUBLIC_TABLES <= await self.public_table_names(template_name)
+            and not await self._has_legacy_baseline_source(template_name)
         ):
             return
 
-        await self._drop_database_if_exists(TEMPLATE_DATABASE_NAME)
-        await self._create_database(TEMPLATE_DATABASE_NAME)
-        await self._set_marker(TEMPLATE_DATABASE_NAME)
-        await self._migrate_and_assert(TEMPLATE_DATABASE_NAME)
-        await self._restore_baseline_data(TEMPLATE_DATABASE_NAME)
-        await self._set_marker(
-            TEMPLATE_DATABASE_NAME,
-            baseline_source=self.configured_database_name,
-        )
+        await self._drop_database_if_exists(template_name)
+        await self._create_database(template_name)
+        await self._set_marker(template_name)
+        await self._migrate_and_assert(template_name)
 
-    async def _baseline_present(self, database_name: str) -> bool:
+    async def _has_legacy_baseline_source(self, database_name: str) -> bool:
         connection = await _connect(self._url, database_name)
         try:
-            try:
-                source = await connection.fetchval(
-                    f"""
-                    SELECT baseline_source
-                    FROM {MARKER_SCHEMA}.{MARKER_TABLE}
-                    WHERE marker_key = $1
+            return bool(
+                await connection.fetchval(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = $1
+                      AND table_name = $2
+                      AND column_name = 'baseline_source'
                     """,
-                    MARKER_KEY,
+                    MARKER_SCHEMA,
+                    MARKER_TABLE,
                 )
-            except asyncpg.UndefinedColumnError:
-                return False
-            return source == self.configured_database_name
+            )
         finally:
             await connection.close()
-
-    def _postgres_cli_database_args(self, database_name: str) -> list[str]:
-        return [
-            "--host",
-            "127.0.0.1" if self._url.host == "localhost" else str(self._url.host),
-            "--port",
-            str(self._url.port or 5432),
-            "--username",
-            str(self._url.username),
-            "--dbname",
-            database_name,
-        ]
-
-    async def _preseeded_table_exclusions(self, database_name: str) -> list[str]:
-        connection = await _connect(self._url, database_name)
-        try:
-            tables = await connection.fetch(
-                """
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                ORDER BY table_name
-                """
-            )
-            exclusions: list[str] = []
-            for row in tables:
-                table_name = row["table_name"]
-                count = await connection.fetchval(
-                    f'SELECT count(*) FROM public."{table_name}"'
-                )
-                if count:
-                    exclusions.extend(["--exclude-table-data", f"public.{table_name}"])
-            return exclusions
-        finally:
-            await connection.close()
-
-    def _postgres_cli_environment(self) -> dict[str, str]:
-        if self._url.password is None:
-            raise UnsafeDatabaseError("DATABASE_URL must include a password for PostgreSQL tools")
-        environment = os.environ.copy()
-        environment["PGHOST"] = "127.0.0.1" if self._url.host == "localhost" else str(self._url.host)
-        environment["PGPORT"] = str(self._url.port or 5432)
-        environment["PGUSER"] = str(self._url.username)
-        environment["PGPASSWORD"] = self._url.password
-        return environment
-
-    async def _restore_baseline_data(self, database_name: str) -> None:
-        """Restore baseline rows while retaining migration-owned seed rows."""
-        exclusions = await self._preseeded_table_exclusions(database_name)
-        exclusions.extend(
-            ["--exclude-table-data", f"{MARKER_SCHEMA}.{MARKER_TABLE}"]
-        )
-        if (self._app_root / "docker-compose.yml").exists():
-            dump_command = [
-                "docker", "compose", "exec", "-T", "postgres", "pg_dump",
-                "--format=custom", "--data-only", "--no-owner", "--no-privileges",
-                "--exclude-table=alembic_version", *exclusions,
-                "--username", str(self._url.username), "--dbname", self.configured_database_name,
-            ]
-            restore_command = [
-                "docker", "compose", "exec", "-T", "postgres", "pg_restore",
-                "--data-only", "--no-owner", "--no-privileges", "--exit-on-error",
-                "--disable-triggers", "--username", str(self._url.username),
-                "--dbname", database_name,
-            ]
-            command_environment = os.environ.copy()
-            command_environment.pop("PGPASSWORD", None)
-        else:
-            dump_command = [
-                "pg_dump", "--format=custom", "--data-only", "--no-owner", "--no-privileges",
-                "--exclude-table=alembic_version", *exclusions,
-                *self._postgres_cli_database_args(self.configured_database_name),
-            ]
-            restore_command = [
-                "pg_restore", "--data-only", "--no-owner", "--no-privileges", "--exit-on-error",
-                "--disable-triggers", *self._postgres_cli_database_args(database_name),
-            ]
-            command_environment = self._postgres_cli_environment()
-
-        dump_result = subprocess.run(
-            dump_command, cwd=self._app_root, env=command_environment,
-            capture_output=True, check=False,
-        )
-        if dump_result.returncode != 0:
-            raise RuntimeError(
-                "Could not snapshot baseline database: "
-                f"{dump_result.stderr.decode(errors='replace').strip()}"
-            )
-        restore_result = subprocess.run(
-            restore_command, cwd=self._app_root, env=command_environment,
-            input=dump_result.stdout, capture_output=True, check=False,
-        )
-        if restore_result.returncode != 0:
-            raise RuntimeError(
-                "Could not restore baseline database: "
-                f"{restore_result.stderr.decode(errors='replace').strip()}"
-            )
 
     async def _migrate_and_assert(self, database_name: str) -> None:
         env = os.environ.copy()
@@ -413,7 +467,6 @@ class DatabaseIsolation:
             )
 
         inspection = await self.inspect(database_name)
-        required_tables = {"cost_model_versions", "item_cost_results", "step_state_records"}
         connection = await _connect(self._url, database_name)
         try:
             table_rows = await connection.fetch(
@@ -426,21 +479,13 @@ class DatabaseIsolation:
         finally:
             await connection.close()
         table_names = {row["table_name"] for row in table_rows}
-        if inspection.head_revision != EXPECTED_HEAD:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: "
-                f"expected head {EXPECTED_HEAD}, got {inspection.head_revision!r}"
-            )
-        if inspection.public_table_count != EXPECTED_PUBLIC_TABLE_COUNT:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: expected "
-                f"{EXPECTED_PUBLIC_TABLE_COUNT} public tables, got {inspection.public_table_count}"
-            )
-        missing_tables = required_tables - table_names
-        if missing_tables:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: missing {sorted(missing_tables)}"
-            )
+        expected_head = migration_head_revision(self._app_root)
+        assert_migrated_schema(
+            database_name,
+            actual_head=inspection.head_revision,
+            expected_head=expected_head,
+            table_names=table_names,
+        )
         if not inspection.marker_present:
             raise RuntimeError(f"Migration DDL assertion failed: marker missing in {database_name}")
 
@@ -449,10 +494,11 @@ class DatabaseIsolation:
         try:
             await connection.execute(
                 f"CREATE DATABASE {_quoted_identifier(database_name)} "
-                f"TEMPLATE {_quoted_identifier(TEMPLATE_DATABASE_NAME)}"
+                f"TEMPLATE {_quoted_identifier(self.template_database_name)}"
             )
         finally:
             await connection.close()
+        await self._set_marker(database_name)
 
     async def _create_database(self, database_name: str) -> None:
         connection = await self._maintenance_connection()
@@ -461,9 +507,7 @@ class DatabaseIsolation:
         finally:
             await connection.close()
 
-    async def _set_marker(
-        self, database_name: str, *, baseline_source: str | None = None
-    ) -> None:
+    async def _set_marker(self, database_name: str) -> None:
         connection = await _connect(self._url, database_name)
         try:
             await connection.execute(
@@ -474,65 +518,51 @@ class DatabaseIsolation:
                 CREATE TABLE IF NOT EXISTS {MARKER_SCHEMA}.{MARKER_TABLE} (
                     marker_key text PRIMARY KEY,
                     database_name text NOT NULL,
-                    baseline_source text,
                     created_at timestamptz NOT NULL DEFAULT now()
                 )
                 """
             )
             await connection.execute(
-                f"ALTER TABLE {MARKER_SCHEMA}.{MARKER_TABLE} "
-                "ADD COLUMN IF NOT EXISTS baseline_source text"
-            )
-            await connection.execute(
                 f"""
                 INSERT INTO {MARKER_SCHEMA}.{MARKER_TABLE}
-                    (marker_key, database_name, baseline_source)
-                VALUES ($1, $2, $3)
+                    (marker_key, database_name)
+                VALUES ($1, $2)
                 ON CONFLICT (marker_key) DO UPDATE
-                SET database_name = EXCLUDED.database_name,
-                    baseline_source = COALESCE(
-                        EXCLUDED.baseline_source,
-                        {MARKER_SCHEMA}.{MARKER_TABLE}.baseline_source
-                    )
+                SET database_name = EXCLUDED.database_name
                 """,
                 MARKER_KEY,
                 database_name,
-                baseline_source,
             )
         finally:
             await connection.close()
 
-    async def _drop_database_if_exists(
-        self, database_name: str, *, best_effort: bool = False
-    ) -> None:
+    async def _drop_database_if_exists(self, database_name: str) -> None:
+        if not await self._database_exists(database_name):
+            return
+        inspection = await self.inspect(database_name)
+        target_database_url = self._url.set(database=database_name).render_as_string(
+            hide_password=False
+        )
+        assert_disposable_database(
+            database_name,
+            self.configured_database_url,
+            target_database_url=target_database_url,
+            marker_present=inspection.marker_present,
+            public_table_count=inspection.public_table_count,
+        )
+        connection = await self._maintenance_connection()
         try:
-            exists = await self._database_exists(database_name)
-            if not exists:
-                return
-            marker_present = await self._marker_present(database_name)
-            assert_disposable_database(
+            await connection.execute(
+                """
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = $1 AND pid <> pg_backend_pid()
+                """,
                 database_name,
-                self.configured_database_url,
-                marker_present=marker_present,
             )
-            connection = await self._maintenance_connection()
-            try:
-                await connection.execute(
-                    """
-                    SELECT pg_terminate_backend(pid)
-                    FROM pg_stat_activity
-                    WHERE datname = $1 AND pid <> pg_backend_pid()
-                    """,
-                    database_name,
-                )
-                await connection.execute(
-                    f"DROP DATABASE {_quoted_identifier(database_name)}"
-                )
-            finally:
-                await connection.close()
-        except Exception:
-            if not best_effort:
-                raise
+            await connection.execute(f"DROP DATABASE {_quoted_identifier(database_name)}")
+        finally:
+            await connection.close()
 
 
 def start_database_isolation(configured_database_url: str) -> DatabaseIsolation:

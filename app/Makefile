@@ -33,16 +33,16 @@ run:
 
 # Testing
 test:
-	pytest -m 'not e2e'
+	PYTHONPATH=. pytest -m 'not e2e'
 
 test-unit:
-	pytest tests/unit -m unit
+	PYTHONPATH=. pytest tests/unit -m unit
 
 test-integration:
-	pytest tests/integration -m integration
+	PYTHONPATH=. pytest tests/integration -m integration
 
 test-e2e:
-	pytest tests/e2e -m e2e
+	PYTHONPATH=. pytest tests/e2e -m e2e
 
 # Worker runtime
 worker:

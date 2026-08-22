@@ -24,7 +24,6 @@ from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -42,6 +41,7 @@ from beyo_manager.services.commands.users.close_declared_worker_state import (
 from beyo_manager.services.commands.users.declare_worker_state import declare_worker_state
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import worker_shift_realtime
+from tests.fixtures.phase2_row_factories import adopt_or_create_role, create_test_workspace
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -87,7 +87,7 @@ def emitted(monkeypatch) -> _Recorder:
 
 async def _seed_workspace_worker(db_session) -> tuple[Workspace, User]:
     suffix = uuid4().hex
-    workspace = await db_session.scalar(select(Workspace).order_by(Workspace.client_id))
+    workspace = await create_test_workspace(db_session, "shift-realtime")
     worker = User(
         username=f"shift-realtime-{suffix}",
         email=f"shift-realtime-{suffix}@example.com",
@@ -95,9 +95,7 @@ async def _seed_workspace_worker(db_session) -> tuple[Workspace, User]:
     )
     db_session.add(worker)
     await db_session.flush()
-    worker_role = (
-        await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-    ).scalar_one()
+    worker_role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = await db_session.scalar(
         select(WorkspaceRole).where(
             WorkspaceRole.workspace_id == workspace.client_id,

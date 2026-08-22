@@ -8,7 +8,6 @@ from beyo_manager.domain.roles.enums import RoleNameEnum
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -24,6 +23,7 @@ from scripts.backfill.curate_shifts_from_connecteam import (
     _resolve_workers,
     curate_worker_shift,
 )
+from tests.fixtures.phase2_row_factories import adopt_or_create_role
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -36,7 +36,7 @@ async def _seed_worker(db_session, *, connecteam_user_id: str | None = None):
     worker = User(username=f"curate-{suffix}", email=f"curate-{suffix}@e.com", password="s")
     db_session.add_all([workspace, worker])
     await db_session.flush()
-    role = (await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))).scalar_one()
+    role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     ws_role = WorkspaceRole(workspace_id=workspace.client_id, role_id=role.client_id)
     db_session.add(ws_role)
     await db_session.flush()

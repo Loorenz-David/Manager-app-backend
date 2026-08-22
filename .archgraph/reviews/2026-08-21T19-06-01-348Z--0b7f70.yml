@@ -1,0 +1,54 @@
+reviewId: 2026-08-21T19-06-01-348Z--0b7f70
+reviewedItemIds:
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+  - node:infrastructure-test-database-isolation
+  - node:test-database-isolation-contract
+decisions:
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: Owner-authorized reject-and-re-record (2026-08-21). Rejected only to
+      be re-recorded in the same session with the same id, direction and type,
+      an anchor at the current 314-343, and a fuller evidence summary. The edge
+      itself was verified TRUE against HEAD 6b2177b; it is deleted here solely
+      because its endpoints are being re-recorded.
+  - itemId: node:infrastructure-test-database-isolation
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: Owner-authorized reject-and-re-record (2026-08-21). Evidence 1's
+      summary claims the destructive guard requires 'a marker', but
+      assert_disposable_database also admits a marker-less database with zero
+      public tables, and requires two checks the summary never mentions
+      (endpoint confinement, configured-tuple identity). An evidence summary
+      cannot be edited by any write path, so the only way to make the
+      safety-invariant claim accurate is to delete the item and re-record it.
+      Re-recorded in this same session with corrected anchors and summaries.
+  - itemId: node:test-database-isolation-contract
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "Owner-authorized reject-and-re-record (2026-08-21). Two of three
+      evidence summaries are false against HEAD 6b2177b: evidence 0 states names
+      resolve to beyo_test_main or beyo_test_gwN, which are now the legacy names
+      the slot discriminator exists to retire, and evidence 2 states the tests
+      assert fixed development row counts, which describes the phase-1 defect
+      that review r3 caught and fix r2 replaced with a before/after snapshot.
+      Evidence summaries are immutable through every write path, so the item is
+      deleted and re-recorded in this same session with accurate summaries."
+retiredItemIds:
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+  - node:infrastructure-test-database-isolation
+  - node:test-database-isolation-contract
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.238
+timestamp: 2026-08-21T19:06:01.348Z
+graphRevisionBefore: 15d686e505beddd08ca10cf56358d134cf140aa4c62e6fb97bbb7bc0c62a0d58
+graphRevisionAfter: fbe0f7c30b71c408391df62d691d31d0349c8bcc9f4b416cf31e8a2a9a6ad636
+evidenceSummary: 7 evidence entries across 3 files; no drift detected
+humanInstruction: 'Owner instruction, verbatim: "you can reject and re-record
+  them to keep them correct and accurate". Authorizing rejection of the two
+  nodes and the configured_by edge so they can be immediately re-recorded in
+  this same session with evidence summaries that are true of HEAD 6b2177b — the
+  only available way to correct an evidence summary.'
+reviewTokenCorrelation: 46784fa0ee37

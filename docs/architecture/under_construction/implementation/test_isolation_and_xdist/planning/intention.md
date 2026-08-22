@@ -2,7 +2,9 @@
 
 ```
 status: SHAPED (owner intention 2026-08-21) + coordinator inspection folded (round 1)
-role: intention (project root artifact)
+role: intention (semantic authority — §1 is the owner's words, unrewritten)
+hub: ../master_plan.md — tracker, environment topology, gates, published baselines.
+     Environment facts are cited from there, never restated here or in prompts.
 owner_decision: this work GATES phase 4 of live_clock_for_working_time_economics
                 (that pipeline's master_plan §6 ⛔ block)
 date: 2026-08-21
@@ -268,14 +270,38 @@ A missing or malformed configuration must abort, never "guess" a target.
 
 ## 3. Phasing (isolation before parallelism — the owner's constraint, made a gate)
 
+**Amended 2026-08-21 (OD-5): three phases, not two.** The original two-phase shape is kept
+below as provenance; the middle phase was inserted because phase 1's own outcome created it.
+
 - **Phase 1 — isolation.** Steps 1–5 of the owner's ordering. Ends with the suite passing
   **serially** on per-worker databases with the same failure-ID set, and residue measured at
-  zero. `pytest-xdist` is **not installed** in this phase.
-- **Phase 2 — parallelism.** Steps 6–8. Install xdist, compare serial / `-n 2` / `-n 4` /
-  higher, choose a conservative default, and establish the **new authoritative baseline
-  failure-ID set** with every difference from the old one explained.
+  zero. `pytest-xdist` is **not installed** in this phase. **APPROVED 2026-08-21 (`5ecfe90`).**
+- **Phase 2 — order-independence and per-checkout isolation, still serial.** The
+  preconditions phase 1 created or exposed: OD-3's ~118-test repair, the slot discriminator
+  (§5), B2's surviving no-marker-table shape, Redis isolation, and the two rows that cannot
+  fail. Ends when the failure-ID set is **invariant under collection order**, proven
+  serially. `pytest-xdist` is **still not installed**.
+- **Phase 3 — parallelism.** Steps 6–8, unchanged from what phase 2 originally was. Install
+  xdist, compare serial / `-n 2` / `-n 4` / higher (the machine has 14 cores), choose a
+  conservative default, and establish the **new authoritative baseline failure-ID set** with
+  every difference from the old one explained.
 
-Phase 2 does not start until phase 1 is APPROVED — the same gating that contained defects
+  **First gate, added at phase 2's approval (2026-08-21) — prove invariance under *perturbation*,
+  not only under reversal.** Phase 2 measured that default order and one deterministic reversal
+  produce identical failing-ID sets. It also produced counter-evidence to the general claim, in
+  its own fix-r4 verification: with eight extra criterion rows temporarily present, the failing-ID
+  set **differed**. Inserting rows is a far smaller perturbation than distributing every test
+  across workers, which is the first thing phase 3 does. **So phase 3 does not begin its
+  worker-count matrix until it has characterised what a collection perturbation does to the
+  failing-ID set on a serial runner** — otherwise the first `-n 4` measurement mixes parallelism
+  with an unquantified order sensitivity, and the new authoritative baseline inherits both.
+
+  Binding consequence for the baseline: **a single-occurrence failing-ID difference triggers
+  re-measurement, never attribution.** Phase 2 lost a round to a difference that was labelled
+  "known" and a second to one labelled "pre-existing order seams"; in both cases the label
+  preceded the evidence.
+
+No phase starts until its predecessor is APPROVED — the same gating that contained defects
 inside a phase boundary three times in `live_clock`.
 
 ---
@@ -344,3 +370,264 @@ Expected new baseline once OD-1's nine are fixed: **~22 inherited failures**, en
 published with database identity and tree identity per the schema `live_clock`'s phase 3 earned.
 `live_clock` phase 4 and `narrow_typical_work_times` D23 consume that number, so it is published
 once, honestly, rather than carried forward because it is familiar.
+
+---
+
+## 5. Open design question — concurrent checkouts (raised 2026-08-21, owner planning git worktrees)
+
+**The isolation design is per-*worker*, not per-*checkout*, and that breaks the owner's plan to
+run parallel work trees.** `resolve_worker_database_name` derives the name from
+`PYTEST_XDIST_WORKER` alone — serial → `beyo_test_main`, xdist → `beyo_test_gw0…` — and
+`TEMPLATE_DATABASE_NAME` is the single fixed `beyo_test_template`. **Nothing in either name is
+derived from which checkout is running.**
+
+Consequences if two git worktrees run pytest at the same time, which is precisely what worktrees
+are for:
+
+1. **Worker-database collision.** Both resolve to `beyo_test_main`. The second run's startup
+   does `DROP IF EXISTS` and **destroys the first run's database mid-run**. The first run then
+   fails in ways that look like flakiness and are not.
+2. **Template clobbering, and it is the worse half.** Both share `beyo_test_template`. Two
+   checkouts on different branches are very likely at **different migration heads**, so each run
+   sees the other's template as stale and rebuilds it — repeatedly, out from under a live run.
+   The failures would be nondeterministic and would look like the suite's own instability.
+
+Neither is a defect in what was built — the plan specified bounded names keyed to worker
+topology and that is what it delivered. It is a **requirement that did not exist when the plan
+was written** and does now.
+
+**Proposed shape (not yet decided):** add a *slot* discriminator ahead of the worker id —
+`beyo_test_<slot>_<worker>`, where `slot` comes from an environment variable defaulting to
+`main`, so each worktree declares its own. The guard pattern widens to
+`^beyo_test_[a-z0-9]{1,12}_(template|main|gw\d+)$` and stays strict. Boundedness is preserved:
+the database count becomes *slots × (workers + 1)*, and a slot only exists because a human
+declared one — no per-invocation growth. **Name the template per slot as well**, or better, key
+it to the migration head (`…_template_<head>`), which makes "rebuild when the schema changes"
+fall out of the naming instead of needing a comparison.
+
+**Recommended sequencing:** do **not** fold this into fix r2 — a session is editing those files
+right now, and this is a new requirement rather than a correction to the round's findings. Take
+it as the first item of **phase 2**, before xdist, since phase 2 already reopens exactly this
+code and the slot discriminator composes naturally with the worker discriminator.
+
+**And the owner's own instinct is the operative conclusion:** create the worktrees *after* this
+project lands, not before. Every stream needs the new test infrastructure, so a worktree cut
+today would carry the old shared-database behaviour and would have to be rebased onto the new
+one anyway.
+
+### OD-3 — the ~118 order-dependent tests are repaired in phase 2, before xdist (2026-08-21)
+
+**Owner: defer to phase 2, first item.** Review r3 established, and the coordinator reproduced,
+that OD-1's "nine tests" was an artifact of pytest's default collection order: the template
+carries `roles=0, pause_reasons=0, workspaces=0` while the development database carries
+`roles=4, pause_reasons=8`, so before phase 1 every test found a populated catalog *regardless
+of order*. Under a reversed collection order the suite reads `139 failed / 2422 passed`
+(**+118, −1**), and `test_worker_shift_commands.py` run alone gives **41 failed / 1 passed** —
+the single pass being the one test fix r2 fixtured.
+
+**The cost is not a catalog.** The coordinator tested the cheap hypothesis — seed the four roles
+and eight pause reasons — and it is **refuted**: with the roles seeded the same 41 still fail,
+the signature merely moving to `AttributeError: 'NoneType' object has no attribute 'client_id'`,
+because `test_worker_shift_commands.py:79` does `select(Workspace).order_by(Workspace.client_id)`
+**with no filter** and adopts whatever workspace happens to exist. The class is *helpers that
+borrow arbitrary pre-existing rows*, and the repair is to make each create what it needs —
+roughly eleven files.
+
+**Binding sequence for phase 2:** the repair lands **before** `pytest-xdist` is installed, so the
+first parallel run measures parallelism rather than a pre-existing order dependency surfacing
+under a new distribution. Phase 2 already reopens this code for the slot discriminator (§5), so
+the repair, the discriminator and the reorder are measured against one another in the same round.
+
+**Phase 1 closes with the number corrected in writing, not with the repair done.** Deliverable 12
+is restated as a class of ~118, with the reorder measurement recorded; the previously published
+"one remaining non-parallel-safe test" understated it by two orders of magnitude.
+
+### OD-8 — an unstable-test finding does not stop phase 3; it is listed (2026-08-21)
+
+**Owner: continue and list them, recommendation accepted.** Phase 3's task 1 probes whether any
+test's outcome is a function of the suite's shape rather than of the code. Until now the plan said
+task 1 "runs first and nothing else starts until it has an answer" — but mapped **no answer to an
+action**, which would leave the implementer mid-session holding a result with authority neither to
+continue nor to stop.
+
+**The rule, now binding:** a non-empty set is **enumerated and published as a separately-named
+unstable list**, excluded from the authoritative failing-ID set, and the phase **continues** to
+the worker-count matrix. Repairing that class is not phase 3's work.
+
+Why: the measurement is what tells us how large the repair is, and a baseline that names its
+unstable IDs out loud is more useful to the three consuming projects than a delayed one. The
+rejected branches were stopping (parallelism slips a phase for a repair of unknown size) and
+repairing in-phase (the phase's size becomes unknown, which is what phase boundaries exist to
+prevent).
+
+### OD-10 — parallel becomes the shipped default, at six workers (2026-08-22)
+
+**Owner: make it the default. Coordinator recommended waiting; the owner reaffirmed, and the
+reason given is the stronger one.** *"That is the whole point of this implementation — to have
+what was being tested faster, and what will be built part of that speed."*
+
+**Supersedes OD-9's default clause only.** OD-9's condition — *the default stays serial unless the
+parallel failing-ID set matches the serial comparator exactly* — was satisfied on 2026-08-22 by
+fix r2: after the `app_update_presentations` fixture repair, `-n 2`, `-n 4` and `-n 6` each
+returned the phase-2 21-ID set with `comm` empty in both directions. OD-9's reasoning about
+asterisks is not overturned; its condition was met, and this records the answer.
+
+**The default is `-n 6 --dist loadfile`, not `-n auto`.** Three reasons, all measured or
+structural, and the coordinator's call rather than the owner's:
+
+1. **`-n auto` is 14 workers here, and nothing has ever been measured above 6.** Shipping an
+   unmeasured configuration as the default is the failure mode this project exists to end.
+2. **The wall-time curve is already flat.** 2 → 4 workers saved 19.2 s; 4 → 6 saved 3.7 s. The
+   floor under `--dist loadfile` is the slowest single file, and more workers cannot go below it.
+3. **The advisory lock makes startup cost linear in worker count.** Every worker serialises
+   through `_template_operation_lock` to copy the template, so worker 14 waits behind thirteen
+   copies. Past some count the startup queue eats the parallel win — that count has not been
+   measured either.
+
+`--dist loadfile` is part of the default, not an incidental flag: every row of the phase-3 matrix
+was measured with it, and the per-test `load` mode has never been run against this suite.
+
+**Raising the count later requires a measurement, not an edit** — master plan §6.3a's rule stands:
+any worker-count decision states the connection budget it checked and records the observed
+`pg_stat_activity` peak. At six workers that peak is 25 of 100.
+
+**The serial run does not disappear; it becomes the comparator.** `PYTHONPATH=. pytest -m 'not e2e'`
+stays the published serial reference so a future divergence between the two modes is detectable at
+all — a parallel-only baseline with nothing to compare against is how a scheduling bug becomes
+invisible.
+
+**Consequence, charter rule 10 (operational reachability):** parallel execution is now
+config-gated behaviour reached by the shipped default, so phase 3 owes a criterion proving the
+default configuration actually runs in parallel. A default that silently degrades to one worker
+would leave every downstream number describing a mode nobody runs.
+
+### OD-9 — the shipped default stays serial until parallel and serial agree (2026-08-21)
+
+**Superseded in its default clause by OD-10 (2026-08-22); its condition was met, not overruled.**
+
+
+**Owner: serial default until the differences are repaired, recommendation accepted.** If the
+failing-ID set under parallel execution differs from serial and the repair is outside phase 3's
+fence, the phase **reports the full matrix and changes no shipped default**. `pytest.ini` is left
+as it is.
+
+Why: phase 3's own primary objective is a baseline the organisation can trust, and a caveat
+attached to a number three projects consume is the exact failure this project was started to end.
+An asterisk everyone must remember is an asterisk everyone eventually forgets.
+
+**This does not delay `live_clock`.** Its ⛔ phase-4 gate asks for xdist installed and the baseline
+re-enumerated under the new runner — **not** for parallel-by-default. The gate opens either way.
+
+The speed is not lost, only deferred: the matrix is measured and published, so flipping the
+default later is a one-line change against numbers already in hand.
+
+### OD-7 — the test slot becomes a settings field (2026-08-21)
+
+**Owner: settings field, recommendation accepted.** Raised by review r3 as blocking B1.
+
+`resolve_test_slot` reads the slot with `os.getenv`, while the only place the repository
+documents the variable is `app/.env.example:8-10` — and `.env` is parsed by pydantic-settings,
+which **never populates `os.environ`**. Measured twice, independently by the reviewer and the
+coordinator: with `BEYO_TEST_SLOT=shopify` in the `.env` that `settings` actually reads,
+`os.getenv` returns `None` and the resolver yields `beyo_test_main_main`. **An operator who
+configures the slot exactly where they were told to gets no slot at all**, and the second
+checkout then drops the first's database mid-run — intention §5's hazard, surviving behind a
+variable that looks set.
+
+**Ratified:** add a `BEYO_TEST_SLOT` field to `app/beyo_manager/config.py` and resolve the slot
+from settings with an `os.environ` override, so both `.env` and an exported variable work.
+
+**This does not breach the production fence — it uses a provision written before phase 1
+started.** `plans/plan_1.md` §3: *"Nothing under `app/beyo_manager/` except `config.py` **only
+if** a test-database setting is genuinely required there."* This is that case, and the change is
+one declarative field with no behaviour.
+
+The rejected branch was keeping `os.getenv` and moving the documentation to a tests README. It
+costs nothing in production code but requires remembering to prefix every invocation in a second
+worktree, and **forgetting is silent destruction rather than an error message** — the failure
+mode this project exists to remove.
+
+### OD-6 — a test may adopt a globally-unique catalog row; everything else it creates (2026-08-21)
+
+**Owner: adopt-or-create for globally-unique catalog rows only, recommendation accepted.**
+This amends OD-3's repair contract, which phase 2 plan §4 had stated as the unqualified *"a
+test may not read a row it did not create."* That rule is **unsatisfiable for one of the
+three row classes it covers**, and the phase-2 projection proved it rather than argued it.
+
+`Role.name` carries `unique=True` (`models/tables/roles/role.py:17-21`) — the database permits
+exactly one `worker` row in existence. `tests/connecteam/test_clock_actions_integration.py`
+creates one and **commits** it, and four of the eleven files commit too. So a factory that
+creates its own `WORKER` role inside any committing test collides with whatever committed
+first: measured, `UniqueViolationError: duplicate key value violates unique constraint
+"ix_roles_name"`. The strict rule would trade ~118 failures that appear when order changes
+for a different set that appears when it does not.
+
+The other two classes have no such constraint — `Workspace.name` is not unique
+(`workspace.py:14`) and `PauseReason` is unique only on `(workspace_id, slug)` with
+workspaces created per test (`pause_reason.py:60`) — so both are created per test.
+
+**The amended contract:**
+
+> For the workspace and pause-catalog classes, a test creates the rows it needs and may not
+> read a row it did not create. For **globally-unique catalog rows** (today: `Role`), a test
+> uses **adopt-or-create** — take the existing row if present, create it if absent. It may
+> never assume one is present.
+
+This is not a new pattern: `tests/fixtures/phase1_reference_data.py:22-28` `_role()` is
+already adopt-or-create, so the strict rule as written forbade the shape the approved phase-1
+fixtures use.
+
+**Verified sufficient before dispatch, not assumed.** The coordinator applied exactly this
+composition — create-your-own `Workspace`, adopt-or-create `Role` — to the single helper
+`_seed_workspace_worker` in the worst file, `test_worker_shift_commands.py:78-89`. Run alone
+that file goes from **41 failed / 1 passed** to **42 passed in 4.48 s**. One helper, roughly
+ten lines. The probe was reverted and the file verified byte-identical
+(`0c7d0c99efef16f0343b7fbccc9a0a2b4cb25af7f59f3c8cc2ecc9f98c209f39` before and after).
+
+What this does *not* license: a shared catalog seeded once per run. OD-1's ruling stands —
+adopt-or-create happens inside the test's own fixture, per test.
+
+**Clause corrected 2026-08-21 (review r3, N5 — coordinator-authored defect).** This paragraph
+originally closed *"and no factory may create a globally-unique row inside a test that commits."*
+That forbids the **create** branch of adopt-or-create: on a fresh database the first committing
+test that needs a `WORKER` role must create it, so the clause contradicted the contract two
+paragraphs above it. The rule intended, and now stated:
+
+> A factory **never creates a globally-unique row unconditionally.** It adopts an existing row
+> when one is present and creates it only when absent. The prohibition is on unconditional
+> creation, not on creation.
+
+`adopt_or_create_role` was right; the wording was wrong. `plans/plan_2.md` §4 task 1 bound 2
+inherits the corrected phrasing.
+
+### OD-5 — xdist moves to its own phase; phase 2 ends at order-independence (2026-08-21)
+
+**Owner: split, recommendation accepted.** §3's phasing is amended above. The reason the
+boundary exists is not tidiness: **OD-3 already binds the ~118-test repair to land *before*
+`pytest-xdist` is installed**, so the two bodies of work were already sequential — the split
+only draws a gate around a boundary the project had committed to.
+
+What it buys: phase 2 ends at a falsifiable claim — *the failure-ID set is invariant under
+collection order, proven serially* — and a CHANGES_REQUESTED on eleven files of test repair
+no longer blocks a parallel measurement that was never the problem. Phase 3 becomes what the
+intention's §1 actually asks for in deliverables 6–14: a measurement phase, mostly evidence.
+
+Unchanged by this decision: the isolation-before-parallelism constraint, OD-3's binding
+sequence, and the requirement that the authoritative baseline be re-enumerated and
+republished **under the new runner** before any mutation result is trusted on it. Only the
+plan boundary moved. `live_clock` phase 4's ⛔ gate is satisfied when **phase 3** closes, not
+phase 2 — the gate's own wording is "xdist + per-worker isolation implemented and the
+baseline re-enumerated under the new runner."
+
+### OD-4 — the two retirement tests are rewritten against production behaviour (2026-08-21)
+
+**Owner: rewrite.** `test_pause_ended_shift_is_still_selectable_through_the_endpoint` documents
+itself as guarding `list_pause_reasons`' `is_deleted` filter; review r3 deleted that filter from
+the production query and ran the full suite to a **byte-identical `22 / 2539 / 1`, added ∅ /
+removed ∅** — so a soft-deleted pause reason could reappear on the worker's pause sheet and
+nothing in the repository would notice. `test_retirement_left_the_guarded_populations_alone`
+asserts "7 preserved references" against seven rows its own fixture inserted four lines earlier.
+
+Rewrite both against production behaviour — soft-delete a fixture row and assert it vanishes from
+the picker — restoring coverage of a live worker-facing screen. Deleting them was the alternative
+and loses that coverage entirely.

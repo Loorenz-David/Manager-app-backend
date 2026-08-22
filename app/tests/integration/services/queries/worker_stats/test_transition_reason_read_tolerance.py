@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event as sa_event, select
+from sqlalchemy import event as sa_event
 
 from beyo_manager.domain.analytics.linear_timeline import UNSPECIFIED_REASON
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
@@ -20,7 +20,6 @@ from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
@@ -31,6 +30,7 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.models.tables.workspaces.workspace_membership import WorkspaceMembership
 from beyo_manager.services.context import ServiceContext
+from tests.fixtures.phase2_row_factories import adopt_or_create_role
 from beyo_manager.services.queries.worker_stats.get_worker_clock_out_analytics import (
     get_worker_clock_out_analytics,
 )
@@ -95,9 +95,7 @@ async def _seed_worker(db_session, workspace_id: str) -> User:
         password="secret",
     )
     db_session.add(user)
-    role = (
-        await db_session.execute(select(Role).where(Role.name == RoleNameEnum.WORKER))
-    ).scalar_one()
+    role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = WorkspaceRole(
         client_id=f"wsr_{suffix}",
         workspace_id=workspace_id,

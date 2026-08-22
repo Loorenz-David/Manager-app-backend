@@ -1,0 +1,152 @@
+reviewId: 2026-08-21T19-00-12-916Z--4c49c6
+reviewedItemIds:
+  - node:infrastructure-test-database-isolation
+  - node:test-database-isolation-contract
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+decisions:
+  - itemId: node:infrastructure-test-database-isolation
+    decision: edit
+    editedFields:
+      name: Per-process test database isolation
+      description: "Gives each pytest process its own disposable PostgreSQL database,
+        created fresh from a migrated template and dropped at session end, so
+        the suite never reads or writes the development database. It owns the
+        per-process lifecycle end to end — template provisioning,
+        worker-database creation from that template, the disposability marker,
+        redirection of the application's database seam (settings.database_url)
+        and teardown — but not the data the tests then need: the template
+        carries migrated schema only, and every reference row is created by
+        fixtures, so there is no seeded baseline inside it. Database names are
+        slot-scoped, so two checkouts of this repository pointed at one
+        PostgreSQL server cannot destroy each other's databases. What must stay
+        true: every destructive operation passes the fail-closed disposability
+        invariant before a DROP, so no name, endpoint or identity mistake can
+        reach the configured database; pre-slot legacy names are reclaimed only
+        under an explicit opt-in environment flag, never by default; and the
+        session restores the original database URL and asserts the development
+        database's row counts are unchanged before it stops. The mechanism is
+        per-process by construction rather than serial — the worker id is part
+        of the name, so running under pytest-xdist changes the worker id, not
+        the design."
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 167
+          endLine: 185
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+          startLine: 463
+          endLine: 489
+        - index: 2
+          path: app/tests/conftest.py
+          symbol: isolated_database
+          startLine: 22
+          endLine: 37
+    rationale: "Re-derived against HEAD 6b2177b. Anchors: all three drifted
+      (evidence 1 ended at 534 in a 496-line file). Name: 'Serial' is falsified
+      by the next phase and was never true of the mechanism — the worker id has
+      been in the name since phase 1; renamed to per-process. Description:
+      'schema-and-baseline template' is false since phase 2 — the template is
+      schema-only and _has_legacy_baseline_source now forces a REBUILD when
+      baseline_source is present; reference rows come from fixtures. Left
+      PENDING, not promoted: evidence 1's summary states the destructive guard
+      requires 'a marker', but assert_disposable_database also accepts a
+      marker-less database with zero public tables, and requires two checks the
+      summary omits (endpoint confinement, configured-tuple identity). No write
+      path can correct an evidence summary."
+  - itemId: node:test-database-isolation-contract
+    decision: edit
+    editedFields:
+      description: "The rules that decide which PostgreSQL database a test process may
+        create, reuse and destroy, and the operator-facing switches that select
+        them. It fixes the name grammar —
+        beyo_test_<slot>_(template|main|gw<n>), slot [a-z0-9]{1,12}, resolved
+        from the BEYO_TEST_SLOT environment variable, then settings.test_slot,
+        then the default 'main', with invalid values raising rather than being
+        normalised — the template acceptance rules (marker present, Alembic head
+        and public-table count both as expected, and no legacy baseline_source
+        column), and the five-part fail-closed invariant every destructive
+        operation must satisfy: disposable name pattern, endpoint confinement to
+        the configured server, non-identity with the configured (host, port,
+        database) tuple, marker present or a table-less shell, and a parseable
+        PostgreSQL URL carrying host, username and database. It also carries the
+        opt-in reclamation flag BEYO_RECLAIM_LEGACY_TEST_DATABASES, without
+        which pre-slot database names are left untouched. What must stay true:
+        the name set stays bounded by construction — slots times
+        workers-plus-one, and a slot exists only because a human declared one —
+        the template is never named after a migration head, and the development
+        database is compared against a snapshot taken at session start rather
+        than against any fixed row count."
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+          startLine: 46
+          endLine: 55
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+          startLine: 364
+          endLine: 414
+        - index: 2
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+          startLine: 277
+          endLine: 311
+    rationale: "Re-derived against HEAD 6b2177b. All three anchors drifted.
+      Description rewritten: 'baseline reference-row preservation' is false
+      since phase 2 (the template is schema-only), and the old text described
+      serial execution only. Left PENDING, not promoted: two of three evidence
+      summaries are factually false against current source. Evidence 0 says
+      names resolve to beyo_test_main or beyo_test_gwN — those are now the
+      LEGACY names the slot discriminator exists to retire; the resolver returns
+      beyo_test_<slot>_<worker>, default beyo_test_main_main. Evidence 2 says
+      the tests 'assert fixed development row counts' — that describes the
+      phase-1 defect review r3 called out and fix r2 repaired; the test now
+      compares a before/after snapshot taken within the run. Evidence summaries
+      cannot be edited by any write path, so promotion would stamp both
+      falsehoods human_confirmed."
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    decision: edit
+    editedFields:
+      description: The lifecycle's database names, template-reuse rules and
+        destructive-operation guard are all decided by the isolation contract;
+        changing the contract changes what this lifecycle may create, reuse or
+        drop.
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._ensure_template
+          startLine: 314
+          endLine: 343
+    rationale: "Re-derived against HEAD 6b2177b. The anchor had drifted 246-278 ->
+      314-343 (a fourth drifted anchor the coordinator's table did not list).
+      The evidence summary is TRUE of current code: _ensure_template accepts an
+      existing template only after marker, EXPECTED_HEAD,
+      EXPECTED_PUBLIC_TABLE_COUNT and _has_legacy_baseline_source checks.
+      Direction is correct: configured_by is node -> configuration and the
+      target is the configuration node. Description no longer says 'phase-1',
+      which phase 2 falsified. Left PENDING only because both endpoints are
+      pending: promoting it would stamp the two-node split as confirmed while
+      the split is thin — two of the contract node's three anchors point at
+      implementation functions in the same module the infrastructure node
+      anchors, not at a configuration surface."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.238
+timestamp: 2026-08-21T19:00:12.916Z
+graphRevisionBefore: 4caa1afe361b7906bd6aed854d0ded5897a6927d3e5e9f13f29e81e7177508fc
+graphRevisionAfter: 15d686e505beddd08ca10cf56358d134cf140aa4c62e6fb97bbb7bc0c62a0d58
+evidenceSummary: 7 evidence entries across 3 files; no drift detected
+humanInstruction: "Owner-delegated maintenance session
+  (prompts/maintenance/2026-08-21_archgraph_verify_and_promote.md): verify the
+  three pending items against current source and promote what is confirmed.
+  Correcting anchors, name and descriptions; promotion withheld on all three
+  because three of seven evidence summaries are false against current source and
+  no write path can correct an evidence summary — reported to the owner as a
+  decision."
+reviewTokenCorrelation: 81d77325e8c9

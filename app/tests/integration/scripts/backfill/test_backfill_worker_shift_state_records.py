@@ -9,7 +9,6 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
-from beyo_manager.models.tables.roles.role import Role
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
@@ -27,6 +26,7 @@ from beyo_manager.services.queries.worker_stats.get_worker_linear_timeline_break
 from scripts.backfill.backfill_worker_shift_state_records import (
     backfill_worker_shift_day,
 )
+from tests.fixtures.phase2_row_factories import adopt_or_create_role
 
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
@@ -42,11 +42,7 @@ async def _seed_worker_day(db_session):
     )
     db_session.add_all([workspace, worker])
     await db_session.flush()
-    role = (
-        await db_session.execute(
-            select(Role).where(Role.name == RoleNameEnum.WORKER)
-        )
-    ).scalar_one()
+    role = await adopt_or_create_role(db_session, RoleNameEnum.WORKER)
     workspace_role = WorkspaceRole(
         workspace_id=workspace.client_id,
         role_id=role.client_id,
@@ -141,7 +137,9 @@ async def _shift_records(db_session, workspace_id: str, user_id: str):
     )
 
 
-async def test_backfill_matches_sweep_read_and_is_idempotent(db_session) -> None:
+async def test_backfill_matches_sweep_read_and_is_idempotent(
+    db_session, backfill_shift_reference_data
+) -> None:
     workspace, worker, step = await _seed_worker_day(db_session)
     work_date = date(2026, 7, 15)
     base = datetime(2026, 7, 15, 9, tzinfo=timezone.utc)
