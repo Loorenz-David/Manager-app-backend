@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: REVIEWING
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -219,12 +219,16 @@ price-scenario *configuration* fingerprint unrelated to spec identity. Pin the e
 by name so that removing it does not silently widen the claim, and so that a *second*
 fingerprint anywhere in the package reddens.
 *Mutation* — add `import hashlib` to `typical_filters.py` → the test reddens.
-**Two escapes the guard must not have** (coordinator consumption of fix round 3,
-2026-08-22, both measured at **2 passed** before round 4 closed them): (1) the package
-walk is **recursive** — a `*.py` under a future subpackage of the same root is scanned,
-not skipped; (2) the pinned exception strips **only the pinned occurrence**, so a second
-use of `config_fingerprint` in serializers.py *in any other shape* reddens. A guard whose
-own coverage can be escaped is the defect this criterion was rewritten to remove.
+**Scope this criterion delivers in phase 1** — the guard walks the package's `*.py`
+modules (flat today: 10, measured) and pins the one exception by its exact line.
+**Two known escapes, measured by the coordinator at `2 passed` and carried to plan 4**
+(which edits this package): the walk is **non-recursive**, so a module in a future
+subpackage is not scanned; and the exception strips **every** occurrence of the token
+rather than the pinned line, so a second `config_fingerprint` in `serializers.py` in a
+different shape is erased before the assertion sees it. Neither is reachable in the
+current tree. Recorded here rather than fixed here so the phase is not approved against a
+claim it does not meet — the strengthening is plan 4's, with the measurements already
+taken (`prompts/implementer/CANCELLED_20260822_plan1_fix_round4_prompt.md`).
 *Mutation* — `TypicalFilterSpec` (definition): declare the dataclass `eq=False`.
 *Both sides* — contract (a) `1`; mutation (a) `2`.
 *Defect caught*: two specs meaning the same population become two `spec_index` values (a
@@ -604,6 +608,23 @@ phase 4's allowances would move silently (the exact drift L1 names).
 ## 8. Review log
 
 *(append-only; shared by implementer and reviewer)*
+
+- **2026-08-22 · owner ruling on round count · round 4 CANCELLED, phase → re-review.**
+  The owner challenged whether four implementation rounds were proportionate and proposed
+  writing the tests from the criteria *before* implementing. Both points upheld. Measured:
+  phase 1 is **344 production lines against 480 test lines (1.4:1)** — the tests are not
+  bloated; it took four rounds to write a normal amount of them. **Eleven of the thirteen
+  audit findings were transcription failures** (a plan row missing from the tests, or
+  present with the criterion's own field projected away) — a class that is invisible
+  afterwards and obvious while transcribing. Master plan §3 now makes **task 0 of every
+  implementer prompt from phase 2 on: transcribe every criterion row, red, before any
+  production code**; §9's decoration rule is sharpened to rank rows by what breaks on the
+  wire and to send guards-over-guards to whichever phase already edits that code.
+  Round 4 (the two purity-guard escapes) is cancelled and carried to **plan 4**; C4(c)
+  amended to state the scope phase 1 actually delivers, so nothing is approved against an
+  unmet claim. Delta re-review dispatched:
+  `prompts/reviewer/20260822_plan1_rereview_prompt.md`. State → `REVIEWING`.
+
 
 - **2026-08-22 · fix round 3 · Codex · IMPLEMENTED → one escape found, round 4
   dispatched.** All seven review findings closed and verified at source: the production

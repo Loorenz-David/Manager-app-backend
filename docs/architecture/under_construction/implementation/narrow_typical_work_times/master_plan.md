@@ -60,6 +60,23 @@ insert lettered sections instead.
 - **Implementer sessions may be Codex.** The coordinator compiles a self-contained prompt
   directing the session to read `/Users/davidloorenz/agent-skills/pipeline-charter.md` and
   `/Users/davidloorenz/agent-skills/implementation-executor.md` by absolute path.
+- **⚠ TESTS FIRST, from phase 2 onward — the criteria table IS the test file** (owner
+  ruling, 2026-08-22, after phase 1 took four implementation rounds to produce a normal
+  1.4:1 test-to-production ratio). Every implementer prompt's **task 0** is: *transcribe
+  every criterion row in §6 into the test files as executable cases, before writing a line
+  of production code; run them; they must be red for the right reason.* Only then
+  implement to green, then run the named mutations.
+  **Why this is the whole fix and not a style preference:** of the thirteen findings
+  phase 1's audits produced, **eleven were "a row the plan enumerates is missing from the
+  tests" or "a row is present but its assertion projects away the field the criterion
+  names"** — the entire class is a transcription failure, and transcription failures are
+  invisible after the fact but obvious while transcribing with the plan open. The three
+  audit passes were each spent re-deriving a comparison the implementer could have made
+  in the first ten minutes.
+  Corollaries: a row that cannot be transcribed is a **plan defect — stop and report**,
+  not a row to invent (that is the projection gate's decidability check, cashed at the
+  right moment); and a criterion's **prose** clauses transcribe too, not just its row
+  table (§9's closing-sentence rule).
 - **Reviewer sessions are Opus 5 — never Sonnet as the only reviewer.** Measured
   head-to-head on an identical tree: Sonnet APPROVED a phase carrying an inert safety
   switch and a silent `DROP DATABASE`, and affirmed coverage that did not exist by
@@ -90,7 +107,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `CHANGES_REQUESTED` | 2026-08-22 | coordinator | Fix round 3 closed all 7 review findings (verified: production diff is `_optional_values` alone; L4 2617/21, delta ∅/∅). Consumption found **two escapes in the new F6 purity guard itself** — non-recursive walk, and an exception that strips every occurrence rather than the pinned one; both measured `2 passed`. Micro fix round 4 dispatched (one test file). Then delta re-review. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `REVIEWING` | 2026-08-22 | coordinator | Fix round 3 closed all 9 review findings (L4 `1590ebe` 2617/21, delta ∅/∅; production diff = `_optional_values` alone). Round 4 **cancelled** on the owner's round-count ruling — the two purity-guard escapes carry to phase 4, C4(c) amended to the delivered scope. **Tests-first is now task 0 for phases 2–6** (§3). Delta re-review dispatched. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
@@ -544,6 +561,17 @@ in §2. Restated here only where they bite hardest on *this* feature:
   `PYTHONPATH=. pytest tests/unit/docs/` costs ~3 s.
 - **A criterion that cannot name the defect it would catch is decoration and is cut.** A
   criterion asserting documented third-party behaviour never appears.
+  **Sharpened by the owner, 2026-08-22 — apply this at plan-writing time, not at review.**
+  The test is: *what would a user, a worker's card, or a downstream consumer see if this
+  were wrong?* If the honest answer is "nothing, ever", the row is decoration however
+  rigorous it looks. Phase 1 carried four grid rows describing evidence shapes the SQL can
+  never produce (a narrowed population larger than the section population containing it);
+  they are defensible for a pure function a future caller could misuse, but they are the
+  first thing to cut when a criteria table gets long. **Rank rows by what breaks on the
+  wire**, and say so in the plan so the implementer and reviewer spend depth in the same
+  place. Guards over guards — a test protecting a test's coverage — are the far end of
+  this and belong to whichever phase already edits the code they guard, never to a
+  dedicated round.
 - **A clause that cannot be tested yet is marked `structurally held`** with the named
   trigger that converts it into a real assertion — never left looking testable when it is
   not. This project has exactly one: §3A C3's `coalesce(..., FALSE)` (plan 2, C11).

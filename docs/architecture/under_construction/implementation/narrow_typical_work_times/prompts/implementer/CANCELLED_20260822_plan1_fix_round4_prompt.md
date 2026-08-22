@@ -5,6 +5,25 @@ round: 4 (fix cycle — micro)
 date: 2026-08-22
 ---
 
+# ⛔ CANCELLED — not dispatched. Superseded by a plan-4 carry-forward.
+
+**Cancelled by the coordinator, 2026-08-22, on the owner's challenge to the round count.**
+The two escapes below are real and measured, but they are escapes in a *guard against a
+hypothetical future import*, in a package that is flat today, and closing them does not
+change any behaviour a user or a downstream consumer can observe. Spending a whole
+implement-and-stamp cycle on three lines of test code is the diminishing-returns end of
+this phase.
+
+**Disposition:** carried to `plans/plan_5.md`'s sibling — specifically **plan 4**, which
+already edits this package (the reviewer nominated it as the guard's natural home in its
+carry-forward section). `plans/plan_1.md` C4(c) has been amended to state what phase 1
+actually delivers, so the phase is not approved against a criterion it does not meet.
+
+Kept as a record because the measurements below are the evidence plan 4 inherits — do not
+re-measure them.
+
+---
+
 # Fix prompt — plan 1, round 4 (one file, two escapes in the purity guard)
 
 Round 3 closed all seven findings; I verified each at source and every one holds. The
