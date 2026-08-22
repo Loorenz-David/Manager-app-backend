@@ -872,3 +872,59 @@ No production code, requirements, pytest configuration, conftest, probe harness,
 `.archgraph/` changes were made by this cycle. The application/doc checkpoint `4b5719d` was
 created by the owner concurrently while the L4 matrix ran and is recorded as an external commit
 stream; its prompt/maintenance-file additions are preserved.
+
+### 2026-08-22 — fix r5 consumed (coordinator). Verdict: B1 RESOLVED; to delta re-review
+
+**A coordinator defect first, because it damages the record and nothing else in this entry makes
+sense without it.** While fix r5 was mid-flight I ran `git add -A && git commit` to correct two
+prompts. That commit — `4b5719d`, subject *"fix the r5 and maintenance gate checks"* — swept in
+fix r5's in-progress code: `app/.env.example`, 93 lines of the criterion module, and a master-plan
+edit. **Two sessions' perimeters are merged under a subject describing one of them.** The charter
+keeps checkpoints per round precisely so *"nothing changed outside the perimeter"* and *"every
+mutation probe was reverted"* stay verifiable from history; for this boundary they are not.
+
+**The damage is attribution, not correctness, and I established that independently rather than
+asserting it.** The handoff's three closing checksums all reproduce exactly on today's tree, and
+two of them — `app/tests/database_isolation.py` at `86434edf…` and `app/pytest.ini` at
+`392e7102…` — are **byte-identical to the values review r4 published before it applied M4–M7**.
+So the files fix r5 mutated are bit-for-bit their pre-mutation state, proven against an
+independently published baseline that predates my commit. Collection is 2599, exactly `21 + 2578`
+from the stamp, and `+2` over r3 — the two endpoint rows N1 asked for, with N2's deletion
+correctly costing nothing (it removed an assertion inside a row, not a row). Residue is
+`beyo_test_main_template` alone; the C6 temporary migration is absent. L4 count 3, matching the
+budget, with run 1's dirty tree carrying a diff digest and runs 2–3 clean.
+
+**B1 is resolved, and the repair is better than the correction I quoted.** Review r4 proposed
+holding a template connection across the copy and asserting *"with the lock present the copy waits
+behind it and passes."* **That does not work, and the implementer was right not to do it:** an
+advisory lock is cooperative between our own processes and does nothing about an external session
+connected to the template — `CREATE DATABASE … TEMPLATE` refuses regardless, so the row would have
+been red in the correct configuration too. What shipped instead observes `pg_locks` for a granted
+advisory lock held by that probe's own maintenance connection (tagged via `application_name`) at
+the moment of the copy, releases the held connection only if the lock is present, and copies. Both
+named mutations bite: M4 (definition-side, lock body → bare `yield`) reddens rows (a)/(b)/(c) with
+`UniqueViolationError` / `InvalidCatalogNameError` / `ObjectInUseError`, and **M5 — the call-site
+narrowing plan task 3 warns about in writing — now reddens row (c)**, which was the whole finding.
+
+**Three things for the re-review, none blocking.**
+
+1. **The divergence from a quoted correction was not reported as one.** The prompt quoted r4's
+   correction verbatim; the implementation is a different mechanism for a good reason, and the
+   handoff describes what it built without saying *"the quoted repair does not work, here is why."*
+   A re-reviewer comparing implementation against correction will see a mismatch with no
+   explanation attached.
+2. **One held connection is shared across both probes.** The closure captures `connection` from the
+   enclosing scope; the first probe to observe its lock closes it, so the second probe's copy is
+   unobstructed whatever the lock does. Only one of the two concurrent probes is actually
+   instrumented — the row is half as strong as it reads. The two probes also run under
+   `asyncio.gather`, so both can pass `not connection.is_closed()` and race into `close()`.
+3. **The failing path's error is contrived, and the handoff's wording obscures it.** Under M4/M5 the
+   copy fails because *the test declined to close its own connection*, not because a sibling worker
+   collided. That is a sound instrument for the invariant task 3 states — *the serialised region
+   covers the copy* — but "M4 and M5 expose PostgreSQL's `ObjectInUseError`" reads as the real
+   hazard reproducing. State what the row proves: **lock presence at the copy call**, which is the
+   contract, not concurrent-copy survival.
+
+**Routing:** delta-scoped re-review, not a sixth fix round. B1 is met, S1–S5 and N1–N2 are met, and
+what remains is judgment about an instrument — which is what a re-review is for. The three items
+above go to it as named probes.
