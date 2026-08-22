@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: REVIEWING
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -567,6 +567,22 @@ phase 4's allowances would move silently (the exact drift L1 names).
   21-ID comparator: added IDs ∅ and removed IDs ∅. Tree identity is code checkpoint
   `8ff6ecc` with no phase-perimeter changes after the compatibility repair; only the
   expected untracked `.archgraph/contexts/` session files are present.
+
+- **2026-08-22 · fix round 2 · Codex · IMPLEMENTED, verified by the coordinator.** All
+  four consumption findings closed with **tests only** — `git diff 8edd3c3 8feae38 --
+  app/beyo_manager/` is empty, so the "production logic unchanged" claim is measured, not
+  asserted. C7 row (i) added with the asymmetric `(3, None)` / `(4, 800)` fixture (plan
+  row amended in the same edit) and both named mutations bite: `narrowed_sample_count`
+  flips `4 → 3`, section seconds flips `None → 800`. C14 gains rows (c), (h)-`True` and
+  (m) `designers`. C10's ghost row now pins the seconds and all four evidence fields; the
+  `_zero_evidence → (0,0,0,0)` mutant flips `None → 0` and reddens. Both mis-measured
+  round-1 claims restated from measurement (`0x65`; the one out-of-scope
+  `config_fingerprint` hit). F5 answered as asked: no guard added, the
+  `participating ⊆ section_ids` subset recorded as an assumption phases 4–5 inherit.
+  Focused perimeter 50 passed; L4 on the handed-over tree `8feae38`: **2609 passed / 21
+  failed / 0 collection errors**, ID delta ∅/∅. State → `REVIEWING`; review prompt
+  `prompts/reviewer/20260822_plan1_review_prompt.md` (Opus 5, full review of both rounds,
+  L4 budget spent on the `TZ=UTC` variation §10 requires and no session has run).
 
 - **2026-08-22 · coordinator consumption pass · CHANGES_REQUESTED before review.**
   Verified at source: the engine's logic is correct at every site checked (ladder,
