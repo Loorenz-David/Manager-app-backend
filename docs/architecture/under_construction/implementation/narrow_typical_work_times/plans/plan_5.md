@@ -57,6 +57,9 @@ re-loads itself (§6.2 row 4, `:196`).
 - `app/beyo_manager/domain/item_economics/serializers.py` (the `typical` block gains
   `typical_resolution`; it imports `serialize_typical_resolution` from
   `division_serializers.py` — **one implementation, not a second**)
+- `app/beyo_manager/domain/item_economics/budget_division.py` — **exactly one deletion**:
+  the line `_median = median` and its comment (§5 task 0). No other line changes; any
+  other edit to this file is still a finding.
 
 **New**
 - `app/tests/integration/services/queries/item_economics/test_narrowed_price_scenario.py`
@@ -65,11 +68,25 @@ re-loads itself (§6.2 row 4, `:196`).
 - `app/tests/integration/services/queries/item_economics/test_price_scenario_query.py`
 
 **Read-only, and a change is a finding**
-- `get_working_section_typical_times.py` · `budget_division.py` ·
-  `get_task_production_time.py` · `get_task_budget_allocations.py` · all three goldens.
+- `get_working_section_typical_times.py` · `get_task_production_time.py` ·
+  `get_task_budget_allocations.py` · all three goldens. (`budget_division.py` is
+  read-only **except** for task 0's single deletion, above.)
 
 ## 5. Ordered tasks
 
+0. **Remove the phase-1 `_median` compatibility bridge** (routed here by the coordinator
+   at plan 1's round-1 fold, 2026-08-22). Phase 1 moved `budget_division._median` to
+   `typical_filters.median` and discovered — only at the full-suite run, as 27 collection
+   errors — that this **private** name had a cross-module importer:
+   `get_task_price_scenario.py:13`. The correct repair then was the alias
+   `_median = median` in `budget_division.py`; the correct repair **now**, in the phase
+   that owns the price-scenario query, is to import `median` from `typical_filters`
+   directly and delete the alias. Criterion: `budget_division` no longer defines
+   `_median` (absence, module-scoped) **and** the full suite collects with zero errors —
+   an alias deleted while an importer survives is exactly the failure this task closes.
+   Do this **first**: it is a two-line change and everything below runs on top of it.
+   *Standing lesson recorded in master plan §9: grep the whole repository for a symbol
+   before moving it — a leading underscore is a convention, not a guarantee.*
 1. **The clock moves to `ctx.now`** (§4A K1, ratified 2026-08-22).
    `_typical_block` calls `typical_times_statement(ctx.workspace_id, now=ctx.now, specs=…)`.
    `ServiceContext.now` is always present (`context.py:24`, `default_factory`), so this is a

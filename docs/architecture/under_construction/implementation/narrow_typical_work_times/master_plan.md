@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Pure domain, participating-set rule, frozen pre-refactor SQL snapshot, 49 focused tests pass; L4: 2608 passed / 21 baseline failures, no new or removed IDs. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `CHANGES_REQUESTED` | 2026-08-22 | coordinator | Round 1 (Codex) implemented: pure domain, participating-set rule, frozen pre-refactor snapshot; L4 2608 passed / 21 baseline failures, ID delta ∅/∅. Coordinator consumption found 4 criteria-coverage gaps (C7 row (i) — an uncovered branch; C14 rows c/h/m; C10 seconds unpinned; 2 mis-measured handoff claims) → fix round 2 dispatched. `_median` alias accepted; removal routed to phase 5. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
@@ -503,6 +503,17 @@ in §2. Restated here only where they bite hardest on *this* feature:
   **raising**.
 - **Absence claims state their root and their term set**, or are restated as the presence
   claim they stand in for. Run them from the **repository root**.
+- **Grep the whole repository for a symbol before moving or renaming it — a leading
+  underscore is a convention, not a guarantee.** Earned in phase 1 (2026-08-22): moving
+  `budget_division._median` broke `get_task_price_scenario.py:13`, which imported the
+  private name across modules. Neither the plan, the projection, nor the coordinator
+  checked; the full suite found it as **27 collection errors**. The bridge alias is
+  routed out in plan 5 task 0.
+- **Report measured values, not remembered ones.** Two phase-1 handoff claims restated
+  measurements inaccurately (a snapshot byte value; an absence grep called "empty" that
+  returns one out-of-scope hit). Neither changed a conclusion, and both cost review time
+  to re-measure. If a number appears in a handoff, it was read off a command in that
+  session.
 - **Never rewrite a published handoff.** Supersede with a new dated document (§11.3).
 - **Before writing any document under a guarded root, run the guard** —
   `PYTHONPATH=. pytest tests/unit/docs/` costs ~3 s.

@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -567,3 +567,30 @@ phase 4's allowances would move silently (the exact drift L1 names).
   21-ID comparator: added IDs ∅ and removed IDs ∅. Tree identity is code checkpoint
   `8ff6ecc` with no phase-perimeter changes after the compatibility repair; only the
   expected untracked `.archgraph/contexts/` session files are present.
+
+- **2026-08-22 · coordinator consumption pass · CHANGES_REQUESTED before review.**
+  Verified at source: the engine's logic is correct at every site checked (ladder,
+  quantifier, materialization, `applied_filter` identity, `has_usable_narrowed`
+  totality, F-J purity — grep clean); the snapshot was captured pre-refactor with the
+  both-clock-forms equality asserted before the write, and its last byte is not a
+  newline. Four **criteria-coverage** gaps found — rows this plan enumerates that the
+  test files omit, three of them rows the projection fold specifically added:
+  **(F1)** C7 row (i) absent — the non-narrowing *insufficient* branch of
+  `resolve_section_typical` has **zero** coverage (every other non-narrowing row has
+  `section_sample_count = 61`); the plan's own row (i) numbers are symmetric and cannot
+  bite, so the fix prompt asymmetrizes them and amends C7 in the same edit.
+  **(F2)** C14 rows (c) both-bounds, (h) `True` half, and **(m) `designers`** absent —
+  (m) is projection ledger L9's omission lapsing a second time.
+  **(F3)** C10's ghost row asserts basis/count/participates but **not the seconds** —
+  `_zero_evidence` returning `(0, 0, 0, 0)` stays green while publishing
+  `typical_worker_seconds: 0` beside `insufficient_sample`, the false-disclosure shape
+  §3B B2 / T16b forbid, which reaches the wire in phase 4.
+  **(F4)** two handoff claims are not what the tree measures: the snapshot's last byte
+  is `0x65`, not `0x6e`; and the C4(c) term-set grep is **not** empty at the stated root
+  — `serializers.py:351 "config_fingerprint"`, pre-existing and unrelated to spec
+  identity, so §6.6's claim holds but the measurement must be reported as it reads.
+  Round-1 judgment calls all accepted, incl. the `_median = median` alias: the plan and
+  the projection both missed that a private name had a cross-module importer
+  (`get_task_price_scenario.py:13`). The alias stays; **its removal is routed to phase
+  5**, which owns that file. Fix prompt:
+  `prompts/implementer/20260822_plan1_fix_round2_prompt.md`. State → `CHANGES_REQUESTED`.
