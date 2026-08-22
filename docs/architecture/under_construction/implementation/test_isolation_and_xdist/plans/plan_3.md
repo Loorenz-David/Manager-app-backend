@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: IMPLEMENTED — 2026-08-22 (Codex; fix r3; shipped default 21 failed / 2576 passed, serial comparator 21 failed / 2575 passed / 1 skipped / 1 deselected)
+state: REVIEWING — 2026-08-22 (review r4 dispatched; first external review of the phase after four implementation rounds. Shipped default 21 failed / 2576 passed in 52.62 s; serial comparator 150.70 s)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
