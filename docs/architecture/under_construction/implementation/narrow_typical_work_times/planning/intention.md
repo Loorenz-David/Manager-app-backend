@@ -3,8 +3,14 @@
 ```
 status: RESOLVED (round 3, 2026-08-20) — 0 owner cards open. D1–D24 settled
         (card A → D24: typical-times route unchanged in V1; card B → D23: serial,
-        live-clock first). Next: mechanism-inventory gate (implementation blocked
-        on live-clock per D23; the gate itself is documents-only and may run).
+        live-clock first). Next: **mechanism-inventory gate**.
+        **UNBLOCKED 2026-08-22:** D23's precondition is satisfied — every live-clock
+        phase touching the shared files is APPROVED and merged (`57d8c25`), and the
+        post-live-clock baseline the goldens regenerate against is published. So the
+        gate is no longer the only thing that may run; implementation may follow it.
+        **⚠ Read §2A first — the grounding drifted while this document waited, and one
+        drifted citation is a contract (`typical_times_statement` gained an injected
+        clock that §3's proposed signature erases).**
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19/20 (no raw_intention.md; three
              architecture projection passes, each owner-corrected, preceded this
@@ -58,7 +64,7 @@ deferred with its contract pre-locked (§9).
 
 ---
 
-## 2. Grounding (inspected 2026-08-20; all paths current)
+## 2. Grounding (inspected 2026-08-20 — **⚠ SEE §2A: the tree moved on 2026-08-21/22 and one citation below is a contract, not a line number**)
 
 ### 2.1 The engine and its four consumers
 
@@ -138,6 +144,100 @@ rounded to whole seconds, NULL under 5 qualifying groups. Constants at
 - **F-J: the domain is SQL-free.** Zero `sqlalchemy`/`models.tables` imports across
   all eight `domain/item_economics/` files. The spec and resolution stay pure; the
   join translation lives in the query layer (§4.2).
+
+
+### 2A. Grounding drift, measured 2026-08-22 (amendment — nothing above renumbers)
+
+**§2's header said "all paths current". That was true on 2026-08-20 and is false now.**
+Between then and 2026-08-22 the `live_clock_for_working_time_economics` pipeline shipped
+phases 2 and 3 (APPROVED 2026-08-21, merged to `main` as `57d8c25`) into the exact files
+§2 cites, and the test runner changed underneath the whole repo. This section records what
+was **measured**, by whom, and what is still owed. Written by the outgoing live-clock
+coordinator at closeout, because a fresh session cannot know it and the fact expires.
+
+#### The one that is a contract, not a line number — read this before §3
+
+`typical_times_statement` **gained a parameter**, and the four consumers **deliberately
+split** over it:
+
+```
+def typical_times_statement(workspace_id, *, now: datetime | None = None)
+```
+
+| Consumer | Call today | Clock |
+|---|---|---|
+| `get_task_production_time.py:81` | `typical_times_statement(ctx.workspace_id, now=ctx.now)` | **injected** |
+| `get_task_budget_allocations.py:46` | `typical_times_statement(ctx.workspace_id, now=ctx.now)` | **injected** |
+| `get_working_section_typical_times.py:74` | `typical_times_statement(ctx.workspace_id)` | own wall-clock read |
+| `get_task_price_scenario.py:140` | `typical_times_statement(ctx.workspace_id)` | own wall-clock read |
+
+The source comment states the split verbatim: *"The optional request clock keeps the
+working-sections and price-scenario callers on their existing clock read while E-P/E-A
+share `ctx.now`."*
+
+**§3 proposes `typical_times_statement(workspace_id, *, specs: Sequence[TypicalFilterSpec] = ())`
+and §5's call form `typical_times_statement(ws, specs)` — both written before that
+parameter existed. Taken literally they erase the parameter AND the two-clock split.**
+
+Why that is not cosmetic: the cutoff is derived as
+`(now if now is not None else datetime.now(timezone.utc)) - timedelta(days=TYPICAL_WINDOW_DAYS)`.
+Dropping `now` returns E-P and E-A to a wall-clock read on the request path, which is the
+live-clock intention's **HC-3A** violation by construction — the contract that two
+executions over identical database state with a frozen clock produce byte-identical
+payloads, guarded by that pipeline's T1 byte-identity tests. The refactor would compile,
+pass a casual read, and redden goldens for a reason nobody would connect to typicals.
+
+**This is not a ruling on what narrow should do.** Keeping the split, collapsing it
+deliberately, or threading the spec alongside the clock are all open designs — it is a
+**mechanism the inventory gate must contract**, and §3/§5 must be reconciled against the
+real signature before the planner sees them.
+
+#### Line-number drift — sampled, not swept
+
+Five citations checked at source on 2026-08-22:
+
+| §2 citation | Today | |
+|---|---|---|
+| `get_working_section_typical_times.py:21` (HC-1's anchor) | **21** | holds |
+| `get_working_section_typical_times.py:68` | **74** | moved |
+| `get_task_production_time.py:55` | **81** | moved |
+| `get_task_budget_allocations.py:45` | **46** | moved |
+| `get_task_price_scenario.py:137` (`_typical_block`) | **140** | moved |
+| `get_task_budget_status.py:51-78` (F-A `_load_task_and_item`) | def at **54** | moved |
+
+**Four of five call sites moved; the HC-1 anchor held.** F-H's golden assertion is still
+inside its cited `:325-332` (the `json.dumps` is at `:330`), though §2 paraphrases it as
+`json.dumps(payload) == golden` where the code passes `sort_keys=True,
+separators=(",", ":")`.
+
+**This is a sample and is labelled as one.** The remaining ~30 citations in §2.2 and §§4–11
+were **not** re-verified. Do not read this table as "everything else is current" — read it
+as evidence that §2's own header cannot be trusted and that **re-grounding is owed before
+the planner runs**. The mechanism-inventory gate is the natural place; §13 step 2 already
+sits there.
+
+#### What else moved that §2 does not mention
+
+- **The test runner.** `pytest -m 'not e2e'` now runs **six xdist workers** with
+  `--dist loadfile` from `app/pytest.ini`'s `addopts`, each process on its own database
+  cloned from `beyo_test_main_template`, and **Redis must be reachable** or the count is
+  23 failed / 2 errors instead of 21. Nothing in the invocation announces this.
+- **D23's precondition is now SATISFIED.** "Implementation starts after the live-clock
+  phases touching the shared files are APPROVED" — all four phases are APPROVED and merged.
+  **The post-live-clock baseline D23 says the goldens regenerate against is published**, with
+  its runner, in `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_live_working_time_clock_20260822.md`
+  §7: **21 failed / 2576 passed**, collection 2597, on `dc76db8`'s `app/` tree. Two named
+  intermittent tests are **not** members of that 21; a third, unrecoverable, **is** — so the
+  set can shrink as well as grow, and **a single run is not evidence**.
+- **The live-clock pipeline's own artifacts moved** to
+  `docs/architecture/archives/live_clock_for_working_time_economics/`. Its intention §2.5A
+  (the eight-row settled-consumer inventory) and §4.3A (the typicals path as a third
+  worked-seconds→allowance route) are the two sections most worth reading before this
+  document's §6.
+
+**Standing lesson this instance re-earns:** a grounded fact is a claim with a shelf life,
+and a header asserting "all paths current" ages worse than the citations under it, because
+it is the sentence nobody re-checks. Date the grounding, and re-ground at the gate.
 
 ---
 
@@ -705,6 +805,13 @@ surface per D24.
 ## 13. Pre-implementation protocol
 
 1. Ledger empty (D23, D24 — both cards answered 2026-08-20); status RESOLVED. ✓
+   **D23's precondition satisfied 2026-08-22** (live-clock APPROVED and merged, baseline
+   published). ✓
+1a. **Re-ground §2 before the planner runs — NOT optional (§2A, 2026-08-22).** The
+   document was grounded 2026-08-20 and the shared files moved on 2026-08-21/22; a
+   sample of five call-site citations found four had drifted, and one drift is a
+   signature change, not a line number. The inventory gate is the natural place to do
+   it, and §2A is deliberately a **sample**, not a sweep.
 2. Mechanism-inventory gate on this document (silent-failure mechanisms to
    contract-grade: the spec→predicate translation incl. NULL semantics; the
    two-population FILTER arithmetic; the reconciliation quantifier; the
