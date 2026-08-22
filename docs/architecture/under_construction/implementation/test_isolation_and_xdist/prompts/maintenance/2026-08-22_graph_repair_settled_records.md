@@ -24,11 +24,12 @@ That authority covers **exactly the three records named in §3** and nothing els
 edge and pending item in the graph is out of bounds.
 
 Workspace root: `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend`
-Branch `feat/test-isolation-xdist`, worktree clean. **The gate is `git diff 8501a51 HEAD -- app/
-.archgraph/` returning empty**, not `HEAD` equalling any particular sha — commits after `8501a51`
-are documentation only, including the one that added this prompt. *(An earlier version of this line
-named a bare HEAD, which the act of committing this prompt falsified; a session correctly flagged
-the mismatch. Master plan standing rule 8.)*
+Branch `feat/test-isolation-xdist`. **This prompt names no HEAD and no line numbers, on purpose.**
+Two earlier attempts at this session were blocked by gates that named a moving value: one pinned a
+bare `HEAD` that the commit adding this prompt falsified, and one carried a drift table that fix r5
+invalidated by adding rows to the file being repaired. Master plan standing rule 8 — write the
+check against what the gate protects, in a form another session cannot falsify. **Record the SHA
+you observe at the start of your run and derive every span from that working tree.**
 
 **Read first, by absolute path:** `/Users/davidloorenz/agent-skills/pipeline-charter.md`
 (its **project-affordance** section on the architecture graph, and **"The owner layer"**).
@@ -48,7 +49,13 @@ hours ago, including the one override and its reasoning.
   side, not something to work around. *(This happened on 2026-08-22: the Codex server's argument
   list carried `--uto-anchor-repair`, a typo the server accepted silently instead of rejecting, so
   the flag was simply absent. The session stopped at this gate, correctly.)*
-- `git diff 8501a51 HEAD -- app/ .archgraph/` is empty.
+- **No implement, fix or review round is in flight.** This session repairs anchors that point into
+  `app/tests/database_isolation.py` and `app/tests/integration/infrastructure/test_database_isolation.py`
+  — the exact files a fix round edits. A concurrent round both dirties the worktree and moves the
+  targets, so a repair applied during one is stale before it lands. *(Measured 2026-08-22: fix r5
+  ran concurrently, dirtied two documents, and moved one recorded symbol from line 537 to 614 while
+  this session was checking its gate.)* If `handoffs/implementer/` holds a handoff the coordinator
+  has not yet consumed, that is not by itself a blocker — but an uncommitted worktree is.
 
 If the revision has moved, someone has written to the graph since review r4 — stop and report
 rather than repairing on top of an unknown change.
@@ -60,16 +67,23 @@ The three records were confirmed at revision `f5bf3a7` on 2026-08-21 at 19:07, a
 and every address below moved. Review r4 measured the drift; **verify each against the file
 yourself before repairing it** — a stale table repaired blindly is a second wrong answer.
 
-| record | evidence entry | recorded | actual today |
-|---|---|---|---|
-| `node:infrastructure-test-database-isolation` | `DatabaseIsolation.start` | 167-185 | **234-252** |
-| — | `_drop_database_if_exists` | 463-489 | **539-565** |
-| — | inline `assert_disposable_database` | 81-107 | **148-174** |
-| — | `isolated_database` (conftest) | 22-37 | 22-37 — unchanged, leave it |
-| `node:test-database-isolation-contract` | `resolve_worker_database_name` | 46-55 | **103-112** |
-| — | `_migrate_and_assert` | 364-414 | **449-490** |
-| — | `test_dev_database_counts_are_untouched` | 277-311 | **537-570** |
-| `edge:…--configured_by-->test-database-isolation-contract` | `_ensure_template` | 314-343 | **398-428** |
+| record | evidence entry — the symbol to locate |
+|---|---|
+| `node:infrastructure-test-database-isolation` | `DatabaseIsolation.start` |
+| — | `_drop_database_if_exists` |
+| — | inline `assert_disposable_database` |
+| — | `isolated_database` (in `app/tests/conftest.py` — review r4 found this one **unchanged**; confirm before touching it) |
+| `node:test-database-isolation-contract` | `resolve_worker_database_name` |
+| — | `_migrate_and_assert` |
+| — | `test_dev_database_counts_are_untouched` |
+| `edge:…--configured_by-->test-database-isolation-contract` | `_ensure_template` |
+
+**The recorded spans are in the graph itself — read them with `archgraph_get_review_item` or
+`archgraph_get_node`, do not take them from any prompt.** Locate each symbol in the working tree
+and derive its current span there. Review r4's N3 table measured these on 2026-08-21; **fix r5 has
+since moved at least one of them** (`test_dev_database_counts_are_untouched`, 537 → 614), which is
+why this prompt carries symbol names and not numbers. Treat r4's numbers as evidence that drift
+exists, never as the drift's current value.
 
 **The substantive one, and the only one needing judgment.** That last edge's evidence *summary*
 reads:
