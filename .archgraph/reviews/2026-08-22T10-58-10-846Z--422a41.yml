@@ -1,0 +1,31 @@
+reviewId: 2026-08-22T10-58-10-846Z--422a41
+reviewedItemIds:
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+decisions:
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Second-pass confirmation under the owner-authorized maintenance
+      prompt. The corrected evidence matches DatabaseIsolation._ensure_template:
+      reuse requires the disposable marker, runtime-derived Alembic head
+      equality, all required public tables, and absence of the legacy baseline
+      column. Preserve the known configured_by relationship despite the server's
+      cardinality-style warning: the contract configures
+      naming/template/destructive-guard invariants, while the shipped parallel
+      default configures runner topology; the registered relationship permits
+      both."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-22T10:58:10.846Z
+graphRevisionBefore: 6ebc426a7da4b60d0c3e0c2a93e18607733be1e3be80bcf0e844e2a56b3fd094
+graphRevisionAfter: e7ab5b2aa34ebd309766071c010d469ffd3f7151cb346c6669a0854d6911f756
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: "Owner authorization in maintenance prompt
+  2026-08-22_graph_repair_settled_records.md: confirm the corrected re-recorded
+  edge on the second pass, preserving the explicitly authorized configured_by
+  override rationale."
+reviewTokenCorrelation: 257746d73ef7

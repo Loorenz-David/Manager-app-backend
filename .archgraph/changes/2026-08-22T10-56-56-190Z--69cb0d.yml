@@ -1,0 +1,80 @@
+changeId: 2026-08-22T10-56-56-190Z--69cb0d
+operations:
+  - itemId: node:infrastructure-test-database-isolation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 167
+          endLine: 185
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+          startLine: 463
+          endLine: 489
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 234
+          endLine: 252
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+          startLine: 539
+          endLine: 565
+    rationale: Repair the moved DatabaseIsolation.start and destructive-drop
+      evidence spans verified in the current working tree; the isolated_database
+      evidence remains unchanged and is deliberately untouched.
+  - itemId: node:test-database-isolation-contract
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+          startLine: 46
+          endLine: 55
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+          startLine: 364
+          endLine: 414
+        - index: 2
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+          startLine: 277
+          endLine: 311
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+          startLine: 103
+          endLine: 112
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+          startLine: 449
+          endLine: 490
+        - index: 2
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+          startLine: 614
+          endLine: 647
+    rationale: Repair the moved resolver, migration assertion, and development-count
+      test evidence spans verified in the current working tree.
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-22T10:56:56.190Z
+graphRevisionBefore: 0dd6785a158409121a63063f3326bbcc440136333db42337a8742b71613463bd
+graphRevisionAfter: 116f6c036f2ee9c0ff57c613a6d3ccddb743fa9d837f4bdf567fbd774ea8736f
+humanInstruction: "Owner authorization in maintenance prompt
+  2026-08-22_graph_repair_settled_records.md: repair exactly these settled
+  record addresses; no other graph item is authorized."
