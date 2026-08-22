@@ -6,7 +6,7 @@ role: implementation-planner
 round: 0
 date: 2026-08-22
 status: PLANNED — six phases, all NOT_STARTED
-intention: planning/intention.md (RESOLVED round 6, D1–D25 settled, gate PASS-WITH-CONTRACTS)
+intention: planning/intention.md (RESOLVED round 8, D1–D25 settled, gate PASS-WITH-CONTRACTS)
 ```
 
 **⚠ Read the intention's header before any section of it.** It carries a
@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `NOT_STARTED` | 2026-08-22 | coordinator | Projection **mandatory** (spec dedupe identity, basis/count totality, reconciliation quantifier). Carries the T11 snapshot capture — impossible to retrofit honestly after phase 2. Projection prompt dispatched (`prompts/reviewer/20260822_plan1_projection_prompt.md`). |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `PROMPT_READY` | 2026-08-22 | coordinator | Projection ran (Opus 5, round 0): **AMENDMENTS_REQUIRED**, 21 rows / 11 blocking / 0 owner cards — all routed and folded same day (intention round 8, this file §§5/6.1/6.2/6.8/9, plan_1 §8). Criteria 15 → 18 (C16–C18). Implementer prompt: `prompts/implementer/20260822_plan1_implementer_prompt.md`. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
@@ -103,12 +103,30 @@ Agents update only their own row. Findings go to the plan file's Review log.
 
 ## 5. Contract resolution
 
-**This repo has no `architecture/*.md` contract system with a goal-mapping guide** —
-`docs/architecture/` holds pipeline artifacts, not code contracts. The charter's standing
-quality rules (§9) are therefore the baseline, extended by the earned-rules corpus adopted
-in §2.
+**⚠ Corrected at the plan-1 projection fold (2026-08-22, projection R1).** This section
+originally stated the repo has no `architecture/*.md` contract system, reasoning from
+`docs/architecture/`. **The system exists at the repo root: `backend/architecture/` — 69
+files, README "Canonical backend contracts live here."** Its index is thin (a three-line
+README, no goal-mapping guide), so the charter's standing rules (§9) plus the earned-rules
+corpus remain the *routing* baseline — but the `architecture/*.md` files are
+**authoritative for how code is written**, and three bind this pipeline directly:
 
-Two affordances the charter's detection *does* find, and every session honours:
+- `architecture/01_architecture.md` — layer map and hard dependency rules.
+- `architecture/08_domain.md` — domain purity (F-J's independent source) and **"fully
+  annotated signatures, no `Any`"** (constrains §6.2's two loosely-written signatures;
+  the resolution is delegated in plan 1's implementer prompt: a local `Protocol`, never a
+  `models.tables` import).
+- `architecture/15_testing.md` — "test files mirror the module they test."
+  **Two recorded deviations, deliberate:** `test_participating_sections.py` splits
+  `budget_division.py`'s coverage by mechanism rather than mirroring it 1:1, and
+  `test_typical_times_sql_identity.py` names its *claim* (SQL identity) rather than its
+  module (`get_working_section_typical_times.py`) because plan 2 extends it across the
+  refactor boundary. Recorded here so neither reads as a silent violation.
+
+Any phase touching errors, commands, queries or routers reads the matching numbered file
+before writing.
+
+Two further affordances the charter's detection finds, and every session honours:
 
 1. **Architecture graph** (`.archgraph/` + `archgraph_*` MCP) — §8.
 2. **Living docs under `docs/domains/item_economics/`**, guarded by
@@ -132,7 +150,7 @@ it here in the same edit, before using it.
 | `app/beyo_manager/domain/item_economics/typical_constants.py` | 1 | **NEW.** `TYPICAL_METHOD`, `TYPICAL_WINDOW_DAYS`, `TYPICAL_MIN_SAMPLE_SIZE`, moved here verbatim. Values unchanged. |
 | `app/beyo_manager/domain/item_economics/typical_filters.py` | 1 | **NEW.** The pure engine (§6.2). |
 | `app/beyo_manager/services/queries/working_sections/_typical_item_filter.py` | 2 | **NEW.** `build_item_match` — the only module that knows Task → primary TaskItem → Item. |
-| `app/beyo_manager/domain/item_economics/budget_division.py` | 1, 4 | **MOD.** Imports and **re-exports** the three constants (its `__all__` already lists all three, so no existing import site changes); gains `participating_sections`; phase 4 changes the division contract. |
+| `app/beyo_manager/domain/item_economics/budget_division.py` | 1, 4 | **MOD.** Imports and **re-exports** the three constants (its `__all__` already lists all three, so no existing import site changes); its `_median` moves to `typical_filters.median` and is imported back (internal call sites rename); gains `participating_sections`; phase 4 changes the division contract. |
 
 **Why the constants move (planner decision, reported in the handoff).**
 `typical_filters` needs `TYPICAL_MIN_SAMPLE_SIZE`; `budget_division` needs
@@ -142,6 +160,17 @@ re-exporting them from `budget_division` breaks the cycle, changes no value, and
 no call site — `budget_division.__all__` already exports all three
 (`budget_division.py:402-410`). Import direction after this pipeline:
 `typical_constants ← typical_filters ← budget_division`.
+
+**The median moves too (plan-1 projection fold, ledger L1).** `apply_business_fallback`
+needs `median(usable)` (§8, plan 1 C11 row d), and plan 1's import direction forbids
+`typical_filters` importing `budget_division`, where `_median` lives
+(`budget_division.py:69`). A second copy whose even-length rule drifts from
+`(a+b)/2` would silently move phase 4's allowances. Resolution: **`_median` moves
+verbatim into `typical_filters.py` as public `median`** (it gains external callers), and
+`budget_division` imports it from there — an edge that already exists at runtime for
+`apply_business_fallback`, so no new dependency. `budget_division`'s internal call sites
+rename `_median(` → `median(`; no behavior change. The even-length rule is pinned by
+plan 1 C18.
 
 ### 6.2 `typical_filters.py` — the fixed API
 
@@ -206,6 +235,10 @@ def reconcile_task_typicals(
 def apply_business_fallback(
     selected_values: Sequence[int | None], *, terminal: Fraction
 ) -> list[Fraction]: ...
+
+def median(values: Sequence[Fraction]) -> Fraction: ...
+    # moved verbatim from budget_division._median (projection fold, L1);
+    # even-length rule (ordered[m-1] + ordered[m]) / 2 is contract — plan 1 C18
 ```
 
 Three of these signatures are **planner-fixed** because no upstream artifact states them
@@ -308,6 +341,26 @@ they become the deferred route's public contract, so they are fixed here:
 A band with only one bound supplied yields `(lo, None)` / `(None, hi)`; both absent means
 the field is not set at all — **not** `(None, None)`, which is a different population
 ("the dimension is recorded", §3A C2). Unknown parameters are ignored.
+
+**Request grammar (plan-1 projection fold, ledger L8/L9; semantics in intention §3C).**
+The parser's input is the router's **already-typed** `ctx.query_params` dict — this
+repo's universal router convention (typed FastAPI `Query(...)` parameters assembled into
+a plain dict; nearest instance `routers/api_v1/working_sections.py`, typical-times
+route). Signature: `parse_spec_from_query_params(params: Mapping[str, object]) ->
+TypicalFilterSpec`.
+
+- Repeatable families (`item_category_ids`, `major_categories`, `designers`) arrive as
+  `Sequence[str] | None`; bounds as `int | None`; `can_have_upholstery` as `bool | None`.
+- **An absent parameter arrives as an absent key OR an explicit `None` value — the two
+  are equivalent** (routers pass `None` for unset `Query(None)` params).
+- String→int coercion, numeric parse failures and boolean spellings are the future
+  route's FastAPI declarations — **outside the parser's contract**.
+- `major_categories` values convert to `ItemMajorCategoryEnum`
+  (`domain/items/enums.py`); an unrecognised value raises **`ValidationError`** (§3C) —
+  silently ignoring it would answer a different narrowed question than asked.
+- An inverted band (`lo > hi`) raises **`ValidationError`** at the parser boundary
+  (§3C); `TypicalFilterSpec.__post_init__` keeps `ValueError` for direct construction.
+- An empty sequence for a repeatable family canonicalizes with §3A C1 (→ `None`).
 
 ### 6.9 Test files and fixtures
 
@@ -458,6 +511,12 @@ in §2. Restated here only where they bite hardest on *this* feature:
 - **A clause that cannot be tested yet is marked `structurally held`** with the named
   trigger that converts it into a real assertion — never left looking testable when it is
   not. This project has exactly one: §3A C3's `coalesce(..., FALSE)` (plan 2, C11).
+- **`typical_times_no_spec_sql.txt` is written once, in phase 1, and never regenerated**
+  (plan-1 projection fold, ledger L12). A red C15 in any later phase is a **finding**,
+  never a regeneration — re-capturing from a changed tree restores exactly the
+  `f(x) == f(x)` vacuity §11A repaired T11 to remove. The only authorized re-derivation
+  is a SQLAlchemy/dialect version bump, and it requires a recorded authorization line in
+  the acting phase's Review log before the write.
 
 ---
 

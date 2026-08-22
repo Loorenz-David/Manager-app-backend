@@ -1,7 +1,7 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: RESOLVED (round 7, 2026-08-22) — **0 owner cards open. D1–D25 settled**
+status: RESOLVED (round 8, 2026-08-22) — **0 owner cards open. D1–D25 settled**
         (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
         known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
         satisfied 2026-08-22 — every live-clock phase touching the shared files is
@@ -19,14 +19,15 @@ status: RESOLVED (round 7, 2026-08-22) — **0 owner cards open. D1–D25 settle
         call forms in §3.1, §4.2 and §5; §4B supersedes §4.4's stated invariant and its
         proof; §4C (D25) amends §3.4's BROADEN rung, §4.3's quantifier, §4B's residual
         reachability and §11A rows T10b/T16b; §6B supersedes §6.4's `is_estimated`
-        definition.
+        definition; §3C (round 8) amends §3A C1's error type at the parser boundary
+        only, and §4C's predicate carries a round-8 `is not None` correction.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19/20 (no raw_intention.md; three
              architecture projection passes, each owner-corrected, preceded this
              document — the corrections are folded, not appended)
 date: 2026-08-20 (rounds 1–4) · 2026-08-22 (round 5, mechanism-inventory gate; round 6,
-      D25 fold; round 7, planner fold)
-round: 7
+      D25 fold; round 7, planner fold; round 8, plan-1 projection fold)
+round: 8
 ```
 
 ---
@@ -630,6 +631,39 @@ and it replaces the accidental cover that `_step_result`'s two-argument
 total either way and costs one branch.
 ---
 
+### 3C. Parser error boundary — `ValidationError`, not `ValueError` (plan-1 projection fold, 2026-08-22)
+
+The plan-1 projection found an intention gap (its ledger L15): §3A C1 fixes `ValueError`
+for rejected specs, but this repo's convention splits error types by who can trigger them
+— `ValidationError` (`errors/validation.py`, HTTP 422) for anything a client can cause,
+`ValueError` for programmer preconditions. A parser `ValueError` reaching the deferred
+statistics route would turn a user typo (`width_cm_min=81&width_cm_max=80`) into a 500.
+
+**Contract (coordinator resolution, routed upstream per the home-artifact rule):**
+
+- **`TypicalFilterSpec.__post_init__` keeps `ValueError`** — construction is a programmer
+  boundary; §3A C1 is unchanged there.
+- **`parse_spec_from_query_params` raises `ValidationError`** for every client-triggerable
+  rejection: an inverted band (`lo > hi`, whether pre-checked or translated from the
+  dataclass's `ValueError`) and an unrecognised `major_categories` value. Silently
+  ignoring an unrecognised category is forbidden — it would answer a *different* narrowed
+  question than the one asked, HC-3's shape.
+- **The parser's input is the router's already-typed dict**, per this repo's universal
+  router convention (typed FastAPI `Query(...)` parameters assembled into
+  `ctx.query_params: dict`): repeatable families arrive as `Sequence[str] | None`, bounds
+  as `int | None`, `can_have_upholstery` as `bool | None`, and **an absent parameter
+  arrives as an absent key OR an explicit `None` value — the two are equivalent**.
+  String→int coercion and boolean spelling are the future route's FastAPI declarations,
+  outside the parser's contract. Unknown *keys* are ignored (§6.8); unknown *values* of a
+  known enum family are rejected.
+
+The route itself remains deferred (§9); this section binds the parser it ships early.
+
+Trace: projection handoff L8/L9/L15 · §3A C1 (unchanged at construction) · §6.8
+(parameter names) · `errors/validation.py` · `services/context.py` ·
+`routers/api_v1/working_sections.py` (the convention's nearest instance).
+---
+
 ## 4. The three layers (exact semantics)
 
 ### 4.1 Layer 1 — statistical resolution (per section, task-free)
@@ -890,10 +924,15 @@ falls back to section-wide figures throughout. Verbatim record in `owner_decisio
 **Contract.**
 
 - `SectionTypicalEvidence` gains one derived predicate:
-  `has_usable_narrowed -> has_narrowed and narrowed_typical_worker_seconds > 0`.
-  `has_narrowed` itself is unchanged — it remains §3.3's pure count predicate (and per
-  §4B, `has_narrowed` already implies the median is non-NULL, so `> 0` is the only new
-  condition).
+  `has_usable_narrowed -> has_narrowed and narrowed_typical_worker_seconds is not None
+  and narrowed_typical_worker_seconds > 0`.
+  `has_narrowed` itself is unchanged — it remains §3.3's pure count predicate.
+  *(Corrected at the plan-1 projection fold, 2026-08-22: the original text omitted the
+  `is not None` conjunct, reasoning that §4B's SQL guarantee makes the median non-NULL
+  wherever the floor is met. That guarantee holds for SQL-produced evidence, but the
+  dataclass permits `(count ≥ floor, median None)`, where `None > 0` raises `TypeError` —
+  the predicate must be total over every shape the dataclass permits, the same totality
+  standard §3B applies. The conjunct is behavior-neutral on all SQL-reachable shapes.)*
 - **§4.3's quantifier quantifies `has_usable_narrowed`, not `has_narrowed`:**
   `item_narrowed_uniform` requires the participating set non-empty AND every
   participating section `has_usable_narrowed`; otherwise `section_wide_uniform`.
@@ -1543,3 +1582,12 @@ criterion says so, and D22's reason is stronger than it reads.
   one edit. §6.2's header gains a pointer reconciling "all four" with its six-row table
   and §6A A5's seventh surface. No contract changes; §6A's additive rule is unaffected.
   Plan set exists: `master_plan.md` + `plans/plan_1..6.md`, six phases, strictly serial.
+- **Round 8 (2026-08-22) — plan-1 projection fold, two intention amendments.** The
+  phase-1 projection (AMENDMENTS_REQUIRED, 21 ledger rows, zero owner cards) routed one
+  intention gap and one coordinator-owned correction upstream: **§3C** — the parser
+  boundary raises `ValidationError` (repo convention: client-triggerable → 422), while
+  `__post_init__` keeps `ValueError`; the parser's input is the router's already-typed
+  dict, absent-key ≡ explicit-`None`. **§4C's predicate gains `is not None`** — the
+  dataclass permits `(count ≥ floor, median None)` and the original text would raise
+  `TypeError` there; behavior-neutral on SQL-reachable shapes. All other rows were plan-
+  or master-plan-scoped and folded there. No owner decision reopened.
