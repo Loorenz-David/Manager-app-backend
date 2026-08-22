@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: REVIEWING — 2026-08-22 (review r4 dispatched; first external review of the phase after four implementation rounds. Shipped default 21 failed / 2576 passed in 52.62 s; serial comparator 150.70 s)
+state: CHANGES_REQUESTED — 2026-08-22 (review r4, Opus 5: 1 blocking, 5 should-fix, 6 notes; graph promoted 4/4, 0 pending. Fix r5 dispatched; owner card 1 answered YES, graph maintenance dispatched separately)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -827,3 +827,21 @@ Rules 11 and 12 generalise past this project and are charter candidates.
 
 **Routing:** B1, S1, S2, S3, S4, S5 and — since the round is open anyway — N1 and N2 go to fix r5.
 N3 is owner card 1. N4 and N5 are carry-forward with no owner yet.
+
+### 2026-08-22 — owner card 1 answered: YES
+
+Review r4's card 1 asked whether a maintenance session may correct the three `human_confirmed`
+records phase 3 invalidated. **The owner answered yes**, accepting the recommendation. Authority is
+granted for **those three records only** and is quoted verbatim in
+`prompts/maintenance/2026-08-22_graph_repair_settled_records.md`, which carries the charter's
+default (agents never adjudicate review items) and the explicit override together, so the grant is
+legible to a session that has no conversation history.
+
+Two of the three need only anchor repair. The third — the `configured_by` edge's evidence summary,
+which still describes template reuse as gated on a **public-table count matching fixed constants**
+— is a wrong claim, not a wrong address, and summaries are immutable: it needs reject-and-re-record
+plus a **second pass** to return to `human_confirmed`. The prompt says so up front so the session
+does not discover it by failing.
+
+Dispatched independently of fix r5, and fix r5 is fenced out of `.archgraph/` entirely: the two
+sessions may run concurrently without contending for the graph.
