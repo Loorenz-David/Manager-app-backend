@@ -91,7 +91,22 @@ collection errors. The collection errors were all existing imports of the moved 
 fixed inside the phase perimeter by adding `_median = median` as a compatibility alias.
 The 22 failures included the published baseline set plus one unrelated enum failure and
 one additional intermittent working-section integration failure; the initial run is not
-the closing stamp. The exact final run after this repair is recorded below once complete.
+the closing stamp. The exact final run after this repair is recorded below.
+
+## 3A. Final L4 stamp
+
+```text
+PYTHONPATH=. pytest -m 'not e2e'
+```
+
+Working directory: `backend/app/`. Runner: six xdist workers from `app/pytest.ini`;
+Redis was reachable. Tree identity: code checkpoint `8ff6ecc`, with phase-perimeter
+status clean; `git status --porcelain` showed only the expected untracked
+`.archgraph/contexts/` session files. Result: **2608 passed, 21 failed, 2 warnings,
+0 collection errors**, collection 2629. Against the published 21-ID baseline, failure
+IDs added: **∅**; failure IDs removed: **∅**. The prior 22-failure/27-error run is
+superseded by this repaired stamp. This L4 result was taken before the documentation-only
+recording commit below; no application code changed afterward.
 
 ## 4. Architecture delta
 

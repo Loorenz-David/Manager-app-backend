@@ -560,3 +560,10 @@ phase 4's allowances would move silently (the exact drift L1 names).
   import sites unchanged while retaining one median implementation. Focused phase tests
   returned to 49 passed. The initial full-suite result is not the closing stamp; a clean
   re-run after this repair is required and will be recorded in the handoff.
+
+- **2026-08-22 · implementation round 1 L4 stamp · Codex.** On the repaired code
+  checkpoint, `PYTHONPATH=. pytest -m 'not e2e'` completed with 2608 passed, 21 failed,
+  2 warnings, and no collection errors. The failing-ID set is exactly the published
+  21-ID comparator: added IDs ∅ and removed IDs ∅. Tree identity is code checkpoint
+  `8ff6ecc` with no phase-perimeter changes after the compatibility repair; only the
+  expected untracked `.archgraph/contexts/` session files are present.

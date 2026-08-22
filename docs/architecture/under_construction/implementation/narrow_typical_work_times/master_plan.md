@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Pure domain, participating-set rule, frozen pre-refactor SQL snapshot, and 49 focused tests pass; full-suite stamp and mutation ledger are in the implementer handoff. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Pure domain, participating-set rule, frozen pre-refactor SQL snapshot, 49 focused tests pass; L4: 2608 passed / 21 baseline failures, no new or removed IDs. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
