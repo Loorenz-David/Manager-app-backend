@@ -5430,6 +5430,34 @@ nodes:
     confidence: 0.94
     createdAt: 2026-08-22T09:12:40.934Z
     updatedAt: 2026-08-22T09:54:23.207Z
+  - id: domain-item-economics-typical-filters
+    type: domain
+    name: Typical-time filtering and reconciliation
+    description: The pure domain boundary that canonicalizes typical-time population
+      specifications, resolves per-section evidence under explicit policy,
+      reconciles participating sections to one task-wide basis, and applies
+      consumer-specific terminal fallback. It owns no SQL, ORM queries,
+      persistence, or transport translation; callers provide typed evidence and
+      section membership. Its invariants are that unfiltered specs remain
+      section-wide, usable narrowed evidence is required for uniform item
+      narrowing, missing evidence is materialized as insufficient, and the two
+      terminal fractions remain distinct.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/typical_filters.py
+          symbol: TypicalFilterSpec
+          startLine: 1
+          endLine: 333
+          summary: The module defines the frozen filter spec, evidence predicates,
+            resolution policies, task reconciliation, business fallback, and
+            median using only domain values and a local Protocol.
+          inferenceReason: The implementation is a self-contained pure typical-time domain
+            boundary with explicit contracts for population identity, policy
+            divergence, uniform task basis, and terminal separation.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-22T16:55:41.605Z
+    updatedAt: 2026-08-22T16:55:41.605Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10569,3 +10597,20 @@ edges:
     confidence: 0.95
     createdAt: 2026-08-22T12:40:12.766Z
     updatedAt: 2026-08-22T13:26:50.261Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: contains
+    targetNodeId: domain-item-economics-typical-filters
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/typical_filters.py
+          startLine: 1
+          endLine: 333
+          summary: The pure typical-time rules are implemented inside the item-economics
+            domain package.
+          inferenceReason: The new module extends the existing Item Economics domain with
+            a separately named, independently tested typical-time
+            responsibility.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-22T16:55:41.605Z
+    updatedAt: 2026-08-22T16:55:41.605Z

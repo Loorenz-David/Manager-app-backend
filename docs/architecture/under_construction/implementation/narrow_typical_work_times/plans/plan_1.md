@@ -552,3 +552,11 @@ phase 4's allowances would move silently (the exact drift L1 names).
   spec; and missing section evidence is materialized as a zero-evidence row. The
   snapshot file has no trailing newline and is not to be regenerated. The one
   authoritative L4 stamp is recorded in the handoff after the checkpoint commit.
+
+- **2026-08-22 · implementation round 1 perimeter repair · Codex.** The first full-suite
+  attempt exposed existing imports of private `budget_division._median` in the price-
+  scenario query, causing collection errors after the planned move. Added the
+  compatibility alias `_median = median` in `budget_division.py`; this keeps all existing
+  import sites unchanged while retaining one median implementation. Focused phase tests
+  returned to 49 passed. The initial full-suite result is not the closing stamp; a clean
+  re-run after this repair is required and will be recorded in the handoff.
