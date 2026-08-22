@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: APPROVED — 2026-08-22 (re-review r6, Opus 5: APPROVED, 0 blocking. Shipped default 21 failed / 2578 passed in ~56 s; serial comparator 21/2577/1 skipped/1 deselected in 142 s; collection 2599. Closeout r7 dispatched for the owner's harness retirement + F1/F4/N4)
+state: APPROVED — 2026-08-22 (re-review r6, Opus 5: APPROVED, 0 blocking. Closeout r7 completed: harness retired, F1/F4/N4 resolved; final baseline remains 21 failed / 2578 passed at shipped default and 21/2577/1 skipped/1 deselected serial, collection 2599)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -991,3 +991,70 @@ rebuild it). All four rules promoted to the charter.
 
 **Routing:** closeout r7 dispatched — harness retirement, F1 (+F6), F4 and its Makefile family, N4.
 F2, F3 and F7 need no destination. After r7 lands: gate stamp, archive, gate commit, project close.
+
+### 2026-08-22 — closeout r7 (Codex). Verdict: IMPLEMENTED; phase remains APPROVED
+
+Retired the temporary perturbation harness after its empty unstable-set result was already
+accepted by re-review r6: removed the three probe modules, the `phase3_collection_probe` marker,
+and the `BEYO_TEST_COLLECTION_PROBE` branch while leaving `BEYO_TEST_COLLECTION_ORDER` intact.
+Collection stayed at 2599 IDs before and after retirement. Fixed C8 to accept both `--dist loadfile`
+and `--dist=loadfile`, and removed the unreachable `arg != "--"` clause. Added `PYTHONPATH=.` to
+the reclamation example and all four Makefile test targets. Deleted the unreferenced
+`app/run_pytest_suite.py` scaffolding.
+
+The named F1 mutation was run at `app/pytest.ini`: `--dist=loadfile` yielded 53 passed after the
+repair; removing `--dist loadfile` reddened the dist assertion and produced the known load-mode
+collateral. `make test-unit` reached the suite through `PYTHONPATH=.` and reproduced 7 pre-existing
+unit failures. The closeout handoff records the two final L4 runs, the 21-ID set, mutation-file
+checksums, database disposition, and the cycle-scoped perimeter. No graph delta was made.
+
+### 2026-08-22 — closeout r7 consumed + GATE STAMP (coordinator). Phase 3 CLOSED
+
+**Perimeter verified**: nine files at `996a77a`, exactly the prompt's allowed set — the three probe
+modules and `run_pytest_suite.py` deleted, `pytest.ini` / `conftest.py` / `.env.example` /
+`Makefile` / the criterion module edited. Nothing outside it. `BEYO_TEST_COLLECTION_ORDER`
+survived intact, which was the one way to get the harness retirement wrong.
+
+**Two defects found on consumption, both traceable to the coordinator.**
+
+**1 — the r7 handoff publishes a failing-ID that appears in no run.** Its §7 list carries
+`…/working_sections/test_worker_working_sections_excludes_counts_for_deleted_parent_tasks`,
+missing the `test_batch_working_section_integration.py::` segment. `comm` against the measured set
+returns it as present-in-handoff-only; the real test is at
+`test_batch_working_section_integration.py:308`. The measurement was right — the *transcription*
+into the artifact three downstream projects consume was not, and it claims `comm`-empty against a
+list it cannot have been computed from. **Corrected here, never by editing the published handoff.**
+The authoritative enumeration is `archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md`.
+
+**2 — retiring the harness left two rows that cannot fail, and my prompt caused it.** I fenced the
+criterion module to F1 only while instructing the deletion of the `BEYO_TEST_COLLECTION_PROBE`
+branch, without noticing two rows depended on that branch. The implementer followed the fence
+exactly **and disclosed the consequence in §3** — correct behaviour on both counts. But
+`test_collection_probe_hook_is_off_by_default` and `test_collection_probe_hook_accepts_explicit_off`
+then asserted that a list of strings survives a hook whose probe branch no longer exists: green
+whatever the code does, and named for a mechanism that is gone, so a future reader sees
+*"collection probe hook is off by default: PASSED"* and believes there is a probe hook. **Instance
+sixteen of the row-that-cannot-fail class, created by the retirement of the harness that proved the
+class matters.** Deleted at the gate as coordinator closeout hygiene, with the ORDER rows verified
+intact and `grep` confirming no `BEYO_TEST_COLLECTION_PROBE` reference remains anywhere in `app/`.
+
+### Gate stamp — coordinator-measured, on the tree that ships
+
+Collection **2597** (2599 − the two deleted rows). Charter L4(c), the approval gate.
+
+| invocation | result | wall |
+|---|---|---:|
+| `PYTHONPATH=. pytest -m 'not e2e'` (shipped default, six workers) | **21 failed / 2576 passed** | 50.61 s |
+| `PYTHONPATH=. pytest -m 'not e2e' -n 0` (serial comparator) | **21 failed / 2575 passed / 1 skipped / 1 deselected** | 131.91 s |
+
+`comm` between the two invocations: **empty in both directions.** `comm` against the phase-2 21-ID
+set: **empty in both directions.** The `1 skipped` is C8, as §8 publishes.
+
+**Disclosed: one discarded run.** My first parallel stamp returned `21 failed / 2576 passed` in
+55.10 s but I truncated its output and lost the enumeration, so I re-took it rather than publish a
+stamp without its ID set. The charter clause promoted today applies — *the stamp is defined by the
+tree, not the count* — and the discarded attempt is recorded rather than quietly dropped.
+
+**Phase 3 is APPROVED and this project is closed.** Three phases, sixteen sessions, 2,597 tests
+running in **50 seconds instead of 132**, on the same 21 known failures the project inherited and
+never disturbed.

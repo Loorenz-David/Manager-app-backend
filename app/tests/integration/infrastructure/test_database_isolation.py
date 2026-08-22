@@ -166,20 +166,6 @@ def test_collection_order_hook_is_off_by_default(monkeypatch: pytest.MonkeyPatch
     assert items == ["first", "second", "third"]
 
 
-def test_collection_probe_hook_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("BEYO_TEST_COLLECTION_PROBE", raising=False)
-    items = ["regular", "phase3-probe"]
-    pytest_collection_modifyitems(None, items)
-    assert items == ["regular", "phase3-probe"]
-
-
-def test_collection_probe_hook_accepts_explicit_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("BEYO_TEST_COLLECTION_PROBE", "off")
-    items = ["regular", "phase3-probe"]
-    pytest_collection_modifyitems(None, items)
-    assert items == ["regular", "phase3-probe"]
-
-
 def test_collection_order_hook_reverses_once_and_rejects_unknown_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

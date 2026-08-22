@@ -47,7 +47,7 @@ Newest first; superseded rows kept as provenance.
 
 | Phase | Scope | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 3 | Parallelism: install xdist, serial / `-n 2` / `-n 4` / higher matrix, conservative default, **new authoritative baseline re-enumerated under the new runner** | **IMPLEMENTED** | 2026-08-22 | Codex (r1, fix r2, fix r3) + Opus 5 (projection r0) + coordinator | **Four rounds, no review yet — review r4 is next.** Perturbation gate returned an **empty** unstable set, so the phase stayed one phase. `-n 6 --dist loadfile` is the shipped default under **OD-10** (owner, 2026-08-22, after OD-9's escape condition was met): 52.62 s against 150.70 s serial, same 21-ID set. Original gate note: see §7's perturbation gate. Does not begin its worker matrix until collection-perturbation sensitivity is characterised on a *serial* runner. Carries six items from phase 2's closeout table. `plans/plan_3.md` authored 2026-08-21; projection r0 returned AMENDMENTS_REQUIRED with **25 ledger rows** (2 of its 8 findings were defects in coordinator-authored documents); all routed, OD-8 and OD-9 answered, implement r1 compiled. |
+| 3 | Parallelism: install xdist, the worker matrix, **parallel by default (OD-10)**, and a new authoritative baseline re-enumerated under the new runner | **APPROVED** | 2026-08-22 | Codex (r1, fix r2, r3, r5, closeout r7) + Opus 5 (projection r0, review r4, re-review r6) + coordinator (gate stamp) | **Seven rounds, one external review round too few for most of them** — r4 was the first outside eye and found what four internal rounds had not: C2 row (c) could not fail, and the lock narrowing task 3 warns about *in writing* shipped green throughout. The perturbation gate returned an **empty** unstable set, so the phase stayed one phase. `-n 6 --dist loadfile` ships by owner decision **OD-10** after OD-9's escape condition was met: **50.61 s against 131.91 s**, same 21 IDs. Earned standing rules 10–13, of which three were promoted to the charter. Harness retired at closeout by owner decision. |
 | 2 | Order-independence and per-checkout isolation, still serial | **APPROVED** | 2026-08-21 | Codex (r1, fix r2, fix r4) + Opus 5 (projection r0, review r3) + Sonnet 5 (review r3 comparison) + coordinator (gate stamp) | **Five rounds.** Repaired the ~118-test order class across 12 files under OD-6's adopt-or-create contract; added the slot discriminator, the fail-closed slot resolver, endpoint confinement, both wedge shapes, Redis isolation, and the collection-order hook. **The projection gate paid for itself in one round** — four of seven criteria would have shipped as tests that pass whether the code is right or wrong, three of them coordinator-authored. Review r3 found two blocking defects nobody else had: an inert `BEYO_TEST_SLOT` and a sweep that dropped other checkouts' live databases on every process. Gate stamp taken by the coordinator because the round's own pair predated an eight-row change. |
 | 1 | Per-worker database isolation, proven serially | **APPROVED** | 2026-08-21 | Codex (r1, fix r2, fix r4) + Opus 5 (review r3) + coordinator | Four rounds. Established the seam (`settings.database_url`, re-read per test), the fail-closed guard, the migrated template, and bounded worker names. Converted dev-data coupling into **test-order** coupling for ~118 tests — discovered by review r3, deferred to phase 2 as OD-3. |
 
@@ -143,6 +143,9 @@ Run from `backend/app/`. `PYTHONPATH=.` is required.
 | collection size only | `PYTHONPATH=. pytest -m 'not e2e' --collect-only -q` |
 | isolation criterion module | `PYTHONPATH=. pytest -q tests/integration/infrastructure/test_database_isolation.py` |
 | one-time legacy reclamation (serial-only; do not combine with xdist) | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e' -n 0` |
+
+The copy-paste command in `app/.env.example` and each Makefile test target carries the required
+`PYTHONPATH=.` prefix; the worker targets already did so.
 
 Machine: **14 cores** (`hw.ncpu` = `hw.physicalcpu` = 14). Runner: pytest 8.3.5,
 `asyncio_mode = auto`, **two** registered third-party plugins — `pytest-asyncio-0.25.3` **and
@@ -250,6 +253,12 @@ the phase-3 resolution of the carried N4 time bomb.
 **any other value raises `pytest.UsageError`**, never silently treated as off. Shipped rather
 than session-local so both L4 runs are taken on the same tree and phase 3 can reuse it.
 
+Phase 3's temporary collection-perturbation harness inserted three database- and Redis-touching
+probe modules at prefix, middle, and suffix path positions. The measured unstable set was empty:
+all probe positions retained the published 21-ID failing set. The harness, its marker, and its
+selection branch were retired at closeout r7; plan §4 task 1 records the one-hour rebuild shape
+if a future phase needs the instrument again.
+
 ## 7. Gates
 
 ### Projection — instantiated, not retired
@@ -293,7 +302,7 @@ teardown has no `ConnectionError` guard. §6.4 asserts the opposite and is wrong
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | *not yet — fix r5, pending review* | **checkpoint `4b5719d`**, app tree identical to the measured implementation tree; report-only plan/handoff edits follow | **Precondition:** Redis reachable at `settings.redis_url`. **Shipped default:** 21 failed / 2578 passed (55.95 s; second run 55.41 s); **serial comparator:** 21 failed / 2577 passed / 1 skipped / 1 deselected (142.29 s); `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; both shipped-default runs and the serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
+| **3** | **2026-08-22 — APPROVED, project closed** | **`996a77a` + the coordinator's two-test deletion, gate-committed**; `git status --porcelain` empty at the stamp | **Precondition: Redis reachable at `settings.redis_url`.** **Shipped default** (`PYTHONPATH=. pytest -m 'not e2e'`, six workers): **21 failed / 2576 passed** in 50.61 s. **Serial comparator** (`-n 0`): **21 failed / 2575 passed / 1 skipped / 1 deselected** in 131.91 s — the `1 skipped` is C8. Collection **2597** in both. `pg_stat_activity` peak 25/100, carried from the r2 matrix, not re-measured | **the phase-2 21-ID set, unchanged**, enumerated in `archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md`; `comm`-empty in both directions between the two invocations **and** against the phase-2 set, coordinator-measured at the gate |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 
