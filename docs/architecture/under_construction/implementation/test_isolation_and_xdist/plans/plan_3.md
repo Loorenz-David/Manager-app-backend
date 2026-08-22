@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: IMPLEMENTED — 2026-08-22 (Codex; fix r3; shipped default 21 failed / 2575 passed, serial comparator 21 failed / 2575 passed / 1 skipped / 1 deselected)
+state: IMPLEMENTED — 2026-08-22 (Codex; fix r3; shipped default 21 failed / 2576 passed, serial comparator 21 failed / 2575 passed / 1 skipped / 1 deselected)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -725,6 +725,8 @@ reddened C8; the restored shipped default passed the criterion module.
 
 The shipped default publishes the phase-2 21-ID failure set with empty `comm` in both directions
 against the serial comparator. The closing evidence budget is exactly **3 L4 runs**: shipped
-default, second shipped-default scheduling run, and explicit `-n 0` serial comparator. The
+default (21 failed / 2576 passed in 52.62 s), second shipped-default scheduling run (21 failed /
+2576 passed in 53.26 s), and explicit `-n 0` serial comparator (21 failed / 2575 passed / 1 skipped
+/ 1 deselected in 150.70 s). The
 `pg_stat_activity` peak of 25/100 for six workers is carried from r2; no monitor re-measurement
 was taken in r3. No architecture item was promoted, rejected, edited, deprecated or removed.

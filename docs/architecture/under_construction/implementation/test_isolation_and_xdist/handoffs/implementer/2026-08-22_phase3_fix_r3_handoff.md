@@ -34,7 +34,8 @@ pending graph items remain pending and the three settled items remain `human_con
 Architecture Graph delta: one inferred `configuration` node and one `configured_by` relationship
 were added in a single batch at revision `2c3f0c58a6c45a66834f2377fb3bb7f8586b171e50c59d20e1348b17cebb0e61`.
 The pre-write graph was valid at revision `6144a01a…`, with 193 nodes, 290 edges, and two pending
-reviews; the delta leaves 194 nodes, 291 edges, and two pending reviews.
+reviews; the delta leaves 194 nodes, 291 edges, and four pending reviews. The two pre-existing
+pending items were left untouched; the two new inferred records await human review.
 
 ## C8 design and mutation evidence
 
@@ -67,14 +68,22 @@ unchanged.
 
 The r3 L4 count is **3**, exactly: (1) the shipped-default closing stamp, (2) a second shipped-
 default run varying scheduling, and (3) the explicit `-n 0` serial comparator. No additional L4
-run is authorized in this cycle. The tree for all three is the fix-r3 checkpoint, with asserted
-clean `git status --porcelain`; the checkpoint SHA is the commit handed to the coordinator.
+run is authorized in this cycle. All three ran on clean implementation checkpoint
+`b96802fdb7c5505ca7d587566ad0d680d0848616`. The final handoff is its documentation-only successor
+checkpoint and differs from that measured tree only by reconciliation of the captured counts and
+times; the executable/configuration files are byte-identical.
 
-The shipped default result is **21 failed / 2575 passed**. The serial comparator result is
+The shipped default result is **21 failed / 2576 passed**. The serial comparator result is
 **21 failed / 2575 passed / 1 skipped / 1 deselected**. The failure-ID set is the phase-2 21-ID
 set below; `comm` is empty in both directions for each of the three runs. The six-worker
 `pg_stat_activity` peak is **25 of max_connections 100**, carried from r2 because the monitor was
 not re-wired for this fix cycle.
+
+| row | command | wall time | result | tree identity |
+|---|---|---:|---|---|
+| 1 | `PYTHONPATH=. pytest -m 'not e2e'` | 52.62 s | 21 failed / 2576 passed; six workers; 21-ID set; `comm` empty both directions | `b96802fdb7c5505ca7d587566ad0d680d0848616`, clean |
+| 2 | `PYTHONPATH=. pytest -m 'not e2e'` | 53.26 s | 21 failed / 2576 passed; six workers; same 21-ID set; `comm` empty both directions | `b96802fdb7c5505ca7d587566ad0d680d0848616`, clean |
+| 3 | `PYTHONPATH=. pytest -m 'not e2e' -n 0` | 150.70 s | 21 failed / 2575 passed / 1 skipped / 1 deselected; same 21-ID set; `comm` empty both directions | `b96802fdb7c5505ca7d587566ad0d680d0848616`, clean |
 
 The complete comparator failure-ID set is:
 
