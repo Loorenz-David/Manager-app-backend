@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: IMPLEMENTED — 2026-08-22 (fix r4: 2 should-fix + 2 notes closed; docs-only; graph queue already closed)
+state: REVIEWING — 2026-08-22 (fix r4 consumed: S1/S2/N1/N2 closed; re-review r5 dispatched — last gate; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -677,3 +677,43 @@ the queue as adjudicated and closed; no graph work remains in this cycle.
 
 **Evidence.** Pre-edit L1 guard: `PYTHONPATH=. pytest tests/unit/docs/` from `app/` →
 59 passed. The post-edit guard and its final tree identity are recorded in the fix handoff.
+
+### 2026-08-22 — coordinator, consumption of fix r4 → REVIEWING (re-review r5 dispatched)
+
+Consumed at `4e79e9d` (+ `8bc8984`, the handoff's own commit). **All four corrections
+implemented; rule 14 correctly declared nothing omitted.** Re-review prompt
+`prompts/reviewer/2026-08-22_phase4_rereview_r5.md`, delta-scoped — the phase's last gate.
+
+**Verified against the tree.** Perimeter is exactly three files; `git diff c543640 HEAD
+--name-only -- app/ .archgraph/` is **empty**, and `archgraph_status` still reads
+`7241b831…` / 194 / 296 / 0 / 0 / 0 — byte-identical to the post-adjudication reading, so
+the "tool-recorded state: none" claim is proven rather than accepted. S1's sentence is
+gone with nothing else in mode 2 altered; S2 carries both named intermittent tests, the
+unrecoverable third and the repeat-and-ID-diff rule; N1's Redis diagnostic and N2's
+"smoothing baseline" are in. The fix **correctly declined to claim** the isolation work
+retired the flakiness — the clause required that to be measured or left as §6 states it.
+
+**The digest reproduces cryptographically, and that is new here.** The handoff declares
+dirty-tree digest `db0045f66f63d5…`; `git diff --binary c543640 4e79e9d` over its three
+tracked files hashes to **exactly** that. The content the L1 run measured is byte-identical
+to what was committed. Last round's evidence row named a SHA and described its dirt in
+prose; the note asking for a digest was written into this round's prompt and answered.
+**A note that changes the next round's artifact is worth more than a finding that scores
+the last one.**
+
+**Coordinator class sweep beyond the finding.** S1 named one sentence, and this project's
+signature failure is a correction applied at one site while its class survives elsewhere.
+Swept: `grep -niE "deletion|deleted|delete"` over the whole document returns four hits,
+all benign — "non-deleted steps" in the cost sentence, the quoted commit subject in the
+tree-identity bullet, and two test IDs inside the published 21. **No other site names
+record deletion as a client-visible event.** S1 is closed as a class, not as a line.
+
+**Evidence:** 0 L4, 0 L1 — nothing was run this round. The fix's own L1 stamp covers
+content proven byte-identical to the checkpoint, and the commits since touch no file the
+docs guard reads, so re-running it would be over-evidence. Verification was spent on the
+digest reproduction and the class sweep, both of which produced facts no prior round held.
+
+**Why a re-review rather than approval here.** Review r3's verdict was
+`CHANGES_REQUESTED`, and only a reviewer moves a phase to `APPROVED` — the coordinator
+verifying its own fold is exactly the loop the gate exists to break. The delta is four
+edits in one file, so the prompt is scoped hard and marks the settled ground.
