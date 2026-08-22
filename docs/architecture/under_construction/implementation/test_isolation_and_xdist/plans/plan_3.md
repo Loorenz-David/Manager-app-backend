@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: REVIEWING — 2026-08-22 (re-review r6 dispatched, delta-scoped; last gate before approval. Shipped default 21 failed / 2578 passed; serial comparator 21/2577/1 skipped/1 deselected)
+state: APPROVED — 2026-08-22 (re-review r6, Opus 5: APPROVED, 0 blocking. Shipped default 21 failed / 2578 passed in ~56 s; serial comparator 21/2577/1 skipped/1 deselected in 142 s; collection 2599. Closeout r7 dispatched for the owner's harness retirement + F1/F4/N4)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -320,8 +320,20 @@ observer; one could not fail; one carried item had no row at all.**
   different errors:* (a) **template absent**, N concurrent starts → all obtain a database, no
   `DuplicateDatabaseError`; (b) **template stale**, N concurrent starts → the rebuild happens once
   and no worker's inspection connection or in-flight `alembic upgrade` is killed; (c) **template
-  current**, a held inspection connection overlapping a copy → no
-  `source database … is being accessed by other users`.
+  current**, the copy is reached → **this process holds a granted advisory lock keyed on the
+  template at the moment `_create_database_from_template` is called.**
+  *(Amended 2026-08-22 after review r6, finding F5 — the row's original text read "a held
+  inspection connection overlapping a copy → no `source database … is being accessed by other
+  users`", and **that observer is not implementable**: `pg_advisory_lock` is cooperative between
+  our own processes and has no effect on an external session holding the template open, so
+  `CREATE DATABASE … TEMPLATE` refuses in the correct configuration too. The shipped row holds a
+  template connection as a **detector** — releasing it only once the probe's own lock is observed
+  in `pg_locks` — and so asserts task 3's actual invariant, that the serialised region covers the
+  copy. **B1 was created by exactly this gap**, a row whose text named an observer the code did not
+  build; leaving the text unamended would re-arm it for the next reader. Known limit, review r6 F3:
+  the row observes lock **presence**, not lock **scope** — narrowing the key from the template name
+  to the worker name leaves (c) green while destroying mutual exclusion, and C2 catches that
+  through rows (a) and (b) instead.)*
   *Observer:* in-process `DatabaseIsolation` probes under `asyncio.gather`, **serially** — this
   does not require the plugin.
   **Named mutation, site named:** remove task 3's serialisation around `_ensure_template` ⇒
@@ -928,3 +940,54 @@ narrowing plan task 3 warns about in writing — now reddens row (c)**, which wa
 **Routing:** delta-scoped re-review, not a sixth fix round. B1 is met, S1–S5 and N1–N2 are met, and
 what remains is judgment about an instrument — which is what a re-review is for. The three items
 above go to it as named probes.
+
+### 2026-08-22 — re-review r6 consumed (coordinator). Verdict: APPROVED — phase 3 closes
+
+Verified independently: the perimeter is `1/1` on `app/.env.example` and `85/8` on the criterion
+module — **exactly** fix r5's declared code perimeter, nothing outside it. F1 confirmed by reading
+(`:120-123` asserts the adjacent pair `--dist` `loadfile` only), F6 confirmed (`:113`'s
+`arg != "--"` is unreachable), F4 confirmed (`.env.example:12` lacks `PYTHONPATH=.`; the four
+Makefile targets share the gap while `worker:` three lines below does not), and `deploy.yml`
+carries no pytest invocation, so §10's claim that there is no CI surface to re-point holds.
+
+**The round earned its verdict.** L4 count 0 against a budget of 0, twelve L1/L2 rows, green sides
+cited from a checksum-matched tree rather than re-run, and three mutation shapes nobody had tried:
+`-n0` / `--numprocesses=0` completing S1's spelling enumeration across two sessions, `--dist
+loadfile` removed entirely (which surfaced **measured** cross-worker template corruption under
+`load` mode, converting OD-10's assertion that `loadfile` is load-bearing into evidence), and
+**M-E**, the lock-key narrowing that leaves row (c) green — the honest limit of B1's new instrument,
+found by the reviewer against its own approval.
+
+**B1 is closed on the strongest available evidence.** M5 — the call-site narrowing plan task 3
+warns about in writing, which shipped green through four rounds — now reddens row (c). M4 reddens
+all three rows with three distinct errors, satisfying C2's *"each row red with its own error"*
+exactly. Both of my instrument doubts were answered by measurement rather than argument: the shared
+connection does not halve the row's power (under both mutations the observer returns false for
+*both* probes, so both copies fail), and the `asyncio.gather` double-close race is structurally
+unreachable (the patched copy runs inside the lock under test, so the two sequences cannot
+interleave; under M4/M5 `close()` is never called at all).
+
+**F5 folded before archive**, as the reviewer asked: §5's C2 row (c) now states the contract that
+shipped — *a granted advisory lock keyed on the template, held at the copy call* — with the reason
+the original observer is unimplementable, and F3's limit recorded beside it. **B1 was born from a
+row whose text named an observer the code did not build; leaving that text in the archived plan
+would have re-armed it for whoever reads this project next.**
+
+**Lesson 5 is aimed at me and is correct.** My prompt asserted `.env.example` matched §6.1
+*"character for character"* without diffing it; it differs by the one prefix that makes the command
+fail, and the reviewer found it only because it re-derived a convenience claim I had supplied. A
+prompt's assertions become the round's evidence unless someone checks them — the same failure that
+put a dropped clause into the graph summary earlier today.
+
+**Folded upstream, with the owner's approval today: charter rules 12, 13 and 14**, plus the missing
+half of the closing-stamp clause (*the stamp is defined by the tree, not the count; re-taking an
+invalidated stamp is not over-budget*), which had been proposed since 2026-08-21. Rule 13 carries
+r6's lesson 1 as its second clause — *when a repair converts a literal to a contract, it converts
+every literal in that assertion* — which is F1 exactly.
+
+**Owner decisions, 2026-08-22:** the perturbation harness is **retired** at closeout (its finding —
+an empty unstable set — is permanent; the instrument is not, and plan §4 task 1 documents how to
+rebuild it). All four rules promoted to the charter.
+
+**Routing:** closeout r7 dispatched — harness retirement, F1 (+F6), F4 and its Makefile family, N4.
+F2, F3 and F7 need no destination. After r7 lands: gate stamp, archive, gate commit, project close.
