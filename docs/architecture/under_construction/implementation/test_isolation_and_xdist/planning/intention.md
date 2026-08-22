@@ -460,7 +460,51 @@ rejected branches were stopping (parallelism slips a phase for a repair of unkno
 repairing in-phase (the phase's size becomes unknown, which is what phase boundaries exist to
 prevent).
 
+### OD-10 — parallel becomes the shipped default, at six workers (2026-08-22)
+
+**Owner: make it the default. Coordinator recommended waiting; the owner reaffirmed, and the
+reason given is the stronger one.** *"That is the whole point of this implementation — to have
+what was being tested faster, and what will be built part of that speed."*
+
+**Supersedes OD-9's default clause only.** OD-9's condition — *the default stays serial unless the
+parallel failing-ID set matches the serial comparator exactly* — was satisfied on 2026-08-22 by
+fix r2: after the `app_update_presentations` fixture repair, `-n 2`, `-n 4` and `-n 6` each
+returned the phase-2 21-ID set with `comm` empty in both directions. OD-9's reasoning about
+asterisks is not overturned; its condition was met, and this records the answer.
+
+**The default is `-n 6 --dist loadfile`, not `-n auto`.** Three reasons, all measured or
+structural, and the coordinator's call rather than the owner's:
+
+1. **`-n auto` is 14 workers here, and nothing has ever been measured above 6.** Shipping an
+   unmeasured configuration as the default is the failure mode this project exists to end.
+2. **The wall-time curve is already flat.** 2 → 4 workers saved 19.2 s; 4 → 6 saved 3.7 s. The
+   floor under `--dist loadfile` is the slowest single file, and more workers cannot go below it.
+3. **The advisory lock makes startup cost linear in worker count.** Every worker serialises
+   through `_template_operation_lock` to copy the template, so worker 14 waits behind thirteen
+   copies. Past some count the startup queue eats the parallel win — that count has not been
+   measured either.
+
+`--dist loadfile` is part of the default, not an incidental flag: every row of the phase-3 matrix
+was measured with it, and the per-test `load` mode has never been run against this suite.
+
+**Raising the count later requires a measurement, not an edit** — master plan §6.3a's rule stands:
+any worker-count decision states the connection budget it checked and records the observed
+`pg_stat_activity` peak. At six workers that peak is 25 of 100.
+
+**The serial run does not disappear; it becomes the comparator.** `PYTHONPATH=. pytest -m 'not e2e'`
+stays the published serial reference so a future divergence between the two modes is detectable at
+all — a parallel-only baseline with nothing to compare against is how a scheduling bug becomes
+invisible.
+
+**Consequence, charter rule 10 (operational reachability):** parallel execution is now
+config-gated behaviour reached by the shipped default, so phase 3 owes a criterion proving the
+default configuration actually runs in parallel. A default that silently degrades to one worker
+would leave every downstream number describing a mode nobody runs.
+
 ### OD-9 — the shipped default stays serial until parallel and serial agree (2026-08-21)
+
+**Superseded in its default clause by OD-10 (2026-08-22); its condition was met, not overruled.**
+
 
 **Owner: serial default until the differences are repaired, recommendation accepted.** If the
 failing-ID set under parallel execution differs from serial and the repair is outside phase 3's

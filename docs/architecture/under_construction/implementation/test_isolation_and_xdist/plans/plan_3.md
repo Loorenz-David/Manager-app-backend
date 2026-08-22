@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: IMPLEMENTED — 2026-08-22 (Codex; 21 failed / 2575 passed / 1 deselected on the serial closing run; `-n 2`, `-n 4`, and `-n 6` each matched the same 21-ID set)
+state: CHANGES_REQUESTED — 2026-08-22 (coordinator; fix r2 verified closed, then OD-10 landed: parallel becomes the shipped default. Task 10 + C8 dispatched as fix r3)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -252,6 +252,46 @@ diagram**. These are deliverables 8, 9 and the closing request of §1 — not op
 tracker row: master plan **§8 replaces its phase-3 row** with the new baseline, **§6.1's command
 table** changes meaning if a default `-n` ever lands (per OD-9 it will not, this phase), and
 **§6.3a** gains the measured peak. The master plan §3 tracker row stays the coordinator's.
+
+## 4A. Task 10 — ship the parallel default (added 2026-08-22 under OD-10)
+
+Added after fix r2, because OD-9's escape condition was met and the owner answered it. Numbering
+of tasks 1–9 and criteria C1–C7 is untouched; this section and C8 are additive.
+
+**`app/pytest.ini` carries `-n 6 --dist loadfile` in `addopts`.** Both parts, for the reasons
+OD-10 records: six is the highest count ever measured here and the wall-time curve is already
+flat above four, and `loadfile` is the only distribution mode this suite has ever run under.
+`-n auto` is 14 workers on this machine and is explicitly not the answer.
+
+The serial invocation stays published as the comparator, not deleted — master plan §6.1's command
+table gains it under that name, and §6.3a records that the shipped default sits at a
+`pg_stat_activity` peak of 25 against `max_connections = 100`.
+
+**The baseline this phase publishes is now the parallel one**, with serial retained beside it.
+§8's phase-3 row states both, each with the tree it was measured on.
+
+## 4B. Criterion C8 — the default configuration actually runs in parallel
+
+**Charter standing rule 10, operational reachability.** Parallel execution is now config-gated
+behaviour reached by the shipped default. A default that silently degrades to a single worker —
+a typo in `addopts`, a plugin that fails to load, a future `-p no:xdist` inherited from somewhere
+— would leave every number this phase published describing a mode nobody runs, and every test
+would still pass while it happened.
+
+**The defect it catches:** the shipped configuration stops distributing work, silently.
+
+**The observer:** the same `PYTEST_XDIST_WORKER` surface the phase already resolves worker names
+from. A test that reads it, run under the shipped default with no command-line override, asserts
+it is present and names a `gw<n>` worker — the assertion is about *the configuration*, so it must
+not be satisfiable by a hand-passed `-n`.
+
+**Named mutation, with its site:** remove `-n 6` from `addopts` in `app/pytest.ini` (the
+configuration, not a call site) and run the criterion module with no `-n` on the command line.
+The row must redden. **Both sides computed:** under the shipped default it is green; with the
+`addopts` entry removed it is red.
+
+This row is the one criterion in the phase whose subject is a config file rather than a function,
+which is exactly why rule 10 exists.
 
 ## 5. Acceptance criteria
 
