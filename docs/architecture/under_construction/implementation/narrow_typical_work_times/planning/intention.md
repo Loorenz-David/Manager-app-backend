@@ -1,7 +1,7 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: RESOLVED (round 6, 2026-08-22) — **0 owner cards open. D1–D25 settled**
+status: RESOLVED (round 7, 2026-08-22) — **0 owner cards open. D1–D25 settled**
         (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
         known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
         satisfied 2026-08-22 — every live-clock phase touching the shared files is
@@ -25,8 +25,8 @@ shaped_from: owner conversation of 2026-08-19/20 (no raw_intention.md; three
              architecture projection passes, each owner-corrected, preceded this
              document — the corrections are folded, not appended)
 date: 2026-08-20 (rounds 1–4) · 2026-08-22 (round 5, mechanism-inventory gate; round 6,
-      D25 fold)
-round: 6
+      D25 fold; round 7, planner fold)
+round: 7
 ```
 
 ---
@@ -301,7 +301,9 @@ across all eight `domain/item_economics/` files" (8 `.py` files, 0 hits).
   `result: ItemCostResult | None` (`get_task_budget_status.py:51`), added by the
   live-clock pipeline, and `item_id` is at `:50`, not `:47`. Consumed on the wire
   (`get_task_production_time.py:117`). §6.2 row 1's "no payload change" claim now
-  applies to a **13-field** dataclass with two construction helpers. → **§6A**.
+  applies to a **14-field** dataclass with two construction helpers (corrected from "13"
+  at the planner fold, 2026-08-22 — re-counted at source, `get_task_budget_status.py:38-51`;
+  the planner caught the gate's own count). → **§6A**.
 - **S-2 (F-A). The published `item_id` and the loaded primary `Item` can be different
   items.** On the evaluated path `item_id = evaluation.item_id` (`:198`), and
   `item_binding == "mismatched"` marks exactly the case where it differs from
@@ -987,7 +989,7 @@ predicate is already domain vocabulary — `EXCLUDED_STEP_STATES`):
 `divide_production_budget`'s internal `allocated_groups` predicate resolve to this
 one implementation (F-C). T7 asserts the three services agree on a mixed fixture.
 
-### 6.2 Per consumer (all four; no consumer issues more queries than today)
+### 6.2 Per consumer (all four; no consumer issues more queries than today) (**⚠ the table below is six rows, and §6A A5 adds the worker face as a seventh surface — "all four" counts the consumers, not the table (§2B count check)**)
 
 | Consumer | Spec entry | Integration |
 |---|---|---|
@@ -1032,7 +1034,8 @@ handoff (§11.3).
 field's name, type, order or value changes; `_empty_status`'s and
 `_build_evaluated_status`'s existing outputs are untouched; the budget-status serializer
 is untouched; `golden_budget_status.json` is unchanged. `TaskBudgetStatus` today carries
-**13** fields including `result: ItemCostResult | None` (§2B S-1) — the "carries only
+**14** fields including `result: ItemCostResult | None` (§2B S-1; "13" corrected to the
+measured 14 at the planner fold, 2026-08-22) — the "carries only
 `item_id`" grounding in F-A is stale and is not a basis for reasoning about the change.
 
 **A2 — carry the derived spec, not the `Item`.** The new field is
@@ -1532,3 +1535,11 @@ criterion says so, and D22's reason is stronger than it reads.
   pointers). Inline pointers added to §3.4, §4.3, §4B and §3B B2. The gate's three
   unilateral resolutions (§4B, §6B, §4A K1) were relayed to the owner for ratification
   at this fold. Ledger empty; status RESOLVED; next: **implementation-planner**.
+- **Round 7 (2026-08-22) — planner fold, two count corrections.** The
+  implementation-planner routed two documentation defects upstream (home-artifact rule;
+  it did not patch them): §6A A1 and §2B S-1 said `TaskBudgetStatus` carries **13**
+  fields — re-counted at source by planner and coordinator independently, it carries
+  **14** (the fourteenth is `result: ItemCostResult | None`); both sites corrected in
+  one edit. §6.2's header gains a pointer reconciling "all four" with its six-row table
+  and §6A A5's seventh surface. No contract changes; §6A's additive rule is unaffected.
+  Plan set exists: `master_plan.md` + `plans/plan_1..6.md`, six phases, strictly serial.
