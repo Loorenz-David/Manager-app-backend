@@ -1,10 +1,11 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: NOT_STARTED
+state: PROMPT_READY — 2026-08-22 (implement r1 compiled; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
-depends_on: plan 3 APPROVED (the handoff documents shipped behaviour, including D9)
+depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
+            gate, SATISFIED 2026-08-22 (merge `0aae85e`, master §6's first block)
 ```
 
 ## 1. Goal
@@ -19,8 +20,11 @@ reference from the new document only. No graph review adjudication (human-owned)
 
 ## 2. Read first
 
-1. `master_plan.md` §7 (the obligations table — the task list), §5, §6 (graph tooling
-   findings pointer).
+1. `master_plan.md` **§6's first block — "⛔ THE GATE IS SATISFIED — 2026-08-22" — before
+   any other baseline sentence in this repository**; then §7 (the obligations table — the
+   task list, **all seven rows**), §5, §6's remainder (graph tooling findings pointer).
+   The runner changed on 2026-08-22 and **nothing in the invocation announces it**; every
+   baseline further down §6, and the one this plan shipped with in §6A, is superseded.
 2. Intention §5.4, §6A C (the per-event client rules — carried **verbatim in
    substance**, three decrease modes), §2.5A (the corrected consumer list ships, not
    the list of four), §3.4 (cost answer), §1A HC-3A / §9 T1 (the determinism answer),
@@ -68,7 +72,17 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
 - **C3** — obligation 3: the 2026-08-18 "Live time" correction (client ticking
   superseded; smoothing from time-of-receipt legitimate).
 - **C4** — obligation 4: all four open questions answered, each citing its intention
-  section (§3.4 cost; §4.1 all-fields; §2.5A the **eight-row** consumer list; HC-3/T1).
+  section (**§2.3A feasibility *and* §3.4A cost — both halves, both cited**; §4.1
+  all-fields; §2.5A the **eight-row** consumer list; HC-3/T1).
+  **Amended 2026-08-22 (coordinator, pre-prompt reconciliation).** This row previously
+  cited `§3.4` alone for question 1, following master §7's obligation-4 wording
+  ("feasibility/cost §3.4"), while the intention's own §5.4 — the semantic authority —
+  cites `§2.3` for the same question. Both are half-right: the question has two halves
+  and a section each (`§2.3`/`§2.3A` the precedent that makes it feasible, `§3.4`/`§3.4A`
+  the derived cost contract). Under the previous text a handoff citing only the cost
+  section satisfied the criterion while leaving the frontend's feasibility half
+  uncited, and a reviewer checking against §5.4 would have raised a finding on a
+  document that met the criterion as written. Cite both.
 - **C5** — obligation 5: the three decrease modes with the per-event client rules of
   §6A C in full (≤ 1 s rounding; disowning drops — record deletion NOT named as a
   cause; D8 settlement window dip-and-recover); snap down, never clamp; no `as_of`
@@ -126,7 +140,50 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   a single test reddening — verified at source. The internal
   `docs/domains/item_economics/` half of the same correction is **phase 3's**, not this
   phase's (plan 3 §4 task 3).
-- **C7** — `pytest tests/unit/docs/` green before and after; suite baseline unchanged.
+- **C7** — `PYTHONPATH=. pytest tests/unit/docs/` green before and after, and **no file
+  under `app/` changed by this phase** (`git diff --name-only` over the session's
+  perimeter, which is the honest form of "suite baseline unchanged" for a phase that
+  runs no full suite — see C9).
+  **Named tripwire, derived at source 2026-08-22, not assumed:**
+  `tests/unit/docs/test_item_economics_handoff_accuracy.py::test_retired_inline_refusal_identity_is_absent_from_live_sources`
+  walks **every `*.md` under `docs/handoff/`** (`_HANDOFFS.rglob`, that file's line 224),
+  so the new closeout document is an input to the suite the moment it is written. It
+  reddens if the document contains the retired identity token
+  `ITEM_COST_INLINE_PRICE` + `_ON_PRICED_ITEM` — do not spell that token in the handoff,
+  in any status table, quotation or appendix. Nothing else in the suite reads `docs/`:
+  four test files mention "docs" and the other two
+  (`test_calculator.py:607`, `test_phase8b_inline_task_prices.py:7`) are *docstring*
+  mentions, not file reads — grep-verified, which is what makes C9's zero-L4 budget a
+  derivation rather than a hope.
+
+- **C9 — obligation 7: the published approval baseline, stated with its runner.**
+  **Added 2026-08-22 (coordinator, pre-prompt reconciliation) — the obligation existed in
+  master §7 from 2026-08-20 and had no criterion in this plan.** C1–C6 cover obligations
+  1–6 and C7 covers the guard, so a phase-4 handoff could satisfy every row and still
+  omit the one output a successor pipeline is waiting on. This is the obligation phase 4
+  was **gated four weeks** to be able to discharge correctly, so it gets a row.
+
+  The closeout publishes, as a block, with the count explicitly subordinate:
+  - **the enumerated failing-ID set — all 21 IDs written out**, not a count and not a
+    reference to another project's folder (a successor cannot diff against a pointer);
+  - **the runner that produces it**: six xdist workers, `--dist loadfile`, from
+    `app/pytest.ini`'s `addopts` — a bare `PYTHONPATH=. pytest -m 'not e2e'` is now a
+    *parallel* invocation and the number means nothing without that sentence;
+  - **the services that must be reachable**: Redis at `settings.redis_url`, without
+    which the same tree measures 23 failed / 2 errors, not 21;
+  - **the database identity**: each pytest process builds its own database from the
+    `beyo_test_main_template` template and drops it at session end — so unlike phases 1–3
+    this baseline is *not* a development-database measurement;
+  - **the tree identity** it is measured at, asserted clean;
+  - the note that **the 21 is a strict subset of the 26** phases 1–3 published — five
+    removed, zero added — so a successor holding an old citation can reconcile the two
+    rather than reading a regression into the difference.
+
+  Source of the enumeration: `test_isolation_and_xdist`'s
+  `archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md` (21 IDs) and master §6's block
+  here. The subset relation was **reproduced by document arithmetic at fold time**
+  (`comm` over the two enumerations: ∅ added, and the five removed are exactly the five
+  master §6 names) — cite that, do not re-derive it by running anything.
 
 ## 6. Notes
 
@@ -152,10 +209,74 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   mutation exists that they alone catch, established structurally, not by exhaustion. Any
   future reader tempted to lean on them should read plan 2 §7's r5 entry first.
 - **The published approval baseline** (master plan §7, closeout obligation 7) is the
-  reference point `narrow_typical_work_times` D23 builds on: phase 2 approved at `efd6b99`,
-  suite 26 / 2479 / 1, failure-ID set unchanged from master §6. The closeout handoff states
+  reference point `narrow_typical_work_times` D23 builds on. The closeout handoff states
   the tree **and** the ID set, never a bare count.
+  **⛔ SUPERSEDED 2026-08-22 — the runner changed underneath this plan.** This bullet
+  read: *"phase 2 approved at `efd6b99`, suite 26 / 2479 / 1, failure-ID set unchanged
+  from master §6."* Kept above as provenance of what phase 4 was originally told to
+  publish; **do not publish it.** That figure is a *serial*-runner measurement against
+  the **development** database, and it is the number D23 must **not** inherit — which is
+  precisely why the owner gated this phase behind the isolation work rather than letting
+  it close in August. The live baseline is master §6's first block: **21 failed /
+  2576 passed**, collection 2597, six workers and `--dist loadfile`, Redis reachable,
+  per-process disposable databases. **C9 (added the same day) is the criterion; §6 is the
+  authority; this bullet is history.** A closeout handoff that publishes `26 / 2479 / 1`
+  satisfies the sentence this plan shipped with and hands the successor pipeline a
+  baseline no machine can reproduce.
 
 ## 7. Review log
 
-(empty — append-only)
+(append-only)
+
+### 2026-08-22 — coordinator, pre-prompt reconciliation (no session dispatched yet)
+
+Gate re-checked and satisfied on all four conditions (state `NOT_STARTED`; master §6's
+gate block present; `git status --porcelain` empty at `a2a60f5`; graph 0 pending /
+0 diagnostics). Then the orientation's three carried items were reconciled against the
+tree rather than believed, and **two of the four findings are in this plan file itself**.
+
+- **F1 (blocking, would have shipped a wrong number) — §6A's baseline bullet was
+  superseded and still read as instruction.** It named phase 2's `efd6b99`, 26 / 2479 / 1
+  as the reference point D23 consumes. That is the serial runner against the development
+  database. Amended above; **C9 added** as the criterion.
+- **F2 (blocking) — closeout obligation 7 had no acceptance criterion.** C1–C6 map to
+  obligations 1–6, C7 guards the docs tripwire, C8 carries OD-10; the baseline
+  publication — the reason this phase was gated — had no row, so a handoff omitting it
+  passed every criterion. **C9 added**, enumerating what "stated with its runner" means
+  (21 IDs written out, six workers + `--dist loadfile`, Redis, per-process database, tree
+  identity, and the subset relation to the 26).
+- **F3 (should-fix) — C4 and the intention's §5.4 cited different sections for the same
+  frontend question.** §5.4 says §2.3, master §7 and C4 said §3.4; the question has two
+  halves with a section each. C4 amended to require both.
+- **F4 (note, folded into C7) — the new document is an input to the suite.**
+  `test_item_economics_handoff_accuracy.py` rglobs every `*.md` under `docs/handoff/`, so
+  the retired-identity tripwire fires on the closeout handoff's own text. Derived at
+  source; the other two "docs"-mentioning test files are docstring mentions, which is what
+  makes the zero-L4 budget a derivation.
+
+**Carried item resolved, not assumed.** The orientation flagged that "3 pending
+`ai_inferred` graph items" appear in phase 2's closeout while the graph reports 0 pending,
+and said to confirm what resolved them. They were promoted in the owner's 13-item
+adjudication of 2026-08-21 (review record
+`.archgraph/reviews/2026-08-21T08-50-39-304Z--eed27f.yml`, commit `3b14447`), which master
+§6 already records. Nothing vanished silently. The graph has moved since — `fbe0f7c3…` /
+190 nodes / 288 edges → `cec60a24…` / **194 / 291** — and all four new nodes belong to the
+`test_isolation_and_xdist` project (`infrastructure-test-database-isolation`,
+`test-database-isolation-contract`, `infrastructure-template-copy-contention-lock`,
+`configuration-shipped-pytest-parallel-default`), each carrying its own review record.
+Master §6's graph line is stale in its revision and counts and is corrected there.
+
+**Obligations 1–6 verified still owed, at source, not from the tracker.** The 2026-08-19
+handoff's §4 still carries the unfulfilled promise (lines 144–145) and its §2/§3 still
+stand; the 2026-08-18 "Live time" section still instructs client ticking (lines 247–260);
+the operational handoff's `infeasible` row is still at line 513 exactly as C8 describes;
+all five projection nodes exist with the descriptions §8 predicts, including the
+budget-allocations node's HC-5 invariant that must be kept rather than restated. No
+obligation was discharged by another session or made moot. The one document published to
+the frontend since (`…production_budget_cap_20260820.md`, stream 1) belongs to the cap
+stream and touches none of them.
+
+Evidence spent: zero pytest runs. The subset relation published by C9 was reproduced by
+`comm` over two enumerated ID sets, and `git diff 0aae85e HEAD -- app/` is empty, so the
+21 / 2576 stamp's tree is `app/`-identical to HEAD and is citable rather than
+re-measurable.
