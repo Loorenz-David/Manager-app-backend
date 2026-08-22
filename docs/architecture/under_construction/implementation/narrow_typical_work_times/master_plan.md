@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Fix round 3 closed F1–F7: reconciliation task-scope and full-tuple coverage, asymmetric resolution row, parser boundary, committed C4(c)/C17 purity guards, and row (c) fixture. One production change (`_optional_values`); focused phase verification 40 passed. L4 stamp and 21-ID comparator delta are in the round-3 implementer handoff. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `CHANGES_REQUESTED` | 2026-08-22 | coordinator | Fix round 3 closed all 7 review findings (verified: production diff is `_optional_values` alone; L4 2617/21, delta ∅/∅). Consumption found **two escapes in the new F6 purity guard itself** — non-recursive walk, and an exception that strips every occurrence rather than the pinned one; both measured `2 passed`. Micro fix round 4 dispatched (one test file). Then delta re-review. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |

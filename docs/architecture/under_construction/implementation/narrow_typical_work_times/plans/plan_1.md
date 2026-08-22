@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -219,6 +219,12 @@ price-scenario *configuration* fingerprint unrelated to spec identity. Pin the e
 by name so that removing it does not silently widen the claim, and so that a *second*
 fingerprint anywhere in the package reddens.
 *Mutation* — add `import hashlib` to `typical_filters.py` → the test reddens.
+**Two escapes the guard must not have** (coordinator consumption of fix round 3,
+2026-08-22, both measured at **2 passed** before round 4 closed them): (1) the package
+walk is **recursive** — a `*.py` under a future subpackage of the same root is scanned,
+not skipped; (2) the pinned exception strips **only the pinned occurrence**, so a second
+use of `config_fingerprint` in serializers.py *in any other shape* reddens. A guard whose
+own coverage can be escaped is the defect this criterion was rewritten to remove.
 *Mutation* — `TypicalFilterSpec` (definition): declare the dataclass `eq=False`.
 *Both sides* — contract (a) `1`; mutation (a) `2`.
 *Defect caught*: two specs meaning the same population become two `spec_index` values (a
@@ -598,6 +604,26 @@ phase 4's allowances would move silently (the exact drift L1 names).
 ## 8. Review log
 
 *(append-only; shared by implementer and reviewer)*
+
+- **2026-08-22 · fix round 3 · Codex · IMPLEMENTED → one escape found, round 4
+  dispatched.** All seven review findings closed and verified at source: the production
+  diff across the cycle is `_optional_values` **alone** (`git diff 8feae38 1590ebe --
+  app/beyo_manager/`), C8 row (g) and the per-section tuples now pin exactly what the
+  review's three green mutants moved, C7 gains row (n) and the full-object assertion on
+  (h)/(m), C14 gains the three malformed-input rows, and C4(c)/C17 ship as committed
+  tests. L4 `1590ebe`: **2617 passed / 21 failed / 0 collection errors**, ID delta ∅/∅.
+  **But the F6 guard — the test written *because* a session grep could not fail — had two
+  escapes of its own, which I measured on the round-3 tree (both `2 passed`):** a second,
+  differently-shaped `config_fingerprint` in `serializers.py` (the exception strips every
+  occurrence of the token, not just the pinned line) and an `import hashlib` in a new
+  subpackage (`glob` is non-recursive, and both guards share the walk). C4(c) already
+  required the first; the test did not meet it. Probes reverted, tree clean. Fix round 4
+  dispatched — one test file, two changes, three mutations:
+  `prompts/implementer/20260822_plan1_fix_round4_prompt.md`. Recorded, no action:
+  `_optional_categories` has no explicit `str` guard, but `{"major_categories": "wood"}`
+  still raises `ValidationError` through the enum path, so §3C's contract holds and only
+  the message is misleading. State → `CHANGES_REQUESTED`.
+
 
 - **2026-08-22 · projection round 0 · Opus 5 · AMENDMENTS_REQUIRED → folded same day by
   the coordinator.** 21 ledger rows (11 blocking) + 7 reality checks, zero owner cards
