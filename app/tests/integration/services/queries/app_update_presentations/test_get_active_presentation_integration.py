@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from beyo_manager.domain.app_update_presentations.enums import (
     AudienceModeEnum,
@@ -185,13 +186,13 @@ async def test_selected_users_only_targeting(db_session):
 
     presentation = (
         await db_session.execute(
-            select(AppUpdatePresentation).where(
-                AppUpdatePresentation.client_id == presentation_id
-            )
+            select(AppUpdatePresentation)
+            .options(selectinload(AppUpdatePresentation.user_targets))
+            .where(AppUpdatePresentation.client_id == presentation_id)
         )
     ).scalar_one()
     presentation.audience_mode = AudienceModeEnum.SELECTED_USERS_ONLY
-    db_session.add(
+    presentation.user_targets.append(
         AppUpdatePresentationUserTarget(
             presentation_id=presentation_id, user_id=user.client_id
         )

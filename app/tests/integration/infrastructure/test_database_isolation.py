@@ -8,6 +8,7 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.engine import make_url
 
 from beyo_manager.config import settings
@@ -16,6 +17,7 @@ from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import seed_pause_reasons
 from beyo_manager.services.infra.redis.keys import make_key
+from beyo_manager.models import Base
 from tests.conftest import pytest_collection_modifyitems
 from tests.database_isolation import (
     EXPECTED_HEAD,
@@ -25,8 +27,10 @@ from tests.database_isolation import (
     DatabaseIsolation,
     UnsafeDatabaseError,
     _connect,
+    assert_migrated_schema,
     assert_disposable_database,
     migration_head_revision,
+    expected_public_tables,
     resolve_template_database_name,
     resolve_test_slot,
     resolve_worker_database_name,
@@ -277,7 +281,6 @@ def test_unmarked_empty_database_is_allowed_but_populated_one_is_not() -> None:
     [
         ("localhost", "LOCALHOST"),
         ("localhost", "::1"),
-        ("127.0.0.1", "0.0.0.0"),
         ("localhost", "localhost."),
     ],
 )
@@ -306,6 +309,19 @@ def test_endpoint_with_different_host_is_still_refused() -> None:
             "postgresql+asyncpg://postgres:postgres@localhost:5433/beyo_manager",
             target_database_url=(
                 "postgresql+asyncpg://postgres:postgres@other-host:5433/"
+                "beyo_test_main_gw0"
+            ),
+            marker_present=True,
+        )
+
+
+def test_unspecified_endpoint_is_refused() -> None:
+    with pytest.raises(UnsafeDatabaseError):
+        assert_disposable_database(
+            "beyo_test_main_gw0",
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/beyo_manager",
+            target_database_url=(
+                "postgresql+asyncpg://postgres:postgres@0.0.0.0:5433/"
                 "beyo_test_main_gw0"
             ),
             marker_present=True,
@@ -432,6 +448,32 @@ async def test_new_migration_rebuilds_template_without_pinned_schema_count(
         revision_file.unlink(missing_ok=True)
 
 
+def test_schema_assertion_rejects_missing_metadata_table_with_required_tables_present() -> None:
+    metadata_only_tables = set(Base.metadata.tables) - REQUIRED_PUBLIC_TABLES
+    missing_table = next(iter(metadata_only_tables))
+    table_names = expected_public_tables() - {missing_table}
+
+    with pytest.raises(RuntimeError, match=missing_table):
+        assert_migrated_schema(
+            "beyo_test_main_template",
+            actual_head=EXPECTED_HEAD,
+            expected_head=EXPECTED_HEAD,
+            table_names=table_names,
+        )
+
+
+def test_schema_assertion_rejects_unenumerated_public_table() -> None:
+    table_names = expected_public_tables() | {"unexpected_public_table"}
+
+    with pytest.raises(RuntimeError, match="expected 107 public tables"):
+        assert_migrated_schema(
+            "beyo_test_main_template",
+            actual_head=EXPECTED_HEAD,
+            expected_head=EXPECTED_HEAD,
+            table_names=table_names,
+        )
+
+
 @pytest.mark.asyncio
 async def test_template_has_migrated_head_and_full_schema(isolated_database: DatabaseIsolation) -> None:
     inspection = await isolated_database.inspect(isolated_database.template_database_name)
@@ -451,6 +493,13 @@ async def test_worker_is_a_faithful_template_copy(isolated_database: DatabaseIso
         isolated_database.worker_database_name
     )
     assert worker.marker_present
+    assert_disposable_database(
+        isolated_database.worker_database_name,
+        isolated_database.configured_database_url,
+        target_database_url=isolated_database.worker_database_url,
+        marker_present=worker.marker_present,
+        public_table_count=worker.public_table_count,
+    )
 
 
 @pytest.mark.asyncio

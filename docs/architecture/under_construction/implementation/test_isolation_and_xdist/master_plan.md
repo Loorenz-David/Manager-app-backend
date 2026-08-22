@@ -124,7 +124,7 @@ inherited from phase 1's inspection and never re-checked. Phase 3's task 2 argue
 plugin changes collection and reporting, so the inventory it reasons from has to be true.)*
 **No randomizer is installed** — a
 `-p no:randomly` in any inherited command is disabling a plugin that does not exist.
-`pytest-xdist==3.6.1` is now pinned in the development manifest for phase 3; no `-n` or
+`pytest-xdist==3.6.1` is pinned in `app/requirements-dev.txt` for phase 3; no `-n` or
 `--dist` default is shipped, so bare pytest remains the serial comparator and default.
 
 ### 6.2 Database topology
@@ -208,11 +208,12 @@ a function of Redis availability.
 
 ### 6.5 Schema constants — and the time bomb
 
-`database_isolation.py` derives the Alembic head from the migration scripts and asserts a required
-table set after migration. The template's total public-table count is observed for diagnostics and
-disposability checks, but is not a schema contract; migration-owned journal tables are deliberately
-outside ORM metadata. A temporary new revision therefore invalidates the template by head and is
-reconciled without editing a constant. This is the phase-3 resolution of the carried N4 time bomb.
+`database_isolation.py` derives the Alembic head from the migration scripts and derives the public
+table count at runtime as `len(Base.metadata.tables)` plus the enumerated non-metadata tables
+`alembic_version`, `ended_shift_collapse_journal`, and `item_valuation_migration_journal`.
+Migration-owned journal tables remain deliberately outside ORM metadata. A temporary new revision
+therefore invalidates the template by head and is reconciled without editing a constant. This is
+the phase-3 resolution of the carried N4 time bomb.
 
 ### 6.6 Collection order
 
@@ -257,7 +258,7 @@ half; compare against it, never the count.
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | 2026-08-21 | closing checkpoint recorded in the implementer handoff, clean | **serial closing runs: 21 failed / 2573 passed / 1 deselected** in 139.96 s and 141.62 s; parallel evidence: `-n 2` = 21/2573 on one run and 22/2572 on the re-measurement, `-n 4` and `-n 6` = 22/2572 | **serial 21-ID set** from phase 2; parallel adds `tests/integration/services/queries/app_update_presentations/test_get_active_presentation_integration.py::test_selected_users_only_targeting`, so it is not absorbed |
+| **3** | 2026-08-22 | `40c1d39` + r2 dirty-tree digest recorded in the r2 handoff (checkpoint SHA recorded there) | **serial closing: 21 failed / 2575 passed / 1 deselected** in 147.66 s; `-n 2`: 21/2574, `-n 4`: 21/2574, `-n 6`: 21/2574; all `--dist loadfile` | **serial 21-ID set** from phase 2; all three parallel rows match it after the app-update fixture repair, so no parallel-only ID is added |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 

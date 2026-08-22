@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: IMPLEMENTED — 2026-08-21 (Codex; 21 failed / 2573 passed / 1 deselected on the serial closing run; parallel-only app-update instability published)
+state: IMPLEMENTED — 2026-08-22 (Codex; 21 failed / 2575 passed / 1 deselected on the serial closing run; `-n 2`, `-n 4`, and `-n 6` each matched the same 21-ID set)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -468,10 +468,10 @@ environment switch.
 |---|---|---|
 | positional axis / harness | file-level path order; three marked modules at `tests/connecteam`, `tests/integration`, and `tests/unit`, selected by `BEYO_TEST_COLLECTION_PROBE` | reproduces the mechanism-bearing DB+Redis rows while keeping every worker's collection identical; unset and `off` remove the probes |
 | `n` and positions | `n = 3`; `prefix`, `middle`, `suffix` | fixed before row 0, enough to exercise the three path positions under the repository's testpath order |
-| dependency manifest | development manifest pin `pytest-xdist==3.6.1` | xdist is a test-runner dependency; the existing owner change in `requirements.txt` was preserved and recorded in the handoff, while `requirements-dev.txt` is the development contract |
+| dependency manifest | `app/requirements-dev.txt` pin `pytest-xdist==3.6.1` | xdist is a test-runner dependency; `app/requirements.txt` is the production manifest and is byte-identical to the coordinator's clean `c73c017` blob |
 | template contention | serialise with a PostgreSQL advisory lock | one lock covers inspection, rebuild, worker drop, and copy; retries would leave a race window and per-worker templates would defeat bounded slot topology |
 | legacy reclamation | serial-only command, documented in master-plan §6.1 | a global legacy sweep has cross-worker scope and is an opt-in maintenance action, not part of every worker's startup |
-| N3 endpoint normalisation | implement and test | fail-closed endpoint comparison remains safe while accepting equivalent loopback spellings (`LOCALHOST`, `::1`, `0.0.0.0`, and trailing-dot localhost) |
+| N3 endpoint normalisation | implement and test | fail-closed endpoint comparison accepts loopback spellings (`LOCALHOST`, `::1`, and trailing-dot localhost); `0.0.0.0` is unspecified, not loopback, and is refused |
 
 #### Resource-class disposition
 
@@ -560,3 +560,68 @@ half. Nothing upstream was corrupted; the record belongs here in §7.
 `21 / 2562 / 1` = 2583 selected against a baseline of 2582, with probes filtered out. The ID sets
 matched in both directions so task 1's conclusion is unaffected, but C5's contract is the word
 "explained", and an unexplained +1 in the control run is what that criterion exists to surface.
+
+### 2026-08-22 — implement r2 (Codex). Verdict: IMPLEMENTED
+
+The fix cycle reverted the accidental production-manifest freeze, restored the runtime-derived
+schema count, refused unspecified endpoints, and documented the worker-marker guarantee. The
+selected-user targeting test now eagerly loads and owns its `user_targets` relationship before
+the production query reads the ORM object. The mechanism was diagnosed as test-local ORM state:
+the old fixture inserted a target row directly into the session while the presentation's loaded
+relationship remained empty, so `is_eligible()` saw no user target. No production-domain call was
+needed.
+
+The before/after deliverables belong here after the semantic intention was restored to `c73c017`:
+
+| condition | wall time | databases used | persistent residue | failures / workers |
+|---|---:|---|---|---|
+| before, phase 2 approved | 116.20 s | `beyo_test_main_template`, `beyo_test_main` | template only | 21 / serial |
+| after, r2 serial closing | 147.66 s | template plus `main` | template only | 21 / serial |
+| after, r2 `-n 2 --dist loadfile` | 70.26 s | template plus `gw0`–`gw1` | template only | 21 / 2 workers |
+| after, r2 `-n 4 --dist loadfile` | 51.04 s | template plus `gw0`–`gw3` | template only | 21 / 4 workers |
+| after, r2 `-n 6 --dist loadfile` | 47.33 s | template plus `gw0`–`gw5` | template only | 21 / 6 workers |
+
+The second serial closing run was `21 failed / 2575 passed / 1 deselected` in 147.66 s; the
+first serial closing run was `21 failed / 2574 passed / 1 deselected` in 143.76 s, before the
+additional count-specific criterion row was added. The final serial run is the shipped baseline.
+The 21-ID set is unchanged from phase 2, and every parallel r2 row has the same set, so OD-9's
+serial default remains conservative but no parallel-only failure is now present.
+
+```text
+pytest process (serial: main; xdist: gwN)
+  -> resolve slot + worker name
+  -> acquire advisory lock for beyo_test_<slot>_template
+  -> inspect template (marker, derived Alembic head, derived public-table contract)
+  -> create/rebuild marked template when stale or absent
+  -> drop stale beyo_test_<slot>_<worker> if present
+  -> CREATE DATABASE worker TEMPLATE template
+  -> rely on copied marker plus worker-marker assertion and guard acceptance
+  -> redirect settings.database_url and use a per-process Redis prefix
+  -> run tests
+  -> dispose pools, terminate stragglers, DROP worker database
+  -> release advisory lock; retain only the bounded template
+```
+
+#### r2 mutation and evidence log
+
+| mutation at named site | scope / command | result |
+|---|---|---|
+| remove runtime public-table count check in `assert_migrated_schema` | L1: infrastructure rows `-k 'unenumerated_public_table or missing_metadata_table'` | `test_schema_assertion_rejects_unenumerated_public_table` failed to raise; reverted |
+| restore `address.is_unspecified` in `_normalised_endpoint` | L1: endpoint rows `-k 'unspecified_endpoint or endpoint_aliases_are_confined_to_same_server'` | unspecified refusal failed; loopback rows stayed green; reverted |
+| restore direct `db_session.add(target)` in the app-update test | L1: `test_selected_users_only_targeting` | result was `None` and assertion failed; reverted |
+| remove explicit worker marker guarantee from the copied-worker criterion | L1: `test_worker_is_a_faithful_template_copy` | the row asserts marker presence and `assert_disposable_database` acceptance; the copied template carries the marker; no production marker rewrite was made |
+
+The unchanged r1 mutation ledger remains cited for the advisory-lock, worker-name, worker-scoped
+membership, dynamic-head, and loopback-normalisation seams; r2's changed rows above cover the
+new findings directly. The C2 marker removal is recorded as a provenance change: `start()` no
+longer needs a separate worker write because `CREATE DATABASE … TEMPLATE` copies the marked
+schema, and the worker criterion now proves the copied marker is accepted by the destructive guard.
+
+#### Collection and archaeology
+
+The five authorized r2 L4 runs are enumerated in the handoff. Each compares the complete failure
+set in both `comm` directions with the 21-ID serial comparator. The r2 union is empty. Rows 0/0b's
+`+1` is accounted for by the first phase-3 criterion row added to the infrastructure module before
+row 0, `test_worker_name_resolution_uses_xdist_worker`; the explicit-off hook and the later
+contention/schema rows were added after that control and therefore cannot explain row 0. The later
+collection growth is intentional criterion coverage, not a failure-set change.

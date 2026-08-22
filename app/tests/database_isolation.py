@@ -16,6 +16,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy.engine import URL, make_url
 
 from beyo_manager.config import settings
+from beyo_manager.models import Base
 
 
 TEST_DATABASE_PATTERN = re.compile(
@@ -32,6 +33,9 @@ MARKER_KEY = "test_database_v1"
 REQUIRED_PUBLIC_TABLES = frozenset(
     {"cost_model_versions", "item_cost_results", "step_state_records"}
 )
+NON_METADATA_PUBLIC_TABLES = frozenset(
+    {"alembic_version", "ended_shift_collapse_journal", "item_valuation_migration_journal"}
+)
 
 
 def migration_head_revision(app_root: Path | None = None) -> str:
@@ -42,6 +46,39 @@ def migration_head_revision(app_root: Path | None = None) -> str:
     if len(heads) != 1:
         raise RuntimeError(f"Expected one migration head, found {heads!r}")
     return heads[0]
+
+
+def expected_public_tables() -> set[str]:
+    """Return the complete public schema inventory for a migrated test database."""
+    return set(Base.metadata.tables) | set(NON_METADATA_PUBLIC_TABLES)
+
+
+def assert_migrated_schema(
+    database_name: str,
+    *,
+    actual_head: str | None,
+    expected_head: str,
+    table_names: set[str],
+) -> None:
+    """Assert migration DDL against runtime-derived metadata and bookkeeping tables."""
+    if actual_head != expected_head:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"expected head {expected_head}, got {actual_head!r}"
+        )
+    expected_tables = expected_public_tables()
+    missing_tables = expected_tables - table_names
+    if missing_tables:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"missing {sorted(missing_tables)}"
+        )
+    expected_count = len(Base.metadata.tables) + len(NON_METADATA_PUBLIC_TABLES)
+    if len(table_names) != expected_count:
+        raise RuntimeError(
+            f"Migration DDL assertion failed for {database_name}: "
+            f"expected {expected_count} public tables, got {len(table_names)}"
+        )
 
 
 # Kept as a compatibility export for existing criterion assertions. Runtime
@@ -101,7 +138,7 @@ def _normalised_endpoint(url: URL) -> tuple[str, int]:
         if host in {"localhost", "localhost.localdomain", "ip6-localhost"}:
             host = "127.0.0.1"
     else:
-        if address.is_loopback or address.is_unspecified:
+        if address.is_loopback:
             host = "127.0.0.1"
         else:
             host = address.compressed
@@ -443,16 +480,12 @@ class DatabaseIsolation:
             await connection.close()
         table_names = {row["table_name"] for row in table_rows}
         expected_head = migration_head_revision(self._app_root)
-        if inspection.head_revision != expected_head:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: "
-                f"expected head {expected_head}, got {inspection.head_revision!r}"
-            )
-        missing_tables = REQUIRED_PUBLIC_TABLES - table_names
-        if missing_tables:
-            raise RuntimeError(
-                f"Migration DDL assertion failed for {database_name}: missing {sorted(missing_tables)}"
-            )
+        assert_migrated_schema(
+            database_name,
+            actual_head=inspection.head_revision,
+            expected_head=expected_head,
+            table_names=table_names,
+        )
         if not inspection.marker_present:
             raise RuntimeError(f"Migration DDL assertion failed: marker missing in {database_name}")
 
