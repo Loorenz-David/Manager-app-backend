@@ -625,3 +625,50 @@ set in both `comm` directions with the 21-ID serial comparator. The r2 union is 
 row 0, `test_worker_name_resolution_uses_xdist_worker`; the explicit-off hook and the later
 contention/schema rows were added after that control and therefore cannot explain row 0. The later
 collection growth is intentional criterion coverage, not a failure-set change.
+
+### 2026-08-22 — fix r2 consumed (coordinator). Verdict: FIXES VERIFIED; to review r3
+
+Consumed against `git diff 40c1d39 00ea07b` and the live tree. Perimeter is exactly the eight
+declared files and exactly the prompt's allowed set — no undeclared write.
+
+**Every blocking finding is closed, and I verified each rather than reading its claim.** B1:
+`app/requirements.txt` is byte-identical to `c73c017`; the production manifest is clean. B2: every
+evidence row now carries SHA plus a dirty-diff digest, the charter's dirty-tree form. B3: one
+unambiguous result per worker count, all three `comm`-empty against the 21-ID comparator. B4: the
+diagnosis is right — the old fixture inserted `AppUpdatePresentationUserTarget` through
+`db_session.add` while the presentation's `user_targets` collection was already loaded empty, so
+`is_eligible()` read an empty collection and the outcome depended on whether the relationship
+happened to be refreshed first. The repair `selectinload`s the relationship and appends through
+the owning object. Test-local, no production call, correctly not raised as a decision.
+
+**S1 is better than the finding asked for.** `expected_public_tables()` derives a *set* —
+`Base.metadata.tables | NON_METADATA_PUBLIC_TABLES` — rather than a count, so a failure names the
+offending table, and both directions are covered by their own rows
+(`rejects_missing_metadata_table_with_required_tables_present`,
+`rejects_unenumerated_public_table`). S2, S3, S5, S6 verified: `0.0.0.0` moved from the accepted-
+alias parametrize list to a dedicated `test_unspecified_endpoint_is_refused`; the marker
+provenance change is recorded with a row proving the copied marker is accepted by the guard;
+§6.1 names the real manifest; `planning/intention.md` is byte-identical to `c73c017`.
+
+**Collection arithmetic reconciles exactly** — the check that would have caught a folded row.
+Criterion module 48 → 50, suite 2594 → 2596, and the ID diff is `−1 / +3`: the removed row is the
+`[127.0.0.1-0.0.0.0]` alias case, correctly retired by S2, and the three additions are the new
+named rows. Every one is collected once. Residue is `beyo_test_main_template` alone. Five L4 runs,
+authorized before execution, matching the budget.
+
+**Two reporting items assigned in r2 were not done.** S4 asked for r1's *actual* L4 total as a
+number with the two unauthorized runs named — absent; the cycle reports its own 5 and stops.
+B1's correction clause asked for a statement naming the r1 sentence it supersedes — the
+forward-facing delegation row was corrected, but nothing supersedes the published claim. Both are
+carried by this log rather than re-dispatched; neither is worth a fix round.
+
+**Coordinator-owned residue closed here.** §8's phase-3 row claimed a checkpoint SHA the handoff
+could not contain (the handoff predates the commit) and dated the phase approved before any review
+existed. Corrected to `00ea07b`, marked pending review, with the parallel rows' one-criterion-row
+tree drift and the carried-not-re-measured connection peaks stated in the row itself.
+
+**New, and the reason this does not go straight to approval: OD-9's escape condition is now
+satisfied.** OD-9 fixed the shipped default as serial *unless the parallel failing-ID set matches
+the serial comparator exactly*. After B4's repair it does, at `-n 2`, `-n 4` and `-n 6`. The round
+kept serial as "conservative" without raising it; the fix prompt said explicitly that if it now
+matched, that was an owner decision card and not a change to make. Routed to the owner as a card.

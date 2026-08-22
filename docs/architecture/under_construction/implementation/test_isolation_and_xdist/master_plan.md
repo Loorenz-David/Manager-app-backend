@@ -258,7 +258,7 @@ half; compare against it, never the count.
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | 2026-08-22 | `40c1d39` + r2 dirty-tree digest recorded in the r2 handoff (checkpoint SHA recorded there) | **serial closing: 21 failed / 2575 passed / 1 deselected** in 147.66 s; `-n 2`: 21/2574, `-n 4`: 21/2574, `-n 6`: 21/2574; all `--dist loadfile` | **serial 21-ID set** from phase 2; all three parallel rows match it after the app-update fixture repair, so no parallel-only ID is added |
+| **3** | *not yet — fix r2, pending review* | **`00ea07b`**, clean (the r2 handoff identifies its runs as `40c1d39` + dirty digest; that tree became this checkpoint) | **serial closing: 21 failed / 2575 passed / 1 deselected** in 147.66 s; `-n 2`: 21/2574, `-n 4`: 21/2574, `-n 6`: 21/2574, all `--dist loadfile` **and all measured one criterion row before the closing tree** (digest `b6926449…`); `pg_stat_activity` peaks 21/23/25 are **r1-measured and carried**, not re-taken in r2 | **serial 21-ID set** from phase 2; all three parallel rows match it after the app-update fixture repair, so no parallel-only ID is added |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 
