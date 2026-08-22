@@ -1,0 +1,29 @@
+reviewId: 2026-08-22T12-05-10-886Z--9566d3
+reviewedItemIds:
+  - edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+decisions:
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "The evidence matches DatabaseIsolation._ensure_template: marked
+      templates are reused only when head, required public tables and
+      legacy-column conditions pass; marked failures are rebuilt; marker-less
+      templates with public tables are refused with UnsafeDatabaseError, while
+      empty shells are absorbed. The conflicting configured_by edge to the
+      shipped pytest-parallel configuration was already evaluated and accepted
+      in review r4: this relationship type allows multiple configuration sources
+      for the same infrastructure node."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-22T12:05:10.886Z
+graphRevisionBefore: f127630be8bef4e252c8e37545904dce099d027b0bcd364981c5485d2f8beb6e
+graphRevisionAfter: cec60a24005ac83da1e396070b36eac1dc3b963a8f1e7526dded2dc5e0225eb9
+evidenceSummary: 1 evidence entry across 1 file; no drift detected
+humanInstruction: Owner authorized the same-record correction in the 2026-08-22
+  maintenance prompt; confirm only the re-recorded configured_by edge after
+  evaluating the already-known parallel-configuration contradiction.
+reviewTokenCorrelation: 79d0519f638c

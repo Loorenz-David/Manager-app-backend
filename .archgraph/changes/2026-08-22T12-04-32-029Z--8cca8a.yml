@@ -1,0 +1,21 @@
+changeId: 2026-08-22T12-04-32-029Z--8cca8a
+operations:
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    kind: delete
+    rationale: Remove the settled relationship so it can be re-recorded with the
+      corrected _ensure_template evidence summary.
+retiredItemIds:
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    retiredAt: 2026-08-22T12:04:32.029Z
+    reason: delete
+authorizerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-22T12:04:32.029Z
+graphRevisionBefore: e7ab5b2aa34ebd309766071c010d469ffd3f7151cb346c6669a0854d6911f756
+graphRevisionAfter: 618f1df89a7e814b0cbfc689dc6ce42e8da0ac1eb539de0677b6bafc57f2c2eb
+humanInstruction: Owner authorized the second correction of this same settled
+  edge in the maintenance prompt dated 2026-08-22; delete only this edge so it
+  can be re-recorded with the corrected marker-less template clause.
+changeTokenCorrelation: ef50257d4272

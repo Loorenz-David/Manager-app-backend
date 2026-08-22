@@ -10448,11 +10448,13 @@ edges:
           summary: An existing template is reused only when it carries the disposable
             marker, its Alembic head equals the head derived at runtime from the
             migration scripts, it contains every required public table, and it
-            does not carry the legacy baseline column; otherwise it is dropped
-            and rebuilt.
+            lacks the legacy baseline column; a marked template failing any of
+            those is dropped and rebuilt. A marker-less template is not rebuilt
+            by default — it is refused outright with UnsafeDatabaseError if it
+            still has public tables, and absorbed only if it is an empty shell.
           inferenceReason: The implementation is configured by explicit invariants that
-            govern when a template is safe to reuse.
+            govern when a template is safe to reuse or refuse.
     origin: human_confirmed
     confidence: 0.92
-    createdAt: 2026-08-22T10:57:38.741Z
-    updatedAt: 2026-08-22T10:58:10.819Z
+    createdAt: 2026-08-22T12:04:55.131Z
+    updatedAt: 2026-08-22T12:05:10.864Z
