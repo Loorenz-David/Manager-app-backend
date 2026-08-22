@@ -117,6 +117,9 @@ One batched `archgraph_apply_changes` call recorded:
 
 Graph result: 2 applied, 0 skipped, new graph revision
 `613460d0edc09f2416ab6b44d40fd957e3f69930f4c4750d6610fa62391be52f`.
+Post-write graph status is valid with no diagnostics. The inferred additions remain
+pending normal human review, and status reports one stale node; no review or maintenance
+mutation was performed.
 
 ## 5. Write perimeter
 
