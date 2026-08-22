@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: PROMPT_READY — 2026-08-22 (implement r1 compiled; projection WAIVED, docs-only)
+state: IMPLEMENTED — 2026-08-22 (implement r1; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -280,3 +280,42 @@ Evidence spent: zero pytest runs. The subset relation published by C9 was reprod
 `comm` over two enumerated ID sets, and `git diff 0aae85e HEAD -- app/` is empty, so the
 21 / 2576 stamp's tree is `app/`-identical to HEAD and is citable rather than
 re-measurable.
+
+### 2026-08-22 — Codex, implement r1
+
+Implemented the documentation-only closeout. Added the new dated frontend handoff
+`docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_live_working_time_clock_20260822.md` with
+one section per closeout obligation, the go-live retirement statement, surviving
+corrections, the eight-row settled-consumer answer, the three decrease modes, the
+OD-10 live-versus-frozen distinction, and the complete 21-ID approval baseline with
+runner, Redis, template-database, tree, and strict-subset context. No published handoff
+was edited and no file under `app/` changed.
+
+The graph already contained all five named projection nodes with human-confirmed
+descriptions, including the budget-allocations HC-5 reconciliation invariant. The
+delta therefore added the five missing architectural relationships in one
+`archgraph_apply_changes` batch: four projection-to-`step_state_records`
+`reads_from` edges and the price-scenario-to-budget-status `depends_on` edge. The
+price-scenario edge is intentionally transitive; it does not claim that the
+price-scenario payload consumes live seconds. The five relationships are
+`ai_inferred` and pending human review; no review item was promoted, rejected, or
+edited.
+
+Judgment calls: existing settled graph descriptions were preserved rather than
+rewritten through maintenance; direct table edges were recorded for the four
+present-tense live projections because the intention explicitly requires the
+dependency delta, while the price-scenario dependency remains indirect. Evidence
+summaries contain no counts, and all evidence uses symbol anchors without spans.
+
+Docs guard evidence: `PYTHONPATH=. pytest tests/unit/docs/` ran before writing and
+after writing, both with the six-worker default, and both returned **59 passed**.
+The post-write run also exercised the new handoff's participation in the all-handoff
+tripwire; the retired identity was absent. No L4 run was spent or required: the
+phase's app tree matches the authoritative gate stamp and the delta is covered by the
+docs guard at L1.
+
+Graph status before the batch was revision
+`cec60a24005ac83da1e396070b36eac1dc3b963a8f1e7526dded2dc5e0225eb9`, 194 nodes,
+291 edges, 0 pending, 0 stale, 0 diagnostics. After the batch it is revision
+`9bcb347f1bf4463ed3522836d86ee102686af9192381d949a5ceb254d173d9b8`, 194 nodes,
+296 edges, 5 pending, 0 stale, 0 diagnostics.
