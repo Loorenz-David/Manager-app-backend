@@ -434,6 +434,49 @@ restated because they are load-bearing here:
     `alembic upgrade` logs success, **exits 0 and persists nothing**. A stamped-but-
     incomplete database is exactly that trap's signature, so when migrating a fresh test
     database, **assert the DDL afterwards — never accept the exit code as evidence.**
+- **⛔ THE GATE IS SATISFIED — 2026-08-22. READ THIS BEFORE CITING ANY BASELINE BELOW.**
+  The `test_isolation_and_xdist` project closed on 2026-08-22 (merge `0aae85e`). Both
+  baselines recorded further down are **superseded**, and so is the "which database"
+  block above.
+  - **New authoritative baseline, under the new runner:** **21 failed / 2576 passed**
+    at the shipped default in **50.61 s**; **21 failed / 2575 passed / 1 skipped /
+    1 deselected** under the serial comparator in 131.91 s. Collection **2597**.
+    Coordinator-measured at the gate; `comm`-empty in both directions between the two
+    invocations.
+  - **The 21 is a strict SUBSET of the 26 enumerated below — five removed, zero added.**
+    Verified by `comm` on 2026-08-22. No criterion that compares against the 26 gains a
+    member; five stop appearing. The five the isolation work **fixed** (they were
+    dev-database coupling and collection-order coupling, not product defects):
+    `test_seed_item_economics_configuration.py::test_human_successors_permanently_freeze_bootstrap_basis_and_model`,
+    `…::test_person_owned_configuration_and_section_membership_are_not_overridden`,
+    `test_create_shopify_metafield_preferences.py::test_create_uses_client_supplied_id_for_new_preference`,
+    `test_add_task_steps_integration.py::test_adding_a_batch_of_steps_reopens_ready_task`,
+    `test_task_date_field_updates_integration.py::test_update_task_schedule_rejects_invalid_order_and_leaves_row_unchanged`.
+  - **The invocation changed and nothing announces it.** Bare
+    `PYTHONPATH=. pytest -m 'not e2e'` now runs **six xdist workers with
+    `--dist loadfile`**, because `app/pytest.ini`'s `addopts` carries `-n 6 --dist
+    loadfile` (owner decision OD-10 in that project's intention). The serial comparator
+    is `-n 0`, and the `1 skipped` it reports is the criterion asserting the shipped
+    default really is parallel. `PYTHONPATH=.` is still required; the four `app/Makefile`
+    test targets now carry it.
+  - **The "which database" block above is answered, not merely updated.** Every pytest
+    process now creates its own database from a migrated template and drops it at
+    session end, behind a five-step fail-closed guard. **Suite residue no longer lands in
+    the development database** — the only persistent artifact is
+    `beyo_test_main_template` — so §6's "residue rows are never evidence" rule is now
+    belt-and-braces rather than load-bearing, and charter rule 7's "configured DB left at
+    head" holds by construction. `app_test` on port 5432 is no longer used or relevant.
+  - **New precondition on the number: Redis must be reachable at `settings.redis_url`.**
+    Two logout rows assert against a live Redis by name and the `redis_client` fixture's
+    teardown has no connection guard, so a machine without Redis measures **23 failures
+    and 2 errors**, not 21. A published baseline in this pipeline now states its failing-ID
+    set, tree identity, database identity **and the services that must be reachable**.
+  - Authoritative record and full provenance:
+    `docs/architecture/under_construction/implementation/test_isolation_and_xdist/master_plan.md`
+    §8, with the enumerated 21 in that project's `archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md`.
+    **Phase 4's closeout publishes this baseline for `narrow_typical_work_times` D23,
+    stated with its runner** — six workers, `--dist loadfile`, Redis up.
+
 - **Start baseline, pre-phase-1, re-measured by this coordinator 2026-08-20 on a clean
   tree at `2711b58`: 26 failed / 2436 passed / 1 deselected** (supersedes the `a0aaacc`
   measurement of 26/2433/1 — commit `6c15678` added/changed item-lookup tests, +3
