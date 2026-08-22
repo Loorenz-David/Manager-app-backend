@@ -775,3 +775,55 @@ confirm or refute them rather than take my word.
 **Carried, owner-owned:** the architecture graph now holds **four** pending items — two from r1,
 two from r3 — all additive, none promoted or edited. They await the owner's instruction, per the
 standing rule that graph review is human-adjudicated.
+
+### 2026-08-22 — review r4 consumed (coordinator). Verdict: CHANGES_REQUESTED, to fix r5
+
+The phase's first external review, and it earned its round. **0 L4 runs against a budget of 0**,
+eighteen L1/L2 evidence rows, both sides computed on every mutation, every mutation site named
+definition-vs-call-site, and the settled ground cited rather than re-measured. Perimeter is three
+paths — the handoff and two `.archgraph` files — matching its declaration.
+
+**B1 verified structurally, not by reproduction.** `test_concurrent_starts_survive_current_template`
+calls `seed.stop()` before `_assert_concurrent_starts_succeed`, so **no connection is held
+anywhere**; C2 row (c)'s specified observer — *"a held inspection connection overlapping a copy"* —
+is simply absent, and the row wins on a sub-millisecond race it has never lost. The consequence is
+the finding: with the lock narrowed to `_ensure_template` alone, leaving the copy unprotected —
+**the exact narrowing task 3 warns against in writing** — the criterion module is 51 passed. The
+reviewer proved the hazard is real with a standalone asyncpg probe (`ObjectInUseError` with one
+held connection, control succeeds without), so the row is one line of setup from being
+deterministic.
+
+**This is my miss as much as the implementer's.** C2's own text reads *"each row red with its own
+error"*; r1's ledger recorded row (c) green, in writing; I read that ledger across three
+consumptions and never diffed it against the enumeration. Folded as master plan **standing rule
+10**.
+
+**S1 and S4 confirmed by reading, no run needed.** The C8 skip guard tests `arg in {"-n0",
+"--numprocesses=0"}` or the adjacent pair `-n` `0`; `--numprocesses 0` matches none of them, so the
+long spelling of the phase's own published comparator false-reds — and the `1 skipped` in §8's
+comparator row *is* C8, so a consuming project spelling it that way gets a failing ID in neither
+published set. S4: both named `..._in_real_redis` rows exist, and `redis_client`'s `finally` calls
+`scan_iter` with no `ConnectionError` guard, so the published baseline carries an unstated service
+precondition while §6.4 asserts it does not.
+
+**Probe A was half wrong, and the reviewer's answer is better than mine.** I proposed deleting or
+re-pointing C8's behavioural sub-check. It is not inert: `PYTEST_ADDOPTS="-n 0"` is merged after the
+ini `addopts` but never appears in `invocation_params.args`, so the skip guard misses it and the
+assertion bites. **The defect is the plan's choice of named mutation, not the assertion** — and
+S1's repair supplies the right mutation for free. Probe B confirmed verbatim.
+
+**Graph:** four items promoted, two evidence addresses corrected, prior addresses preserved under
+`metadata.evidenceHistory`. Verified independently: 194 nodes, 291 edges, **0 pending, 0
+diagnostics**, revision `0dd6785a…`, matching the handoff exactly. The `conflicting-canonical-
+relationship` override on the fourth item is sound — `configured_by` declares a direction, not a
+cardinality, and two configuration nodes legitimately configure one infrastructure node. The three
+`f5bf3a7` items were not reopened.
+
+**Folded upstream:** master plan standing rules **10** (diff the ledger against the enumeration),
+**11** (a named mutation must reach every sub-check), **12** (assert the contract, not the
+literal), **13** (a shipped-default change has a documentation perimeter wider than the master
+plan), and **§8's baseline schema gains a fourth axis** — the services that must be reachable.
+Rules 11 and 12 generalise past this project and are charter candidates.
+
+**Routing:** B1, S1, S2, S3, S4, S5 and — since the round is open anyway — N1 and N2 go to fix r5.
+N3 is owner card 1. N4 and N5 are carry-forward with no owner yet.

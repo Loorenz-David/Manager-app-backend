@@ -1,0 +1,97 @@
+reviewId: 2026-08-22T09-54-23-230Z--78f98a
+reviewedItemIds:
+  - node:infrastructure-template-copy-contention-lock
+  - edge:infrastructure-test-database-isolation--contains-->infrastructure-template-copy-contention-lock
+  - node:configuration-shipped-pytest-parallel-default
+  - edge:infrastructure-test-database-isolation--configured_by-->configuration-shipped-pytest-parallel-default
+decisions:
+  - itemId: node:infrastructure-template-copy-contention-lock
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/tests/database_isolation.py
+            symbol: DatabaseIsolation._template_operation_lock
+            startLine: 344
+            endLine: 359
+          to:
+            path: app/tests/database_isolation.py
+            symbol: DatabaseIsolation._template_operation_lock
+            startLine: 381
+            endLine: 396
+    rationale: "Re-derived from source: DatabaseIsolation._template_operation_lock
+      acquires pg_advisory_lock(hashtextextended(template_database_name, 0)) on
+      a dedicated maintenance connection, yields, and unlocks and closes in
+      finally; start() wraps _ensure_template + _drop_database_if_exists(worker)
+      + _create_database_from_template(worker) in it. Claim, name and type are
+      accurate. The recorded evidence address had drifted (344-359 now points at
+      _marker_present); corrected to the actual span 381-396 via anchors."
+  - itemId: edge:infrastructure-test-database-isolation--contains-->infrastructure-template-copy-contention-lock
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    editedFields:
+      anchors:
+        - index: 0
+          from:
+            path: app/tests/database_isolation.py
+            symbol: DatabaseIsolation.start
+            startLine: 197
+            endLine: 209
+          to:
+            path: app/tests/database_isolation.py
+            symbol: DatabaseIsolation.start
+            startLine: 234
+            endLine: 252
+    rationale: "Re-derived from source: DatabaseIsolation.start invokes the lock as
+      one lifecycle step around the template ensure and the worker copy, so the
+      lock is contained by the isolation lifecycle rather than being a
+      free-standing utility. Direction and type are correct. The recorded
+      evidence address had drifted (197-209 now points at the DatabaseInspection
+      dataclass and __init__); corrected to the actual span of
+      DatabaseIsolation.start, 234-252, via anchors."
+  - itemId: node:configuration-shipped-pytest-parallel-default
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived from source: app/pytest.ini line 2 reads 'addopts = -ra
+      --strict-markers --strict-config -n 6 --dist loadfile', and
+      test_shipped_default_reaches_an_xdist_worker at lines 108-125 checks the
+      configured token sequence plus PYTEST_XDIST_WORKER. Both evidence
+      addresses are exact in the current tree; no anchor correction needed. Name
+      and type (configuration) are accurate."
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->configuration-shipped-pytest-parallel-default
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Re-derived from source: app/pytest.ini:1-2 is the configuration that
+      selects the runner topology under which the isolation lifecycle runs; the
+      target is a configuration node and configured_by's canonical direction is
+      node -> configuration, so type and direction are correct and the address
+      is exact. Overriding the server's 'investigate' suggestion deliberately:
+      the flagged conflict is that a configured_by edge from this source already
+      targets test-database-isolation-contract. Both targets are configuration
+      nodes and they configure different things - the contract fixes name
+      grammar, template acceptance and the destructive guard, while this one
+      fixes the worker topology the lifecycle runs under - so two configured_by
+      edges are correct here rather than contradictory, and each carries a
+      distinguishing description."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.238
+timestamp: 2026-08-22T09:54:23.230Z
+graphRevisionBefore: 2c3f0c58a6c45a66834f2377fb3bb7f8586b171e50c59d20e1348b17cebb0e61
+graphRevisionAfter: 0dd6785a158409121a63063f3326bbcc440136333db42337a8742b71613463bd
+evidenceSummary: 5 evidence entries across 3 files; no drift detected
+humanInstruction: 'Owner delegation, recorded verbatim in the review r4 prompt
+  §8: "the reviewer will also look at the archgraph and check those four new
+  entries that are waiting for human approval, check them and approve them if
+  correct, otherwise edit them accordingly and then approve them". All four
+  re-derived from source independently before deciding; two carried drifted
+  evidence addresses, corrected via anchors in the same authorized decision.'
+reviewTokenCorrelation: b3cee861a0c5

@@ -100,6 +100,32 @@ Each came from a measured defect. These supplement the charter, never replace it
 9. **The closing stamp is defined by the tree, not by the count.** Two rounds read a numeric L4
    budget as forbidding a re-stamp after they had invalidated their own. *(A charter amendment
    is proposed to the owner; until it lands, prompts state it explicitly.)*
+10. **When a criterion enumerates per-row mutation outcomes, the consuming session diffs the
+    implementer's ledger against that enumeration, row by row.** C2's text read *"each row red
+    with its own error, not one shared string"*; r1's ledger recorded row (c) green, in writing;
+    the ledger was read by three coordinator consumptions and the diff was never taken. The
+    review that finally took it found the row could not fail **and** that the narrowing task 3
+    warns about in writing ships with all 51 tests green. A row's presence is not its coverage,
+    and a ledger entry is a claim, not evidence.
+11. **A named mutation must be shown to reach every sub-check, not merely to redden the test.**
+    Sequential assertions short-circuit: C8's addopts check reddens first and returns, so its
+    behavioural half — the one that proves work was distributed — was never executed by the
+    mutation that was supposed to cover it. Rule 4 says enumerate sub-checks from branch points;
+    this is its missing half — **enumerate the mutations too, one per sub-check, and record which
+    bites on which.** The charter already requires this of two tests dividing the labour; it
+    applies equally to two assertions inside one test.
+12. **A criterion asserting a configured value asserts its contract, not its literal.** C8
+    required `["-n", "6", "--dist", "loadfile"]` while OD-10 explicitly permits raising the
+    count; `-n 8` produces a red suite whose message says the parallel default is *missing* while
+    eight workers are demonstrably running. This is N4's time-bomb shape, reintroduced by the
+    criterion written to enforce the decision that permits the change. Assert *a positive
+    integer*, not `6`.
+13. **A shipped-default change has a documentation perimeter, and it is wider than the master
+    plan.** Making `-n 6` the default silently re-pointed every command anyone had memorised. Fix
+    r3 found one (the legacy sweep); review r4 found two more, one of them in `.env.example` —
+    the file OD-7 already taught this project is part of a variable's contract. **Any phase that
+    changes `addopts` enumerates every invocation surface in the repository, with the `git grep`
+    output in its handoff.**
 
 ## 6. Environment
 
@@ -256,6 +282,12 @@ deviation (done twice: phase 1 r4, phase 2 r4).
 A baseline is `failure-ID set + tree identity + database identity`, **with the count explicitly
 subordinate** — the schema `live_clock` earned at its re-review r3. The ID set is the durable
 half; compare against it, never the count.
+
+**Baseline schema (extended 2026-08-22, review r4 S4):** a published row states its **failing-ID
+set + tree identity + database identity + the services that must be reachable**. Review r4 measured
+the fourth axis: with Redis down the suite returns 23 failures and 2 teardown errors, not 21,
+because two logout rows assert against a live Redis by name and the `redis_client` fixture's
+teardown has no `ConnectionError` guard. §6.4 asserts the opposite and is wrong.
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
