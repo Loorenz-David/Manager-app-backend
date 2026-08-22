@@ -10491,10 +10491,10 @@ edges:
             into actual seconds.
           inferenceReason: The projection's present-tense worked-time input is ultimately
             sourced from open step-state records.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-22T12:40:12.766Z
-    updatedAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
   - sourceNodeId: projection-item-economics-task-budget-status-worker
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -10510,10 +10510,10 @@ edges:
             shared loader.
           inferenceReason: The worker projection has the same open-interval source
             dependency even though its service boundary delegates the fold.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-22T12:40:12.766Z
-    updatedAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
   - sourceNodeId: projection-item-economics-task-budget-allocations
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -10528,10 +10528,10 @@ edges:
             uses it for task totals and DivisionStep rows.
           inferenceReason: The allocation projection's present-tense time values depend on
             the open interval population in step-state records.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-22T12:40:12.766Z
-    updatedAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
   - sourceNodeId: projection-item-economics-task-production-time
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -10547,10 +10547,10 @@ edges:
             step shapes.
           inferenceReason: The projection's live section and budget values are derived
             from the open interval table through one shared loader.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-22T12:40:12.766Z
-    updatedAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
   - sourceNodeId: projection-item-economics-task-price-scenario
     relationshipType: depends_on
     targetNodeId: projection-item-economics-task-budget-status
@@ -10565,7 +10565,7 @@ edges:
             assembling its valuation payload.
           inferenceReason: The projection inherits the budget-status dependency
             transitively, without becoming a direct live-seconds consumer.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-22T12:40:12.766Z
-    updatedAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z

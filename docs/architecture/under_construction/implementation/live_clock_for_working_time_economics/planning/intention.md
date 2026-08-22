@@ -1066,8 +1066,17 @@ any record of the step, and step removal; record deletion is **not** a shipped
 capability and is not named to the client — where it drops by the whole disowned
 share at once, deliberately; and the D8 settlement window (§3.3A C.1), a
 dip-and-recover at clock-out that the client renders as served. Client smoothing must
-snap down to the served value, never
+snap its **smoothing baseline** down to the served value, never
 clamp — a clamp keeps displaying time the workspace has explicitly disowned.
+**"Snap" names the baseline, not the rendered value (round 4i).** The two are different
+surfaces and this sentence had been read as governing both: §3.3 is titled *"the no-snap
+invariant"*, where a snap is the thing to avoid, and §6A C's second bullet says that on a
+≤ 1 s drop *"no visible snap is required"*. Both are simultaneously satisfiable, and only
+under this reading — a client displaying `served + elapsed-since-receipt` lowers its
+baseline by the drop while the display keeps rising, so the baseline snaps and nothing
+visible does. §6A C's ">1 s" bullet already uses the pair correctly ("reset the smoothing
+baseline"). A reader who has to reconcile three sections to find that out is one
+misreading away from a clamp.
 
 ---
 
@@ -1797,3 +1806,18 @@ exists to redden on the edit that would reintroduce the coupling. Round 4a's "pl
 task 1 verifies the identity" obligation is refined by the same measurement: the
 verification is not *whether* the identity holds (it does, unconditionally) but *where
 its output is undefined*, and that is the criterion §5 lacked.
+
+**Round 4i — 2026-08-22, phase 4 review r3 folded (one ambiguity, no contract change).**
+The reviewer decided a tension it had been asked to judge, and the decision is recorded
+here because the ambiguity is this document's, not the deliverable's. **"Snap down" was
+carrying two referents across three sections** — §5.4 and master §7 obligation 5 say
+client smoothing *"must snap down to the served value"* over every mode; §6A C says that
+on a ≤ 1 s drop *"no visible snap is required"*; §3.3 is *"the no-snap invariant"*. The
+phase-4 handoff carried §5.4's sentence near-verbatim and therefore inherited the
+ambiguity **faithfully — no finding against the implementer**. Resolution, now written
+into §5.4: **"snap" governs the smoothing baseline, never the rendered value.** Nothing
+about the contract changes; what changes is that the frontend no longer has to derive the
+reconciliation from three sections to avoid shipping a clamp. Recorded also because it is
+the second time this pipeline has found a *word* rather than a *mechanism* to be the
+defect — the first was "live", which meant "non-deleted" in the architecture graph and
+"present-tense" in the payload.

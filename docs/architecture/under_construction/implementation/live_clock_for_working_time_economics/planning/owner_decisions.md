@@ -304,10 +304,50 @@ is undefined. Only the second case is what OD-10 decides. Grounded at source:
 
 ---
 
+## Adjudicated at the phase-4 review gate (2026-08-22)
+
+### OD-11 — The graph records one dependency at two granularities. Keep the shortcut edges?
+
+**Raised by:** review r3, owner Card 1 (`handoffs/reviewer/2026-08-22_phase4_review_r3_handoff.md`).
+
+**Question as put.** When adjudicating phase 4's five pending graph items, keep the four
+new `reads_from` edges from the item-economics projections to the step-state-record table,
+or reject them because the two-hop path through `projection-live-worked-seconds` already
+records the same fact?
+
+**ANSWERED — owner, 2026-08-22: keep them** (the recommended branch), in the owner's own
+words: *"about the owner card, we keep them ( recommended option )"*.
+
+**What the answer buys, in the reviewer's framing:** an impact question asked of the graph
+six months from now — "who breaks if the open-interval table changes shape?" — returns the
+four screens a person actually looks at (the budget screen, the worker card, the batched
+allocation cards, the production-time widget) in one hop, instead of returning only the
+internal loader and requiring the reviewer to know to take a second hop. The cost is
+tidiness: the same dependency is recorded twice, and a future refactor has four extra
+edges to remember.
+
+**The falsifiable cost recorded with the decision** (review r3, N3), so no later reader
+re-discovers it as a defect: each shortcut edge's evidence anchor points at a symbol that
+does not itself touch the table — `get_task_budget_status.py:_build_evaluated_status`
+contains no `StepStateRecord` reference, because the read lives in
+`live_worked_seconds.py`. The edges are **self-documenting rather than misleading**: their
+own `description` and `inferenceReason` fields say the read happens *"through the shared
+live-worked-seconds loader"* and is *"ultimately sourced from"* the open records.
+
+**Scope note, stated so it can be corrected in one line.** The card's branches named the
+**four** `reads_from` edges; the same card's question opened *"when you adjudicate phase
+4's five pending graph items"*. All five were promoted on this answer — the fifth,
+`projection-item-economics-task-price-scenario --depends_on--> projection-item-economics-task-budget-status`,
+was never contested and its three clauses were verified at source by review r3 (P2).
+
+---
+
 ## Ledger status
 
-**Empty as of round 4h (2026-08-21).** D1–D4 settled during shaping, D5–D6 ratified by
+**Empty as of 2026-08-22 (OD-11 answered the same day it was raised).** D1–D4 settled during shaping, D5–D6 ratified by
 the owner (round 2), D7 ratified from the coordinator review (round 3), D8–D9 ratified
 from the mechanism-inventory gate (round 4a), **OD-10 ratified at the phase-3 projection
 gate (2026-08-21)**. No decision in this intention is a guess. Gate:
-**mechanism-inventory PASSED**; phases 1 and 2 APPROVED; next: **phase 3 implementation**.
+**mechanism-inventory PASSED**; phases 1, 2 and 3 APPROVED; phase 4 in review
+(`CHANGES_REQUESTED` at review r3, fix r4 dispatched). **OD-11 adjudicated the graph
+queue: 5 promoted, 0 pending.**

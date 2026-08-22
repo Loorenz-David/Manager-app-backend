@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: REVIEWING — 2026-08-22 (fix r2 consumed; review r3 dispatched; projection WAIVED, docs-only)
+state: CHANGES_REQUESTED — 2026-08-22 (review r3: 0 blocking / 2 should-fix / 3 notes; fix r4 dispatched; OD-11 closed the graph queue; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -84,9 +84,21 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   uncited, and a reviewer checking against §5.4 would have raised a finding on a
   document that met the criterion as written. Cite both.
 - **C5** — obligation 5: the three decrease modes with the per-event client rules of
-  §6A C in full (≤ 1 s rounding; disowning drops — record deletion NOT named as a
-  cause; D8 settlement window dip-and-recover); snap down, never clamp; no `as_of`
-  field exists by their own request (D4).
+  §6A C in full (≤ 1 s rounding; disowning drops; D8 settlement window dip-and-recover);
+  snap the smoothing baseline down, never clamp; no `as_of` field exists by their own
+  request (D4). On record deletion, the authority's own words, quoted, not paraphrased:
+  **"record deletion is *not* a shipped capability and *is not named to the client*"**
+  (intention §5.4; master §7 obligation 5, identically).
+  **Amended 2026-08-22 (review r3, S1 + lesson 1) — this row's paraphrase was the
+  defect.** It previously read "record deletion **NOT named as a cause**", a compression
+  of the authority's "not named to the client". The document named the event **as a
+  non-cause** — *"Record deletion is not a shipped client event and is not a cause to
+  handle"* — which **satisfies the paraphrase and violates the authority**. Everyone
+  downstream was correct against the artifact in front of them: the implementer against
+  C5, the coordinator against C5 (who judged the literal met, kept it open, and routed it
+  to the reviewer rather than deciding it), and only the reviewer, reading §5.4 itself,
+  saw the gap. A paraphrase inside a criterion is a second source of truth with no
+  changelog. Quote the clause.
 - **C6** — obligation 6 / graph: five nodes updated, edges recorded, `archgraph_status`
   returns 0 stale / 0 diagnostics after the batch; evidence spans verified by reading
   the `anchors` block (the hash does not cover anchors — master plan §5 lineage).
@@ -505,3 +517,146 @@ identifies its tree as `e13923f` plus edits **without a diff digest**; the chart
 SHA + digest on a dirty tree. Not raised as a finding — the tree in question is now
 committed as `3df02ae`, so the record is recoverable exactly, and the probe above
 re-establishes the same fact more strongly. Recorded so the next round states digests.
+
+### 2026-08-22 — review r3 (independent reviewer, first external review) — CHANGES_REQUESTED
+
+Full checklist against C1–C9 and the semantic authorities. **0 blocking, 2 should-fix,
+3 notes.** Handoff: `handoffs/reviewer/2026-08-22_phase4_review_r3_handoff.md`.
+
+Perimeter verified first: `git show --stat 3df02ae` is **exactly the allowed 10 files**
+(`.archgraph/` ×6, the fix handoff, `master_plan.md` one own row, `plan_4.md`, the new
+frontend handoff). The two extra files in `git diff 80b8cca 3df02ae` belong to the
+coordinator commit `e13923f` sitting between the checkpoints — **not** a violation, and
+no external-stream attribution was needed.
+
+- **S1 (should-fix) — record deletion is named to the client.** §5 mode 2 ships *"Record
+  deletion is not a shipped client event and is not a cause to handle."* Intention **§5.4**
+  and master **§7 obligation 5** both say record deletion *"is not named to the client"* —
+  not merely "not named as a cause". **C5's narrower literal is met**, so the coordinator's
+  reading of C5 was right; the document violates the two authorities C5 compressed.
+  **Not blocking**: established at source that no behavioural harm follows —
+  `reset/reset_app.py` deletes task steps, tasks and the workspace alongside
+  `phases/delete_step_state_records.py`, so no surface survives on which a client could
+  observe the decrease. Two supporting measurements: **no published frontend handoff has
+  ever named record deletion as a decrease cause** (grep over all 18 documents in
+  `docs/handoff/to_frontend/`), so the sentence retires no prior belief; and it is the one
+  sentence in §5 describing our write surface rather than their behaviour — the exact
+  register §6A C excludes ("what to do, not what we believe"), which is the same test that
+  correctly kept §6A B's two-drop fact out. **Correction: delete the sentence, change
+  nothing else in mode 2**; the surviving ">1 s is authoritative" rule already covers a
+  decrease from any cause. Source of truth: intention §5.4, master §7 obligation 5.
+- **S2 (should-fix) — the published baseline omits the instability caveat.** §7 publishes
+  the 21-ID set as "the durable comparator" for D23. Master **§6** carries *"at least TWO
+  named flaky tests"* with the consequence marked **binding** — *"a single run is not
+  evidence — repeat and ID-diff"* — plus a third intermittent test of unrecoverable
+  identity. **Those bullets are NOT superseded** by the 2026-08-22 gate block, which
+  supersedes only the baselines and the "which database" block. **Measured: neither named
+  flaky test is a member of the 21** (grep, 0 hits each), so a flake presents as a **NEW**
+  failing ID in D23's diff — read as a regression — which is exactly the misreading C9's
+  own subset bullet exists to prevent one bullet earlier. **Correction: state the named
+  intermittent tests, their non-membership, and "a single run is not evidence — repeat and
+  ID-diff"**; if the isolation work is believed to have retired the instability, that must
+  be measured and stated, not assumed. Source of truth: master §6's two ⚠ bullets.
+- **N1 (note) — Redis ships without its diagnostic number.** C9 names *"without which the
+  same tree measures 23 failed / 2 errors, not 21"*; §7 states the requirement only. Master
+  §6's own baseline standard (ID set + tree + database + services reachable) **is** met —
+  hence a note. Add the 23/2 figure so a mismatch is diagnosable.
+- **N2 (note, NOT a finding against the implementer) — "snap down" has two referents.**
+  The closing rule is a near-verbatim lift of **§5.4** and master §7 obligation 5; the
+  tension with §6A C's *"no visible snap is required"* and §3.3's *"no-snap invariant"* is
+  **between authority sections**. **Decided: a client can obey both** — "snap down" governs
+  the smoothing *baseline*, "no visible snap" the *rendered* value; a client showing
+  `served + elapsed` lowers its baseline 1 s while the display keeps rising. Lesson to
+  intention §5.4 / §6A C.
+- **N3 (note, owner-adjudicated) — the double dependency is on FOUR projections, not one.**
+  P7 framed it as one node; measured over the graph, all four carry both
+  `reads_from → projection-live-worked-seconds` (phase 2, `human_confirmed`) and
+  `reads_from → table-step-state-record` (r1, pending), while the loader's own edge to the
+  table already exists. **Not a graph-vs-code discrepancy** (dependency real, diagnostics
+  0) so not filed on the `archgraph-discrepancies` route — it is an owner call, carried as
+  **Card 1**, recommendation **promote as-is**. Recorded for the adjudication: each new
+  edge's anchor (`get_task_budget_status.py:_build_evaluated_status`) names a symbol
+  carrying no `StepStateRecord` reference, mitigated by the edges' own descriptions saying
+  the read is "through the shared live-worked-seconds loader". **Nothing promoted, rejected
+  or edited.**
+
+**Verified correct, at source rather than from the ledger.** **P2 — all three
+price-scenario clauses hold**, the load-bearing one being "publishes no live worked-time
+field": it consumes only `status` and `item_binding`, and `status` is
+`INFEASIBLE if allowed <= 0 else OK` over `evaluation.allowed_worker_minutes`
+(`get_task_budget_status.py:172–173`) — an evaluation snapshot, not a worked-time
+derivation — so no live value reaches its payload; it imports neither `StepStateRecord`
+nor the loader. **P5 — both most-falsifiable claims confirmed exactly**: allocations issues
+**one** `load_live_worked_seconds` over all visible tasks' steps (line 124) and indexes it
+per task (222, 238); production time loads once (42), injects into budget status (48) **and**
+substitutes into `DivisionStep` rows (55). The other three node descriptions also hold.
+**C4 both amendments survived** — 4.1 cites §§2.3A *and* 3.4A, and 4.3's **eight** rows were
+checked one-by-one against §2.5A. **Runner verified at source**: `app/pytest.ini` carries
+`-n 6 --dist loadfile`. §4.1's cost passage matches §3.4A term-for-term including the
+corrected `min(...)` denominator (not §3.4's superseded 50-task cap). `worked_seconds` /
+`left_seconds` / `share_state` are real payload keys (`division_serializers.py:43–45`);
+`as_of` exists nowhere in the domain or query surfaces. 21 + 2576 = 2597 = published
+collection.
+
+**Evidence: 0 L4** (budget was 0; the gate stamp is cited by tree identity, `app/` diff
+empty). One L1: `PYTHONPATH=. pytest tests/unit/docs/` → **59 passed** at `31e6634`,
+`git status --porcelain` empty — new evidence, since this tree differs from the last
+docs-guard stamp's tree in `docs/`, the surface that guard reads. **No mutation probe
+applied**; no file, database or tool-recorded state mutated.
+
+### 2026-08-22 — coordinator, consumption of review r3 → CHANGES_REQUESTED, fix r4 dispatched
+
+Review r3 (independent, Opus 5) returned **CHANGES_REQUESTED — 0 blocking, 2 should-fix,
+3 notes, 1 owner card**. Consumed at `31e6634`; reviewer perimeter verified as exactly its
+three declared files (handoff + this log + its own tracker row, added not overwritten).
+Fix prompt `prompts/implementer/2026-08-22_phase4_fix_r4.md` — four edits, one file.
+
+**Every load-bearing measurement reproduced independently before acting on it:** neither
+named flaky test appears in the published 21 (0 and 0 by grep — S2's whole basis);
+`pytest.ini` carries `-n 6 --dist loadfile` verbatim; `get_task_price_scenario.py` touches
+`budget_status.status` and `.item_binding` and nothing else (239, 242, 298–299) and imports
+neither `StepStateRecord` nor `live_worked_seconds`. The review is accurate where it is
+checkable.
+
+**S1 — and it is a finding against this coordinator's own criterion, not against the
+implementer.** Plan C5 read "record deletion **NOT named as a cause**"; intention §5.4 and
+master §7 obligation 5 both read "**is not named to the client**". The document named the
+event as a non-cause, which **satisfies the paraphrase and violates the authority**. Every
+actor was correct against the artifact in front of them — and the artifact in front of two
+of them was a compression written here. The coordinator judged C5's literal met, declined
+to decide it, and routed it to the reviewer as an open call; that routing is the only
+reason it was caught, and it is the argument for reserving judgment calls rather than
+settling them in a prompt. **C5 amended to quote the clause** (§5 above), and the general
+rule folded to master §5.
+
+**S2** — the published baseline omitted the instability caveat. Measured consequence: since
+neither flaky test is a member of the 21, a flake reaches D23 as a **new** failing ID —
+i.e. as a regression they caused — which is the exact misreading the subset bullet prevents
+one bullet earlier. Folded to master §7's baseline schema as a **required field** (known
+instability), and master §6's gate block now states what it does **not** supersede, which
+is how the caveat went missing.
+
+**N1** folded into the same fix (Redis's diagnostic number). **N2** was decided the other
+way by the reviewer and is **not** a defect in the document: "snap" carried two referents
+across §5.4, §6A C and §3.3, and the implementer carried §5.4 faithfully. Resolved
+**upstream** — intention **round 4i**: "snap" governs the smoothing baseline, never the
+rendered value — with the reviewer's endorsed one-noun clarification carried into the
+document so the frontend need not reconcile three sections. **N3** was the owner card.
+
+**Owner card 1 ANSWERED the same session** (owner, 2026-08-22, verbatim: *"about the owner
+card, we keep them ( recommended option )"*). Recorded as **OD-11** in
+`planning/owner_decisions.md`, and the queue is **adjudicated and closed: 5 promoted,
+0 pending, 0 stale, 0 diagnostics**, revision `7241b831…`, review record
+`.archgraph/reviews/2026-08-22T13-26-50-282Z--7ddf0c.yml`. Four items were the card's
+subject; the fifth (price-scenario `depends_on`) was uncontested and source-verified by
+P2, promoted under the same adjudication with that scope stated in OD-11 so it is
+correctable in one line. **C6's graph obligation is now fully discharged.**
+
+**Coordinator note on the review's own evidence, recorded not raised.** E1 re-ran the docs
+guard and justified it by tree difference "in `docs/`" — but that guard's roots are
+`docs/handoff/` and `docs/domains/item_economics/`, and the coordinator commits between the
+stamps touched neither, so E1 was tree-matched. It cost three seconds at L1 and no round,
+so it is not a finding; the *reasoning pattern* is worth naming, because justifying a
+re-run by a directory that merely **contains** the read surface is how a two-minute L4 gets
+justified next time. The read surface, not its parent directory, is the unit of tree
+identity.
