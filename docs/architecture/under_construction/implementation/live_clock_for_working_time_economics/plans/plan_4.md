@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: REVIEWING — 2026-08-22 (fix r4 consumed: S1/S2/N1/N2 closed; re-review r5 dispatched — last gate; projection WAIVED, docs-only)
+state: APPROVED — 2026-08-22 (re-review r5: 0 blocking / 0 should-fix / 3 notes; all seven closeout obligations discharged; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -717,3 +717,129 @@ digest reproduction and the class sweep, both of which produced facts no prior r
 `CHANGES_REQUESTED`, and only a reviewer moves a phase to `APPROVED` — the coordinator
 verifying its own fold is exactly the loop the gate exists to break. The delta is four
 edits in one file, so the prompt is scoped hard and marks the settled ground.
+
+### 2026-08-22 — re-review r5 (independent reviewer, delta-scoped) — APPROVED
+
+**The phase's last gate. 0 blocking, 0 should-fix, 3 notes.** Handoff:
+`handoffs/reviewer/2026-08-22_phase4_rereview_r5_handoff.md`.
+
+**Perimeter verified first, reconstructed not accepted.** `git diff c543640 HEAD
+--name-only` is five documents, each inside the declared perimeter of one of the three
+commits in range; `-- app/ .archgraph/` is **empty**. `git show --stat 4e79e9d` is exactly
+three files with master's row a 1-line insertion above the previous. No external-stream
+attribution needed — stream 3 is quiet across this range. **The declared dirty-tree digest
+reproduces:** `git diff --binary c543640 4e79e9d | shasum -a 256` returns
+`db0045f66f63d5ab…` exactly, so C7's before-and-after guard measured the delivered content.
+
+**P2 — §5 mode 2 reads correctly with a sentence removed from its middle.** Prose intact,
+no dangling referent, nothing else in the mode altered. Re-derived against §6A A event by
+event: **E1 and E2 both covered by "any record"** — the load-bearing word, since §6A A flags
+E2 as *"not named in §6"*, and a fix that narrowed this while deleting the neighbour would
+have silenced it; **E4** by "or removing the step"; **E3 correctly absent** (§6A A records
+it as a *rise*); **E6 correctly absent** (a 404, "not a decrease — a different contract");
+**E5 correctly absent**, which is S1. The surviving general rule is cause-independent by
+construction, so it does cover what the deleted sentence claimed — r3's justification holds.
+**S1 swept as a class with a different instrument than the coordinator's:** 11 alternative
+terms (`eras|purg|remov|destro|discard|wipe|reset|hard delete|soft.delet|not a cause|not a
+shipped|capabilit`) plus every `record` occurrence → six hits, all benign, **zero sites
+naming record deletion in any register.**
+
+**P3 — the instability caveat sits consistently with "durable comparator".** No
+contradiction: "prefer the ID set over the count" is not "the set is immutable". **The
+instruction is actionable, not merely a warning** — "repeat and ID-diff before concluding
+that the set has changed" is direction-neutral and discriminates correctly on an extra
+named ID, an extra unnamed ID, **and a missing ID**, without needing the third test's
+identity. Both named IDs transcribed exactly, **both exist at source**
+(`test_phase4_fix_coverage.py:240`, `test_process_shopify_products_integration.py:82`), and
+**non-membership re-verified by basename** — stronger than the earlier full-path grep, since
+it would also catch a same-named test at another path. 0 and 0.
+
+**P4 — both "exactly" claims survive the edit.** Three is still the right number and the
+right three, derived from §6A C rather than from the document: its five bullets are three
+modes plus the general "any decrease" rule and the standing `share_state` rule, both of
+which the document correctly carries **outside** the numbered list. E1–E6 collapses onto
+exactly these three because E3 is an increase, E6 is a 404, E5 is not a capability.
+Corroborated by §5.4's own "exactly **three** ways". Worth re-deriving because master §7
+obligation 5 records that this row *"originally said 'exactly two ways'"*. **N2's
+correction is verbatim-faithful** to §5.4 round 4i.
+
+**Nine new facts, none held by a prior round.** (1) the digest above; (2) **the published 21
+are all members of master §6's 26** — `comm`, ∅ foreign; (3) **the five-removed enumeration
+reproduces by independent arithmetic** — `master26 − doc21` equals the published five
+**exactly, both directions**, a second derivation path to C9's fold-time result; (4)
+**obligation 2 proven structurally**: `git diff 80b8cca HEAD --name-only --
+docs/handoff/to_frontend/` is **exactly one file**, the new document — no published handoff
+edited in place, from git history rather than the document's claim about itself; (5)
+`dc76db8`'s subject matches character-for-character and `git diff dc76db8 HEAD -- app/` is
+empty, so the tree-identity sentence D23 leans on is true *as of this review*; (6)
+`pytest.ini:2` carries `-n 6 --dist loadfile`; (7) **all twelve provenance-appendix paths
+resolve**; (8) C9's seven required elements all present; (9) 21 + 2576 = 2597.
+
+**Notes (all improvements to a correct document; none holds the gate).** **N4** — §7 names
+the third intermittent test but not master §7's attached consequence *"(so the set can
+shrink too)"*, and the preceding clause's non-membership assertion implies an additive-only
+reading. Kept a **note**, not a should-fix: nothing false is stated, the schema's three
+required elements are all carried, and the published rule is direction-neutral so a reader
+following it is protected on a shrink. **N5** — the two named intermittents are published as
+bare basenames while every other ID in §7 is a full node ID, in a section whose own
+instruction is a mechanical ID-diff; full node IDs measured verbatim in the handoff. **N6** —
+the appendix's `planning/intention.md` is not repo-root-relative, unlike its twelve
+siblings, and collides with the successor project's own file of that name.
+
+**Evidence: 0 L4, 0 L1.** The gate stamp is cited by tree identity (`git diff 0aae85e HEAD
+-- app/` and `git diff dc76db8 HEAD -- app/` both empty). The docs guard was **deliberately
+not re-run**: fix r4's 59 passed covers content now proven byte-identical to `4e79e9d`, the
+commits since touch nothing under `docs/handoff/` or `docs/domains/item_economics/`, and the
+guard's non-vacuity is already measured by the coordinator's planted-token probe. **No
+mutation probe applied** — every instrument was a read, a hash, or set arithmetic over text;
+no file, database row or tool-recorded state mutated, nothing to revert.
+
+**Closeout readiness: all seven of master §7's obligations discharged**, checked one by one
+in the handoff. Two housekeeping items for the gate commit, neither a condition of approval:
+fold N4 and N5 into master §6/§7 so the next publisher inherits them. The baseline D23
+consumes is ready to publish as it stands.
+
+### 2026-08-22 — coordinator, closeout: re-review r5 APPROVED, phase and pipeline closed
+
+Re-review r5 returned **APPROVED — 0 blocking, 0 should-fix, 3 notes**. Consumed at
+`e6a49c6`; reviewer perimeter exactly its three declared files. **Phase 4 is closed and
+with it the pipeline.**
+
+**The review's strongest claims re-derived on this tree rather than accepted:**
+- **Obligation 2, proven from git history** — `git diff 80b8cca HEAD --name-only --
+  docs/handoff/to_frontend/` returns **exactly one file**, the new dated document. That is
+  a stronger instrument than any textual check, and it closes
+  [[feedback-never-rewrite-a-published-handoff]]'s concern for this phase by construction.
+- **The subset arithmetic now has two independent derivations, and both reproduce here.**
+  The published 21 contain **zero IDs foreign** to master §6's 26, and `master26 − doc21`
+  equals the document's published five **exactly, both directions**. The fold-time
+  derivation went against the isolation project's enumeration; this one goes against §6.
+- **N5's two node IDs confirmed at source** (`test_phase4_fix_coverage.py:240`,
+  `test_process_shopify_products_integration.py:82`) before being written into §6.
+
+**The three notes were folded at closeout, not deferred** — the reviewer's own disposition
+table asked for exactly that, and a note that survives closeout as a table row is a note
+that evaporates. **N5** → §6's instability bullet now carries both **full node IDs** with
+the reason (a block whose instruction is *"repeat and ID-diff"* must make every identifier
+mechanically comparable). **N4** → §7's baseline schema now states the third intermittent
+test's **direction** — it was observed as a *member* of the published set, so it can only
+remove an ID, and that is why the set can shrink as well as grow; the clause had been a
+parenthetical, and the first baseline published under the schema carried the field and
+dropped the reason. **N6** (a non-root-relative `planning/intention.md` citation, colliding
+with the successor project's own file) is documentation hygiene owed by no phase; recorded
+here so the next handoff this lineage authors picks it up.
+
+**Coordinator housekeeping, same class as N5.** The reviewer's own tracker row carried
+unescaped pipes (a shell pipeline and a grep alternation), which split it into eighteen
+table cells. Escaped. Every phase-4 row in §3 now renders as six. Noted because it is the
+third instance today of *a document about mechanical comparability being defeated by its
+own formatting*, across three different actors — the table's shape invites it.
+
+**Evidence spent at closeout: 0 L4, 0 L1.** Two set-arithmetic derivations, one git-history
+query and one source lookup. **The phase spent 0 L4 runs across all five rounds** — every
+round cited the gate stamp by tree identity, which held because `git diff 0aae85e HEAD --
+app/` is empty from the first prompt to this line.
+
+**Archived:** 11 session artifacts to `archive/plan_4/` (five prompts, five handoffs, the
+incoming coordinator's orientation). All four live queues are empty. The approval-gate
+commit follows this entry.
