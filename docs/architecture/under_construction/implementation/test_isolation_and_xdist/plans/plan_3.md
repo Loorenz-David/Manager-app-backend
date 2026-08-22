@@ -730,3 +730,48 @@ default (21 failed / 2576 passed in 52.62 s), second shipped-default scheduling 
 / 1 deselected in 150.70 s). The
 `pg_stat_activity` peak of 25/100 for six workers is carried from r2; no monitor re-measurement
 was taken in r3. No architecture item was promoted, rejected, edited, deprecated or removed.
+
+### 2026-08-22 — fix r3 consumed (coordinator). Verdict: TASK 10 MET; two notes to review r4
+
+Consumed against `git diff 0cd062c HEAD` and the live tree. Perimeter is six files: the five
+declared plus `.archgraph/architecture.yml`, whose delta the handoff declares in prose but omits
+from its own bullet list — declared, so not a finding, but the file belongs in the list.
+
+**Task 10 is met and verified.** `app/pytest.ini` carries `-n 6 --dist loadfile`. Bare
+`pytest -m 'not e2e'` now takes **52.62 s** against **150.70 s** for the `-n 0` comparator — 2.9×,
+on the same 21-ID set with `comm` empty in both directions across all three runs. Collection is
+2597 selected, exactly one more than `00ea07b`, which is C8 and nothing else. Residue is
+`beyo_test_main_template` alone. Three L4 runs, authorized before execution, all on `b96802f`
+clean. §8, §6.1 and §6.3a all say what the tree says.
+
+**The round caught the hazard task 10 created and I had not flagged.** Making parallel the default
+silently re-pointed every inherited command in §6.1, including the legacy reclamation sweep that
+r1 had documented as *serial-only; do not combine with xdist*. It now carries `-n 0`. That is the
+kind of second-order consequence a shipped-default change produces, and it was found without
+being asked for.
+
+**N1 — C8's behavioural sub-check has no mutation.** C8 is two assertions: the `addopts` token
+sequence, then `PYTEST_XDIST_WORKER` matching `gw\d+`. The named mutation removes `-n 6` from
+`pytest.ini`, which reddens the **first** assertion and returns before the second ever runs. So
+the evidence proves the string check works; the half that actually proves work was distributed is
+unproven. Project rule 4 — enumerate sub-checks from the code's branch points — and the executor's
+"a sub-check whose disabling reddens nothing is a finding" both land here. Deleting the
+`PYTEST_XDIST_WORKER` assertion and observing whether anything reddens is an L1 question.
+
+**N2 — C8 hardcodes the count, and OD-10 expects the count to change.** The assertion requires the
+literal sequence `["-n", "6", "--dist", "loadfile"]`. OD-10 states plainly that raising the count
+is permitted with a measurement. The first time someone raises it to eight, C8 goes red with
+*"shipped parallel default is missing from pytest.ini"* — a false message about a legitimate
+change. This is the N4 time-bomb shape, reintroduced by the criterion written to protect the
+default, in the phase that removed the original. The contract C8 owns is *"the configuration, not
+the command line, produced parallelism"*; skipping when `-n` appears in the invocation args at all
+and asserting only the worker environment would express exactly that and survive a count change.
+
+**Neither is blocking and neither is being re-dispatched.** This phase has now had four
+implementation rounds and **zero reviews**. A fifth fix round before any external eyes would be
+the wrong shape; both notes go to review r4 as named probes, where an independent session can
+confirm or refute them rather than take my word.
+
+**Carried, owner-owned:** the architecture graph now holds **four** pending items — two from r1,
+two from r3 — all additive, none promoted or edited. They await the owner's instruction, per the
+standing rule that graph review is human-adjudicated.
