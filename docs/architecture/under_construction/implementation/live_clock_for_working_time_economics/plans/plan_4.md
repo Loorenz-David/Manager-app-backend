@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: IMPLEMENTED — 2026-08-22 (fix r2 applied: B1, S1, S2 closed; awaiting review r3; projection WAIVED, docs-only)
+state: REVIEWING — 2026-08-22 (fix r2 consumed; review r3 dispatched; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -457,3 +457,51 @@ C6 arguably unmet on a count the reviewer will check.
 
 **Nothing diverged from the prompt's corrections** — rule 14 has nothing to declare this
 round.
+
+### 2026-08-22 — coordinator, consumption of fix r2 → REVIEWING (review r3 dispatched)
+
+Consumed at `3df02ae`. **All three findings closed and independently verified; nothing
+added beyond them; rule 14 had nothing to declare and correctly said so.** Review prompt
+`prompts/reviewer/2026-08-22_phase4_review_r3.md` — full checklist, the phase's first
+external review.
+
+**Verified against the tree, not read from the ledger.** Perimeter is exactly the ten
+declared items (4 documents + `architecture.yml` + 5 change records), **nothing under
+`app/`**. `master_plan.md` shows **1 insertion, 0 deletions** — the row was added above
+the coordinator's, not over it, so r1's overwrite is not repeated.
+
+- **B1 closed.** Five node descriptions edited through five preview→apply pairs, one
+  operation per call. `…-task-budget-status`'s drifted phrase — "live non-deleted
+  task-step seconds", the exact string intention §8 names — is gone, replaced by the
+  settled-plus-open-share basis; the other three present-tense projections carry the same
+  basis in their own terms; the fifth records the dependency as transitive and explicitly
+  denies a direct open-interval read. **Zero `+`/`-` lines match `summary:` or
+  `inferenceReason:`** — the immutability constraint held under measurement, not just in
+  the claim. The HC-5 invariant is present exactly once, wording unchanged (re-wrapped
+  only). The five nodes remain `human_confirmed`: **maintenance editing a confirmed
+  description does not re-pend it**, which the dry run predicted and the apply confirmed.
+  Graph reproduces exactly: `897d57b3…`, 194 / 296, 5 pending, 0 stale, 0 diagnostics.
+- **S1 closed.** The shipped sentence now carries §6A C's substance — "do not animate the
+  descent: render the drop in one step rather than easing the value down over time — the
+  time is gone at once, not gradually" — with the separately-correct no-clamp half kept.
+- **S2 closed.** The tree identity is now commit `dc76db8` with its subject and a
+  check-out instruction; `dc76db8` resolves and `git diff dc76db8 HEAD -- app/` is empty,
+  both re-verified here. D23 can reproduce the measurement.
+
+**Coordinator variation — a probe no ledger had run, and the class it was aimed at.**
+Both rounds reported "docs guard 59 passed before and after". A guard that is green on
+both sides proves nothing about whether it can **see** the new file: that is the
+row-that-cannot-fail shape this project has hit eleven times in five shapes, and C7 was
+the obvious next site for it. Measured rather than assumed: inserting the retired identity
+token into the new handoff turns the guard **red — 1 failed / 58 passed**, the single red
+being `test_item_economics_handoff_accuracy.py::test_retired_inline_refusal_identity_is_absent_from_live_sources`
+at its rglob line. **C7's tripwire is non-vacuous over this document.** Probe reverted,
+file SHA-256 byte-identical (`257093891e1c…`), tree clean. Marked do-not-re-spend in the
+review prompt.
+
+**Evidence:** 0 L4 this round (the gate stamp's tree is still `app/`-identical to HEAD, so
+it is cited by tree identity), one L1 mutation probe of ~3 s. The implementer's own L1 row
+identifies its tree as `e13923f` plus edits **without a diff digest**; the charter asks for
+SHA + digest on a dirty tree. Not raised as a finding — the tree in question is now
+committed as `3df02ae`, so the record is recoverable exactly, and the probe above
+re-establishes the same fact more strongly. Recorded so the next round states digests.
