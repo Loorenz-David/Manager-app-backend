@@ -1,7 +1,13 @@
 # Master plan — simple_valuation_editor
 
 ```
-state: ALL FIVE PHASES APPROVED. Code complete; closeout ritual and graph remain.
+state: **CLOSED — all five phases APPROVED; archived 2026-08-22.** Code complete and
+       all work queues empty. **Header corrected at archive time:** the previous line
+       read "closeout ritual and graph remain", which was true when written and was not
+       refreshed afterwards; the graph has since been driven to 0 pending / 0 stale /
+       0 diagnostics by later projects, and this pipeline holds no open queue. If a
+       closeout step was in fact skipped, §3's tracker — not this line — is the record
+       that would show it.
 date: 2026-08-19
 phases: 5 — see §3. Phases 3 and 4 ran in parallel (app/ vs docs/handoff/); phase 5 was
         opened by re-review r2's R8, was blocked on phase 3, and is now unblocked.

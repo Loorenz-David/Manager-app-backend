@@ -1,23 +1,23 @@
 # Master plan — live_clock_for_working_time_economics
 
 ```
-state: IN PROGRESS. Gate PASSED; phase 1 APPROVED (`d21fe9e`); **phase 2 APPROVED**
-       (`efd6b99`, 2026-08-21, six rounds); **phase 3 APPROVED** (2026-08-21, three
-       rounds, gate measurement `26 / 2515 / 1` at `808eead`); phase 4 **BLOCKED**.
-       **0 owner cards open** (OD-10 ratified 2026-08-21).
-       **Next is NOT a phase-4 prompt.** Phase 4 is gated (§6 ⛔) behind the
-       test-environment work: build a correctly migrated test database, then
-       `pytest-xdist` with per-worker isolation, then **re-enumerate the failure-ID
-       baseline under the new runner**. Phase 4 compiles only after that.
-       Test-evidence policy (charter, 2026-08-21) is live; phase 3 was its pilot and
-       spent **zero L4 runs** in its final round.
-       **Environment: the graph is NOT clean** (9 pending / 2 stale **plus stream 3's
-       uncommitted node** — re-measure, never cite); **the suite runs on the DEVELOPMENT
-       database** (§6); **recognized stream 3 is uncommitted and live** — attribute any
-       count movement to it before concluding.
-       §3's tracker is the authority on state — this line is a convenience and is
-       refreshed at every gate.
-date: 2026-08-20 (header refreshed after phase 1 approval)
+state: **CLOSED — ALL FOUR PHASES APPROVED, 2026-08-22.** Gate PASSED; phase 1
+       (`d21fe9e`), phase 2 (`efd6b99`), phase 3 (`808eead`), phase 4 (gate `4063fc6`);
+       merged to `main` as `57d8c25` and the branch deleted. **0 owner cards open**
+       (OD-10 ratified 2026-08-21; OD-11 2026-08-22).
+       **The pipeline's one binding promise is delivered:** the go-live statement
+       retiring the frontend's interim verdict-suppression flag ships in
+       `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_live_working_time_clock_20260822.md`
+       — a **new dated** document, and that handoff's §7 is the authoritative published
+       baseline for `narrow_typical_work_times` D23. Read it there, not here.
+       **Environment, as left:** the graph is **clean** (0 pending / 0 stale /
+       0 diagnostics, revision `7241b831…`); the suite runs under **six xdist workers**
+       with per-process disposable databases — the development-database and
+       9-pending-graph warnings this header used to carry are **retired**, see §6's
+       first block.
+       §3's tracker is the authority on state — this line is a convenience, refreshed
+       at every gate and finally at closeout.
+date: 2026-08-20 (header refreshed at closeout, 2026-08-22)
 coordinator: Claude Fable 5 (incoming 2026-08-20, per ORIENTATION_for_new_coordinator_20260820.md
              — that document is SUPERSEDED as an instruction set; see its banner)
 ```

@@ -202,16 +202,16 @@ tests/integration/services/commands/tasks/test_task_date_field_updates_integrati
 
 Semantic authority:
 
-- `planning/intention.md:§1A HC-3A`
-- `planning/intention.md:§2.3A`
-- `planning/intention.md:§2.5A`
-- `planning/intention.md:§3.4A`
-- `planning/intention.md:§4.1A`
-- `planning/intention.md:§5.3A`
-- `planning/intention.md:§5.4`
-- `planning/intention.md:§6A C`
-- `planning/intention.md:§8`
-- `planning/intention.md:§9 T1`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§1A HC-3A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§2.3A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§2.5A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§3.4A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§4.1A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§5.3A`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§5.4`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§6A C`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§8`
+- `docs/architecture/archives/live_clock_for_working_time_economics/planning/intention.md:§9 T1`
 
 Implementation anchors:
 
@@ -225,8 +225,8 @@ Implementation anchors:
 
 Baseline evidence:
 
-- `docs/architecture/under_construction/implementation/test_isolation_and_xdist/master_plan.md:§8`
-- `docs/architecture/under_construction/implementation/test_isolation_and_xdist/archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md:§3`
+- `docs/architecture/archives/test_isolation_and_xdist/master_plan.md:§8`
+- `docs/architecture/archives/test_isolation_and_xdist/archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md:§3`
 - `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_production_time_share_state_answer_20260819.md:§4`
 - `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_production_time_and_worker_cards_20260818.md:Live time`
 - `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md:status table`
