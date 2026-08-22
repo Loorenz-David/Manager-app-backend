@@ -111,11 +111,12 @@ Run from `backend/app/`. `PYTHONPATH=.` is required.
 
 | purpose | command |
 |---|---|
-| full suite (authoritative) | `PYTHONPATH=. pytest -m 'not e2e'` |
+| full suite (shipped default, authoritative) | `PYTHONPATH=. pytest -m 'not e2e'` |
+| full suite (serial comparator) | `PYTHONPATH=. pytest -m 'not e2e' -n 0` |
 | full suite, reversed collection | `BEYO_TEST_COLLECTION_ORDER=reverse PYTHONPATH=. pytest -m 'not e2e'` |
 | collection size only | `PYTHONPATH=. pytest -m 'not e2e' --collect-only -q` |
 | isolation criterion module | `PYTHONPATH=. pytest -q tests/integration/infrastructure/test_database_isolation.py` |
-| one-time legacy reclamation (serial-only; do not combine with xdist) | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e'` |
+| one-time legacy reclamation (serial-only; do not combine with xdist) | `BEYO_RECLAIM_LEGACY_TEST_DATABASES=1 PYTHONPATH=. pytest -m 'not e2e' -n 0` |
 
 Machine: **14 cores** (`hw.ncpu` = `hw.physicalcpu` = 14). Runner: pytest 8.3.5,
 `asyncio_mode = auto`, **two** registered third-party plugins — `pytest-asyncio-0.25.3` **and
@@ -124,8 +125,8 @@ inherited from phase 1's inspection and never re-checked. Phase 3's task 2 argue
 plugin changes collection and reporting, so the inventory it reasons from has to be true.)*
 **No randomizer is installed** — a
 `-p no:randomly` in any inherited command is disabling a plugin that does not exist.
-`pytest-xdist==3.6.1` is pinned in `app/requirements-dev.txt` for phase 3; no `-n` or
-`--dist` default is shipped, so bare pytest remains the serial comparator and default.
+`pytest-xdist==3.6.1` is pinned in `app/requirements-dev.txt` for phase 3. The shipped default
+is `-n 6 --dist loadfile`; the explicit `-n 0` invocation above remains the serial comparator.
 
 ### 6.2 Database topology
 
@@ -193,8 +194,8 @@ certainty. **Any worker-count decision states the connection budget it checked a
 
 Phase 3 measured total `pg_stat_activity` peaks while running the full suite with the completed
 criterion module and the monitor's own connection included: `-n 2` = 21, `-n 4` = 23, and
-`-n 6` = 25. All are below the server ceiling; `-n 6` is retained as an evidence row, not as the
-default, because the parallel failure-ID set is not equal to the serial set.
+`-n 6` = 25. All are below the server ceiling. The shipped default is `-n 6`; raising the count
+still requires a measurement, not an edit.
 
 ### 6.4 Redis
 
@@ -258,7 +259,7 @@ half; compare against it, never the count.
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | *not yet — fix r2, pending review* | **`00ea07b`**, clean (the r2 handoff identifies its runs as `40c1d39` + dirty digest; that tree became this checkpoint) | **serial closing: 21 failed / 2575 passed / 1 deselected** in 147.66 s; `-n 2`: 21/2574, `-n 4`: 21/2574, `-n 6`: 21/2574, all `--dist loadfile` **and all measured one criterion row before the closing tree** (digest `b6926449…`); `pg_stat_activity` peaks 21/23/25 are **r1-measured and carried**, not re-taken in r2 | **serial 21-ID set** from phase 2; all three parallel rows match it after the app-update fixture repair, so no parallel-only ID is added |
+| **3** | *not yet — fix r3, pending review* | **fix-r3 checkpoint; clean at handoff** | **shipped default:** 21 failed / 2575 passed; **serial comparator:** 21 failed / 2575 passed / 1 skipped / 1 deselected; both on the fix-r3 tree; `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; the shipped default and serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -101,6 +103,26 @@ def test_worker_name_resolution_rejects_unknown_worker() -> None:
 def test_worker_name_resolution_uses_xdist_worker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw17")
     assert resolve_worker_database_name() == "beyo_test_main_gw17"
+
+
+def test_shipped_default_reaches_an_xdist_worker(pytestconfig: pytest.Config) -> None:
+    """Prove the shipped pytest configuration, rather than a CLI override, is parallel."""
+    args = list(pytestconfig.invocation_params.args)
+    if any(
+        arg in {"-n0", "--numprocesses=0"}
+        or (arg == "-n" and index + 1 < len(args) and args[index + 1] == "0")
+        for index, arg in enumerate(args)
+    ):
+        pytest.skip("serial comparator deliberately overrides the shipped parallel default")
+
+    addopts = pytestconfig.getini("addopts")
+    assert any(
+        addopts[index : index + 4] == ["-n", "6", "--dist", "loadfile"]
+        for index in range(len(addopts) - 3)
+    ), f"shipped parallel default is missing from pytest.ini addopts: {addopts!r}"
+    assert re.fullmatch(r"gw\d+", os.environ.get("PYTEST_XDIST_WORKER", "")), (
+        "the shipped default did not reach an xdist worker"
+    )
 
 
 @pytest.mark.parametrize("slot", ["Alpha", "al pha", "alpha_beta", "", "a" * 13])

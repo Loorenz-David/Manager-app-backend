@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: CHANGES_REQUESTED — 2026-08-22 (coordinator; fix r2 verified closed, then OD-10 landed: parallel becomes the shipped default. Task 10 + C8 dispatched as fix r3)
+state: IMPLEMENTED — 2026-08-22 (Codex; fix r3; shipped default 21 failed / 2575 passed, serial comparator 21 failed / 2575 passed / 1 skipped / 1 deselected)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -712,3 +712,19 @@ satisfied.** OD-9 fixed the shipped default as serial *unless the parallel faili
 the serial comparator exactly*. After B4's repair it does, at `-n 2`, `-n 4` and `-n 6`. The round
 kept serial as "conservative" without raising it; the fix prompt said explicitly that if it now
 matched, that was an owner decision card and not a change to make. Routed to the owner as a card.
+
+### 2026-08-22 — fix r3 (Codex). Verdict: IMPLEMENTED
+
+Task 10 ships `-n 6 --dist loadfile` in `app/pytest.ini`. The serial invocation remains the
+explicit `-n 0` comparator. C8 observes both sides of the configuration contract: it requires
+the four configured `addopts` tokens and a `PYTEST_XDIST_WORKER=gw<n>` value. It skips only when
+the command line explicitly requests `-n 0`, because that is the deliberate comparator mode;
+therefore a hand-passed `-n 6` cannot make the named mutation pass after `-n 6` is removed from
+the configuration. The named mutation was run at `app/pytest.ini` with no `-n` argument and
+reddened C8; the restored shipped default passed the criterion module.
+
+The shipped default publishes the phase-2 21-ID failure set with empty `comm` in both directions
+against the serial comparator. The closing evidence budget is exactly **3 L4 runs**: shipped
+default, second shipped-default scheduling run, and explicit `-n 0` serial comparator. The
+`pg_stat_activity` peak of 25/100 for six workers is carried from r2; no monitor re-measurement
+was taken in r3. No architecture item was promoted, rejected, edited, deprecated or removed.

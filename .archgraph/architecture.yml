@@ -5288,6 +5288,45 @@ nodes:
     confidence: 0.94
     createdAt: 2026-08-21T21:18:27.881Z
     updatedAt: 2026-08-21T21:18:27.881Z
+  - id: configuration-shipped-pytest-parallel-default
+    type: configuration
+    name: Shipped pytest parallel default
+    description: "The repository's operator-facing pytest default runs the
+      non-end-to-end suite with six xdist workers using file-preserving loadfile
+      distribution. It owns runner topology only; database isolation and worker
+      naming remain the responsibility of the test isolation infrastructure. The
+      explicit -n 0 invocation is the serial comparator and is not the shipped
+      mode. What must stay true: the configuration reaches a real gw<n> worker,
+      and raising the worker count requires a fresh connection-budget and
+      scheduling measurement."
+    tags:
+      - tests
+      - pytest
+      - pytest-xdist
+      - configuration
+    metadata:
+      evidence:
+        - path: app/pytest.ini
+          startLine: 1
+          endLine: 2
+          summary: The shipped pytest addopts include -n 6 and --dist loadfile alongside
+            the strict runner settings.
+          inferenceReason: This configuration is the executable source of the repository's
+            default parallel runner topology.
+        - path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_shipped_default_reaches_an_xdist_worker
+          startLine: 108
+          endLine: 125
+          summary: The criterion requires the configured -n 6 --dist loadfile tokens and a
+            PYTEST_XDIST_WORKER value matching gw<n>, while exempting only the
+            explicit -n 0 comparator.
+          inferenceReason: The criterion makes the shipped configuration's operational
+            reachability observable and prevents a command-line worker override
+            from masking a missing default.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-22T09:12:40.934Z
+    updatedAt: 2026-08-22T09:12:40.934Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10303,3 +10342,22 @@ edges:
     confidence: 0.9
     createdAt: 2026-08-21T21:18:27.881Z
     updatedAt: 2026-08-21T21:18:27.881Z
+  - sourceNodeId: infrastructure-test-database-isolation
+    relationshipType: configured_by
+    targetNodeId: configuration-shipped-pytest-parallel-default
+    description: The test database isolation lifecycle is exercised under the
+      shipped six-worker loadfile runner, while the explicit serial comparator
+      remains available for baseline comparison.
+    metadata:
+      evidence:
+        - path: app/pytest.ini
+          startLine: 1
+          endLine: 2
+          summary: The default runner invokes xdist with six workers and loadfile
+            distribution.
+          inferenceReason: The lifecycle's operational concurrency is selected by this
+            configuration.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-08-22T09:12:40.934Z
+    updatedAt: 2026-08-22T09:12:40.934Z
