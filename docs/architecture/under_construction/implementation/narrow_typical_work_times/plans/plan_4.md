@@ -137,6 +137,32 @@ adds; budget-allocations derives its own from `item_by_id` / `primary_by_task`.
 
 ## 6. Tests / acceptance criteria
 
+### C0 — inherited: strengthen the domain-purity guard (three measured escapes)
+
+**Carried here from phase 1** (owner ruling 2026-08-22: a guard-over-a-guard does not
+justify its own implement-and-stamp cycle; it belongs to the phase that already edits the
+code it guards — this one). `app/tests/unit/domain/item_economics/test_domain_purity.py`
+holds phase 1's C4(c) and C17 as committed tests. **Three escapes were measured on the
+approved phase-1 tree; do not re-measure them, close them:**
+
+| # | escape | measured | fix |
+|---|---|---|---|
+| 1 | the package walk is `glob("*.py")`, **non-recursive** — a module in a future subpackage is never scanned | `import hashlib` in `…/item_economics/sub/leak.py` → **2 passed** | `rglob("*.py")` |
+| 2 | the pinned exception strips **every** occurrence of `config_fingerprint`, not the pinned line, so a second use in another shape is erased before the assertion sees it | a second, differently-shaped use appended to `serializers.py` → **2 passed** | strip only the pinned occurrence; keep the `count(...) == 1` pin |
+| 3 | the C17 half **passes vacuously on an empty walk** — nothing asserts the walk found anything (its sibling fails only by accident, via `FileNotFoundError` when it reads `serializers.py` to pin the exception) | `PACKAGE_ROOT` repointed at a non-existent directory → that test **passes** | assert the walk is non-empty, **as a contract, not the literal `10`** (rule 13) |
+
+*Named mutations, all three required, both sides:* re-apply each escape above; each must
+now redden. Plus the two regression probes that already bite and must continue to:
+`import hashlib` in `typical_filters.py`, and
+`from beyo_manager.models.tables.items.item import Item`.
+*Defect caught:* a purity guard that phases 4 and 5 rely on while it silently guards
+nothing — escape 3 is the shape that makes the whole file a no-op.
+*Standing rule this earned (master plan §9):* **a guard that walks a directory needs a row
+proving the walk found something.** Three escapes in one small file, all the same shape:
+the guard's own preconditions were unasserted.
+
+---
+
 Hypothesis scope: L1 = `test_narrowed_task_economics.py` / `test_budget_division.py`.
 C1's third row and C13's sweep are **absence claims** and run at **L4** with their roots and
 term sets stated. C5, C7, C11 and C12 name cross-file bite sets and run at L2 =

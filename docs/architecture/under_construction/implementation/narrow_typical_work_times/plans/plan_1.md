@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: REVIEWING
+state: APPROVED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -376,9 +376,18 @@ does not** (its count is below the floor either way) — recorded per rule 12.
 (vii) set `participates=True` for every section → the excluded row's `participates` flips
 `False` → `True` (projection L20 — otherwise an inverted `participates` is invisible until
 it surfaces as a wrong `participating_section_count` on the wire in phase 4).
-**Row attribution corrected at the review fold (N3):** the plan named rows (e)/(f); in the
-tree the bite lands on **row (d)'s fixture and the ghost row**, which are where
-`participates` is actually asserted. The mechanism is guarded; the attribution was wrong.
+**Row attribution — corrected twice, the second time from the repaired code (N3 → N9).**
+The plan first named rows (e)/(f). The round-1 fold corrected that to "row (d)'s fixture
+and the ghost row" — written from the *finding*, and stale the moment fix round 3 landed.
+**Measured on the approved tree:** setting `participates=True` for every section reddens
+the fixtures for rows **(d), (e) and (f)** — the excluded-side tuples added in round 3
+assert `participates=False` — and does **not** touch the ghost row, which is a
+*participating* section whose `participates` is already `True`.
+⚠ *Charter rule 12's second half, learned here at a cost of two wrong corrections:*
+**enumerate a mutation's bite set from the code after the repair, never from the finding
+that requested it.** The cheap enforcement, now standing (master plan §9): a fix cycle
+states, per named mutation, **which test id failed** — the implementer already has that
+output in hand.
 (viii) *(review fold, B2)* in the **participating, non-uniform** branch, publish
 `narrowed_typical_worker_seconds` instead of `section_typical_worker_seconds` → **row
 (b)** flips: the zero-median section's tuple goes `(900, section_wide, 61)` →
@@ -395,10 +404,17 @@ sections **bypass `resolve_section_typical`** and are governed by this code.
 ***Both sides* are exact-literal assertions on the `task_typical_basis` string AND on each
 section's `(typical_worker_seconds, typical_basis, sample_count, participates)` tuple.**
 ⚠ **This sentence is a criterion, not a summary** — it is the one line no session
-implemented, and it carried three of the review's findings. Rows **(a), (b), (e), (f),
-(j)** each assert the full tuple for **every** section they name, participating ones
-included. Before the review, no test anywhere asserted what a *participating* section
-publishes under `section_wide_uniform`, and both mutants above left the phase suite green.
+implemented, and it carried three of the review's findings. Before the review, no test
+anywhere asserted what a *participating* section publishes under `section_wide_uniform`,
+and both mutants above left the phase suite green.
+**Rows carrying the full tuple, re-attributed from the approved tree (N8):** the
+row-(b)/(h) two-cause fixture, and rows **(c), (e), (f), (g), (j)**. The sentence
+originally named (a), (b), (e), (f), (j); the repair landed on a different five, with
+**no detection gap** — mutations (viii) and (ix) each redden four tests, and the D25
+shape this criterion calls out (a published `0` under a `section_wide` label) is asserted,
+because the two-cause fixture's section `b` has narrowed median `0` and asserts
+`(1200, section_wide, 61, True)`. Row (a) has no dedicated two-participant fixture and
+does not need one. Bookkeeping corrected at the fold; no fix cycle.
 
 **C9 — no hidden pace model (T5, repaired).** Fixture: three participating sections with
 narrowed values `600`, `900`, `300`, all usable.
@@ -608,6 +624,32 @@ phase 4's allowances would move silently (the exact drift L1 names).
 ## 8. Review log
 
 *(append-only; shared by implementer and reviewer)*
+
+- **2026-08-22 · re-review round 2 · Opus 5 · APPROVED.** Delta-scoped
+  (`handoffs/reviewer/20260822_plan1_rereview_handoff.md`): **zero blocking, zero
+  should-fix, four notes, zero owner cards.** All nine round-1 findings closed **and
+  biting** — the three mutants that left the suite at 33 passed in round 1 now redden it,
+  as do the two S1 mutants and the parser mutant, measured across **15 L1 probes** on a
+  41-test baseline. Perimeter verified first: the production change across the whole fix
+  cycle is `_optional_values`, one hunk, +7/-1. The reviewer took **L4 runs: 0** —
+  consuming the round-3 stamp by citation on a matching SHA and corroborating it
+  arithmetically instead (its phase baseline moved 33 → 41, +8; the cited suite moved
+  2609 → 2617, +8, with the 21-ID set unmoved). It also ran **eight unnamed variation
+  mutants** on the participating branches, all biting, and re-read the archgraph delta
+  from `git diff` rather than from the ledger.
+  **Four notes, none blocking, all routed:** N6 — the purity guard has a *third* escape
+  (the C17 half passes vacuously on an empty walk) → **plan 4 C0**, joining the two the
+  owner carried; N7 — three container shapes still parse and two parameter families are
+  unguarded at the same boundary, with `major_categories` rejecting a bare string only
+  *accidentally* (no enum member is one character long) → **plan 2 C0**; N8 — C8's
+  closing sentence named five rows and the repair landed on a different five, **no
+  detection gap** → re-attributed here; N9 — the N3 attribution went stale when the
+  repair landed → re-derived here from the approved tree. Three rules earned into master
+  plan §9 (directory-walk non-emptiness; enumerate a bite set from the repaired code, and
+  state which test id failed; malformed-input rejection is per-family).
+  **State → `APPROVED`.** Gate commit `<this commit>`; rows archived to
+  `archive/plan_1/`. Phase 2 may start.
+
 
 - **2026-08-22 · owner ruling on round count · round 4 CANCELLED, phase → re-review.**
   The owner challenged whether four implementation rounds were proportionate and proposed

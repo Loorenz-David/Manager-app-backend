@@ -107,6 +107,40 @@ committed in plan 1 is read-only in this phase — a change to it is an automati
 
 ## 6. Tests / acceptance criteria
 
+### C0 — inherited: close the parser boundary for the families phase 1 left open
+
+**Carried here from phase 1's re-review (N7).** Phase 1's S2 fix closed
+`_optional_values` for **scalars** — `str`, `bytes`, `int`, `float`, `bool` all raise
+`ValidationError`. This phase builds the route, so the parser stops being a deferred
+surface and becomes a public contract; the same *"structurally satisfies the annotation"*
+reasoning that produced S2 applies to what remains. **Measured on the approved phase-1
+tree — none of these is reachable through master plan §6.8's typed-router grammar today,
+which is why they were not a phase-1 defect:**
+
+| input | today | why it matters here |
+|---|---|---|
+| `bytearray(b"ab")`, `memoryview(b"ab")` | `frozenset({'97','98'})` | the byte-wise analogue of exactly the defect S2 closed |
+| `{"cat_a": 1, "cat_b": 2}` | `frozenset({'cat_a','cat_b'})` — iterates keys | a dict silently reads as its keys |
+| `{"can_have_upholstery": "yes"}` | a **narrowing** spec whose field is the string `"yes"` | this family takes **any object verbatim** — no guard at all |
+| `{"major_categories": {"wood": 1}}` | `frozenset({WOOD})` from a dict's keys | — |
+| `{"major_categories": "wood"}` | `ValidationError` — but **only accidentally** | every `ItemMajorCategoryEnum` value is multi-character; **add a one-character member and the round-1 defect silently reopens on this family** |
+
+*Contract:* every parameter family rejects what it cannot legitimately receive, and the
+boundary is stated **per family** — `can_have_upholstery` accepts only `bool | None`;
+the repeatable families accept only a non-`str`/`bytes` iterable of scalars; the enum
+family rejects a bare `str` **explicitly**, never by accident of member length.
+*Rows:* one per shape in the table above, plus the phase-1 rows (o)(p)(q) which must
+continue to pass.
+*Mutation:* remove the `can_have_upholstery` type check → the `"yes"` row flips from
+`ValidationError` to a narrowing spec; shorten a test enum member to one character in the
+`major_categories` row's fixture → the bare-`str` row flips from `ValidationError` to a
+silently narrowed spec.
+*Standing rule this earned (master plan §9):* **"reject the malformed input" is
+per-family, and families drift apart.** A criterion fixing a boundary for one family
+enumerates the others and says which are in scope and which are deferred.
+
+---
+
 Hypothesis scope for mutations: L1 = `test_typical_item_filter.py` /
 `test_typical_times_narrowing.py` / `test_typical_times_sql_identity.py`. C7, C8 and C9 name
 cross-file bite sets and run at L2 (`tests/unit/services/queries/working_sections/` +

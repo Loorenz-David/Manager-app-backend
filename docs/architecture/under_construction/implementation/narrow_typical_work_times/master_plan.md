@@ -5,7 +5,7 @@ plan: master_plan
 role: implementation-planner
 round: 0
 date: 2026-08-22
-status: PLANNED — six phases, all NOT_STARTED
+status: IN PROGRESS — phase 1 APPROVED 2026-08-22; phases 2–6 NOT_STARTED
 intention: planning/intention.md (RESOLVED round 8, D1–D25 settled, gate PASS-WITH-CONTRACTS)
 ```
 
@@ -52,6 +52,20 @@ sequencing gates, the environment, and the standing rules.
 **this file**; a phase-local change amends **its plan file**. Nothing is patched
 downstream into divergence. Amendments never renumber sections other documents cite —
 insert lettered sections instead.
+
+**Archive ritual (charter layout, plus one recorded extension).** Rows move to
+`archive/plan_<n>/` **at the phase's approval gate, in the gate commit** — never earlier:
+a row's folder *is* its state, and several handoffs stay **live inputs** until their phase
+closes (plan 1's read-first list cited its own projection and implementation handoffs
+while the phase was open). Historical path references are **not** rewritten; they resolve
+under the archive by convention.
+*Extension (owner question, 2026-08-22):* the charter partitions the archive by phase, but
+this project has **project-level** rows belonging to no phase — the planner prompt and
+handoff, the voided calibration seal, and the previous coordinator's orientation document.
+They live in **`archive/planning/`**, closed after the plan set was folded.
+*The one deliberate exception:* the **mechanism-inventory gate prompt and handoff stay
+live** until the project closes — §2 above cites the handoff as a standing source of truth
+and plans 1–6 read it, so archiving it mid-project would break live read-first lists.
 
 ---
 
@@ -107,7 +121,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `REVIEWING` | 2026-08-22 | coordinator | Fix round 3 closed all 9 review findings (L4 `1590ebe` 2617/21, delta ∅/∅; production diff = `_optional_values` alone). Round 4 **cancelled** on the owner's round-count ruling — the two purity-guard escapes carry to phase 4, C4(c) amended to the delivered scope. **Tests-first is now task 0 for phases 2–6** (§3). Delta re-review dispatched. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
@@ -545,6 +559,23 @@ in §2. Restated here only where they bite hardest on *this* feature:
   differs from another only in a field the assertion projects away is a duplicate: C7's
   T17 pair asserted three of six fields, so it proved identity of the projection, and
   `participates` survived unconstrained.
+- **A guard that walks a directory needs a row proving the walk found something.** Phase
+  1's purity guard accumulated **three** escapes in one small file and all three shared a
+  shape — the guard's own preconditions were unasserted: a non-recursive walk, an
+  exception that stripped every occurrence instead of the pinned one, and a directory
+  scan that **passed vacuously on an empty result**. Assert non-emptiness as a contract,
+  never as a literal count. (Closed in plan 4 C0.)
+- **Enumerate a mutation's bite set from the code AFTER the repair, never from the finding
+  that requested it** — charter rule 12's second half. Phase 1 paid for this twice: an
+  attribution was corrected once from the finding, and the correction itself was stale by
+  the time the repair landed. **Cheap enforcement, now required:** a fix cycle states,
+  per named mutation, **which test id failed**. The implementer already has that output;
+  it costs one column and makes the plan's claims falsifiable.
+- **"Reject the malformed input" is per-family, and families drift apart.** Phase 1's
+  parser fix closed two of four parameter families; a third took any object verbatim and
+  a fourth rejected a bare string only because no enum member happened to be one
+  character long. A criterion that fixes a boundary for one family **enumerates the
+  others** and says which are in scope and which are deferred. (Closed in plan 2 C0.)
 - **Absence criteria ship as committed tests, never as a session grep** (charter rule 1;
   the exemption is environment-lifecycle checks only). Plan 1's C4(c) and C17 were both
   re-measured *correct* at review — the defect was the form: nothing in the suite went
