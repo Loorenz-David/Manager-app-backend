@@ -293,7 +293,7 @@ teardown has no `ConnectionError` guard. §6.4 asserts the opposite and is wrong
 
 | Phase | Approved | Tree | Suite | Failing-ID set |
 |---|---|---|---|---|
-| **3** | *not yet — fix r3, pending review* | **`b96802f`**, clean at all three L4 runs | **Precondition:** Redis reachable at `settings.redis_url`. **Shipped default:** 21 failed / 2576 passed (52.62 s; second run 53.26 s); **serial comparator:** 21 failed / 2575 passed / 1 skipped / 1 deselected (150.70 s); `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; both shipped-default runs and the serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
+| **3** | *not yet — fix r5, pending review* | **checkpoint `4b5719d`**, app tree identical to the measured implementation tree; report-only plan/handoff edits follow | **Precondition:** Redis reachable at `settings.redis_url`. **Shipped default:** 21 failed / 2578 passed (55.95 s; second run 55.41 s); **serial comparator:** 21 failed / 2577 passed / 1 skipped / 1 deselected (142.29 s); `pg_stat_activity` peak 25/100 for the shipped six-worker default is carried from the completed r2 matrix | **serial 21-ID set** from phase 2; both shipped-default runs and the serial comparator have empty `comm` in both directions, so no parallel-only ID is added |
 | **2** | 2026-08-21 | **`11b4d02`**, clean | **`21 failed / 2561 passed / 1 deselected`**, default 116.20 s and reversed 117.83 s | **21 IDs**, enumerated in `archive/plan_2/2026-08-21_phase2_fix_r4_handoff.md`; `comm`-empty in both directions, coordinator-measured at the gate |
 | 1 | 2026-08-21 | `5ecfe90` | `22 failed / 2541 passed / 1 deselected` | the published 22 |
 

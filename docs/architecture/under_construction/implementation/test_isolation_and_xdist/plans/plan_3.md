@@ -1,7 +1,7 @@
 # Plan 3 — parallelism, and a baseline worth trusting
 
 ```
-state: CHANGES_REQUESTED — 2026-08-22 (review r4, Opus 5: 1 blocking, 5 should-fix, 6 notes; graph promoted 4/4, 0 pending. Fix r5 dispatched; owner card 1 answered YES, graph maintenance dispatched separately)
+state: IMPLEMENTED — 2026-08-22 (Codex fix r5; shipped default 21 failed / 2578 passed; serial comparator 21 failed / 2577 passed / 1 skipped / 1 deselected; L4 count: 3)
 hub: ../master_plan.md (tracker §3, environment §6, gates §7, baselines §8)
 phase: 3
 date: 2026-08-21
@@ -845,3 +845,30 @@ does not discover it by failing.
 
 Dispatched independently of fix r5, and fix r5 is fenced out of `.archgraph/` entirely: the two
 sessions may run concurrently without contending for the graph.
+
+### 2026-08-22 — fix r5 (Codex). Verdict: IMPLEMENTED
+
+Closed review r4's B1, S1–S5, N1 and N2 within the cycle perimeter. C2's current-template row
+now holds a template connection and observes each probe's own advisory lock at the copy call,
+releasing the held connection only for the correctly wide lock; this is necessary because
+PostgreSQL rejects `CREATE DATABASE ... TEMPLATE` immediately when the source connection remains
+open. The row is green on the shipped implementation and red with `ObjectInUseError` under both
+the definition-side lock removal (M4) and the call-site narrowing (M5); rows (a)/(b) retain their
+own `UniqueViolationError` and `InvalidCatalogNameError`. The C8 guard now recognizes every
+`-n`/`--numprocesses` override and asserts positive worker count, `loadfile`, and `gw<n>` rather
+than literal six. The two missing endpoint aliases and the serial-only documentation corrections
+are present; the sibling-disjointness decoration was removed.
+
+Targeted criterion evidence: shipped default 53 passed; both `-n 0` and `--numprocesses 0` 52
+passed / 1 skipped. C8 mutations: missing addopts worker count red; `-n 8` green; `PYTEST_ADDOPTS=-n 0`
+red on the worker assertion. L4 count is **3**: shipped default 21 failed / 2578 passed twice;
+serial comparator 21 failed / 2577 passed / 1 skipped / 1 deselected. All three failing-ID deltas
+are empty in both directions against the phase-2 21-ID set. Redis was reachable at
+`settings.redis_url`; the 25/100 `pg_stat_activity` peak is carried from r2 as instructed.
+The concurrent comparator attempt was discarded because two serial L1 commands shared probe
+slots; sequential reruns were the cited evidence.
+
+No production code, requirements, pytest configuration, conftest, probe harness, migration, or
+`.archgraph/` changes were made by this cycle. The application/doc checkpoint `4b5719d` was
+created by the owner concurrently while the L4 matrix ran and is recorded as an external commit
+stream; its prompt/maintenance-file additions are preserved.
