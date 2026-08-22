@@ -100,6 +100,16 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
   tables as `round: 0`.
 - **State machine:** `NOT_STARTED → PROJECTED → PROMPT_READY → IMPLEMENTING →
   IMPLEMENTED → REVIEWING → CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`.
+  **⚠ A session's gate check names the state that exists when the session opens, not the
+  state that existed when the prompt was written.** Compiling an implementer prompt *is*
+  the `PROJECTED → PROMPT_READY` transition, so an implementer prompt gates on
+  `PROMPT_READY` — never on `PROJECTED`. Earned 2026-08-22: the phase-2 prompt gated on
+  the pre-transition state and a session correctly refused to start.
+  **The coordinator writes the gate check after advancing the state, and re-reads the
+  tracker while writing it.** And the corollary for the session: **a gate check that
+  disagrees with the tree is a coordinator defect — stop and report it. Never edit the
+  tracker or the plan header to match your own instructions**, which would convert a
+  prompt typo into a false project state.
 - **The PROJECTED gate is risk-triggered.** It is **mandatory** for every phase that
   touches a rule-6 silent-failure mechanism; §7 states the trigger per phase. Waivers are
   the coordinator's, with a recorded one-line justification. Two consecutive empty

@@ -28,9 +28,17 @@ Doctrine first, by absolute path — it wins over this prompt wherever they diff
 
 ## Gate check (stop-and-report if any fails)
 
-1. `<project>/master_plan.md` §4: phase 1 **`APPROVED`**, phase 2 `PROJECTED`.
+1. `<project>/master_plan.md` §4: phase 1 **`APPROVED`**, phase 2 **`PROMPT_READY`**.
 2. `git status` clean at start (only `?? .archgraph/contexts/` is expected).
-3. `<project>/plans/plan_2.md` header reads `state: PROJECTED`.
+3. `<project>/plans/plan_2.md` header reads `state: PROMPT_READY`, and its §8 Review log
+   carries the 2026-08-22 projection fold entry.
+
+*(Corrected 2026-08-22 after a first session stopped here: round 1 of this prompt asked
+for `PROJECTED`, which is the state **before** an implementer prompt exists. The charter's
+machine is `PROJECTED → PROMPT_READY → IMPLEMENTING`, and compiling this prompt is what
+made the transition. The session was right to stop rather than edit the tracker to match
+its instructions — **a gate check that disagrees with the tree is a coordinator defect,
+and reporting it is the correct move every time.**)*
 
 ## ⚠ TASK 0 — TESTS FIRST. This is the change that defines this phase.
 
