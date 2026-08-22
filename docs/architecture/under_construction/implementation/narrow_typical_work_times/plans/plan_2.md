@@ -3,9 +3,10 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: NOT_STARTED
+state: PROJECTED
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
+            (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
 ```
 
 ## 1. Goal
@@ -52,6 +53,20 @@ committed in plan 1 is read-only in this phase — a change to it is an automati
 - `app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py`
   — `typical_times_statement` only. `get_working_section_typical_times` (the service) keeps
   its current call form.
+- `app/beyo_manager/domain/item_economics/typical_filters.py` — **C0 only** (the
+  per-family parser guards). No other production edit to this file. *(Projection L1: C0
+  was folded in from plan 1's re-review and its two files were never added here — three
+  undeclared paths in the diff would be automatic findings against a session that did
+  exactly what the plan asked.)*
+- `app/tests/unit/domain/item_economics/test_typical_filters.py` — C0's rows (L1).
+- `app/tests/unit/services/queries/working_sections/test_typical_times_sql_identity.py` —
+  C1's third row (L6). **The snapshot file it reads stays read-only** (below).
+- `app/tests/integration/services/queries/working_sections/_narrowing_seed.py` **(new)** —
+  the §12 seeding + `EXPLAIN ANALYZE` harness, committed so the measurements are
+  reproducible (L20). Master plan §6.9 assigns `seed_narrowing_history` /
+  `_narrowing_fixture.py` to **phase 4**; this is a *separate, phase-2-local* harness and
+  does not pre-empt it (L26). If phase 4's fixture can absorb it later, that is phase 4's
+  call to make.
 
 **Read-only, and a change is a finding**
 - `app/tests/unit/services/queries/working_sections/snapshots/typical_times_no_spec_sql.txt`
@@ -93,16 +108,36 @@ committed in plan 1 is read-only in this phase — a change to it is an automati
    primary-less task in `section_*` and not in `narrowed_*` (C7).
 7. `emit the ItemCategory join iff any spec needs it`, and only those specs' predicates
    reference it (§3A C4).
-8. **The §12 measurement matrix — all ten.** Seed a representative 90-day history on a
-   disposable database. Measure with `EXPLAIN ANALYZE` (or equivalent) the **current**
-   statement and the **new** statement at five shapes: single task; batch of 50 tasks ×
-   5 distinct primary-item categories; × 10; × 20; and the no-spec shape (expected:
-   identical plan, since C1 pins identical SQL). Write plans, timings and the chosen
-   internal strategy per shape into `planning/query_cost_measurements.md`.
-   **§12 states no count; ten is the count. A silent subset is a gate failure.**
-   If a measurement embarrasses a strategy, the strategy is swapped **behind
-   `typical_times_statement`** — the domain objects, resolution semantics and every §7
-   response contract stay unchanged. **No caching layer is the remedy.**
+8. **The §12 measurement matrix — corrected shapes, and no acceptance threshold**
+   (**D26 / intention §12A**, owner ruling 2026-08-22).
+   **Batch size: 20 tasks, not 50.** 50 is the API cap
+   (`get_task_budget_allocations._MAX_TASK_IDS`); the **frontend paginates task queries at
+   20**, so 20 is the operating point and 50 is a ceiling nobody currently reaches.
+   Measure the **current** and the **new** statement at five shapes: single task;
+   **20 tasks × 5** distinct primary-item categories; **× 10**; **× 20**; and the no-spec
+   shape (expected: identical plan, since C1 pins identical SQL). **That is the ten.**
+   Plus **one extra row, new statement only: 50 × 20**, labelled *API ceiling, not a
+   realistic page* — recorded for the freezing decision, not compared against anything.
+   **Seed size (L21 — "representative" is an adjective for a mechanism, charter rule 5):**
+   the harness fixes and records exact cardinalities — sections, tasks per section, steps
+   per task, distinct item categories, and the span of `latest_closed_at` across the
+   90-day window — with **every section clearing `TYPICAL_MIN_SAMPLE_SIZE`**, or the
+   measured query returns `NULL` typicals and measures the wrong plan.
+   **State which cells are constant by construction** (L22, §12A): the *current* statement
+   is spec-blind, so its cost is the same query in all five of its rows, and the *new*
+   no-spec row equals it by C1 — **five of the ten cells are copies, and unrecorded a
+   reviewer cannot tell a measurement from a copy.**
+   Write plans, timings, seed cardinalities and the chosen internal strategy per shape into
+   `planning/query_cost_measurements.md`. The harness lives at
+   `app/tests/integration/services/queries/working_sections/_narrowing_seed.py` and is
+   **committed** — an uncommitted harness makes the numbers unreproducible (L20).
+   **Acceptance: no number blocks this phase** (D26). The gate is that all ten cells are
+   present, honestly labelled, and reproducible. But a result an **order of magnitude
+   outside expectation is surfaced to the owner as information** — not gated, not silently
+   filed. If a measurement embarrasses a strategy, the strategy is swapped **behind
+   `typical_times_statement`** — domain objects, resolution semantics and every §7 response
+   contract stay unchanged. **No caching layer is the remedy** *within this pipeline*; the
+   owner's frozen-snapshot direction is a later, separate piece of work (§12A).
 9. Tests per §6. Update the tracker row and the Review log.
 
 ## 6. Tests / acceptance criteria
@@ -355,6 +390,107 @@ their shape and statement, is a gate failure. The automated companion already ex
 pins the no-spec SQL identically, which is why the no-spec shape is expected to show an
 identical plan.
 
+---
+
+## 6A. Projection fold — criteria corrections (2026-08-22)
+
+The plan-2 projection (AMENDMENTS_REQUIRED, 33 ledger rows, 13 reality checks, 1 owner
+card) tried to turn every §6 criterion into a test and found **nine of fourteen not
+writable as worded**. Because this is the **first tests-first phase**, the implementer
+hits each of these in the first hour — which is exactly the value the decidability check
+was supposed to pay out, cashed one step earlier than usual.
+
+**These corrections win over §6 wherever they differ.** Six criteria are untouched and
+transcribable as written: **C2, C4, C5, C6, C7, C11**.
+
+### The recurring defect: a fixture too small to show the thing it checks
+
+**C8 row (a), C9 and C13(a) all assert a median that their own fixture cannot produce.**
+`narrowed_typical` / `section_typical` are `NULL` below `TYPICAL_MIN_SAMPLE_SIZE`
+(`get_working_section_typical_times.py:49-52`), so a **one-task** fixture yields `None`
+on both the contract and the mutation side. And at exactly five groups, tripling **one**
+of them leaves the median where it was — `median({S,S,S,S,3S}) = S`.
+**Every fixture in this phase that asserts a typical value enumerates its groups, clears
+the floor, and states why the mutation moves the median.** Recommended shape: five
+qualifying groups all carrying the fan-out shape, so the mutation moves every element.
+
+### Per criterion
+
+| # | Correction |
+|---|---|
+| **C0** | *(the criterion I folded in from plan 1's re-review — my text, and the weakest in the table.)* Its table gives each input's value **today**, not its required **outcome**, and the *Contract* sentence does not decide two of the rows: a `dict` and a `bytearray`/`memoryview` are both non-`str` iterables of scalars (L2). **Decide them: `bytearray`/`memoryview` → `ValidationError`** (they are the byte-wise analogue of the defect S2 closed); **a bare `dict` → `ValidationError`** (silently reading a mapping as its keys is the same class of accident). State the expected outcome per row, and give rows 1, 2 and 4 a named mutation each (L3). Reword "This phase builds the route" → **"builds the spec→SQL path"** — §6.8 defers the route and §1 forbids consumer changes (L4). Add **§6 C14** of plan 1 to §2's read-first: C0 requires rows (o)(p)(q) to keep passing and they live there, not in C15 (L30). |
+| **C1** | The mutation *"make the item joins unconditional"* **cannot redden** the branch task 3 mandates: item joins exist only on the `K ≥ 1` path, and `len(specs) == 0` returns before reaching them. This is §11A's T11 repair reappearing one phase later. **The mutation becomes "delete the `len(specs) == 0` branch"**, sending the no-spec call through the general builder (L5). Keep plan 1's C15 mutation (delete `WorkingSection.is_deleted.is_(False)`) as the structural control. **Parametrize the three rows** — they are currently sequential asserts in one function, so "all three go red" is unobservable; the first failure hides the rest (L7, charter rule 12). |
+| **C3** | "no qualifying history at all" → **"no COMPLETED task_steps at all"**. With merely *old* steps the section survives the inner-join mutation and the mutation is inert (L8). |
+| **C8** | Enumerate row (a)'s fixture per the floor rule above (L9). **The closing claim "the median assertion bites under either" is false** (L10): under **outer** attachment the three joined `task_items` rows multiply the *row count*, not `group_seconds` — the median over three equal values is still `S`, and the **count** assertion (1 → 3) is what bites; under **inner** attachment the median moves (S → 3S) and the count does not. Row (a) asserts both and is safe, but say which assertion bites on which strategy. |
+| **C9** | Same fixture enumeration (L11). **Label the `specs=()` half a control, not a sub-check**: with no specs the statement emits no item joins, so dropping `removed_at IS NULL` from an `ON` clause that does not exist changes nothing (R7). A control is legitimate; reading as two biting sub-checks is not. |
+| **C10** | Add a **`can_have_upholstery=False`** row — a *set* field that is falsy, so `if spec.can_have_upholstery:` drops the conjunct silently; same shape for a **zero lower bound** on a range (L12). This is the highest-value non-blocking row in the ledger. Give rows (b), (f), (g) one mutation each (L13). Add one line assigning criteria to files: C10's both-sides are `narrowed_sample_count` literals, so it is an **integration** criterion, and the unit file's only enumerated content is otherwise C11 (L14). |
+| **C12** | **The instrument counts the wrong thing** (L15): the substring `item_categories` appears in the `LEFT OUTER JOIN` **and** inside `item_categories.major_category IN (…)`, so "present **once**" is false under the *contract*, not only under the mutation. **Count `LEFT OUTER JOIN item_categories`.** Row (a) ("K=2, neither sets `major_categories`") is satisfiable by two **empty** specs that emit no joins at all — vacuous; **require both specs to narrow on another field** (L16). |
+| **C13** | **(a) is the load-bearing repair in this fold.** C1's boxed limitation defers every bound-value change to an integration row, and C13(a) is that row — but it names **no baseline** for "unchanged key-for-key and value-for-value", and does not require the seeded workspace to **clear the sample floor**. A workspace with four qualifying groups answers `typical_worker_seconds: null` for every section, and a `percentile_cont(0.5) → 0.6` mutation leaves the payload identical (L17, R8). **Pin the expected payload explicitly, and require ≥ `TYPICAL_MIN_SAMPLE_SIZE` qualifying groups.** (b) omits an existing consumer: `test_phase2_live_surfaces.py` imports `typical_times_statement` (`:37`), asserts on its compiled params (`:986-989`), executes it against a real session (`:1377-1380`) and monkeypatches the module's bound `datetime` (`:1394`) — **add it** (L18, R9). |
+| **C4** | Mutation (ii) is an **absence assertion wearing a mutation's label**, and it is module-scoped where §6.6 claims "anywhere in this pipeline". Restate it as its own criterion row with root and term set (L29). |
+| **C2** | Row (d) asserts `narrowed_* == section_*` — an equality between two computed values. Assert **both against the literal count** (master plan §9; L32). Non-blocking. |
+
+### Strategy taxonomy — one axis, not two
+
+Task 6 offers §4.2's axis (`bool_or` pairs vs GROUPING SETS) while C8/C9's both-sides are
+stated on **§4A K4's** axis (inner vs outer attachment). **K4's axis is the one the
+criteria bind** (L23). Two further consequences:
+
+- **GROUPING SETS as named cannot produce K2's total cardinality** — a section with no
+  rows for a category emits no row; it needs an outer cross join plus a `LEFT JOIN`, which
+  the plan does not describe. **Drop the option for V1**, or state the extra machinery.
+  C3 is the guard either way (L24).
+- **Ship one strategy this phase.** "The chosen internal strategy *per shape*" means that
+  if more than one ships, only the one the tests' spec profile triggers is covered
+  (charter rule 10). One strategy, or a criterion per strategy (L25).
+
+### Where the K-multiplication hazard actually lives — and which criterion owns it
+
+Worked out on paper by the projection: both attachments are constructible and neither
+multiplies the section-wide aggregates, **provided `spec_index` is materialised as a cross
+join in the OUTER select and added to its `GROUP BY`** —
+`FROM working_sections CROSS JOIN (VALUES (0),(1),…) AS s(spec_index) LEFT OUTER JOIN
+grouped_steps … GROUP BY ws.client_id, ws.name, s.spec_index`. Every `(section,
+spec_index)` group then sees the same `grouped_steps` rows, so `section_sample_count` is
+constant across indices by construction.
+**The failure mode** is introducing `spec_index` *inside* `grouped_steps` without adding
+it to that subquery's `GROUP BY`, which multiplies `SUM(total_working_seconds)` by K.
+**C5 is the guard** — it pins `section_sample_count == 20` at every index *and* against
+the `K == 0` call, so a K-multiplication reddens it. Recorded here so the implementer
+knows which criterion owns the phase's sharpest hazard.
+
+### Delegated in writing (free choices, not gaps)
+
+- **`build_item_match`'s `(bool, predicate | None)` tuple stays.** The projection checked
+  whether the bool is dead and concluded it is not: `needs_category_join` is not derivable
+  from the predicate without walking the expression tree, and keeping it is what preserves
+  the "only module that knows Task → primary TaskItem → Item" boundary (§4.2). One gap
+  worth closing cheaply: no criterion asserts the bool directly — C12 asserts only its
+  statement-level consequence.
+- **Under outer attachment the `TaskItem` `ON` clause needs `workspace_id`, which
+  `grouped_steps` does not select** (L27). Implementer's choice: pass it as a bound
+  parameter, or add the column to the subquery. `K ≥ 1` only, so **C1 is unaffected**
+  either way — say which you chose in the handoff.
+
+### Recorded, not fixed here
+
+- **`uix_task_items_primary_active` is untested repo-wide** (L33, R10). It appears in the
+  model (`task_item.py:53`), in two migrations, and in docs — **no test references it** —
+  yet plan §2's fan-out-free claim rests on it. Its shape does match §3A C5's `ON` clause
+  exactly, so the claim is true today; it is simply unguarded, and C8/C9 would catch a
+  *code* change but not the index being dropped. **One criterion row** (a second active
+  primary raises `IntegrityError`, or the index exists with its `WHERE`) — cheap, and this
+  is the phase that depends on it.
+- **§7's docs-guard instruction is a no-op** (L31, R11): the guard's roots are
+  `docs/domains/item_economics/` and the app/backend roots, and
+  `query_cost_measurements.md` lands under `docs/architecture/under_construction/`. Kept
+  as harmless habit; do not read a green guard as having checked this doc.
+- **Routed upstream, not an implementer blocker:** §3A C5's `ItemCategory` join carries
+  neither `workspace_id` nor `is_deleted IS FALSE`, though `Item`'s join carries both and
+  `item_categories` has both columns (`item_category.py:19-21`, `:41`) — **a soft-deleted
+  category still satisfies `major_categories`** (L28, R12). Folded to intention §3D.
+
+---
+
 ## 7. Notes
 
 - **F-B is the boundary of the design, not an incidental fact.** Narrowing is defined
@@ -373,4 +509,24 @@ identical plan.
 
 ## 8. Review log
 
-*(empty — append-only; shared by implementer and reviewer)*
+*(append-only; shared by implementer and reviewer)*
+
+- **2026-08-22 · projection round 0 · Opus 5 · AMENDMENTS_REQUIRED → folded same day.**
+  33 ledger rows (9 blocking), 13 reality checks, **1 owner card — answered**
+  (`handoffs/reviewer/20260822_plan2_projection_handoff.md`). The design held: the
+  two-population arithmetic, the item join and HC-4's byte-identity are all sound and no
+  settled decision reopened. **The criteria table did not: nine of fourteen criteria were
+  not writable as tests as worded**, and since this is the first tests-first phase the
+  implementer would have hit every one in the first hour — the decidability check paying
+  out exactly as intended, one step earlier than usual.
+  **Owner card → D26:** no acceptance threshold; the card's 50-task premise was wrong
+  (the frontend paginates at 20), few categories exist, and the architectural fix is
+  scheduler-refreshed frozen typicals. Folded as intention **§12A** + task 8.
+  **All 33 rows routed:** intention §12A and **§3D** (the `ItemCategory` join asymmetry,
+  recorded with a conversion trigger, §3A C5 unchanged); §4 gains the four undeclared
+  paths plus the committed measurement harness; and **§6A** carries the per-criterion
+  corrections — chiefly C1's inert mutation (it cannot redden the `len(specs)==0` branch
+  task 3 mandates — §11A's T11 repair reappearing one phase later), C12's instrument
+  counting a substring the predicate also contains, C13(a) unable to discriminate the
+  bound-value changes C1's own limitation defers to it, and the recurring
+  fixture-below-the-sample-floor defect in C8/C9/C13. State → `PROJECTED`.

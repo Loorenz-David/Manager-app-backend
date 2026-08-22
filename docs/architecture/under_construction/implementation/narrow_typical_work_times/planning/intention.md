@@ -1,7 +1,7 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: RESOLVED (round 8, 2026-08-22) — **0 owner cards open. D1–D25 settled**
+status: RESOLVED (round 9, 2026-08-22) — **0 owner cards open. D1–D26 settled**
         (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
         known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
         satisfied 2026-08-22 — every live-clock phase touching the shared files is
@@ -20,14 +20,18 @@ status: RESOLVED (round 8, 2026-08-22) — **0 owner cards open. D1–D25 settle
         proof; §4C (D25) amends §3.4's BROADEN rung, §4.3's quantifier, §4B's residual
         reachability and §11A rows T10b/T16b; §6B supersedes §6.4's `is_estimated`
         definition; §3C (round 8) amends §3A C1's error type at the parser boundary
-        only, and §4C's predicate carries a round-8 `is not None` correction.
+        only, and §4C's predicate carries a round-8 `is not None` correction;
+        §12A (round 9, D26) corrects §12's batch shapes and removes the
+        acceptance threshold; §3D (round 9) records the ItemCategory join
+        asymmetry without changing §3A C5.
 role: intention (pipeline root artifact)
 shaped_from: owner conversation of 2026-08-19/20 (no raw_intention.md; three
              architecture projection passes, each owner-corrected, preceded this
              document — the corrections are folded, not appended)
 date: 2026-08-20 (rounds 1–4) · 2026-08-22 (round 5, mechanism-inventory gate; round 6,
-      D25 fold; round 7, planner fold; round 8, plan-1 projection fold)
-round: 8
+      D25 fold; round 7, planner fold; round 8, plan-1 projection fold; round 9,
+      plan-2 projection fold + D26)
+round: 9
 ```
 
 ---
@@ -629,6 +633,32 @@ and it replaces the accidental cover that `_step_result`'s two-argument
 `typicals.get(section_id, <step attr>)` provides today and that D18's removal deletes
 (§6C). Reachability of the soft-deleted-section shape is not proven here; the contract is
 total either way and costs one branch.
+---
+
+### 3D. The `ItemCategory` join is asymmetric with the `Item` join (plan-2 projection fold, 2026-08-22)
+
+**Routed upstream by the plan-2 projection (L28 / R12), measured, not blocking.** §3A C5
+joins `Item` with **both** `workspace_id` and `is_deleted IS FALSE`, and joins
+`ItemCategory` with **neither** — though `item_categories` carries both columns
+(`item_category.py:19-21`, `:41`).
+
+**Consequence:** a **soft-deleted category still satisfies `major_categories`**. A task
+whose item points at a deleted category is narrowed as though the category were live, and
+a workspace boundary is enforced on one side of the join and not the other.
+
+**Status: recorded, not changed.** §3A C5 is *determinate* as written, so no implementer
+is blocked and phase 2 builds exactly what §3A says. Two reasons to leave it:
+`major_categories` has **no V1 producer** — `derive_spec_from_primary_item` emits only
+`item_category_ids` (§3.2), so the field is reachable only through the deferred statistics
+route — and changing a join predicate is a semantic change to a Critical-ranked mechanism,
+which belongs in a phase that owns it with a criterion, not in a fold.
+
+**Trigger that converts this into a real amendment:** the first V1 consumer that populates
+`major_categories`, or the statistics route shipping — whichever comes first. At that
+point §3A C5 gains `workspace_id` and `is_deleted IS FALSE` on the `ItemCategory` `ON`
+clause, with a criterion row per predicate. Whichever phase does that owns the change.
+
+Trace: plan-2 projection L28/R12 · §3A C5 · §3.2 (no V1 producer) · §9 (route deferred).
 ---
 
 ### 3C. Parser error boundary — `ValidationError`, not `ValueError` (plan-1 projection fold, 2026-08-22)
@@ -1500,6 +1530,42 @@ criterion says so, and D22's reason is stronger than it reads.
   `typical_times_statement`** — the domain objects, resolution semantics, and every
   response contract in §7 remain unchanged. No caching layer is the remedy.
 
+### 12A. D26 — the shapes are corrected and the gate is measurement, not a threshold (2026-08-22)
+
+**Owner ruling (D26), answering the plan-2 projection's card 1.** There is **no
+acceptance ceiling**. The ten measurements are taken and recorded in full, but no number
+blocks a phase. Verbatim record in `owner_decisions.md`.
+
+**Two corrections to §12 above, both consequences of the ruling:**
+
+1. **The batch shape was wrong.** §12 measures "a batch of **50** tasks". 50 is the API
+   cap (`get_task_budget_allocations._MAX_TASK_IDS`), not the operating point: **the
+   frontend paginates task queries at 20**. The realistic row is therefore **20 tasks ×
+   {5, 10, 20} categories**, with **one 50 × 20 row retained as the API-ceiling worst
+   case**, labelled as such. Measuring only the ceiling would have described a load
+   nobody generates.
+2. **Five of the ten cells are constant by construction** (projection depth area 5): the
+   *current* statement is spec-blind, so its cost is the same query at all five shapes,
+   and the *new* no-spec row equals it by C1/HC-4. The doc **states this explicitly** —
+   unrecorded, a reviewer cannot tell a measurement from a copy.
+
+**Why no ceiling** (owner's grounds, recorded so a later reader does not read this as an
+oversight): the realistic batch is 20 not 50; few item categories exist today, so the
+K-spec fan-out is far below its modelled 20; and the chosen architectural fix is to
+**freeze typicals into stored snapshots refreshed by a scheduler**, which removes the
+per-request cost rather than tuning it. Optimising this query now would be work thrown
+away.
+
+**Standing scope note.** The freezing/scheduler direction is **recorded direction, not a
+commitment**, and **no phase of this pipeline builds it**. §12's "no caching layer is the
+remedy" continues to bind every phase here: within this pipeline a slow strategy is
+swapped behind `typical_times_statement`, never papered over with a cache.
+
+**What still binds.** Measurement is not optional and the numbers are not decoration —
+the doc is the evidence the freezing decision will later be argued from. A result an
+order of magnitude outside expectation is **surfaced to the owner as information**, not
+gated and not silently filed.
+
 ---
 
 ## 13. Pre-implementation protocol
@@ -1603,3 +1669,16 @@ criterion says so, and D22's reason is stronger than it reads.
   dataclass permits `(count ≥ floor, median None)` and the original text would raise
   `TypeError` there; behavior-neutral on SQL-reachable shapes. All other rows were plan-
   or master-plan-scoped and folded there. No owner decision reopened.
+- **Round 9 (2026-08-22) — plan-2 projection fold, one owner card answered.** The
+  projection returned AMENDMENTS_REQUIRED (33 rows, 9 blocking, 13 reality checks) with a
+  single owner card on query cost. **D26:** no acceptance threshold — the owner overrode
+  the projection's recommendation on stated grounds (the card reasoned from 50 tasks per
+  call; the frontend paginates at **20**, few item categories exist, and the chosen fix is
+  to freeze typicals into scheduler-refreshed snapshots, which removes the per-request cost
+  rather than tuning it). Folded as **§12A**: corrected shapes (20-task rows plus one
+  50×20 ceiling row), the five-of-ten-cells-are-copies disclosure, measurement still
+  mandatory, and the frozen-snapshot direction recorded as direction — **no phase here
+  builds it**, and §12's "no caching layer is the remedy" still binds within this pipeline.
+  **§3D** records the `ItemCategory` join asymmetry (a soft-deleted category still matches
+  `major_categories`) with its conversion trigger; §3A C5 is unchanged, and the field has
+  no V1 producer. Every other row was plan-scoped and folded into `plans/plan_2.md` §6A.

@@ -236,3 +236,45 @@ the corrected reachability invariant (intention §4B), the `is_estimated` defini
 was relayed to the owner at the fold as three cards with recommendations to ratify.
 **Ratified 2026-08-22** — the owner answered "go" to the relay (R1 additionally implied
 by the D25 answer). The contracts stand as written; the record is closed.
+
+---
+
+## D26 — Query cost: take the pain now; the real fix is frozen typicals, later (2026-08-22)
+
+**Card.** Plan-2 projection, owner card 1: *do you want a speed ceiling fixed before the
+measurements are taken, or will you judge the numbers when you see them?* The projection
+recommended fixing a ceiling now, reasoning that "a threshold chosen after seeing the
+numbers is the one that always turns out to have been met."
+
+**Owner answer, verbatim.** *"about the owner card, if i understand it correctly this is
+about performance, because on every call of budget allocation we are performing that multi
+join query and calculation for 50 * join filters. but the current frontend has it already
+corrected to 20 fetch pagination on any task query. and in the near future i will frezze
+this typicals as more data comes in and then only that schedulers update those snapshots,
+that way query and computanional performance will be better, for now we can take the pain
+( plus there is not that many item types )"*
+
+**Decision.** **No acceptance ceiling.** The measurements are still taken and recorded in
+full — they are the input to the freezing decision — but no number blocks the phase, and
+the projection's recommendation is **overridden knowingly**, on three stated grounds:
+
+1. **The card's premise was wrong about the batch size.** It reasoned from 50 tasks per
+   call. The API cap is 50 (`_MAX_TASK_IDS`), but **the frontend paginates task queries at
+   20**, so the realistic operating point is 20 tasks per call and 50 is a worst case
+   nobody currently reaches. §12's matrix is corrected accordingly (§12A).
+2. **The narrowing axis is small in practice** — few item categories exist today, so the
+   K-spec fan-out is far from its modelled 20.
+3. **The architectural fix is already chosen and is not this pipeline's.** Typicals will
+   be **frozen into stored snapshots refreshed by a scheduler**, so the per-request cost
+   of this query stops mattering rather than being tuned. Optimising it now would be work
+   thrown away. Recorded as **direction, not commitment** — no phase of this pipeline
+   builds it, and intention §12's "no caching layer is the remedy" still binds *within*
+   this pipeline.
+
+**What this does not license.** Measurement is not optional and the numbers are not
+decoration: the doc must state them plainly enough to be the evidence the freezing
+decision is later argued from. A result an order of magnitude outside expectation is
+**surfaced to the owner as information** — not as a gate, and not silently filed.
+
+**Trace.** intention §12 → new §12A · plan 2 §12 and §6A · master plan §7 constraint 2 ·
+projection handoff card 1 and L19/L20/L21/L22.
