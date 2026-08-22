@@ -4130,8 +4130,11 @@ nodes:
     type: projection
     name: Task Budget Status Projection
     description: Current task budget read model. It resolves the current committed
-      evaluation, live non-deleted task-step seconds, item binding/status, and
-      the durable result boundary; the worker serializer omits monetary fields.
+      evaluation, item binding/status, and the durable result boundary. Its
+      worked-seconds basis is each non-deleted task step's settled working
+      seconds plus the concurrency-averaged share of any open WORKING interval,
+      resolved once per request through the shared live worked-seconds loader
+      and persisted nowhere; the worker serializer omits monetary fields.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
@@ -4157,7 +4160,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-15T06:28:26.290Z
+    updatedAt: 2026-08-22T12:55:56.857Z
   - id: projection-item-economics-lifetime
     type: projection
     name: Item Lifetime Economics Projection
@@ -4304,8 +4307,12 @@ nodes:
     description: "Worker/seller face of the task budget-status read: an INDEPENDENT
       service with its own literal committed-current evaluation filter (A7 — a
       separate mutation site from the manager service), delegating the evaluated
-      computation to the shared _build_evaluated_status; its serializer path
-      carries no monetary keys (§11A.3)."
+      computation to the shared _build_evaluated_status and therefore carrying
+      the same worked-seconds basis — each non-deleted task step's settled
+      working seconds plus the concurrency-averaged share of any open WORKING
+      interval, resolved once per request through the shared live worked-seconds
+      loader and persisted nowhere; its serializer path carries no monetary keys
+      (§11A.3)."
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
@@ -4322,7 +4329,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-15T06:30:00.148Z
-    updatedAt: 2026-08-15T06:30:26.394Z
+    updatedAt: 2026-08-22T12:56:07.679Z
   - id: command-task-create
     type: command
     name: create_task
@@ -4542,11 +4549,15 @@ nodes:
     name: Task budget allocations
     description: The batched, read-only task view that combines current committed
       evaluation budgets, non-deleted live steps, section typicals, and
-      item-economics readiness into per-step allowances. It omits unknown or
-      cross-workspace tasks, charges non-deleted excluded steps, and degrades
-      evaluation-less tasks to explicit no-budget states without persisting
-      derived values. Its invariant is that the response's time-only fields
-      reconcile with the same non-deleted step set used by budget status.
+      item-economics readiness into per-step allowances. Each step's
+      worked-seconds input is its settled working seconds plus the
+      concurrency-averaged share of any open WORKING interval, taken from one
+      shared live worked-seconds map loaded once per request and persisted
+      nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+      excluded steps, and degrades evaluation-less tasks to explicit no-budget
+      states without persisting derived values. Its invariant is that the
+      response's time-only fields reconcile with the same non-deleted step set
+      used by budget status.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
@@ -4561,7 +4572,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-17T10:41:50.921Z
+    updatedAt: 2026-08-22T12:56:21.209Z
   - id: endpoint-working-section-typical-times
     type: endpoint
     name: GET /api/v1/working-sections/typical-times
@@ -4610,11 +4621,15 @@ nodes:
     name: Task production time
     description: The task-scoped, read-only production-time view that composes
       manager budget status with section grouping, section typicals, and
-      deterministic per-step time allowances. It includes ordered section rows
-      and a flat time-only final snapshot without monetary fields, persisted
-      calculation results, or schema changes. It preserves the existing
-      budget-status readiness and tenant boundary while exposing section
-      metadata and live state snapshots.
+      deterministic per-step time allowances. Its worked-seconds basis is each
+      non-deleted step's settled working seconds plus the concurrency-averaged
+      share of any open WORKING interval, resolved once per request through the
+      shared live worked-seconds loader and passed both to budget status and
+      into the allocator's response-only step rows, persisted nowhere. It
+      includes ordered section rows and a flat time-only final snapshot without
+      monetary fields, persisted calculation results, or schema changes. It
+      preserves the existing budget-status readiness and tenant boundary while
+      exposing section metadata and live state snapshots.
     tags:
       - item-economics
       - production-time
@@ -4663,7 +4678,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-21T08:46:09.249Z
+    updatedAt: 2026-08-22T12:56:32.773Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -4855,7 +4870,10 @@ nodes:
       price-scenario model into break-even anchors and a slider domain.
       Non-bound bindings govern the payload by nulling
       valuation/model/anchor/domain structure while keeping the step-derived
-      typical; the projection performs no writes.
+      typical; the projection performs no writes. It composes task budget status
+      and so inherits that read's worked-time dependency transitively; it
+      publishes no live worked-time field of its own and reads no open interval
+      record directly.
     tags:
       - item-economics
       - price-scenario
@@ -4904,7 +4922,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-21T08:47:41.638Z
+    updatedAt: 2026-08-22T12:56:48.435Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: get_task_price_scenario
@@ -10458,3 +10476,96 @@ edges:
     confidence: 0.92
     createdAt: 2026-08-22T12:04:55.131Z
     updatedAt: 2026-08-22T12:05:10.864Z
+  - sourceNodeId: projection-item-economics-task-budget-status
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    description: The current task budget read derives its worked-seconds basis from
+      open step-state intervals through the shared live-worked-seconds loader;
+      it does not persist that basis.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
+          symbol: _build_evaluated_status
+          summary: The evaluated status uses the live-seconds map supplied by the shared
+            loader, or loads it when no map is provided, and folds those values
+            into actual seconds.
+          inferenceReason: The projection's present-tense worked-time input is ultimately
+            sourced from open step-state records.
+    origin: human_confirmed
+    confidence: 0.92
+    createdAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
+  - sourceNodeId: projection-item-economics-task-budget-status-worker
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    description: The worker/seller budget-status read inherits the shared
+      live-worked-seconds basis through the evaluated status computation and
+      does not persist it.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          symbol: get_task_budget_status_worker
+          summary: The worker service delegates its evaluated read to the shared
+            budget-status implementation, which supplies live seconds from the
+            shared loader.
+          inferenceReason: The worker projection has the same open-interval source
+            dependency even though its service boundary delegates the fold.
+    origin: human_confirmed
+    confidence: 0.92
+    createdAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    description: The batched budget-allocation read uses live seconds loaded for its
+      visible non-deleted steps from open step-state intervals and keeps those
+      values in response-only row shapes.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          summary: The batch service loads one live-seconds map for its visible steps and
+            uses it for task totals and DivisionStep rows.
+          inferenceReason: The allocation projection's present-tense time values depend on
+            the open interval population in step-state records.
+    origin: human_confirmed
+    confidence: 0.94
+    createdAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
+  - sourceNodeId: projection-item-economics-task-production-time
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    description: The task production-time read uses the shared live-worked-seconds
+      basis from open step-state intervals for its budget status and
+      response-only step substitutions.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          summary: The production-time service loads a live-seconds map, passes it into
+            budget status, and substitutes it into the allocator's response-only
+            step shapes.
+          inferenceReason: The projection's live section and budget values are derived
+            from the open interval table through one shared loader.
+    origin: human_confirmed
+    confidence: 0.94
+    createdAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z
+  - sourceNodeId: projection-item-economics-task-price-scenario
+    relationshipType: depends_on
+    targetNodeId: projection-item-economics-task-budget-status
+    description: The task price-scenario read composes task budget status as a
+      transitive dependency; it does not consume or publish a live worked-time
+      field of its own.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          summary: The price-scenario service calls the task budget-status service while
+            assembling its valuation payload.
+          inferenceReason: The projection inherits the budget-status dependency
+            transitively, without becoming a direct live-seconds consumer.
+    origin: human_confirmed
+    confidence: 0.95
+    createdAt: 2026-08-22T12:40:12.766Z
+    updatedAt: 2026-08-22T13:26:50.261Z

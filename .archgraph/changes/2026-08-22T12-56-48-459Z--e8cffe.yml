@@ -1,0 +1,39 @@
+changeId: 2026-08-22T12-56-48-459Z--e8cffe
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: edit
+    before:
+      description: Manager-only, task-scoped read model that composes workspace-scoped
+        task/item binding, the saved valuation and byline, live item-economics
+        configuration, median-substituted task typical time, and the pure
+        price-scenario model into break-even anchors and a slider domain.
+        Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes.
+    after:
+      description: Manager-only, task-scoped read model that composes workspace-scoped
+        task/item binding, the saved valuation and byline, live item-economics
+        configuration, median-substituted task typical time, and the pure
+        price-scenario model into break-even anchors and a slider domain.
+        Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes. It composes task budget
+        status and so inherits that read's worked-time dependency transitively;
+        it publishes no live worked-time field of its own and reads no open
+        interval record directly.
+    rationale: "live_clock phase 4 closeout (intention section 8, round 4): the
+      fifth node records the transitive dependency only. Deliberately worded so
+      it does not claim a direct live-seconds read, which would be false of this
+      payload."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.239
+timestamp: 2026-08-22T12:56:48.459Z
+graphRevisionBefore: 5a768b5c2265148233fd5cee3bed36322cb4c7e9a17160b18982955e5f455ec4
+graphRevisionAfter: 897d57b3a98553d180fbe15d1af23a3f6c9cd5ef710bdd6c36a2a31bc73a1d66
+humanInstruction: "live_clock phase 4 fix r2, finding B1 — the fifth node,
+  handled on its own terms per the fix prompt: transitive dependency recorded,
+  no language implying a direct live-seconds read."
+changeTokenCorrelation: 01c2a68587e3

@@ -1,0 +1,34 @@
+changeId: 2026-08-22T12-56-07-697Z--300698
+operations:
+  - itemId: node:projection-item-economics-task-budget-status-worker
+    kind: edit
+    before:
+      description: "Worker/seller face of the task budget-status read: an INDEPENDENT
+        service with its own literal committed-current evaluation filter (A7 — a
+        separate mutation site from the manager service), delegating the
+        evaluated computation to the shared _build_evaluated_status; its
+        serializer path carries no monetary keys (§11A.3)."
+    after:
+      description: "Worker/seller face of the task budget-status read: an INDEPENDENT
+        service with its own literal committed-current evaluation filter (A7 — a
+        separate mutation site from the manager service), delegating the
+        evaluated computation to the shared _build_evaluated_status and
+        therefore carrying the same worked-seconds basis — each non-deleted task
+        step's settled working seconds plus the concurrency-averaged share of
+        any open WORKING interval, resolved once per request through the shared
+        live worked-seconds loader and persisted nowhere; its serializer path
+        carries no monetary keys (§11A.3)."
+    rationale: "live_clock phase 4 closeout (intention section 8): the present-tense
+      projection did not state the live basis it now has through the shared
+      evaluated computation."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.239
+timestamp: 2026-08-22T12:56:07.697Z
+graphRevisionBefore: 29ab1ed5615d01d081452c44779e6561fbf636deb300811cb1b6b4c8445c6134
+graphRevisionAfter: 4b860034597085707e025d921aa4306397c2f9d24d648e4a09c7097de9fd06f4
+humanInstruction: live_clock phase 4 fix r2, finding B1 — second of the four
+  present-tense projection descriptions named by the coordinator's fix prompt.
+changeTokenCorrelation: 9ac2a96093bf

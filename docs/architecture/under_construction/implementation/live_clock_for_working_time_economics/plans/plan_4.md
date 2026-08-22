@@ -1,10 +1,11 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: NOT_STARTED
+state: APPROVED — 2026-08-22 (re-review r5: 0 blocking / 0 should-fix / 3 notes; all seven closeout obligations discharged; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
-depends_on: plan 3 APPROVED (the handoff documents shipped behaviour, including D9)
+depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
+            gate, SATISFIED 2026-08-22 (merge `0aae85e`, master §6's first block)
 ```
 
 ## 1. Goal
@@ -19,8 +20,11 @@ reference from the new document only. No graph review adjudication (human-owned)
 
 ## 2. Read first
 
-1. `master_plan.md` §7 (the obligations table — the task list), §5, §6 (graph tooling
-   findings pointer).
+1. `master_plan.md` **§6's first block — "⛔ THE GATE IS SATISFIED — 2026-08-22" — before
+   any other baseline sentence in this repository**; then §7 (the obligations table — the
+   task list, **all seven rows**), §5, §6's remainder (graph tooling findings pointer).
+   The runner changed on 2026-08-22 and **nothing in the invocation announces it**; every
+   baseline further down §6, and the one this plan shipped with in §6A, is superseded.
 2. Intention §5.4, §6A C (the per-event client rules — carried **verbatim in
    substance**, three decrease modes), §2.5A (the corrected consumer list ships, not
    the list of four), §3.4 (cost answer), §1A HC-3A / §9 T1 (the determinism answer),
@@ -68,11 +72,33 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
 - **C3** — obligation 3: the 2026-08-18 "Live time" correction (client ticking
   superseded; smoothing from time-of-receipt legitimate).
 - **C4** — obligation 4: all four open questions answered, each citing its intention
-  section (§3.4 cost; §4.1 all-fields; §2.5A the **eight-row** consumer list; HC-3/T1).
+  section (**§2.3A feasibility *and* §3.4A cost — both halves, both cited**; §4.1
+  all-fields; §2.5A the **eight-row** consumer list; HC-3/T1).
+  **Amended 2026-08-22 (coordinator, pre-prompt reconciliation).** This row previously
+  cited `§3.4` alone for question 1, following master §7's obligation-4 wording
+  ("feasibility/cost §3.4"), while the intention's own §5.4 — the semantic authority —
+  cites `§2.3` for the same question. Both are half-right: the question has two halves
+  and a section each (`§2.3`/`§2.3A` the precedent that makes it feasible, `§3.4`/`§3.4A`
+  the derived cost contract). Under the previous text a handoff citing only the cost
+  section satisfied the criterion while leaving the frontend's feasibility half
+  uncited, and a reviewer checking against §5.4 would have raised a finding on a
+  document that met the criterion as written. Cite both.
 - **C5** — obligation 5: the three decrease modes with the per-event client rules of
-  §6A C in full (≤ 1 s rounding; disowning drops — record deletion NOT named as a
-  cause; D8 settlement window dip-and-recover); snap down, never clamp; no `as_of`
-  field exists by their own request (D4).
+  §6A C in full (≤ 1 s rounding; disowning drops; D8 settlement window dip-and-recover);
+  snap the smoothing baseline down, never clamp; no `as_of` field exists by their own
+  request (D4). On record deletion, the authority's own words, quoted, not paraphrased:
+  **"record deletion is *not* a shipped capability and *is not named to the client*"**
+  (intention §5.4; master §7 obligation 5, identically).
+  **Amended 2026-08-22 (review r3, S1 + lesson 1) — this row's paraphrase was the
+  defect.** It previously read "record deletion **NOT named as a cause**", a compression
+  of the authority's "not named to the client". The document named the event **as a
+  non-cause** — *"Record deletion is not a shipped client event and is not a cause to
+  handle"* — which **satisfies the paraphrase and violates the authority**. Everyone
+  downstream was correct against the artifact in front of them: the implementer against
+  C5, the coordinator against C5 (who judged the literal met, kept it open, and routed it
+  to the reviewer rather than deciding it), and only the reviewer, reading §5.4 itself,
+  saw the gap. A paraphrase inside a criterion is a second source of truth with no
+  changelog. Quote the clause.
 - **C6** — obligation 6 / graph: five nodes updated, edges recorded, `archgraph_status`
   returns 0 stale / 0 diagnostics after the batch; evidence spans verified by reading
   the `anchors` block (the hash does not cover anchors — master plan §5 lineage).
@@ -126,7 +152,50 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   a single test reddening — verified at source. The internal
   `docs/domains/item_economics/` half of the same correction is **phase 3's**, not this
   phase's (plan 3 §4 task 3).
-- **C7** — `pytest tests/unit/docs/` green before and after; suite baseline unchanged.
+- **C7** — `PYTHONPATH=. pytest tests/unit/docs/` green before and after, and **no file
+  under `app/` changed by this phase** (`git diff --name-only` over the session's
+  perimeter, which is the honest form of "suite baseline unchanged" for a phase that
+  runs no full suite — see C9).
+  **Named tripwire, derived at source 2026-08-22, not assumed:**
+  `tests/unit/docs/test_item_economics_handoff_accuracy.py::test_retired_inline_refusal_identity_is_absent_from_live_sources`
+  walks **every `*.md` under `docs/handoff/`** (`_HANDOFFS.rglob`, that file's line 224),
+  so the new closeout document is an input to the suite the moment it is written. It
+  reddens if the document contains the retired identity token
+  `ITEM_COST_INLINE_PRICE` + `_ON_PRICED_ITEM` — do not spell that token in the handoff,
+  in any status table, quotation or appendix. Nothing else in the suite reads `docs/`:
+  four test files mention "docs" and the other two
+  (`test_calculator.py:607`, `test_phase8b_inline_task_prices.py:7`) are *docstring*
+  mentions, not file reads — grep-verified, which is what makes C9's zero-L4 budget a
+  derivation rather than a hope.
+
+- **C9 — obligation 7: the published approval baseline, stated with its runner.**
+  **Added 2026-08-22 (coordinator, pre-prompt reconciliation) — the obligation existed in
+  master §7 from 2026-08-20 and had no criterion in this plan.** C1–C6 cover obligations
+  1–6 and C7 covers the guard, so a phase-4 handoff could satisfy every row and still
+  omit the one output a successor pipeline is waiting on. This is the obligation phase 4
+  was **gated four weeks** to be able to discharge correctly, so it gets a row.
+
+  The closeout publishes, as a block, with the count explicitly subordinate:
+  - **the enumerated failing-ID set — all 21 IDs written out**, not a count and not a
+    reference to another project's folder (a successor cannot diff against a pointer);
+  - **the runner that produces it**: six xdist workers, `--dist loadfile`, from
+    `app/pytest.ini`'s `addopts` — a bare `PYTHONPATH=. pytest -m 'not e2e'` is now a
+    *parallel* invocation and the number means nothing without that sentence;
+  - **the services that must be reachable**: Redis at `settings.redis_url`, without
+    which the same tree measures 23 failed / 2 errors, not 21;
+  - **the database identity**: each pytest process builds its own database from the
+    `beyo_test_main_template` template and drops it at session end — so unlike phases 1–3
+    this baseline is *not* a development-database measurement;
+  - **the tree identity** it is measured at, asserted clean;
+  - the note that **the 21 is a strict subset of the 26** phases 1–3 published — five
+    removed, zero added — so a successor holding an old citation can reconcile the two
+    rather than reading a regression into the difference.
+
+  Source of the enumeration: `test_isolation_and_xdist`'s
+  `archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md` (21 IDs) and master §6's block
+  here. The subset relation was **reproduced by document arithmetic at fold time**
+  (`comm` over the two enumerations: ∅ added, and the five removed are exactly the five
+  master §6 names) — cite that, do not re-derive it by running anything.
 
 ## 6. Notes
 
@@ -152,10 +221,625 @@ gets one row, per the blanket-claim rule: a grouped claim needs one probe per me
   mutation exists that they alone catch, established structurally, not by exhaustion. Any
   future reader tempted to lean on them should read plan 2 §7's r5 entry first.
 - **The published approval baseline** (master plan §7, closeout obligation 7) is the
-  reference point `narrow_typical_work_times` D23 builds on: phase 2 approved at `efd6b99`,
-  suite 26 / 2479 / 1, failure-ID set unchanged from master §6. The closeout handoff states
+  reference point `narrow_typical_work_times` D23 builds on. The closeout handoff states
   the tree **and** the ID set, never a bare count.
+  **⛔ SUPERSEDED 2026-08-22 — the runner changed underneath this plan.** This bullet
+  read: *"phase 2 approved at `efd6b99`, suite 26 / 2479 / 1, failure-ID set unchanged
+  from master §6."* Kept above as provenance of what phase 4 was originally told to
+  publish; **do not publish it.** That figure is a *serial*-runner measurement against
+  the **development** database, and it is the number D23 must **not** inherit — which is
+  precisely why the owner gated this phase behind the isolation work rather than letting
+  it close in August. The live baseline is master §6's first block: **21 failed /
+  2576 passed**, collection 2597, six workers and `--dist loadfile`, Redis reachable,
+  per-process disposable databases. **C9 (added the same day) is the criterion; §6 is the
+  authority; this bullet is history.** A closeout handoff that publishes `26 / 2479 / 1`
+  satisfies the sentence this plan shipped with and hands the successor pipeline a
+  baseline no machine can reproduce.
 
 ## 7. Review log
 
-(empty — append-only)
+(append-only)
+
+### 2026-08-22 — coordinator, pre-prompt reconciliation (no session dispatched yet)
+
+Gate re-checked and satisfied on all four conditions (state `NOT_STARTED`; master §6's
+gate block present; `git status --porcelain` empty at `a2a60f5`; graph 0 pending /
+0 diagnostics). Then the orientation's three carried items were reconciled against the
+tree rather than believed, and **two of the four findings are in this plan file itself**.
+
+- **F1 (blocking, would have shipped a wrong number) — §6A's baseline bullet was
+  superseded and still read as instruction.** It named phase 2's `efd6b99`, 26 / 2479 / 1
+  as the reference point D23 consumes. That is the serial runner against the development
+  database. Amended above; **C9 added** as the criterion.
+- **F2 (blocking) — closeout obligation 7 had no acceptance criterion.** C1–C6 map to
+  obligations 1–6, C7 guards the docs tripwire, C8 carries OD-10; the baseline
+  publication — the reason this phase was gated — had no row, so a handoff omitting it
+  passed every criterion. **C9 added**, enumerating what "stated with its runner" means
+  (21 IDs written out, six workers + `--dist loadfile`, Redis, per-process database, tree
+  identity, and the subset relation to the 26).
+- **F3 (should-fix) — C4 and the intention's §5.4 cited different sections for the same
+  frontend question.** §5.4 says §2.3, master §7 and C4 said §3.4; the question has two
+  halves with a section each. C4 amended to require both.
+- **F4 (note, folded into C7) — the new document is an input to the suite.**
+  `test_item_economics_handoff_accuracy.py` rglobs every `*.md` under `docs/handoff/`, so
+  the retired-identity tripwire fires on the closeout handoff's own text. Derived at
+  source; the other two "docs"-mentioning test files are docstring mentions, which is what
+  makes the zero-L4 budget a derivation.
+
+**Carried item resolved, not assumed.** The orientation flagged that "3 pending
+`ai_inferred` graph items" appear in phase 2's closeout while the graph reports 0 pending,
+and said to confirm what resolved them. They were promoted in the owner's 13-item
+adjudication of 2026-08-21 (review record
+`.archgraph/reviews/2026-08-21T08-50-39-304Z--eed27f.yml`, commit `3b14447`), which master
+§6 already records. Nothing vanished silently. The graph has moved since — `fbe0f7c3…` /
+190 nodes / 288 edges → `cec60a24…` / **194 / 291** — and all four new nodes belong to the
+`test_isolation_and_xdist` project (`infrastructure-test-database-isolation`,
+`test-database-isolation-contract`, `infrastructure-template-copy-contention-lock`,
+`configuration-shipped-pytest-parallel-default`), each carrying its own review record.
+Master §6's graph line is stale in its revision and counts and is corrected there.
+
+**Obligations 1–6 verified still owed, at source, not from the tracker.** The 2026-08-19
+handoff's §4 still carries the unfulfilled promise (lines 144–145) and its §2/§3 still
+stand; the 2026-08-18 "Live time" section still instructs client ticking (lines 247–260);
+the operational handoff's `infeasible` row is still at line 513 exactly as C8 describes;
+all five projection nodes exist with the descriptions §8 predicts, including the
+budget-allocations node's HC-5 invariant that must be kept rather than restated. No
+obligation was discharged by another session or made moot. The one document published to
+the frontend since (`…production_budget_cap_20260820.md`, stream 1) belongs to the cap
+stream and touches none of them.
+
+Evidence spent: zero pytest runs. The subset relation published by C9 was reproduced by
+`comm` over two enumerated ID sets, and `git diff 0aae85e HEAD -- app/` is empty, so the
+21 / 2576 stamp's tree is `app/`-identical to HEAD and is citable rather than
+re-measurable.
+
+### 2026-08-22 — Codex, implement r1
+
+Implemented the documentation-only closeout. Added the new dated frontend handoff
+`docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_live_working_time_clock_20260822.md` with
+one section per closeout obligation, the go-live retirement statement, surviving
+corrections, the eight-row settled-consumer answer, the three decrease modes, the
+OD-10 live-versus-frozen distinction, and the complete 21-ID approval baseline with
+runner, Redis, template-database, tree, and strict-subset context. No published handoff
+was edited and no file under `app/` changed.
+
+The graph already contained all five named projection nodes with human-confirmed
+descriptions, including the budget-allocations HC-5 reconciliation invariant. The
+delta therefore added the five missing architectural relationships in one
+`archgraph_apply_changes` batch: four projection-to-`step_state_records`
+`reads_from` edges and the price-scenario-to-budget-status `depends_on` edge. The
+price-scenario edge is intentionally transitive; it does not claim that the
+price-scenario payload consumes live seconds. The five relationships are
+`ai_inferred` and pending human review; no review item was promoted, rejected, or
+edited.
+
+Judgment calls: existing settled graph descriptions were preserved rather than
+rewritten through maintenance; direct table edges were recorded for the four
+present-tense live projections because the intention explicitly requires the
+dependency delta, while the price-scenario dependency remains indirect. Evidence
+summaries contain no counts, and all evidence uses symbol anchors without spans.
+
+Docs guard evidence: `PYTHONPATH=. pytest tests/unit/docs/` ran before writing and
+after writing, both with the six-worker default, and both returned **59 passed**.
+The post-write run also exercised the new handoff's participation in the all-handoff
+tripwire; the retired identity was absent. No L4 run was spent or required: the
+phase's app tree matches the authoritative gate stamp and the delta is covered by the
+docs guard at L1.
+
+Graph status before the batch was revision
+`cec60a24005ac83da1e396070b36eac1dc3b963a8f1e7526dded2dc5e0225eb9`, 194 nodes,
+291 edges, 0 pending, 0 stale, 0 diagnostics. After the batch it is revision
+`9bcb347f1bf4463ed3522836d86ee102686af9192381d949a5ceb254d173d9b8`, 194 nodes,
+296 edges, 5 pending, 0 stale, 0 diagnostics.
+
+### 2026-08-22 — coordinator, consumption of implement r1 → CHANGES_REQUESTED
+
+Consumed adversarially at `80b8cca`. **1 blocking, 2 should-fix, 1 note.** Fix prompt
+`prompts/implementer/2026-08-22_phase4_fix_r2.md`; the review round follows the fix.
+
+**Verified against the tree rather than read from the ledger.** Perimeter is exactly the
+four declared files plus the handoff; nothing under `app/`; the only file under
+`docs/handoff/` is the new one. The **21 published IDs `comm`-diff empty in both
+directions** against the authoritative enumeration and the five removed IDs match §6's
+five. L4 budget honoured: 0 L4, two L1 runs at 59 passed. Evidence summaries carry no
+counts, anchors are symbol-without-span, no review item was adjudicated — the 5 pending
+relationships are the correct outcome of adding `ai_inferred` items, not a defect.
+C1–C4, C8 correct at source, including **both** citation halves C4 gained this morning.
+
+**B1 (blocking) — obligation 6's node half is undone.** 194 → 194 nodes, 291 → 296 edges,
+**zero deletions in `architecture.yml`**. The four present-tense projections still describe
+the settled-only basis; intention §8 names the description update first and the edges
+second. The divergence **was declared** (rule 14 honoured), but its reason — descriptions
+"preserved rather than rewritten through maintenance" — does not survive measurement: a
+dry-run `archgraph_preview_maintenance_changes` `edit` on the `human_confirmed`,
+non-pending budget-status node **is accepted**, returning a clean description-only diff,
+no cascades, no adjudication. Preview not applied. The prompt's prohibition was on
+adjudicating *review items*, never on maintenance.
+
+**The ledger concealed it, and the concealment is the reusable lesson.** Obligation 6's
+Result column describes the *frontend document's* §6 prose — "Describes the four direct
+live projections, the price-scenario transitive dependency…" — so the row reads discharged
+while the graph half is untouched. A single ledger row spanning two artifacts reports on
+whichever one it was easier to satisfy. **Rule proposed to §5: when one obligation spans
+two artifacts (a document and tool-recorded state), it gets one ledger row per artifact.**
+
+**S1 — a per-event rule drifted in substance while sounding compliant.** §6A C: *"do not
+animate the descent over time; the time is gone at once, not gradually."* Shipped: *"never
+animate time that the workspace has disowned."* A developer satisfies the second with a
+400 ms ease-out — exactly what the first forbids.
+
+**S2 — the published tree identity is unresolvable by its consumer.** "`996a77a` plus the
+coordinator's two-test deletion" is the isolation project's internal phrasing minus the
+word **gate-committed**; to D23 it reads as an unreconstructable dirty tree. Measured: the
+state is committed as `dc76db8`, and `git diff dc76db8 HEAD -- app/` is empty, so the
+citation is sound and only its identity is unusable.
+
+**N1 (reviewer probe, deliberately not a fix item).** The document names record deletion
+as a non-cause; §6A A forbids naming E5 *as a decrease cause*, so C5's literal is met and
+the rationale is brushed. Left to the independent reviewer — the fix prompt says so
+explicitly, so the reviewer sees an unresolved judgment call rather than an omission.
+
+**Examined and NOT raised, recorded so the next round does not re-raise it:** §6A B's
+"one disowning action produces two drops at different times" is absent from the document
+and that is **correct**. §6A C opens *"the closeout handoff tells the frontend what to do,
+not what we believe"* — B is what we believe, C is the contract — and C's "any decrease →
+render the served value" already covers the later drop. A reviewer meeting the two-drop
+fact in §6A B without reading C's opening sentence would file this as a gap.
+
+**Process note (coordinator's own housekeeping, not a finding against r1):** the
+implementer's tracker row replaced the coordinator's `PROMPT_READY` row instead of being
+added above it. §3's convention keeps superseded rows as provenance. Restored; the fix
+prompt states it so r2 does not repeat it. The coordinator made the same mistake earlier
+today on the `BLOCKED` row and restored that one too — twice in one day, by both actors,
+which makes it a property of the table's shape rather than of either agent.
+
+### 2026-08-22 — Codex, fix r2
+
+Finding-scoped round: B1, S1, S2. Nothing added beyond them; N1 left exactly as it
+stands, by instruction, as the reviewer's probe.
+
+**B1 — the node half of obligation 6, now done.** The four present-tense projection
+descriptions were rewritten through `archgraph_apply_maintenance_changes` to state the
+basis the reads actually have: each non-deleted step's **settled** working seconds
+**plus** the concurrency-averaged share of any open `WORKING` interval, resolved once
+per request through the shared live worked-seconds loader, persisted nowhere. The
+prohibition r1 read as blocking this was on adjudicating *review items*; maintenance is
+a different path and it accepted every edit on these `human_confirmed`, non-pending
+nodes, exactly as the coordinator's dry run predicted.
+
+The fifth node, `projection-item-economics-task-price-scenario`, was handled on its own
+terms: its description now records that it composes budget status and so inherits that
+read's worked-time dependency **transitively**, and states in the same sentence that it
+publishes no live worked-time field of its own and reads no open interval record
+directly. That keeps the line r1's edge description drew, on the node itself.
+
+Binding constraints, each verified rather than asserted:
+
+- **No evidence `summary` or `inferenceReason` was touched.** `git diff` over
+  `.archgraph/architecture.yml` shows **zero** added or removed lines matching
+  `summary:` or `inferenceReason:`. `…-task-budget-status`'s summary still reads
+  "aggregates non-deleted task-step seconds" — left alone deliberately; it is immutable
+  through both paths and correcting it is the owner's reject-and-re-record.
+- **The budget-allocations HC-5 invariant is byte-identical.** *"Its invariant is that
+  the response's time-only fields reconcile with the same non-deleted step set used by
+  budget status."* — present exactly once, checked whitespace-normalised against the
+  YAML rather than by eye.
+- **One operation per maintenance call**, five previews and five applies. The open
+  tooling finding attributes `INTERNAL_ERROR` to batch size on the maintenance path and
+  leaves batching-vs-mixed-kinds unresolved; this round did not spend a batch to find
+  out, and the cheap experiment it proposes is still undone. No `archgraph_repair_anchors`
+  call was needed — no anchor moved.
+
+**Graph before → after.** `9bcb347f…` → `897d57b3…`; **194 → 194 nodes, 296 → 296 edges,
+5 → 5 pending, 0 stale, 0 diagnostics.** Maintenance edits moved no count, and the
+pending 5 are still r1's `ai_inferred` relationships awaiting the owner — this round
+promoted, rejected and edited no review item. The number that *did* move is the one that
+exposed B1: `architecture.yml` went from r1's **zero deletions** to **38 insertions /
+20 deletions**, which is what a description rewrite looks like in that file.
+
+**S1 — §6A C's rule carried in substance.** The shipped sentence forbade animating
+"time that the workspace has disowned", which a 400 ms ease-out satisfies. It now reads:
+*"Never clamp to the previous maximum, and do not animate the descent: render the drop in
+one step rather than easing the value down over time — the time is gone at once, not
+gradually."* The no-clamp half, which comes from the same section's "any decrease" row,
+is kept.
+
+**S2 — a resolvable tree identity.** §7 now publishes commit **`dc76db8`** with its
+subject line, tells the reader to check it out to reproduce, and adds that as of
+2026-08-22 `git diff dc76db8 HEAD -- app/` is empty, so a measurement on today's tree is
+comparable without checking anything out. Both facts were re-verified in this session
+(`git log --oneline -1 dc76db8` resolves; the diff is empty; `git status --porcelain` was
+empty at the start of the session).
+
+**Evidence.** Hypothesis: the docs tripwires — including the all-`docs/handoff/` rglob
+that now sweeps this document — stay green over the edited handoff. Scope **L1**,
+command `PYTHONPATH=. pytest tests/unit/docs/` from `app/`, tree `e13923f` plus this
+session's edits, result **59 passed** (six workers, the shipped parallel default).
+**Zero L4 runs**: the budget was 0, and its derivation holds unchanged — `git diff
+--name-only -- app/` is empty for this session, so the authoritative 21 / 2576 stamp's
+tree is still `app/`-identical to HEAD. The r1 pre-write run was not repeated. No
+mutation probe was applied, so no file was touched and reverted.
+
+**Judgment call.** C6 reads "five nodes updated" while the fix prompt's correction
+enumerates four descriptions and then says to handle the fifth "on its own terms". I
+edited the fifth too, wording it so it records only the transitive dependency — that
+satisfies C6's literal and the prompt's constraint at once. The alternative (leaving the
+fifth description untouched because the edge already carries the claim) would have left
+C6 arguably unmet on a count the reviewer will check.
+
+**Nothing diverged from the prompt's corrections** — rule 14 has nothing to declare this
+round.
+
+### 2026-08-22 — coordinator, consumption of fix r2 → REVIEWING (review r3 dispatched)
+
+Consumed at `3df02ae`. **All three findings closed and independently verified; nothing
+added beyond them; rule 14 had nothing to declare and correctly said so.** Review prompt
+`prompts/reviewer/2026-08-22_phase4_review_r3.md` — full checklist, the phase's first
+external review.
+
+**Verified against the tree, not read from the ledger.** Perimeter is exactly the ten
+declared items (4 documents + `architecture.yml` + 5 change records), **nothing under
+`app/`**. `master_plan.md` shows **1 insertion, 0 deletions** — the row was added above
+the coordinator's, not over it, so r1's overwrite is not repeated.
+
+- **B1 closed.** Five node descriptions edited through five preview→apply pairs, one
+  operation per call. `…-task-budget-status`'s drifted phrase — "live non-deleted
+  task-step seconds", the exact string intention §8 names — is gone, replaced by the
+  settled-plus-open-share basis; the other three present-tense projections carry the same
+  basis in their own terms; the fifth records the dependency as transitive and explicitly
+  denies a direct open-interval read. **Zero `+`/`-` lines match `summary:` or
+  `inferenceReason:`** — the immutability constraint held under measurement, not just in
+  the claim. The HC-5 invariant is present exactly once, wording unchanged (re-wrapped
+  only). The five nodes remain `human_confirmed`: **maintenance editing a confirmed
+  description does not re-pend it**, which the dry run predicted and the apply confirmed.
+  Graph reproduces exactly: `897d57b3…`, 194 / 296, 5 pending, 0 stale, 0 diagnostics.
+- **S1 closed.** The shipped sentence now carries §6A C's substance — "do not animate the
+  descent: render the drop in one step rather than easing the value down over time — the
+  time is gone at once, not gradually" — with the separately-correct no-clamp half kept.
+- **S2 closed.** The tree identity is now commit `dc76db8` with its subject and a
+  check-out instruction; `dc76db8` resolves and `git diff dc76db8 HEAD -- app/` is empty,
+  both re-verified here. D23 can reproduce the measurement.
+
+**Coordinator variation — a probe no ledger had run, and the class it was aimed at.**
+Both rounds reported "docs guard 59 passed before and after". A guard that is green on
+both sides proves nothing about whether it can **see** the new file: that is the
+row-that-cannot-fail shape this project has hit eleven times in five shapes, and C7 was
+the obvious next site for it. Measured rather than assumed: inserting the retired identity
+token into the new handoff turns the guard **red — 1 failed / 58 passed**, the single red
+being `test_item_economics_handoff_accuracy.py::test_retired_inline_refusal_identity_is_absent_from_live_sources`
+at its rglob line. **C7's tripwire is non-vacuous over this document.** Probe reverted,
+file SHA-256 byte-identical (`257093891e1c…`), tree clean. Marked do-not-re-spend in the
+review prompt.
+
+**Evidence:** 0 L4 this round (the gate stamp's tree is still `app/`-identical to HEAD, so
+it is cited by tree identity), one L1 mutation probe of ~3 s. The implementer's own L1 row
+identifies its tree as `e13923f` plus edits **without a diff digest**; the charter asks for
+SHA + digest on a dirty tree. Not raised as a finding — the tree in question is now
+committed as `3df02ae`, so the record is recoverable exactly, and the probe above
+re-establishes the same fact more strongly. Recorded so the next round states digests.
+
+### 2026-08-22 — review r3 (independent reviewer, first external review) — CHANGES_REQUESTED
+
+Full checklist against C1–C9 and the semantic authorities. **0 blocking, 2 should-fix,
+3 notes.** Handoff: `handoffs/reviewer/2026-08-22_phase4_review_r3_handoff.md`.
+
+Perimeter verified first: `git show --stat 3df02ae` is **exactly the allowed 10 files**
+(`.archgraph/` ×6, the fix handoff, `master_plan.md` one own row, `plan_4.md`, the new
+frontend handoff). The two extra files in `git diff 80b8cca 3df02ae` belong to the
+coordinator commit `e13923f` sitting between the checkpoints — **not** a violation, and
+no external-stream attribution was needed.
+
+- **S1 (should-fix) — record deletion is named to the client.** §5 mode 2 ships *"Record
+  deletion is not a shipped client event and is not a cause to handle."* Intention **§5.4**
+  and master **§7 obligation 5** both say record deletion *"is not named to the client"* —
+  not merely "not named as a cause". **C5's narrower literal is met**, so the coordinator's
+  reading of C5 was right; the document violates the two authorities C5 compressed.
+  **Not blocking**: established at source that no behavioural harm follows —
+  `reset/reset_app.py` deletes task steps, tasks and the workspace alongside
+  `phases/delete_step_state_records.py`, so no surface survives on which a client could
+  observe the decrease. Two supporting measurements: **no published frontend handoff has
+  ever named record deletion as a decrease cause** (grep over all 18 documents in
+  `docs/handoff/to_frontend/`), so the sentence retires no prior belief; and it is the one
+  sentence in §5 describing our write surface rather than their behaviour — the exact
+  register §6A C excludes ("what to do, not what we believe"), which is the same test that
+  correctly kept §6A B's two-drop fact out. **Correction: delete the sentence, change
+  nothing else in mode 2**; the surviving ">1 s is authoritative" rule already covers a
+  decrease from any cause. Source of truth: intention §5.4, master §7 obligation 5.
+- **S2 (should-fix) — the published baseline omits the instability caveat.** §7 publishes
+  the 21-ID set as "the durable comparator" for D23. Master **§6** carries *"at least TWO
+  named flaky tests"* with the consequence marked **binding** — *"a single run is not
+  evidence — repeat and ID-diff"* — plus a third intermittent test of unrecoverable
+  identity. **Those bullets are NOT superseded** by the 2026-08-22 gate block, which
+  supersedes only the baselines and the "which database" block. **Measured: neither named
+  flaky test is a member of the 21** (grep, 0 hits each), so a flake presents as a **NEW**
+  failing ID in D23's diff — read as a regression — which is exactly the misreading C9's
+  own subset bullet exists to prevent one bullet earlier. **Correction: state the named
+  intermittent tests, their non-membership, and "a single run is not evidence — repeat and
+  ID-diff"**; if the isolation work is believed to have retired the instability, that must
+  be measured and stated, not assumed. Source of truth: master §6's two ⚠ bullets.
+- **N1 (note) — Redis ships without its diagnostic number.** C9 names *"without which the
+  same tree measures 23 failed / 2 errors, not 21"*; §7 states the requirement only. Master
+  §6's own baseline standard (ID set + tree + database + services reachable) **is** met —
+  hence a note. Add the 23/2 figure so a mismatch is diagnosable.
+- **N2 (note, NOT a finding against the implementer) — "snap down" has two referents.**
+  The closing rule is a near-verbatim lift of **§5.4** and master §7 obligation 5; the
+  tension with §6A C's *"no visible snap is required"* and §3.3's *"no-snap invariant"* is
+  **between authority sections**. **Decided: a client can obey both** — "snap down" governs
+  the smoothing *baseline*, "no visible snap" the *rendered* value; a client showing
+  `served + elapsed` lowers its baseline 1 s while the display keeps rising. Lesson to
+  intention §5.4 / §6A C.
+- **N3 (note, owner-adjudicated) — the double dependency is on FOUR projections, not one.**
+  P7 framed it as one node; measured over the graph, all four carry both
+  `reads_from → projection-live-worked-seconds` (phase 2, `human_confirmed`) and
+  `reads_from → table-step-state-record` (r1, pending), while the loader's own edge to the
+  table already exists. **Not a graph-vs-code discrepancy** (dependency real, diagnostics
+  0) so not filed on the `archgraph-discrepancies` route — it is an owner call, carried as
+  **Card 1**, recommendation **promote as-is**. Recorded for the adjudication: each new
+  edge's anchor (`get_task_budget_status.py:_build_evaluated_status`) names a symbol
+  carrying no `StepStateRecord` reference, mitigated by the edges' own descriptions saying
+  the read is "through the shared live-worked-seconds loader". **Nothing promoted, rejected
+  or edited.**
+
+**Verified correct, at source rather than from the ledger.** **P2 — all three
+price-scenario clauses hold**, the load-bearing one being "publishes no live worked-time
+field": it consumes only `status` and `item_binding`, and `status` is
+`INFEASIBLE if allowed <= 0 else OK` over `evaluation.allowed_worker_minutes`
+(`get_task_budget_status.py:172–173`) — an evaluation snapshot, not a worked-time
+derivation — so no live value reaches its payload; it imports neither `StepStateRecord`
+nor the loader. **P5 — both most-falsifiable claims confirmed exactly**: allocations issues
+**one** `load_live_worked_seconds` over all visible tasks' steps (line 124) and indexes it
+per task (222, 238); production time loads once (42), injects into budget status (48) **and**
+substitutes into `DivisionStep` rows (55). The other three node descriptions also hold.
+**C4 both amendments survived** — 4.1 cites §§2.3A *and* 3.4A, and 4.3's **eight** rows were
+checked one-by-one against §2.5A. **Runner verified at source**: `app/pytest.ini` carries
+`-n 6 --dist loadfile`. §4.1's cost passage matches §3.4A term-for-term including the
+corrected `min(...)` denominator (not §3.4's superseded 50-task cap). `worked_seconds` /
+`left_seconds` / `share_state` are real payload keys (`division_serializers.py:43–45`);
+`as_of` exists nowhere in the domain or query surfaces. 21 + 2576 = 2597 = published
+collection.
+
+**Evidence: 0 L4** (budget was 0; the gate stamp is cited by tree identity, `app/` diff
+empty). One L1: `PYTHONPATH=. pytest tests/unit/docs/` → **59 passed** at `31e6634`,
+`git status --porcelain` empty — new evidence, since this tree differs from the last
+docs-guard stamp's tree in `docs/`, the surface that guard reads. **No mutation probe
+applied**; no file, database or tool-recorded state mutated.
+
+### 2026-08-22 — coordinator, consumption of review r3 → CHANGES_REQUESTED, fix r4 dispatched
+
+Review r3 (independent, Opus 5) returned **CHANGES_REQUESTED — 0 blocking, 2 should-fix,
+3 notes, 1 owner card**. Consumed at `31e6634`; reviewer perimeter verified as exactly its
+three declared files (handoff + this log + its own tracker row, added not overwritten).
+Fix prompt `prompts/implementer/2026-08-22_phase4_fix_r4.md` — four edits, one file.
+
+**Every load-bearing measurement reproduced independently before acting on it:** neither
+named flaky test appears in the published 21 (0 and 0 by grep — S2's whole basis);
+`pytest.ini` carries `-n 6 --dist loadfile` verbatim; `get_task_price_scenario.py` touches
+`budget_status.status` and `.item_binding` and nothing else (239, 242, 298–299) and imports
+neither `StepStateRecord` nor `live_worked_seconds`. The review is accurate where it is
+checkable.
+
+**S1 — and it is a finding against this coordinator's own criterion, not against the
+implementer.** Plan C5 read "record deletion **NOT named as a cause**"; intention §5.4 and
+master §7 obligation 5 both read "**is not named to the client**". The document named the
+event as a non-cause, which **satisfies the paraphrase and violates the authority**. Every
+actor was correct against the artifact in front of them — and the artifact in front of two
+of them was a compression written here. The coordinator judged C5's literal met, declined
+to decide it, and routed it to the reviewer as an open call; that routing is the only
+reason it was caught, and it is the argument for reserving judgment calls rather than
+settling them in a prompt. **C5 amended to quote the clause** (§5 above), and the general
+rule folded to master §5.
+
+**S2** — the published baseline omitted the instability caveat. Measured consequence: since
+neither flaky test is a member of the 21, a flake reaches D23 as a **new** failing ID —
+i.e. as a regression they caused — which is the exact misreading the subset bullet prevents
+one bullet earlier. Folded to master §7's baseline schema as a **required field** (known
+instability), and master §6's gate block now states what it does **not** supersede, which
+is how the caveat went missing.
+
+**N1** folded into the same fix (Redis's diagnostic number). **N2** was decided the other
+way by the reviewer and is **not** a defect in the document: "snap" carried two referents
+across §5.4, §6A C and §3.3, and the implementer carried §5.4 faithfully. Resolved
+**upstream** — intention **round 4i**: "snap" governs the smoothing baseline, never the
+rendered value — with the reviewer's endorsed one-noun clarification carried into the
+document so the frontend need not reconcile three sections. **N3** was the owner card.
+
+**Owner card 1 ANSWERED the same session** (owner, 2026-08-22, verbatim: *"about the owner
+card, we keep them ( recommended option )"*). Recorded as **OD-11** in
+`planning/owner_decisions.md`, and the queue is **adjudicated and closed: 5 promoted,
+0 pending, 0 stale, 0 diagnostics**, revision `7241b831…`, review record
+`.archgraph/reviews/2026-08-22T13-26-50-282Z--7ddf0c.yml`. Four items were the card's
+subject; the fifth (price-scenario `depends_on`) was uncontested and source-verified by
+P2, promoted under the same adjudication with that scope stated in OD-11 so it is
+correctable in one line. **C6's graph obligation is now fully discharged.**
+
+**Coordinator note on the review's own evidence, recorded not raised.** E1 re-ran the docs
+guard and justified it by tree difference "in `docs/`" — but that guard's roots are
+`docs/handoff/` and `docs/domains/item_economics/`, and the coordinator commits between the
+stamps touched neither, so E1 was tree-matched. It cost three seconds at L1 and no round,
+so it is not a finding; the *reasoning pattern* is worth naming, because justifying a
+re-run by a directory that merely **contains** the read surface is how a two-minute L4 gets
+justified next time. The read surface, not its parent directory, is the unit of tree
+identity.
+
+### 2026-08-22 — Codex, fix r4
+
+Implemented the four corrections from review r3 within the declared perimeter. In the
+published frontend handoff, removed the record-deletion sentence from §5 mode 2; clarified
+that smoothing snaps its **smoothing baseline** to the served value; and amended §7's
+baseline block with the two named intermittent tests, the unrecoverable third intermittent
+test, the rule that one run is not evidence and must be repeated with an ID diff, plus the
+Redis-unreachable diagnostic of 23 failed / 2 errors rather than 21. No other handoff
+section changed, no application code changed, and no graph state was written.
+
+**Judgment calls and deviations.** None. All four quoted corrections were implemented
+as written. The graph was not revisited because review r3 and the prompt explicitly record
+the queue as adjudicated and closed; no graph work remains in this cycle.
+
+**Evidence.** Pre-edit L1 guard: `PYTHONPATH=. pytest tests/unit/docs/` from `app/` →
+59 passed. The post-edit guard and its final tree identity are recorded in the fix handoff.
+
+### 2026-08-22 — coordinator, consumption of fix r4 → REVIEWING (re-review r5 dispatched)
+
+Consumed at `4e79e9d` (+ `8bc8984`, the handoff's own commit). **All four corrections
+implemented; rule 14 correctly declared nothing omitted.** Re-review prompt
+`prompts/reviewer/2026-08-22_phase4_rereview_r5.md`, delta-scoped — the phase's last gate.
+
+**Verified against the tree.** Perimeter is exactly three files; `git diff c543640 HEAD
+--name-only -- app/ .archgraph/` is **empty**, and `archgraph_status` still reads
+`7241b831…` / 194 / 296 / 0 / 0 / 0 — byte-identical to the post-adjudication reading, so
+the "tool-recorded state: none" claim is proven rather than accepted. S1's sentence is
+gone with nothing else in mode 2 altered; S2 carries both named intermittent tests, the
+unrecoverable third and the repeat-and-ID-diff rule; N1's Redis diagnostic and N2's
+"smoothing baseline" are in. The fix **correctly declined to claim** the isolation work
+retired the flakiness — the clause required that to be measured or left as §6 states it.
+
+**The digest reproduces cryptographically, and that is new here.** The handoff declares
+dirty-tree digest `db0045f66f63d5…`; `git diff --binary c543640 4e79e9d` over its three
+tracked files hashes to **exactly** that. The content the L1 run measured is byte-identical
+to what was committed. Last round's evidence row named a SHA and described its dirt in
+prose; the note asking for a digest was written into this round's prompt and answered.
+**A note that changes the next round's artifact is worth more than a finding that scores
+the last one.**
+
+**Coordinator class sweep beyond the finding.** S1 named one sentence, and this project's
+signature failure is a correction applied at one site while its class survives elsewhere.
+Swept: `grep -niE "deletion|deleted|delete"` over the whole document returns four hits,
+all benign — "non-deleted steps" in the cost sentence, the quoted commit subject in the
+tree-identity bullet, and two test IDs inside the published 21. **No other site names
+record deletion as a client-visible event.** S1 is closed as a class, not as a line.
+
+**Evidence:** 0 L4, 0 L1 — nothing was run this round. The fix's own L1 stamp covers
+content proven byte-identical to the checkpoint, and the commits since touch no file the
+docs guard reads, so re-running it would be over-evidence. Verification was spent on the
+digest reproduction and the class sweep, both of which produced facts no prior round held.
+
+**Why a re-review rather than approval here.** Review r3's verdict was
+`CHANGES_REQUESTED`, and only a reviewer moves a phase to `APPROVED` — the coordinator
+verifying its own fold is exactly the loop the gate exists to break. The delta is four
+edits in one file, so the prompt is scoped hard and marks the settled ground.
+
+### 2026-08-22 — re-review r5 (independent reviewer, delta-scoped) — APPROVED
+
+**The phase's last gate. 0 blocking, 0 should-fix, 3 notes.** Handoff:
+`handoffs/reviewer/2026-08-22_phase4_rereview_r5_handoff.md`.
+
+**Perimeter verified first, reconstructed not accepted.** `git diff c543640 HEAD
+--name-only` is five documents, each inside the declared perimeter of one of the three
+commits in range; `-- app/ .archgraph/` is **empty**. `git show --stat 4e79e9d` is exactly
+three files with master's row a 1-line insertion above the previous. No external-stream
+attribution needed — stream 3 is quiet across this range. **The declared dirty-tree digest
+reproduces:** `git diff --binary c543640 4e79e9d | shasum -a 256` returns
+`db0045f66f63d5ab…` exactly, so C7's before-and-after guard measured the delivered content.
+
+**P2 — §5 mode 2 reads correctly with a sentence removed from its middle.** Prose intact,
+no dangling referent, nothing else in the mode altered. Re-derived against §6A A event by
+event: **E1 and E2 both covered by "any record"** — the load-bearing word, since §6A A flags
+E2 as *"not named in §6"*, and a fix that narrowed this while deleting the neighbour would
+have silenced it; **E4** by "or removing the step"; **E3 correctly absent** (§6A A records
+it as a *rise*); **E6 correctly absent** (a 404, "not a decrease — a different contract");
+**E5 correctly absent**, which is S1. The surviving general rule is cause-independent by
+construction, so it does cover what the deleted sentence claimed — r3's justification holds.
+**S1 swept as a class with a different instrument than the coordinator's:** 11 alternative
+terms (`eras|purg|remov|destro|discard|wipe|reset|hard delete|soft.delet|not a cause|not a
+shipped|capabilit`) plus every `record` occurrence → six hits, all benign, **zero sites
+naming record deletion in any register.**
+
+**P3 — the instability caveat sits consistently with "durable comparator".** No
+contradiction: "prefer the ID set over the count" is not "the set is immutable". **The
+instruction is actionable, not merely a warning** — "repeat and ID-diff before concluding
+that the set has changed" is direction-neutral and discriminates correctly on an extra
+named ID, an extra unnamed ID, **and a missing ID**, without needing the third test's
+identity. Both named IDs transcribed exactly, **both exist at source**
+(`test_phase4_fix_coverage.py:240`, `test_process_shopify_products_integration.py:82`), and
+**non-membership re-verified by basename** — stronger than the earlier full-path grep, since
+it would also catch a same-named test at another path. 0 and 0.
+
+**P4 — both "exactly" claims survive the edit.** Three is still the right number and the
+right three, derived from §6A C rather than from the document: its five bullets are three
+modes plus the general "any decrease" rule and the standing `share_state` rule, both of
+which the document correctly carries **outside** the numbered list. E1–E6 collapses onto
+exactly these three because E3 is an increase, E6 is a 404, E5 is not a capability.
+Corroborated by §5.4's own "exactly **three** ways". Worth re-deriving because master §7
+obligation 5 records that this row *"originally said 'exactly two ways'"*. **N2's
+correction is verbatim-faithful** to §5.4 round 4i.
+
+**Nine new facts, none held by a prior round.** (1) the digest above; (2) **the published 21
+are all members of master §6's 26** — `comm`, ∅ foreign; (3) **the five-removed enumeration
+reproduces by independent arithmetic** — `master26 − doc21` equals the published five
+**exactly, both directions**, a second derivation path to C9's fold-time result; (4)
+**obligation 2 proven structurally**: `git diff 80b8cca HEAD --name-only --
+docs/handoff/to_frontend/` is **exactly one file**, the new document — no published handoff
+edited in place, from git history rather than the document's claim about itself; (5)
+`dc76db8`'s subject matches character-for-character and `git diff dc76db8 HEAD -- app/` is
+empty, so the tree-identity sentence D23 leans on is true *as of this review*; (6)
+`pytest.ini:2` carries `-n 6 --dist loadfile`; (7) **all twelve provenance-appendix paths
+resolve**; (8) C9's seven required elements all present; (9) 21 + 2576 = 2597.
+
+**Notes (all improvements to a correct document; none holds the gate).** **N4** — §7 names
+the third intermittent test but not master §7's attached consequence *"(so the set can
+shrink too)"*, and the preceding clause's non-membership assertion implies an additive-only
+reading. Kept a **note**, not a should-fix: nothing false is stated, the schema's three
+required elements are all carried, and the published rule is direction-neutral so a reader
+following it is protected on a shrink. **N5** — the two named intermittents are published as
+bare basenames while every other ID in §7 is a full node ID, in a section whose own
+instruction is a mechanical ID-diff; full node IDs measured verbatim in the handoff. **N6** —
+the appendix's `planning/intention.md` is not repo-root-relative, unlike its twelve
+siblings, and collides with the successor project's own file of that name.
+
+**Evidence: 0 L4, 0 L1.** The gate stamp is cited by tree identity (`git diff 0aae85e HEAD
+-- app/` and `git diff dc76db8 HEAD -- app/` both empty). The docs guard was **deliberately
+not re-run**: fix r4's 59 passed covers content now proven byte-identical to `4e79e9d`, the
+commits since touch nothing under `docs/handoff/` or `docs/domains/item_economics/`, and the
+guard's non-vacuity is already measured by the coordinator's planted-token probe. **No
+mutation probe applied** — every instrument was a read, a hash, or set arithmetic over text;
+no file, database row or tool-recorded state mutated, nothing to revert.
+
+**Closeout readiness: all seven of master §7's obligations discharged**, checked one by one
+in the handoff. Two housekeeping items for the gate commit, neither a condition of approval:
+fold N4 and N5 into master §6/§7 so the next publisher inherits them. The baseline D23
+consumes is ready to publish as it stands.
+
+### 2026-08-22 — coordinator, closeout: re-review r5 APPROVED, phase and pipeline closed
+
+Re-review r5 returned **APPROVED — 0 blocking, 0 should-fix, 3 notes**. Consumed at
+`e6a49c6`; reviewer perimeter exactly its three declared files. **Phase 4 is closed and
+with it the pipeline.**
+
+**The review's strongest claims re-derived on this tree rather than accepted:**
+- **Obligation 2, proven from git history** — `git diff 80b8cca HEAD --name-only --
+  docs/handoff/to_frontend/` returns **exactly one file**, the new dated document. That is
+  a stronger instrument than any textual check, and it closes
+  [[feedback-never-rewrite-a-published-handoff]]'s concern for this phase by construction.
+- **The subset arithmetic now has two independent derivations, and both reproduce here.**
+  The published 21 contain **zero IDs foreign** to master §6's 26, and `master26 − doc21`
+  equals the document's published five **exactly, both directions**. The fold-time
+  derivation went against the isolation project's enumeration; this one goes against §6.
+- **N5's two node IDs confirmed at source** (`test_phase4_fix_coverage.py:240`,
+  `test_process_shopify_products_integration.py:82`) before being written into §6.
+
+**The three notes were folded at closeout, not deferred** — the reviewer's own disposition
+table asked for exactly that, and a note that survives closeout as a table row is a note
+that evaporates. **N5** → §6's instability bullet now carries both **full node IDs** with
+the reason (a block whose instruction is *"repeat and ID-diff"* must make every identifier
+mechanically comparable). **N4** → §7's baseline schema now states the third intermittent
+test's **direction** — it was observed as a *member* of the published set, so it can only
+remove an ID, and that is why the set can shrink as well as grow; the clause had been a
+parenthetical, and the first baseline published under the schema carried the field and
+dropped the reason. **N6** (a non-root-relative `planning/intention.md` citation, colliding
+with the successor project's own file) is documentation hygiene owed by no phase; recorded
+here so the next handoff this lineage authors picks it up.
+
+**Coordinator housekeeping, same class as N5.** The reviewer's own tracker row carried
+unescaped pipes (a shell pipeline and a grep alternation), which split it into eighteen
+table cells. Escaped. Every phase-4 row in §3 now renders as six. Noted because it is the
+third instance today of *a document about mechanical comparability being defeated by its
+own formatting*, across three different actors — the table's shape invites it.
+
+**Evidence spent at closeout: 0 L4, 0 L1.** Two set-arithmetic derivations, one git-history
+query and one source lookup. **The phase spent 0 L4 runs across all five rounds** — every
+round cited the gate stamp by tree identity, which held because `git diff 0aae85e HEAD --
+app/` is empty from the first prompt to this line.
+
+**Archived:** 11 session artifacts to `archive/plan_4/` (five prompts, five handoffs, the
+incoming coordinator's orientation). All four live queues are empty. The approval-gate
+commit follows this entry.

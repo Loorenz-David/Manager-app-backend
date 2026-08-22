@@ -1,0 +1,38 @@
+changeId: 2026-08-22T12-56-32-792Z--d06159
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: edit
+    before:
+      description: The task-scoped, read-only production-time view that composes
+        manager budget status with section grouping, section typicals, and
+        deterministic per-step time allowances. It includes ordered section rows
+        and a flat time-only final snapshot without monetary fields, persisted
+        calculation results, or schema changes. It preserves the existing
+        budget-status readiness and tenant boundary while exposing section
+        metadata and live state snapshots.
+    after:
+      description: The task-scoped, read-only production-time view that composes
+        manager budget status with section grouping, section typicals, and
+        deterministic per-step time allowances. Its worked-seconds basis is each
+        non-deleted step's settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live worked-seconds loader and passed both to budget status
+        and into the allocator's response-only step rows, persisted nowhere. It
+        includes ordered section rows and a flat time-only final snapshot
+        without monetary fields, persisted calculation results, or schema
+        changes. It preserves the existing budget-status readiness and tenant
+        boundary while exposing section metadata and live state snapshots.
+    rationale: "live_clock phase 4 closeout (intention section 8): the present-tense
+      projection described the settled-only basis. States the live basis it now
+      has."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.239
+timestamp: 2026-08-22T12:56:32.792Z
+graphRevisionBefore: 4f8286cb5d1cf3d79a7b3ac747a06d08bc8bb2b638fb83860c48a79a8303af06
+graphRevisionAfter: 5a768b5c2265148233fd5cee3bed36322cb4c7e9a17160b18982955e5f455ec4
+humanInstruction: live_clock phase 4 fix r2, finding B1 — fourth and last of the
+  present-tense projection descriptions.
+changeTokenCorrelation: 0425ce086704
