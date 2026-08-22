@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: IMPLEMENTED — 2026-08-22 (implement r1; projection WAIVED, docs-only)
+state: CHANGES_REQUESTED — 2026-08-22 (implement r1 consumed; fix r2 dispatched; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -319,3 +319,64 @@ Graph status before the batch was revision
 291 edges, 0 pending, 0 stale, 0 diagnostics. After the batch it is revision
 `9bcb347f1bf4463ed3522836d86ee102686af9192381d949a5ceb254d173d9b8`, 194 nodes,
 296 edges, 5 pending, 0 stale, 0 diagnostics.
+
+### 2026-08-22 — coordinator, consumption of implement r1 → CHANGES_REQUESTED
+
+Consumed adversarially at `80b8cca`. **1 blocking, 2 should-fix, 1 note.** Fix prompt
+`prompts/implementer/2026-08-22_phase4_fix_r2.md`; the review round follows the fix.
+
+**Verified against the tree rather than read from the ledger.** Perimeter is exactly the
+four declared files plus the handoff; nothing under `app/`; the only file under
+`docs/handoff/` is the new one. The **21 published IDs `comm`-diff empty in both
+directions** against the authoritative enumeration and the five removed IDs match §6's
+five. L4 budget honoured: 0 L4, two L1 runs at 59 passed. Evidence summaries carry no
+counts, anchors are symbol-without-span, no review item was adjudicated — the 5 pending
+relationships are the correct outcome of adding `ai_inferred` items, not a defect.
+C1–C4, C8 correct at source, including **both** citation halves C4 gained this morning.
+
+**B1 (blocking) — obligation 6's node half is undone.** 194 → 194 nodes, 291 → 296 edges,
+**zero deletions in `architecture.yml`**. The four present-tense projections still describe
+the settled-only basis; intention §8 names the description update first and the edges
+second. The divergence **was declared** (rule 14 honoured), but its reason — descriptions
+"preserved rather than rewritten through maintenance" — does not survive measurement: a
+dry-run `archgraph_preview_maintenance_changes` `edit` on the `human_confirmed`,
+non-pending budget-status node **is accepted**, returning a clean description-only diff,
+no cascades, no adjudication. Preview not applied. The prompt's prohibition was on
+adjudicating *review items*, never on maintenance.
+
+**The ledger concealed it, and the concealment is the reusable lesson.** Obligation 6's
+Result column describes the *frontend document's* §6 prose — "Describes the four direct
+live projections, the price-scenario transitive dependency…" — so the row reads discharged
+while the graph half is untouched. A single ledger row spanning two artifacts reports on
+whichever one it was easier to satisfy. **Rule proposed to §5: when one obligation spans
+two artifacts (a document and tool-recorded state), it gets one ledger row per artifact.**
+
+**S1 — a per-event rule drifted in substance while sounding compliant.** §6A C: *"do not
+animate the descent over time; the time is gone at once, not gradually."* Shipped: *"never
+animate time that the workspace has disowned."* A developer satisfies the second with a
+400 ms ease-out — exactly what the first forbids.
+
+**S2 — the published tree identity is unresolvable by its consumer.** "`996a77a` plus the
+coordinator's two-test deletion" is the isolation project's internal phrasing minus the
+word **gate-committed**; to D23 it reads as an unreconstructable dirty tree. Measured: the
+state is committed as `dc76db8`, and `git diff dc76db8 HEAD -- app/` is empty, so the
+citation is sound and only its identity is unusable.
+
+**N1 (reviewer probe, deliberately not a fix item).** The document names record deletion
+as a non-cause; §6A A forbids naming E5 *as a decrease cause*, so C5's literal is met and
+the rationale is brushed. Left to the independent reviewer — the fix prompt says so
+explicitly, so the reviewer sees an unresolved judgment call rather than an omission.
+
+**Examined and NOT raised, recorded so the next round does not re-raise it:** §6A B's
+"one disowning action produces two drops at different times" is absent from the document
+and that is **correct**. §6A C opens *"the closeout handoff tells the frontend what to do,
+not what we believe"* — B is what we believe, C is the contract — and C's "any decrease →
+render the served value" already covers the later drop. A reviewer meeting the two-drop
+fact in §6A B without reading C's opening sentence would file this as a gap.
+
+**Process note (coordinator's own housekeeping, not a finding against r1):** the
+implementer's tracker row replaced the coordinator's `PROMPT_READY` row instead of being
+added above it. §3's convention keeps superseded rows as provenance. Restored; the fix
+prompt states it so r2 does not repeat it. The coordinator made the same mistake earlier
+today on the `BLOCKED` row and restored that one too — twice in one day, by both actors,
+which makes it a property of the table's shape rather than of either agent.
