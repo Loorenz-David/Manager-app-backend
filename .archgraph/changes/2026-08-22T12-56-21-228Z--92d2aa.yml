@@ -1,0 +1,39 @@
+changeId: 2026-08-22T12-56-21-228Z--92d2aa
+operations:
+  - itemId: node:projection-item-economics-task-budget-allocations
+    kind: edit
+    before:
+      description: The batched, read-only task view that combines current committed
+        evaluation budgets, non-deleted live steps, section typicals, and
+        item-economics readiness into per-step allowances. It omits unknown or
+        cross-workspace tasks, charges non-deleted excluded steps, and degrades
+        evaluation-less tasks to explicit no-budget states without persisting
+        derived values. Its invariant is that the response's time-only fields
+        reconcile with the same non-deleted step set used by budget status.
+    after:
+      description: The batched, read-only task view that combines current committed
+        evaluation budgets, non-deleted live steps, section typicals, and
+        item-economics readiness into per-step allowances. Each step's
+        worked-seconds input is its settled working seconds plus the
+        concurrency-averaged share of any open WORKING interval, taken from one
+        shared live worked-seconds map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values. Its invariant is that the
+        response's time-only fields reconcile with the same non-deleted step set
+        used by budget status.
+    rationale: "live_clock phase 4 closeout (intention section 8): states the live
+      worked-seconds basis. The HC-5 invariant sentence is kept byte-identical,
+      not restated."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.239
+timestamp: 2026-08-22T12:56:21.228Z
+graphRevisionBefore: 4b860034597085707e025d921aa4306397c2f9d24d648e4a09c7097de9fd06f4
+graphRevisionAfter: 4f8286cb5d1cf3d79a7b3ac747a06d08bc8bb2b638fb83860c48a79a8303af06
+humanInstruction: live_clock phase 4 fix r2, finding B1 — third of the four;
+  HC-5 invariant sentence preserved byte-identical per the fix prompt's binding
+  constraint.
+changeTokenCorrelation: 879f589671f0

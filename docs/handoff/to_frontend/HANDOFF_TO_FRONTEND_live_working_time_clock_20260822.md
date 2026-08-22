@@ -99,8 +99,9 @@ There are exactly three client-visible decrease modes:
    remove the step's live contribution. Record deletion is not a shipped client event
    and is not a cause to handle. A drop larger than 1 second is authoritative: snap
    down immediately to the served value, reset the smoothing baseline, and accrue from
-   the new time of receipt. Never clamp to the previous maximum and never animate time
-   that the workspace has disowned.
+   the new time of receipt. Never clamp to the previous maximum, and do not animate the
+   descent: render the drop in one step rather than easing the value down over time —
+   the time is gone at once, not gradually.
 3. **Settlement window.** Closing a working record can briefly make the served value
    dip before the asynchronous settlement recomputation returns it to the settled
    value. If it drops and returns within seconds, render both served values as given;
@@ -140,8 +141,12 @@ count is context; the failing-ID set is the durable comparator.
 - **Database:** each pytest process creates its own database from the migrated
   `beyo_test_main_template` and drops it at session end; this is not a development-
   database measurement.
-- **Tree identity:** `996a77a` plus the coordinator's two-test deletion, with
-  `git status --porcelain` empty at measurement time.
+- **Tree identity:** commit `dc76db8` — subject `CHECKPOINT (not approved): gate stamp
+  + two rows that cannot fail, deleted` — with `git status --porcelain` empty at
+  measurement time. Check out that commit to reproduce the measurement. As of
+  2026-08-22 the backend's `app/` tree is identical to it (`git diff dc76db8 HEAD --
+  app/` is empty), so a measurement taken on today's tree is comparable without
+  checking anything out.
 - **Result:** 21 failed / 2576 passed, collection 2597, measured in 50.61 seconds.
 - **Relation to the previous baseline:** this 21-ID set is a strict subset of the
   previously published 26-ID set: five IDs were removed and zero were added. The

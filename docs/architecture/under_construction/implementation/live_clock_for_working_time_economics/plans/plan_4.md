@@ -1,7 +1,7 @@
 # Plan 4 — the closeout handoff and the graph delta
 
 ```
-state: CHANGES_REQUESTED — 2026-08-22 (implement r1 consumed; fix r2 dispatched; projection WAIVED, docs-only)
+state: IMPLEMENTED — 2026-08-22 (fix r2 applied: B1, S1, S2 closed; awaiting review r3; projection WAIVED, docs-only)
 phase: 4
 date: 2026-08-20
 depends_on: plan 3 APPROVED 2026-08-21 (`808eead`) — holds; and the ⛔ test-environment
@@ -380,3 +380,80 @@ added above it. §3's convention keeps superseded rows as provenance. Restored; 
 prompt states it so r2 does not repeat it. The coordinator made the same mistake earlier
 today on the `BLOCKED` row and restored that one too — twice in one day, by both actors,
 which makes it a property of the table's shape rather than of either agent.
+
+### 2026-08-22 — Codex, fix r2
+
+Finding-scoped round: B1, S1, S2. Nothing added beyond them; N1 left exactly as it
+stands, by instruction, as the reviewer's probe.
+
+**B1 — the node half of obligation 6, now done.** The four present-tense projection
+descriptions were rewritten through `archgraph_apply_maintenance_changes` to state the
+basis the reads actually have: each non-deleted step's **settled** working seconds
+**plus** the concurrency-averaged share of any open `WORKING` interval, resolved once
+per request through the shared live worked-seconds loader, persisted nowhere. The
+prohibition r1 read as blocking this was on adjudicating *review items*; maintenance is
+a different path and it accepted every edit on these `human_confirmed`, non-pending
+nodes, exactly as the coordinator's dry run predicted.
+
+The fifth node, `projection-item-economics-task-price-scenario`, was handled on its own
+terms: its description now records that it composes budget status and so inherits that
+read's worked-time dependency **transitively**, and states in the same sentence that it
+publishes no live worked-time field of its own and reads no open interval record
+directly. That keeps the line r1's edge description drew, on the node itself.
+
+Binding constraints, each verified rather than asserted:
+
+- **No evidence `summary` or `inferenceReason` was touched.** `git diff` over
+  `.archgraph/architecture.yml` shows **zero** added or removed lines matching
+  `summary:` or `inferenceReason:`. `…-task-budget-status`'s summary still reads
+  "aggregates non-deleted task-step seconds" — left alone deliberately; it is immutable
+  through both paths and correcting it is the owner's reject-and-re-record.
+- **The budget-allocations HC-5 invariant is byte-identical.** *"Its invariant is that
+  the response's time-only fields reconcile with the same non-deleted step set used by
+  budget status."* — present exactly once, checked whitespace-normalised against the
+  YAML rather than by eye.
+- **One operation per maintenance call**, five previews and five applies. The open
+  tooling finding attributes `INTERNAL_ERROR` to batch size on the maintenance path and
+  leaves batching-vs-mixed-kinds unresolved; this round did not spend a batch to find
+  out, and the cheap experiment it proposes is still undone. No `archgraph_repair_anchors`
+  call was needed — no anchor moved.
+
+**Graph before → after.** `9bcb347f…` → `897d57b3…`; **194 → 194 nodes, 296 → 296 edges,
+5 → 5 pending, 0 stale, 0 diagnostics.** Maintenance edits moved no count, and the
+pending 5 are still r1's `ai_inferred` relationships awaiting the owner — this round
+promoted, rejected and edited no review item. The number that *did* move is the one that
+exposed B1: `architecture.yml` went from r1's **zero deletions** to **38 insertions /
+20 deletions**, which is what a description rewrite looks like in that file.
+
+**S1 — §6A C's rule carried in substance.** The shipped sentence forbade animating
+"time that the workspace has disowned", which a 400 ms ease-out satisfies. It now reads:
+*"Never clamp to the previous maximum, and do not animate the descent: render the drop in
+one step rather than easing the value down over time — the time is gone at once, not
+gradually."* The no-clamp half, which comes from the same section's "any decrease" row,
+is kept.
+
+**S2 — a resolvable tree identity.** §7 now publishes commit **`dc76db8`** with its
+subject line, tells the reader to check it out to reproduce, and adds that as of
+2026-08-22 `git diff dc76db8 HEAD -- app/` is empty, so a measurement on today's tree is
+comparable without checking anything out. Both facts were re-verified in this session
+(`git log --oneline -1 dc76db8` resolves; the diff is empty; `git status --porcelain` was
+empty at the start of the session).
+
+**Evidence.** Hypothesis: the docs tripwires — including the all-`docs/handoff/` rglob
+that now sweeps this document — stay green over the edited handoff. Scope **L1**,
+command `PYTHONPATH=. pytest tests/unit/docs/` from `app/`, tree `e13923f` plus this
+session's edits, result **59 passed** (six workers, the shipped parallel default).
+**Zero L4 runs**: the budget was 0, and its derivation holds unchanged — `git diff
+--name-only -- app/` is empty for this session, so the authoritative 21 / 2576 stamp's
+tree is still `app/`-identical to HEAD. The r1 pre-write run was not repeated. No
+mutation probe was applied, so no file was touched and reverted.
+
+**Judgment call.** C6 reads "five nodes updated" while the fix prompt's correction
+enumerates four descriptions and then says to handle the fifth "on its own terms". I
+edited the fifth too, wording it so it records only the transitive dependency — that
+satisfies C6's literal and the prompt's constraint at once. The alternative (leaving the
+fifth description untouched because the edge already carries the claim) would have left
+C6 arguably unmet on a count the reviewer will check.
+
+**Nothing diverged from the prompt's corrections** — rule 14 has nothing to declare this
+round.

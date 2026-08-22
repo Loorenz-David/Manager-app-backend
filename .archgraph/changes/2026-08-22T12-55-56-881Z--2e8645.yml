@@ -1,0 +1,35 @@
+changeId: 2026-08-22T12-55-56-881Z--2e8645
+operations:
+  - itemId: node:projection-item-economics-task-budget-status
+    kind: edit
+    before:
+      description: Current task budget read model. It resolves the current committed
+        evaluation, live non-deleted task-step seconds, item binding/status, and
+        the durable result boundary; the worker serializer omits monetary
+        fields.
+    after:
+      description: Current task budget read model. It resolves the current committed
+        evaluation, item binding/status, and the durable result boundary. Its
+        worked-seconds basis is each non-deleted task step's settled working
+        seconds plus the concurrency-averaged share of any open WORKING
+        interval, resolved once per request through the shared live
+        worked-seconds loader and persisted nowhere; the worker serializer omits
+        monetary fields.
+    rationale: "live_clock phase 4 closeout (intention section 8): the present-tense
+      projection described the settled-only basis while calling it live. States
+      the basis the read now actually has."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.239
+timestamp: 2026-08-22T12:55:56.881Z
+graphRevisionBefore: 9bcb347f1bf4463ed3522836d86ee102686af9192381d949a5ceb254d173d9b8
+graphRevisionAfter: 29ab1ed5615d01d081452c44779e6561fbf636deb300811cb1b6b4c8445c6134
+humanInstruction: live_clock_for_working_time_economics phase 4, fix r2, finding
+  B1 — the coordinator's fix prompt
+  (prompts/implementer/2026-08-22_phase4_fix_r2.md) instructs the implementer to
+  update the four present-tense projection node descriptions to state the live
+  basis, intention section 8. Evidence summaries and inferenceReason are
+  explicitly out of scope.
+changeTokenCorrelation: 380ba3fff125
