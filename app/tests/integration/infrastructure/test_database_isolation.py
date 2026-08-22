@@ -110,7 +110,7 @@ def test_shipped_default_reaches_an_xdist_worker(pytestconfig: pytest.Config) ->
     args = list(pytestconfig.invocation_params.args)
     if any(
         arg == "-n"
-        or (arg.startswith("-n") and arg != "--")
+        or arg.startswith("-n")
         or arg == "--numprocesses"
         or arg.startswith("--numprocesses=")
         for arg in args
@@ -119,7 +119,12 @@ def test_shipped_default_reaches_an_xdist_worker(pytestconfig: pytest.Config) ->
 
     addopts = pytestconfig.getini("addopts")
     assert any(
-        arg == "--dist" and index + 1 < len(addopts) and addopts[index + 1] == "loadfile"
+        (
+            arg == "--dist"
+            and index + 1 < len(addopts)
+            and addopts[index + 1] == "loadfile"
+        )
+        or arg == "--dist=loadfile"
         for index, arg in enumerate(addopts)
     ), f"shipped parallel default is missing --dist loadfile: {addopts!r}"
     assert any(
