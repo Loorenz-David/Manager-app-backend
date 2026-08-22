@@ -3,7 +3,7 @@
 ```
 plan: plan_1
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY — ran 2026-08-22, AMENDMENTS_REQUIRED, folded same day (§8)
 ```
 
@@ -269,7 +269,7 @@ the proof that the AS_ASKED branch never reads `has_section`.
 | f | narrowing | (7, **0**) | (61, 600) | AS_ASKED | `item_narrowed` / **`0`** / `7` (§4C: deliberately unchanged) |
 | g | narrowing | (2, None) | (61, 600) | AS_ASKED | `insufficient_sample` / `None` / `2` (§3.6) |
 | h | **non-narrowing** | (61, 600) — equal to section by construction | (61, 600) | BROADEN | `section_wide` / `600` / `61` |
-| i | **non-narrowing** | (3, None) | (3, None) | BROADEN | `insufficient_sample` / `None` / `3` |
+| i | **non-narrowing** | (3, None) | (4, 800) | BROADEN | `insufficient_sample` / `None` / `4` |
 | j | narrowing | (7, 540) | (3, None) | BROADEN | `item_narrowed` / `540` / `7` — the first rung does not consult `has_section` |
 | k | narrowing | (7, 540) | (3, None) | AS_ASKED | `item_narrowed` / `540` / `7` |
 | l | narrowing | (2, None) | (3, None) | AS_ASKED | `insufficient_sample` / `None` / `2` — differs from row (g) only in the section columns, proving AS_ASKED never reads them |
@@ -594,3 +594,15 @@ phase 4's allowances would move silently (the exact drift L1 names).
   (`get_task_price_scenario.py:13`). The alias stays; **its removal is routed to phase
   5**, which owns that file. Fix prompt:
   `prompts/implementer/20260822_plan1_fix_round2_prompt.md`. State → `CHANGES_REQUESTED`.
+
+- **2026-08-22 · implementation fix round 2 · Codex · IMPLEMENTED.** Closed the four
+  criteria-coverage gaps from the coordinator's fix prompt without changing production
+  logic. Added C7 row (i) with an asymmetric `(3, None)` narrowed / `(4, 800)` section
+  fixture so both insufficient-sample outputs are mutation-discriminating; added C14's
+  both-bounds, upholstery-`True`, and `designers` rows; and expanded C10's ghost-row
+  assertions to both seconds and all evidence fields, including `None` seconds. The
+  handoff corrects the measured snapshot last byte to `0x65` and reports the one
+  pre-existing out-of-scope `config_fingerprint` grep hit. F5 remains structurally held:
+  participating section IDs are contractually a subset of `section_ids`; no guard was
+  added. Named mutations were run at L1 whole-file scope and reverted; the one
+  authoritative L4 stamp is recorded in the round-2 handoff.

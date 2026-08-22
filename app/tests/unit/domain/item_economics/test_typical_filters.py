@@ -113,6 +113,7 @@ def test_evidence_predicates_cover_floor_zero_and_none():
         (TypicalFilterSpec(width_cm=(1, 2)), (7, 540), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_narrowed", 540, 7)),
         (TypicalFilterSpec(width_cm=(1, 2)), (2, None), (3, None), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 2)),
         (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 600, 61)),
+        (TypicalFilterSpec(), (3, None), (4, 800), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 4)),
         (TypicalFilterSpec(), (61, 600), (61, 600), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("section_wide", 600, 61)),
     ],
 )
@@ -138,6 +139,12 @@ def test_reconciliation_uses_uniform_usable_narrowed_basis_and_materializes_miss
     )
     assert result.task_typical_basis == "section_wide_uniform"
     assert result.selected["ghost"].typical_basis == "insufficient_sample"
+    assert result.selected["ghost"].typical_worker_seconds is None
+    assert result.selected["ghost"].evidence == SectionTypicalEvidence("ghost", None, 0, None, 0)
+    assert result.selected["ghost"].evidence.narrowed_sample_count == 0
+    assert result.selected["ghost"].evidence.section_sample_count == 0
+    assert result.selected["ghost"].evidence.narrowed_typical_worker_seconds is None
+    assert result.selected["ghost"].evidence.section_typical_worker_seconds is None
     assert result.selected["ghost"].sample_count == 0
     assert result.selected["ghost"].participates is True
 
@@ -241,13 +248,16 @@ def test_business_fallback_has_typed_distinct_terminals_and_zero_is_unusable():
 def test_parser_handles_typed_params_absence_none_enums_and_client_errors():
     assert parse_spec_from_query_params({}) == TypicalFilterSpec()
     assert parse_spec_from_query_params({"item_category_ids": ["a", "b"]}).item_category_ids == frozenset({"a", "b"})
+    assert parse_spec_from_query_params({"width_cm_min": 60, "width_cm_max": 80}).width_cm == (60, 80)
     assert parse_spec_from_query_params({"width_cm_min": 60}).width_cm == (60, None)
     assert parse_spec_from_query_params({"width_cm_max": 80}).width_cm == (None, 80)
     assert parse_spec_from_query_params({"width_cm_min": None, "item_category_ids": None}) == TypicalFilterSpec()
     assert parse_spec_from_query_params({"major_categories": ["wood", "seat"]}).major_categories == frozenset(
         {ItemMajorCategoryEnum.WOOD, ItemMajorCategoryEnum.SEAT}
     )
+    assert parse_spec_from_query_params({"can_have_upholstery": True}).can_have_upholstery is True
     assert parse_spec_from_query_params({"can_have_upholstery": False}).can_have_upholstery is False
+    assert parse_spec_from_query_params({"designers": ["dsg_a", "dsg_b"]}).designers == frozenset({"dsg_a", "dsg_b"})
     assert parse_spec_from_query_params({"unknown": "ignored"}) == TypicalFilterSpec()
     assert parse_spec_from_query_params({"item_category_ids": []}) == TypicalFilterSpec()
     with pytest.raises(ValidationError):

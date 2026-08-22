@@ -90,7 +90,7 @@ insert lettered sections instead.
 
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `CHANGES_REQUESTED` | 2026-08-22 | coordinator | Round 1 (Codex) implemented: pure domain, participating-set rule, frozen pre-refactor snapshot; L4 2608 passed / 21 baseline failures, ID delta ∅/∅. Coordinator consumption found 4 criteria-coverage gaps (C7 row (i) — an uncovered branch; C14 rows c/h/m; C10 seconds unpinned; 2 mis-measured handoff claims) → fix round 2 dispatched. `_median` alias accepted; removal routed to phase 5. |
+| 1 | Pure typicals domain + the pre-refactor SQL snapshot | `IMPLEMENTED` | 2026-08-22 | Codex | Fix round 2 closed C7 row (i), C14 rows (c)/(h)/(m), and C10's seconds/evidence assertions; production logic unchanged. L4 stamp and mutation ledger are in the round-2 handoff. `_median` alias remains; removal is routed to phase 5. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `NOT_STARTED` | — | — | Projection **mandatory** (4 of the 5 Critical rows). Acceptance **conditional** on the 10-row measurement doc. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
