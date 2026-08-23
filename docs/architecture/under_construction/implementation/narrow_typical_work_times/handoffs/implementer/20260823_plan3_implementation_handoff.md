@@ -74,6 +74,6 @@ Expected implementation perimeter at handoff time:
 - new this handoff file
 - expected untracked `?? .archgraph/contexts/` retained and not staged
 
-Checkpoint SHA: **pending the explicit-path checkpoint commit immediately following this handoff**. The final commit SHA will be added to this handoff in the documentation follow-up commit if the self-referential hash changes.
+Checkpoint SHA: **`186027a`** (`CHECKPOINT (not approved): implement phase 3 typical filter carrier`). This handoff line is the only follow-up documentation change after that implementation checkpoint.
 
 No upstream notes or owner decisions are required.
