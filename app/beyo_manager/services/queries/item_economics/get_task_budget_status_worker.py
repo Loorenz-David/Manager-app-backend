@@ -5,6 +5,10 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from beyo_manager.domain.item_economics.enums import ItemCostEvaluationKindEnum
+from beyo_manager.domain.item_economics.typical_filters import (
+    TypicalFilterSpec,
+    derive_spec_from_primary_item,
+)
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_task_budget_status import (
     TaskBudgetStatus,
@@ -21,6 +25,7 @@ from beyo_manager.services.commands.item_economics._common import _load_preview_
 
 async def get_task_budget_status_worker(ctx: ServiceContext) -> TaskBudgetStatus:
     task, item = await _load_task_and_item(ctx)
+    typical_filter_spec = None if item is None else derive_spec_from_primary_item(item)
     # Keep this literal boundary local to the worker service. It is a separate
     # money-redaction producer and must not inherit a future manager change.
     evaluation = await ctx.session.scalar(
@@ -35,7 +40,12 @@ async def get_task_budget_status_worker(ctx: ServiceContext) -> TaskBudgetStatus
     binding = "detached" if item is None else ("bound" if evaluation is None or evaluation.item_id == item.client_id else "mismatched")
     if evaluation is None:
         if item is None:
-            return _empty_status(EconomicsStatusEnum.NOT_EVALUATED, binding=binding, item_id=None)
+            return _empty_status(
+                EconomicsStatusEnum.NOT_EVALUATED,
+                binding=binding,
+                item_id=None,
+                typical_filter_spec=typical_filter_spec,
+            )
         selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
             select(ItemValuation).where(
@@ -49,5 +59,13 @@ async def get_task_budget_status_worker(ctx: ServiceContext) -> TaskBudgetStatus
             resolve_item_economics_status(valuation, selection, terms),
             binding=binding,
             item_id=item.client_id,
+            typical_filter_spec=typical_filter_spec,
         )
-    return await _build_evaluated_status(ctx, task, item, evaluation, binding)
+    return await _build_evaluated_status(
+        ctx,
+        task,
+        item,
+        evaluation,
+        binding,
+        typical_filter_spec=typical_filter_spec,
+    )

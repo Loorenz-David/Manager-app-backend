@@ -3,7 +3,7 @@
 ```
 plan: plan_3
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 
@@ -331,4 +331,31 @@ files. **`_load_task_and_item` keeps its 2-tuple return**; the spec is computed 
 
 ## 8. Review log
 
-*(empty — append-only; shared by implementer and reviewer)*
+### 2026-08-23 — implementer round 1 (Codex)
+
+- **Outcome:** implemented the additive `typical_filter_spec` carrier on `TaskBudgetStatus`, deriving it from the loaded active PRIMARY item in both manager and worker services. The worker continues to share the helper while retaining its own redacted serializer boundary; no serializer, route, consumer, or golden payload was changed.
+- **Task 0 / red baseline:** transcribed the §6/§6A contract into `app/tests/integration/services/queries/item_economics/test_budget_status_filter_spec.py`. Before implementation the new file collected and ran with **9 failed / 4 passed**; failures were the expected missing-field/attribute contract failures with no import or fixture failures.
+- **Judgment calls recorded:** `_load_task_and_item` remains a two-tuple; derivation is immediately after each load with `None if item is None else derive_spec_from_primary_item(item)`; `_empty_status` and `_build_evaluated_status` receive required keyword-only carrier arguments; evaluated `item_id` remains `evaluation.item_id`; C-N1(a) seeds legal shapes before the violating insert, uses distinct item IDs, and isolates that insert in a savepoint; no graph node was added because the existing projection boundary and architecture meaning did not change.
+- **Positive evidence:** the phase contract file passed **13 tests**; the integration/router command passed **124 tests** in the focused invocation; the full item-economics integration directory had **128 passed** before the final stamp; Redis returned `PONG`.
+- **Mutation ledger:** every named §6A mutation was run against the base tree and reverted immediately. Each red result is recorded here so the reviewer can reproduce the bite:
+
+  | Criterion | Mutation | Both-sides result / failing test ID |
+  |---|---|---|
+  | C1 | Move the defaulted field before non-default `result`. | Collection failed with dataclass `TypeError: non-default argument 'result' follows default argument`; C1 could not collect. |
+  | C2 | Add `typical_filter_spec` inside the manager serializer's `include_monetary` mapping. | **3 failed / 125 passed** at L2: `test_C2_manager_budget_status_payload_has_the_existing_exact_key_set`, `test_C2a_and_C2c_existing_live_clock_goldens_are_byte_identical`, `test_live_clock_goldens.py::test_prechange_payloads_match_byte_golden_files`. |
+  | C2(c) | Publish the field from `division_serializers.serialize_task_production_time`. | **2 failed / 126 passed** at L2: `test_C2a_and_C2c_existing_live_clock_goldens_are_byte_identical`, `test_live_clock_goldens.py::test_prechange_payloads_match_byte_golden_files`. |
+  | C3 | Add the field to the shared serializer payload. | **4 failed / 124 passed** at L2: `test_C2_manager_budget_status_payload_has_the_existing_exact_key_set`, `test_C2_and_C3a_worker_service_serialization_is_not_a_payload_change`, `test_C2a_and_C2c_existing_live_clock_goldens_are_byte_identical`, `test_live_clock_goldens.py::test_prechange_payloads_match_byte_golden_files`; the worker golden path also raised JSON serialization on the leaked spec object. |
+  | C4 | Reload `Item` by `evaluation.item_id` and derive from that item. | **2 failed**: `test_C4_manager_uses_loaded_primary_item_not_evaluation_item`, `test_C4_worker_uses_loaded_primary_item_not_evaluation_item`; both observed X/table instead of Y/chair. |
+  | C4 item-id consistency | Set evaluated status `item_id` from the loaded item instead of `evaluation.item_id`. | **2 failed**: the two C4 tests above; both observed Y instead of the required evaluated X. |
+  | C5(a) | Pass `TypicalFilterSpec()` into the manager no-item empty-status call. | **1 failed**: `test_C5_empty_status_preserves_no_item_vs_categoryless_item[C5-a-manager-no-primary]`. |
+  | C5(b)/(c) manager item-present | Pass `None` into the manager item-present empty-status call. | **1 failed**: `test_C5_empty_status_preserves_no_item_vs_categoryless_item[C5-b-manager-categoryless-primary]`. |
+  | C5(c) worker no-item | Pass `TypicalFilterSpec()` into the worker no-item empty-status call. | **1 failed**: `test_C5_empty_status_preserves_no_item_vs_categoryless_item[C5-c-worker-no-primary]`. |
+  | C5(d) worker item-present | Pass `None` into the worker item-present empty-status call. | **1 failed**: `test_C5_empty_status_preserves_no_item_vs_categoryless_item[C5-d-worker-categoryless-primary]`. |
+  | C6 | Remove the dataclass default from `typical_filter_spec`. | **7 failed / 232 passed** across integration/router coverage: C1, C2 manager construction, and the four role/unknown-role router tests (`test_budget_status_route_is_available_to_all_roles[...]` ×4, `test_budget_status_audience_predicate_fails_closed_for_unknown_role`). |
+  | C-N1(a) index removal | Drop `uix_task_items_primary_active` before the violating insert. | **1 failed**: `test_CN1a_primary_index_is_partial_and_two_legal_shapes_are_valid` (`DID NOT RAISE IntegrityError`). |
+  | C-N1(a) no-WHERE index | Recreate `uix_task_items_primary_active` without its partial predicate. | Legal active RELATED/removed PRIMARY shapes failed at their legal flush, proving the predicate is required. |
+  | C-N1(b) command guard | Remove the explicit active-PRIMARY precheck from `add_item_to_task`. | **1 failed**: `test_CN1b_add_item_to_task_has_the_explicit_primary_conflict_guard`; database `IntegrityError` replaced the pinned `ConflictError` message. |
+
+- **L4 stamp:** authoritative command `PYTHONPATH=. pytest -m 'not e2e'` from `app/`, with default `BEYO_TEST_SLOT=main`, produced **2674 passed, 21 failed, 1 skipped, 2 warnings** across **2696 collected items** in 48.83s. The 21 failing IDs are exactly the approved baseline set in the live-working-time-clock handoff: no new failures and no baseline failures disappeared. The set is unchanged in both directions (added-to-baseline: none; baseline-not-in-current: none). The failures are unrelated existing failures in Shopify migration, auth role shape, upholstery/inventory fixtures, bootstrap, item routers, working sections, worker stats, case-type serialization, and audit log.
+- **Architecture graph:** rechecked the initialized graph at revision `364223242014a733822256e445824b7160bcda2e1cc4a6e3f9e9d930b5419a47` (198 nodes / 298 edges, 0 diagnostics, 1 pending review, 2 stale nodes). The phase changes a field inside an existing projection contract and adds no boundary or node meaning. One attempted empty `archgraph_apply_changes` call was rejected by the tool's minimum-one-change validation; no graph mutation was made, and the pending review item was untouched.
+- **Environment / deviations:** Redis was available (`PONG`); no implementation deviations from the approved plan. The expected untracked `.archgraph/contexts/` directory remains outside the checkpoint commit.

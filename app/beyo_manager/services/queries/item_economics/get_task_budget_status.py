@@ -19,6 +19,10 @@ from beyo_manager.domain.item_economics.calculator import (
 )
 from beyo_manager.domain.item_economics.configuration import resolve_item_economics_status
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
+from beyo_manager.domain.item_economics.typical_filters import (
+    TypicalFilterSpec,
+    derive_spec_from_primary_item,
+)
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemCostEvaluation
@@ -49,6 +53,7 @@ class TaskBudgetStatus:
     evaluation_id: str | None
     item_id: str | None
     result: ItemCostResult | None
+    typical_filter_spec: TypicalFilterSpec | None = None
 
 
 async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
@@ -81,7 +86,13 @@ async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
     return task, item
 
 
-def _empty_status(status: EconomicsStatusEnum, *, binding: str, item_id: str | None) -> TaskBudgetStatus:
+def _empty_status(
+    status: EconomicsStatusEnum,
+    *,
+    binding: str,
+    item_id: str | None,
+    typical_filter_spec: TypicalFilterSpec | None,
+) -> TaskBudgetStatus:
     return TaskBudgetStatus(
         status=status,
         item_binding=binding,
@@ -97,6 +108,7 @@ def _empty_status(status: EconomicsStatusEnum, *, binding: str, item_id: str | N
         evaluation_id=None,
         item_id=item_id,
         result=None,
+        typical_filter_spec=typical_filter_spec,
     )
 
 
@@ -106,6 +118,7 @@ async def get_task_budget_status(
     live_seconds: Mapping[str, int] | None = None,
 ) -> TaskBudgetStatus:
     task, item = await _load_task_and_item(ctx)
+    typical_filter_spec = None if item is None else derive_spec_from_primary_item(item)
     evaluation = await ctx.session.scalar(
         select(ItemCostEvaluation).where(
             ItemCostEvaluation.workspace_id == ctx.workspace_id,
@@ -118,7 +131,12 @@ async def get_task_budget_status(
     binding = "detached" if item is None else ("bound" if evaluation is None or evaluation.item_id == item.client_id else "mismatched")
     if evaluation is None:
         if item is None:
-            return _empty_status(EconomicsStatusEnum.NOT_EVALUATED, binding=binding, item_id=None)
+            return _empty_status(
+                EconomicsStatusEnum.NOT_EVALUATED,
+                binding=binding,
+                item_id=None,
+                typical_filter_spec=typical_filter_spec,
+            )
         selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
             select(ItemValuation).where(
@@ -129,7 +147,12 @@ async def get_task_budget_status(
             )
         )
         status = resolve_item_economics_status(valuation, selection, terms)
-        return _empty_status(status, binding=binding, item_id=item.client_id)
+        return _empty_status(
+            status,
+            binding=binding,
+            item_id=item.client_id,
+            typical_filter_spec=typical_filter_spec,
+        )
 
     return await _build_evaluated_status(
         ctx,
@@ -137,6 +160,7 @@ async def get_task_budget_status(
         item,
         evaluation,
         binding,
+        typical_filter_spec=typical_filter_spec,
         live_seconds=live_seconds,
     )
 
@@ -148,6 +172,7 @@ async def _build_evaluated_status(
     evaluation: ItemCostEvaluation,
     binding: str,
     *,
+    typical_filter_spec: TypicalFilterSpec | None,
     live_seconds: Mapping[str, int] | None = None,
 ) -> TaskBudgetStatus:
     """Build the shared evaluated read model after a caller's own filter."""
@@ -197,4 +222,5 @@ async def _build_evaluated_status(
         evaluation_id=evaluation.client_id,
         item_id=evaluation.item_id,
         result=result,
+        typical_filter_spec=typical_filter_spec,
     )
