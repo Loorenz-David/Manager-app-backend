@@ -3,7 +3,7 @@
 ```
 plan: plan_3
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY
 ```
 
@@ -309,6 +309,109 @@ files. **`_load_task_and_item` keeps its 2-tuple return**; the spec is computed 
   production construction sites, 4 `_empty_status` call sites, 6 helper call sites, 2 test
   constructions. The phrase is inherited from §6A and harmless — the tasks work off the
   measured call sites — **but it is not a checklist and must not be used as one.**
+
+---
+
+### §6B. Coordinator consumption fold — corrections to §6A (2026-08-23)
+
+**§6B wins over §6A wherever they differ.** The implementation is **correct and complete**:
+the production diff is exactly what §6A prescribed (`None if item is None else
+derive_spec_from_primary_item(item)` at both load sites, 2-tuple `_load_task_and_item`,
+required keyword-only carrier with no default, `item_id=evaluation.item_id` preserved,
+`typical_filters.py` untouched). **No production change is required by this fold.** Every
+correction below is to the *evidence* — and two of them are corrections to §6A itself.
+
+#### The structural finding — a content-blind double encodes the query count
+
+`_ScalarSession` (`test_budget_status_filter_spec.py:41-51`) is a **content-blind iterator**:
+`scalar()` returns the next value in a list regardless of what was asked for. Its length
+therefore encodes **the expected number of queries**. Any mutation that adds or removes a
+query exhausts it and raises `RuntimeError: coroutine raised StopIteration` — a red that is
+**indistinguishable from the semantic failure the criterion is asserting**, and that
+splashes onto unrelated rows.
+
+This is the **second-sufficient-cause** family that C-N1(a)(ii) belongs to, one layer over:
+there the fixture satisfied two causes, here the *double* does.
+
+**C4-a (blocking, and this corrects §6A) — the prescribed mutation cannot run.**
+§6A C4 prescribed "re-load `Item` by `evaluation.item_id` and derive from that ORM instance"
+with both-sides `frozenset({"cat_chair"})` → `frozenset({"cat_table"})`. **Measured by the
+coordinator, that mutation does not produce that observable.** The reload consumes the fake
+session's second value, so the run yields:
+
+```
+FAILED test_C4_manager_uses_loaded_primary_item_not_evaluation_item
+  RuntimeError: coroutine raised StopIteration      # not "got cat_table"
++ 3 C5 rows red as collateral (C5-a, C5-b, C5-e)    # fixture exhaustion, not semantics
+```
+
+§6A went one step — *the mutation must produce an `Item`, not an id* — and not the second:
+**the fixture must be able to supply that `Item`.** A content-blind double never can.
+The ledger row claiming "both observed X/table instead of Y/chair" is therefore **not
+reproducible** and must be withdrawn.
+
+**The replacement, measured green-to-red by the coordinator.** Keep the query count
+unchanged and change only the *source*: move the derivation below the evaluation load and
+derive from `evaluation` itself. Result — **2 failed / 11 passed**, the C4 row failing on
+its own assertion, cleanly:
+
+```
+FAILED test_C4_manager_uses_loaded_primary_item_not_evaluation_item     # assertion
+FAILED test_C5_...[C5-e-manager-categorized-primary]                    # assertion
+```
+
+**Say plainly what C4 proves.** Against a content-blind double, C4 can demonstrate *"the
+carrier stopped coming from the loaded PRIMARY item"* — it **cannot** demonstrate *"it came
+from the evaluated item specifically"*, because no mutation can make the double return a
+different `Item`. Record the narrower claim rather than the wider one.
+
+**C1-a (should-fix, and this also corrects §6A) — C1's mutation names no failing test.**
+"Move the defaulted field before non-default `result`" is rejected by Python **at class
+creation**: `TypeError: non-default argument 'result' follows default argument`. It is a
+**collection** error, so it names no failing test id — which §6A's own evidence budget
+requires ("the id, not 'the file reddened'"). It is also unfalsifiable as a criterion probe:
+`result` is the last non-default field, so the language, not the test, forbids the position.
+
+**C1's ordering assertion is nonetheless armed** — the coordinator measured it. Swap two
+*existing* fields (`evaluation_id` / `item_id`), which is legal Python and leaves every
+keyword construction working:
+
+```
+FAILED test_C1_task_budget_status_appends_defaulted_spec_after_result
+  At index 11 diff: 'item_id' != 'evaluation_id'     # 1 failed, 12 passed
+```
+
+**That is C1's mutation.** The old one demonstrated Python's grammar, not the criterion.
+
+**C-N1(a)-a (minor) — the no-`WHERE` row names no test id.** "Legal shapes failed at their
+legal flush" is a description, not an id. State it.
+
+#### Refuted by the coordinator — recorded because a refutation is a result
+
+- **C3's worker key-set assertion bites on the assertion, not on a crash.** The ledger's
+  parenthetical ("the worker path also encountered JSON serialization of the leaked spec
+  object") reads as though the worker row might be red for the wrong reason. Measured: under
+  the shared-`payload` mutation **both** key-set tests fail on the frozenset comparison —
+  `Extra items in the left set: 'typical_filter_spec'` — and the `TypeError: Object of type
+  TypicalFilterSpec is not JSON serializable` is confined to the **golden** test, a
+  different row. **C3 is sound as recorded**; only the prose is ambiguous.
+- **`asyncio_mode = auto`** (`app/pytest.ini:7`), so the three `@pytest.mark.integration`
+  tests that carry no `@pytest.mark.asyncio` **do** run. The inconsistent marking is
+  cosmetic, not a silent skip.
+- **C-N1(a) avoided its own trap.** The five seeded items are distinct, so the violating
+  insert reuses no `item_id` and the `IntegrityError` comes from
+  `uix_task_items_primary_active` and not from `uix_task_items_active`. §6A(ii) held.
+
+#### Notes — no action
+
+- **C5-b is inert against a wrong-source derivation.** Under the corrected C4 mutation it
+  **passes**, because deriving from the wrong source yields `TypicalFilterSpec()` — exactly
+  the value C5-b asserts. It remains armed against **its own** named hazard (pass `None` at
+  the item-present call site), which is what it is for. Recorded so a later round does not
+  mistake its green for wrong-source coverage.
+- **`C5-e-manager-categorized-primary` earned its place.** The implementer added a fifth
+  parametrize case the plan did not require, and it is the **only** C5 row that catches a
+  wrong-source derivation. Keep it.
 
 ---
 

@@ -143,7 +143,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 is owed on the gate commit's own tree.** |
-| 3 | `TaskBudgetStatus` carries the derived spec (§6A) | **`IMPLEMENTED`** | 2026-08-23 | Codex | Additive carrier implemented in manager and worker services; serializers and existing payload goldens remain unchanged. Phase contract file: 13 passed; affected integration/router coverage: 239 passed. L4 stamp: 2674 passed, 21 pre-existing failures, 1 skipped; failure-ID set unchanged from the approved baseline. Review log, mutation ledger, and implementation handoff recorded. |
+| 3 | `TaskBudgetStatus` carries the derived spec (§6A, §6B) | **`CHANGES_REQUESTED`** | 2026-08-23 | Codex (impl r1) → coordinator | Implementation **correct and complete** — production diff is exactly §6A's prescription, `typical_filters.py` untouched, perimeter clean, L4 **2674/21/1** with the 21-ID set unchanged in both directions (+13 passed = the 13 new cases, arithmetic checks out). **Every finding is evidentiary, and two correct §6A itself.** C4's §6A-prescribed mutation **cannot run** — the content-blind `_ScalarSession` encodes query count, so the reload raises `StopIteration` and splashes onto 3 C5 rows; the ledger's "got X/table" is not reproducible (coordinator-measured, replacement measured 2 failed / 11 passed on the assertion). C1's mutation is rejected at class creation and names **no test id**; its ordering assertion *is* armed (field swap → index-11 diff, 1 failed / 12 passed). Refuted at source: C3 bites on the frozenset assertion (JSON `TypeError` is the golden row only); `asyncio_mode = auto` so the unmarked integration tests run; C-N1(a) avoided its own trap with 5 distinct items. Folded as **§6B** (wins over §6A). Fix round 1 dispatched — **evidence only, no production change.** |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
 | 6 | Closeout: frontend handoff, living docs, graph delta | `NOT_STARTED` | — | — | Projection **waivable** — no rule-6 code surface. Never edits a published handoff. |
@@ -499,6 +499,20 @@ for the part code cannot say.
 delta, **do not emit `startLine`/`endLine`**. Describe the boundary and its effect instead.
 Existing span-bearing links are legacy and are repaired only under a scoped owner
 authorization (D28, D29) — never opportunistically.
+
+**⚠ D29 IS DEFERRED, owner 2026-08-23 — do not dispatch it.** The owner is editing
+`.archgraph/agent-operating-policy.md` and will not run the re-anchor session until the
+policy change lands. **This is the right call, and it changes what D29 is worth:** two of its
+three authorized operations (**1** and **3**) are *span re-anchors*, and if spans leave the
+model those operations do not get performed — **they cease to exist**. Only operation **2**
+(re-accept `_optional_values`, refreshing a drifted content hash without touching line
+numbers) survives the policy change in recognisable form. Running D29 first would spend a
+session deriving three spans in order to delete the concept of a span.
+**Consequences to hold:** the one **pending review entry stays pending** and the **two stale
+nodes stay stale** until the policy lands — that is accepted state, not neglect. D29's
+authorization remains valid and scoped; it is not withdrawn, only postponed. When the policy
+lands, **re-scope D29 before dispatching it** rather than running it as written, and update
+this section plus the graph-delta paragraph in every implementer prompt template.
 *Why this is written here and not just awaited:* this project alone paid three drifts on one
 entry, two stale nodes, one owner card and two maintenance sessions to keep a cache of
 something `grep` answers instantly. The full policy change is the owner's, tracked
@@ -798,6 +812,31 @@ in §2. Restated here only where they bite hardest on *this* feature:
   than most — but no downstream plan's Read-first list included it, and plan 6, whose scope
   names the very construct that fires it, was among them. **A criterion held structurally
   "until X happens" is incomplete until the plan where X would happen is made to read it.**
+- **A content-blind test double encodes the query count, so a mutation that changes the
+  number of queries reddens for the wrong reason** (plan-3 coordinator consumption, measured
+  2026-08-23). `_ScalarSession` returns the next value in a list whatever is asked of it, so
+  its length *is* an assertion about how many queries the code issues. §6A prescribed C4's
+  mutation as "re-load `Item` by `evaluation.item_id` and derive from that instance" — one
+  extra query — and the measured result was `RuntimeError: coroutine raised StopIteration`
+  plus **three unrelated C5 rows red as collateral**, not the promised
+  `cat_chair` → `cat_table`. **When a criterion's mutation must change *where a value comes
+  from*, check that it leaves the query count unchanged**; if it cannot, the double must be
+  made content-aware or the criterion must claim only what it can prove. Corollary, and the
+  reason this is its own rule: **a "wrong Item" mutation is unprovable against a double that
+  cannot return a different Item** — state the narrower claim ("the carrier stopped coming
+  from the loaded PRIMARY item") instead of the wider one.
+- **A mutation the language rejects is not a mutation** (same round). C1's named mutation —
+  move a defaulted field before a non-default one — is a `TypeError` at *class creation*, so
+  it produces a **collection error and no failing test id**, which the evidence budget
+  requires. It was also unfalsifiable: `result` is the last non-default field, so the
+  grammar, not the test, forbade the position. **A mutation must be legal code that runs and
+  names a failing test; if the language refuses it, the criterion is untested and a legal
+  mutation must be found** — here, swapping two *existing* fields, which reddens C1 alone.
+- **Two of these three corrections were to a coordinator fold, not to an implementer**
+  (2026-08-23). §6A caught that C4's original mutation passed a `str` and went one step —
+  *produce an `Item`, not an id* — but not two: **the fixture must be able to supply that
+  `Item`.** A fold that corrects a defect one layer down inherits the obligation to check
+  the layer below it.
 
 ---
 
