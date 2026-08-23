@@ -30,7 +30,30 @@ place where "extend the determinism contract" is the wrong instinct. No
   §6.1, §6.2 row 4, §6.4
   (**SUPERSEDED on `is_estimated` by §6B**), **§6B** in full, §7.4, §8, §11.1 rows
   T4/T6/T7/T14/T21, **§11A** T27 and the correction to §8.
-- **`test_price_scenario_query.py`'s `fake_status` is a two-attribute fake** (`:559-560`, `SimpleNamespace(status=…, item_binding=…)`, installed `:574`). **The first phase that reads `budget_status.typical_filter_spec` gets an `AttributeError` from it** — phase 3 does not, because no consumer reads the field there, but you do. Widen the fake before you read the field (plan-3 projection L15).
+- **`test_price_scenario_query.py`'s `fake_status` is a two-attribute fake, and there are
+  FOUR of them — not one.** *(Corrected and re-homed at plan 4's projection fold, L15, measured
+  2026-08-23. Plan-3 projection L15 named only the first, and the obligation was written into
+  **plan 4's** Read-first, where it does not belong: plan 4 never touches price-scenario, so
+  acting on it there would have put that phase outside its own file perimeter. This is the
+  phase that reads the field, so it is the phase that owns the widening — master plan §9,
+  "route an amendment to its consumers, not to its origin".)*
+  All four fake the same two attributes (`SimpleNamespace(status=…, item_binding=…)`) and all
+  four are installed on the price-scenario module (`:47` binds
+  `module = import_module("beyo_manager.services.queries.item_economics.get_task_price_scenario")`):
+
+  | definition | install |
+  |---|---|
+  | `:559-560` | `:574` |
+  | `:955-959` | `:978` |
+  | `:1097-1101` | `:1120` |
+  | `:1256-1260` | `:1279` |
+
+  **The first phase that reads `budget_status.typical_filter_spec` through this module gets an
+  `AttributeError` from every one of them** — that is this phase. **Widen all four before you
+  read the field**; widening one and leaving three is the "reject the malformed input is
+  per-family, and families drift apart" shape master plan §9 already charges this project for.
+  Verified at the fold by a repo-wide grep: these four `monkeypatch.setattr(module,
+  "get_task_budget_status", …)` calls are the **only** places anything fakes that service.
 - `planning/owner_decisions.md` — D14, D19, D22, D24.
 - Gate handoff §2 rows 6, 9, 14 and **§5 item 3** (the ratified clock move).
 - **Neighbouring authority, at source:**

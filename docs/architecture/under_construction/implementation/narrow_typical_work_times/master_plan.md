@@ -5,7 +5,7 @@ plan: master_plan
 role: implementation-planner
 round: 0
 date: 2026-08-22
-status: IN PROGRESS — phases 1–3 APPROVED (2026-08-22, 2026-08-23, 2026-08-23); phases 4–6 NOT_STARTED
+status: IN PROGRESS — phases 1–3 APPROVED (2026-08-22, 2026-08-23, 2026-08-23); phase 4 PROMPT_READY (projection gate satisfied 2026-08-23); phases 5–6 NOT_STARTED
 intention: planning/intention.md (RESOLVED round 8, D1–D25 settled, gate PASS-WITH-CONTRACTS)
 ```
 
@@ -144,7 +144,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 was never run on phase 2's own gate tree and now cannot be** — `app/` has moved on. What IS established: phase 3's gate tree is stamped by measurement (2674/21/1) and its only `app/` delta from phase 2's gate is phase 3's 49 lines, so no unstamped application change sits between them. Recorded as closed-by-succession, not as paid. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A, §6B) | **`APPROVED`** | 2026-08-23 | Opus 5 (review r1) | First review: 0 blocking / 0 should-fix / 4 notes / 0 cards. Production matches §6A line for line (additive, defaulted, fail-closed keyword-only helpers, 2-tuple loader, `item_id=evaluation.item_id` preserved, `typical_filters.py` untouched). **7 probes, all new sites or shapes, each red on its own assertion**: the never-measured **worker-side** wrong-source derivation (2/11), T-L1's own `None`-guard removal on **both** faces (1/12 each), both helper **definition**-side carrier drops (4/9 and 2/11), a **value-gated** serializer publish (3/125 at L2), and C-N1(a)'s no-`WHERE` row — whose inferred test id is now **observed** and correct. L4 runs **0**: `git diff 186027a HEAD -- app/` empty, so the 2674/21/1 stamp describes this tree. Graph re-read live and unchanged (198/298, `364223…`, 1 pending / 2 stale). Notes: N1 C2(b)'s manager key-set row is blind to a value-gated leak (measured; the two goldens catch the class) → plan 4; N2 `_ScalarSession` encodes the query count, 8 rows → plan 4 task 0; N3 §6 C6's "three"/four count + L2 scope line → fold; N4 C5-d shares C5-b's wrong-source inertness → fold. **GATE (coordinator, 2026-08-23):** rows archived to `archive/plan_3/` (9); N3 + N4 folded; N1 + N2 routed into plan 4's read-first list as the first publisher. **P2 re-verified independently — 3 failed / 125 passed, the reviewer's exact ids, manager row green.** **⚠→✅ The approval-gate L4 was RUN on this gate tree, not cited: `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` → **2674 passed / 21 failed / 1 skipped** in 54.64s, the 21-ID set unchanged. Doc/archive delta measured test-inert first (both `tests/unit/docs/` tests resolve only to `docs/handoff/to_frontend/` and `docs/domains/item_economics/`). |
-| 4 | Division contract + production-time + budget-allocations | **`PROJECTING`** | 2026-08-23 | Opus 5 (projection r0) | Projection **dispatched** 2026-08-23. Mandatory gate (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"; C1 is that guard). Largest phase: 14 criteria (**C0–C13**), 4 production files, 2 goldens regenerating **by key addition only**, and the first phase where the engine actually runs. Carries in: **C0** (phase-1's three measured domain-purity escapes, owner-ruled into this phase), **L15** (`fake_status` widening), and phase-3 review **N1** (service-produced key-set fixtures) + **N2** (`_ScalarSession` query-count trigger). Zero prior adversarial passes on this surface. |
+| 4 | Division contract + production-time + budget-allocations | **`PROMPT_READY`** | 2026-08-23 | Opus 5 (coordinator) | **Projection r0 `AMENDMENTS_REQUIRED` — 6 blocking / 10 should-fix / 4 notes / 0 owner cards — consumed and FULLY ROUTED 2026-08-23; gate SATISFIED.** The largest finding was measurable and measured: probe P1 applied the phase's own payload additions + v2 flip and reddened **4** tests, **two in files §4 never named**, neither self-healing — the phase could not have closed green as written. Also repaired: three criteria that could not be executed (C9(a) had no baseline, C10's mutation was designed against a 3-item list and applied to a 50-task one, C12's gate rule was false by construction), C1's three unstated fixture preconditions, two unarmed rows (C7(b), C10(b)), two undecidable absence claims (C1(c), C2), **four** drifted `budget_division.py` spans, and a misrouted plan-5 obligation. Plan 4 gained a **task 0** (tests-first + the C9(a) pre-refactor snapshot) and a **task 9a**. Coordinator added one finding the ledger missed (C10's fixture is denominated in tasks, its assertion in sample counts) and corrected three of the projection's own numbers. **10 rules earned → §9.** Largest phase: now 15 tasks, 14 criteria (**C0–C13**), 4 production files, 2 goldens. Carries in **C0**, phase-3 **N1** + **N2**. Zero prior adversarial passes on this surface. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
 | 6 | Closeout: frontend handoff, living docs, graph delta | `NOT_STARTED` | — | — | Projection **waivable** — no rule-6 code surface. Never edits a published handoff. |
 
@@ -467,12 +467,20 @@ Four sequencing constraints are **structural**, not preferences:
    ten; a silent subset is a gate failure.** Recorded in
    `planning/query_cost_measurements.md`. Phase 2's acceptance, and every phase downstream
    of the statement extension, is conditional on it.
-3. **Goldens regenerate once**, on the post-live-clock baseline (D23), keys-only criterion
-   (§11.2): **any changed numeric value is a gate failure, not a regeneration.** Both
-   changed goldens (`golden_production_time.json`, `golden_budget_allocations.json`) are
-   regenerated in **phase 4**, in one act; `golden_budget_status.json` is unchanged by
-   every phase. Planner reading of D23, recorded so a reviewer does not read a gate
-   failure into two files moving at once.
+3. **Goldens regenerate once**, on the post-live-clock baseline (D23). The accepted diff is
+   **key additions plus exactly one value change — `allocation_method`
+   `static_proportional_section_v1` → `static_proportional_section_v2`, twice per file** — and
+   **any changed numeric value is a gate failure, not a regeneration.** Both changed goldens
+   (`golden_production_time.json`, `golden_budget_allocations.json`) are regenerated in
+   **phase 4**, in one act; `golden_budget_status.json` is unchanged by every phase. Planner
+   reading of D23, recorded so a reviewer does not read a gate failure into two files moving
+   at once.
+   *(The "keys-only" label was corrected at plan 4's projection fold, 2026-08-23, L3: measured,
+   both goldens carry the method constant as a **value**, twice each, so phase 4's own approved
+   version bump puts a value change in the diff **by construction**. A gate whose accept
+   condition the phase cannot satisfy is not a strict gate, it is a broken one — and this one
+   was replicated verbatim into `plans/plan_4.md` §5 task 10 and §6 C12. All three now carry
+   the enumerated form.)*
 4. **D18's removal edits two production files** (§6C / §2B S-4) —
    `get_task_production_time.py:50-62` and `get_task_budget_allocations.py:217-229` both
    construct `DivisionStep(..., typical_worker_seconds=None, ...)`. F-F's "only 8 test call
@@ -891,6 +899,85 @@ in §2. Restated here only where they bite hardest on *this* feature:
   `Item`.** A fold that corrects a defect one layer down inherits the obligation to check
   the layer below it.
 
+- **A plan's "files expected to change" is a claim, and a projection can MEASURE it** (plan-4
+  projection L1, 2026-08-23 — the largest finding of the round and a new technique). Phase 4's
+  §4 named two goldens and one test file. The projection applied the phase's own payload
+  additions and its method-constant flip to the four serializers, ran the scoped surface, and
+  found **four** reds — two of them in files §4 never named, and **neither self-healing**
+  (exact key-set assertions at `test_budget_division_routes.py:155/:158` and an exact v1
+  literal plus two key sets at `test_production_time_query.py:206/:207/:208`). The phase could
+  not have closed green as written. **Generalized: any phase adding a wire key or changing a
+  published constant can have its declared perimeter measured before an implementer opens —
+  apply the payload change, run the import radius, read the reds.** It costs one probe and it
+  is the only check that finds an *omission* rather than an error.
+- **An exact key-set assertion is a perimeter obligation, not a test detail** (same round).
+  `assert set(serialize_x(row)) == {...}` is a tripwire that fires on every *addition*, so it
+  redden**s** in exactly the phases that are doing their job. **Grep for exact key-set
+  assertions on any payload you are extending, and widen — never delete — each one**: they are
+  usually the only guards on that wire, and a phase that deletes one converts a caught
+  regression into a silent one for every phase after it.
+- **A mutation designed against a small fixture does not survive the fixture growing** (plan-4
+  projection L6). C10's mutation "map tasks to `spec_index` by insertion order" was written
+  against a 3-item list and applied to a **50-task** fixture, where `spec_index ∈ [0, K)` means
+  47 of 50 tasks map to indices with **no row in the result**. The row was exposed to *both*
+  paid-for shapes at once: **inert** if the asserted task was the first one, and **red for the
+  wrong reason** (`insufficient_sample` / count 0, not a wrong population) for 17 of the
+  remaining 19. **A named mutation and the fixture it runs against are one artifact — re-derive
+  the mutation whenever the fixture's cardinality changes, and state the mutant's index range.**
+- **A criterion's fixture line must state the quantity the criterion asserts** (plan-4 fold,
+  coordinator). C10's fixture counted **tasks** (20 chair / 15 table / 10 stool / 5 none) while
+  its row asserted a **`sample_count`**, which counts completed section groups in the 90-day
+  window — a different quantity the fixture never mentioned. The corrected mutation makes a
+  chair task read the table population, which reddens the row **only if the two populations
+  differ**, and nothing in the plan said they did. This is §9's *"confirm the fixture contains a
+  row the mutation moves"* one level earlier: **at plan-writing time, check that the fixture
+  description and the assertion are denominated in the same unit.**
+- **An absence claim rooted at the repository root is false the moment the project publishes
+  its own history** (plan-4 projection L10). C2's sweep for the *old* method constant would run
+  against three published frontend handoffs and an archived plan set that carry it as **history**
+  — and §9 forbids rewriting a published handoff, so the claim could never be made true. The
+  root is the **code that must not carry it** (`app/beyo_manager/` plus the regenerated
+  goldens), never "everywhere". Companion to §9's "absence claims state their root and their
+  term set": **choose the root so that ∅ is both true and meaningful, and say in the row why the
+  excluded paths are excluded** — otherwise the next session widens it back.
+- **A criterion whose instrument cannot return the expected result is undecidable, however
+  precise its prose** (plan-4 projection L9). C1(c)'s claim was semantic ("no site passes a
+  live-derived value into a typical") but its instrument was a three-term grep expecting ∅ over
+  a repository where all three terms are present **by design** — `total_working_seconds` is the
+  live-clock contract, at a dataclass field and five read sites. The qualifier that made the
+  claim true ("within the typicals path") is not mechanically checkable. **Before shipping an
+  absence row, run its own sweep and look at the hits: if the expected result is unreachable,
+  the row is prose, and the real guard is the mutation on the value rows.**
+- **A pre/post comparison needs a "pre" that something captured** (plan-4 projection L4). C9(a)
+  asked for every pre-existing numeric field to be "compared against the pre-refactor payload
+  for the same fixture" — but the fixture is **created in that phase**, so no such payload
+  existed and no task captured one. Taken after the refactor it is `f(x) == f(x)`, the vacuity
+  §11A repaired T11 to remove. **Any criterion containing the words "unchanged", "before" or
+  "pre-refactor" owes a task that writes the baseline down, ordered before the first production
+  edit** — and that snapshot is then never regenerated.
+- **A blanket phrase in a gate is a defect when the phase's own approved work violates it**
+  (plan-4 projection L3). "Regeneration is approved only if the diff adds keys" was replicated
+  in three artifacts and was **false by construction**: the same phase flips a method constant
+  that lives in both goldens as a *value*. The enumerated form ("key additions plus exactly one
+  named value change, twice per file") is the same strictness with none of the falsity.
+  **Prefer an enumerated accept-list to a blanket adjective in any gate the phase itself must
+  pass.**
+- **Route a Read-first obligation to the phase that can act on it** (plan-4 projection L15, and
+  the third instance of this shape in this project). "Widen the price-scenario `fake_status`
+  before you read the field" sat in **plan 4's** Read-first — a phase that never touches
+  price-scenario, so obeying the instruction would have breached its own file perimeter. It also
+  named **one** fake where the surface is **four**. Both halves are the same error: the
+  amendment landed near where it was discovered rather than where it is executed. §9 already
+  carries "route an amendment to its consumers"; this instance adds the test — **"could this
+  phase act on this without leaving its §4 perimeter?" If no, it belongs to another plan.**
+- **A projection's own corrections inherit the obligation to be checked** (plan-4 fold,
+  2026-08-23 — the second time in two phases). Three of this round's twenty rows needed a
+  further correction from the coordinator: a re-derived span the projection put one line off, a
+  measured count restated from memory ("12+" for eleven), and one mutation correction that fixed
+  the site but left the fixture unable to discriminate. **Consuming a projection is not
+  transcribing it. Re-derive every number that will be written into a plan, by locating the
+  symbol at the moment of writing.**
+
 ---
 
 ## 10. Environment topology
@@ -946,8 +1033,15 @@ disagrees, update this section.**
 - **Mutations run at hypothesis scope** — L1 (named test / phase file) by default, L2 where
   the criterion names a cross-file bite set. An L1 miss is already a finding.
 - **L4 is required** for: the cycle stamp; review entry on a changed tree; the approval gate;
-  **absence claims** (plan 4 C1's live-seconds sweep, plan 5 C7's fork sweep); and baseline
-  re-enumeration.
+  **absence claims whose root really is the repository**; and baseline re-enumeration.
+  *(Corrected 2026-08-23, plan-4 projection L9: plan 4 C1's live-seconds sweep is **no longer**
+  an L4 row — it could not return ∅ from the repository root, because `total_working_seconds`
+  is present there by design, and it is now an L2 sweep over `typical_filters.py` plus the
+  evidence-construction helper. Plan 5 C7's fork sweep still is one.)*
+- **A repo-wide claim and a full-suite run are different axes.** An absence criterion that
+  ships as a committed test walking the repository (plan 4 C13(c)) is an **L1 test** with a
+  repo-wide *claim*; running it does not require and does not consume an L4 suite run. Do not
+  spend the stamp on it.
 - **A phase whose criteria enumerate L4 measurements states that matrix as its budget** —
   plan 2's §12 matrix is ten distinct conditions and each is variation, not redundancy.
 - Every evidence record carries hypothesis, scope, exact command, **tree identity** (SHA +
