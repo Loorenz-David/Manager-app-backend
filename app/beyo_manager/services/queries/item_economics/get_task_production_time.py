@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from beyo_manager.domain.item_economics import budget_division
 from beyo_manager.domain.item_economics.budget_division import (
     DivisionStep,
     TYPICAL_METHOD,
@@ -15,6 +16,10 @@ from beyo_manager.domain.item_economics.budget_division import (
 )
 from beyo_manager.domain.item_economics.division_serializers import serialize_task_production_time
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
+from beyo_manager.domain.item_economics.typical_filters import (
+    SectionTypicalEvidence,
+    reconcile_task_typicals,
+)
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
@@ -55,7 +60,6 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             total_working_seconds=live_seconds[step.client_id],
             sequence_order=step.sequence_order,
             working_section_name_snapshot=step.working_section_name_snapshot,
-            typical_worker_seconds=None,
             is_deleted=step.is_deleted,
             created_at=step.created_at,
             latest_state_record=_loaded_latest_state_record(step),
@@ -74,27 +78,57 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
     ).scalars().all()
     section_by_id = {section.client_id: section for section in sections}
 
-    typicals_by_section: dict[str, int | None] = {}
-    typical_details: dict[str, dict] = {}
+    spec = status.typical_filter_spec
+    specs = (spec,) if spec is not None and spec.is_narrowing else ()
+    evidence_by_section: dict[str, SectionTypicalEvidence] = {}
     if section_ids:
         typical_result = await ctx.session.execute(
-            typical_times_statement(ctx.workspace_id, now=ctx.now).where(
+            typical_times_statement(ctx.workspace_id, now=ctx.now, specs=specs).where(
                 WorkingSection.client_id.in_(section_ids)
             )
         )
         for row in typical_result:
-            typicals_by_section[row.client_id] = (
-                int(row.typical_worker_seconds)
-                if row.typical_worker_seconds is not None
-                else None
-            )
-            typical_details[row.client_id] = {
-                "typical_worker_seconds": typicals_by_section[row.client_id],
-                "sample_count": int(row.sample_count or 0),
-                "method": TYPICAL_METHOD,
-                "window_days": TYPICAL_WINDOW_DAYS,
-                "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
-            }
+            if specs:
+                # K >= 1 results are keyed by the named spec_index. Never rely
+                # on the statement's column order; K2-a deliberately differs.
+                if int(row.spec_index) != 0:
+                    continue
+                evidence_by_section[row.client_id] = SectionTypicalEvidence(
+                    row.client_id,
+                    int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
+                    int(row.narrowed_sample_count or 0),
+                    int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
+                    int(row.section_sample_count or 0),
+                )
+            else:
+                evidence_by_section[row.client_id] = SectionTypicalEvidence(
+                    row.client_id,
+                    None,
+                    0,
+                    int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
+                    int(row.sample_count or 0),
+                )
+    section_ids = frozenset(section_ids)
+    selection = reconcile_task_typicals(
+        evidence_by_section,
+        spec if specs else None,
+        frozenset(budget_division.participating_sections(division_steps)),
+        section_ids,
+    )
+    typicals_by_section = selection.selected
+    typical_details = {
+        section_id: {
+            "typical_worker_seconds": selected.typical_worker_seconds,
+            "typical_basis": selected.typical_basis,
+            "sample_count": selected.sample_count,
+            "narrowed_sample_count": selected.evidence.narrowed_sample_count,
+            "section_sample_count": selected.evidence.section_sample_count,
+            "method": TYPICAL_METHOD,
+            "window_days": TYPICAL_WINDOW_DAYS,
+            "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
+        }
+        for section_id, selected in selection.selected.items()
+    }
 
     division = divide_production_budget(
         status.allowed_worker_minutes
@@ -117,6 +151,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "result": status.result,
             "division": division,
             "typicals": typical_details,
+            "typical_resolution": selection,
         }
     )
 

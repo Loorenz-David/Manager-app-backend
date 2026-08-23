@@ -13,7 +13,11 @@ from beyo_manager.domain.item_economics.typical_constants import (
     TYPICAL_MIN_SAMPLE_SIZE,
     TYPICAL_WINDOW_DAYS,
 )
-from beyo_manager.domain.item_economics.typical_filters import median
+from beyo_manager.domain.item_economics.typical_filters import (
+    SelectedTypical,
+    apply_business_fallback,
+    median,
+)
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 
@@ -22,7 +26,7 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 _median = median
 
 
-ALLOCATION_METHOD = "static_proportional_section_v1"
+ALLOCATION_METHOD = "static_proportional_section_v2"
 EXCLUDED_STEP_STATES = frozenset(
     {
         TaskStepStateEnum.SKIPPED,
@@ -42,7 +46,6 @@ class DivisionStep:
     total_working_seconds: int = 0
     sequence_order: int | None = None
     working_section_name_snapshot: str | None = None
-    typical_worker_seconds: int | None = None
     is_deleted: bool = False
     created_at: datetime | None = None
     latest_state_record: Any = None
@@ -261,14 +264,31 @@ def _step_result(
     allowance: int | None,
     left: int | None,
     share_state: str,
-    typicals: Mapping[str, int | None],
+    typicals: Mapping[str, SelectedTypical],
 ) -> dict[str, Any]:
     section_id = _value(step, "working_section_id")
+    selected = typicals.get(section_id)
+    if isinstance(selected, SelectedTypical):
+        typical_worker_seconds = selected.typical_worker_seconds
+        typical_basis = selected.typical_basis
+        sample_count = selected.sample_count
+    elif selected is not None:
+        # Keep the pure helper tolerant of old unit-call shapes while all service
+        # callers use SelectedTypical as the contract requires.
+        typical_worker_seconds = selected
+        typical_basis = "section_wide" if selected is not None else "insufficient_sample"
+        sample_count = 0
+    else:
+        typical_worker_seconds = None
+        typical_basis = "insufficient_sample"
+        sample_count = 0
     return {
         "step_id": _value(step, "client_id"),
         "working_section_id": section_id,
         "section_name_snapshot": _value(step, "working_section_name_snapshot"),
-        "typical_worker_seconds": typicals.get(section_id, _value(step, "typical_worker_seconds")),
+        "typical_worker_seconds": typical_worker_seconds,
+        "typical_basis": typical_basis,
+        "sample_count": sample_count,
         "allowance_seconds": allowance,
         "worked_seconds": int(_value(step, "total_working_seconds", 0) or 0),
         "left_seconds": left,
@@ -280,7 +300,7 @@ def _step_result(
 def divide_production_budget(
     allowed_worker_minutes: Decimal | int | str | None,
     steps: Sequence[Any],
-    typicals_by_section: Mapping[str, int | None] | None = None,
+    typicals_by_section: Mapping[str, SelectedTypical] | None = None,
     section_attributes: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Allocate one budget slice per section and split it back across its steps."""
@@ -313,33 +333,23 @@ def divide_production_budget(
 
     budget_seconds = _budget_seconds(allowed_worker_minutes)
     excluded = [step for step in live_steps if _step_state_is_excluded(step)]
-    allocated_groups = [
-        group
-        for group in groups
-        if any(not _step_state_is_excluded(step) for step in group["steps"])
-    ]
+    participating = participating_sections(live_steps)
+    allocated_groups = [group for group in groups if group["working_section_id"] in participating]
     charged_seconds = sum(int(_value(step, "total_working_seconds", 0) or 0) for step in excluded)
     distributable_seconds = max(0, budget_seconds - charged_seconds)
 
-    usable: list[Fraction] = []
     resolved_weights: dict[str, Fraction] = {}
+    selected_values = []
     for group in allocated_groups:
-        section_id = group["working_section_id"]
-        typical = typicals.get(section_id)
-        if typical is None:
-            typical = next(
-                (_value(step, "typical_worker_seconds") for step in group["steps"] if _value(step, "typical_worker_seconds") is not None),
-                None,
-            )
-        if typical is not None and _as_fraction(typical) > 0:
-            usable.append(_as_fraction(typical))
-            resolved_weights[section_id] = _as_fraction(typical)
+        selected = typicals.get(group["working_section_id"])
+        if isinstance(selected, SelectedTypical):
+            selected_values.append(selected.typical_worker_seconds)
         else:
-            resolved_weights[section_id] = Fraction(0, 1)
-    fallback = median(usable) if usable else Fraction(1, 1)
-    for section_id, weight in list(resolved_weights.items()):
-        if weight <= 0:
-            resolved_weights[section_id] = fallback
+            selected_values.append(selected)
+    resolved_values = apply_business_fallback(selected_values, terminal=Fraction(1, 1))
+    for group, resolved in zip(allocated_groups, resolved_values):
+        section_id = group["working_section_id"]
+        resolved_weights[section_id] = resolved
 
     total_weight = sum(resolved_weights.values(), Fraction(0, 1))
     raw_shares = {

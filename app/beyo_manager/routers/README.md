@@ -1670,11 +1670,20 @@ None
 | data.budget_allocations[].actual_worker_seconds | integer | No |  |
 | data.budget_allocations[].remaining_worker_minutes | string | No |  |
 | data.budget_allocations[].allocation_method | string | Yes |  |
+| data.budget_allocations[].typical_resolution | object | Yes |  |
+| data.budget_allocations[].typical_resolution.task_typical_basis | string | Yes |  |
+| data.budget_allocations[].typical_resolution.reconciliation_method | string | Yes |  |
+| data.budget_allocations[].typical_resolution.comparability_profile | string | Yes |  |
+| data.budget_allocations[].typical_resolution.applied_filter | object | No |  |
+| data.budget_allocations[].typical_resolution.participating_section_count | integer | Yes |  |
+| data.budget_allocations[].typical_resolution.sections_by_basis | object | Yes |  |
 | data.budget_allocations[].steps[] | array[object] | Yes |  |
 | data.budget_allocations[].steps[].step_id | string | Yes |  |
 | data.budget_allocations[].steps[].working_section_id | string | Yes |  |
 | data.budget_allocations[].steps[].section_name_snapshot | string | No |  |
 | data.budget_allocations[].steps[].typical_worker_seconds | integer | No |  |
+| data.budget_allocations[].steps[].typical_basis | string | Yes |  |
+| data.budget_allocations[].steps[].sample_count | integer | Yes |  |
 | data.budget_allocations[].steps[].allowance_seconds | integer | No |  |
 | data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
 | data.budget_allocations[].steps[].left_seconds | integer | No |  |
@@ -1712,6 +1721,13 @@ None
 | data.status | string | Yes |  |
 | data.item_binding | string | Yes |  |
 | data.allocation_method | string | Yes |  |
+| data.typical_resolution | object | Yes |  |
+| data.typical_resolution.task_typical_basis | string | Yes |  |
+| data.typical_resolution.reconciliation_method | string | Yes |  |
+| data.typical_resolution.comparability_profile | string | Yes |  |
+| data.typical_resolution.applied_filter | object | No |  |
+| data.typical_resolution.participating_section_count | integer | Yes |  |
+| data.typical_resolution.sections_by_basis | object | Yes |  |
 | data.budget | object | Yes |  |
 | data.final | object | No |  |
 | data.sections[] | array[object] | Yes |  |
@@ -1727,6 +1743,14 @@ None
 | data.sections[].left_seconds | integer | No |  |
 | data.sections[].share_state | string | Yes |  |
 | data.sections[].typical | object | Yes |  |
+| data.sections[].typical.typical_worker_seconds | integer | No |  |
+| data.sections[].typical.sample_count | integer | Yes |  |
+| data.sections[].typical.typical_basis | string | Yes |  |
+| data.sections[].typical.narrowed_sample_count | integer | Yes |  |
+| data.sections[].typical.section_sample_count | integer | Yes |  |
+| data.sections[].typical.method | string | Yes |  |
+| data.sections[].typical.window_days | integer | Yes |  |
+| data.sections[].typical.min_sample_size | integer | Yes |  |
 | warnings[] | string | Yes |  |
 
 Returns one time-only section row per non-deleted task section, with the section's

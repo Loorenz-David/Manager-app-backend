@@ -17,7 +17,6 @@ def step(client_id, state="pending", section="section", worked=0, sequence_order
         working_section_id=section,
         total_working_seconds=worked,
         sequence_order=sequence_order,
-        typical_worker_seconds=typical,
         is_deleted=deleted,
     )
 
@@ -242,12 +241,12 @@ def test_c5_section_unit_weights_a_reassigned_section_once():
 def test_c7_multi_open_governing_step_and_equal_remainder_tie_are_deterministic():
     now = datetime.now(timezone.utc)
     first = DivisionStep(
-        client_id="first", state="pending", working_section_id="section", typical_worker_seconds=1,
+        client_id="first", state="pending", working_section_id="section",
         created_at=now - timedelta(minutes=2),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
     )
     second = DivisionStep(
-        client_id="second", state="pending", working_section_id="section", typical_worker_seconds=1,
+        client_id="second", state="pending", working_section_id="section",
         created_at=now - timedelta(minutes=1),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
     )
@@ -261,17 +260,17 @@ def test_c7_multi_open_governing_step_and_equal_remainder_tie_are_deterministic(
 def test_c6c_multi_open_governing_precedence_is_entered_created_then_client_id():
     now = datetime.now(timezone.utc)
     entered_winner = DivisionStep(
-        client_id="z-winner", state="pending", working_section_id="section", typical_worker_seconds=1,
+        client_id="z-winner", state="pending", working_section_id="section",
         created_at=now - timedelta(minutes=3),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
     )
     created_winner = DivisionStep(
-        client_id="b-created", state="working", working_section_id="section", typical_worker_seconds=1,
+        client_id="b-created", state="working", working_section_id="section",
         created_at=now - timedelta(minutes=1),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=2)),
     )
     client_id_winner = DivisionStep(
-        client_id="a-client", state="paused", working_section_id="section", typical_worker_seconds=1,
+        client_id="a-client", state="paused", working_section_id="section",
         created_at=now - timedelta(minutes=2),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=3)),
     )

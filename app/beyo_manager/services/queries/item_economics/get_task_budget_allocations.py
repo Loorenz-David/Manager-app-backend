@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
+from beyo_manager.domain.item_economics import budget_division
 from beyo_manager.domain.item_economics.budget_division import (
     ALLOCATION_METHOD,
     DivisionStep,
@@ -20,6 +21,11 @@ from beyo_manager.domain.item_economics.configuration import (
 )
 from beyo_manager.domain.item_economics.division_serializers import serialize_budget_allocations
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
+from beyo_manager.domain.item_economics.typical_filters import (
+    SectionTypicalEvidence,
+    derive_spec_from_primary_item,
+    reconcile_task_typicals,
+)
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.item_economics.cost_model_term import CostModelTerm
@@ -40,18 +46,6 @@ from beyo_manager.domain.item_economics.calculator import calculate_actual_worke
 
 _MAX_TASK_IDS = 50
 _BUDGET_STATUSES = frozenset({EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEASIBLE})
-
-
-async def _load_typicals(ctx: ServiceContext) -> dict[str, dict]:
-    result = await ctx.session.execute(typical_times_statement(ctx.workspace_id, now=ctx.now))
-    return {
-        row.client_id: {
-            "typical_worker_seconds": int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
-            "sample_count": int(row.sample_count or 0),
-            "section_name": row.name,
-        }
-        for row in result
-    }
 
 
 async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
@@ -129,7 +123,32 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
     )
     selection_date = ctx.now.date()
 
-    typicals = await _load_typicals(ctx)
+    spec_by_task = {
+        task.client_id: derive_spec_from_primary_item(
+            item_by_id.get(primary_by_task[task.client_id].item_id)
+            if task.client_id in primary_by_task
+            else None
+        )
+        for task in tasks
+    }
+    narrowing_specs = []
+    spec_index_by_task: dict[str, int | None] = {}
+    for task in tasks:
+        spec = spec_by_task[task.client_id]
+        if not spec.is_narrowing:
+            spec_index_by_task[task.client_id] = None
+            continue
+        if spec not in narrowing_specs:
+            narrowing_specs.append(spec)
+        spec_index_by_task[task.client_id] = narrowing_specs.index(spec)
+    specs = tuple(narrowing_specs)
+    typical_result = await ctx.session.execute(
+        typical_times_statement(ctx.workspace_id, now=ctx.now, specs=specs)
+    )
+    typical_rows: dict[tuple[str, int | None], object] = {}
+    for row in typical_result:
+        index = int(row.spec_index) if specs else None
+        typical_rows[(row.client_id, index)] = row
 
     # These four reads intentionally happen once per request. They mirror the
     # preview loader's query shapes and are resolved against each item in Python.
@@ -222,19 +241,41 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 total_working_seconds=live_seconds[step.client_id],
                 sequence_order=step.sequence_order,
                 working_section_name_snapshot=step.working_section_name_snapshot,
-                typical_worker_seconds=None,
                 is_deleted=step.is_deleted,
                 created_at=step.created_at,
                 latest_state_record=_loaded_latest_state_record(step),
             )
             for step in task_steps
         ]
-        typicals_by_section = {
-            step.working_section_id: typicals.get(step.working_section_id, {}).get("typical_worker_seconds")
-            for step in task_steps
-        }
+        section_ids = frozenset(step.working_section_id for step in task_steps)
+        task_spec_index = spec_index_by_task[task.client_id]
+        evidence_by_section: dict[str, SectionTypicalEvidence] = {}
+        for section_id in section_ids:
+            row = typical_rows.get((section_id, task_spec_index if specs else None))
+            if row is None:
+                evidence_by_section[section_id] = SectionTypicalEvidence(section_id, None, 0, None, 0)
+            elif specs:
+                evidence_by_section[section_id] = SectionTypicalEvidence(
+                    section_id,
+                    int(row.narrowed_typical_worker_seconds) if task_spec_index is not None and row.narrowed_typical_worker_seconds is not None else None,
+                    int(row.narrowed_sample_count or 0) if task_spec_index is not None else 0,
+                    int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
+                    int(row.section_sample_count or 0),
+                )
+            else:
+                evidence_by_section[section_id] = SectionTypicalEvidence(
+                    section_id, None, 0,
+                    int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
+                    int(row.sample_count or 0),
+                )
+        selection = reconcile_task_typicals(
+            evidence_by_section,
+            spec_by_task[task.client_id] if spec_by_task[task.client_id].is_narrowing else None,
+            frozenset(budget_division.participating_sections(division_steps)),
+            section_ids,
+        )
         allowed = evaluation.allowed_worker_minutes if evaluation is not None and status in _BUDGET_STATUSES else None
-        division = divide_production_budget(allowed, division_steps, typicals_by_section)
+        division = divide_production_budget(allowed, division_steps, selection.selected)
         actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
         if status in _BUDGET_STATUSES and allowed is not None:
             actual_minutes = calculate_actual_worker_minutes(actual_seconds)
@@ -253,6 +294,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "actual_worker_seconds": actual_seconds,
                 "remaining_worker_minutes": remaining_minutes,
                 "allocation_method": ALLOCATION_METHOD,
+                "typical_resolution": selection,
                 "steps": division["steps"],
             }
         )

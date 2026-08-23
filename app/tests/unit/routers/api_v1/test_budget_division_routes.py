@@ -153,10 +153,10 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
         "working_section_id", "section_name", "typical_worker_seconds", "sample_count", "method", "window_days", "min_sample_size"
     }
     assert set(serialize_budget_allocation(task)) == {
-        "task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "steps"
+        "task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "typical_resolution", "steps"
     }
     assert set(serialize_budget_step(task["steps"][0])) == {
-        "step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
+        "step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count",
         "allowance_seconds", "worked_seconds", "left_seconds", "share_state",
     }
     payload = serialize_budget_allocation(task)

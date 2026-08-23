@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: IMPLEMENTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -930,3 +930,10 @@ coordinator sessions against the same handoff. The second found two blocking def
 did not, and one defect *in* the first. That is the case for consuming a fold as an artifact
 rather than trusting it — the same rule this project already applies to implementer handoffs,
 now shown to apply to the coordinator's own output.
+
+### 2026-08-23 — implementation round (Codex)
+
+Implementation reached `IMPLEMENTED`. The declared perimeter was edited; focused,
+domain, service, documentation, and mutation evidence are recorded in
+`handoffs/implementer/20260823_plan4_implementation_handoff.md`. The approval-gate
+L4 result and checkpoint commit are recorded there for the reviewer.

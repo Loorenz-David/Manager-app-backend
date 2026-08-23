@@ -1,0 +1,72 @@
+{
+  "budget_allocations": {
+    "budget_allocations": [
+      {
+        "actual_worker_seconds": 1200,
+        "allocation_method": "static_proportional_section_v1",
+        "allowed_worker_minutes": "100.00",
+        "remaining_worker_minutes": "80.00",
+        "status": "ok",
+        "steps": [
+          {
+            "allowance_seconds": null,
+            "left_seconds": null,
+            "section_name_snapshot": null,
+            "share_state": "excluded",
+            "step_id": "tsp_failed_a2d848a481",
+            "typical_worker_seconds": 1200,
+            "worked_seconds": 1200,
+            "working_section_id": "wsec_a2d848a481"
+          },
+          {
+            "allowance_seconds": 4800,
+            "left_seconds": 4800,
+            "section_name_snapshot": null,
+            "share_state": "on_track",
+            "step_id": "tsp_live_a2d848a481",
+            "typical_worker_seconds": 1200,
+            "worked_seconds": 0,
+            "working_section_id": "wsec_a2d848a481"
+          }
+        ],
+        "task_id": "tsk_a2d848a481"
+      }
+    ]
+  },
+  "production_time": {
+    "allocation_method": "static_proportional_section_v1",
+    "budget": {
+      "actual_worker_minutes": "20.00",
+      "actual_worker_seconds": 1200,
+      "allowed_worker_minutes": "100.00",
+      "percent_consumed": "20.00",
+      "remaining_worker_minutes": "80.00"
+    },
+    "final": null,
+    "item_binding": "bound",
+    "sections": [
+      {
+        "allowance_seconds": 4800,
+        "left_seconds": 3600,
+        "order_list": null,
+        "section_name": "Upholstery",
+        "section_name_snapshot": null,
+        "share_state": "on_track",
+        "state": "pending",
+        "state_entered_at": null,
+        "step_count": 2,
+        "typical": {
+          "method": "median_completed_section_totals",
+          "min_sample_size": 5,
+          "sample_count": 5,
+          "typical_worker_seconds": 1200,
+          "window_days": 90
+        },
+        "worked_seconds": 1200,
+        "working_section_id": "wsec_a2d848a481"
+      }
+    ],
+    "status": "ok",
+    "task_id": "tsk_a2d848a481"
+  }
+}
