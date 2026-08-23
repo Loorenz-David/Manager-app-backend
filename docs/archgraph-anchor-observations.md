@@ -266,3 +266,18 @@ Not a session; a snapshot of what the graph currently hands agents.
   consistent with the policy working *and* with the prompt working, and cannot distinguish
   them. **The clean test still has not been run**: it needs a session whose prompt says
   nothing about anchoring. Until one does, treat 0-of-3 as encouraging and unattributed.
+
+### 2026-08-23 — plan-4 fix round 2, first halt (implementer, Codex)
+
+- **New evidence written:** none. No `archgraph_apply_changes`, no `archgraph_*` call. The
+  session halted before its closing protocol. **Nothing to report.**
+- **Re-anchor activity:** none.
+- **Review findings about location:** none about the graph. The session did cite production
+  line numbers precisely and correctly in its stop-report (`:150-151` keying, `:254` lookup),
+  and those citations were re-derived by the coordinator at source and confirmed exact. Logged
+  as a counter-example to this project's standing citation-drift pattern: a **freshly measured**
+  line number is reliable; it is **cached** ones that decay.
+- **Closing-work language:** none.
+- **Reading:** unchanged. Still no session whose prompt is silent on anchoring, so the span
+  question remains unmeasurable. Cumulative: one session has written new evidence since the
+  policy change (3 links, 0 spans) and its prompt carried the explicit instruction.

@@ -622,6 +622,31 @@ assertion is silently satisfied by whichever chair task the implementer happens 
 (d) each of the five category-less tasks carries `typical_basis: "section_wide"` and
 `applied_filter: null`.
 
+> **★ This row found the phase's first production defect, in fix round 2 (2026-08-23).**
+> **The defect:** in a **mixed-spec batch** (`K ≥ 1` with at least one category-less task),
+> `get_task_budget_allocations` keys its statement rows `(section_id, 0..K-1)` (`:150-151`)
+> but a category-less task looks up **`(section_id, None)`** (`:254`). That key never exists,
+> so the lookup misses, `SectionTypicalEvidence(section_id, None, 0, None, 0)` is constructed
+> (`:256`), and the task publishes `insufficient_sample` — **contradicting task 8 and §3B B1,
+> which require `spec_index = None` to take `narrowed_* := section_*` with a section-wide
+> basis.**
+> **The fix, and why it is safe:** the section-wide columns are **spec-independent** —
+> `section_count` and `section_percentile` are filtered by `qualifying` only, never by
+> `narrowed_qualifying` (`get_working_section_typical_times.py:95-96`) — so they are identical
+> on every `spec_index` row for a section. A `spec_index is None` task must therefore resolve
+> against **any** row for that section (`(section_id, 0)` is always present, since the
+> statement emits one row per live section × spec_index) and read only its section-wide
+> columns.
+> **Why C9 did not catch it:** C9's fixture is a single no-category task, so `K == 0`, `specs`
+> is empty, and rows are keyed `(section_id, None)` — the lookup matches. **C9 exercises the
+> `K == 0` path; only C10 exercises the `K ≥ 1` mixed path.** The two are different branches of
+> the same `if specs` expression.
+> **Fixture precondition, separately true and still required:** `section_wide` is
+> **count-gated** — `has_section` is `section_sample_count >= TYPICAL_MIN_SAMPLE_SIZE`
+> (`typical_filters.py:149-150`) — so these sections need **≥ 5 completed section totals
+> in-window** regardless. Measured in round 2: the batch fixture carries **27**, and raising it
+> to 32 changed nothing, which is what proved the cause was keying and not sampling.
+
 **The instrument for (a) AND (b)** *(rewritten at the projection fold, L7 — row (b) had no
 instrument at all, and the fixture caution read as forbidding the only one that works)*: a
 `wraps`-style spy installed on **`get_task_budget_allocations.typical_times_statement`**. It
@@ -1020,3 +1045,46 @@ v2 assertion exists for production-time (`test_production_time_query.py:206`). C
    and `Fraction` appears **0×** in both services. The consumption fold's C-2 was acted on.
 6. **Graph evidence is policy-correct**: three new source links, `path` + `symbol` +
    `contentHash`, **zero spans**.
+
+### 2026-08-23 — fix round 2 halt, adjudicated WRONG then corrected (coordinator)
+
+**Sequence, recorded in full because the error is the lesson.** The implementer halted on
+C10(d) reporting that production returns `insufficient_sample` for category-less tasks where
+the row requires `section_wide`, and that fixing it needed out-of-perimeter production edits.
+
+**My first adjudication was wrong.** I ruled it a fixture defect — unstated count-gating
+precondition — on the grounds that *"C9(c) asserts that exact shape for a no-category task and
+passes, so production can produce `section_wide`; therefore the red must be undersampling."*
+I told the implementer to seed more history inside its existing perimeter, and I named the
+condition that would refute me.
+
+**The implementer refuted it, by measurement.** It raised the batch fixture from **27** to
+**32** completed section totals; C10 failed **identically**. It then located the real cause and
+reverted the ineffective change, leaving the tree clean. **It was right and I was not.**
+
+**The real defect is production**, verified independently at source and written into C10(d)
+above: mixed-spec batches key rows `(section_id, 0..K-1)` while a `spec_index is None` task
+looks up `(section_id, None)`, which never exists.
+
+**Why my inference failed, stated precisely.** C9 passing proved the **`K == 0`** path works.
+C10 exercises the **`K ≥ 1` mixed** path. They are two branches of the same `if specs`
+expression, and I treated evidence about one as evidence about the surface. **This is the same
+error class I recorded as a standing rule two rounds ago** — *"a measurement at one site is not
+a measurement of the surface"* — committed the same week I wrote it down, one abstraction level
+up: not one call site generalized to a symbol, but one code path generalized to a behaviour.
+Knowing the rule did not stop me applying the reasoning it forbids.
+
+**What made this recoverable was not judgment, it was procedure**: the ruling shipped with the
+condition that would refute it, and the implementer was told to re-open rather than defend if
+it hit. **Every adjudication that overrides a session's own diagnosis must name its refutation
+condition** — routed to master plan §9.
+
+**Consequences routed:**
+- **The round-2 production fence is lifted for this one fix.** `get_task_budget_allocations.py`
+  is already inside plan §4's perimeter; my round-2 prompt narrowed it out, and that narrowing
+  was wrong. Superseded by
+  `prompts/implementer/20260823_plan4_fix_round2_correction2_prompt.md` — never by editing the
+  round-2 prompt, which has been reported against twice.
+- **C10(d) keeps its wording.** It is not a defective criterion; it is the criterion that
+  caught the phase's first production defect, on the exact shape (Critical rank 2/3, a
+  mis-keyed row) it was written for. **The instrument worked; the adjudicator did not.**
