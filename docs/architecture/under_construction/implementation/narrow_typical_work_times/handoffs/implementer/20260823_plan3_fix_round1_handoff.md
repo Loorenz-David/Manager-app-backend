@@ -42,5 +42,5 @@ No file under `app/beyo_manager/` was modified at close. After the checkpoint, o
 owner's Architecture Graph policy edit and the expected untracked context directory
 remain outside the committed documentation changes.
 
-Checkpoint SHA: **pending the explicit-path checkpoint commit immediately following this
-handoff**. The final SHA will be added in a documentation follow-up commit.
+Checkpoint SHA: **`07201f3`** (`CHECKPOINT (not approved): record plan 3 fix round 1 evidence`).
+This handoff line is the only follow-up documentation change after that checkpoint.
