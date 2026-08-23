@@ -1,0 +1,252 @@
+changeId: 2026-08-23T10-58-28-018Z--c22f90
+operations:
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 208
+          endLine: 360
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-task
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+          startLine: 23
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+          startLine: 23
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-create-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+          startLine: 23
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+          startLine: 23
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-create-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+          startLine: 23
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/create_item_cost_projection.py
+          symbol: create_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-delete-item-cost-projection--reads_from-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/delete_item_cost_projection.py
+          symbol: delete_item_cost_projection
+          startLine: 20
+          endLine: 34
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/delete_item_cost_projection.py
+          symbol: delete_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-delete-item-cost-projection--writes_to-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/delete_item_cost_projection.py
+          symbol: delete_item_cost_projection
+          startLine: 20
+          endLine: 34
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/delete_item_cost_projection.py
+          symbol: delete_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-task
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--reads_from-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-promote-item-cost-projection--writes_to-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+          startLine: 20
+          endLine: 54
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/promote_item_cost_projection.py
+          symbol: promote_item_cost_projection
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:28.018Z
+graphRevisionBefore: a4e3c1e7bc2babf6fe99db9dda2542ebedc752e28e196a4e267c2c3beee361b3
+graphRevisionAfter: 9373aa0eacf81ab9f3d2c8ae2785bdf21f294c340976ced484a67377d5bc40b5
+humanInstruction: "Evidence span backfill 9/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."

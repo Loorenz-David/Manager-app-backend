@@ -1,0 +1,325 @@
+changeId: 2026-08-23T10-58-23-115Z--784bf0
+operations:
+  - itemId: node:decision-item-economics-production-budget-cap-v1
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: PRODUCTION_BUDGET_CAP_PERCENT
+          startLine: 20
+          endLine: 26
+        - index: 1
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+          startLine: 250
+          endLine: 273
+        - index: 2
+          path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: PriceModel
+          startLine: 25
+          endLine: 32
+        - index: 3
+          path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: budget_minor
+          startLine: 101
+          endLine: 113
+        - index: 4
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 252
+          endLine: 259
+        - index: 5
+          path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: serialize_task_price_scenario
+          startLine: 318
+          endLine: 330
+        - index: 6
+          path: app/tests/unit/domain/item_economics/test_price_scenario.py
+          symbol: test_c22_piecewise_budget_matches_the_capped_calculator_across_crossing
+          startLine: 433
+          endLine: 452
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: PRODUCTION_BUDGET_CAP_PERCENT
+        - index: 1
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+        - index: 2
+          path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: PriceModel
+        - index: 3
+          path: app/beyo_manager/domain/item_economics/price_scenario.py
+          symbol: budget_minor
+        - index: 4
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+        - index: 5
+          path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: serialize_task_price_scenario
+        - index: 6
+          path: app/tests/unit/domain/item_economics/test_price_scenario.py
+          symbol: test_c22_piecewise_budget_matches_the_capped_calculator_across_crossing
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:infrastructure-test-database-isolation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 234
+          endLine: 252
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+          startLine: 539
+          endLine: 565
+        - index: 2
+          path: app/tests/conftest.py
+          symbol: isolated_database
+          startLine: 22
+          endLine: 37
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._drop_database_if_exists
+        - index: 2
+          path: app/tests/conftest.py
+          symbol: isolated_database
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:test-database-isolation-contract
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+          startLine: 103
+          endLine: 112
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+          startLine: 449
+          endLine: 490
+        - index: 2
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+          startLine: 614
+          endLine: 647
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: resolve_worker_database_name
+        - index: 1
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._migrate_and_assert
+        - index: 2
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_dev_database_counts_are_untouched
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:infrastructure-template-copy-contention-lock
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._template_operation_lock
+          startLine: 381
+          endLine: 396
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._template_operation_lock
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:configuration-shipped-pytest-parallel-default
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 1
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_shipped_default_reaches_an_xdist_worker
+          startLine: 108
+          endLine: 125
+    after:
+      anchors:
+        - index: 1
+          path: app/tests/integration/infrastructure/test_database_isolation.py
+          symbol: test_shipped_default_reaches_an_xdist_worker
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:domain-item-economics-typical-filters
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/typical_filters.py
+          symbol: TypicalFilterSpec
+          startLine: 1
+          endLine: 333
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/typical_filters.py
+          symbol: TypicalFilterSpec
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:test-item-economics-domain-purity-guards
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_spec_identity_hashing
+          startLine: 13
+          endLine: 23
+        - index: 1
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+          startLine: 26
+          endLine: 29
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_spec_identity_hashing
+        - index: 1
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:source-file-working-section-typical-item-filter
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/_typical_item_filter.py
+          symbol: build_item_match
+          startLine: 13
+          endLine: 49
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/_typical_item_filter.py
+          symbol: build_item_match
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-put-valuation--accepts-->command-item-economics-set-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+          startLine: 229
+          endLine: 241
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-delete-valuation--accepts-->command-item-economics-delete-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_delete_item_valuation
+          startLine: 258
+          endLine: 269
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_delete_item_valuation
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-set-item-valuation--writes_to-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          symbol: set_item_valuation
+          startLine: 128
+          endLine: 159
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/set_item_valuation.py
+          symbol: set_item_valuation
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-put-valuation--returns-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+          startLine: 229
+          endLine: 241
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_set_item_valuation
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-get-valuations--returns-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+          symbol: get_item_valuation_history
+          startLine: 32
+          endLine: 33
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py
+          symbol: get_item_valuation_history
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-commit-evaluation--accepts-->command-item-economics-commit-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_commit_item_cost_evaluation
+          startLine: 295
+          endLine: 307
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_commit_item_cost_evaluation
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-list-evaluations--accepts-->command-item-economics-list-task-evaluations
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_list_task_evaluations
+          startLine: 310
+          endLine: 321
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_list_task_evaluations
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:23.115Z
+graphRevisionBefore: 5220c97f27ac14b6bd0c7b08c6ae0e68d8a1e5c16a99ca2e2b9ed479cb2bb92c
+graphRevisionAfter: b75ab7c1cc4e881557daa6d29e1444d9380a2474c3df64406f0d8fafaf5273bd
+humanInstruction: "Evidence span backfill 7/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."

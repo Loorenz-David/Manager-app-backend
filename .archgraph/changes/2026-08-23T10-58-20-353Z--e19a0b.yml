@@ -1,0 +1,301 @@
+changeId: 2026-08-23T10-58-20-353Z--e19a0b
+operations:
+  - itemId: node:projection-item-economics-task-budget-status-worker
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          symbol: get_task_budget_status_worker
+          startLine: 22
+          endLine: 53
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py
+          symbol: get_task_budget_status_worker
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:command-task-create
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 72
+          endLine: 594
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:decision-money-audience-admin-manager-only
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: include_monetary_step_fields
+          startLine: 150
+          endLine: 155
+        - index: 1
+          path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: serialize_step
+          startLine: 158
+          endLine: 160
+        - index: 2
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: _run_budget_status
+          startLine: 133
+          endLine: 144
+        - index: 3
+          path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: _serialize_result
+          startLine: 197
+          endLine: 207
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: include_monetary_step_fields
+        - index: 1
+          path: app/beyo_manager/domain/tasks/serializers.py
+          symbol: serialize_step
+        - index: 2
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: _run_budget_status
+        - index: 3
+          path: app/beyo_manager/domain/item_economics/serializers.py
+          symbol: _serialize_result
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:command-bootstrap-seed-item-economics-configuration
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: seed_item_economics_configuration
+          startLine: 406
+          endLine: 463
+        - index: 1
+          path: app/tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py
+          symbol: test_human_successors_permanently_freeze_bootstrap_basis_and_model
+          startLine: 264
+          endLine: 361
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: seed_item_economics_configuration
+        - index: 1
+          path: app/tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py
+          symbol: test_human_successors_permanently_freeze_bootstrap_basis_and_model
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:source-file-item-economics-budget-division
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 14
+          endLine: 191
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:projection-working-section-typical-times
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+          startLine: 21
+          endLine: 83
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:projection-item-economics-task-budget-allocations
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 100
+          endLine: 283
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:endpoint-working-section-typical-times
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+          startLine: 131
+          endLine: 146
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:endpoint-item-economics-task-budget-allocations
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+          startLine: 351
+          endLine: 365
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:projection-item-economics-task-production-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          startLine: 23
+          endLine: 96
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+          symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+          startLine: 191
+          endLine: 213
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_production_time_query.py
+          symbol: test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:endpoint-item-economics-task-production-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+          startLine: 371
+          endLine: 382
+        - index: 1
+          path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+          symbol: test_production_time_route_is_available_to_all_roles
+          startLine: 8
+          endLine: 14
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+        - index: 1
+          path: app/tests/unit/routers/api_v1/test_production_time_routes.py
+          symbol: test_production_time_route_is_available_to_all_roles
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:endpoint-item-economics-task-price-scenario
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+          startLine: 385
+          endLine: 396
+        - index: 1
+          path: app/tests/unit/routers/api_v1/test_item_economics_router.py
+          symbol: test_price_scenario_route_mounts_the_price_scenario_service
+          startLine: 147
+          endLine: 153
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+        - index: 1
+          path: app/tests/unit/routers/api_v1/test_item_economics_router.py
+          symbol: test_price_scenario_route_mounts_the_price_scenario_service
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          startLine: 181
+          endLine: 311
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+          startLine: 583
+          endLine: 617
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:domain-purchase-api-sek-price-normalization
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 1
+          path: app/beyo_manager/services/queries/items/lookup/purchase_api.py
+          symbol: PurchaseApiLookupHandler.lookup
+          startLine: 132
+          endLine: 145
+    after:
+      anchors:
+        - index: 1
+          path: app/beyo_manager/services/queries/items/lookup/purchase_api.py
+          symbol: PurchaseApiLookupHandler.lookup
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:projection-live-worked-seconds
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 18
+          endLine: 82
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:20.353Z
+graphRevisionBefore: d2b8be83f206777010a2483aac6ac0484fe6fbecb7f68cad0e645cb91f01cd49
+graphRevisionAfter: 5220c97f27ac14b6bd0c7b08c6ae0e68d8a1e5c16a99ca2e2b9ed479cb2bb92c
+humanInstruction: "Evidence span backfill 6/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."

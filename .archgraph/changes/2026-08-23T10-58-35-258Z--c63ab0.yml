@@ -1,0 +1,177 @@
+changeId: 2026-08-23T10-58-35-258Z--c63ab0
+operations:
+  - itemId: edge:endpoint-working-section-typical-times--accepts-->projection-working-section-typical-times
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+          startLine: 131
+          endLine: 146
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/working_sections.py
+          symbol: get_working_section_typical_times_route
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-production-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 273
+          endLine: 401
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-task-production-time--accepts-->projection-item-economics-task-production-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+          startLine: 371
+          endLine: 382
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_production_time
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-task-create--reads_from-->table-item
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 236
+          endLine: 248
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-task-price-scenario--accepts-->projection-item-economics-task-price-scenario
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+          startLine: 385
+          endLine: 396
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_price_scenario
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:projection-live-worked-seconds--reads_from-->table-step-state-record
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 41
+          endLine: 57
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:projection-live-worked-seconds--calls-->src-compute-record-contributions
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+          startLine: 60
+          endLine: 70
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_seconds
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:domain-item-economics--governed_by-->decision-item-economics-production-budget-cap-v1
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+          startLine: 250
+          endLine: 273
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/calculator.py
+          symbol: calculate_production_budget
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:infrastructure-test-database-isolation--contains-->infrastructure-template-copy-contention-lock
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+          startLine: 234
+          endLine: 252
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation.start
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._ensure_template
+          startLine: 398
+          endLine: 428
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/database_isolation.py
+          symbol: DatabaseIsolation._ensure_template
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:test-item-economics-domain-purity-guards--verifies-->domain-item-economics-typical-filters
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+          startLine: 26
+          endLine: 29
+    after:
+      anchors:
+        - index: 0
+          path: app/tests/unit/domain/item_economics/test_domain_purity.py
+          symbol: test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:35.258Z
+graphRevisionBefore: 9f60b6c1f6ac542fd48b3ee7cfd513d02145709d7272f4c481cf6976ec4f6483
+graphRevisionAfter: 8d4efaa9bff796269bbf09905dd15a1ed4f45668083612d52e5ee0ceb7a88b63
+humanInstruction: "Evidence span backfill 11/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."

@@ -1,0 +1,267 @@
+changeId: 2026-08-23T10-58-32-453Z--ae9d63
+operations:
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-task
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+          startLine: 34
+          endLine: 89
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+          startLine: 34
+          endLine: 89
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+          startLine: 34
+          endLine: 89
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/list_task_evaluations.py
+          symbol: list_task_evaluations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-item-economics-commit-item-cost-evaluation--produces-->event-item-economics-evaluation-committed
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+          startLine: 386
+          endLine: 392
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py
+          symbol: _commit_item_cost_evaluation_in_session
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-task-create--writes_to-->table-item-valuation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 316
+          endLine: 367
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-task-create--writes_to-->table-task
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 113
+          endLine: 183
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-task-create--writes_to-->table-task-item
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          startLine: 307
+          endLine: 315
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _get_or_create_group
+          startLine: 135
+          endLine: 175
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _get_or_create_group
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group-section
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_group_sections
+          startLine: 178
+          endLine: 218
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_group_sections
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-basis-version
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_basis_version
+          startLine: 221
+          endLine: 300
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_basis_version
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-version
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+          startLine: 303
+          endLine: 404
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-term
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+          startLine: 352
+          endLine: 404
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py
+          symbol: _seed_cost_model
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-allocations
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+          startLine: 78
+          endLine: 191
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/item_economics/budget_division.py
+          symbol: divide_production_budget
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:projection-item-economics-task-budget-allocations--reads_from-->table-task-step
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 154
+          endLine: 165
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:projection-item-economics-task-budget-allocations--reads_from-->table-item-cost-evaluation
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          startLine: 141
+          endLine: 152
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:projection-working-section-typical-times--reads_from-->table-task-step
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+          startLine: 24
+          endLine: 38
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
+          symbol: get_working_section_typical_times
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: edge:endpoint-item-economics-task-budget-allocations--accepts-->projection-item-economics-task-budget-allocations
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+          startLine: 351
+          endLine: 365
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_allocations
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:32.453Z
+graphRevisionBefore: 9373aa0eacf81ab9f3d2c8ae2785bdf21f294c340976ced484a67377d5bc40b5
+graphRevisionAfter: 9f60b6c1f6ac542fd48b3ee7cfd513d02145709d7272f4c481cf6976ec4f6483
+humanInstruction: "Evidence span backfill 10/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."

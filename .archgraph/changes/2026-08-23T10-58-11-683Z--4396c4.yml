@@ -1,0 +1,328 @@
+changeId: 2026-08-23T10-58-11-683Z--4396c4
+operations:
+  - itemId: node:command-assign-worker-to-step
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_steps/assign_worker_to_step.py
+          symbol: assign_worker_to_step
+          startLine: 98
+          endLine: 140
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_steps/assign_worker_to_step.py
+          symbol: assign_worker_to_step
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:helper-task-state-transitions
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/_task_state_transitions.py
+          symbol: maybe_evaluate_task_ready
+          startLine: 51
+          endLine: 95
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/tasks/_task_state_transitions.py
+          symbol: maybe_evaluate_task_ready
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:command-mark-step-obligations-acknowledged
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_step_acknowledgments/mark_step_obligations_acknowledged.py
+          symbol: mark_step_obligations_acknowledged
+          startLine: 10
+          endLine: 40
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_step_acknowledgments/mark_step_obligations_acknowledged.py
+          symbol: mark_step_obligations_acknowledged
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:task-finalize-pending-step-completion
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py
+          symbol: handle_finalize_pending_step_completion
+          startLine: 29
+          endLine: 60
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py
+          symbol: handle_finalize_pending_step_completion
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:command-pause-task-working-steps-for-case
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/cases/_case_created_step_pause.py
+          symbol: pause_task_working_steps_for_case
+          startLine: 100
+          endLine: 150
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/cases/_case_created_step_pause.py
+          symbol: pause_task_working_steps_for_case
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:contract-step-transition-payload
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/execution/payloads/step_transition.py
+          symbol: StepTransitionPayload
+          startLine: 7
+          endLine: 27
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/execution/payloads/step_transition.py
+          symbol: StepTransitionPayload
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:src-create-instant-task
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/task_factory.py
+          symbol: create_instant_task
+          startLine: 10
+          endLine: 50
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/task_factory.py
+          symbol: create_instant_task
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:infra-task-router
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/task_router.py
+          symbol: run_task_router
+          startLine: 87
+          endLine: 135
+        - index: 1
+          path: app/beyo_manager/services/infra/execution/task_router.py
+          symbol: QUEUE_MAP
+          startLine: 17
+          endLine: 35
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/task_router.py
+          symbol: run_task_router
+        - index: 1
+          path: app/beyo_manager/services/infra/execution/task_router.py
+          symbol: QUEUE_MAP
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:infra-worker-base
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/worker_base.py
+          symbol: run_worker
+          startLine: 45
+          endLine: 120
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/infra/execution/worker_base.py
+          symbol: run_worker
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:analytics-process-step-transition
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: handle_process_step_transition
+          startLine: 37
+          endLine: 110
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: handle_process_step_transition
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:analytics-recompute-step-time-totals
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: _recompute_step_time_totals
+          startLine: 161
+          endLine: 234
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: _recompute_step_time_totals
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:analytics-reconcile-user-day-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/reconcile_user_time.py
+          symbol: reconcile_user_day_time
+          startLine: 256
+          endLine: 337
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/reconcile_user_time.py
+          symbol: reconcile_user_day_time
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:analytics-apply-reconcile-deltas
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/reconcile_user_time.py
+          symbol: apply_reconcile_deltas
+          startLine: 338
+          endLine: 350
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/reconcile_user_time.py
+          symbol: apply_reconcile_deltas
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:src-compute-record-contributions
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/averaged_time.py
+          symbol: compute_record_contributions
+          startLine: 69
+          endLine: 140
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/analytics/averaged_time.py
+          symbol: compute_record_contributions
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:command-reconcile-worker-shift-state
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/users/reconcile_worker_shift_state.py
+          symbol: reconcile_worker_shift_state
+          startLine: 270
+          endLine: 330
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/users/reconcile_worker_shift_state.py
+          symbol: reconcile_worker_shift_state
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:domain-analytics-insights-engine
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/analytics/insights/engine.py
+          symbol: evaluate
+          startLine: 103
+          endLine: 140
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/domain/analytics/insights/engine.py
+          symbol: evaluate
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:script-backfill-averaged-time
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/scripts/backfill/backfill_averaged_time.py
+          symbol: _run
+          startLine: 59
+          endLine: 180
+    after:
+      anchors:
+        - index: 0
+          path: app/scripts/backfill/backfill_averaged_time.py
+          symbol: _run
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:concept-attribution-split
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+          startLine: 336
+          endLine: 345
+        - index: 1
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: _recompute_step_time_totals
+          startLine: 165
+          endLine: 172
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+        - index: 1
+          path: app/beyo_manager/services/tasks/analytics/process_step_transition.py
+          symbol: _recompute_step_time_totals
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:rule-issue-counting-ignores-marked-wrong
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 1
+          path: app/beyo_manager/domain/analytics/concurrency.py
+          symbol: wasted_seconds_by_record
+          startLine: 86
+          endLine: 105
+    after:
+      anchors:
+        - index: 1
+          path: app/beyo_manager/domain/analytics/concurrency.py
+          symbol: wasted_seconds_by_record
+    rationale: "Backfill: drop line range, keep path + symbol."
+  - itemId: node:table-production-cost-group
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/models/tables/item_economics/production_cost_group.py
+          symbol: ProductionCostGroup
+          startLine: 10
+          endLine: 24
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/models/tables/item_economics/production_cost_group.py
+          symbol: ProductionCostGroup
+    rationale: "Backfill: drop line range, keep path + symbol."
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T10:58:11.683Z
+graphRevisionBefore: 3fd4fd48e5a443635191fc92c8d8bd30af7b8e74f3ccb6d1b90a0b82409c0710
+graphRevisionAfter: 620d482957caa9f06f1b76d4e736e0a3b2c6071087a2d39497bae10417623a86
+humanInstruction: "Evidence span backfill 3/11: drop line ranges where a symbol
+  exists (scripts/backfill-evidence-spans.py)."
