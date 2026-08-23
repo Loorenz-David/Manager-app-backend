@@ -38,6 +38,26 @@ breaks both call sites at once, and a phase must close green.
   T1/T2/T3/T4/T5/T6/T7/T8/T9/T16/T21, **§11A** in full (T10a, T16b as amended by §4C, T23,
   T24, and the correction to §8), §11.2.
 - **`test_price_scenario_query.py`'s `fake_status` is a two-attribute fake** (`:559-560`, `SimpleNamespace(status=…, item_binding=…)`, installed `:574`). **The first phase that reads `budget_status.typical_filter_spec` gets an `AttributeError` from it** — phase 3 does not, because no consumer reads the field there, but you do. Widen the fake before you read the field (plan-3 projection L15).
+- **`plans/plan_3.md` §6B, and the two phase-3 review notes routed here (2026-08-23).** You
+  are the **first publisher** of `typical_filter_spec`, so both fire in this phase:
+  - **N1 — a key-set criterion must serialize a *service-produced* object, not a locally
+    constructed one.** Phase 3's manager key-set row serializes a hand-built
+    `TaskBudgetStatus` whose `typical_filter_spec` is the dataclass default `None`, so it is
+    **blind to a value-gated publish** (`if spec is not None: payload[...]`). **Measured
+    twice** — review probe P2 and coordinator re-verification, both **3 failed / 125 passed**
+    with `test_C2_manager_budget_status_payload_has_the_existing_exact_key_set` staying
+    **green** while the worker row and both goldens go red. **When you edit that row to
+    publish the field, give it a populated spec or build the status through
+    `get_task_budget_status`** — otherwise your new publishing criterion inherits the same
+    blindness on the face that carries money.
+  - **N2 — `_ScalarSession`'s length is an unstated assertion about the query count**, and
+    **eight rows** in `test_budget_status_filter_spec.py` depend on it (C4 ×2, C3a, C5 ×5).
+    **Trigger, not a scheduled task: the first phase that adds or removes a query in either
+    budget-status service turns all eight red with `RuntimeError: coroutine raised
+    StopIteration`, a message that names nothing.** If this phase changes either service's
+    query sequence, **make the double content-aware in the same round** (dispatch on the
+    statement's target entity) rather than extending the value list. Phase 3 paid a full fix
+    round to this mechanism; master plan §9 carries the rule.
 - `planning/owner_decisions.md` — D2, D7, D9, D12, D16, D18, D20, D22, D23, **D25**.
 - Gate handoff §2 rows 5, 8, 12, 14 and §5.
 - **The neighbouring pipeline's approved authority, read at source:**

@@ -3,7 +3,7 @@
 ```
 plan: plan_3
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: APPROVED
 projection_gate: MANDATORY
 ```
 
@@ -108,8 +108,11 @@ Anything else is a finding — in particular any serializer, any golden, and
 ## 6. Tests / acceptance criteria
 
 Hypothesis scope: L1 = `test_budget_status_filter_spec.py`. C2 and C6 name cross-file bite
-sets (the goldens and three consumer suites) and run at L2 =
+sets (the goldens and the consumer suites) and run at L2 =
 `tests/integration/services/queries/item_economics/`.
+**⚠ Corrected (review N3, 2026-08-23): C6's actual bite is in
+`tests/unit/routers/api_v1/test_item_economics_router.py`, which sits OUTSIDE that L2 root.**
+C6's scope is that file plus the L2 root. The count below is **four**, not three.
 
 **C1 — additive, appended last, defaulted.**
 Assert `[f.name for f in fields(TaskBudgetStatus)]` equals the exact fourteen existing names
@@ -177,7 +180,9 @@ bite on that call site — recorded, and each has its own call-site mutation of 
 *Defect caught*: "no primary item" and "a primary item with no category" collapsing into one
 value, which is harmless in V1 and is silent policy drift at `COMPARABILITY_PROFILE` v2.
 
-**C6 — the three consumer suites are green with no edits.**
+**C6 — the four consumer suites are green with no edits.** *(Corrected from "three" —
+review N3 / §6A C6(iii); the list below has always named four. Master plan §9: a count in a
+plan sentence is a checklist, and this one counted to nothing.)*
 `test_production_time_query.py`, `test_budget_allocations_query.py`,
 `test_price_scenario_query.py` and `test_live_clock_goldens.py` pass unchanged.
 *Mutation* — `get_task_budget_status.py` (definition): change `item_id`'s value on the
@@ -411,7 +416,15 @@ legal flush" is a description, not an id. State it.
   mistake its green for wrong-source coverage.
 - **`C5-e-manager-categorized-primary` earned its place.** The implementer added a fifth
   parametrize case the plan did not require, and it is the **only** C5 row that catches a
-  wrong-source derivation. Keep it.
+  wrong-source derivation on the **manager** face. Keep it.
+- **C5-d shares C5-b's inertness, and the worker face has no C5-e analogue** (review N4,
+  2026-08-23). C5-d (worker, category-less primary, expects `TypicalFilterSpec()`) is inert
+  against a wrong-source derivation for exactly C5-b's reason — the wrong source also yields
+  `TypicalFilterSpec()`. **This is not a gap:** the worker's wrong-source coverage lives in
+  `test_C4_worker_...` and in C3(a)'s spec assertion, **both proven to bite** by review probe
+  P1 (2 failed / 11 passed, each on its own assertion). Recorded so a later round neither
+  reads C5-d's green as wrong-source coverage **nor "adds the missing worker C5-e"** that
+  C3(a) already is.
 
 #### §6B.1 — the fix round's own gate was defective (2026-08-23, coordinator)
 
@@ -509,3 +522,67 @@ Carrying the technique across without checking that precondition is the defect.
 - **C1 — field-order mutation.** Contract side: `evaluation_id`, then `item_id`, then `result`, then defaulted `typical_filter_spec`; mutation side: `item_id`, then `evaluation_id`, then `result`, then defaulted `typical_filter_spec`. **Matched:** 1 failed / 12 passed. Failing ID: `test_C1_task_budget_status_appends_defaulted_spec_after_result` with `At index 11 diff: 'item_id' != 'evaluation_id'`.
 - **C-N1(a) no-`WHERE` row.** Contract side: the active RELATED and removed PRIMARY legal shapes flush successfully while the second active PRIMARY raises `IntegrityError`; no-`WHERE` mutation side: the legal shapes fail at their legal flush because the partial predicate is lost. **Matched:** the existing observation was retained without re-running. Test ID: `test_CN1a_primary_index_is_partial_and_two_legal_shapes_are_valid`.
 - **Evidence scope:** both pinned mutations ran at L1 over the whole contract file from `app/`: C4 **2 failed / 11 passed**, C1 **1 failed / 12 passed**. No L4 ran; production code was not changed.
+
+### 2026-08-23 — reviewer round 1 (Opus 5) — **`APPROVED`**
+
+- **Verdict:** 0 blocking / 0 should-fix / 4 notes / 0 owner cards. Handoff:
+  `handoffs/reviewer/20260823_plan3_review_handoff.md`. Tree: `2e37f30`, `git status` clean under `app/`.
+- **Production verified structurally against §6A**, line by line: additive `typical_filter_spec:
+  TypicalFilterSpec | None = None` appended last (`get_task_budget_status.py:56`); `None if item is None else
+  derive_spec_from_primary_item(item)` at both load sites (`:121`, `_worker.py:27`); required keyword-only,
+  no-default carrier on `_empty_status` (`:89-95`) and `_build_evaluated_status` (`:168-175`); 2-tuple
+  `_load_task_and_item`; `item_id=evaluation.item_id` preserved (`:224`); `typical_filters.py` untouched.
+  Perimeter is exactly the three declared files.
+- **L4 runs: 0.** `git diff 186027a HEAD -- app/` empty and no modified tracked file under `app/`; the eight
+  files changed since the stamp are all under `docs/`/`.archgraph/` and the only test naming either path
+  (`tests/unit/docs/test_item_economics_docs.py:20`) reads `docs/domains/item_economics/`. The implementer's
+  **2674 passed / 21 failed / 1 skipped** stamp describes the reviewed tree and is consumed by citation.
+  Control run of the phase file: **13 passed**. `redis-cli ping` → `PONG`.
+- **Probe ledger** (all L1 unless stated; each applied to the base tree, reverted, MD5 re-verified):
+
+  | id | mutation (file · definition-vs-call-site) | result | failing ids |
+  |---|---|---|---|
+  | P1 | `get_task_budget_status_worker.py` · call site: derive from `evaluation` below the evaluation load (query count unchanged) | **2 failed / 11 passed** | `test_C4_worker_uses_loaded_primary_item_not_evaluation_item`; `test_C2_and_C3a_worker_service_serialization_is_not_a_payload_change` — both on their own assertion (`None != frozenset({'cat_chair'})`) |
+  | P2 | `serializers.py` · `serialize_task_budget_status` definition: publish the spec **only when it is not None** | **3 failed / 125 passed** (L2) | `test_C2_and_C3a_worker_...`; `test_C2a_and_C2c_...`; `test_live_clock_goldens.py::test_prechange_payloads_match_byte_golden_files`. **`test_C2_manager_..._exact_key_set` stayed green** → N1 |
+  | P4 | `get_task_budget_status.py` · load site: drop the `None if item is None` guard (T-L1's hazard) | **1 failed / 12 passed** | `C5-a-manager-no-primary` |
+  | P4w | `_worker.py` · load site: same | **1 failed / 12 passed** | `C5-c-worker-no-primary` |
+  | P7 | `get_task_budget_status.py` · `_empty_status` **definition**: stop forwarding the carrier | **4 failed / 9 passed** | `C5-b`, `C5-d`, `C5-e`, `test_C2_and_C3a_worker_...` |
+  | P8 | `get_task_budget_status.py` · `_build_evaluated_status` **definition**: same | **2 failed / 11 passed** | `test_C4_manager_...`, `test_C4_worker_...` |
+  | P9 | C-N1(a) sub-check 3: recreate `uix_task_items_primary_active` without its `WHERE` (DDL in the test transaction) | **1 failed / 12 passed** | `test_CN1a_primary_index_is_partial_and_two_legal_shapes_are_valid`, failing at the **legal** flush |
+
+- **Answers to the five open areas.** (1) C4's narrower §6B claim is **acceptable** — every way the carrier can
+  stop coming from the loaded PRIMARY item was made red on its own assertion (P1, P4, P4w, P7, P8); only the
+  *attribution* to the evaluated item is unprovable, and widening the claim would be false. (2) The faces are
+  **not symmetric**: the worker key-set row serializes a service-produced status, the manager row serializes a
+  hand-built `_status()` whose spec is `None` — see N1. (3) **Nine of ten criteria have their own transcribed
+  case**; C6 alone has none, correctly, because its claim is that four *existing* suites stay green.
+  (4) The worker-side mutation gap was **real and is now closed** by P1 (plus P4w, P8). (5) C2 / C2(c) / C6 are
+  tree-matched and consumed by citation; the round bought **variation** (P2) instead, and observed C-N1(a)'s
+  previously-inferred test id (P9).
+- **Refutations.** The golden loop is **not** vacuous (`_payloads` returns a hard-coded three-key literal,
+  `test_live_clock_goldens.py:318-322`). No spec leaks into the price-scenario payload — `get_task_price_scenario.py:195`
+  reads named fields and no `asdict`/`__dict__` is applied to a `TaskBudgetStatus` anywhere. No helper call site
+  was missed (4 × `_empty_status`, 2 × `_build_evaluated_status`, all keyword; 5 × `TaskBudgetStatus(...)`, all
+  keyword — C1's positional hazard stays correctly labelled *future*). The fix round's inferred C-N1(a) id is
+  **correct**, and fails at the legal flush because the legal shapes flush at `:392` before the `pg_indexes` read
+  at `:394`. Graph re-read live and **unchanged** — 198/298, revision `364223242014…`, 0 diagnostics, 1 pending /
+  2 stale; nothing promoted, rejected, edited or re-anchored, and no `startLine`/`endLine` emitted.
+- **Notes, all routed.** **N1** — C2(b)'s manager key-set row serializes `_status()` (`:111-129`), whose
+  `typical_filter_spec` is the dataclass default, so it cannot see a value-gated leak (measured, P2); the class
+  is caught by the two golden rows, so this is a note. → **plan 4**, which first publishes the field.
+  **N2** — `_ScalarSession`'s value-list length encodes the query count; the first phase to add or remove a query
+  in either service turns **eight** rows red with `RuntimeError: coroutine raised StopIteration`. → **plan 4 task 0**
+  as a named trigger. **N3** — §6 C6 still reads "the **three** consumer suites" over a list of four, and §6's scope
+  line still declares C6's L2 root as the item-economics integration tree while its real bite is
+  `tests/unit/routers/api_v1/test_item_economics_router.py`; §6A carries both corrections and wins, so no evidence
+  was lost. → **prose fold**. **N4** — C5-d shares C5-b's wrong-source inertness and only C5-b is recorded; the
+  worker's wrong-source coverage is C4-worker and C3(a), both proven by P1. → **prose fold**.
+- **Lessons.** (i) A key-set criterion should serialize a **service-produced** object — a hand-built one can only
+  see unconditional leaks. (ii) When a helper fans out, name the **definition**-side mutation as well as the call
+  sites: P7 reddens a different four rows than the plan's call-site mutations. (iii) An **inferred** failing-test
+  id is not an observed one — the ledger should distinguish "retained without re-running" from "measured".
+- **Mutation-probe declaration.** Four files touched and reverted byte-identical:
+  `get_task_budget_status.py` `aec7826f3119694da3bcb3815f22b570`; `get_task_budget_status_worker.py`
+  `2b3b7d42e85185c4a6b2e01a63b91179`; `serializers.py` `e433330a94317c80ff024901721bd033`;
+  `test_budget_status_filter_spec.py` `d14dc521133d46e60d13327800a03308`. P9's DDL ran inside `db_session`'s
+  rolled-back transaction (`tests/conftest.py:107-110`); no state persists; no concurrent suite session ran.

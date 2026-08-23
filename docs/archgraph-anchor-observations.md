@@ -133,6 +133,24 @@ Ran before the policy edit. Recorded for contrast, not as a violation.
   architectural delta to record. Its silence on the graph is consistent with the round's
   scope rather than informative about anchoring behaviour. **Nothing to report.**
 
+### 2026-08-23 — reviewer (phase 3, review round 1, Opus 5) — **first post-policy session with a graph interaction**
+
+- **New evidence written:** **0 entries.** No `archgraph_apply_changes`. The session's write
+  perimeter states *"Tool-recorded state: none — `archgraph_status` only (read-only)."*
+- **Re-anchor activity:** none.
+- **Review findings about location:** **none.** The session read graph state live and
+  reported it as a refutation (its R5): *"198 nodes / 298 edges, revision `364223242014…`,
+  0 diagnostics, 1 pending, 2 stale — identical to master plan §8 and to the implementer's
+  ledger. Nothing was promoted, rejected, edited or re-anchored, and no `startLine`/`endLine`
+  was emitted anywhere."*
+- **Closing-work language:** none about anchors. It explicitly left the pending item alone,
+  citing the owner's D29 deferral.
+- **Reading:** the first session since the policy change that *touched* the graph at all, and
+  it neither emitted a span nor treated position as a fact. **But it also wrote no evidence**,
+  so the span-rate question is still unmeasured. Its prompt carried the standing instruction
+  (*"nodes carry meaning, not coordinates … do not report a line-number change as drift"*),
+  so the confound in the summary applies to this session too.
+
 ### 2026-08-23 — standing state (coordinator read-only sweep)
 
 Not a session; a snapshot of what the graph currently hands agents.

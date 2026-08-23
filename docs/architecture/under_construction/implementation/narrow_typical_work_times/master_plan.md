@@ -5,7 +5,7 @@ plan: master_plan
 role: implementation-planner
 round: 0
 date: 2026-08-22
-status: IN PROGRESS — phases 1–2 APPROVED (2026-08-22, 2026-08-23); phases 3–6 NOT_STARTED
+status: IN PROGRESS — phases 1–3 APPROVED (2026-08-22, 2026-08-23, 2026-08-23); phases 4–6 NOT_STARTED
 intention: planning/intention.md (RESOLVED round 8, D1–D25 settled, gate PASS-WITH-CONTRACTS)
 ```
 
@@ -142,8 +142,8 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
-| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 is owed on the gate commit's own tree.** |
-| 3 | `TaskBudgetStatus` carries the derived spec (§6A, §6B) | **`IMPLEMENTED`** | 2026-08-23 | Codex (fix r1 redispatch) | Implementation remains correct and complete; fix round corrected the evidence only. C4's withdrawn reload mutation was replaced with the exact query-count-preserving source mutation (**2 failed / 11 passed**, own assertion IDs recorded); C1's legal field swap matched (**1 failed / 12 passed**, index-11 mismatch named); C-N1(a)'s no-`WHERE` row now names `test_CN1a_primary_index_is_partial_and_two_legal_shapes_are_valid`. No production file changed, no L4 ran, and the production perimeter is clean. |
+| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 was never run on phase 2's own gate tree and now cannot be** — `app/` has moved on. What IS established: phase 3's gate tree is stamped by measurement (2674/21/1) and its only `app/` delta from phase 2's gate is phase 3's 49 lines, so no unstamped application change sits between them. Recorded as closed-by-succession, not as paid. |
+| 3 | `TaskBudgetStatus` carries the derived spec (§6A, §6B) | **`APPROVED`** | 2026-08-23 | Opus 5 (review r1) | First review: 0 blocking / 0 should-fix / 4 notes / 0 cards. Production matches §6A line for line (additive, defaulted, fail-closed keyword-only helpers, 2-tuple loader, `item_id=evaluation.item_id` preserved, `typical_filters.py` untouched). **7 probes, all new sites or shapes, each red on its own assertion**: the never-measured **worker-side** wrong-source derivation (2/11), T-L1's own `None`-guard removal on **both** faces (1/12 each), both helper **definition**-side carrier drops (4/9 and 2/11), a **value-gated** serializer publish (3/125 at L2), and C-N1(a)'s no-`WHERE` row — whose inferred test id is now **observed** and correct. L4 runs **0**: `git diff 186027a HEAD -- app/` empty, so the 2674/21/1 stamp describes this tree. Graph re-read live and unchanged (198/298, `364223…`, 1 pending / 2 stale). Notes: N1 C2(b)'s manager key-set row is blind to a value-gated leak (measured; the two goldens catch the class) → plan 4; N2 `_ScalarSession` encodes the query count, 8 rows → plan 4 task 0; N3 §6 C6's "three"/four count + L2 scope line → fold; N4 C5-d shares C5-b's wrong-source inertness → fold. **GATE (coordinator, 2026-08-23):** rows archived to `archive/plan_3/` (9); N3 + N4 folded; N1 + N2 routed into plan 4's read-first list as the first publisher. **P2 re-verified independently — 3 failed / 125 passed, the reviewer's exact ids, manager row green.** **⚠→✅ The approval-gate L4 was RUN on this gate tree, not cited: `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` → **2674 passed / 21 failed / 1 skipped** in 54.64s, the 21-ID set unchanged. Doc/archive delta measured test-inert first (both `tests/unit/docs/` tests resolve only to `docs/handoff/to_frontend/` and `docs/domains/item_economics/`). |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
 | 6 | Closeout: frontend handoff, living docs, graph delta | `NOT_STARTED` | — | — | Projection **waivable** — no rule-6 code surface. Never edits a published handoff. |
@@ -832,6 +832,33 @@ in §2. Restated here only where they bite hardest on *this* feature:
   grammar, not the test, forbade the position. **A mutation must be legal code that runs and
   names a failing test; if the language refuses it, the criterion is untested and a legal
   mutation must be found** — here, swapping two *existing* fields, which reddens C1 alone.
+- **A key-set criterion must serialize a *service-produced* object, not a locally
+  constructed one** (plan-3 review N1, measured twice 2026-08-23). A payload-key assertion
+  built from a hand-made read model can only see leaks that are **unconditional**. Phase 3's
+  manager row serializes a `TaskBudgetStatus` whose new field holds the dataclass default
+  `None`, so a **value-gated** publish (`if spec is not None: payload[...]`) leaks on both
+  faces and that row stays **green** — reproduced independently at **3 failed / 125 passed**.
+  This is §9's *"confirm the fixture contains a row the mutation moves"* applied to a **key
+  set** rather than a value: **the fixture must contain a populated value for the key whose
+  absence is being asserted.**
+- **Name the mutation at the *definition* as well as the call site when a helper fans out**
+  (plan-3 review P7/P8). §6 named only call-site mutations for C5; the definition-side drop
+  reddens a **different** four rows — and it is the shape a careless refactor actually
+  produces, since nobody edits four call sites by accident. Charter rule 11 already implies
+  this; plan 3 applied it to C-N1 and not to C5.
+- **An inferred failing-test id is not an observed one** (plan-3 review, lesson 3). The fix
+  round supplied C-N1(a)'s no-`WHERE` id by inference and **said so honestly**; the review
+  observed it and it was correct. **Both are legitimate, but they are different claims and a
+  ledger must distinguish them** — the cost of observing it was one second. Add the column.
+- **A probe that lands in the wrong place measures nothing, and its green is the most
+  dangerous result available** (coordinator, plan-3 gate, 2026-08-23). Verifying review
+  probe P2, the coordinator inserted a value-gated publish by locating `payload = {` — and
+  `serializers.py` has **four**, so the edit landed in `serialize_item_cost_result_worker`.
+  The suite returned **128 passed**, which read as "the reviewer's finding is wrong" and was
+  in fact "the mutation was never applied to the function under test". Correctly sited, it
+  reproduced the reviewer's numbers and ids exactly. **After applying a mutation, assert it
+  is inside the symbol you meant** — the same failure as the `python`/`python3` slip in
+  phase 2, where an unapplied mutant produced a clean baseline that looked like evidence.
 - **A narrower round is not a licence to drop a step that maintains state** (plan-3 fix
   round 1, 2026-08-23). Phase 3's state is recorded in **two** places — `master_plan.md` §4
   row 3 and the plan file's own `state:` header. The round-1 implementer prompt's closing
