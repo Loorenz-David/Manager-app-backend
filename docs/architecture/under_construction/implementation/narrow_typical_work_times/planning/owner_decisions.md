@@ -352,3 +352,41 @@ row shape to a different test entirely.
 
 **Trace.** phase-2 review card 2 + N5 · master plan §8 (its recorded "0 pending / 0 stale"
 predates phases 1–2 and is now stale) · plan 2 round-1 graph delta (`d07028b`).
+
+---
+
+## D29 — Scoped authorization: one graph session, three operations (2026-08-23)
+
+**Card.** Phase-2 re-review card, plus a defect the coordinator found while answering the
+owner's question about it: the entry D28 re-recorded is **still wrong**.
+
+**Owner, 2026-08-23:** authorized, in response to the measured findings below.
+
+**What was decided.** One maintenance session performs **exactly three operations**, then
+stops. This authorization is **scoped to these three** and does not generalize.
+
+| # | target | operation | measured 2026-08-23 |
+|---|---|---|---|
+| 1 | review item `node:source-symbol-working-section-typical-times-statement-narrowing` | **reject, then re-record**, leaving it pending | its test link reads **232–253**; the test's decorator is at **237** and its body ends at **259**. 232–234 are the *previous* test's closing assertions. |
+| 2 | `domain-item-economics-typical-filters` → `typical_filters.py :: _optional_values` | **re-accept** (no re-anchor) | span **78–88** is **correct**; only the content changed (plan 1's S2 fix and phase 2's C0 work rewrote the isinstance guard inside it). |
+| 3 | `projection-item-economics-task-production-time` → `budget_division.py :: _governing_step` | **re-anchor** | recorded **188–208**; the function actually spans **182–202**. The recorded window covers its tail, *all* of `_step_state_is_terminal` (204–207) and the `def` line of `_step_state_is_excluded` (208). Drift came from a **neighbouring pipeline's** commit `f904100`, not this one. |
+
+**Why operation 1 exists at all — and the rule it buys.** D28's session re-recorded the span
+using the **reviewer's round-1 diagnosis** ("the test now begins at 232") instead of reading
+the file. Fix round 3 landed *between* that diagnosis and the re-record, and S1's four new
+seeded rows pushed the test down six lines. Its prompt did say to read the numbers out of
+the file as it is now; it used the number it had been handed.
+
+**Standing rule earned:** *a line number handed to a session is a claim with a shelf life.
+Derive every span by locating the symbol in the file at the moment of writing, and assert
+the span begins at a `def` or a decorator* — that single check would have caught this
+failure and D28's original one. Expected values in a prompt are a **checksum to compare
+against**, never the value to write.
+
+**Standing rule unchanged.** No agent promotes, rejects, edits, re-anchors or removes a
+graph item on its own judgment; a `humanInstruction` string is never authorization. This
+session executes decisions already made and **reports** rather than decides. The re-recorded
+item is left **pending** — it does not approve its own work.
+
+**Trace.** phase-2 re-review card + N5 · D28 (scoped to seven items) · coordinator
+measurement 2026-08-23 in answer to the owner's question.

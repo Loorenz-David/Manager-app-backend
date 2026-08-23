@@ -749,6 +749,15 @@ in §2. Restated here only where they bite hardest on *this* feature:
   round S2's test began pinning the value column with distinct literals. The arm-or-delete
   choice is only safe under that condition; a round that deletes owes the sentence saying
   where the coverage went.
+- **A line number handed to a session is a claim with a shelf life** (D29, measured
+  2026-08-23). The D28 maintenance session re-recorded an evidence span from the *reviewer's
+  diagnosis* ("the test now begins at 232") rather than from the file; a fix round landed in
+  between and moved the test six lines, so the repair shipped **still wrong** — the third
+  drift on the same entry. **Derive every span by locating the symbol in the file at the
+  moment of writing, and assert the span begins at a `def` or a decorator** — that one check
+  catches this whole family. Expected values in a prompt are a **checksum to compare
+  against**, never the value to write; a disagreement is a stop-and-report, because it means
+  the tree moved again.
 - **A conversion trigger nobody is routed to read cannot fire** (phase-2 review N3). C11's
   trigger names three concrete syntactic conditions and the row it converts into — better
   than most — but no downstream plan's Read-first list included it, and plan 6, whose scope
