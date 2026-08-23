@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: REVIEWING
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -626,6 +626,37 @@ knows which criterion owns the phase's sharpest hazard.
   rows — the DB index *and* the untested `add_item_to_task` guard, unguarded at both
   layers); D28 authorizes a scoped maintenance session to adjudicate the seven-item graph
   queue. N3 routed to plans 3 and 6. State → `CHANGES_REQUESTED`.
+- **2026-08-23 · fix round 3 · Codex · consumed, → `REVIEWING` (delta re-review).** All
+  seven items closed with **no production code change** — re-measured, not accepted:
+  `git diff 0107c82 HEAD -- app/beyo_manager/` is empty. C5 gained four non-qualifying rows
+  (marked-wrong, deleted, `PENDING`, 91 days old, all with distinctive seconds 200–203) and
+  keeps its literals `20`/`76` plus the cross-branch equality; a new
+  `test_each_spec_index_selects_its_own_narrowed_typical` pins **distinct literal medians
+  30 and 80** at indices 0 and 1; C0's bare-`str` row pins `must be a sequence of values`
+  and both enum fixtures now derive from the member value; C8's inert median line was
+  **deleted** (count retained, 6 → 17 under fan-out); N4's NULL width seeded; S5's paragraph
+  written; S4 correctly left alone.
+  **Verified with four probes at shapes nobody had run:**
+  (A) *negating* the `K ≥ 1` marked-wrong filter (`is_(False)` → `is_(True)`) rather than
+  deleting it — **21 failed**, so S1's population guard holds against inversion too.
+  (B) mis-keying the typical coalesce by **reversing** the spec order rather than collapsing
+  it to index 0 — **exactly one test failed**, the new S2 guard, and nothing else: the gap
+  it was written for is precisely the gap it closes.
+  (C) **the contract-side form nobody ran** — shortening `ItemMajorCategoryEnum.WOOD` to one
+  character with the explicit guard *left intact*: **43 passed**. That is C0's actual claim
+  ("rejects a bare `str` explicitly, never by accident of member length") demonstrated
+  positively; the pre-fix defect would have silently narrowed here.
+  (D) **a residual of my own, refuted.** I suspected every `K ≥ 1` fixture had median == mean
+  (C5's 10…143, C2(d)'s and S2's 10–50 / 60–100), so a `percentile_cont(0.5) → avg()` swap
+  would be invisible. Measured on the `K ≥ 1` branch only: **C5's test reddens.** The phase
+  does discriminate a median from a mean. Recorded because the suspicion was reasonable and
+  the answer is a fact, not an opinion.
+  **Graph queue adjudicated in parallel under D28** (`88092c6`, `731cc06`): six approved,
+  one rejected and re-recorded, **left pending for the owner** exactly as instructed. Graph
+  measured independently by the coordinator: **198 nodes / 298 edges, 1 pending / 2 stale /
+  0 diagnostics** — matching the session's report. The two sessions did not interfere: the
+  fix checkpoint `8718092` precedes both maintenance commits and the graph delta was not in
+  its perimeter. Master plan §8's stale "0 pending / 0 stale" is corrected and dated.
 - **2026-08-23 · fix round 2 · Codex · IMPLEMENTED.** Closed the evidence and fixture
   findings without changing production query behavior. C5 now seeds 20 section groups
   (6 narrowed) with a non-flat median and asserts literal `20` / `76` section values at
