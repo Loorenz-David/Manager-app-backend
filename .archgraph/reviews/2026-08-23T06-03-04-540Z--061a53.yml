@@ -1,0 +1,67 @@
+reviewId: 2026-08-23T06-03-04-540Z--061a53
+reviewedItemIds:
+  - edge:domain-item-economics--contains-->domain-item-economics-typical-filters
+  - node:domain-item-economics-typical-filters
+  - edge:test-item-economics-domain-purity-guards--verifies-->domain-item-economics-typical-filters
+  - node:test-item-economics-domain-purity-guards
+  - edge:source-symbol-working-section-typical-times-statement-narrowing--implements-->projection-working-section-typical-times
+  - node:source-file-working-section-typical-item-filter
+  - node:source-symbol-working-section-typical-times-statement-narrowing
+decisions:
+  - itemId: edge:domain-item-economics--contains-->domain-item-economics-typical-filters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Source span 1–333 in typical_filters.py shows the pure typical-time
+      domain module inside Item Economics.
+  - itemId: node:domain-item-economics-typical-filters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: TypicalFilterSpec and the module's pure filtering, resolution,
+      reconciliation, fallback, and median rules are present at the cited source
+      span.
+  - itemId: edge:test-item-economics-domain-purity-guards--verifies-->domain-item-economics-typical-filters
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: The cited test lines scan the domain package for forbidden SQLAlchemy
+      and model-table dependencies.
+  - itemId: node:test-item-economics-domain-purity-guards
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Both cited test spans exist and enforce the package-wide
+      identity-hashing and persistence-dependency guards.
+  - itemId: edge:source-symbol-working-section-typical-times-statement-narrowing--implements-->projection-working-section-typical-times
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: typical_times_statement lines 28–142 implement the changed
+      ordered-filter projection contract.
+  - itemId: node:source-file-working-section-typical-item-filter
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: build_item_match lines 13–49 implement the item-filter predicate
+      translation and NULL-safe conjunction.
+  - itemId: node:source-symbol-working-section-typical-times-statement-narrowing
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: The production evidence is accurate, but the cited integration-test
+      span 199–224 is stale and points into a different test;
+      reject-and-re-record is the authorized repair.
+retiredItemIds:
+  - node:source-symbol-working-section-typical-times-statement-narrowing
+  - edge:source-symbol-working-section-typical-times-statement-narrowing--implements-->projection-working-section-typical-times
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-23T06:03:04.540Z
+graphRevisionBefore: 46154ec9d22efb39c02cec11dcb6f334a72196dad37dd2246b7a2855bdbb9291
+graphRevisionAfter: 884cee2b0c9aadcc98083e804b16b7c189295786342891aecda47de89f605485
+evidenceSummary: 9 evidence entries across 5 files; no drift detected
+humanInstruction: "Owner authorization D28, 2026-08-23: approve the six accurate
+  items, reject the stale test-span item so it can be re-recorded."
+reviewTokenCorrelation: 36df76eecae3

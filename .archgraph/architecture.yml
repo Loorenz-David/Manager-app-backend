@@ -5454,10 +5454,10 @@ nodes:
           inferenceReason: The implementation is a self-contained pure typical-time domain
             boundary with explicit contracts for population identity, policy
             divergence, uniform task basis, and terminal separation.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-22T16:55:41.605Z
-    updatedAt: 2026-08-22T20:04:39.774Z
+    updatedAt: 2026-08-23T06:03:04.510Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/typical_filters.py
         symbol: _optional_values
@@ -5490,10 +5490,10 @@ nodes:
             sqlalchemy and models.tables terms.
           inferenceReason: The committed test prevents later phases from introducing
             persistence dependencies into the pure domain package.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-22T20:04:39.774Z
-    updatedAt: 2026-08-22T20:04:39.774Z
+    updatedAt: 2026-08-23T06:03:04.510Z
     sourceLinks:
       - path: app/tests/unit/domain/item_economics/test_domain_purity.py
         symbol: test_item_economics_domain_has_no_spec_identity_hashing
@@ -5526,22 +5526,16 @@ nodes:
           inferenceReason: This new query-layer module is the single translation point for
             the phase's item-filter semantics and controls whether the category
             join is structurally present.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-22T21:42:46.367Z
-    updatedAt: 2026-08-22T21:42:46.367Z
+    updatedAt: 2026-08-23T06:03:04.510Z
   - id: source-symbol-working-section-typical-times-statement-narrowing
     type: source_symbol
     name: typical_times_statement — ordered filter projection query
-    description: The phase-2 statement builder accepts an ordered sequence of
-      TypicalFilterSpec values. It preserves an exact no-spec branch, and for
-      K>0 returns one live-section × spec-index row with narrowed and
-      section-wide aggregates; task membership is attached through the active
-      PRIMARY TaskItem and live Item.
-    tags:
-      - narrow_typical_work_times
-      - plan_2
-      - projection
+    description: The query builder produces the ordered-filter projection rows for
+      working-section typical times while preserving the no-spec compatibility
+      branch.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
@@ -5557,16 +5551,17 @@ nodes:
             empty-spec snapshot branch intact.
         - path: app/tests/integration/services/queries/working_sections/test_typical_times_narrowing.py
           symbol: test_cardinality_is_section_cross_spec_total_and_history_less_sections_are_materialized
-          startLine: 199
-          endLine: 224
-          summary: Integration coverage asserts total live-section × K cardinality and
-            materialization of a section with no qualifying history.
-          inferenceReason: The test directly verifies the projection's new row topology
-            and outer-attachment behavior.
+          startLine: 232
+          endLine: 253
+          summary: Integration coverage asserts live-section × K cardinality, excludes
+            deleted sections, and materializes sections with no qualifying
+            history using zero counts and NULL typical values.
+          inferenceReason: This test directly verifies the projection's new row topology
+            and outer-attachment behavior at the corrected source span.
     origin: ai_inferred
     confidence: 0.97
-    createdAt: 2026-08-22T21:42:46.367Z
-    updatedAt: 2026-08-22T21:42:46.367Z
+    createdAt: 2026-08-23T06:03:22.559Z
+    updatedAt: 2026-08-23T06:03:22.559Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -10719,10 +10714,10 @@ edges:
           inferenceReason: The new module extends the existing Item Economics domain with
             a separately named, independently tested typical-time
             responsibility.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-22T16:55:41.605Z
-    updatedAt: 2026-08-22T16:55:41.605Z
+    updatedAt: 2026-08-23T06:03:04.510Z
   - sourceNodeId: test-item-economics-domain-purity-guards
     relationshipType: verifies
     targetNodeId: domain-item-economics-typical-filters
@@ -10737,28 +10732,7 @@ edges:
             model-table dependencies.
           inferenceReason: The test directly verifies the boundary claimed by the pure
             typical-time domain node.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.99
     createdAt: 2026-08-22T20:04:39.774Z
-    updatedAt: 2026-08-22T20:04:39.774Z
-  - sourceNodeId: source-symbol-working-section-typical-times-statement-narrowing
-    relationshipType: implements
-    targetNodeId: projection-working-section-typical-times
-    description: The phase-2 statement builder implements the
-      ordered-spec/narrowed-population extension of the existing working-section
-      typical-times projection.
-    metadata:
-      evidence:
-        - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
-          symbol: typical_times_statement
-          startLine: 28
-          endLine: 142
-          summary: The changed statement builder returns the phase-2 projection shape for
-            ordered filter specs and retains the pre-refactor shape for an empty
-            sequence.
-          inferenceReason: The symbol is the concrete query implementation of the existing
-            projection's amended contract.
-    origin: ai_inferred
-    confidence: 0.95
-    createdAt: 2026-08-22T21:42:46.367Z
-    updatedAt: 2026-08-22T21:42:46.367Z
+    updatedAt: 2026-08-23T06:03:04.510Z
