@@ -198,7 +198,8 @@ async def test_k_shape_is_keyed_by_spec_count_and_non_narrowing_k1_is_seven_colu
     seed, _ = await _seed_base(db_session)
     chair = await _category(db_session, seed, "chair", ItemMajorCategoryEnum.SEAT)
     item = await _item(db_session, seed, "chair", category=chair)
-    await _task(db_session, seed, "one", primary=item, seconds=100)
+    for index, seconds in enumerate([10, 20, 30, 40, 50]):
+        await _task(db_session, seed, f"one-{index}", primary=item, seconds=seconds)
 
     no_specs = _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, now=NOW))).all())
     empty_spec = _rows(
@@ -222,15 +223,15 @@ async def test_k_shape_is_keyed_by_spec_count_and_non_narrowing_k1_is_seven_colu
         "section_sample_count", "section_typical_worker_seconds",
     )
     assert narrowing[0]._fields == empty_spec[0]._fields
-    assert (empty_spec[0].narrowed_sample_count, empty_spec[0].section_sample_count) == (1, 1)
-    assert empty_spec[0].narrowed_typical_worker_seconds == empty_spec[0].section_typical_worker_seconds
+    assert (empty_spec[0].narrowed_sample_count, empty_spec[0].section_sample_count) == (5, 5)
+    assert empty_spec[0].narrowed_typical_worker_seconds == 30
+    assert empty_spec[0].section_typical_worker_seconds == 30
 
 
 @pytest.mark.integration
 async def test_cardinality_is_section_cross_spec_total_and_history_less_sections_are_materialized(db_session):
-    seed, sections = await _seed_base(db_session, sections=3)
-    sections[1].is_deleted = False
-    sections[2].is_deleted = True
+    seed, sections = await _seed_base(db_session, sections=4)
+    sections[3].is_deleted = True
     await db_session.flush()
     chair = await _category(db_session, seed, "card", ItemMajorCategoryEnum.SEAT)
     item = await _item(db_session, seed, "card", category=chair)
@@ -243,11 +244,11 @@ async def test_cardinality_is_section_cross_spec_total_and_history_less_sections
     )
     rows = _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, specs=specs, now=NOW))).all())
 
-    assert len(rows) == 4
+    assert len(rows) == 6
     assert {(row.client_id, row.spec_index) for row in rows} == {
-        (sections[index].client_id, spec_index) for index in range(2) for spec_index in range(2)
+        (sections[index].client_id, spec_index) for index in range(3) for spec_index in range(2)
     }
-    empty_rows = [row for row in rows if row.client_id == sections[1].client_id]
+    empty_rows = [row for row in rows if row.client_id in {sections[1].client_id, sections[2].client_id}]
     assert all(row.narrowed_sample_count == 0 and row.section_sample_count == 0 for row in empty_rows)
     assert all(row.narrowed_typical_worker_seconds is None and row.section_typical_worker_seconds is None for row in empty_rows)
 
@@ -260,9 +261,11 @@ async def test_spec_index_preserves_input_order_and_section_population_is_consta
     chair_item = await _item(db_session, seed, "order-chair", category=chair)
     table_item = await _item(db_session, seed, "order-table", category=table)
     for index in range(6):
-        await _task(db_session, seed, f"chair_{index}", primary=chair_item)
+        await _task(db_session, seed, f"chair_{index}", primary=chair_item, seconds=10 + index * 7)
     for index in range(2):
-        await _task(db_session, seed, f"table_{index}", primary=table_item)
+        await _task(db_session, seed, f"table_{index}", primary=table_item, seconds=52 + index * 7)
+    for index in range(12):
+        await _task(db_session, seed, f"other_{index}", seconds=66 + index * 7)
 
     specs = (
         TypicalFilterSpec(item_category_ids=frozenset({chair.client_id})),
@@ -274,7 +277,10 @@ async def test_spec_index_preserves_input_order_and_section_population_is_consta
     assert set(by_index) == {0, 1}
     assert by_index[0].narrowed_sample_count == 6
     assert by_index[1].narrowed_sample_count == 2
-    assert {row.section_sample_count for row in rows} == {base.sample_count}
+    assert all(row.section_sample_count == 20 for row in rows)
+    assert all(row.section_typical_worker_seconds == 76 for row in rows)
+    assert base.sample_count == 20
+    assert base.typical_worker_seconds == 76
 
 
 @pytest.mark.integration
@@ -330,6 +336,24 @@ async def test_primary_less_tasks_stay_in_section_population_and_not_narrowed(db
 
 
 @pytest.mark.integration
+async def test_removed_primary_is_still_section_population_and_not_narrowed(db_session):
+    seed, _ = await _seed_base(db_session)
+    chair = await _category(db_session, seed, "removed-primaryless", ItemMajorCategoryEnum.SEAT)
+    active = await _item(db_session, seed, "removed-primaryless-active", category=chair)
+    removed = await _item(db_session, seed, "removed-primaryless-removed", category=chair)
+    await _task(db_session, seed, "removed-primaryless-0", removed_primary=removed)
+    for index in range(1, 5):
+        await _task(db_session, seed, f"removed-primaryless-{index}", primary=active)
+
+    spec = TypicalFilterSpec(item_category_ids=frozenset({chair.client_id}))
+    rows = _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, specs=(spec,), now=NOW))).all())
+    no_spec = _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, now=NOW))).all())[0]
+    assert rows[0].section_sample_count == 5
+    assert rows[0].narrowed_sample_count == 4
+    assert no_spec.sample_count == 5
+
+
+@pytest.mark.integration
 async def test_primary_join_is_fanout_free_and_secondary_items_do_not_define_membership(db_session):
     seed, _ = await _seed_base(db_session)
     chair = await _category(db_session, seed, "fanout-chair", ItemMajorCategoryEnum.SEAT)
@@ -376,6 +400,7 @@ async def test_removed_primary_does_not_change_group_sum_and_no_spec_is_a_contro
         ("height", "height_cm", "height-in", "height-out"),
         ("depth", "depth_cm", "depth-in", "depth-out"),
         ("upholstery-false", "can_have_upholstery", "upholstery-false", "upholstery-true"),
+        ("upholstery-true", "can_have_upholstery", "upholstery-true", "upholstery-false"),
         ("designer", "designers", "designer-in", "designer-out"),
         ("recorded-width", "width_cm", "recorded-width", "null-width"),
     ],
@@ -389,14 +414,15 @@ async def test_each_item_field_and_null_unknown_row_is_an_exact_population_count
     for index in range(5):
         if field == "category":
             in_item = await _item(db_session, seed, f"{inside}-{index}", category=seat)
-            out_item = await _item(db_session, seed, f"{outside}-{index}", category=wood)
+            out_category = wood if index < 4 else None
+            out_item = await _item(db_session, seed, f"{outside}-{index}", category=out_category)
             filter_spec = TypicalFilterSpec(item_category_ids=frozenset({seat.client_id}))
         elif field == "major":
             in_item = await _item(db_session, seed, f"{inside}-{index}", category=seat)
             out_item = await _item(db_session, seed, f"{outside}-{index}", category=wood)
             filter_spec = TypicalFilterSpec(major_categories=frozenset({ItemMajorCategoryEnum.SEAT}))
         elif field == "width":
-            in_item = await _item(db_session, seed, f"{inside}-{index}", width=60 + index)
+            in_item = await _item(db_session, seed, f"{inside}-{index}", width=60 if index == 0 else 80)
             out_item = await _item(db_session, seed, f"{outside}-{index}", width=59 if index == 0 else 81)
             filter_spec = TypicalFilterSpec(width_cm=(60, 80))
         elif field == "height":
@@ -407,10 +433,11 @@ async def test_each_item_field_and_null_unknown_row_is_an_exact_population_count
             in_item = await _item(db_session, seed, f"{inside}-{index}", depth=70)
             out_item = await _item(db_session, seed, f"{outside}-{index}", depth=None)
             filter_spec = TypicalFilterSpec(depth_cm=(60, 80))
-        elif field == "upholstery-false":
-            in_item = await _item(db_session, seed, f"{inside}-{index}", upholstery=False)
-            out_item = await _item(db_session, seed, f"{outside}-{index}", upholstery=True)
-            filter_spec = TypicalFilterSpec(can_have_upholstery=False)
+        elif field.startswith("upholstery"):
+            expected_upholstery = field.endswith("true")
+            in_item = await _item(db_session, seed, f"{inside}-{index}", upholstery=expected_upholstery)
+            out_item = await _item(db_session, seed, f"{outside}-{index}", upholstery=not expected_upholstery)
+            filter_spec = TypicalFilterSpec(can_have_upholstery=expected_upholstery)
         elif field == "designer":
             in_item = await _item(db_session, seed, f"{inside}-{index}", designer="Aalto")
             out_item = await _item(db_session, seed, f"{outside}-{index}", designer=None if index == 0 else "Eames")

@@ -564,3 +564,21 @@ knows which criterion owns the phase's sharpest hazard.
   `--dist loadfile`. **The 21-ID baseline is not stable under adding a test file** — a free
   measured datapoint for `test_isolation_xdist` phase 3's perturbation gate.
   Fix round 2 dispatched; state stays `IMPLEMENTED`.
+- **2026-08-23 · fix round 2 · Codex · IMPLEMENTED.** Closed the evidence and fixture
+  findings without changing production query behavior. C5 now seeds 20 section groups
+  (6 narrowed) with a non-flat median and asserts literal `20` / `76` section values at
+  every `spec_index` and in the K=0 control; its `group_seconds * 2` probe reddened
+  `test_spec_index_preserves_input_order_and_section_population_is_constant` (alongside
+  the expected dependent value guards). C2(d) now clears the sample floor and asserts
+  literal count `5` and typical `30`. C3 is the enumerated 3-live-plus-1-deleted,
+  6-row fixture. C7 gained the removed-primary variant. C10 retains both upholstery
+  boolean rows, seeds width `80`, and makes the category NULL case asymmetric so the
+  `NOT IN` probe cannot preserve the count. The measurement harness now labels one-day
+  history as `history_age_days: 1` alongside `window_days: 90`; the matrix was not rerun.
+  The seven previously missing mutations were run at their prescribed L1/L2 scopes with
+  both sides and failing IDs recorded in the handoff. C8 chose the accepted outer-
+  attachment disclosure: its count assertion bites, while the equal-seconds median is a
+  documented control. C13(b)'s five existing suites plus `test_phase2_live_surfaces.py`
+  remained green without edits. The known three out-of-perimeter clock-in-code IDs remain
+  diagnosed and routed to `test_isolation_xdist`. State remains `IMPLEMENTED` pending
+  review; checkpoint and handoff follow.
