@@ -143,7 +143,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
 | 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 is owed on the gate commit's own tree.** |
-| 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `PROJECTED` (in flight) | 2026-08-23 | Opus 5 | Projection **mandatory** and dispatched (shipped cross-pipeline dataclass, 5 construction surfaces). Carries D27's C-N1(a)/(b) and re-review **N-c**, which the projection owes an answer to: after `IntegrityError` PostgreSQL aborts the transaction, so C-N1(a) must state insert order or savepoint. |
+| 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `PROMPT_READY` | 2026-08-23 | Opus 5 (projection) | Projection: **AMENDMENTS_REQUIRED**, 15 rows / **8 blocking** / 0 cards — production tasks executable, **a third of the test evidence not**. 4 of 8 named mutations point at code that does not exist or fire without catching their criterion. Folded as **§6A** (wins over §5/§6); 4 load-bearing claims re-verified by the coordinator at source. 3 citations drifted, corrected. L15 routed to plans 4/5. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
 | 6 | Closeout: frontend handoff, living docs, graph delta | `NOT_STARTED` | — | — | Projection **waivable** — no rule-6 code surface. Never edits a published handoff. |
@@ -488,6 +488,22 @@ finally be asserted over all three surfaces.
 
 ## 8. Tool protocols
 
+**⚠ INTERIM POLICY, owner 2026-08-23 — new graph nodes carry meaning, not coordinates.**
+The owner is simplifying the archgraph policy so that **evidence links stop referencing code
+line ranges**. A source link names the **file** whose meaning the node describes; the node
+and its relationships explain **what that substance means for the application and what it
+affects**. Rationale, in the owner's terms: maintaining spans is "too much job and is almost
+like duplicating code" — a span restates what the code already says, while the graph exists
+for the part code cannot say.
+**Binding on every session from now, ahead of the policy landing:** when recording a graph
+delta, **do not emit `startLine`/`endLine`**. Describe the boundary and its effect instead.
+Existing span-bearing links are legacy and are repaired only under a scoped owner
+authorization (D28, D29) — never opportunistically.
+*Why this is written here and not just awaited:* this project alone paid three drifts on one
+entry, two stale nodes, one owner card and two maintenance sessions to keep a cache of
+something `grep` answers instantly. The full policy change is the owner's, tracked
+separately; this line stops sessions producing more of what it removes.
+
 **Architecture graph.** Measured after the 2026-08-23 queue-adjudication maintenance
 session: **198 nodes / 298 edges, revision `364223242014…`, 1 pending / 2 stale /
 0 diagnostics.** (The archived live-clock
@@ -749,6 +765,25 @@ in §2. Restated here only where they bite hardest on *this* feature:
   round S2's test began pinning the value column with distinct literals. The arm-or-delete
   choice is only safe under that condition; a round that deletes owes the sentence saying
   where the coverage went.
+- **A fixture that satisfies two independent sufficient causes cannot prove either**
+  (plan-3 projection L6(ii)). `task_items` carries **two** partial unique indexes; a
+  "second active primary" fixture that reuses the first primary's `item_id` raises
+  `IntegrityError` from `uix_task_items_active`, so dropping `uix_task_items_primary_active`
+  — the named mutation — leaves the row **green**. Before asserting that an error proves a
+  rule, **enumerate every constraint that could produce the same error** and make the
+  fixture violate exactly one.
+- **A duck-typed helper turns a "wrong source" mutation into a "no source" mutation**
+  (plan-3 projection L3). `derive_spec_from_primary_item` reads via `getattr`, so deriving
+  from an **id string** rather than an `Item` returns the *empty* spec, not the *wrong*
+  spec — the mutant's red is then indistinguishable from "the value was never computed".
+  A mutation meant to prove *which* input was used must supply an input of the **right
+  type** carrying the **wrong content**.
+- **A count in a plan sentence is a checklist, and one that counts to nothing is worse than
+  no count** (plan-3 projection, reality checks 18–19). "§6.2's table is seven rows" was
+  false (six rows, seventh *surface*), and "five construction surfaces" matches **no**
+  measurement in the repository — 2 production construction sites, 4 `_empty_status` call
+  sites, 6 helper call sites, 2 test constructions. An inherited phrase that reads like a
+  checklist and is not one will be used as one.
 - **A line number handed to a session is a claim with a shelf life** (D29, measured
   2026-08-23). The D28 maintenance session re-recorded an evidence span from the *reviewer's
   diagnosis* ("the test now begins at 232") rather than from the file; a fix round landed in

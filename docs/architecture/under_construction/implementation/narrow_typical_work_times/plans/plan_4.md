@@ -37,6 +37,7 @@ breaks both call sites at once, and a phase must close green.
   but §6B's division half binds here**), **§6C** in full, §7.2, §7.3, §8, §11.1 rows
   T1/T2/T3/T4/T5/T6/T7/T8/T9/T16/T21, **§11A** in full (T10a, T16b as amended by §4C, T23,
   T24, and the correction to §8), §11.2.
+- **`test_price_scenario_query.py`'s `fake_status` is a two-attribute fake** (`:559-560`, `SimpleNamespace(status=…, item_binding=…)`, installed `:574`). **The first phase that reads `budget_status.typical_filter_spec` gets an `AttributeError` from it** — phase 3 does not, because no consumer reads the field there, but you do. Widen the fake before you read the field (plan-3 projection L15).
 - `planning/owner_decisions.md` — D2, D7, D9, D12, D16, D18, D20, D22, D23, **D25**.
 - Gate handoff §2 rows 5, 8, 12, 14 and §5.
 - **The neighbouring pipeline's approved authority, read at source:**

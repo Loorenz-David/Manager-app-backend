@@ -3,7 +3,7 @@
 ```
 plan: plan_3
 project: narrow_typical_work_times
-state: NOT_STARTED
+state: PROMPT_READY
 projection_gate: MANDATORY
 ```
 
@@ -99,8 +99,10 @@ Anything else is a finding — in particular any serializer, any golden, and
 6. **A5 — the worker face is a row of §6.2's table.** `get_task_budget_status_worker`
    gains the field through the shared helpers and **must not publish it**. Its own comment —
    *"must not inherit a future manager change"* — is the standing instruction, and this is a
-   manager change. With it, §6.2's table is **seven** rows, not the "all four" its header
-   claims.
+   manager change. §6.2's table is **six** rows and the worker is the **seventh surface** —
+   that is how the intention's §6.2 header and §6A A5 both put it. *(Plan 3 originally
+   compressed this into "the table is seven rows", which is false; corrected per projection
+   reality check 18. Do not use it as a checklist.)*
 7. Tests per §6. Update the tracker row and the Review log.
 
 ## 6. Tests / acceptance criteria
@@ -201,7 +203,8 @@ number.
 `removed_at IS NULL` on the same `(workspace_id, task_id)` as an existing active primary →
 `IntegrityError`. The index is `uix_task_items_primary_active` on
 `(workspace_id, task_id) WHERE role = 'primary' AND removed_at IS NULL`
-(`models/tables/tasks/task_item.py:53`).
+(`models/tables/tasks/task_item.py:52-58` — the `Index(` call; the projection
+corrected plan 3's `:53`, and intention F-B's citation was the accurate one).
 *Mutation*: drop the index in the test's transaction (or assert against
 `pg_indexes` that it exists **with its `WHERE` clause** — the partiality is the point: two
 *removed* primaries, and a primary plus a *related* item, must both remain legal).
@@ -210,7 +213,7 @@ legal shapes insert cleanly; mutation: the second active primary inserts.
 
 **(b) The application guard.** `add_item_to_task` with a second primary raises
 `ConflictError("Task already has an active primary item.")`
-(`add_item_to_task.py:46-57`). **No test file in the repository references
+(`add_item_to_task.py:47-57`). **No test file in the repository references
 `add_item_to_task` at all** — measured by the phase-2 reviewer, and the message appears
 only in production code.
 *Mutation*: delete the pre-check → the call reaches the database and raises `IntegrityError`
@@ -234,6 +237,80 @@ errors anywhere — the business starts quoting longer jobs than its own history
 D27 records why deferring from phase 2 was safe: the reviewer read the index out of the
 live migrated database and it is present and correct **today**. That is a measurement with
 a shelf life, which is exactly what a test replaces.
+
+### §6A. Projection fold — corrections (2026-08-23)
+
+The plan-3 projection (`AMENDMENTS_REQUIRED`, 15 rows / **8 blocking** / 0 owner cards)
+found the **production tasks executable as written** and **a third of the test evidence not
+executable**: four of eight named mutations either point at code that does not exist or
+would fire without catching what their criterion was written to catch. It measured each
+against the real code instead of reading the prose.
+
+**§6A wins over §5 and §6 wherever they differ.** The coordinator verified the four
+load-bearing claims independently at source before folding (L1, L4, L5, L6(ii) — all four
+confirmed).
+
+#### Tasks — three corrections before any criterion
+
+**T-L1 (blocking) — passing the item is necessary and NOT sufficient.**
+`derive_spec_from_primary_item(None)` returns **`TypicalFilterSpec()`, not `None`**
+(`typical_filters.py:71-75`: `getattr(item, "item_category_id", None)` → `None` → empty
+spec). That is plan 1's shipped contract, and it collapses **exactly the two cases C5 exists
+to separate**. An implementer who reads task A4 literally — pass the item, call the derive
+function — gets `TypicalFilterSpec()` on the no-item path and rows (a)/(c) fail while the
+plan, the intention and the helper all appear to agree.
+**The value carried is `None if item is None else derive_spec_from_primary_item(item)`,
+computed at the load site.** `derive_spec_from_primary_item` is **not changed** — "fixing"
+it to return `None` for `None` silently breaks a shipped contract and is forbidden by §6.1's
+fold rule.
+
+**T-L2 (blocking) — the helper signature is declared here, not left to the implementer.**
+`_empty_status(status, *, binding, item_id, typical_filter_spec: TypicalFilterSpec | None)`
+and the same **required keyword-only** parameter on `_build_evaluated_status`. **No
+default** — fail-closed (charter rule 11), so a future fifth call site cannot silently drop
+it; the default lives on the dataclass per C1 and nowhere else.
+
+**T-L8 (blocking) — the branch that would not close green is closed now.**
+§5 A2's "computed once at the load site" has a reading — *inside `_load_task_and_item`,
+returning a 3-tuple* — that breaks `get_task_price_scenario.py:196` (a file §4 puts **out of
+perimeter**) and `test_price_scenario_query.py`'s `fake_task_and_item` (`:562-563`), both C6
+files. **`_load_task_and_item` keeps its 2-tuple return**; the spec is computed in
+`get_task_budget_status` and `get_task_budget_status_worker`, immediately after that call.
+
+#### Criteria
+
+| # | Correction |
+|---|---|
+| **C1** | Supply the literal (L9) — the fourteen existing names in order, then the new one: `["status", "item_binding", "actual_worker_seconds", "actual_worker_minutes", "remaining_worker_minutes", "percent_consumed", "variance_worker_minutes", "production_budget_minor", "allowed_worker_minutes", "consumed_cost_minor", "variance_cost_minor", "evaluation_id", "item_id", "result", "typical_filter_spec"]`. State **0-based** for the index claim (L14): index 13 is `result`, 14 is `typical_filter_spec`. **Honesty note (L10):** both existing `TaskBudgetStatus(...)` constructions are **keyword**, so C1's "positional construction" hazard is a *future* risk, not a present one — say so rather than implying a live bug. |
+| **C2** | **(a) and (c) are ONE observable with ONE bite** (L11): `test_live_clock_goldens.py:326-332` asserts all three goldens in a single loop that short-circuits at the first mismatch, so per-row attribution is impossible. Record them as one. Row **(b) becomes an exact 14-key frozenset**, not a disjointness check (L9; master plan §9 prefers the literal): `{"status", "item_binding", "actual_worker_seconds", "actual_worker_minutes", "remaining_worker_minutes", "percent_consumed", "variance_worker_minutes", "result", "production_budget_minor", "allowed_worker_minutes", "consumed_cost_minor", "variance_cost_minor", "evaluation_id", "item_id"}`. Row (c)'s alternative mutation site is **`division_serializers.py:112`** (`serialize_task_production_time`), *not* `serializers.py` — confirmed it would bite. |
+| **C3** | **BLOCKING — the named mutation site does not exist** (L5). There is exactly **one** budget-status serializer, `serialize_task_budget_status(status, *, include_monetary)` (`serializers.py:231-276`), and the worker face is that same function called with `include_monetary=False` (`routers/api_v1/item_economics.py:146`). As written, C2's and C3's mutations are **the same edit**. The real distinction is **placement inside one function**: adding the key to the **shared `payload` dict** (`:245-262`) reaches **both** faces — *that is literally the "worker inherits a manager change" defect C3 exists to catch*, so it is **C3's mutation**, biting C2(a), C2(b) **and** C3(b); adding it inside `if include_monetary:` (`:263-273`) is **C2's mutation**, biting C2(a) and C2(b) only and leaving C3(b) green. Row (b)'s exact 9-key literal: `{"status", "item_binding", "actual_worker_seconds", "actual_worker_minutes", "remaining_worker_minutes", "percent_consumed", "variance_worker_minutes", "result", "allowed_worker_minutes"}`. **(b) asserts the service-level call** `serialize_task_budget_status(worker_status, include_monetary=False)` — the exact call the route makes — not the route (L12), since §4 puts the new file under `tests/integration/services/queries/`. |
+| **C4** | **BLOCKING — the mutation reddens the row but cannot catch the defect** (L3). `derive_spec_from_primary_item` is duck-typed, so deriving "from `evaluation.item_id`" passes a **`str`**, which has no `item_category_id`, and yields `TypicalFilterSpec()` — **not X's category**. The plan's stated both-sides is measurably false, and the mutant's red is indistinguishable from "the spec was never derived at all". **The mutation must produce an `Item`, not an id:** re-load `Item` by `evaluation.item_id` and derive from **that ORM instance**. Both sides — contract `frozenset({Y.item_category_id})` (`chair`); mutation `frozenset({X.item_category_id})` (`table`). **C4 also inherits C6's item_id-consistency mutation** (see C6). |
+| **C5** | **BLOCKING ×2.** See **T-L1** for the value expression — without it the criterion is unsatisfiable. And restate the mutation as a **value** mutation, well-defined under T-L2's no-default signature (L2): *`get_task_budget_status_worker.py:48` (call site): pass `typical_filter_spec=None`* → contract row (d) `TypicalFilterSpec()`, mutation `None`. *(The plan's "stop passing the item" wording becomes a `TypeError` under a required parameter, which is not the stated both-sides.)* Rows (a)–(c) still need **one call-site mutation each** — write them out; "each has its own of the same shape" is a blanket claim, and master plan §9 makes the ledger checkable against the count. |
+| **C6** | **BLOCKING — the mutation reddens nothing in its declared scope** (L4), measured twice: `test_price_scenario_query.py::_run_scenario` **monkeypatches `get_task_budget_status` away** (`:559-560`, installed `:574`), so the `mismatched` rows never execute the mutated function and assert `item_binding` but **never `item_id`** — repo-wide, no consumer suite asserts it; and both `golden_budget_status.json` tasks are `item_binding: "bound"` with `item_id` equal to the loaded primary, so the edit leaves all three goldens byte-identical. **(i) Move the item_id-consistency mutation to C4**, whose `mismatched` fixture can see it, and record C4 as its bite. **(ii) Give C6 a mutation its own files can see:** *add the field **without** a default* → the two keyword `TaskBudgetStatus(...)` constructions at `tests/unit/routers/api_v1/test_item_economics_router.py:70` and `:208` break. **(iii)** C6 says "the **three** consumer suites" and names **four** — fix the count (rule 2), and **name the router test file**, which sits outside the declared L2 root and is a real consumer. |
+| **C-N1(a)** | **BLOCKING ×3** (L6). **(i) Insert order, settled — this is what N-c/D27 owed.** `db_session` (`tests/conftest.py:107-110`) rolls back at teardown and the test never commits, so charter rule 11½ needs no explicit DELETE — **say so**, or a later round adds a teardown that cannot run on an aborted transaction. Seed the workspace/task/items/first active primary **and both legal shapes first**, flushing each; the **violating insert is last, inside a savepoint**: `with pytest.raises(IntegrityError): async with db_session.begin_nested(): db_session.add(second_active_primary); await db_session.flush()`. **(ii) The fixture defect that would have made the row green under its own mutation.** `task_items` carries a **second** partial unique index — `uix_task_items_active` on `(workspace_id, task_id, item_id) WHERE removed_at IS NULL` (`task_item.py:44-51`) — so if the second active PRIMARY reuses the first's `item_id`, the `IntegrityError` comes from the **wrong index** and dropping `uix_task_items_primary_active` leaves the row **green**. **The second active primary must name a different item**, and so must both legal shapes; the two *removed* primaries are exempt from both indexes. **(iii)** Rule 12: three sub-checks, one mutation. Add *recreate `uix_task_items_primary_active` **without** its `WHERE`* → both legal inserts fail and nothing else does. And the `pg_indexes` check is an **alternative assertion**, not a mutation — the plan offers it as one. |
+| **C-N1(b)** | **BLOCKING — the both-sides is false as written** (L7). `add_item_to_task` carries a **second** pre-check at `:59-68` raising `ConflictError("Item already active on this task.")`, so on a same-item fixture deleting the primary pre-check lands on that one: **same exception type**, different message. The row still reddens — but only because the criterion pins the message (S3's rule, correctly carried). **State the fixture requirement** (different item, per C-N1(a)(ii)) and restate: *mutation: `ConflictError` → `IntegrityError`; and if the fixture reuses the item, `ConflictError` with the **other** message — which is why the message is pinned.* *(Refuted while checking: the row needs **no Redis** — the `ConflictError` path returns before `event_bus.dispatch` (`:94`); and `maybe_begin` runs in **subordinate** mode once the seed is flushed, so the raise leaves the session clean.)* |
+
+#### Refuted — recorded because a refutation is a result
+
+- **"`_empty_status` cannot tell the two cases apart"** — **refuted and re-aimed.** The call
+  sites already carry the information (`:121`/`:38` are the `item is None` branch; `:132`/`:48`
+  hold a live `Item`). The blocker is one layer down, in the helper (T-L1). **This matters:
+  the fix is a two-token expression at the load site, and "fix the helper" is the wrong
+  repair.**
+- **C4's `mismatched` fixture is cheap to build** — "a **committed** evaluation" means
+  `kind = COMMITTED`, **not** a database commit. `test_live_clock_goldens.py::_seed_golden_fixture`
+  is a working template, and `_load_preview_inputs` degrades gracefully on empty cost
+  configuration, so C5's rows (b)/(d)/(e) need no economics seeding. The only additions are
+  two `ItemCategory` rows.
+- **The worker face is better covered than the plan claims** — `golden_budget_status.json`
+  already contains the **worker** payload byte-exactly (`test_live_clock_goldens.py:305-309`).
+  What is wrong on that face is the *count* and the *mutation site*, not the coverage.
+- **"Five construction surfaces" counts to nothing** (reality check 19). Measured: 2
+  production construction sites, 4 `_empty_status` call sites, 6 helper call sites, 2 test
+  constructions. The phrase is inherited from §6A and harmless — the tasks work off the
+  measured call sites — **but it is not a checklist and must not be used as one.**
+
+---
 
 ## 7. Notes
 

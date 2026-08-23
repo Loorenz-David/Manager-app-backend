@@ -30,6 +30,7 @@ place where "extend the determinism contract" is the wrong instinct. No
   §6.1, §6.2 row 4, §6.4
   (**SUPERSEDED on `is_estimated` by §6B**), **§6B** in full, §7.4, §8, §11.1 rows
   T4/T6/T7/T14/T21, **§11A** T27 and the correction to §8.
+- **`test_price_scenario_query.py`'s `fake_status` is a two-attribute fake** (`:559-560`, `SimpleNamespace(status=…, item_binding=…)`, installed `:574`). **The first phase that reads `budget_status.typical_filter_spec` gets an `AttributeError` from it** — phase 3 does not, because no consumer reads the field there, but you do. Widen the fake before you read the field (plan-3 projection L15).
 - `planning/owner_decisions.md` — D14, D19, D22, D24.
 - Gate handoff §2 rows 6, 9, 14 and **§5 item 3** (the ratified clock move).
 - **Neighbouring authority, at source:**
