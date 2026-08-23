@@ -83,11 +83,25 @@ SHA `40c4ee3df7412923fefc82fe293a23d19cd88006d5a1fdedf3892bc9b4ab6375`.
 
 ## L4 full-suite stamp
 
-Pending the final full-suite run after the checkpoint metadata is finalized. Required
-comparator: the approved 21-ID baseline, with the three known diagnosed out-of-perimeter
-IDs in `tests/integration/models/users/test_user_work_profile_clock_in_code.py` named
-separately. The stamp will record both-direction failure-ID delta, Redis reachability, and
-the final clean-tree identity.
+Authoritative command: `PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/`, using the
+documented default `BEYO_TEST_SLOT=main` topology. Redis pre-check: `redis-cli ping` →
+`PONG`. Result: **2660 passed, 21 failed, 1 skipped, 2 warnings in 50.26s**.
+
+- Approved 21-ID baseline → current failure IDs: added **∅**; removed **∅**.
+- No phase-2 test ID was added to the failure set; the phase's focused and L2 suites are
+  green, and the known 21 failures are outside this phase's perimeter.
+- The three diagnosed IDs from round 1 are recorded as known and out of perimeter, but did
+  **not** appear in this default-slot stamp: `tests/integration/models/users/test_user_work_profile_clock_in_code.py::test_duplicate_clock_in_code_in_one_workspace_is_rejected`,
+  `...::test_same_clock_in_code_in_two_workspaces_is_allowed`, and
+  `...::test_index_is_partial_so_unassigned_codes_never_collide`. Their failure mechanism
+  remains the pre-existing `_two_workspaces` helper consuming leaked worker state; they
+  remain routed to `test_isolation_xdist`.
+- A preliminary run with an isolated `BEYO_TEST_SLOT=r2l4` was discarded as non-authoritative
+  because it added two expected-name database-isolation failures; the documented default
+  slot is the valid comparator.
+- Tree identity for this stamp: clean `HEAD` with only expected untracked
+  `.archgraph/contexts/`; the checkpoint code/content is `a371e8e`, and the handoff-only
+  metadata commit changes no code, tests, or fixtures.
 
 ## Full write perimeter
 
