@@ -13,23 +13,23 @@
             "left_seconds": null,
             "section_name_snapshot": null,
             "share_state": "excluded",
-            "step_id": "tsp_failed_a2d848a481",
+            "step_id": "tsp_failed_2b0c82a99a",
             "typical_worker_seconds": 1200,
             "worked_seconds": 1200,
-            "working_section_id": "wsec_a2d848a481"
+            "working_section_id": "wsec_2b0c82a99a"
           },
           {
             "allowance_seconds": 4800,
             "left_seconds": 4800,
             "section_name_snapshot": null,
             "share_state": "on_track",
-            "step_id": "tsp_live_a2d848a481",
+            "step_id": "tsp_live_2b0c82a99a",
             "typical_worker_seconds": 1200,
             "worked_seconds": 0,
-            "working_section_id": "wsec_a2d848a481"
+            "working_section_id": "wsec_2b0c82a99a"
           }
         ],
-        "task_id": "tsk_a2d848a481"
+        "task_id": "tsk_2b0c82a99a"
       }
     ]
   },
@@ -63,10 +63,10 @@
           "window_days": 90
         },
         "worked_seconds": 1200,
-        "working_section_id": "wsec_a2d848a481"
+        "working_section_id": "wsec_2b0c82a99a"
       }
     ],
     "status": "ok",
-    "task_id": "tsk_a2d848a481"
+    "task_id": "tsk_2b0c82a99a"
   }
 }

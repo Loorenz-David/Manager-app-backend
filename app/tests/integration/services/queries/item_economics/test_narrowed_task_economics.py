@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib
 from dataclasses import fields
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -34,7 +35,13 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 
-from tests.integration.services.queries.item_economics._narrowing_fixture import seed_narrowing_history
+from tests.integration.services.queries.item_economics._narrowing_fixture import (
+    cleanup_batch_dedupe_fixture,
+    cleanup_categorized_fixture,
+    seed_batch_dedupe_fixture,
+    seed_categorized_two_section_task,
+    seed_narrowing_history,
+)
 from tests.integration.services.queries.item_economics.test_budget_allocations_query import _cleanup, _seed_two_section_allocation
 
 
@@ -144,9 +151,7 @@ async def test_c9_no_category_snapshot_and_empty_spec_converge(db_session):
         production = await get_task_production_time(context)
         allocations = await get_task_budget_allocations(allocations_context)
         current = {"production_time": production, "budget_allocations": allocations}
-        if not SNAPSHOT.exists():
-            SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-            SNAPSHOT.write_text(json.dumps(current, sort_keys=True, indent=2) + "\n")
+        assert SNAPSHOT.exists(), "pre-refactor baseline missing — see plan 4 §4"
         expected = json.loads(SNAPSHOT.read_text())
         def assert_preexisting_numeric(before, after):
             if isinstance(before, dict):
@@ -171,6 +176,123 @@ async def test_c9_no_category_snapshot_and_empty_spec_converge(db_session):
     finally:
         await db_session.execute(delete(StepStateRecord).where(StepStateRecord.workspace_id == workspace.client_id))
         await _cleanup(db_session, values)
+
+
+@pytest.mark.integration
+async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session):
+    fixture = await seed_categorized_two_section_task(db_session, budgeted=False)
+    base_values, section_ids, category_id = fixture
+    workspace, _user, _section, _task, unevaluated_task, *_ = base_values
+    context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "manager"},
+        incoming_data={"task_client_id": unevaluated_task.client_id}, query_params={}, session=db_session,
+        now=datetime(2026, 8, 23, 12, tzinfo=timezone.utc),
+    )
+    try:
+        result = await get_task_production_time(context)
+        assert result["status"] not in {"ok", "infeasible"}
+        assert set(result["typical_resolution"]) == {
+            "task_typical_basis", "reconciliation_method", "comparability_profile", "applied_filter",
+            "participating_section_count", "sections_by_basis",
+        }
+        assert result["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
+        assert result["typical_resolution"]["applied_filter"] == {"item_category_ids": [category_id]}
+        assert result["typical_resolution"]["participating_section_count"] == 2
+        assert set(result["typical_resolution"]["sections_by_basis"]) == {
+            "item_narrowed", "section_wide", "insufficient_sample",
+        }
+        assert {row["working_section_id"] for row in result["sections"]} == set(section_ids)
+        assert all(row["allowance_seconds"] is None for row in result["sections"])
+        assert all(row["share_state"] == "no_budget" for row in result["sections"])
+        assert all(set(row["typical"]) == {
+            "typical_worker_seconds", "typical_basis", "sample_count", "narrowed_sample_count",
+            "section_sample_count", "method", "window_days", "min_sample_size",
+        } for row in result["sections"])
+    finally:
+        await cleanup_categorized_fixture(db_session, fixture)
+
+
+@pytest.mark.integration
+async def test_c10_batch_dedupes_specs_once_and_preserves_category_index(monkeypatch, db_session):
+    fixture = await seed_batch_dedupe_fixture(db_session)
+    module = importlib.import_module(
+        "beyo_manager.services.queries.item_economics.get_task_budget_allocations"
+    )
+    real_statement = module.typical_times_statement
+    captured_specs = []
+
+    def spy(*args, **kwargs):
+        captured_specs.append(tuple(kwargs["specs"]))
+        return real_statement(*args, **kwargs)
+
+    monkeypatch.setattr(module, "typical_times_statement", spy)
+    now = datetime(2026, 8, 23, 12, tzinfo=timezone.utc)
+    context = ServiceContext(
+        identity={"workspace_id": fixture["workspace"].client_id, "user_id": "usr", "role_name": "worker"},
+        incoming_data={}, query_params={"task_ids": [task.client_id for task in fixture["tasks"]]},
+        session=db_session, now=now,
+    )
+    try:
+        result = await get_task_budget_allocations(context)
+        assert len(captured_specs) == 1
+        assert captured_specs[0] == tuple(
+            TypicalFilterSpec(item_category_ids=frozenset({fixture["category_ids"][name]}))
+            for name in ("chair", "table", "stool")
+        )
+        assert len(captured_specs[0]) == 3
+        rows_by_task = {row["task_id"]: row for row in result["budget_allocations"]}
+        assert len(rows_by_task) == 50
+        chair_row = rows_by_task[fixture["tasks"][0].client_id]
+        assert [step["sample_count"] for step in chair_row["steps"]] == [7]
+        for task in fixture["tasks"][45:]:
+            row = rows_by_task[task.client_id]
+            assert row["typical_resolution"]["applied_filter"] is None
+            assert all(step["typical_basis"] == "section_wide" for step in row["steps"]), row
+    finally:
+        await cleanup_batch_dedupe_fixture(db_session, fixture)
+
+
+@pytest.mark.integration
+async def test_c11_both_consumers_publish_the_same_literal_typical_triples(db_session):
+    fixture = await seed_categorized_two_section_task(db_session, budgeted=True)
+    base_values, section_ids, _category_id = fixture
+    workspace, _user, _section, task, *_ = base_values
+    now = datetime(2026, 8, 23, 12, tzinfo=timezone.utc)
+    production_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "manager"},
+        incoming_data={"task_client_id": task.client_id}, query_params={}, session=db_session, now=now,
+    )
+    allocations_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "worker"},
+        incoming_data={}, query_params={"task_ids": [task.client_id]}, session=db_session, now=now,
+    )
+    try:
+        production = await get_task_production_time(production_context)
+        allocations = await get_task_budget_allocations(allocations_context)
+        production_triples = {
+            row["working_section_id"]: (
+                row["typical"]["typical_worker_seconds"], row["typical"]["typical_basis"],
+                row["typical"]["sample_count"],
+            )
+            for row in production["sections"]
+        }
+        allocation_triples = {
+            row["working_section_id"]: (
+                row["typical_worker_seconds"], row["typical_basis"], row["sample_count"],
+            )
+            for row in allocations["budget_allocations"][0]["steps"]
+        }
+        assert production["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
+        assert production_triples == {
+            section_ids[0]: (540, "item_narrowed", 7),
+            section_ids[1]: (600, "item_narrowed", 7),
+        }
+        assert allocation_triples == {
+            section_ids[0]: (540, "item_narrowed", 7),
+            section_ids[1]: (600, "item_narrowed", 7),
+        }
+    finally:
+        await cleanup_categorized_fixture(db_session, fixture)
 
 
 @pytest.mark.integration
