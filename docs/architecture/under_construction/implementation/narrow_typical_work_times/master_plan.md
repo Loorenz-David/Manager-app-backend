@@ -110,6 +110,16 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
   disagrees with the tree is a coordinator defect — stop and report it. Never edit the
   tracker or the plan header to match your own instructions**, which would convert a
   prompt typo into a false project state.
+  **⚠ Corollary, earned 2026-08-23 on the second instance: a gate check must name state
+  that survives the coordinator's own fold commit.** The fix-round-2 prompt gated on
+  `git log --oneline -2` showing `406b097, d07028b` — true while it was being drafted,
+  false the instant the consumption fold committed on top, and a second session correctly
+  refused to start. The coordinator always commits the fold *and the prompt* after the
+  round being consumed, so **anything pinning `HEAD` to a SHA is stale before it is read.**
+  Gate on **ancestry and content** — "commit X is an ancestor of `HEAD`", "the plan header
+  reads `<state>`", "the Review log carries the `<date>` entry" — never on tip position.
+  Both instances cost a session start and both were caught by the session, not by me; the
+  gate check is the one part of a prompt the coordinator cannot test by reading.
 - **The PROJECTED gate is risk-triggered.** It is **mandatory** for every phase that
   touches a rule-6 silent-failure mechanism; §7 states the trigger per phase. Waivers are
   the coordinator's, with a recorded one-line justification. Two consecutive empty

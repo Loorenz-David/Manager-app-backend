@@ -31,7 +31,18 @@ Doctrine first, by absolute path — it wins over this prompt wherever they diff
 1. `<project>/plans/plan_2.md` header reads `state: IMPLEMENTED`, and its §8 Review log
    carries the **2026-08-23 coordinator consumption** entry.
 2. `git status` clean at start (only `?? .archgraph/contexts/` is expected).
-3. `git log --oneline -2` shows `406b097` and `d07028b` (round 1's handoff and checkpoint).
+3. Round 1's checkpoint `d07028b` and handoff `406b097` are **ancestors of `HEAD`**
+   (`git merge-base --is-ancestor 406b097 HEAD`), and the coordinator's consumption fold
+   `a4e41f6` is present. **Do not pin `HEAD` to a particular SHA** — the coordinator commits
+   the fold and this prompt *after* the round it is consuming, so anything that pins the tip
+   is stale before you read it. `HEAD` at your start is expected to be `a4e41f6` or a later
+   docs-only commit.
+
+*(Corrected 2026-08-23 after this prompt's round 1 stopped here: the gate named
+`406b097, d07028b` as the two latest commits, which was true while I drafted it and false
+the moment I committed the fold at `a4e41f6`. **Second instance of a coordinator gate
+describing a state its own commit invalidates** — see master plan §3. Stopping was correct
+both times; nothing below the gate changed.)*
 
 ## What round 1 got right — do not touch it
 
