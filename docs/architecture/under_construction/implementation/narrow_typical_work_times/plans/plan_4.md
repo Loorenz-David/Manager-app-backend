@@ -28,7 +28,11 @@ breaks both call sites at once, and a phase must close green.
 
 - Master plan §§4, 6.2, 6.4, 6.5, 6.7, 6.9, 7, 9, 10.
 - Intention **header**, then §2.2 F-C/F-D/F-E/**F-F (stale — see §2B S-4)**/F-G/F-H,
-  §2B S-4, S-5, S-6, S-7, §3.5, §3.6, **§3B** in full, §4.3, **§4A** K1–K4, **§4B**,
+  §2B S-4, S-5, S-6, S-7, §3.5, §3.6, **§3B** in full, §4.3, **§4A** K1–K4
+  (**including §4A K2-a** — the shipped `K ≥ 1` column order is the reverse of K2's prose;
+  **read the result by column name, never by position**. You are a consumer of this
+  statement; K2-a is inside your K1–K4 range by adjacency, and named here so it is not
+  picked up by luck — phase-2 re-review N-b), **§4B**,
   **§4C**, §4.5, §6.1, §6.2 rows 2/3/6, §6.3, §6.4 (**superseded on `is_estimated` by §6B —
   but §6B's division half binds here**), **§6C** in full, §7.2, §7.3, §8, §11.1 rows
   T1/T2/T3/T4/T5/T6/T7/T8/T9/T16/T21, **§11A** in full (T10a, T16b as amended by §4C, T23,

@@ -219,6 +219,15 @@ instead, or succeeds if (a)'s index is also gone.
 type. **Pin the message, not just the type** (phase-2 review S3's rule: a `match=` is an
 assertion and gets the same enumeration discipline as any other).
 
+**⚠ Undetermined, and the projection owes an answer (re-review N-c).** Row (a) asserts an
+`IntegrityError` **and** two clean inserts in the same criterion. On a session that has just
+raised `IntegrityError`, PostgreSQL **aborts the transaction** and every later statement
+fails until a rollback or a savepoint. This criterion does not say whether the legal shapes
+are inserted **before** the violating one, or inside a nested savepoint. **Get it wrong and
+the row either fails for the wrong reason or swallows its own evidence** — a green row that
+proves nothing, which is the class this project has now paid for six times. Settle it on
+paper in the projection round; it costs one sentence there and a debugging session here.
+
 *Defect caught*: if a future migration or refactor quietly drops either guard, a task with
 two active primaries is **counted twice**, the section's typical drifts upward, and nothing
 errors anywhere — the business starts quoting longer jobs than its own history supports.

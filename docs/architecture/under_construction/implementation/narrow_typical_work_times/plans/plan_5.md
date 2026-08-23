@@ -26,7 +26,8 @@ place where "extend the determinism contract" is the wrong instinct. No
 
 - Master plan §§4, 6.2, 6.5, 7, 9, 10.
 - Intention **header**, then §2.1 (price-scenario's row), §2A (the clock split, verbatim),
-  §2B S-6, S-7, §3.6, §3B B2, §4.3, **§4A K1** in full, §4.5, §6.1, §6.2 row 4, §6.4
+  §2B S-6, S-7, §3.6, §3B B2, §4.3, **§4A K1** in full, **§4A K2 + K2-a**, §4.5,
+  §6.1, §6.2 row 4, §6.4
   (**SUPERSEDED on `is_estimated` by §6B**), **§6B** in full, §7.4, §8, §11.1 rows
   T4/T6/T7/T14/T21, **§11A** T27 and the correction to §8.
 - `planning/owner_decisions.md` — D14, D19, D22, D24.

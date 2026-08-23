@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: REVIEWING
+state: APPROVED
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -331,8 +331,20 @@ holds.
 Rows (a)/(g)/(i) also assert the OR-within-a-collection half: a `stool` item is **in** under
 row (i)'s spec.
 *Mutations, one per sub-check* — all in `_typical_item_filter.build_item_match` (definition):
-(i) drop the `IS NOT NULL` conjunct from the range rows → **rows (c), (d), (e)** flip their
-NULL entries out → in.
+(i) drop the `IS NOT NULL` conjunct from the range rows.
+**⚠ CORRECTED 2026-08-23 (re-review N-d) — the bite set written here was wrong, and this
+mutation had never been run by any round.** Measured: dropping `column.is_not(None)` from
+`_range_predicate` reddens **row (h)** (`assert 0 == 5`) and the unit structural row
+`test_recorded_dimension_range_requires_a_non_null_dimension` — **rows (c), (d) and (e)
+stay green.** Why: `column.is_not(None)` on a NULL column evaluates to **FALSE, not NULL**,
+so for a *bounded* range the conjunction is already definitely FALSE with or without the
+conjunct, and the `coalesce` never sees a NULL to convert. **The conjunct is load-bearing
+only for the unbounded `(None, None)` case** — exactly what `build_item_match`'s docstring
+says and exactly what row (h) tests. Rows (c)/(d)/(e)'s NULL entries are **enumeration of
+the contract, held structurally at the unit layer**, not mutation-discriminating; a fixture
+cannot separate the explicit conjunct from SQL's three-valued logic for a bounded range.
+*(The control: `coalesce(<conjunction>, FALSE)` → `TRUE` reddens nine rows — every one whose
+"out" entry is a missing item or missing category — and (c)/(d)/(e) stay green there too.)*
 (ii) emit `TRUE` for `(None, None)` instead of `IS NOT NULL` → **row (h)** flips its
 NULL-width entry out → in, and that section's `narrowed_sample_count` doubles from the
 recorded-width count to the whole population.
@@ -749,3 +761,103 @@ knows which criterion owns the phase's sharpest hazard.
   unrecorded buffers, and the undecidable 1.9× explanation. C2's shipped tuple was
   confirmed against §4A K2-a; no column order was changed. Mutation ledger, L4 stamp,
   perimeter, and checkpoint are in the round-3 implementer handoff.
+
+- **2026-08-23 · delta re-review round 2 · Opus 5 · APPROVED.** 0 blocking / 0 should-fix /
+  4 notes / 1 owner card (`handoffs/reviewer/20260823_plan2_rereview_handoff.md`).
+  **Perimeter verified**: `git diff 0107c82 HEAD` is ten files across three declared write
+  perimeters (fix round 3, the D28 maintenance session, the coordinator) and nothing else;
+  `-- app/beyo_manager/` empty, and the three probe files' SHA-256 are **byte-identical to
+  the round-1 declaration**, so the round-1 production audit stands unrevisited.
+  **S1 CLOSED AND BITING FROM BOTH SIDES.** Three rounds mutated only the `K ≥ 1` copy;
+  S1's hazard is *divergence between two builders* and is symmetric, so the no-spec copy
+  was cut: deleting `TaskStep.is_deleted.is_(False)` from
+  `_no_spec_typical_times_statement` alone → **4 failed** — C1's three snapshot rows **and**
+  C5 on `assert base.sample_count == 20` → `21 == 20` (base median drifted 76 → 80). The
+  duplicated populations are now pinned to each other by literals in both directions.
+  *(N-a: the appended `section_sample_count == base.sample_count` line is a tautology given
+  the two literals above it — harmless, but it is not the instrument.)*
+  **S2 CLOSED AND BITING at a third shape.** Not a mis-key: the narrowed **value** column
+  made to publish the **section** median (`case((index == position, section_typical))`) →
+  **exactly one test failed**, the new guard, `assert 55 == 30`. That is Critical rank 2's
+  literal shape ("a section-wide median published as `item_narrowed`") and before this round
+  nothing in the phase caught it.
+  **S3 CLOSED.** Both named mutations ran; the coordinator's contract-side probe (one-char
+  member, guard intact → 43 passed) demonstrated C0's claim positively. My round-1
+  prediction that the same change would arm the `{"wood": 1}` mapping row was **wrong and
+  measured wrong**: removing `Mapping` from the guard → **`DID NOT RAISE`**, so that row's
+  bite never depended on its `match=` string. Residue not real.
+  **S4 CLOSED as decided — §4A K2-a judged sufficient on content** (shipped tuple printed
+  verbatim, "read by name never by position", the `SectionTypicalEvidence` third-order
+  argument, lettered insertion renumbering nothing). **N-b, routing:** K2-a is named in
+  **plan 3's** Read-first — the one plan that never calls the statement (0 `spec_index`,
+  0 `narrowed_*`) — while **plan 4** gets it only by adjacency inside "§4A K1–K4" and
+  **plan 5**, which calls `typical_times_statement(..., specs=…)`, reads "§4A K1" only and
+  is **not covered by either route**. N3's shape recurring on S4's own amendment.
+  **S5 CLOSED** — the paragraph carries all four owed disclosures; no re-measurement, per D26.
+  **N4 CLOSED as enumeration; the new row CANNOT FAIL, and C10's mutation (i) is wrong.**
+  Measured: dropping `column.is_not(None)` from `_range_predicate` → **2 failed**, row (h)
+  `recorded-width` and the unit structural row; **rows (c)/(d)/(e) green**. The
+  `coalesce(…, FALSE)` → `TRUE` shape → **9 failed**, again none of (c)/(d)/(e). Cause:
+  `is_not(None)` on NULL is **FALSE, not NULL**, so for a *bounded* range the conjunction is
+  already definitely FALSE and the conjunct is load-bearing only for `(None, None)` — as
+  `build_item_match`'s docstring says. §6 C10's mutation (i) claims rows (c)/(d)/(e) flip;
+  **it has never been run by any round** (round 2's ledger carries (ii)/(iii)/(iv)) and my
+  round-1 N4 restated it from that ledger instead of measuring it. **Note, not should-fix:**
+  nothing breaks on the wire, the contract is held structurally by
+  `test_recorded_dimension_range_requires_a_non_null_dimension` (which *did* bite), and the
+  correction is prose in §6 C10 → **N-d, coordinator fold.**
+  **C8 closed by deletion**, correctly — the only assertion removed was one already measured
+  inert, and the value column it nominally covered is now pinned by S2's biting test.
+  **D27's rows judged: they would catch what N1 describes**, and (a) is stronger than the row
+  recommended — it enumerates the index's *partiality* (two removed primaries, primary +
+  related, both legal). **N-c → plan 3's projection:** the criterion does not determine
+  whether the legal inserts precede the `IntegrityError` or sit in a savepoint; on an aborted
+  transaction that decides whether the row proves anything.
+  **Graph:** the D28 session executed exactly its authorization and self-approved nothing.
+  Two stale nodes diagnosed cheaply and they differ in kind — `typical_filters._optional_values`
+  78–88 is **span-accurate, content-changed** (a re-accept), while
+  `budget_division._governing_step` 188–208 has **drifted** (the function now starts at 182;
+  the window straddles two other functions) and needs a re-anchor; last touched by `f904100`,
+  a neighbouring pipeline. Neither is authorized by D28 → **one owner card**; the pending
+  re-record needs no second card. Nothing adjudicated by this session.
+  **Evidence: L4 runs 0**, authorized because the tree difference is **measured** test-inert
+  (no test references `archgraph`; `tests/unit/docs/` reads only the *item_cost_calculation*
+  folder). Round-3 stamp consumed by citation and corroborated arithmetically (+1 passed
+  = the one added test; L2 62 → 63), and the L2 figure independently reproduced inside the
+  probes themselves (4+59 = 63, 1+62 = 63) with no redundant contract-side run. **Five
+  mutation probes, every one a shape no prior round ran**, applied-and-reverted,
+  checksum-verified. **⚠ The approval-gate L4 is still owed on the tree actually committed
+  at the gate** — citing round 3's stamp there would be the mirror-image violation.
+  State → `APPROVED`.
+- **2026-08-23 · coordinator gate · PHASE 2 APPROVED.** Four re-review notes folded:
+  **N-b** — §4A K2-a routed into the Read-first of **plan 4** (named explicitly, not left to
+  adjacency) and **plan 5** (a consumer that read only §4A K1 and would have missed it
+  entirely). **N-c** — plan 3's C-N1(a) now carries the undetermined question in writing:
+  after an `IntegrityError` PostgreSQL aborts the transaction, so the criterion must say
+  whether the two legal shapes insert **before** the violating one or inside a savepoint;
+  routed to plan 3's mandatory projection. **N-d** — plan 2 §6 C10's mutation (i) prose is
+  **corrected in place**: it reddens row (h) and the unit structural row, **not** rows
+  (c)/(d)/(e), because `column.is_not(None)` on a NULL yields FALSE rather than NULL and a
+  bounded range is already definitely FALSE without it. **N-a** — recorded only: C5's
+  trailing `section_sample_count == base.sample_count` is a tautology given the literals
+  above it; the literals are the instrument.
+  Six standing rules earned into master plan §9 (symmetric hazards mutate both operands; a
+  never-run mutation's bite set is a claim that decays; `IS NOT NULL` semantics inside a
+  bounded conjunction; route an amendment to its consumers; arm-or-delete with the coverage
+  named; plus the corrected baseline reading).
+  **Approval-gate L4, run by the coordinator on the tree in this commit** — the reviewer
+  correctly flagged that citing round 3's stamp here would be the mirror-image over-evidence
+  violation, since the gate commit adds this entry, the tracker row and thirteen archive
+  moves. Command `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/`,
+  Redis pre-check `PONG`. Result **21 failed / 2661 passed / 1 skipped / 2 warnings** in
+  48.12 s. **Delta against the approved 21-ID set: added ∅, removed ∅** — diffed
+  programmatically (`comm` against §7 of the live-clock frontend handoff), 21/21, not by eye.
+  *(A first attempt carried `-p no:logging` and reported 35 errors; the flag removes the
+  `caplog` fixture. My instrumentation, not the tree — recorded because a stamp taken with a
+  non-authoritative command is exactly the kind of number that would otherwise be explained
+  away later.)*
+  Thirteen phase-2 rows archived to `archive/plan_2/`. The mechanism-inventory gate rows and
+  the D28 maintenance rows stay **live** — the first because §2 cites it as a standing source
+  of truth, the second because the graph queue is still open (one entry pending owner
+  adjudication, one owner card for the two stale links). State → `APPROVED`.
+

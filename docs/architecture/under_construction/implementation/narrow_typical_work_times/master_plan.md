@@ -5,7 +5,7 @@ plan: master_plan
 role: implementation-planner
 round: 0
 date: 2026-08-22
-status: IN PROGRESS — phase 1 APPROVED 2026-08-22; phases 2–6 NOT_STARTED
+status: IN PROGRESS — phases 1–2 APPROVED (2026-08-22, 2026-08-23); phases 3–6 NOT_STARTED
 intention: planning/intention.md (RESOLVED round 8, D1–D25 settled, gate PASS-WITH-CONTRACTS)
 ```
 
@@ -38,7 +38,7 @@ sequencing gates, the environment, and the standing rules.
 | Content | Artifact |
 |---|---|
 | Product semantics, domain invariants, mechanism contracts | `planning/intention.md` |
-| Owner decisions D1–D25, verbatim | `planning/owner_decisions.md` |
+| Owner decisions D1–D28, verbatim | `planning/owner_decisions.md` |
 | Mechanism inventory (18 ranked mechanisms) and the gate's reasoning | `handoffs/reviewer/20260822_mechanism_inventory_gate_handoff.md` |
 | Naming registry, contract resolution, environment topology, standing rules, tracker | **this file** |
 | Phase-local goal / files / tasks / criteria + Review log | `plans/plan_<n>.md` |
@@ -142,7 +142,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
-| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `REVIEWING` | 2026-08-23 | Codex | Fix round 3 closed all 5 should-fix + N4 + C8 with **no production change** (re-measured empty). Verified with four probes at unrun shapes: negated filter (21 failed), reversed coalesce key (exactly the new S2 guard), one-char enum with guard intact (43 passed — C0's claim shown positively), and median→mean **refuted** as a gap. Delta re-review dispatched. |
+| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | **`APPROVED`** | 2026-08-23 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 1 card. All 5 should-fix closed, 4 of them **biting** — proven at 5 probe shapes no prior round ran (no-spec-side filter deletion reddens C1×3 + C5's `base` literal; narrowed value column made to publish the section median reddens exactly the new S2 guard). **N4 closed as enumeration but its row cannot fail**, and §6 C10's mutation (i) is measurably wrong and has never been run — prose fold, no round. L4 runs 0 (tree difference measured test-inert; round-3 stamp cited, +1/+1 corroborated). Notes: N-a C5 tautology (record), N-b §4A K2-a not routed to plans 4/5 (fold), N-c C-N1(a) insert order → plan 3 projection, N-d C10 mutation prose (fold). Card: re-anchor authorization for the 2 stale graph links (diagnosed). **⚠ The approval-gate L4 is owed on the gate commit's own tree.** |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
@@ -718,6 +718,37 @@ in §2. Restated here only where they bite hardest on *this* feature:
   planner saw — visible in the doc's own numbers, where the same query costs 0.060 ms at
   position 5 and 0.087 ms at position 10. Record row positions, whether `ANALYZE` ran, and
   any requested-but-unrecorded output (`BUFFERS`).
+- **A symmetric hazard needs a mutation from each side** (phase-2 re-review, S1's close).
+  S1 was about **two builders diverging**, and three rounds mutated only the `K ≥ 1` copy —
+  a right repair with half a proof. Cutting the **no-spec** copy
+  (`delete TaskStep.is_deleted.is_(False)` there alone) reddened C1's three snapshot rows
+  *and* C5's `base.sample_count == 20` at `21 == 20`. **When a criterion asserts an equality
+  between two independently-written computations, the named mutations enumerate both
+  operands** — one per sub-check, in both directions.
+- **A named mutation's stated bite set is a claim, and it decays** (phase-2 re-review N-d).
+  Plan 2 §6 C10's mutation (i) asserted a bite set that **was never true**, and survived a
+  projection, three implementation rounds and two reviews **because it was never run** — and
+  because a reviewer restated it from a ledger instead of measuring it. **A mutation that has
+  never been run is not evidence of anything, including of what it would catch.** Re-derive a
+  plan's mutation prose from the code after each repair; never carry it forward unmeasured.
+- **`IS NOT NULL` inside a conjunction with bounds is not the guard it looks like.**
+  `column.is_not(None)` on a NULL column evaluates to **FALSE, not NULL**, so a *bounded*
+  range is already definitely FALSE without it and the `coalesce` never sees a NULL. It is
+  load-bearing **only** for the unbounded `(None, None)` case. Any criterion reasoning about
+  NULL handling in a predicate must say **which of the two mechanisms** it tests — the
+  explicit conjunct, or SQL's three-valued logic — because **no fixture can tell them apart
+  for a bounded range**.
+- **Route an amendment to its consumers, not to its origin** (phase-2 re-review N-b, and
+  N3 one finding earlier in the same phase). §4A K2-a landed in the Read-first of the plan
+  that raised it — a plan that never calls the statement — and not in the two plans that do;
+  plan 4 caught it only by physical adjacency and plan 5 not at all. Twice in one phase is a
+  pattern, not an accident: **"who reads this?" is an explicit line on every fold**, answered
+  by naming files, not by judgment made once per project.
+- **Deleting an inert assertion is a legitimate close — when the claim moved somewhere that
+  bites, and the round says where.** C8's equal-`100` median line was removed in the same
+  round S2's test began pinning the value column with distinct literals. The arm-or-delete
+  choice is only safe under that condition; a round that deletes owes the sentence saying
+  where the coverage went.
 - **A conversion trigger nobody is routed to read cannot fire** (phase-2 review N3). C11's
   trigger names three concrete syntactic conditions and the row it converts into — better
   than most — but no downstream plan's Read-first list included it, and plan 6, whose scope
