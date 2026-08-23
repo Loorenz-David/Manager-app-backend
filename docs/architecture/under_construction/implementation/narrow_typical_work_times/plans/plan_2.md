@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: REVIEWING
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -564,6 +564,34 @@ knows which criterion owns the phase's sharpest hazard.
   `--dist loadfile`. **The 21-ID baseline is not stable under adding a test file** — a free
   measured datapoint for `test_isolation_xdist` phase 3's perturbation gate.
   Fix round 2 dispatched; state stays `IMPLEMENTED`.
+- **2026-08-23 · fix round 2 · Codex · consumed, → `REVIEWING`.** All seventeen prompt
+  items closed: seven named mutations run with both sides and failing ids, C5 reseeded to
+  the plan's own fixture (6 narrowed / 20 section, seconds 10…143) asserting **literal**
+  count `20` and median `76` at every index *and* against the `K == 0` call, C2(d) reseeded
+  to five groups with literal typicals `30`, C3 restored to 3 live + 1 soft-deleted / 6
+  rows, C7 gained its removed-primary variant, C10 gained the `True` upholstery row and the
+  `80` boundary, and the harness's false `history_span_days: 90` became
+  `history_age_days: 1` + `window_days: 90` without re-running the matrix.
+  **Verified at source, not from the ledger:** the production diff across the whole fix
+  cycle (`git diff d5731c3 HEAD -- app/beyo_manager/`) is **empty** — "tests only" measured,
+  never accepted as asserted. **K1's repair independently confirmed with a *different*
+  mutant shape than the one the implementer ran:** `percentile_cont(0.5) → 0.9` in the
+  `K ≥ 1` section aggregate moves the section median while leaving every count untouched,
+  and it reddens `test_spec_index_preserves_input_order_and_section_population_is_constant`
+  — the criterion that survived the identical class of mutation in round 1. The guard is
+  armed, not merely re-worded.
+  **Two disclosures carried into review rather than closed.** (i) C8 took option (b): the
+  six-identical-`100`s fixture stands and the median is documented as a control while the
+  count assertion bites — authorised, and the reviewer should judge it. (ii) C13(b)'s
+  "covered by the L2 run" is imprecise: the L2 run was `working_sections/`, which holds
+  **one** of the six consumer suites; the other five are in `item_economics/` and rest on
+  the L4 stamp, which is green. True via L4, loosely stated.
+  **The L4 nondeterminism is now measured, and it matters more than either stamp.** Round 1
+  stamped 24 failed including the clock-in-code trio; round 2 stamped 21 with a ∅/∅ delta
+  and the trio absent — **same tree**. At `HEAD` the trio still fails **3/3 in isolation**.
+  So the trio's presence in a full-suite run is decided by xdist scheduling, and **round 2's
+  clean ∅/∅ delta is partly luck, not evidence of a stable baseline**. Recorded for the
+  reviewer and routed to `test_isolation_xdist`.
 - **2026-08-23 · fix round 2 · Codex · IMPLEMENTED.** Closed the evidence and fixture
   findings without changing production query behavior. C5 now seeds 20 section groups
   (6 narrowed) with a non-flat median and asserts literal `20` / `76` section values at
