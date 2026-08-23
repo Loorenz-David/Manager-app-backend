@@ -24,7 +24,16 @@ is the first reader. No statement call changes. No change to `divide_production_
 - Master plan §§4, 6.2, 7, 9, 10.
 - Intention **header**, then §2.2 F-A (**stale — see §2B S-1/S-2/S-3**), §2B S-1, S-2, S-3,
   §3.2, §6.2 row 1, **§6A** in full, §7 (the always-present rule).
-- `planning/owner_decisions.md` — D9, D11.
+- **Intention §3A C3, and `plans/plan_2.md` §6 C11's named conversion trigger** (phase-2
+  review N3). C11 holds `coalesce(<conjunction>, FALSE)` structurally today because no
+  fixture can separate it from three-valued logic. **It converts into a real behavioural
+  criterion the first time any predicate negates the item match** — a `NOT item_match`, an
+  `is_(False)` on it, or an `ANSWER_AS_ASKED` complement query. **If this phase writes one,
+  the criterion is yours to add.** The trigger was well stated and routed to nobody, which
+  is why it is now in a Read-first list.
+- **Intention §4A K2-a** — the shipped `K ≥ 1` column order is the reverse of K2's prose.
+  **Read the statement's result by column name, never by position** (phase-2 review S4).
+- `planning/owner_decisions.md` — D9, D11, **D27**.
 - Gate handoff §2 row 12 and §3 (S-1, S-2, S-3).
 - Code, read at source: `get_task_budget_status.py` (the whole file — `TaskBudgetStatus`,
   `_load_task_and_item`, `_empty_status`, `_build_evaluated_status`, and every call site of
@@ -175,6 +184,47 @@ evaluated path from `evaluation.item_id` to `item.client_id`.
 `mismatched` binding rows go red, because `item_id` and the binding label stop agreeing.
 *Defect caught*: the tempting "while I am in here, make `item_id` consistent with the spec"
 edit. A3 says the two deliberately differ.
+
+---
+
+### C-N1 — the "one active primary item per task" rule is guarded, at both layers
+
+**Carried here by owner ruling D27** (phase-2 review card 1). This rule is what makes the
+whole pipeline's `TaskItem` join fan-out-free — plan 2 §2's central claim rests on it — and
+the phase-2 review confirmed it is **enforced twice and tested zero times**. This is the
+phase that buys the rows, because it is where the first real surface reads the narrowed
+number.
+
+**Two rows, not one — the two layers fail independently:**
+
+**(a) The database backstop.** Insert a second `TaskItem` with `role = PRIMARY` and
+`removed_at IS NULL` on the same `(workspace_id, task_id)` as an existing active primary →
+`IntegrityError`. The index is `uix_task_items_primary_active` on
+`(workspace_id, task_id) WHERE role = 'primary' AND removed_at IS NULL`
+(`models/tables/tasks/task_item.py:53`).
+*Mutation*: drop the index in the test's transaction (or assert against
+`pg_indexes` that it exists **with its `WHERE` clause** — the partiality is the point: two
+*removed* primaries, and a primary plus a *related* item, must both remain legal).
+*Both sides* — contract: `IntegrityError` on the second active primary, **and** the two
+legal shapes insert cleanly; mutation: the second active primary inserts.
+
+**(b) The application guard.** `add_item_to_task` with a second primary raises
+`ConflictError("Task already has an active primary item.")`
+(`add_item_to_task.py:46-57`). **No test file in the repository references
+`add_item_to_task` at all** — measured by the phase-2 reviewer, and the message appears
+only in production code.
+*Mutation*: delete the pre-check → the call reaches the database and raises `IntegrityError`
+instead, or succeeds if (a)'s index is also gone.
+*Both sides* — contract: `ConflictError` with that message; mutation: a different exception
+type. **Pin the message, not just the type** (phase-2 review S3's rule: a `match=` is an
+assertion and gets the same enumeration discipline as any other).
+
+*Defect caught*: if a future migration or refactor quietly drops either guard, a task with
+two active primaries is **counted twice**, the section's typical drifts upward, and nothing
+errors anywhere — the business starts quoting longer jobs than its own history supports.
+D27 records why deferring from phase 2 was safe: the reviewer read the index out of the
+live migrated database and it is present and correct **today**. That is a measurement with
+a shelf life, which is exactly what a test replaces.
 
 ## 7. Notes
 

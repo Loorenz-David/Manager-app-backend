@@ -142,7 +142,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
-| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `REVIEWING` | 2026-08-23 | Codex | Fix round 2 closed all 17 consumption items: 7 named mutations run, C5 reseeded to literal count/median at every index and vs K=0, C2(d)/C3/C7/C10 fixtures repaired, harness label corrected. Production diff across the cycle measured **empty**; K1's repair confirmed with an independent mutant shape. Opus 5 review dispatched. |
+| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `CHANGES_REQUESTED` | 2026-08-23 | Opus 5 | Review r1: **0 blocking**, production code correct and no defect found in it. 5 should-fix — three guards measured unable to fail (S1 population filters, S2 typical column at index ≥1, S3 the `match=` substring), S4 column-order drift (routed: intention amended §4A K2-a, shipped order stands), S5 cumulative measurements. 2 cards answered → D27, D28. Fix round 3 dispatched. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
@@ -679,6 +679,49 @@ in §2. Restated here only where they bite hardest on *this* feature:
   project: an unexplained delta against the 21-ID set is not automatically a regression,
   and must be diagnosed rather than counted.** Routed to `test_isolation_xdist` phase 3 as
   a free perturbation datapoint.
+  **⚠ Superseded in its strong form, 2026-08-23 (phase-2 review, serial L4).** The reviewer
+  ran `-n 0` and got the **identical 21-ID set** — so the set is *not* nondeterministic
+  run-to-run on a fixed tree, and round 2's clean ∅/∅ was **not** luck. What survives is
+  narrower and still true: **the set changed between round 1's tree and round 2's**, which
+  added tests to an existing file. And the trio fails 3/3 *in isolation* while passing in
+  **both** full runs — they need leaked state a full run supplies. So round **1**'s
+  24-failure stamp is the outlier, not round 2's. **Read a delta as composition-dependent,
+  not random**: it moves when the test population changes, not between runs of the same tree.
+- **A phase that deliberately duplicates a definition owes one criterion asserting the
+  copies agree — on a fixture where they could disagree** (phase-2 review S1). HC-4's
+  byte-identity requirement forces two `grouped_steps` builders; the plan then wrote no
+  criterion over the *second* one's population. C5 *looked* like the guard — it asserts the
+  `K ≥ 1` section count against the `K == 0` call's, a genuine cross-branch equality — but
+  every fixture seeded only steps that were `COMPLETED`, not deleted, not marked wrong, and
+  closed yesterday, so there was nothing for the equality to discriminate. Measured: all
+  four population filters deleted from the `K ≥ 1` branch, one at a time, left the full L2
+  bite set green (62 passed) every time.
+- **"The criterion asserts a cross-call equality" is not "the criterion can see a
+  difference."** The extension to §9's hazard-ownership rule, earned three times in one
+  phase (S1, S2, S3): after naming the mutation and the column, **confirm the fixture
+  contains a row the mutation moves.** An equality between two calls over a fixture with no
+  discriminating row is an identity, not a test. Prefer an **exact literal** over an
+  equality between two calls wherever one exists.
+- **A `match=` on an expected exception is an assertion, and gets the same enumeration
+  discipline as any other** (phase-2 review S3). C0's bare-`str` enum row asserted
+  `match="major_categories"` — a substring present in **both** the explicit guard's message
+  ("must be a sequence of values") and the accidental path's ("contains an unknown value").
+  Measured: deleting `str` from the guard left the row **green**, so the row that exists to
+  prove the rejection is *explicit* could not tell an explicit rejection from an accidental
+  one. **Pin the message only the correct path produces**, never the family or symbol name
+  that every path mentions.
+- **A measurement harness that seeds cumulatively must say so** (phase-2 review S5).
+  `collect_measurement_matrix` loops eleven cases on one session with no cleanup, so each
+  row is measured against a table holding every previous row's seed. "Seed cardinalities are
+  exact for every row" was true of each *workspace's* seed and not of the *table* the
+  planner saw — visible in the doc's own numbers, where the same query costs 0.060 ms at
+  position 5 and 0.087 ms at position 10. Record row positions, whether `ANALYZE` ran, and
+  any requested-but-unrecorded output (`BUFFERS`).
+- **A conversion trigger nobody is routed to read cannot fire** (phase-2 review N3). C11's
+  trigger names three concrete syntactic conditions and the row it converts into — better
+  than most — but no downstream plan's Read-first list included it, and plan 6, whose scope
+  names the very construct that fires it, was among them. **A criterion held structurally
+  "until X happens" is incomplete until the plan where X would happen is made to read it.**
 
 ---
 

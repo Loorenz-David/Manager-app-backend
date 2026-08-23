@@ -859,6 +859,30 @@ len(specs) == K >= 1  ->  columns
 - Domain mapping: `(client_id, spec_index) -> SectionTypicalEvidence`. Neither
   `spec_index` nor any column name appears in a domain object or on the wire.
 
+**⚠ K2-a — amendment, 2026-08-23 (phase-2 review S4). Column ORDER is not contractual;
+the column SET and their names are.** Phase 2 shipped the two population pairs in the
+reverse of the order written above:
+
+```
+shipped (K >= 1):  (client_id, name, spec_index,
+                    narrowed_sample_count, narrowed_typical_worker_seconds,
+                    section_sample_count,  section_typical_worker_seconds)
+```
+
+**The shipped order stands and the block above is not re-ordered** — the coordinator's
+routing call, because the production code is independently verified correct, every consumer
+binds **by name**, and re-ordering a `select()` to match prose would be a production change
+bought with nothing. Plan 2 C2 pins the shipped tuple, which is now the accurate one.
+
+**What this costs, and the rule it buys:** a later implementer who trusted the written
+order for any *positional* read would swap the two populations and publish a section-wide
+median as `item_narrowed` — Critical rank 2's shape. So: **read the result by column name,
+never by position.** Positional construction is impossible against `SectionTypicalEvidence`
+in any case — its own field order is `narrowed_typical, narrowed_count, section_typical,
+section_count`, a third order again, which is exactly why none of the three is a contract.
+Recorded rather than silently tolerated, because a Critical-ranked mechanism whose contract
+text and implementation disagree is drift even when nothing is wrong on the wire.
+
 **K3 — shape is a function of `K`, never of `is_narrowing`.** A caller that dedupes 50
 tasks' specs and gets back a *different row shape* depending on whether every derived spec
 happened to be empty would take a different parsing branch on a data-dependent condition —

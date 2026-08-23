@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: REVIEWING
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -592,6 +592,40 @@ knows which criterion owns the phase's sharpest hazard.
   So the trio's presence in a full-suite run is decided by xdist scheduling, and **round 2's
   clean ∅/∅ delta is partly luck, not evidence of a stable baseline**. Recorded for the
   reviewer and routed to `test_isolation_xdist`.
+- **2026-08-23 · review round 1 · Opus 5 · CHANGES_REQUESTED → fix round 3.**
+  0 blocking / 5 should-fix / 5 recorded / **2 owner cards, both now answered** (D27, D28).
+  **The production code is correct and the reviewer found no defect in it** — §4A K4
+  transcribed exactly, the narrowed `CASE` reading its own count, §6A's K-shape making the
+  K-multiplication structurally unreachable, the perimeter exactly plan §4's declared paths,
+  the snapshot untouched, and fan-out freedom confirmed **at the database** by reading
+  `uix_task_items_primary_active` out of the migrated template rather than off the model.
+  **The round is owed for instruments, not behaviour — three guards cannot fail:**
+  **S1** the `K ≥ 1` branch's population definition is guarded by nothing; C5 *looks* like
+  the cross-branch guard but no fixture seeds a step that is deleted, non-`COMPLETED`,
+  marked wrong or outside the window, so all four filters were deleted one at a time and the
+  L2 set stayed green (62 passed) each time. **S2** `narrowed_typical_worker_seconds` is
+  never asserted at any `spec_index ≥ 1`: mis-keying the *typical* coalesce bit nothing,
+  while the same mutation on the *count* coalesce reddened three tests — the C4 defect
+  ("one item category's history attributed to another task") live on the value column.
+  **S3** C0's bare-`str` enum row matches a substring both the explicit and the accidental
+  rejection produce, so it passes with its own guard deleted; and C0's **second** named
+  mutation was declined in round 2 as "covered by the round-1 ledger row", which it is not.
+  **S4 — coordinator routing call, decided:** the shipped `K ≥ 1` column order is the
+  reverse of §4A K2's prose. **The shipped order stands**; the intention is amended as
+  **§4A K2-a** (column order is not contractual, the set and names are, read by name never
+  by position), and plans 3 and 6 now read it. Re-ordering verified production code to match
+  prose buys nothing. **S5** the §12 matrix is eleven *cumulative* measurements presented as
+  eleven isolated ones — one paragraph owed, no re-measurement (D26 sets no threshold).
+  **My own framing was refuted, which is the result.** The reviewer spent its L4 on the
+  serial `-n 0` comparator and got the **identical 21-ID set**: the baseline is *not*
+  nondeterministic on a fixed tree, round 2's clean delta was not luck, and round **1**'s
+  24-failure stamp is the outlier. The trio fails only when run **alone** — it needs leaked
+  state a full run supplies. Master plan §9 corrected; the residue for
+  `test_isolation_xdist` is composition-dependence, not randomness.
+  **Both cards answered same day:** D27 routes the one-active-primary rows to plan 3 (two
+  rows — the DB index *and* the untested `add_item_to_task` guard, unguarded at both
+  layers); D28 authorizes a scoped maintenance session to adjudicate the seven-item graph
+  queue. N3 routed to plans 3 and 6. State → `CHANGES_REQUESTED`.
 - **2026-08-23 · fix round 2 · Codex · IMPLEMENTED.** Closed the evidence and fixture
   findings without changing production query behavior. C5 now seeds 20 section groups
   (6 narrowed) with a non-flat median and asserts literal `20` / `76` section values at
@@ -610,3 +644,65 @@ knows which criterion owns the phase's sharpest hazard.
   remained green without edits. The known three out-of-perimeter clock-in-code IDs remain
   diagnosed and routed to `test_isolation_xdist`. State remains `IMPLEMENTED` pending
   review; checkpoint and handoff follow.
+
+- **2026-08-23 · review round 1 · Opus 5 · CHANGES_REQUESTED.** 0 blocking / 5 should-fix /
+  5 recorded / 2 owner cards
+  (`handoffs/reviewer/20260823_plan2_review_handoff.md`). **The production code is correct
+  and carries no defect**: §4A K4's arithmetic is transcribed exactly, §6A's mandated
+  K-shape (outer `VALUES` cross join, `spec_index` in the outer `GROUP BY`) makes the
+  K-multiplication hazard structurally unreachable, the `K == 1` bypass is equivalent to the
+  coalesce path and the count-0/NULL boundary through it is exercised at `K = 2`, all three
+  joins are 1:1, the perimeter is exactly §4's declared paths, and the snapshot is untouched.
+  The round is owed for **instruments, not behaviour** — three guards cannot fail.
+  **S1 (should-fix): nothing guards the `K ≥ 1` branch's population definition.** Both
+  branches declare their own `grouped_steps`; C1 freezes only the no-spec shape. Four probes
+  at L2, one per sub-check, each deleting one filter from the `K ≥ 1` branch alone —
+  `recorded_time_marked_wrong`, `state == COMPLETED`, `is_deleted`, and `qualifying →
+  true()` — **each returned 62 passed / 1 skipped, no bite**. C5's cross-branch equality
+  against the `K == 0` call is the intended guard, but every fixture seeds only qualifying
+  steps, so it has nothing to discriminate. Fix: four discriminating rows in C5's fixture,
+  four named mutations with bite ids.
+  **S2: `narrowed_typical_worker_seconds` is never asserted at any `spec_index ≥ 1`.**
+  Mis-keying the **typical** coalesce (`index == position` → `index == 0`) → 62 passed, no
+  bite; the same mutation on the **count** coalesce → 3 failed. The count column is pinned
+  per index, the value column is not. Under the mutant, index ≥ 1 returns `NULL` and index 0
+  inherits a later spec's median whenever its own count is below the floor — C4's own
+  *Defect caught*, on the value rather than the key. Fix: one `K = 2` row where both indices
+  clear the floor with different medians, asserting literals.
+  **S3: C0's `{"major_categories": "wood"}` row cannot tell an explicit rejection from an
+  accidental one** — the defect it exists to close. Removing `str` from
+  `_optional_categories`'s isinstance guard → **43 passed, no bite**: both messages contain
+  the family name the `match=` pins. Compounding — C0 names two mutations, round 1 ran one,
+  and round 2's "justified by round-1 tree-bound ledger row" does not cover the second
+  (§9's ledger-count rule, second firing this phase; charter rule 14). Fix:
+  `match="must be a sequence of values"`.
+  **S4: the shipped `K ≥ 1` column order is the reverse of intention §4A K2's**, and C2 —
+  which requires "the exact column-name tuple" — pins the shipped one. Nothing wrong on the
+  wire; silent drift on a Critical-ranked mechanism's contract. Recommend amending §4A K2 to
+  the shipped order plus one line that order is not contractual.
+  **S5: `query_cost_measurements.md` reads as eleven isolated measurements; it is eleven
+  cumulative ones** — `collect_measurement_matrix` seeds every case on one session with no
+  cleanup, so the last row is measured against 232 seeded rows. Visible in its own numbers
+  (the same query at position 5 vs 10: 0.060 vs 0.087 ms). No re-measurement — D26 sets no
+  threshold and §12's conditional acceptance is otherwise met in full; one disclosure
+  paragraph is owed (cumulative positions, no `ANALYZE`, `BUFFERS` dropped).
+  **Recorded:** N1 `uix_task_items_primary_active` — deferral **judged acceptable** after
+  reading the index out of the migrated template (`role = 'primary' AND removed_at IS NULL`,
+  exact match for §3A C5), routed to plan 3; N2 C13(b) confirmed green at L4 under a
+  different topology; N3 C11's trigger is well stated but **routed to nobody** — no
+  downstream plan's Read-first carries intention §3A or C11; N4 C10 row (c)'s NULL entry not
+  transcribed; N5 the graph's test evidence span drifted to a different test in round 2.
+  **Owner card 1 answered same day: executed by phase 3.** Asked to explain it, I found the
+  rule has a *second* guard — `add_item_to_task` pre-checks and raises `ConflictError` — and
+  **no test file in the repo references `add_item_to_task`**, so the one-active-primary rule
+  is unguarded at **both** layers. Nothing miscounts today (both guards work; the index was
+  read out of the migrated template). Plan 3 buys **two** rows, not one: the `IntegrityError`
+  on a second active primary, and the `ConflictError` from the command. Card 2 (graph queue:
+  7 pending items, 2 stale nodes, one carrying N5's stale span) stays open.
+  **Evidence.** Round 2's stamps consumed by citation (matching SHA). One L4 spent on
+  variation per the environment section's named comparator: `pytest -m 'not e2e' -n 0`,
+  default slot, Redis `PONG`, tree `90c2490` clean → **21 failed / 2659 passed / 2 skipped
+  in 129.80 s, ∅/∅ against the approved 21-ID set**. **The serial and parallel failing sets
+  are identical**, so round 2's ∅/∅ was not scheduling luck; the trio fails only when run
+  *in isolation*, and round 1's 24 is the outlier. Seven mutation probes, all shapes nobody
+  had run, applied-and-reverted, checksums verified. State → `CHANGES_REQUESTED`.

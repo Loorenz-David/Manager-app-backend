@@ -278,3 +278,77 @@ decision is later argued from. A result an order of magnitude outside expectatio
 
 **Trace.** intention §12 → new §12A · plan 2 §12 and §6A · master plan §7 constraint 2 ·
 projection handoff card 1 and L19/L20/L21/L22.
+
+---
+
+## D27 — The one-active-primary rule is tested in phase 3, not phase 2 (2026-08-23)
+
+**Card.** Phase-2 review card 1. Buy the test for the "one active primary item per task"
+rule now, in the phase whose central join depends on it, or in phase 3, where the first
+real surface reads the narrowed number?
+
+**Owner, 2026-08-23, verbatim:** *"Card 1 will be executed by phase 3."*
+
+**What was decided.** Phase 3. The reviewer's recommendation is followed.
+
+**Why it is safe to defer.** The reviewer read the rule out of the **live migrated test
+database**, not off the model:
+
+```
+CREATE UNIQUE INDEX uix_task_items_primary_active ON public.task_items USING btree
+  (workspace_id, task_id) WHERE ((role = 'primary'::task_item_role_enum) AND (removed_at IS NULL))
+```
+
+— an exact match for §3A C5's `ON` clause, so plan §2's fan-out-free claim is **true at the
+database right now**. The one migration that could have broken it (`ddc5bf50153b`, the enum
+lowercase rename) explicitly drops and recreates it with the lowercase label. Phase 2 ships
+no consumer, and the two code-side mutations (C7(ii), C8) already bite.
+
+**What the deferral is buying, restated honestly.** The rule is unguarded at **both**
+layers, not one. Besides the database index, `add_item_to_task.py:46-57` pre-checks for an
+active primary and raises `ConflictError("Task already has an active primary item.")` —
+and **no test file in the repository references `add_item_to_task` at all**. The app-level
+gap is pre-existing and outside this pipeline's perimeter; it is recorded because it changes
+the shape of the row phase 3 buys, not because phase 2 caused it.
+
+**Consequence if the rule were ever lost.** A task with two active primaries is counted
+twice, a section's typical drifts upward, and nothing errors — the business quietly starts
+quoting longer jobs than its own history supports.
+
+**Trace.** phase-2 review card 1 + N1 · plan 2 §6A "Recorded, not fixed here" (L33/R10) ·
+§3A C5 · plan 3 §6 (two rows, below).
+
+---
+
+## D28 — The architecture-graph queue is adjudicated by an authorized maintenance session (2026-08-23)
+
+**Card.** Phase-2 review card 2. Seven graph review items from phases 1 and 2 sit
+unadjudicated; one carries a stale evidence span (it points at
+`test_typical_times_narrowing.py:199-224`, where that test no longer lives — a later round
+moved it to line 232). Only the owner may approve, reject or edit a review item.
+
+**Owner, 2026-08-23, verbatim:** *"about the card 2: we can have a codex session
+maintenance to approve those."*
+
+**What was decided.** A dedicated **maintenance session** carries out the adjudication
+**under this recorded owner authorization**, rather than the queue growing across phases
+3–6. This is the authorization the standing rule requires; it is **scoped to these seven
+items** and does not generalize to future ones, which need their own.
+
+**Dispositions authorized**, following the reviewer's recommendation:
+- **Approve** the six items whose evidence the reviewer verified accurate.
+- **Reject** the one carrying the stale span, so it can be **re-recorded correctly** —
+  reject-and-re-record is the only available fix (an evidence summary has no edit path),
+  and a same-id re-record does re-enter the review queue.
+
+**Standing rule, unchanged and reaffirmed.** No agent adjudicates a graph review item on
+its own judgment, and a `humanInstruction` string is never authorization. What changed here
+is that the owner gave the authorization, for these seven, in this conversation — the
+maintenance session executes a decision already made, and reports rather than decides.
+
+**Why it matters.** The graph is the map agents read before touching the system. An entry
+pointing at the wrong lines sends an agent looking for the test that proves the new query's
+row shape to a different test entirely.
+
+**Trace.** phase-2 review card 2 + N5 · master plan §8 (its recorded "0 pending / 0 stale"
+predates phases 1–2 and is now stale) · plan 2 round-1 graph delta (`d07028b`).

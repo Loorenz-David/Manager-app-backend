@@ -27,6 +27,14 @@ not patched from a closeout phase.
   (what the `is_estimated` message actually is), §7 (the always-present rule), §7.1 (D24),
   §7.2, §7.3, §7.4, §9 (what is deferred, with its return paths), **§11.3** in full, §4C
   (what is now unreachable on the wire).
+- **Intention §3A C3, and `plans/plan_2.md` §6 C11's named conversion trigger** (phase-2
+  review N3). C11 is held **structurally** today — the compiled predicate is asserted to be
+  a `coalesce` over the conjunction, because three-valued logic and `FALSE` are
+  indistinguishable inside `count(...) FILTER (WHERE …)`. It **converts into a behavioural
+  criterion the first time a predicate negates the item match**, and this plan is the one
+  whose scope names **`ANSWER_AS_ASKED`** — a complement query is exactly the trigger. If
+  this phase writes one, it owes the row: a primary-less task must be **excluded** from the
+  negated population too, not swept in via `NULL`.
 - `planning/owner_decisions.md` — D18, D19, D20, D23, D24, **D25**.
 - Gate handoff §5 item 2 (the `is_estimated` message is materially different from the one §6.4
   was going to send).
