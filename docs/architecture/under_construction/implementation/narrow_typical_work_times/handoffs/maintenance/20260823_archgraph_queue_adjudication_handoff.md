@@ -60,4 +60,4 @@ they were left untouched and are not included in the maintenance commit.
 
 ## Commit
 
-Primary maintenance commit SHA: to be recorded after the explicit-path commit.
+Primary maintenance commit SHA: `88092c6`.
