@@ -85,7 +85,7 @@ SHA `40c4ee3df7412923fefc82fe293a23d19cd88006d5a1fdedf3892bc9b4ab6375`.
 
 Authoritative command: `PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/`, using the
 documented default `BEYO_TEST_SLOT=main` topology. Redis pre-check: `redis-cli ping` →
-`PONG`. Result: **2660 passed, 21 failed, 1 skipped, 2 warnings in 50.26s**.
+`PONG`. Result: **2660 passed, 21 failed, 1 skipped, 2 warnings in 51.93s**.
 
 - Approved 21-ID baseline → current failure IDs: added **∅**; removed **∅**.
 - No phase-2 test ID was added to the failure set; the phase's focused and L2 suites are
