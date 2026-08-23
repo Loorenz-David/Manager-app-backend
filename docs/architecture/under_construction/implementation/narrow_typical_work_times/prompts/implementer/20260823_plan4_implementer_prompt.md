@@ -40,9 +40,19 @@ plan header to match this prompt — that converts a coordinator typo into a fal
    consumption rows are amendments already written into the plan you are about to read; if
    either entry is missing you have a partially folded plan, and that is a stop-and-report.
 
-**Tree:** `git status --porcelain` should show only the owner's `.archgraph/` work
-(` M .archgraph/agent-operating-policy.md`, `?? .archgraph/backfill/`, `?? .archgraph/contexts/`).
-**No modified tracked file under `app/`.** If `app/` is dirty, stop and report.
+**Tree:** the binding condition is **`git status --porcelain -- app/` is empty** — no modified
+tracked file under `app/`. If `app/` is dirty, stop and report.
+
+**Anything under `.archgraph/` is the owner's live work and is expected, whatever it is.**
+Do not enumerate it, do not diff it, do not report it as a finding, and above all do not treat
+an unfamiliar `.archgraph/` path as a reason to halt. The owner runs graph sessions in this
+workspace concurrently with yours; at the time this prompt was written that directory held
+three paths, and **within the same hour it held sixteen**. `.archgraph/contexts/` is never
+rebuilt or committed, and `.archgraph/agent-operating-policy.md` is an uncommitted owner edit.
+*(This clause is itself a correction: the previous draft enumerated the three paths, and a
+self-test against the live tree showed a session would have halted on owner churn. Gate on
+what the phase owns — `app/` and the plan's own perimeter — never on a directory that belongs
+to someone else.)*
 
 **Redis must answer `PONG`** before any suite run (master plan §10 — without it this machine
 measures 23 failed / 2 errors, not 21, and you will misread your own stamp).

@@ -995,6 +995,14 @@ in §2. Restated here only where they bite hardest on *this* feature:
   the plan's own C4 mutation instructed the implementer to trip. **A scoped probe must state its
   path set as a limit, and consuming one means asking what the set excluded** — the excluded
   region is where the next defect is, precisely because nobody looked.
+- **A gate check must gate on what the phase owns** (plan-4 dispatch self-test, 2026-08-23 —
+  the fourth instance of the gate-check class and the second caught *before* dispatch). The
+  implementer prompt enumerated the three expected `.archgraph/` paths and told the session to
+  stop if the tree differed. Within the hour the owner's concurrent graph sessions took that
+  directory from three paths to sixteen, so the check would have halted a session over state
+  the phase does not own and cannot affect. **Gate on `git status --porcelain -- app/` and on
+  the plan's own perimeter; declare foreign directories expected-whatever-they-contain.**
+  A gate that fires on someone else's work trains sessions to ignore gates.
 - **A measurement at one site is not a measurement of the surface** (plan-4 seal, 2026-08-23 —
   both unhinted predictions failed this way in one round). A `fake_status` counted at one
   definition was reported as the surface (three, actually four); a defaulted read
