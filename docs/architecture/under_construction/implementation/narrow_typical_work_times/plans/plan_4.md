@@ -90,6 +90,23 @@ breaks both call sites at once, and a phase must close green.
 - Code: `budget_division.py` (whole file); `division_serializers.py` (whole file);
   `get_task_production_time.py` (whole file); `get_task_budget_allocations.py` (whole file);
   `test_budget_division.py`.
+- **INHERITED TRIPWIRE — read it before you write a line of either service.**
+  *(Added at the coordinator consumption fold — C-2, measured 2026-08-23.)*
+  `app/tests/unit/services/queries/item_economics/test_production_time_contract.py::test_c19_division_has_one_allocator_and_services_only_consume_it`
+  asserts, for **both** `get_task_production_time.py` and `get_task_budget_allocations.py`,
+  that their source contains none of the tokens **`Fraction`**, `ROUND_HALF_EVEN`, `largest`,
+  or `//`. It is a **substring check on the file**, so an *import* trips it as surely as
+  arithmetic does. **Measured on the clean tree: 17 passed; with `from fractions import
+  Fraction` added to `get_task_production_time.py`, 1 failed / 16 passed** at the `Fraction`
+  assertion.
+  **This is a signal, not an obstacle**, and it is satisfiable: the weight ladder and its
+  `terminal=` live in `budget_division.py` (task 2), `apply_business_fallback` is imported
+  there at module scope (task 1), and the services only ever hand over `SelectedTypical`s.
+  If you find yourself reaching for `Fraction` inside a service, the arithmetic has leaked
+  out of the domain layer and C19 is telling you so. **C4's mutation is therefore applied at
+  the definition, never at the service call site** — see §6B C-2.
+  The whole directory `tests/unit/services/queries/item_economics/` (17 tests) is outside
+  every path set this phase's projection ran; treat it as unmeasured until you run it.
 
 ## 3. Dependencies
 
@@ -103,6 +120,16 @@ adds; budget-allocations derives its own from `item_by_id` / `primary_by_task`.
 - `app/beyo_manager/domain/item_economics/division_serializers.py`
 - `app/beyo_manager/services/queries/item_economics/get_task_production_time.py`
 - `app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py`
+
+**Modified — documentation (unguarded by any test — see §6B C-1)**
+- `app/beyo_manager/routers/README.md` — **added at the coordinator consumption fold (C-1).**
+  It enumerates, field by field, the exact response schema of **both** endpoints this phase
+  changes: `data.budget_allocations[].steps[].*` and `data.budget_allocations[].allocation_method`
+  (≈`:1660-1680`), and `data.allocation_method` + `data.sections[].typical` (≈`:1700-1725`).
+  Its own header states the rule: *"Hand-maintained. No generator exists in this repository…
+  A route added without editing this file silently rots it."* **No test reads this file** —
+  the living-docs guard roots at `docs/domains/item_economics/`, which is why probe P1 came
+  back green on it and why a test-based projection could not see it. See task 9c.
 
 **Modified — tests / goldens**
 - `app/tests/unit/domain/item_economics/test_budget_division.py`
@@ -251,6 +278,21 @@ adds; budget-allocations derives its own from `item_by_id` / `primary_by_task`.
     is the `/working-sections/typical-times` serializer, which D24 holds byte-identical.
     Verified at the fold: it is a distinct function, untouched by §7.2/§7.3. A change to it is
     a finding.
+9c. **Update the hand-maintained router contract.** *(Added at the coordinator consumption
+    fold — C-1.)* `app/beyo_manager/routers/README.md` documents both changed endpoints as
+    field-by-field response tables. Add the new rows in the same format and flip nothing else:
+    - `GET …/tasks/{task_client_id}/budget-allocations` — under
+      `data.budget_allocations[].steps[]`, add `typical_basis` and `sample_count`; under
+      `data.budget_allocations[]`, add `typical_resolution`.
+    - `GET …/tasks/{task_client_id}/production-time` — under `data`, add `typical_resolution`;
+      keep the existing `data.sections[].typical` row and add the section-level keys §7.2
+      ships.
+    **Derive each row from the serializer you actually wrote, not from this list** — this list
+    is a checklist of places to look, and master plan §9 says a count in a plan sentence that
+    counts to nothing is worse than no count.
+    **Nothing tests this file.** It cannot fail your suite, which is exactly why it is a task
+    and not a criterion: the only thing standing between it and rot is you doing it. Declare
+    it in your write perimeter.
 10. **Goldens.** Regenerate `golden_production_time.json` and `golden_budget_allocations.json`
     on the post-live-clock baseline. **The live-clock fixture is NOT taught to narrow.** It has
     no COMPLETED steps (F-H), so post-refactor it yields counts `0`, basis
@@ -349,8 +391,11 @@ tests, never as a session grep).
 ("no site reachable from `divide_production_budget`'s inputs passes a live-derived value into
 a typical") but its instrument was a three-term sweep from the repository root expecting ∅ —
 and that sweep **cannot** return ∅. `total_working_seconds` is present *by design* at
-`budget_division.py:45` (the dataclass field) and at five read sites (`:271`, `:321`, `:331`
-twice, `:334`), and both services carry
+`budget_division.py:42` (the dataclass field) and at five read sites (`:133`, `:234`, `:273`,
+`:321`, `:391`) — **citations re-derived at the coordinator consumption fold (C-3); the
+projection's own `:45` / `:271` / `:331` / `:334` were wrong, and this fold had transcribed
+them unverified.** The finding's substance is unaffected: six occurrences in one file, all
+legitimate. And both services carry
 `total_working_seconds=live_seconds[step.client_id]` verbatim
 (`get_task_production_time.py:55`, `get_task_budget_allocations.py:222`) — which **is** the
 live-clock contract, not a defect. "Within the typicals path" is not a mechanically checkable
@@ -414,8 +459,14 @@ value — an accidental cover that D18's removal deletes. §3B B4 is what replac
 Fixture: a task where **no** participating section has a usable typical (all `None`).
 Assert every `allowance_seconds` is the even split of `distributable_seconds` — exact
 literals — and that the neutral weight appears **nowhere** as seconds on the payload.
-*Mutation* — `get_task_production_time` (call site) / `budget_division` (definition): pass
-`terminal=Fraction(0, 1)` to `apply_business_fallback`.
+*Mutation* — ~~`get_task_production_time` (call site) /~~ **`budget_division` (definition)
+only**: pass `terminal=Fraction(0, 1)` to `apply_business_fallback`.
+**The call-site option is struck at the coordinator consumption fold (C-2, measured).** The
+terminal is set inside `budget_division.py` and never threaded through a service; applying
+this mutation at `get_task_production_time` puts the token `Fraction` into that file, which
+reddens `test_c19_division_has_one_allocator_and_services_only_consume_it` (**1 failed / 16
+passed**, measured) — a *collateral* red in a file this plan does not list, not the
+`ZeroDivisionError` the row claims. That is the "fails for the wrong reason" shape.
 *Both sides* — contract: the even split; mutation: `total_weight == 0` and
 `budget_division.py:348` raises `ZeroDivisionError` (span corrected at the fold, L14; verified
 reachable — with `terminal=Fraction(0,1)` and no usable typical every resolved weight is `0`,
@@ -684,6 +735,63 @@ allowance moves (`distributable_seconds` is unchanged but `total_weight` grows).
 inert — a faithful copy is what an implementer writes, and a faithful copy agrees. Naming the
 **disagreeing form** is what makes it bite.
 
+## 6B. Coordinator consumption fold — corrections to §6A (2026-08-23)
+
+The projection ledger was consumed adversarially at source before this prompt was dispatched.
+**Nineteen of its twenty rows were verified and are carried unchanged**; L14's four corrected
+citations were re-derived independently and are all exactly right (`:271`, `:329`/`:331`,
+`:344-350` with `/ total_weight` at `:348`, `:292`). What follows is what consumption **added
+or corrected**. Provenance matters here: rows C-1 and C-2 are defects the projection's
+instrument could not have found, and C-3 is a defect this fold introduced by transcribing.
+
+**C-1 — blocking — the phase changes a documented contract that no test guards.**
+`app/beyo_manager/routers/README.md` enumerates both changed endpoints field by field. It is
+hand-maintained (*"No generator exists in this repository… A route added without editing this
+file silently rots it"*), and `git log` shows the neighbouring pipeline's phases edited it as
+implementation work. It appeared in neither §2 nor §4. **Why the projection missed it:** its
+instrument was a test run, and the living-docs guard roots at `docs/domains/item_economics/`,
+so probe P1 was green on this file *by construction*. **A green suite is evidence about the
+suite's reach, never about a surface the suite does not read.** Routed: §4 *Modified —
+documentation*, task 9c.
+
+**C-2 — blocking — an inherited tripwire forbids exactly what C4's mutation instructed.**
+`test_production_time_contract.py::test_c19_…` asserts `"Fraction" not in source` for both
+services. C4 named `get_task_production_time` **(call site)** as a site for
+`terminal=Fraction(0, 1)`. **Measured:** clean tree 17 passed; token added, **1 failed / 16
+passed** at line 17. Probe reverted, `md5` identical, `app/` clean. **Why the projection missed
+it:** the whole directory `tests/unit/services/queries/item_economics/` lay outside all four
+path groups its probe ran. Routed: §2 read-first tripwire, C4's mutation site struck.
+*Standing rule earned:* **a probe's path set is a claim about coverage, and an unmeasured
+directory is not a green one.**
+
+**C-3 — should-fix — this fold transcribed the projection's citations without re-deriving
+them.** L9's supporting spans were wrong (`:45` / `:271` / `:331`×2 / `:334`); the field is at
+`budget_division.py:42` and the five reads at `:133`, `:234`, `:273`, `:321`, `:391`. The
+finding's substance stands. **This is the sharpest lesson of the round: the fold that carried
+L14 — the row whose entire subject is that line numbers decay — copied a neighbouring row's
+line numbers unchecked.** A citation is not more reliable for having arrived inside a finding
+about unreliable citations. Corrected in place.
+
+**C-4 — note — the fold over-delivered on L3, correctly.** L3 named only C12's blanket "key
+additions only" phrasing. §5 task 10 carried the same sentence, and the fold fixed **both**.
+Recorded because a fold that goes beyond its ledger is the good direction and should be
+visible as a pattern, not silent.
+
+**C-5 — note — `test_production_time_query.py` is in the perimeter for a second, independent
+reason.** Beyond L1's key-set and v1-literal assertions, it **imports `DivisionStep`** (`:11`),
+so task 4's field removal reaches it directly. Two independent reasons to edit one file is
+worth stating, so a reviewer who closes the first does not conclude the file is done.
+
+**Seal scored at this fold** (coordinator-private, outside the repo). Verdict and row count
+inside band; blocking count **over-predicted** (predicted 8–16, ledger delivered 6) — though
+consumption then added the two above, landing the phase at 8. **Both unhinted Layer-0
+predictions failed, and failed identically:** the `fake_status` surface was measured at one
+site and generalized (three predicted, **four** actual), and `division_serializers.py:56`'s
+defaulted read was called invisible to C2's mutation without tracing who supplies the row —
+`get_task_budget_allocations.py:255` supplies the constant itself, so the mutation reaches
+both faces. *Standing rule earned:* **a measurement at one site is not a measurement of the
+surface; a claim about a surface owes a sweep of it.**
+
 ## 7. Notes
 
 - **F-F is stale, and stale in the direction that costs a round.** Its conclusion survives
@@ -796,3 +904,29 @@ both touched files' checksums asserted restored. No over-evidence, no unauthoriz
 **What the projection did NOT close, and the implementer therefore owns:** every criterion's
 transcription (task 0), every named mutation's execution, and the fixture arithmetic C10 and
 C5(a) now demand. A projection proves the plan is buildable; it proves nothing about the build.
+
+### 2026-08-23 — coordinator consumption of the projection (second pass, §6B)
+
+The ledger above was re-consumed at source before dispatch. **Nineteen of twenty rows verified
+and carried unchanged**; L14's four corrected citations re-derived independently and all
+correct. Added or corrected — full detail in **§6B**:
+
+| row | severity | folded into | why the layer above missed it |
+|---|---|---|---|
+| C-1 | **blocking** | §4 *Modified — documentation* · §5 task 9c | the surface has no test, so a test-based probe was green on it by construction |
+| C-2 | **blocking** | §2 tripwire · §6 C4 mutation site struck | the guard's directory was outside all four of the probe's path groups |
+| C-3 | should-fix | §6A L9's citations, corrected in place | this fold transcribed them from the ledger without re-deriving |
+| C-4 | note | — (recorded) | none: the fold correctly went **beyond** L3's stated scope |
+| C-5 | note | §4 rationale | a second independent reason to edit an already-listed file |
+
+**Measurements taken this pass:** `tests/unit/services/queries/item_economics/` baselined at
+**17 passed** on the clean tree; with `Fraction` present in `get_task_production_time.py`,
+**1 failed / 16 passed**. Probe reverted, `md5` identical, `git diff -- app/` empty. Repo-wide
+sweeps: `divide_production_budget` referenced in 8 files (2 of them string-scans, not callers);
+`DivisionStep` in 5; `ALLOCATION_METHOD` publish sites exactly 3, all reached by C2's mutation.
+
+**Provenance note, recorded deliberately.** §6A and this section were written by two different
+coordinator sessions against the same handoff. The second found two blocking defects the first
+did not, and one defect *in* the first. That is the case for consuming a fold as an artifact
+rather than trusting it — the same rule this project already applies to implementer handoffs,
+now shown to apply to the coordinator's own output.

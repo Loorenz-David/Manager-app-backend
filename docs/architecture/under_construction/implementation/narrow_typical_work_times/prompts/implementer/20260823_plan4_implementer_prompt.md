@@ -35,9 +35,10 @@ plan header to match this prompt — that converts a coordinator typo into a fal
 2. `plans/plan_4.md` header reads **`state: PROMPT_READY`** and
    `projection_gate: MANDATORY — SATISFIED`.
 3. `master_plan.md` §4 shows phases 1–3 **`APPROVED`** and phase 4 **`PROMPT_READY`**.
-4. `plans/plan_4.md` §8 carries the **2026-08-23 projection-fold entry**. Nineteen of that
-   entry's twenty rows are amendments already written into the plan you are about to read;
-   if the entry is missing you have an unfolded plan.
+4. `plans/plan_4.md` §8 carries **both** 2026-08-23 entries — the projection fold **and** the
+   coordinator consumption pass beneath it — and §6B exists. The twenty ledger rows plus five
+   consumption rows are amendments already written into the plan you are about to read; if
+   either entry is missing you have a partially folded plan, and that is a stop-and-report.
 
 **Tree:** `git status --porcelain` should show only the owner's `.archgraph/` work
 (` M .archgraph/agent-operating-policy.md`, `?? .archgraph/backfill/`, `?? .archgraph/contexts/`).
@@ -116,6 +117,19 @@ These are not advice. Each was measured, in this project, at a cost.
 - **Line numbers in the plan are checksums, not targets.** Four were corrected yesterday and one
   of those corrections needed a further correction. Locate the symbol in the file at the moment
   you edit it; a disagreement means the tree moved and is a stop-and-report.
+- **`Fraction` must not appear in either service's source — and C4's mutation goes at the
+  definition.** `tests/unit/services/queries/item_economics/test_production_time_contract.py::test_c19_…`
+  is a **substring check** over `get_task_production_time.py` and `get_task_budget_allocations.py`
+  for the tokens `Fraction`, `ROUND_HALF_EVEN`, `largest` and `//`. An *import* trips it.
+  **Measured: clean tree 17 passed; with `from fractions import Fraction` in the production-time
+  service, 1 failed / 16 passed.** C4's mutation once named that service as a site; **it is
+  struck** — apply the mutation in `budget_division.py` only. Treat C19 as a signal: reaching
+  for `Fraction` in a service means the arithmetic has leaked out of the domain layer.
+  **That whole directory (17 tests) was outside every path set the projection ran.** Run it.
+- **Task 9c updates a contract that cannot fail your suite.** `beyo_manager/routers/README.md`
+  is hand-maintained, documents both changed endpoints field by field, and **no test reads it**.
+  Nothing will go red if you skip it and nothing will go green when you do it. It is in §4 and
+  in your write perimeter. Derive its new rows from the serializers you actually wrote.
 
 ## 5. Scope fences
 
@@ -165,11 +179,23 @@ them**, and diagnose any delta rather than reporting it.
 
 ## 7. The perimeter
 
-Exactly the files in `plans/plan_4.md` §4 — nine modified, three new. **§4 was measured, not
-assumed**: a projection probe applied this phase's own payload additions and reddened four
-tests, two of them in files the plan originally never named. Those two are now listed and
-**task 9a** names the five assertions to widen. **Widen, never delete** — they are the only
-exact key-set guards on that wire.
+Exactly the files in `plans/plan_4.md` §4 — **eleven modified** (four production, one
+hand-maintained doc, six tests/goldens) **and three new**, fourteen in all. Count them in §4
+yourself before you start; if your count disagrees with this sentence, §4 wins and the
+disagreement is worth a line in your report. *(Both prior drafts of this sentence miscounted —
+"nine", then "ten". §9's rule about counts in plan sentences was earned three times in this
+project and just fired a fourth. Counting is cheap; trusting a count is not.)*
+
+**§4 was measured twice, not assumed.** A projection probe applied this phase's own payload
+additions and reddened four tests, two of them in files the plan originally never named — those
+two are now listed, and **task 9a** names the five assertions to widen (**widen, never delete**;
+they are the only exact key-set guards on that wire). A second consumption pass then added
+`beyo_manager/routers/README.md` (**task 9c**), which the first probe could not see because no
+test reads it.
+
+**The lesson is aimed at you, not at the plan:** two passes over the same phase each found a
+file the previous one missed, both times a file whose omission produced *no red*. When you
+finish, the question that catches the third one is **"what did I change that nothing tested?"**
 
 A write outside §4 is an automatic finding at review. If you find you need one, **stop and
 report** rather than taking it.

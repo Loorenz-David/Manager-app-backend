@@ -204,3 +204,29 @@ Not a session; a snapshot of what the graph currently hands agents.
   loosely. The owner's `.archgraph/backfill/` work (194 re-anchor operations generated
   2026-08-23 12:04) would remove 222 spans from existing entries; it is unapplied and no session
   has been dispatched to apply it.
+
+### 2026-08-23 — plan-4 coordinator consumption pass (second pass over the same handoff)
+
+- **New evidence written:** **0 entries.** No `archgraph_apply_changes`, no `archgraph_*` tool
+  of any kind. Nothing to report on span rate.
+- **Re-anchor activity:** none.
+- **Review findings about location:** none about the graph. Two further code-line corrections
+  in the plan, both in the same family the entry above logs: L9's supporting spans
+  (`budget_division.py:45` + four read sites) were **wrong in the projection ledger** and had
+  been transcribed into the plan unverified; re-derived by locating the symbol (`:42`; reads at
+  `:133`, `:234`, `:273`, `:321`, `:391`). Logged here because it sharpens the previous entry's
+  point: the drift-catching row and the drifted row sat **in the same document**, written in the
+  same pass. Proximity to a warning about stale coordinates confers no immunity.
+- **Closing-work language:** none. No session in this project has yet described keeping anchors
+  current as work it did or recommended.
+- **`.archgraph/backfill/` provenance — resolved.** The projection reported it as "not mine" and
+  correctly declined to absorb it. It is the owner's: two `architecturegraph-*` sessions were
+  running concurrently in this workspace (started ~2h before the directory's 12:04 timestamps).
+  Recorded so the next perimeter check treats it as expected owner state rather than an
+  undeclared write.
+- **Reading:** unchanged and still **unmeasured** — four sessions since the policy change, zero
+  evidence entries written, so the span rate on *new* entries has no data behind it. The
+  standing confound also still holds: this project's implementer prompts carry an explicit
+  "do not emit `startLine`/`endLine`" instruction predating the brief, so compliance here could
+  never be attributed to the policy text alone. **A clean test still needs a session whose
+  prompt is silent on anchoring**, and none has run.
