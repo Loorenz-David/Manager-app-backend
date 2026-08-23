@@ -108,4 +108,4 @@ Architecture Graph: no delta. The round changes test evidence and a reproducibil
 not an independently named architectural boundary; the existing phase-2 additive graph
 delta remains untouched. `.archgraph/contexts/` is the expected untracked generated state.
 
-Checkpoint SHA: pending the checkpoint commit immediately following this handoff.
+Checkpoint SHA: `a371e8e` (`CHECKPOINT (not approved): plan 2 fix round 2 evidence`).
