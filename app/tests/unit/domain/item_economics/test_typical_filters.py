@@ -364,7 +364,9 @@ def test_parser_handles_typed_params_absence_none_enums_and_client_errors():
     assert parse_spec_from_query_params({"width_cm_min": 60}).width_cm == (60, None)
     assert parse_spec_from_query_params({"width_cm_max": 80}).width_cm == (None, 80)
     assert parse_spec_from_query_params({"width_cm_min": None, "item_category_ids": None}) == TypicalFilterSpec()
-    assert parse_spec_from_query_params({"major_categories": ["wood", "seat"]}).major_categories == frozenset(
+    assert parse_spec_from_query_params(
+        {"major_categories": [ItemMajorCategoryEnum.WOOD.value, ItemMajorCategoryEnum.SEAT.value]}
+    ).major_categories == frozenset(
         {ItemMajorCategoryEnum.WOOD, ItemMajorCategoryEnum.SEAT}
     )
     assert parse_spec_from_query_params({"can_have_upholstery": True}).can_have_upholstery is True
@@ -398,11 +400,16 @@ def test_parser_rejects_bare_strings_and_non_iterable_repeatable_values(params):
         ({"item_category_ids": memoryview(b"ab")}, "item_category_ids"),
         ({"item_category_ids": {"cat_a": 1}}, "item_category_ids"),
         ({"major_categories": {"wood": 1}}, "major_categories"),
-        ({"major_categories": "wood"}, "major_categories"),
+        ({"major_categories": ItemMajorCategoryEnum.WOOD.value}, "major_categories"),
     ],
 )
 def test_parser_rejects_mapping_and_byte_iterable_repeatable_values(params, family):
-    with pytest.raises(ValidationError, match=family):
+    match = (
+        "must be a sequence of values"
+        if family == "major_categories" and isinstance(params["major_categories"], str)
+        else family
+    )
+    with pytest.raises(ValidationError, match=match):
         parse_spec_from_query_params(params)
 
 

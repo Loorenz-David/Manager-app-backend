@@ -3,7 +3,7 @@
 ```
 plan: plan_2
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY
 acceptance: CONDITIONAL on planning/query_cost_measurements.md carrying all ten rows
             (+ the 50x20 ceiling row). NO performance threshold - D26 / intention 12A.
@@ -706,3 +706,15 @@ knows which criterion owns the phase's sharpest hazard.
   are identical**, so round 2's ∅/∅ was not scheduling luck; the trio fails only when run
   *in isolation*, and round 1's 24 is the outlier. Seven mutation probes, all shapes nobody
   had run, applied-and-reverted, checksums verified. State → `CHANGES_REQUESTED`.
+
+- **2026-08-23 · fix round 3 · Codex · IMPLEMENTED.** Closed review round 1's five
+  should-fix items and the enumerated N4/C8 follow-ups without changing production code:
+  C5 now contains four independently non-qualifying steps and asserts literal `20` / `76`
+  values plus cross-branch equality; a new K=2 row pins narrowed medians `30` and `80` at
+  both indices; C0 pins the explicit enum-boundary message and its bare-string fixture is
+  derived from the enum member for the one-character mutation; C10 row (c) seeds a NULL
+  width; C8 keeps its biting count assertion and deletes its inert equal-100 median line;
+  and the measurement document discloses cumulative seeding, default-estimate costs,
+  unrecorded buffers, and the undecidable 1.9× explanation. C2's shipped tuple was
+  confirmed against §4A K2-a; no column order was changed. Mutation ledger, L4 stamp,
+  perimeter, and checkpoint are in the round-3 implementer handoff.

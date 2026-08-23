@@ -119,6 +119,10 @@ async def _task(
     related: list[Item] | None = None,
     removed_primary: Item | None = None,
     step_count: int = 1,
+    step_state: TaskStepStateEnum = TaskStepStateEnum.COMPLETED,
+    step_deleted: bool = False,
+    step_marked_wrong: bool = False,
+    closed_at: datetime | None = NOW - timedelta(days=1),
 ) -> Task:
     section = section or seed.section
     task = Task(
@@ -174,12 +178,14 @@ async def _task(
                 task_id=task.client_id,
                 working_section_id=section.client_id,
                 working_section_name_snapshot=section.name,
-                state=TaskStepStateEnum.COMPLETED,
+                state=step_state,
                 readiness_status=TaskStepReadinessStatusEnum.READY,
                 total_dependencies=0,
                 completed_dependencies=0,
                 total_working_seconds=seconds,
-                closed_at=NOW - timedelta(days=1),
+                recorded_time_marked_wrong=step_marked_wrong,
+                is_deleted=step_deleted,
+                closed_at=closed_at,
                 created_by_id=seed.user.client_id,
             )
             for index in range(step_count)
@@ -266,6 +272,10 @@ async def test_spec_index_preserves_input_order_and_section_population_is_consta
         await _task(db_session, seed, f"table_{index}", primary=table_item, seconds=52 + index * 7)
     for index in range(12):
         await _task(db_session, seed, f"other_{index}", seconds=66 + index * 7)
+    await _task(db_session, seed, "wrong", seconds=200, step_marked_wrong=True)
+    await _task(db_session, seed, "deleted", seconds=201, step_deleted=True)
+    await _task(db_session, seed, "pending", seconds=202, step_state=TaskStepStateEnum.PENDING)
+    await _task(db_session, seed, "outside-window", seconds=203, closed_at=NOW - timedelta(days=91))
 
     specs = (
         TypicalFilterSpec(item_category_ids=frozenset({chair.client_id})),
@@ -281,6 +291,36 @@ async def test_spec_index_preserves_input_order_and_section_population_is_consta
     assert all(row.section_typical_worker_seconds == 76 for row in rows)
     assert base.sample_count == 20
     assert base.typical_worker_seconds == 76
+    assert all(row.section_sample_count == base.sample_count for row in rows)
+
+
+@pytest.mark.integration
+async def test_each_spec_index_selects_its_own_narrowed_typical(db_session):
+    seed, _ = await _seed_base(db_session)
+    chair = await _category(db_session, seed, "value-chair", ItemMajorCategoryEnum.SEAT)
+    table = await _category(db_session, seed, "value-table", ItemMajorCategoryEnum.WOOD)
+    chair_item = await _item(db_session, seed, "value-chair", category=chair)
+    table_item = await _item(db_session, seed, "value-table", category=table)
+    for index, seconds in enumerate([10, 20, 30, 40, 50]):
+        await _task(db_session, seed, f"value-chair-{index}", primary=chair_item, seconds=seconds)
+    for index, seconds in enumerate([60, 70, 80, 90, 100]):
+        await _task(db_session, seed, f"value-table-{index}", primary=table_item, seconds=seconds)
+
+    specs = (
+        TypicalFilterSpec(item_category_ids=frozenset({chair.client_id})),
+        TypicalFilterSpec(item_category_ids=frozenset({table.client_id})),
+    )
+    rows = {
+        row.spec_index: row
+        for row in _rows((await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=specs, now=NOW)
+        )).all())
+    }
+
+    assert rows[0].narrowed_sample_count == 5
+    assert rows[1].narrowed_sample_count == 5
+    assert rows[0].narrowed_typical_worker_seconds == 30
+    assert rows[1].narrowed_typical_worker_seconds == 80
 
 
 @pytest.mark.integration
@@ -371,7 +411,6 @@ async def test_primary_join_is_fanout_free_and_secondary_items_do_not_define_mem
     )
     rows = {row.spec_index: row for row in _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, specs=specs, now=NOW))).all())}
     assert rows[0].narrowed_sample_count == 6
-    assert rows[0].narrowed_typical_worker_seconds == 100
     assert rows[1].narrowed_sample_count == 0
 
 
@@ -452,6 +491,9 @@ async def test_each_item_field_and_null_unknown_row_is_an_exact_population_count
     if field in {"category", "major"}:
         null_item = await _item(db_session, seed, f"{field}-null", category=None)
         await _task(db_session, seed, f"{field}-null", primary=null_item)
+    if field == "width":
+        null_width_item = await _item(db_session, seed, f"{field}-null", width=None)
+        await _task(db_session, seed, f"{field}-null", primary=null_width_item)
 
     row = _rows((await db_session.execute(typical_times_statement(seed.workspace.client_id, specs=(filter_spec,), now=NOW))).all())[0]
     assert row.narrowed_sample_count == 5

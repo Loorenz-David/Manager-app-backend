@@ -142,7 +142,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
-| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `CHANGES_REQUESTED` | 2026-08-23 | Opus 5 | Review r1: **0 blocking**, production code correct and no defect found in it. 5 should-fix — three guards measured unable to fail (S1 population filters, S2 typical column at index ≥1, S3 the `match=` substring), S4 column-order drift (routed: intention amended §4A K2-a, shipped order stands), S5 cumulative measurements. 2 cards answered → D27, D28. Fix round 3 dispatched. |
+| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `IMPLEMENTED` | 2026-08-23 | Codex | Fix round 3 closed the five review should-fix items plus N4/C8: tests and measurement prose only, no production diff; C2 confirmed the shipped tuple against §4A K2-a. Checkpoint and round-3 handoff follow; pending re-review. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
@@ -488,8 +488,9 @@ finally be asserted over all three surfaces.
 
 ## 8. Tool protocols
 
-**Architecture graph.** Measured this session, read-only: **194 nodes / 296 edges,
-revision `7241b831c3bd…`, 0 pending / 0 stale / 0 diagnostics.** (The archived live-clock
+**Architecture graph.** Measured after the 2026-08-23 queue-adjudication maintenance
+session: **198 nodes / 298 edges, revision `364223242014…`, 1 pending / 2 stale /
+0 diagnostics.** (The archived live-clock
 master plan §6 cites `cec60a24…`, 194 / 291 — a stale citation in an archived document,
 not a graph/code disagreement. Cite the measurement, never a document's copy of it.)
 

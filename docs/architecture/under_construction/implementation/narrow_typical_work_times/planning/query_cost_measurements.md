@@ -29,3 +29,14 @@ new no-spec row: the current statement does not inspect specs, and the new no-sp
 branch returns the pre-refactor statement byte-for-byte. The measurements are
 observational only; D26 sets no performance threshold for this phase. Nothing was an
 order of magnitude outside the expected small-page range in this disposable seed.
+
+The seeding is cumulative: `collect_measurement_matrix` uses one database session, does
+not clean up between cases, and measures the rows in the table order shown above (positions
+1 through 11). Each workspace's seed cardinality is exact, but later rows are measured
+against the table containing every earlier workspace's rows. The harness did not run
+`ANALYZE`, so `cost` is PostgreSQL's default planner estimate, not an observed runtime
+quantity; this is why the identical query reports `16.42` for both the 1-task and 20-task
+current-statement seeds. The harness requests `BUFFERS`, but records no buffer values in
+the document. Consequently, the 1.9× execution-time difference for the 50-task ×
+20-category row is undecidable from this document: it may reflect spec fan-out, table
+growth from cumulative seeding, or both.
