@@ -132,7 +132,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | # | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure typicals domain + the pre-refactor SQL snapshot | **`APPROVED`** | 2026-08-22 | Opus 5 (re-review r2) | Delta re-review: 0 blocking / 0 should-fix / 4 notes / 0 cards. All 9 round-1 findings closed **and biting** (15 L1 probes, 41-test baseline; L4 runs 0 — round-3 stamp consumed by citation and corroborated +8/+8). Notes routed: N6 → plan 4 C0, N7 → plan 2 C0, N8/N9 → plan 1 prose. Rows archived to `archive/plan_1/`. |
-| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `IMPLEMENTED` | 2026-08-22 | Codex | Implemented after task-0 criteria transcription. Predicate/query perimeter is green; 11-row EXPLAIN matrix recorded (10 required cells + 50×20 ceiling). Checkpoint handoff ready for review. |
+| 2 | Statement extension: spec→predicate, K-spec shape, HC-4 + §12 measurements | `IMPLEMENTED` | 2026-08-23 | Codex | Round 1 implemented after task-0 transcription; code accepted and §12's conditional acceptance met (11 rows, copies disclosed). **Coordinator consumption sent it back before review:** 7 named mutations unrun (C1/C6/C7/C10), C5's typical half untranscribed so the K-multiplication guard is inert (measured), C2(d) and C8's median assertions cannot fail. Fix round 2 dispatched. |
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A) | `NOT_STARTED` | — | — | Projection **mandatory** (shipped cross-pipeline dataclass, 5 construction surfaces; the lineage has paid one round on it). No payload change anywhere. |
 | 4 | Division contract + production-time + budget-allocations | `NOT_STARTED` | — | — | Projection **mandatory** (settled-basis guard — the neighbouring pipeline's "most expensive mistake available in this feature"). Two goldens regenerate, keys only. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | `NOT_STARTED` | — | — | Projection **mandatory** (`is_estimated` reverses a shipped payload value if read literally; the clock move extends an APPROVED pipeline's determinism contract). |
@@ -632,6 +632,43 @@ in §2. Restated here only where they bite hardest on *this* feature:
   `f(x) == f(x)` vacuity §11A repaired T11 to remove. The only authorized re-derivation
   is a SQLAlchemy/dialect version bump, and it requires a recorded authorization line in
   the acting phase's Review log before the write.
+- **Name the criterion that owns a hazard, then check that it can *see* the hazard's
+  observable** (plan-2 consumption, measured 2026-08-23). §6A worked the K-multiplication
+  hazard out on paper and designated **C5** its guard. C5 shipped asserting counts only,
+  and a group-seconds multiplication moves the **median** while leaving `count(task_id)`
+  untouched — measured: the `* 2` probe reddened three tests in the file and **not** the
+  one named as the guard. Coverage existed, but accidentally, in C8/C9. **Designating a
+  guard is a claim about an instrument, and it is checkable the same way any other
+  criterion is: name the mutation, name the column it moves, confirm the guard reads that
+  column.**
+- **"Mutations, one per sub-check" is a count, and the ledger is checkable against it**
+  (plan-2 consumption, 2026-08-23). Round 1 reported one mutation per criterion where the
+  plan named two (C6), three (C7) and four (C10) — **seven unrun**, with the plan's own
+  text calling two of them "the likelier slips". A criteria ledger with one row per
+  criterion silently under-reports any criterion that named more than one; **the ledger's
+  row count must match the plan's mutation count, not its criterion count.**
+- **Tests-first shrinks the transcription-failure class; it does not close it** (plan-2,
+  the first tests-first phase). Task 0 eliminated the *missing row* failures that cost
+  phase 1 eleven of thirteen findings — every criterion reached a test file this time.
+  What survived was the next layer in: rows transcribed into **fixtures too small or too
+  uniform to discriminate** (C2 row (d) comparing `None` to `None` on a one-task fixture;
+  C8's median assertion on six identical 100s), and **mutations named but not run**.
+  Transcribing a row and *arming* it are two different acts. A tests-first prompt should
+  ask for both explicitly: the row, and the fixture arithmetic that makes it move.
+- **A uniform fixture is an inert fixture.** Seeding every group at the same value makes
+  every median assertion in that test survive any multiplicity, ordering or fan-out
+  mutation. Where a criterion asserts a typical, the fixture states its group multiset and
+  why the mutation moves the median — the median must not equal the mean, and must not be
+  invariant under duplication.
+- **The 21-ID failing baseline is not stable under adding a test file** (measured
+  2026-08-23). Phase 2 added one integration file and the failing set moved by three ids,
+  all in `test_user_work_profile_clock_in_code.py`, whose `_two_workspaces` helper reads
+  whatever workspaces leaked into its xdist worker (`SELECT ... FROM workspaces LIMIT 2`,
+  asserting two exist). Under `--dist loadfile`, adding a file re-partitions the workers
+  and changes a leak-dependent test's neighbours. **Consequence for every phase in this
+  project: an unexplained delta against the 21-ID set is not automatically a regression,
+  and must be diagnosed rather than counted.** Routed to `test_isolation_xdist` phase 3 as
+  a free perturbation datapoint.
 
 ---
 

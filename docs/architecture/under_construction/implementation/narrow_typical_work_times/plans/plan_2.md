@@ -536,3 +536,31 @@ knows which criterion owns the phase's sharpest hazard.
   with active-primary item matching; focused perimeter and named mutation probes are
   green on the repaired tree. The committed cost document carries all ten matrix cells
   plus the 50×20 API-ceiling row. Checkpoint and handoff follow.
+- **2026-08-23 · coordinator consumption of implementation round 1 · CHANGES_REQUESTED
+  before review.** The **code is sound and the conditional acceptance is met**: the K-spec
+  shape is exactly §6A's mandated form (outer `VALUES` cross join, `spec_index` in the
+  outer `GROUP BY`), C1 ships three parametrized rows against the corrected mutation, C0's
+  five parser rows all landed, C12's corrected instrument landed, C9 is built as specified,
+  and `query_cost_measurements.md` carries all eleven rows with the five copies disclosed
+  and no threshold claimed. The snapshot file is untouched in the diff.
+  **What did not land is mutation evidence and two fixtures that cannot fail** — seven
+  named mutations across C1/C6/C7/C10 were never run, and:
+  **(K1, measured)** C5's `section_typical_worker_seconds` half — the plan's closing
+  "likewise" clause — was not transcribed, so **the criterion §6A designated as the owner
+  of the K-multiplication hazard does not catch it**. Measured by mutating the `K ≥ 1`
+  `group_seconds` SUM to `* 2`: three tests in the file reddened and
+  `test_spec_index_preserves_input_order_and_section_population_is_constant` was **not**
+  among them. The hazard is covered, but accidentally, by C8/C9 — not by its guard.
+  **(N1)** C2 row (d) asserts `narrowed_typical == section_typical` on a **one-task**
+  fixture, so both sides are `None`: the exact fixture-below-the-floor defect §6A opens
+  with, reappearing inside a criterion §6A called transcribable as written.
+  **(N2)** C8's median half is inert as §6A predicted (all six groups seed `seconds=100`,
+  so a fan-out cannot move the median); the count half bites, and the required
+  "say which assertion bites on which strategy" disclosure is absent.
+  **Not a phase-2 regression, routed out:** the L4 stamp's three extra failing IDs are in
+  `test_user_work_profile_clock_in_code.py` (predates this phase, `b0f35b1`), whose
+  `_two_workspaces` helper reads whatever workspaces leaked into its xdist worker. Phase 2
+  touched no fixture or conftest; adding one integration **file** re-partitioned
+  `--dist loadfile`. **The 21-ID baseline is not stable under adding a test file** — a free
+  measured datapoint for `test_isolation_xdist` phase 3's perturbation gate.
+  Fix round 2 dispatched; state stays `IMPLEMENTED`.
