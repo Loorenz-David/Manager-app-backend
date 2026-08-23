@@ -832,6 +832,16 @@ in §2. Restated here only where they bite hardest on *this* feature:
   grammar, not the test, forbade the position. **A mutation must be legal code that runs and
   names a failing test; if the language refuses it, the criterion is untested and a legal
   mutation must be found** — here, swapping two *existing* fields, which reddens C1 alone.
+- **A narrower round is not a licence to drop a step that maintains state** (plan-3 fix
+  round 1, 2026-08-23). Phase 3's state is recorded in **two** places — `master_plan.md` §4
+  row 3 and the plan file's own `state:` header. The round-1 implementer prompt's closing
+  protocol named both (*"§4 row 3 and `plans/plan_3.md` (`state:` + §8)"*); when the
+  coordinator rewrote that protocol for the narrower fix round it kept the `master_plan`
+  half and dropped the `state:` half, so the two artifacts **disagreed** at close — tracker
+  `IMPLEMENTED`, plan header `CHANGES_REQUESTED` — and the next session's gate check reads
+  the header. **When you rewrite a closing protocol for a smaller round, re-derive it from
+  the full one rather than trimming it**; and where state lives in two artifacts, name both
+  every time.
 - **A checksum is only valid for a fact with one correct value** (plan-3 fix round 1, gate
   stop, measured 2026-08-23). The D29 technique — *publish the expected value as a checksum
   to compare against, and treat a disagreement as stop-and-report* — is sound for a **derived

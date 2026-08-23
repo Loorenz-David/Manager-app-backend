@@ -3,7 +3,7 @@
 ```
 plan: plan_3
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 

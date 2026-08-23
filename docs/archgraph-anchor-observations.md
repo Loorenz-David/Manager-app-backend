@@ -121,6 +121,18 @@ Ran before the policy edit. Recorded for contrast, not as a violation.
 - **Nothing to report.** The session stopped at its gate check before doing any work and
   wrote no handoff. No graph reads or writes attributable to it.
 
+### 2026-08-23 — implementer (phase 3, fix round 1, redispatch)
+
+- **New evidence written:** **0 entries.** No `archgraph_apply_changes` call of any kind.
+  The session's handoff makes **no mention of the architecture graph** — it neither read
+  status nor recorded a delta.
+- **Re-anchor activity:** none.
+- **Review findings about location:** none.
+- **Closing-work language:** none about anchors.
+- **Note:** this was an evidence-only round touching no production code, so there was no
+  architectural delta to record. Its silence on the graph is consistent with the round's
+  scope rather than informative about anchoring behaviour. **Nothing to report.**
+
 ### 2026-08-23 — standing state (coordinator read-only sweep)
 
 Not a session; a snapshot of what the graph currently hands agents.
