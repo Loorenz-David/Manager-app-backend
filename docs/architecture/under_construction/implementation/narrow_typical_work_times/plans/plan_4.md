@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -1088,3 +1088,25 @@ condition** — routed to master plan §9.
 - **C10(d) keeps its wording.** It is not a defective criterion; it is the criterion that
   caught the phase's first production defect, on the exact shape (Critical rank 2/3, a
   mis-keyed row) it was written for. **The instrument worked; the adjudicator did not.**
+
+### 2026-08-24 — fix round 2 correction 2 (Codex)
+
+**State: IMPLEMENTED.** Correction2 applied the one newly permitted production edit in
+`app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py`. In the
+mixed-spec (`K >= 1`) path, a category-less task whose `spec_index is None` now reads the
+section-wide evidence from the section row at index `0`; the `K == 0` path and the narrowed
+branch are unchanged. No fixture workaround or other production change remains.
+
+**Evidence:** C10(d) was red before the edit (`1 failed`) and green after it (`1 passed`);
+the phase integration file is `11 passed`, and the focused L2 suite is `422 passed`. B1
+was bite-tested by temporarily removing the committed snapshot: C9(c) failed (`1 failed,
+10 passed`), and the snapshot was restored. B4 is recorded honestly: the original task-0
+red baseline was not recorded before the prior fix round. S1's exact programmatic comparison
+of the one permitted L4 run against the published 21-ID set is `actual − published = ∅` and
+`published − actual = ∅`.
+S2 is asserted on every budget-allocation task entry. The complete 22-row mutation ledger
+and commands are in the implementer handoff.
+
+**L4:** `2687 passed / 21 failed / 1 skipped` in `49.57s`; the 21 failures are exactly the
+published baseline IDs. The pytest process completed; the shell wrapper then reported its
+zsh `status`-variable error, so no second L4 run was taken.

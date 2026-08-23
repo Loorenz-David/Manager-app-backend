@@ -251,6 +251,19 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         task_spec_index = spec_index_by_task[task.client_id]
         evidence_by_section: dict[str, SectionTypicalEvidence] = {}
         for section_id in section_ids:
+            if specs and task_spec_index is None:
+                row = typical_rows.get((section_id, 0))
+                if row is None:
+                    evidence_by_section[section_id] = SectionTypicalEvidence(section_id, None, 0, None, 0)
+                else:
+                    evidence_by_section[section_id] = SectionTypicalEvidence(
+                        section_id,
+                        None,
+                        0,
+                        int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
+                        int(row.section_sample_count or 0),
+                    )
+                continue
             row = typical_rows.get((section_id, task_spec_index if specs else None))
             if row is None:
                 evidence_by_section[section_id] = SectionTypicalEvidence(section_id, None, 0, None, 0)
