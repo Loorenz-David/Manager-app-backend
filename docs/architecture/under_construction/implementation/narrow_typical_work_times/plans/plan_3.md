@@ -413,6 +413,46 @@ legal flush" is a description, not an id. State it.
   parametrize case the plan did not require, and it is the **only** C5 row that catches a
   wrong-source derivation. Keep it.
 
+#### §6B.1 — the fix round's own gate was defective (2026-08-23, coordinator)
+
+Fix round 1 **stopped at its gate**, correctly. It ran the withdrawn C4 mutation and
+measured **3 failed / 10 passed** against a prompt checksum of **4 failed / 9 passed**, and
+refused to continue. **The implementer was right to stop and the checksum was wrong to
+exist.**
+
+**The tree had not moved.** The coordinator re-ran the original mutant on the same tree and
+reproduced **4 failed / 9 passed**, the same four ids. What differs is **where the extra
+query is placed** — and the withdrawn mutation's prose does not say. Three faithful readings,
+three observables, all measured:
+
+| placement of "re-load `Item` by `evaluation.item_id`" | observable |
+|---|---|
+| unconditional, before `binding` | **4 failed / 9 passed** |
+| guarded on `evaluation is not None` | **1 failed / 12 passed** |
+| the implementer's reading | **3 failed / 10 passed** |
+
+**This is the withdrawal argument, restated as a measurement.** A mutation whose red depends
+on where you put it is not specified by prose. It was withdrawn precisely *because* the
+content-blind double reacts to query placement rather than to the semantic change — so
+demanding a canonical observable **for the withdrawn mutation** was incoherent, and wiring
+that demand to a stop-and-report gate halted the round **by construction**.
+
+**Two corrections, both to the coordinator's prompt, not to the implementation:**
+
+1. **Drop the confirmation run of the withdrawn mutation.** It buys nothing. The row is
+   withdrawn because its *promised* both-sides (`cat_chair` → `cat_table`) is unreachable
+   against a double that cannot return a different `Item` — which follows from the double's
+   structure and needs no run at all.
+2. **Specify the replacement mutations as exact code, never as prose.** Both are stable and
+   were re-verified on this tree after the disagreement: C4 replacement **2 failed / 11
+   passed**, C1 replacement **1 failed / 12 passed**.
+
+**Where the checksum technique does and does not apply.** It was borrowed from D29, where it
+is sound: a symbol's span has **one** correct value, so a disagreement really does mean the
+tree moved. A **mutation observable is not that kind of fact** — it is a function of how the
+mutation is written, so it is only checksummable once the mutation is pinned to exact code.
+Carrying the technique across without checking that precondition is the defect.
+
 ---
 
 ## 7. Notes

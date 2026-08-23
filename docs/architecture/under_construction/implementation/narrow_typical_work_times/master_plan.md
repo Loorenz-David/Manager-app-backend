@@ -832,6 +832,22 @@ in §2. Restated here only where they bite hardest on *this* feature:
   grammar, not the test, forbade the position. **A mutation must be legal code that runs and
   names a failing test; if the language refuses it, the criterion is untested and a legal
   mutation must be found** — here, swapping two *existing* fields, which reddens C1 alone.
+- **A checksum is only valid for a fact with one correct value** (plan-3 fix round 1, gate
+  stop, measured 2026-08-23). The D29 technique — *publish the expected value as a checksum
+  to compare against, and treat a disagreement as stop-and-report* — is sound for a **derived
+  span**, because a symbol occupies exactly one range and a mismatch really does mean the tree
+  moved. It was carried across to a **mutation observable**, which is not that kind of fact:
+  the red depends on **how the mutation is written**. Three faithful readings of one
+  mutation's prose measured **4/9, 1/12 and 3/10** on an *identical* tree, so the gate fired
+  on a difference that was guaranteed by construction and halted the round. **Before
+  publishing a checksum, ask whether the thing being checksummed has a unique correct value.
+  If it depends on how the session chooses to do the work, pin the work to exact code first —
+  or do not gate on it.**
+- **Never demand a canonical observable from a mutation you have just withdrawn** (same
+  round). The withdrawn C4 row was withdrawn *because* its observable is unstable; requiring
+  a confirmation run of it re-imported the instability into the gate. **A withdrawal is
+  argued from the fixture's structure, not re-measured** — and a confirmation run of a
+  withdrawn row buys nothing that the withdrawal argument does not already establish.
 - **Two of these three corrections were to a coordinator fold, not to an implementer**
   (2026-08-23). §6A caught that C4's original mutation passed a `str` and went one step —
   *produce an `Item`, not an id* — but not two: **the fixture must be able to supply that
