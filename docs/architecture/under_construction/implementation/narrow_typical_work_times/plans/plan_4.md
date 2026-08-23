@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -937,3 +937,86 @@ Implementation reached `IMPLEMENTED`. The declared perimeter was edited; focused
 domain, service, documentation, and mutation evidence are recorded in
 `handoffs/implementer/20260823_plan4_implementation_handoff.md`. The approval-gate
 L4 result and checkpoint commit are recorded there for the reviewer.
+
+### 2026-08-23 — coordinator consumption of implementation round 1 → `CHANGES_REQUESTED`
+
+**Handoff:** `handoffs/implementer/20260823_plan4_implementation_handoff.md`, checkpoint
+`0efbbd4`. **Perimeter is exact** — 14 files declared, 14 modified, no undeclared write,
+`.archgraph/` correctly unstaged. **The production engineering is sound and is not the
+problem**: both consumers derive a spec, call the statement once, reconcile through
+`uniform_basis_v1`, and feed the same `SelectedTypical`s to display and weights.
+**The round is owed for evidence**, and one row is the shape this project has paid for most.
+
+**B1 — blocking — C9(a) cannot fail, and I measured it.** The plan's §4 entry for the
+snapshot is explicit: *"Written once, before any production edit, and **never regenerated** —
+re-capturing from a refactored tree restores exactly the `f(x) == f(x)` vacuity §11A repaired
+T11 to remove."* The shipped test does the opposite, at
+`test_narrowed_task_economics.py`:
+
+```python
+if not SNAPSHOT.exists():
+    SNAPSHOT.write_text(json.dumps(current, sort_keys=True, indent=2) + "\n")
+expected = json.loads(SNAPSHOT.read_text())
+```
+
+**Measured:** removed the snapshot → **8 passed**, no failure; the test **re-created the file
+from post-refactor output**, and the regenerated file **contains `typical_resolution`** — a key
+that does not exist pre-refactor, proving the capture was post-refactor. Original restored,
+`md5` `96f91c9c…` identical, `git status -- app/` clean.
+Compounding, and the handoff says so itself: *"its numeric values were reconciled manually to
+the task-0 pre-refactor payload rather than regenerated."* So the committed baseline is a
+**hand-edited** artifact guarded by a **self-healing** read. The criterion the projection spent
+a blocking finding (L4) to create is currently the one criterion that cannot fail.
+**Correction:** the test **reads** the snapshot and **fails if it is absent**
+(`assert SNAPSHOT.exists()`), never writes it. Re-capture it honestly: check out the
+pre-refactor tree for the fixture, produce both payloads, commit the file, and record in §8
+the commit it was captured from.
+
+**B2 — blocking — three criteria have no committed test.** Task 0 required every row of
+C0–C13 transcribed. `test_narrowed_task_economics.py` holds **8** tests covering C1, C3, C4,
+C5, C6, C7, C9, C12, C13. Missing entirely:
+- **C8** (the no-budget branch reconciles, F-D) — `no_budget` appears **0×** in the file.
+- **C10** (batch dedupe, `K == 3`, the 50-task fixture) — the handoff defers it: *"not
+  represented as a separate committed fixture in this round… a reviewer follow-up."*
+- **C11** (production-time and budget-allocations agree per section) — the row that also
+  discharges **charter rule 10**, operational reachability under shipped defaults.
+Net suite growth is **+10** tests (2674 → 2684) for the largest phase in the project.
+
+**B3 — blocking — the mutation ledger is short of the mutation count.** The plan names **21**
+mutations; the ledger has **16** rows. Absent: C0's two standing regression probes, C9(ii),
+and **C10(i) and C10(ii)** — the latter two declared *"verified by source inspection"*.
+Master plan §9: **a never-run mutation is not evidence of anything, including of what it would
+catch.** C10(ii) is also the mutation the projection spent blocking finding **L6** repairing,
+so it has now been corrected twice and executed zero times.
+
+**B4 — blocking — task 0's red baseline was never recorded.** Task 0 required the failing ids
+and count in §8 before any production edit. The §8 entry records none and the handoff records
+none. That record is the only evidence that tests-first happened at all; without it, B2's three
+missing criteria are indistinguishable from three criteria that were never transcribed.
+
+**S1 — should-fix — the baseline was compared by count, not by id.** The handoff reports
+`2684 passed / 21 failed / 1 skipped` and *"the 21 failures are the inherited baseline set…
+no phase-focused test is in that failure list"*. Master plan §10 is explicit that the
+comparator is **the 21-ID set, not the count**; "no phase test among them" is a weaker claim
+that a coincidental swap would satisfy. The re-review's L4 discharges this with a programmatic
+id diff.
+
+**S2 — should-fix — C2's budget-allocations half rests on the golden alone.** The exact-literal
+v2 assertion exists for production-time (`test_production_time_query.py:206`). C2 requires it
+*"on production-time's task block **and on every budget-allocations task entry**"*.
+
+**Verified correct — do not re-verify.**
+1. **Perimeter exact**: declared 14, modified 14, `.archgraph/` unstaged as instructed.
+2. **Task 9c was done** — `routers/README.md` +24 lines. It could not fail the suite and it
+   was done anyway; recorded because the coordinator's seal predicted it would be skipped.
+3. **C12's review half passes, diffed programmatically**: `golden_production_time.json`
+   +8 keys, `golden_budget_allocations.json` +6 keys, and **exactly 4 value changes across
+   both files, every one of them `allocation_method` v1 → v2.** No `allowance_seconds`,
+   `left_seconds`, `share_state`, `worked_seconds` or budget figure moved. **The refactor did
+   not move a number** — the safety property this whole phase exists to preserve.
+4. **C2's absence half holds**: `static_proportional_section_v1` has zero occurrences in
+   `app/beyo_manager/`.
+5. **The C19 tripwire survived**: `tests/unit/services/queries/item_economics/` **17 passed**,
+   and `Fraction` appears **0×** in both services. The consumption fold's C-2 was acted on.
+6. **Graph evidence is policy-correct**: three new source links, `path` + `symbol` +
+   `contentHash`, **zero spans**.

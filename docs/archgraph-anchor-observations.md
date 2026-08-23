@@ -230,3 +230,39 @@ Not a session; a snapshot of what the graph currently hands agents.
   "do not emit `startLine`/`endLine`" instruction predating the brief, so compliance here could
   never be attributed to the policy text alone. **A clean test still needs a session whose
   prompt is silent on anchoring**, and none has run.
+
+### 2026-08-23 — plan-4 implementation round 1 (implementer, Codex)
+
+**The first session to write new graph evidence since the policy change. It emitted no spans.**
+
+- **New evidence written:** one additive `archgraph_apply_changes` batch (revision
+  `0196645b…`, confirmed live by `archgraph_status`). **Three new source links, zero carrying
+  `startLine`/`endLine`, all three carrying `symbol`.** Their shape is
+  `path` + `symbol` + `contentHash` + `linkedAt` — the policy-correct form exactly:
+  - `budget_division.py` → `participating_sections`
+  - `test_narrowed_task_economics.py` → `test_c13_one_participating_sections_patch_moves_both_consumers`
+  - plus the production-time contract-test link named in the handoff.
+  **Span rate on new entries: 0 of 3.** First non-zero denominator this brief has had.
+- **Re-anchor activity:** none by this session. The owner's backfill ran separately at 12:58
+  (committed `0e98493`) and is span-removal, not drift repair — its records show
+  `before: {path, symbol, startLine, endLine}` → `after: {path, symbol}`, which is the policy
+  change being applied to history rather than an agent reacting to movement.
+- **Review findings about location:** none.
+- **Closing-work language:** none. The handoff's graph paragraph reports what was added and
+  states "no pending review item was modified". It does not describe keeping anchors current
+  as work it did or recommended — the language this brief watches for is still absent
+  everywhere in this project.
+- **Staleness moved 2 → 4** under this phase's production edits. Under the new policy this is
+  **not a repair candidate** and correctly nobody treated it as one. Logged because it is the
+  first observation of the policy's central claim being exercised: code moved, nodes went
+  stale, and no session proposed a re-anchor.
+- **Whole-graph span inventory, for the owner's backfill planning:** `architecture.yml` still
+  carries **638** `startLine` keys against **561** `symbol` keys. The backfill commit landed
+  but the bulk of historical spans remain, so any agent reading a stored item is still shown
+  line numbers. Descriptive only.
+- **Standing confound, restated because it now matters more than before.** This project's
+  implementer prompts have carried an explicit *"do not emit `startLine`/`endLine`"* since
+  2026-08-23, and **this session's prompt carried it**. So the clean 0-of-3 result is
+  consistent with the policy working *and* with the prompt working, and cannot distinguish
+  them. **The clean test still has not been run**: it needs a session whose prompt says
+  nothing about anchoring. Until one does, treat 0-of-3 as encouraging and unattributed.
