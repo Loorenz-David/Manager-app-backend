@@ -174,3 +174,33 @@ Not a session; a snapshot of what the graph currently hands agents.
 - **Tool-output observation:** `archgraph_get_review_item` returns `startLine`/`endLine` in
   the evidence payload. An agent following the review workflow is therefore shown line
   numbers for an item whose policy-correct handling never requires them.
+
+### 2026-08-23 — plan-4 projection session (reviewer, round 0)
+
+- **New evidence written:** **0 entries.** No `archgraph_apply_changes`. The session's write
+  perimeter states that **no `archgraph_*` tool was called at any point** in the projection.
+- **Re-anchor activity:** none.
+- **Review findings about location:** none about the graph. It did file **twenty** findings
+  about *code* line numbers, four of which are drifted citations in the plan file
+  (`budget_division.py`, all low by 5–7 lines after an import block moved). Worth logging under
+  this brief because it is the same failure mode the span policy exists to remove, occurring in
+  a document rather than in the graph: **the plan cached coordinates, the code moved, and one
+  task instructed an implementer to delete something at a line where there is nothing to
+  delete.** The projection re-derived all four by locating the symbol.
+- **A near-miss in the plan text, corrected at the fold:** `plans/plan_4.md` §7 paraphrased the
+  interim policy as *"prefer symbol anchors over line spans, **but not both on one entry**"* —
+  which **permits a span**, where master plan §8 forbids one absolutely (*"do not emit
+  `startLine`/`endLine`"*). The projection caught it as a note (L17). An implementer reading only
+  the plan's §7 would have emitted spans and been correct by its own instructions. Logged
+  because it is a **propagation** observation rather than an agent-behaviour one: the policy is
+  binding in §8, but the phase plans carry weaker restatements of it, and the restatements are
+  what sessions actually read.
+- **Closing-work language:** the fold rewrote §7 to point at §8 rather than paraphrase it, and
+  the implementer prompt now carries the absolute form.
+- **Reading:** still **zero spans emitted** since the policy change, and still **zero evidence
+  written**, so the span-rate question remains unmeasured — three sessions running. What this
+  session adds is the first evidence that the risk has moved *upstream of the tool*: nothing an
+  agent does at the graph boundary matters if the phase plan it is following restates the policy
+  loosely. The owner's `.archgraph/backfill/` work (194 re-anchor operations generated
+  2026-08-23 12:04) would remove 222 spans from existing entries; it is unapplied and no session
+  has been dispatched to apply it.
