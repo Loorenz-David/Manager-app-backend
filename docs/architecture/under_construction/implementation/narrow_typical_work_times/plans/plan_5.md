@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: PROJECTING
+state: PROMPT_READY
 projection_gate: MANDATORY
 ```
 
@@ -198,6 +198,10 @@ re-loads itself (§6.2 row 4, `:196`).
 
 ## 6. Tests / acceptance criteria
 
+> **⚠ SUPERSEDED IN FULL by §6A** (projection fold, 2026-08-24). Read §6A for the criteria;
+> §6 is retained only as the history of how they got there. **§6 has no trace cells and its
+> mutation set is wrong** — do not execute from it.
+
 Hypothesis scope: L1 = `test_narrowed_price_scenario.py` / `test_price_scenario_query.py`.
 C5 and C7 name cross-file bite sets and run at L2 =
 `tests/integration/services/queries/item_economics/`; C7's sweep row is an **absence claim** at
@@ -371,6 +375,573 @@ defeated by the codebase's own wrapper.
   has drifted twice in this lineage — **re-derive its span from the symbol, never trust the
   stored one.**
 
+---
+
+# §§4A–7A — projection fold, round 0 (coordinator, 2026-08-24)
+
+**Precedence, stated once:** where a lettered section and the numbered section it amends
+disagree, **the letter wins** — the house rule this project's intention already uses. §6A
+supersedes §6 **wholesale**: read §6A for the criteria, and §6 only for the history of how they
+got there. Sources: the phase-5 projection handoff (`handoffs/reviewer/20260824_plan5_projection_handoff.md`,
+`AMENDMENTS_REQUIRED`, 6 blocking / 14 should-fix / 5 notes / 1 card), the owner's ratification
+instruction of 2026-08-24, and two findings the coordinator added at consumption.
+
+**The intention gate is open.** `planning/intention.md` header reads **RATIFIED** (round 10,
+owner, 2026-08-24). Every criterion row below carries a **trace cell** naming the §1A
+measurement-ledger entry it serves — charter trace chain, manifest property 5.
+
+## §4A. Files expected to change — corrected perimeter
+
+**B1 — the collision that would have stopped the phase closing green.** Task 3 removes **both**
+occurrences of `_step_state_is_excluded` from `get_task_price_scenario.py` (`:14` import, `:134`
+call — measured, they are the only two). Phase 4's C13(c) guard hard-codes that number:
+
+```
+tests/integration/services/queries/item_economics/test_narrowed_task_economics.py:542
+    assert price_scenario.read_text().count("_step_state_is_excluded") == 2
+```
+
+The projection applied task 3 faithfully and measured **16 passed → 1 failed / 15 passed**, the
+red at `:542`, `assert 0 == 2`. That file appeared in **neither** of §4's lists.
+
+**Add to Modified — tests:**
+- `app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py` —
+  **one edit only**: `:542`'s expected count `2` → `0`, with the comment restated to say the
+  predicate now has a single owner (`budget_division.participating_sections`) and price-scenario
+  no longer names it. **Any other edit to this file is a finding** — it is phase 4's, and phase 4
+  is APPROVED.
+
+**A second text-scanning guard reads this phase's perimeter — found by the extended plan lint at
+the fold, not by the projection.** `tests/unit/domain/item_economics/test_domain_purity.py:17-27`
+walks **every** module under `beyo_manager/domain/item_economics/` and asserts none contains any of
+`hashlib` · `sha1` · `sha256` · `md5` · `fingerprint` · `digest`, with one whitelisted occurrence of
+`'"config_fingerprint": scenario["config_fingerprint"]'` in `serializers.py` asserted at **exactly
+1**. **Plan 5 as written does not violate it** — `typical_resolution` introduces none of those
+terms and does not touch the whitelisted line. It is stated here because two of this phase's
+modified files (`serializers.py`, `budget_division.py`) are inside that walk: **any new comment,
+docstring or symbol containing one of those six substrings reddens a unit test in a file this plan
+does not permit anyone to touch.**
+
+**S2 — the fixtures every criterion needs do not exist.** The three seeds in
+`_narrowing_fixture.py` were built for phase 4's counts-and-basis rows; none of C2–C6, and
+neither of C5's or C8's populations, exists today. **Add to Modified — tests:**
+- `app/tests/integration/services/queries/item_economics/_narrowing_fixture.py` —
+  **additive only**: new seeds may be added; **no existing seed may change**, because plans 3
+  and 4's approved criteria assert against them. Update master plan §6.9's `5 (reused)` to
+  `5 (extended)` at the fold (done).
+
+**N3 — the read-only probe is authorized.** C1 mutation (ii) and C7 row (d) apply reverted
+probes to files §4 marks *"a change is a finding"*. **A reverted, md5-verified probe is not a
+change**, and both are authorized here so the perimeter check reads correctly: the mutation
+ledger will list `get_working_section_typical_times.py` and one file under `app/beyo_manager/`,
+and neither is a perimeter breach.
+
+## §5A. Ordered tasks — corrections
+
+**Task 0 — B2.** *"Exactly one deletion"* is **unsatisfiable**: `median` is imported into
+`budget_division.py` **only** to build the bridge (measured — `:19` `median,` and `:26`
+`_median = median` are its only two hits), so deleting `:26` orphans `:19` and takes
+`ruff check` on the file from **1 error to 2** (`F401`). `app/Makefile:103-104` defines
+`lint: python -m ruff check .` and `.github/workflows/ci.yml:9,18` runs it as its own CI job —
+so the plan as written instructs a session to redden CI.
+**Corrected:** §4 authorizes **two** deletions in `budget_division.py` — `:25-26` (the alias and
+its comment) and `median,` from the `typical_filters` import block at `:19`. Safe by
+measurement: no importer of `budget_division.median` exists anywhere in `beyo_manager/` or
+`tests/`, and `__all__` (`:413-422`) does not list it.
+**S10:** task 0's inline acceptance claim is **not** promoted to a new criterion — that would take
+the phase to nine and breach the sizing cap. It is discharged by **C7 row (b)**, whose corrected
+sweep asserts `typical_filters.py` is the *only* hit at the item-economics root, which entails
+`budget_division` no longer defining `_median`. The "full suite collects with zero errors" half
+is the phase's gate stamp, not a criterion row.
+
+**Task 1 — S14. The clock does not *move*; it becomes explicit.** Measured:
+`get_task_price_scenario.py` contains **no clock reference of any kind** — no `datetime`, no
+`timezone`, no `timedelta`, no `ctx.now`, no `utcnow`. Its two `now` hits (`:82`, `:105`) are the
+English word inside comments. What the file has today is not a wall-clock *read* but an inherited
+*default*: `_typical_block` calls `typical_times_statement(ctx.workspace_id)` with no `now`, and
+the clock is read one module away at `get_working_section_typical_times.py:40` and `:147`.
+**Corrected wording:** *"The clock becomes explicit: `_typical_block` passes `now=ctx.now`, so the
+cutoff stops falling back to the statement's own `datetime.now(timezone.utc)`."* This is an
+**introduction, not a move** — so **no criterion may be phrased as preserving current behaviour on
+the clock axis**; there is no prior local behaviour to preserve. §1's "gains an injected clock" was
+the accurate wording all along. D24's contrast reads the same way: `/working-sections/typical-times`
+is not "keeping its clock read" either, it keeps the same inherited default (`:192`).
+
+**Task 2 — S13. The task picks its source; it does not leave the choice open.**
+`_typical_block`'s new signature is pinned: **`_typical_block(ctx, task_id, spec)`**, and the spec
+comes from **`budget_status.typical_filter_spec`**, mirroring `get_task_production_time.py:81-82`
+so one derivation feeds every task surface. **Consequences the plan must state, because §2's
+widening obligation is wrong without them:**
+- §2 says this phase "gets an `AttributeError` from every one of" the four `fake_status` fakes.
+  Measured, that holds **only** on this branch **and only** for a read outside `_typical_block` —
+  all four tests also monkeypatch `_typical_block` itself (`:578`, `:981`, `:1123`, `:1282`).
+- **The larger surface §2 does not name:** `module._typical_block(...)` has **nine** call sites —
+  `:128, :147, :164, :185, :198, :206, :218, :230, :337` — every one of which changes arity, and
+  **eight feed `_typical_row` (`:108-113`)**, a three-attribute `SimpleNamespace` in the *no-spec*
+  column shape (`client_id`, `typical_worker_seconds`, `sample_count`) that cannot carry
+  `spec_index` / `narrowed_*` / `section_*`. The widening obligation is **nine call sites plus
+  `_typical_row`'s column shape**, beside the four fakes.
+
+**Task 4 — B3. The task states its call explicitly.** `reconcile_task_typicals` takes a fourth
+argument the plan never assigned, and two mutations were inert or unreachable because of it:
+
+```python
+reconcile_task_typicals(
+    evidence_by_section,
+    spec if specs else None,
+    participating_ids,                                          # §2B S-7: the statement is scoped here
+    frozenset(step.working_section_id for step in steps),       # §6.2: the FULL task section set
+)
+```
+
+The full set, per §6.2 (`selected` covers every section in the task, including excluded), while
+the **statement** stays scoped to `participating_ids` per §2B S-7. Non-participating sections
+resolve to `insufficient_sample` on zero evidence (`typical_filters.py:261-262`) and **reach no
+published field**, so §2B S-7 and §6.2 do not conflict. Comparator: `get_task_production_time.py:69,111-117`
+passes `{step.working_section_id for step in steps}` — the full set.
+
+**Task 8 — B6. Task 0's coverage map runs both ways.** *"Tests per §6"* is no longer sufficient.
+Under the charter's trace chain the executor's Task 0 must **also map every test in this phase's
+test files back to a criterion row**. A test discharging no row is **not shipped** — either
+deleted, or declared in the Review log as a **candidate criterion** naming the defect it catches
+and the ledger entry it serves, for the coordinator to fold or refuse with a recorded reason.
+**The rewritten `_typical_block` call sites keep their existing criterion attribution** (phase-3
+and prior-project criteria); say so, or the first reviewer meets eight tests tracing nowhere and
+reconstructs the mapping from scratch. **Orphan tests are a reviewer finding of the same class as
+an uncovered row.**
+
+**§2's routed item N1 — S11.** Its premise is wrong and its placement makes it uncountable.
+Measured: **plan 5 writes no private copy of the excluded-state predicate.** Price-scenario holds
+no state-set literal at all, and task 3 removes both of its `_step_state_is_excluded` occurrences.
+**Phase 5 is the phase that makes `budget_division.py` the sole owner, not the phase that forks
+it** — which makes the probe *more* valuable, because C13(c) becomes the only remaining guard.
+Restated and given a row: **C7 row (d)**.
+
+## §6A. Tests / acceptance criteria — superseding §6 in full
+
+**Hypothesis scope.** L1 = `test_narrowed_price_scenario.py` / `test_price_scenario_query.py`.
+C5 and C8 name cross-file bite sets and run at **L2** =
+`tests/integration/services/queries/item_economics/`.
+**C7's sweep is L1, not L4 (S9).** Master plan §10 reserves L4 for absence claims *"whose root
+really is the repository"*, and the lint narrowed C7's root to two item-economics directories
+without re-deriving the budget. §10's bullet *"Plan 5 C7's fork sweep still is one"* became false
+at that moment and is amended at this fold.
+
+**⚠ Fixture rule for this whole phase.** `test_price_scenario_query.py`'s `_TypicalSession`
+(`execute(self, _statement)` discards the statement and pops pre-built results) means **eight
+existing `_typical_block` tests never issue SQL**, and none of the query's predicates can be
+observed through them. **Before citing any test in this phase as proof of a SQL-level or
+clock-level behaviour, check that it issues SQL.** Every row below that constrains the statement
+call runs against a real session.
+
+**⚠ Fixture rule earned this round (N11, and now C8's subject).** Two populations that are
+*identical* prove nothing about narrowing. Measured on `seed_categorized_two_section_task`: the
+section's entire completed population **is** the same 7 chair groups at 540 s
+(`_narrowing_fixture.py:95-121`), because `_seed` contributes only `FAILED`, `PENDING` and a
+deleted `SKIPPED` step — so the narrowed and section-wide pairs are both `(540, 7)`. **Any
+criterion asserting that narrowing changed something needs `seed_divergent_category_task`
+(§6A.F).**
+
+### §6A.F — the fixture C5 and C8 share
+
+`seed_divergent_category_task` — **new**, additive, in `_narrowing_fixture.py`. One task, **one
+participating section**, active PRIMARY item in category `chair`. Completed groups, values in
+worker-seconds, deliberately **non-uniform on both sides**:
+
+| population | values | n | median |
+|---|---|---|---|
+| chair (narrowed) | 500 · 550 · **600** · 650 · 700 | 5 | **600** |
+| non-chair | 100 · 150 · 200 · **250** · 300 · 350 · 400 | 7 | 250 |
+| section-wide (all 12) | 100 · 150 · 200 · 250 · 300 · 350 · 400 · 500 · 550 · 600 · 650 · 700 | 12 | **375** |
+
+**The seed builds two tasks over that one history**, and C8(b) does not exist without the second:
+
+| task | active PRIMARY item | reconciles to | serves |
+|---|---|---|---|
+| `narrowed_task` | category `chair` | `item_narrowed_uniform` | C5 (a)(b)(c), C8 (a) |
+| `plain_task` | **no category** (non-narrowing spec) | `section_wide_uniform` | **C8 (b)** |
+
+*Caught at the fold by the lint's own "references resolve, and fixtures are references too" check:
+C8(b) as first drafted asserted the section-wide value "on the same fixture with a non-narrowing
+task" — a task no seed built. That is precisely S2's defect being reintroduced one section after
+folding S2.*
+
+Narrowed `n = 5 == TYPICAL_MIN_SAMPLE_SIZE`, so the narrowed value is **usable** and
+`narrowed_task` reconciles to `item_narrowed_uniform`. Section-wide median is `percentile_cont(0.5)` over an even
+count → `(350 + 400) / 2 = 375`, an exact integer, so no rounding rule is load-bearing.
+
+**The two medians are derived arithmetically above, not measured.** The implementer confirms both
+at source **before** writing any assertion and records the measured pair in the ledger. **A
+divergence from `600` / `375` is a plan finding to route, never a literal to quietly adjust** —
+that silent adjustment is how a fixture stops discriminating.
+
+### Criteria
+
+| id | subject | trace | scope |
+|---|---|---|---|
+| **C1** | the clock, in both directions | **M7** | L1 |
+| **C2** | `is_estimated`, one row per disjunct (§6B, §6D) | **M6** | L1 |
+| **C3** | `sections_total` / `sections_without_sample` keep their published meanings | **M6** | L1 |
+| **C4** | the price terminal, and it does not converge with division's | **M3** | L1 |
+| **C5** | HC-2 complete: three surfaces, one literal | **M3** | L2 |
+| **C6** | `typical_resolution` is the same object as §7.2 | **M3** | L1 |
+| **C7** | no consumer forks a shared domain function | **M2** | L1 |
+| **C8** | **narrowing observably narrows** | **M1** | L2 |
+
+---
+
+**C1 — the clock becomes explicit, in both directions.** *(trace **M7**)*
+
+(a) `_typical_block` calls `typical_times_statement` with `now=ctx.now` — asserted through a spy
+that **delegates**.
+
+(b) **Determinism — repaired (S6). The row must control the wall clock, not hope it moves.**
+The published form asserted byte-identity across "two different wall-clock instants": under the
+contract that is trivially true (`now=ctx.now` reads no clock), and under mutation (i) it is
+*also* true, because two in-process calls are **microseconds apart** and the boundary group falls
+on the same side of both cutoffs unless `max(closed_at)` lands inside a microseconds-wide window
+no test can aim at. **The mutant's red was a race the row lost ~always** — the highest-prior
+defect family in this lineage, and the row belonged to it.
+**Corrected:** monkeypatch
+`beyo_manager.services.queries.working_sections.get_working_section_typical_times.datetime`
+(a module attribute — `datetime` is imported into that namespace at `:5`) with a fake whose
+`now()` returns, in order, `ctx.now - 1s` then `ctx.now + 1s`. The fixture pins one group at
+`max(closed_at) == ctx.now - 90 days` — exactly the window boundary. Then:
+*contract* — both calls byte-identical, the boundary group **in** both times, `total_seconds`
+equal to the stated literal; *mutation (i)* — the two calls differ, group **in** then **out**,
+and both `total_seconds` values are stated as exact literals.
+
+(c) `get_working_section_typical_times` calls the statement with **no** `now` argument (D24).
+**N1: the "and its payload is unchanged" clause is dropped.** Phase 5 does not edit that module
+and no typical-times golden exists (measured — the three goldens are `golden_budget_status.json`,
+`golden_production_time.json`, `golden_budget_allocations.json`), so the clause was green by
+construction and §9 forbids an "unchanged" criterion with no baseline task. The spy carries the
+row alone.
+**N2: test home, declared.** Row (c) lands in `test_narrowed_price_scenario.py` as a **recorded
+third deviation** from `architecture/15_testing.md`'s mirror rule (master plan §5 records two
+already). Reason: (b) and (c) are the two halves of one determinism contract — D24's whole content
+is that one surface has it and the other deliberately does not — and splitting them across files
+is how one half gets deleted as orphaned.
+
+*Mutations, and note what each actually does (S14):*
+**(i)** `get_task_price_scenario._typical_block` (**call site**): drop the `now=` argument. This
+does **not** remove a clock read from price-scenario — it **hands the cutoff back to the
+statement's own default**. → rows **(a), (b)** flip.
+**(ii)** `get_working_section_typical_times` (**call site**, `:192`): pass `now=ctx.now` → row
+**(c)** flips. Probe authorized under §4A N3.
+
+*Why (c) exists:* this phase extends an APPROVED pipeline's determinism contract to a fourth
+surface that pipeline deliberately excluded. Extending it to a **fifth** breaks D24's
+byte-identity requirement. Opposite directions, both contract.
+
+---
+
+**C2 — `is_estimated`, one row per disjunct (§6B, and §6D on what "unchanged" means).**
+*(trace **M6**)*
+
+| # | fixture | `is_estimated` | also |
+|---|---|---|---|
+| a | every section excluded → participating set empty | `true` | `total_seconds: 0`, `sections_total: 0` |
+| b | **exactly one** participating section whose **selected** typical is `None`, beside **one** usable — the fixture pins both | `true` | `sections_without_sample: 1` **(exact)** |
+| c | **exactly one** participating section whose **selected** typical is `0`, and **every other participating section usable** — the fixture pins both | `true` | `sections_without_sample: 1` **(exact)** |
+| d | every participating section has a usable selected value, on a **`section_wide_uniform`** task | `false` | `sections_without_sample: 0` |
+
+**S3 — row (c) was green under its own mutation.** Its fixture read *"≥1 participating section
+whose selected typical is `0`"*, which forbids nothing: with a second unusable section that is
+`None`, mutation (iii) leaves the `is None` half firing and the row stays `true`. **The lint
+caught this exact looseness in row (b)'s *assertion* and left it in row (c)'s *fixture*** — a
+fixture cardinality is an assertion wearing a description's clothes.
+
+**§6D binds here.** No row may assert a before/after on the payload. C2 asserts the **definition**
+on pinned fixtures only.
+
+*Mutations:*
+**(i)** `_typical_block` (**definition**): drop the `sections_total == 0` disjunct → row **(a)**
+flips `true` → `false` beside `total_seconds: 0`. (b)–(d) do not bite.
+**(ii)** `_typical_block` (**definition**): **redefine the flag's second disjunct only**, leaving
+`sections_without_sample` computed as §6B specifies, as *"participating sections without a
+**narrowed** sample"* → row **(d)** alone flips. *(S4: the published-count reading belongs to C3(ii);
+stated as one edit, the two mutations collided and would have made C2(b) redden against a correct
+implementation, contradicting this row's own "(a)–(c) do not bite".)*
+**(iii)** `_typical_block` (**definition**): layer-2 trigger `<= 0` → `< 0` → row **(c)** flips.
+
+**Mutation (iv) is deleted, and this is a coordinator finding the projection did not make.**
+The published fourth mutation was *"set the flag whenever `task_typical_basis ==
+"section_wide_uniform"`"*. Measured at `typical_filters.py:276-281`:
+
+```python
+narrowed_uniform = (
+    effective_spec.is_narrowing
+    and bool(participating_section_ids)
+    and all(evidence[sid].has_usable_narrowed for sid in participating_section_ids)
+)
+task_basis = "item_narrowed_uniform" if narrowed_uniform else "section_wide_uniform"
+```
+
+So, for any task with a non-empty participating set, **`section_wide_uniform` ⟺ at least one
+participating section lacks a usable narrowed sample** — which is mutation (ii)'s trigger,
+**logically equivalent, not merely coextensive on one fixture**. Both flip row (d) from `false`
+to `true` leaving `sections_without_sample` at `0`; no reachable fixture separates them.
+**(iv) bought nothing over (ii) and is removed** — over-evidence is a defect, symmetrically.
+Row (d) still carries §6.4's genuine content as a negative; **(ii) is what proves it.**
+
+*Both sides* — exact boolean literals beside their `total_seconds` and `sections_without_sample`.
+
+---
+
+**C3 — `sections_total` and `sections_without_sample` keep their published meanings (§6B).**
+*(trace **M6**)*
+
+Fixture: **3 participating** sections — one usable, one selected-`None`, one selected-`0` — plus
+**1 excluded**. Assert `sections_total == 3` (**participating** only, not 4) and
+`sections_without_sample == 2`.
+
+*Mutations:*
+**(i)** `_typical_block` (**definition**): count every section in `selected` for `sections_total`
+→ contract `3`, mutant `4`. **This mutant is only reachable because §5A task 4 now passes the
+full task section set as `section_ids`** — under the participating-set reading `selected` holds
+three entries and the mutation was a **no-op**, leaving the row green under the defect it names.
+**(ii)** `_typical_block` (**definition**): redefine the **published count**
+`sections_without_sample` as narrowed-thin participating sections → contract `2`, mutant `3`
+(the usable section's narrowed sample is thin on this fixture). *(S4: this is the count-site
+reading; C2(ii) is the flag-site reading. Two sites, two rows, stated separately.)*
+
+---
+
+**C4 — T4 row (b): the price terminal, and it does not converge with division's.**
+*(trace **M3** — HC-2's third clause: terminals may differ where the selected typical is genuinely
+absent, and each surface makes its firing visible)*
+
+(a) No usable typical anywhere in the task → `total_seconds: 0` and `is_estimated: true`.
+(b) A mixed task — participating selected values `600`, `900`, and one `None` → the unusable
+section takes the in-task median: `total_seconds == 600 + 900 + 750 == 2250`.
+
+*Mutations — **the shared preamble was wrong for one of the two (S5)**, and they are now stated
+separately:*
+**(i)** `_typical_block`'s `apply_business_fallback` **call site**: pass `terminal=Fraction(1, 1)`
+→ row **(a)** flips `total_seconds` `0` → `3` (one second per participating section). Row (b) does
+not bite — with usable values present the terminal is never reached.
+**(ii)** `typical_filters.apply_business_fallback` (**definition**, `:335`):
+`fallback = median(usable) if usable else terminal` → `fallback = terminal` → row **(b)** flips
+`2250` → `1500`. **A call site cannot make this edit** — it supplies `selected_values` and
+`terminal` only. Note that (ii) is in a **shared** function and also reddens division tests at L2;
+**the ledger records the red observed in this phase's own file**, so the bite is attributable.
+Values verified against `apply_business_fallback`'s actual behaviour.
+
+*Note:* `Fraction(1,1)` is division's terminal because `0` starves a section **and** makes
+`total_weight` zero and raises; `Fraction(0,1)` is price-scenario's because a fabricated average
+inflates a number managers read as an estimate. **The docstring records that the difference is
+intentional and must not converge** (D22, §8).
+
+---
+
+**C5 — HC-2 complete (T6b): three surfaces, one literal.** *(trace **M3**)*
+
+**B5 — the published row asserted an observable price-scenario does not publish.** Measured: the
+`typical` block (`get_task_price_scenario.py:173-181`) is
+`{total_seconds, is_estimated, sections_without_sample, sections_total, method, window_days,
+min_sample_size}`, and `serializers.py:364` is a whole-dict pass-through — **there is no
+section-keyed structure** to compare against production-time's per-section triple, and the row
+named no internal to reach for instead.
+
+**Corrected — one participating section, three surfaces, one number.** On
+`seed_divergent_category_task` (§6A.F) at one frozen `ctx.now`, extended with **one excluded
+section that also carries typicals**:
+
+(a) production-time publishes `(typical_worker_seconds, typical_basis, sample_count) ==
+(600, "item_narrowed", 5)` — **exact literals**.
+(b) `price_scenario.typical.total_seconds == 600` — the **same literal**, and it is the sum over
+the **participating** set only; the excluded section's typical is absent from it.
+(c) budget-allocations' step row carries the **same triple** as (a) — closing the three-way
+agreement plan 4 C11 opened.
+
+**Assertion form, and it is the point of the row:** all three surfaces assert against **the same
+stated literal**, never against each other. An equality between two calls is invariant under a
+mutation that moves both; this lineage has shipped four inert checks of exactly that shape.
+
+*Mutations:*
+**(i)** `_typical_block` (**call site**): `frozenset(step.working_section_id for step in steps)`
+in place of `participating_sections(steps)` → the excluded section joins the computation and
+**(b)** flips `600` → the stated two-section sum. *(B3: the published mutation, "compute over all
+of `selected`", could not produce its stated `2100` under any reading of `section_ids` — the
+excluded section carries `_zero_evidence`, so it would take the in-task median, not its own
+typical. This shape is also the realistic drift: an exclusion predicate dropped.)*
+**(ii)** `get_task_price_scenario._typical_block` (**definition**): rebuild the private ladder and
+resolve typicals locally instead of through `reconcile_task_typicals` → price-scenario's number
+diverges from the literal, so **(b)** reddens while (a) and (c) stay green — **which is exactly
+what makes them the anchor.** *(B4: the published second mutation claimed rows (a) and (c) would
+flip. `get_task_budget_allocations` never calls, imports or reads price-scenario, so a mutation
+confined to price-scenario cannot move a budget-allocations row. And its literals —
+`(600, "section_wide", 61)` — exist in this repository exactly once, at
+`test_narrowed_task_economics.py:223`, inside a **hand-built dataclass in a pure-unit test**. On
+the fixture that produces `(540, "item_narrowed", 7)` the section-wide pair is **also** `(540, 7)`,
+so the "mutation" moved only `typical_basis`. That is N11 one level up: the two populations were
+not merely uniform, they were the same rows. §6A.F exists because of this finding.)*
+
+---
+
+**C6 — `typical_resolution` on §7.4 is the same object as §7.2, by construction.**
+*(trace **M3**)*
+
+Fixture: `seed_categorized_two_section_task` — the **existing** narrowed seed, used here because
+C6 asserts *shape and provenance*, not a narrowing effect, and its literals are already measured.
+
+(a) The serialized `typical_resolution` key set from price-scenario equals the **exact frozenset
+literal** `{"task_typical_basis", "reconciliation_method", "comparability_profile",
+"applied_filter", "participating_section_count", "sections_by_basis"}`.
+(b) The same exact frozenset literal is asserted for production-time's block in the same test.
+(c) For the same task and frozen `now`, both blocks' values equal the same literals:
+`task_typical_basis == "item_narrowed_uniform"` (exact string — §9 exempts version strings the
+frontend keys on), `applied_filter == {"item_category_ids": [category_id]}` and
+`participating_section_count == 2`.
+
+**S1 — the published literals were transcribed from a documentation example.** `"icat_chair"` and
+`3` appear together in master plan §6.5's illustrative JSON. Measured:
+`seed_categorized_two_section_task` seeds **two** sections (`_narrowing_fixture.py:90,95`) and its
+category client_id is `f"itc_narrowing_chair_{uuid4().hex[:10]}"` (`:74`) — **`"icat_chair"` is not
+producible by any seed in this repository.** The honest forms already existed twelve lines away:
+`test_narrowed_task_economics.py:302-303`.
+
+*Mutation:* `domain/item_economics/serializers.py` (**definition**): build the price-scenario block
+with a private builder instead of importing `serialize_typical_resolution`, omitting
+`comparability_profile` → contract: the six-key frozenset on both surfaces; mutant: **five** keys
+on price-scenario.
+
+*Assertion-form note:* two literal assertions, **not** `price_keys == production_keys`.
+
+---
+
+**C7 — HC-1: no consumer forks a shared domain function.** *(trace **M2**)*
+
+**(a) Presence form (automated; the verdict rests on it).** `_typical_block` computes no statistic
+of its own: it calls `apply_business_fallback` **exactly once**, asserted by a spy installed at
+**`get_task_price_scenario.apply_business_fallback`** (a module attribute after task 4's import),
+on a fixture with **≥ 1 participating section** — with none, the function is called with an empty
+sequence or not at all and "exactly once" is ambiguous.
+**Source terms, stated exactly (S7):** `"median" not in source`, `"percentile" not in source`,
+`">= TYPICAL_MIN_SAMPLE_SIZE" not in source`, `"< TYPICAL_MIN_SAMPLE_SIZE" not in source`.
+*The published form named two terms that can never be green:* `_typical_block` **publishes**
+`TYPICAL_MIN_SAMPLE_SIZE` in its own return dict (`:180`) and §7.4 keeps that key, so a bare
+`"TYPICAL_MIN_SAMPLE_SIZE" not in source` is unsatisfiable; and `Fraction` stays in the function
+by construction (task 4's `terminal=Fraction(0, 1)`). **The `Fraction` clause is dropped and the
+spy carries it.** *"Comparison against"* is a semantic qualifier no text scan can make — §9: a
+criterion whose instrument cannot return the expected result is undecidable, however precise its
+prose.
+
+**(b) Absence sweep — L1 (S9), root and allowlist re-derived against the post-task tree (S8).**
+Root: `app/beyo_manager/domain/item_economics/` + `app/beyo_manager/services/queries/item_economics/`.
+Terms: `percentile_cont` · `_median` · `median(`.
+**Expected hits after this phase's own tasks: `{typical_filters.py}` — exactly, asserted as an
+equality**, plus `assert files` (§9's walk rule: a directory guard needs a row proving the walk
+found something).
+*Derivation, measured at `9bad5a3`:* `budget_division.py:26` is its only hit and **task 0 deletes
+it**; `get_task_price_scenario.py:13,160` are its two and **task 4 deletes both**;
+`typical_filters.py:335,339` remain. **The published allowlist enumerated three files** — one
+(`budget_division.py`) that will not hit after the phase's own task 0, and one
+(`get_working_section_typical_times.py`) that lives in `services/queries/working_sections/`,
+**outside the stated root, and can therefore never hit at all**. As an equality it fails on green
+code; as `hits <= allowed` it silently widens by two files. The statement's home is a fact about
+the codebase, not an allowlist entry.
+**(N5) The shape this row is blind to, named:** its three terms are literal, so a hand-rolled
+`ordered[len(ordered) // 2]`, or `from statistics import median as med`, is invisible to it — the
+same class as C13(c)'s string-literal blindness.
+
+**(c) Planted-defect probe for row (b) — required before the row is relied on (charter rule 15).**
+Add a private `usable` / `_median(usable)` ladder to a file **inside** the root and **outside** the
+allowlist; record the **observed red**. An absence measured true may be true only because nothing
+writes that form — this lineage has produced that exact defect twice.
+
+**(d) Planted-defect probe for phase 4's C13(c) — the routed N1, restated (S11).**
+*Premise corrected:* phase 5 writes **no** private copy of the excluded-state predicate; task 3
+removes both of price-scenario's `_step_state_is_excluded` occurrences. **Phase 5 makes
+`budget_division.py` the sole owner — which makes C13(c) the only remaining guard, so the probe is
+worth more after task 3, not less.** Plant, in a production file under `app/beyo_manager/`:
+`_EXCLUDED = frozenset({TaskStepStateEnum.SKIPPED, TaskStepStateEnum.CANCELLED, TaskStepStateEnum.FAILED})`
+plus a local `def _step_state_is_excluded`, and record the observed red. The AST half of the guard
+(`test_narrowed_task_economics.py:544-570`) handles enum-member set literals; **the string-literal
+half does not** — that blindness is what N1 is about. Probe authorized under §4A N3.
+
+*Mutation:* `_typical_block` (**definition**): reintroduce the private `usable` / `_median(usable)`
+ladder → the spy records **zero** `apply_business_fallback` calls and row (a)'s source assertion
+fails.
+
+---
+
+**C8 — narrowing observably narrows.** *(trace **M1** — the ledger's top entry, and the outcome
+this pipeline exists for)*
+
+**Why this row exists, recorded because it takes the phase to the sizing cap.** M1 says a task
+whose item has a category is served from the **same-category** slice, and *where that slice differs
+from the section-wide one, the published numbers differ*. Phase 4's carried finding **N11** —
+both narrowing fixtures uniform within category — means every phase serving M1 may be serving it
+**inertly**: measured, `seed_categorized_two_section_task`'s narrowed and section-wide pairs are
+**both** `(540, 7)`. The owner's ratification instruction of 2026-08-24 routes the proof here
+rather than to phase 6, because **plan 6 §1 forbids test-behaviour change** (verified at source),
+and phase 5 is the last phase in this pipeline touching production code. **Phase 5 therefore ships
+at 8 criteria — the charter's sizing cap, reason recorded: it arms the ledger's top entry before
+the pipeline closes.**
+
+Fixture: **`seed_divergent_category_task` (§6A.F)** — populations that genuinely differ, and
+**non-uniform on both sides; N11's shape is forbidden.**
+
+(a) `price_scenario.typical.total_seconds == 600` and
+`typical_resolution.task_typical_basis == "item_narrowed_uniform"` — the narrowed median, on a
+section whose section-wide median is a **different** number.
+(b) The section-wide value on that same section is **`375`**, asserted from production-time's
+`sections[].typical` triple on **`plain_task`** (§6A.F) — same section, same history, **no
+category** — so the two bases are shown to differ **by measurement on the running system**, not by
+assumption. Rows (a) and (b) together are M1's proof: `600 ≠ 375` on one section's history,
+because one task's item has a category and the other's does not.
+
+*Mutation:* `_typical_block` (**call site**): pass `specs=()` — **break the narrowing predicate at
+its call site**. The spec never reaches the statement, the narrowed population is never computed,
+and row (a)'s `total_seconds` falls to **`375`** with basis `section_wide_uniform`. **Exactly
+row (a) reddens**, and it reddens on a number, not on a label.
+
+**This is the row that would have failed on N11's fixtures**: with narrowed and section-wide pairs
+both `(540, 7)`, the mutation moves nothing and the row is green under total loss of narrowing.
+State that in the test's docstring — it is the reason the fixture is specified value by value.
+
+### Mutation ledger — summands printed (lint check "counts derived")
+
+`C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 1` = **14 named mutations**
+plus **2 required planted-defect probes** (C7 rows (c) and (d)) = **16 ledger rows the round owes.**
+
+*The published plan said 12, and the lint certified that number as "counted from the criteria".
+It was not: the criteria as published summed to **14**, and this fold removes one (C2 iv) and adds
+one (C8). The probes were omitted from the count by construction. Both defects are the
+coordinator's; both are now commands in `pipeline-coordinator.md` Responsibility 1c.*
+
+## §7A. Notes — corrections
+
+**The architecture-graph paragraph — S12, and it was owed before dispatch.** Master plan §8's
+D30 lesson names this plan: *"A phase that changes what a node MEANS owes a description rewrite,
+and the plan must say which of the two it wants. **Plans 5 and 6 carry the same ambiguous sentence
+— fix it there before dispatch.**"* It was not fixed. **Corrected, and it is both:**
+
+- **Description rewrite.** `projection-item-economics-task-price-scenario`
+  (`.archgraph/architecture.yml:5911-5923`) describes a **"median-substituted task typical
+  time"** and mentions neither narrowing, the shared reconciliation, nor an injected clock — it
+  describes **exactly the private ladder task 4 deletes**. Replace that clause with the
+  narrowed / reconciled / clock-injected meaning.
+- **Source links**, one batched `apply_changes`, **no counts in evidence summaries**.
+
+**Both span sentences are deleted.** *"Symbol anchors preferred over line spans, but never both on
+one entry"* and *"re-derive its span from the symbol, never trust the stored one"* **contradict the
+binding interim policy** (master plan §8): *do not emit `startLine`/`endLine`.* The node's live
+evidence already carries `path` + `symbol` and no spans, so the plan was instructing a session to
+derive a coordinate the policy has removed. **Corrected form: no `startLine`/`endLine`, symbol
+anchors only.**
+
+**Adjudication is the owner's.** Propose changes; never promote, reject, or re-anchor without
+recorded scoped authorization.
+
+**Unchanged from §7 and still binding:** the accepted duplication stays; `_typical_block` keeps its
+own step query; the comment block at `:105-121` is a claim inheriting rule 2; a cross-reference
+from production code must resolve from a clean checkout with no pipeline documents present
+(`path:symbol`, no criterion IDs or bare line numbers).
+
+
 ## 8. Review log
 
 *(empty — append-only; shared by implementer and reviewer)*
@@ -396,3 +967,114 @@ the lint being mechanical rather than a matter of care.
 **What the lint did not check, stated so its pass is not over-read** (charter, phase manifest):
 it cannot tell whether a criterion's assertion is *weaker* than the row it discharges, and it has
 never caught a guard that cannot fail. Those remain the projection's and the reviewer's work.
+
+### 2026-08-24 — projection round 0 consumed (coordinator fold) — and the intention gate opened first
+
+**Handoff:** `handoffs/reviewer/20260824_plan5_projection_handoff.md` — `AMENDMENTS_REQUIRED`,
+**6 blocking / 14 should-fix / 5 notes / 1 card**, tree `9bad5a3`, **L4 runs 0**, two probes
+applied and md5-reverted. A strong session: **it found the Layer-0 measurement the coordinator
+deliberately withheld from it** (S14 — price-scenario has never held a clock reference of any
+kind, so task 1 is an *introduction*, not a *move*), and its **B6 derived the trace-chain
+ordering independently** of the owner's instruction that arrived the same morning.
+
+**Order of operations, because it was forced.** Consuming this handoff amends plan 5, and that
+is the project's next planning act — so the charter's in-flight adoption clause put the
+measurement-ledger backfill **before** this fold. Intention **§1A** (M1–M7) was written and
+**RATIFIED by the owner on 2026-08-24** (`cd642e6`); every criterion row in §6A carries its trace
+cell. **No prompt of any role compiled against the intention while its header was unratified.**
+
+**Blocking, all five verified at source by the coordinator before folding:**
+**B1** — task 3 removes both `_step_state_is_excluded` occurrences and phase 4's C13(c) hard-codes
+`count(...) == 2` in a file §4 listed **neither** as modifiable nor read-only; measured 16 passed →
+1 failed. **The phase could not have closed green.** → §4A. **B2** — task 0's "exactly one
+deletion" orphans the `median` import and takes `ruff check` 1 → 2 errors, with `make lint` its own
+CI job → §5A. **B3** — `reconcile_task_typicals`' fourth argument was never assigned, making C3(i)
+a **no-op** and C5's first mutation unreachable at its stated value → §5A task 4, §6A C3/C5.
+**B4** — C5's second mutation claimed a bite in a service price-scenario has no coupling to, with
+literals whose only home is a hand-built unit object → §6A C5, and it is why §6A.F exists.
+**B5** — C5(a) asserted a per-section observable **price-scenario does not publish** → §6A C5.
+**B6** — no row traced to a declared measurement → the ledger, ratified above.
+
+**Two findings the coordinator added at consumption, neither in the handoff:**
+1. **C2 mutation (iv) is deleted.** `typical_filters.py:276-281` makes `section_wide_uniform`
+   **logically equivalent** to "at least one participating section lacks a usable narrowed
+   sample" for any non-empty participating set — which is mutation (ii)'s trigger. Both flip row
+   (d) leaving `sections_without_sample` at `0`; **no reachable fixture separates them.** S4's own
+   correction *creates* the collision rather than resolving it. Over-evidence is a defect,
+   symmetrically.
+2. **S10 is discharged without a new criterion.** Promoting task 0's inline acceptance claim to
+   `C0` would take the phase to nine and breach the sizing cap; **C7 row (b)'s corrected sweep
+   entails it** — if `typical_filters.py` is the only hit at the item-economics root, then
+   `budget_division` no longer defines `_median`.
+
+**Two defects that were the coordinator's own, both mechanical, both now commands in
+`pipeline-coordinator.md` Responsibility 1c (`e70d2d6`):**
+- **The lint certified "12 named mutation markers, counted from the criteria."** They summed to
+  **14** (`C1 2 · C2 4 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1`). **Third consecutive phase with a
+  wrong mutation count — this time inside the row whose entire job is certifying counts are
+  derived.** §6A now prints the summands.
+- **S12.** Master plan §8 says verbatim *"Plans 5 and 6 carry the same ambiguous sentence — fix it
+  there before dispatch."* The plan was dispatched without fixing it → §7A.
+
+**The lint's own score, recorded honestly.** The coordinator's sealed prediction was that this
+ledger would be dominated by defects the lint *structurally cannot* catch. It was not: roughly
+**half of the twenty blocking and should-fix rows were mechanical**, several of them the lint's
+own checks applied one field further — a perimeter-vs-guard grep (B1), a `ruff check` after the
+stated deletion (B2), fixture cardinalities as exact outcomes (S3), an allowlist re-derived
+against the **post-task** tree (S8). **The checklist's reach, not the coordinator's care, was the
+gap.** Ten commands added.
+
+**One owner instruction folded with the ratification: C8.** M1 — *narrowing observably narrows* —
+is the ledger's top entry and the outcome the pipeline exists for, and N11 says the phases serving
+it may serve it **inertly**. The coordinator proposed routing the proof to phase 6; **the owner
+rejected that on plan 6's own fence** (§1: *"no test-behaviour change"*, verified at source) and
+placed it here. **Phase 5 ships at 8 criteria — the sizing cap, reason recorded.** `§6A.F` gives
+C5 and C8 the first fixture in this project whose two populations genuinely differ, non-uniform on
+both sides: narrowed median **600** over 5 chair groups, section-wide median **375** over all 12.
+
+**Notes routed:** N1 (drop C1(c)'s baseline-less "unchanged" clause) and N2 (declare its test home
+as a recorded third mirror-rule deviation) and N3 (authorize the read-only probes) and N5 (name
+the shape C7(b) is blind to) → §6A. **N4 → the intention**, as **§6D**: §6B's *"unchanged in every
+case"* is exact about the definition and loose about the payload — five chair groups at 600 s
+beside twenty non-chair at 0 s flips `is_estimated` `true` → `false` once narrowing is live.
+Folded under a **recorded coordinator materiality ruling** (it makes an over-broad sentence
+accurate rather than deciding anything new; a derived flag moving when the statistic beneath it
+narrows is **M1 succeeding, not M6 failing**) — reversible in one word.
+
+**One observation returned to the doctrine's owner, not folded here:** `plan-projection.md`
+contradicts itself on this handoff's `role` column — *Position and dispatch* says `reviewer`,
+*Closing protocol* says `projection`. The session used `reviewer`, matching the prompt and the
+folder. Not a plan finding.
+
+**State:** `PROJECTING` → **`PROMPT_READY`**.
+
+### 2026-08-24 — plan lint, second run (coordinator) — against the amended plan, with the ten new commands
+
+Run per `pipeline-coordinator.md` **Responsibility 1c** as extended at this fold (`e70d2d6`).
+**Every property was checked by running its command, not by reading.**
+
+| check | result |
+|---|---|
+| **Sizing** | **PASS — 8** (C1–C8), **at the cap**. Reason recorded in §6A C8 and in the tracker: the owner's ratification instruction routes M1's proof here because plan 6 §1 forbids test-behaviour change |
+| **Intention gate (precondition)** | **PASS.** `planning/intention.md` header reads **RATIFIED** (round 10, owner, 2026-08-24). Checked at source, not from a tracker note |
+| **References resolve** | **PASS.** `participating_sections` → `budget_division.py`; `apply_business_fallback`, `reconcile_task_typicals` → `typical_filters.py`; `serialize_typical_resolution` → `division_serializers.py`. C6's three literals verified **at source** — `test_narrowed_task_economics.py:301-303` asserts `"item_narrowed_uniform"`, `[category_id]`, `2` |
+| **References resolve — fixtures** | **★ FAIL → fixed.** `_narrowing_fixture.py` defines four seeds; **C8 row (b) as first drafted asserted against "the same fixture with a non-narrowing task" — a task no seed builds.** That is S2's own defect reintroduced one section after folding S2. §6A.F now builds **two** tasks over one history (`narrowed_task`, `plain_task`) and row (b) names `plain_task` |
+| **References resolve — observables** | **PASS.** `typical.total_seconds` exists (`get_task_price_scenario.py:174`); production-time's per-section triple exists (`division_serializers.py:47-49`). **This is the check B5 needed** — the published C5(a) asserted a per-section observable price-scenario does not publish |
+| **Counts derived — summands printed** | **PASS.** `C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 1` = **14**, plus 2 planted-defect probes = **16 rows owed** |
+| **Counts derived — mutation literals name their fixture** | **PASS.** Every literal in §6A traces to §6A.F, to `seed_categorized_two_section_task`, or to a stated arithmetic derivation. **This is the check B4 needed** — `(600, 61)`'s only home was a hand-built dataclass in a unit test |
+| **Exact outcomes — fixture cardinalities** | **PASS.** C2 (b) and (c) both read "exactly one … and the fixture pins both" |
+| **Exact outcomes — every verb is true of the code it names** | **PASS after S14.** Task 1 says the clock *becomes explicit*, not that it *moves*; measured, `get_task_price_scenario.py` holds no clock reference of any kind |
+| **Traces** | **PASS.** All 8 rows carry a trace cell; every cited entry exists in the ratified §1A. Reverse direction: M1→C8, M2→C7, M3→C4/C5/C6, M6→C2/C3, M7→C1. **M4 and M5 are served by phases 1–3, not by this phase** — recorded, not padded |
+| **Perimeter-vs-guard collision** | **★ FAIL → fixed, twice.** The grep returned **two** text-scanning guards reading this phase's perimeter. `test_narrowed_task_economics.py:542` is **B1**, which the projection found by applying the change and running. **`test_domain_purity.py:17-27` the projection did not name** — it walks every module under `domain/item_economics/`, which contains two of this phase's modified files. It adds no constraint plan 5 violates, and it is now stated in §4A so no implementer reddens it with a stray comment |
+| **A deletion leaves no unused import** | **PASS after B2.** §4A authorizes both deletions (`:19` and `:25-26`); no importer of `budget_division.median` exists and `__all__` does not list it |
+| **Standing instructions naming this plan** | **PASS after S12.** Master plan §8's D30 lesson is applied in §7A; §8 now records that **plan 6 still owes its half** |
+
+**Two of the fourteen rows failed, and both are the new commands finding what the old checklist
+could not.** The fixture-reference check caught the coordinator reintroducing S2's defect **inside
+the fold that was fixing S2** — which is the argument for the lint being mechanical rather than a
+matter of care, restated for the third phase running.
+
+**What this run did not check, so its pass is not over-read:** it cannot tell whether an
+assertion is *weaker* than the row it discharges, and it has never caught a guard that cannot
+fail. C1(b) — the highest-value repair in this fold — was found by the **projection**, not by any
+command here.
