@@ -472,3 +472,28 @@ both were the policy being reasoned from.**
 `architecture.yml` still carries ~638 `startLine` keys, so any agent *reading* stored state is
 shown line numbers regardless. And **no session has yet run with a prompt silent on anchoring**,
 so the clean test remains unrun. Describe, do not fix.
+
+---
+
+### 2026-08-24 — phase-5 projection (Opus 5, round 0)
+
+**Wrote nothing to the graph.** Its Write-perimeter declaration is explicit: *"No `archgraph_*`
+call was made this session; the node was read from `.archgraph/architecture.yml` on disk,
+read-only."* So the running total is unchanged: **spans emitted by any agent since the policy
+change: 0.**
+
+**The one observation worth recording, and it is a reading observation, not a writing one.** The
+session cited a graph node as **`.archgraph/architecture.yml:5911`** — a bare line number into
+the stored-state file — in its reality-check list, alongside the node's own id
+(`projection-item-economics-task-price-scenario`). It had the id and used it; the line number is
+additive, not a substitute. But it is exactly the shape the caveat below predicts: an agent that
+reads stored state is shown line numbers, and reaches for them when citing.
+
+**This is the first datum for the caveat that has been standing unresolved since the policy
+change** — that ~638 `startLine` keys in `architecture.yml` keep teaching position-anchoring to
+every agent that opens the file, independently of what the policy text says. The prompt for this
+session was silent on anchoring (it is a plan projection, not a graph session), which makes it
+also the **closest thing yet to the clean test** the brief keeps noting is unrun — though not a
+true instance, since master plan §8's absolute restatement is still in its read-first list.
+
+**Describe, do not fix.** Nothing was said to the session, and nothing should be.
