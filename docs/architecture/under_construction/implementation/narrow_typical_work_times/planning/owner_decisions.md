@@ -431,3 +431,57 @@ repository, which is what makes it one.
 
 **Sequenced before plan 5** at the owner's direction, so phase 5 opens against a graph whose
 meaning is current.
+
+---
+
+## D31 — Scoped authorization: bring the price-scenario projection's meaning current, and re-anchor its drifted links
+
+**Owner, 2026-08-24, verbatim:** *"we can create a maintenance prompt for codex to correct this,
+codex has permission to edit and then human confirmed"* — answering the coordinator's report of
+what the phase-5 graph delta left undone, which enumerated exactly the four items below.
+
+**Context.** Phase 5's implementation round 1 recorded three source links on
+`projection-item-economics-task-price-scenario` and then **previewed a description replacement
+that the client's safety gate declined**, because that turn had not authorized that exact
+mutation. The session escalated instead of forcing it, and fix round 2 carried the item forward
+unchanged rather than retrying a gate that had already said no. **This decision is the missing
+authorization.** Plan 5 §7A makes the description rewrite part of the phase, so **phase 5 cannot
+reach `APPROVED` without item 1.**
+
+**Authorized, and only these, on `projection-item-economics-task-price-scenario`:**
+
+1. **Replace the description's stale mechanism clause** — the words *"median-substituted task
+   typical time"*, which name the private `_median(usable)` ladder plan 5 task 4 deleted. The
+   replacement states what the projection composes **now**: an item-aware typical drawn from the
+   same-category slice of each participating section's history, through the shared engine and the
+   shared reconciliation, windowed by the **injected request clock**. Every other clause of the
+   description is **true and stays** — the non-bound nulling behaviour, "keeping the step-derived
+   typical", "performs no writes", and the transitive budget-status dependency.
+2. **Re-anchor `get_task_price_scenario.py:get_task_price_scenario`** — currently
+   `startLine 184–315`, `stale: true` — to **`path` + `symbol`, span-free.**
+3. **Re-anchor `test_price_scenario_query.py:test_c1_status_matrix_has_twelve_exact_rows`** —
+   currently `startLine 583–615`, `stale: true` — to **`path` + `symbol`, span-free.**
+4. **Refresh the `contentHash` of
+   `test_narrowed_price_scenario.py:test_c5_three_surfaces_use_the_same_published_literal`** —
+   symbol-anchored already, recorded at `10:04:22` in round 1 and **stale by the time fix round 2
+   finished editing that file**. The symbol is correct; only the hash is behind.
+
+**The owner grants the session permission to perform these edits and to mark the result
+`human_confirmed`.** That grant is bounded by this list.
+
+**Items 2 and 3 are re-anchoring, not span repair.** Both links drifted because phase 5 changed
+their files. The interim policy is *"a span that merely drifted is not a repair candidate"* —
+so the operation is to **remove the span** and anchor by symbol, which is also what the two links
+phase 5 added already do.
+
+**Explicitly NOT authorized:** the other **five** stale nodes; any other node, edge, description
+or evidence entry; deleting, deprecating or promoting anything; **editing any evidence summary**
+(no write path can — reject-and-re-record is the only mechanism, and it is out of scope here);
+**D29's three operations, which remain deferred** and are in any case scoped to an operation the
+span-removal policy has retired; and applying `.archgraph/backfill/`, which is the owner's own
+work.
+
+**The standing rule is relaxed only within this scope.** Outside items 1–4, no agent promotes,
+rejects, edits, re-anchors or removes a graph item on its own judgment, and **a `humanInstruction`
+string is never authorization**. This authorization is recorded here, in the repository, which is
+what makes it one.
