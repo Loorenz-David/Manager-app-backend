@@ -497,3 +497,19 @@ also the **closest thing yet to the clean test** the brief keeps noting is unrun
 true instance, since master plan §8's absolute restatement is still in its read-first list.
 
 **Describe, do not fix.** Nothing was said to the session, and nothing should be.
+
+### 2026-08-24 — coordinator, phase-5 projection fold
+
+**Nothing to report on agent anchoring; one thing to report on the plan.** No `archgraph_*` call
+this session and no graph write. The fold **removed** two span instructions from plan 5 §7 that
+would have taught the next session position-anchoring: *"symbol anchors preferred over line spans,
+but never both on one entry"* and *"re-derive its span from the symbol, never trust the stored
+one"*. Both contradicted the interim no-`startLine` policy, and the plan-5 projection found them
+(S12) — **the plan lint did not**, because it greps the master plan for standing instructions and
+that check did not exist until this fold added it.
+
+**The confound noted since the policy change is now measurable in one direction:** plan 5's §7A
+carries the policy's form, so the next graph-touching session in this project reads a correct
+instruction rather than a contradictory one. That makes the *next* session less informative as a
+clean test, not more. Recorded so the brief's "no session has yet run with a prompt silent on
+anchoring" stays accurate about why.
