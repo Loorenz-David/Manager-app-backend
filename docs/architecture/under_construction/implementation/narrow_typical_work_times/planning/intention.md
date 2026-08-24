@@ -1,7 +1,14 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: RESOLVED (round 9, 2026-08-22) — **0 owner cards open. D1–D26 settled**
+status: READY_FOR_RATIFICATION (round 10, 2026-08-24) — the measurement ledger is
+        backfilled as **§1A** (charter trace chain, in-flight adoption clause) and
+        presented to the owner through the ratification surface. **The intention gate
+        holds until the owner's explicit act writes RATIFIED here** — no prompt of any
+        role compiles against this document until then (charter, state machine and
+        gates), and silence never ratifies. Nothing in §1A is new intent; every entry
+        cites the text it was derived from. Prior header, unchanged in substance:
+        RESOLVED (round 9, 2026-08-22) — **0 owner cards open. D1–D26 settled**
         (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
         known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
         satisfied 2026-08-22 — every live-clock phase touching the shared files is
@@ -76,6 +83,61 @@ schema migration; no change to `TYPICAL_METHOD`, `TYPICAL_WINDOW_DAYS`, or
 `TYPICAL_MIN_SAMPLE_SIZE`; historical-allocation reproducibility explicitly out of
 scope (owner ruling, §10 D18); the `/statistics/typical-times` route itself is
 deferred with its contract pre-locked (§9).
+
+---
+
+### 1A. Measurement ledger (trace-chain root — backfilled 2026-08-24; amendment, nothing above renumbers)
+
+**Why this section exists, and why it is late.** The charter gained a **trace chain** on
+2026-08-24 — `measurement objective → criterion row → test → named mutation`, checkable in
+both directions — after phases 1–4 of this pipeline had already shipped. Its in-flight
+adoption clause requires the ledger to be backfilled as a lettered section **before the
+project's next planning act**, which is the phase-5 projection fold. **Nothing here is new
+intent.** Every entry is derived from text already in this document and cites its source; a
+ledger that invented an objective would be a scope change wearing a backfill's clothes.
+
+**What an entry is.** An **observable outcome** — something measurable true or false on the
+shipped system — plus the **defect family it guards**. Planners' criteria may trace only to
+these entries or to a mechanism contract (below); a criterion row tracing to nothing is cut
+before its plan ships, and an outcome missing from this ledger cannot legitimately grow tests
+later — it routes back here as a candidate criterion.
+
+**Ranked as the scope ladder is ranked:** M1–M3 are why the pipeline exists; M4–M5 are what it
+must not break; M6–M7 are what its payloads must keep meaning.
+
+| ID | Observable outcome | Defect family it guards | Derived from |
+|---|---|---|---|
+| **M1** | For a task whose active PRIMARY item carries a category, every task-scoped consumer's typical is computed from the **same-category** subset of that section's history — and where the same-category and section-wide populations differ, the published values differ. | **The feature ships inert.** A narrowing spec that reaches no SQL predicate, or a fixture whose two populations are identical, both pass every test while narrowing nothing. This project has produced that fixture shape twice. | §1 objective; §3.2; §4.3 |
+| **M2** | `typical_times_statement` is the only implementation of the statistic. No consumer computes a median, a percentile, or a sample-size-floor comparison of its own. | **The fork.** A second implementation that agrees on the day it is written and drifts afterwards — the failure HC-1 names. | **HC-1** (§1) |
+| **M3** | For the same task and section at the same instant, every task-scoped consumer observes **identical layer-1 evidence and an identical layer-1.5 selected typical, including identical `None`s**. Layer-2 terminals may differ between consumers only where the selected typical is genuinely absent, are never published under `typical_worker_seconds` or any `*_basis` field, and each consumer's payload makes its terminal's firing visible on its own surface. | **Three different typicals for one task.** A worker, a manager and the division arithmetic disagreeing — the failure this whole pipeline was built to prevent — and its quieter form: a fabricated terminal published as if it were measured evidence. | **HC-2** (§1); §6.4; §8 |
+| **M4** | With no narrowing spec, `typical_times_statement` compiles **character-for-character** to the SQL it compiles to today, and every consumer that passes no spec produces its current payload unchanged. | **Silent regression of every existing caller.** A refactor that changes the default path while all attention is on the new one. | **HC-4** (§1); §7.1 |
+| **M5** | A narrowed request is never silently answered with a broader section-wide statistic; broadening occurs only where the caller's resolution policy explicitly permits it, and the payload **names the basis actually used**. | **The number that looks narrowed and is not.** A manager reading an item-aware figure that quietly fell back — and, in the analytics direction, a question answered as a different question. | **HC-3** (§1); §3.4; §4C |
+| **M6** | Every published typical field means what its contract says **after** the change: `is_estimated`, `sections_total` and `sections_without_sample` per §6B; basis and count total over all states per §3B; and no consumer's typical moves because the task's own steps moved (settled-basis, §6C). | **Payload-semantics reversal.** §6B is exactly this defect caught in the document: a clarification that, taken literally, reverses a value already shipped to the frontend. Plus the neighbouring pipeline's most expensive mistake, restated in §6C. | §6B; §3B; §6C; §§7.2–7.4 |
+| **M7** | Every **task-scoped** consumer derives its window from the injected `ctx.now`, so the same task over identical database state serves byte-identical typicals at two different wall-clock instants. `/working-sections/typical-times` deliberately does **not** take `now` (D24), and that asymmetry is contract. | **Wall-clock nondeterminism** — the family the live-clock pipeline shipped to close, re-entering through a fourth surface; and its mirror, extending byte-identity to a fifth surface where D24 forbids it. | §4A K1; **D24** (§10); §7.1 |
+
+**Mechanism contracts are traceable targets in their own right** (charter trace chain, link 2:
+a criterion may cite *the ledger ID **or** the mechanism contract it serves*). The contracts
+this intention already carries register here against the outcome each one serves, so a criterion
+citing `§3A C5` or `§4B` is traced without needing a duplicate M-entry:
+
+| Contract | Registers against |
+|---|---|
+| §2B (re-grounding sweep) | — evidentiary; supports every outcome, asserts none |
+| §3A (spec canonicalization + per-field predicates) | **M1**, M5 |
+| §3B (basis and count totality) | **M6** |
+| §3C (parser error boundary) | M5 |
+| §3D (`ItemCategory` join asymmetry) | M1 |
+| §4A (statement contract: signature, clock, result shape, HC-4 scope) | **M4**, **M7** |
+| §4B / §4C (reachability, corrected; usable narrowed median required) | **M5**, M6 |
+| §6A (`TaskBudgetStatus` additive contract, five construction surfaces) | **M3** |
+| §6B (`is_estimated`) | **M6** |
+| §6C (typicals stay settled-basis) | **M6** |
+| §11A (test-matrix corrections) | — instrument; corrects how outcomes are measured |
+
+**What this ledger does not do**, stated so a filled trace cell is not mistaken for a verified
+outcome. It makes *"was this test worth writing"* answerable. It says nothing about whether the
+test that traces to **M1** can actually observe **M1** failing — that is the criterion's job,
+and the row-that-cannot-fail family lives entirely inside a correctly-traced row.
 
 ---
 
@@ -1706,3 +1768,24 @@ gated and not silently filed.
   **§3D** records the `ItemCategory` join asymmetry (a soft-deleted category still matches
   `major_categories`) with its conversion trigger; §3A C5 is unchanged, and the field has
   no V1 producer. Every other row was plan-scoped and folded into `plans/plan_2.md` §6A.
+- **Round 10 (2026-08-24) — measurement-ledger backfill; the intention gate opens.**
+  The charter gained a **trace chain** and an **intention gate** on 2026-08-24
+  (`agent-skills` `96f229b`, `75ecddd`), after phases 1–4 had shipped. Two consequences,
+  both folded here. **(a) §1A — the measurement ledger**, seven observable outcomes
+  (M1–M7) each with the defect family it guards, **derived entirely from existing text**
+  (HC-1…HC-4, §1's objective, §3.2, §3.4, §4.3, §6B, §6C, §3B, §4A K1, D24, §§7.2–7.4)
+  and citing it — no new intent, no scope change. The eleven mechanism contracts register
+  against the outcomes they serve rather than duplicating them, so a criterion citing
+  `§3A C5` or `§4B` is traced without a parallel M-entry. **(b) The status header moves
+  from the old `RESOLVED` vocabulary to `READY_FOR_RATIFICATION`** — the shaper's claim,
+  not the owner's answer. Under the new gate no prompt of any role compiles against this
+  document until the owner's explicit act writes RATIFIED, and silence does not ratify.
+  Occasioned by the phase-5 projection's finding **B6**, which derived the same ordering
+  independently: consuming that handoff amends plan 5, plan 5 is the project's next
+  planning act, and a ledger written after phase 5 could never have shaped phase 5 — the
+  last phase in this pipeline that touches production code. **One planning gap the ledger
+  surfaced on its first day, recorded here rather than silently absorbed:** M1 —
+  *item-awareness observably narrows* — is the outcome the whole pipeline exists for, and
+  phase 4's carried finding **N11** (both narrowing fixtures uniform within category)
+  says the phases that serve it may serve it inertly. That is a coverage question for
+  phase 6 closeout, not a phase-5 amendment.
