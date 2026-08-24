@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: REVIEWING
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -420,7 +420,12 @@ open-record task, the column re-read from the database is unchanged.
 
 **C2 — `ALLOCATION_METHOD` is v2 on every surface that publishes it.**
 Assert the exact literal `"static_proportional_section_v2"` on production-time's task block
-and on every budget-allocations task entry.
+and on every budget-allocations task entry — **and name the surface each assertion reads, because
+one test holds both** (review S3, 2026-08-24). Round 1's closure of this row cited
+`test_production_time_query.py:206` as the production-time literal; that line asserts on `e2_row`,
+a **budget-allocations** row, so the fix round added a *second* budget-allocations assertion and
+left production-time's `data.allocation_method` pinned only by the byte-golden. **The missing
+assertion is one line: `assert e3["allocation_method"] == "static_proportional_section_v2"`.**
 (c) **absence, L2, root = `app/beyo_manager/` plus the two regenerated goldens, term =
 `static_proportional_section_v1`. Expected ∅.** *(Root and term added at the projection fold,
 L10 — §9 requires an absence claim to state both, and this one had neither.* ***Run from the
@@ -750,7 +755,14 @@ observable as *"one patch moves one"*. `participating_sections` is defined at
 (c) **absence, L4, root = repository root, terms stated**: no private copy of the
 excluded-state predicate remains. Search terms: `SKIPPED`, `CANCELLED`, `FAILED`,
 `EXCLUDED_STEP_STATES`, `_step_state_is_excluded`. Expected: every hit outside
-`budget_division.py` and the enum definitions is a **test** fixture, enumerated by name.
+`budget_division.py` and the enum definitions is a **test fixture, or a documented import of the
+shared predicate**, enumerated by name.
+> **Corrected at review round 1 (N8) — the original wording was false before it was transcribed.**
+> Measured: `get_task_price_scenario.py:14` / `:134` are **production** hits, and they are a
+> legitimate import and use of the shared `_step_state_is_excluded`, not a private copy. The
+> original "is a **test** fixture" would have made this row impossible to turn green honestly, so
+> it must be corrected **before** the committed test is written. Private frozensets naming the
+> excluded states outside `budget_division.py`: **∅** — the substance of the claim holds.
 *Mutation* — `budget_division` (definition): reintroduce a private excluded set that omits
 `FAILED`.
 *Both sides* — contract: the FAILED-only section is `"excluded"` with a `null` allowance;
@@ -1129,7 +1141,7 @@ prompt were honoured.
 |---|---|---|
 | **B1** snapshot must fail when absent | **closed and biting** | `assert SNAPSHOT.exists()` at `:154`, write branch gone (verified in code); their measurement 1 failed / 10 passed with it moved |
 | **B2** C8, C10, C11 committed | **closed** | all three present; C10's four rows are individually armed with exact literals (`:237`, `:242`/`:244`, `:246`, `:249-250`) |
-| **B3** one row per mutation | **closed** | 22 rows = the plan's 21 named + the new anti-regression; the five previously-unrun mutations (C0 ×2, C9(ii), C10(i), C10(ii)) all executed with observed ids |
+| **B3** one row per mutation | ~~closed~~ **RE-OPENED at review (S4)** | 22 rows against the plan's **23** named mutations — **C8's and C11's were never counted**, because the 21 was round 1's arithmetic (16 ledger rows + 5 identified absent) computed on a round where C8 and C11 had **no test at all**. I carried the count forward from the finding instead of re-deriving it from the plan. The reviewer ran both and **both bite** (C8 at `:198`, C11 at `:290` with a collateral C10 bite `[27] == [7]`), so only the record is owed, not a re-run |
 | **B4** task-0 red baseline | **closed as honestly absent** | stated plainly rather than reconstructed, exactly as instructed. A fabricated baseline would have been worse |
 | **S1** 21-ID comparison | **closed** | programmatic diff, `actual − published: ∅`, `published − actual: ∅` |
 | **S2** budget-allocations v2 literal | **closed in code** | `test_production_time_query.py:205` asserts it on **every** task entry; `:207` on the production-time block |
@@ -1168,3 +1180,176 @@ untested, and nothing depends on it alone — so this is not a defect and needs 
 reverted, `md5` `c484abc692ea7899e86a622c14e15c89` identical, `app/` clean.
 
 **Dispatched:** review round 1, Opus 5 (never Sonnet as the only reviewer).
+
+### 2026-08-24 — review round 1 (Opus 5) → `CHANGES_REQUESTED`
+
+**Handoff:** `handoffs/reviewer/20260824_plan4_review_handoff.md`. Tree `748e709`, `app/` clean at
+entry and exit. **2 blocking / 5 should-fix / 11 notes / 0 owner cards.**
+
+**The production engineering holds and was attacked, not assumed.** The `spec_index is None` fix is
+correct under all three attacks: the `row is None` guard covers the soft-deleted-section shape,
+`(section_id, 0)` exists for every live section by construction, the `continue` sits inside
+`if specs and …` so `K == 0` is byte-for-byte unchanged, and the narrowed slots are hard-set
+`None, 0`. `apply_business_fallback` is term-for-term the deleted inline ladder. **The refactor did
+not move a number:** leaf-set diff of both goldens, `353a8c9` → `HEAD` — 0 leaves removed, **0
+pre-existing numeric leaves changed**, exactly 4 value changes, all `allocation_method` v1→v2.
+
+**L4, one run, spent on variation:** `-n 0 -p no:randomly` → `21 failed / 2686 passed / 2 skipped /
+1 deselected`, and the failing set is **∅/∅ against the published 21-ID block**. So the set is
+composition-stable in serial on a tree carrying three more integration files than the tree phase 2
+established that on. Count delta vs the parallel stamp reconciles exactly: `-n 0` skips
+`test_database_isolation.py:118` ("serial comparator deliberately overrides the shipped parallel
+default"). The implementer's stamp was **not** re-run.
+
+**B1 — blocking — C5's three rows are not implemented as specified, and row (b) is invisible at
+C5's own declared L2 scope.** Measured: republishing a zero section-wide median at count ≥ floor as
+`insufficient_sample`/`None` in `reconcile_task_typicals` → **346 passed**. No `SectionTypicalEvidence`
+anywhere in `tests/` carries a zero section value at count ≥ floor. Row (a) has no fixture (C3's row
+is the *missing-key* shape, `sample_count 0`, not §3B B3's below-floor shape); row (b) is a serializer
+pass-through on a hand-built dict at `:104`; row (c) is absent. The projection fold's instruction —
+*"Pin C5(a)'s fixture … leaving it unstated is not [acceptable]"* — could not be followed because
+C5(a) has no fixture.
+
+**B2 — blocking — C1(c) and C13(c) never shipped as committed tests**, though both criterion texts
+require it and master plan §10 budgets C13(c) as an L1 test with a repo-wide claim. Round 1's B2 was
+raised for this exact class and closed for C8/C10/C11; these two were never in its list. **Substance
+verified true**: C1(c) ∅/∅/∅ in `typical_filters.py`; C13(c) repo-root sweep finds no private copy
+(all non-`budget_division` hits enumerated in the handoff). §9: *the defect was the form*.
+
+**S1** `_step_result`'s `elif selected is not None:` tolerance branch is unreachable production code
+publishing the impossible triple `(value, "section_wide", 0)`; mutating it to `("item_narrowed", 99)`
+→ **494 passed**, asserted by nothing. Undeclared divergence from §5 task 4, which named the 23 int
+literals as the surface to convert. **S2** `test_item_economics_domain_walk_is_recursive` is
+`f(x) == f(x)`: `rglob`→`glob` alone → **4 passed**. Escape 3's shape, one level up, in the file
+written to close it. **S3** C2's production-time half has no exact-literal assertion — both v2
+literals (`:205`, `:207`) read `e2_row`, a **budget-allocations** row; round 1's S2 mis-read the
+variable, so the fix doubled the covered half. Guarded only by the byte-golden. **S4** the ledger is
+**two rows short**: the plan names **23** named mutations, not 21 — C8's and C11's were never run.
+**Both were run at this review and both bite**: C8 at `test_c8_…:198`
+(`'section_wide_uniform' == 'item_narrowed_uniform'`), C11 at `test_c11_…:290`
+(`(540,'section_wide',7) != (540,'item_narrowed',7)`, both sections, plus a collateral C10 bite
+`[27] == [7]`). No re-run owed; the count needs fixing in three artifacts. **S5** C1(a)/(b) assert
+`f(a) == f(b)` with no exact literals and no non-emptiness guard, against a criterion demanding
+"exact literals per section" — on the Critical rank 5 row.
+
+**Notes N1–N11** in the handoff: the missing `§6A` section four artifacts cite (N1); task 11's owed
+docs-guard record (N2, measured **59 passed**); `serialize_typical_resolution` hardcoding the two
+version strings instead of the constants (N3); the dead `typical=` parameter (N4); C6's `{1,1,1}` vs
+the specified `{0,2,1}` and the unasserted `sum(...) == participating_section_count` clause (N5);
+C10's unreachable `:242` and the fact that C10(i) fails at `:238`, not the `:242` the coordinator's
+N2 inferred (N6); dead conditionals in the mixed-batch arm (N7); **C13(c)'s stated expectation is
+false before transcription** — `get_task_price_scenario.py:14/134` is a production import of the
+shared predicate, so the row must be corrected before B2's test can be written honestly (N8); the
+graph delta naming contract tests rather than §7's two projection nodes, **routed to the owner** (N9);
+escape 2's dropped `count(...) == 1` pin, fail-closed but undeclared (N10); both narrowing fixtures
+uniform within each category, **routed to plan 5** (N11).
+
+**Verified correct — 16 reality checks, do not re-verify** (perimeter exact 14/14 name-for-name; the
+serial 21-ID identity; C12's review half by leaf-set diff; C9(a)'s snapshot pre-refactor-shaped, read-only,
+and comparing **24** numeric leaves including the refactored `typical_worker_seconds` ×3 and
+`sample_count: 5` — its `e7b2c41` re-capture moved **only** `uuid4` tokens, no number; the
+`spec_index is None` fix on all three attacks; C11's exact literals on both surfaces; C8's fixture
+precondition self-enforcing via `participating_section_count == 2`; C10's discriminating 7/9/11 counts
+and 600/900/1200 medians with row (c) armed and row (d)'s indices correct by construction; C1's three
+fixture preconditions and C1(i) biting when correctly sited; the fallback ladder's arithmetic identity
+and `zip` safety; §3B B3 guarded — 5 tests bite; task 9c accurate field-for-field against the
+serializers; one `participating_sections` implementation making C13(a)'s single-patch observable work;
+the phantom `uniform_basis_v2` confirmed prose-only; C0 escape 3's contract-not-literal fix and no
+probe residue).
+
+**Refutations — 5**, including one against myself: **my first C1(i) probe went green because I sited
+it on the settled `tsp_failed` step** via `setdefault` ordering, which is C1's own fixture precondition
+2 and §9's *"a probe that lands in the wrong place measures nothing, and its green is the most
+dangerous result available."* Re-sited on the accruing open step it bites. Recorded in full — a
+reviewer's mis-sited green is the same defect as an implementer's.
+
+**Mutation-probe declaration:** 7 probes across 5 files, all reverted, all five md5s byte-identical to
+pre-probe values; no file or directory created; `git status --porcelain -- app/` empty at exit; phase
+file + `tests/unit/domain/item_economics` green again at **218 passed**.
+
+### 2026-08-24 — review round 1 consumed → fix round 3 (coordinator)
+
+**Handoff:** `handoffs/reviewer/20260824_plan4_review_handoff.md`, Opus 5, tree `748e709`,
+`CHANGES_REQUESTED` — **2 blocking / 5 should-fix / 11 notes / 0 owner cards**. Consumed at
+source; the review's own arithmetic reconciled and its two corrections to *my* work verified
+independently before folding.
+
+**The production engineering was attacked from every angle the prompt named, and it holds.**
+That is now established by two independent sessions and needs no further round: the
+`spec_index is None` fix survives all three attacks, `apply_business_fallback` is term-for-term
+the ladder it replaced, and **the refactor moved no number** — the reviewer proved that with an
+instrument nobody had used, a leaf-set diff showing 0 leaves removed, **0 pre-existing numeric
+leaves changed**, and exactly 4 value changes, all `allocation_method`.
+
+**The L4 was spent on the question the prompt posed, and it answered it.** Serial `-n 0` gives
+`21 failed / 2686 passed / 2 skipped`, failing set **∅/∅** against the published 21-ID block.
+So the set is composition-stable in serial on a tree carrying three more integration files than
+the tree phase 2 established that on, and the 2686/2-vs-2687/1 delta reconciles exactly via the
+`-n 0`-only skip at `test_database_isolation.py:118`. The implementer's parallel stamp was
+consumed by citation, not re-run. **This is the model for how an L4 should be spent.**
+
+#### Three of the findings are corrections to my own work, verified before acceptance
+
+- **S3 — I mis-read a variable and my closure row was wrong.** Round 1's S2 said the
+  production-time v2 literal existed at `test_production_time_query.py:206`. Verified at source:
+  `:205` reads `e2["budget_allocations"]` and `:207` reads `e2_row = e2["budget_allocations"][0]`
+  — **both budget-allocations**. Production-time's `e3` has no v2 assertion at all, so the fix
+  round faithfully closed my finding by adding a *second* assertion on the already-covered half.
+  **A closure claim that names a `file:line` must name the variable too.**
+- **S4 — my mutation count was wrong in three artifacts.** Re-derived from §6 myself, criterion
+  by criterion: C0=5, C1=2, C2=1, C3=1, C4=1, C5=2, C6=1, C7=2, C8=1, C9=2, C10=2, C11=1,
+  C12=1, C13=1 → **23**. My "21" was round 1's B3 arithmetic (16 ledger rows + 5 absent),
+  computed on a round in which C8 and C11 had **no test**, so their mutations were never in the
+  sum. I carried the number forward from the finding instead of re-deriving it from the plan.
+  Corrected in `master_plan.md` §4 and above. **The correction2 handoff also states 21 and is
+  NOT edited — it is published; the correction lives here.**
+- **N6 — my N2 inferred three assert lines and one was wrong.** I wrote that C10's three
+  mutations "must have failed at `:242`, `:246` and `:250`". Measured, C10(i) fails at **`:238`**.
+  **The note asking for observed-rather-than-inferred attribution was itself an inference, and it
+  was wrong.** N6 also shows `:242` is unreachable — `:238`'s exact 3-tuple comparison subsumes
+  it — so C10 row (b)'s designated instrument is dead code with no loss of coverage.
+
+**That is three self-corrections in one round, all of the same family: I stated something as
+measured that I had actually inferred.** Routed to §9 as one rule rather than three.
+
+#### Coordinator addition — what the golden net actually protects (note, by design)
+
+Measured on both goldens: every `typical_basis` is `insufficient_sample`, every
+`task_typical_basis` is `section_wide_uniform`, **every `typical_worker_seconds` is `null`** and
+every `applied_filter` is `null`. This is **intended** — task 10 says the live-clock fixture is
+deliberately not taught to narrow — so it is not a defect and needs no row. But it **bounds the
+claim**: "the refactor did not move a number" is proven on a fixture whose every typical is
+null. The byte-goldens are blind to `item_narrowed`, `section_wide`, any non-null typical, any
+non-null filter and any non-zero sample count. **Anywhere this phase's evidence is cited later —
+plan 6's release handoff especially — the goldens must not be described as protecting the
+narrowing payloads. They protect the degenerate case, exactly as designed.**
+
+#### Routing
+
+| finding | destination |
+|---|---|
+| **B1** C5's three rows need real fixtures | **fix round 3** — §6 C5, and the projection fold's unmet instruction to pin C5(a)'s fixture |
+| **B2** C1(c) + C13(c) as committed tests | **fix round 3**, and **N8 first** — C13(c)'s expectation was false as written and is now corrected in §6 |
+| **S1** the `_step_result` tolerance branch | **fix round 3** — convert the 23 literals, delete the branch, or give it a criterion and a declared divergence |
+| **S2** the recursive-walk guard is `f(x) == f(x)` | **fix round 3** |
+| **S3** C2's production-time literal | **fix round 3** — one line; §6 C2 amended to name the surface |
+| **S4** the count is 23 | **corrected here and in `master_plan.md`**; the ledger owes two rows, no re-run |
+| **S5** C1(a)/(b) need exact literals + non-emptiness | **fix round 3** — Critical rank 5 should not carry the weaker form |
+| **N1** the "§6A" citations name a section that does not exist | **fix round 3** (documentation) |
+| **N2** living-docs guard record | **fix round 3** — measured 59 passed, record the line |
+| **N3** hardcoded version strings in `serialize_typical_resolution` | **fix round 3** — production should read the constants |
+| **N4** dead `typical=None` parameter | with S1's conversion |
+| **N5** C6's distribution and the unasserted `sum(...)` clause | **fix round 3** |
+| **N6** C10 `:242` unreachable | **fix round 3** (drop or re-purpose) |
+| **N7** dead conditionals in the mixed-batch arm | **fix round 3** |
+| **N8** C13(c) wording | **corrected in §6 above, before B2's test is written** |
+| **N9** graph delta records contract tests, not §7's two projection nodes | **OWNER** — agents never adjudicate graph review state |
+| **N10** C0 escape 2's undeclared divergence | **fix round 3** — record the reasoning, the direction is safe |
+| **N11** uniform fixture multisets | **plan 5**, which reuses both fixtures |
+
+**The reviewer's process note is accepted and acted on.** Both blocking findings are *criteria
+with no committed test* — the same class as round 1's B2 — and round 1's list was built by
+reading the new test file and asking which criteria were missing, which cannot see a criterion
+whose test is merely weaker, nor an absence row that has no test file to be missing from.
+**Fix round 3's prompt therefore opens with a completeness pass over every criterion and every
+row letter, absence rows included, as its first task rather than its last.**

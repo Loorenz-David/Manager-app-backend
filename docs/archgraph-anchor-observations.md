@@ -301,3 +301,30 @@ Not a session; a snapshot of what the graph currently hands agents.
   explicit "do not emit `startLine`/`endLine`" instruction, so none of them is a clean test of
   the policy text. Two sessions have now written or declined to write evidence correctly; zero
   have done so without being told.
+
+### 2026-08-24 — plan-4 review round 1 (reviewer, Opus 5)
+
+- **New evidence written:** none. A reviewer records no graph delta by design.
+- **Re-anchor activity:** none.
+- **Review findings about location — and this is the first one this brief has had to log.**
+  The review filed **N9**: plan §7 expected a delta on
+  `projection-item-economics-task-production-time`,
+  `projection-item-economics-task-budget-allocations` and
+  `source-file-item-economics-budget-division`, while the round-1 handoff records source links
+  for two **contract tests** plus `budget_division.participating_sections`. **Note the shape
+  carefully: this is a finding about *which nodes were recorded*, not about line numbers.** It
+  reports that two projection nodes whose contracts changed may have no delta at all — a
+  **meaning** question, exactly the axis the policy says the graph is for. It explicitly
+  **consumed the coordinator's span verification by citation rather than re-measuring**, and it
+  routed the item to the owner with the sentence *"agents never promote, reject or edit a review
+  item"*.
+- **Closing-work language:** none. Still absent in every session of this project.
+- **Reading — the clearest positive signal so far.** Under the old policy, a session reviewing a
+  phase that moved ~600 lines of mapped production code would have been expected to surface
+  position drift; **this one surfaced node identity instead.** That is the substitution the
+  policy was written to produce, and it happened in a session whose prompt said nothing about
+  anchoring at all — **the prompt's only graph instruction was "verify the declared perimeter"**.
+  So this is the closest thing yet to the clean test this brief has been waiting for: not proof,
+  because the reviewer read master plan §8 in its read order, but the first session whose *own
+  prompt* carried no anchoring instruction and which nonetheless reasoned about the graph in
+  terms of meaning rather than position.
