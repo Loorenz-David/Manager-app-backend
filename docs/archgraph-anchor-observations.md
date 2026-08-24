@@ -281,3 +281,23 @@ Not a session; a snapshot of what the graph currently hands agents.
 - **Reading:** unchanged. Still no session whose prompt is silent on anchoring, so the span
   question remains unmeasurable. Cumulative: one session has written new evidence since the
   policy change (3 links, 0 spans) and its prompt carried the explicit instruction.
+
+### 2026-08-24 — plan-4 fix round 2 correction 2 (implementer, Codex)
+
+- **New evidence written:** none. The handoff states *"No graph delta is required. The correction
+  repairs an existing lookup branch inside an already-mapped service and does not add or remove
+  an architectural component or boundary."* **Nothing to report on span rate.**
+- **Re-anchor activity:** none — and this is the observation worth logging. The session changed
+  production code inside `get_task_budget_allocations`, a service the graph already maps, and
+  **did not propose a re-anchor, did not report drift, and did not treat moved lines as work.**
+  Under the pre-2026-08-23 policy this is the shape that produced re-anchor churn. It reasoned
+  about the change in terms of **boundaries** ("does not add or remove an architectural component
+  or boundary") rather than positions, which is the distinction the policy exists to draw.
+- **Review findings about location:** none about the graph.
+- **Closing-work language:** none. Still absent everywhere in this project.
+- **Reading:** the strongest signal so far that the policy's intent is landing — a session that
+  edited mapped code and correctly concluded the graph owed nothing. **But the confound is
+  unchanged and now cumulative:** every session in this project has read a prompt carrying the
+  explicit "do not emit `startLine`/`endLine`" instruction, so none of them is a clean test of
+  the policy text. Two sessions have now written or declined to write evidence correctly; zero
+  have done so without being told.

@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: REVIEWING
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -1110,3 +1110,61 @@ and commands are in the implementer handoff.
 **L4:** `2687 passed / 21 failed / 1 skipped` in `49.57s`; the 21 failures are exactly the
 published baseline IDs. The pytest process completed; the shell wrapper then reported its
 zsh `status`-variable error, so no second L4 run was taken.
+
+### 2026-08-24 — fix round 2 + correction 2 consumed → `REVIEWING` (coordinator)
+
+**Handoff:** `handoffs/implementer/20260824_plan4_fix_round2_correction2_handoff.md`, base
+`e7b2c41`. **All four blocking and both should-fix items close.** Perimeter exact: the only
+`app/` file changed after the checkpoint is `get_task_budget_allocations.py`, +13 lines.
+
+**The production fix is correct, and correct in the way that mattered.** The new branch
+(`if specs and task_spec_index is None:`) resolves `(section_id, 0)` and constructs
+`SectionTypicalEvidence` with the narrowed slots **hard-set to `None, 0`**, so no spec-0
+population can be attributed to a category-less task — the Critical rank 2 hazard this phase
+exists to prevent. The `K == 0` path is untouched, the narrowed branch is untouched, and no
+fabricated key was inserted into `typical_rows`. All three constraints from the correction
+prompt were honoured.
+
+| item | status | evidence consumed |
+|---|---|---|
+| **B1** snapshot must fail when absent | **closed and biting** | `assert SNAPSHOT.exists()` at `:154`, write branch gone (verified in code); their measurement 1 failed / 10 passed with it moved |
+| **B2** C8, C10, C11 committed | **closed** | all three present; C10's four rows are individually armed with exact literals (`:237`, `:242`/`:244`, `:246`, `:249-250`) |
+| **B3** one row per mutation | **closed** | 22 rows = the plan's 21 named + the new anti-regression; the five previously-unrun mutations (C0 ×2, C9(ii), C10(i), C10(ii)) all executed with observed ids |
+| **B4** task-0 red baseline | **closed as honestly absent** | stated plainly rather than reconstructed, exactly as instructed. A fabricated baseline would have been worse |
+| **S1** 21-ID comparison | **closed** | programmatic diff, `actual − published: ∅`, `published − actual: ∅` |
+| **S2** budget-allocations v2 literal | **closed in code** | `test_production_time_query.py:205` asserts it on **every** task entry; `:207` on the production-time block |
+
+**L4 stamp reconciles arithmetically:** `2687 passed / 21 failed / 1 skipped`, against round 1's
+`2684`. **+3 is exactly C8, C10 and C11** — the three criteria B2 was raised for. A phase that
+adds three named criteria and grows by three tests is the cheapest possible corroboration that
+the ledger and the suite describe the same work.
+
+**N1 — note — the handoff mis-states a literal.** §S2 reads
+*"`allocation_method == "uniform_basis_v2"`"*. That string occurs **nowhere in the repository
+except in the handoff itself**; the assertions correctly use
+`static_proportional_section_v2`, and `uniform_basis_v1` is the *reconciliation* method, a
+different field. **The code is right and S2 is satisfied** — only the prose is wrong. Third
+instance in this project of a handoff stating a literal that differs from the code it describes
+(§9: report measured values, not remembered ones). No round; recorded so the reviewer does not
+chase a string that does not exist.
+
+**N2 — should-fix at review — C10's ledger rows are not individually attributable.** All four
+C10 rows live in one test function, so ledger rows 20, 21 and 22 report the **same** test id.
+Each assertion is genuinely distinct and each mutation genuinely bit — pytest stops at the
+first failing assert, so the three mutations must have failed at `:242`, `:246` and `:250`
+respectively — but **the ledger does not record that**, so rule 12's "which rows bite" is
+inferred rather than shown. **Correction: when one test carries several criterion rows, the
+bite names the row letter or assert line, not just the test id.** Cheap, and it is the
+difference between an observed and an inferred attribution.
+
+**N3 — a suspicion of mine, refuted and recorded as a fact.** I probed the one failure mode of
+the new branch that no mutation guards: leaking spec-0's *narrowed* population into a
+category-less task, instead of hard-coding `None, 0`. **Measured: 11 passed — invisible.**
+It is invisible because it is **inert**: `resolve_section_typical` short-circuits on
+`if not spec.is_narrowing` (`typical_filters.py:182`) and the task quantifier requires
+`effective_spec.is_narrowing` (`:277`), so narrowed evidence is never consulted for a
+non-narrowing spec. **The implementer's `None, 0` is defence-in-depth whose independent value is
+untested, and nothing depends on it alone — so this is not a defect and needs no row.** Probe
+reverted, `md5` `c484abc692ea7899e86a622c14e15c89` identical, `app/` clean.
+
+**Dispatched:** review round 1, Opus 5 (never Sonnet as the only reviewer).
