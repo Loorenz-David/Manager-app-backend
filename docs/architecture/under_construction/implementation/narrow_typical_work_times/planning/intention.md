@@ -1,13 +1,17 @@
 # Intention: Narrow Typical Work Times (item-aware typicals, one engine, four consumers)
 
 ```
-status: READY_FOR_RATIFICATION (round 10, 2026-08-24) — the measurement ledger is
-        backfilled as **§1A** (charter trace chain, in-flight adoption clause) and
-        presented to the owner through the ratification surface. **The intention gate
-        holds until the owner's explicit act writes RATIFIED here** — no prompt of any
-        role compiles against this document until then (charter, state machine and
-        gates), and silence never ratifies. Nothing in §1A is new intent; every entry
-        cites the text it was derived from. Prior header, unchanged in substance:
+status: **RATIFIED** (round 10, 2026-08-24) — ratified by the owner (David) on
+        2026-08-24, on the ratification surface presented by the coordinator: the intended
+        outcome in plain language, the **§1A measurement ledger verbatim (all seven entries,
+        M1–M7)**, the §9 scope boundaries, and one decision card (the ratification itself).
+        The owner ratified the ledger **as presented, all seven entries**, and issued one
+        instruction with it: M1's proof lands in **phase 5** as criterion C8, not phase 6,
+        because plan 6 §1 forbids test-behaviour change. **This is the pipeline's strongest
+        gate and it is now open** — prompts of every role compile against this document.
+        A **material** semantic change re-opens it (status back to COLLABORATING); the
+        coordinator records its materiality ruling in §14 for anything it folds without
+        returning here. Prior header, unchanged in substance:
         RESOLVED (round 9, 2026-08-22) — **0 owner cards open. D1–D26 settled**
         (card A → D24; card B → D23; card C → D25: a narrowed median of zero is not a
         known typical, answered 2026-08-22 and folded as §4C). D23's precondition was
@@ -1315,6 +1319,38 @@ only the test constructors §11.1 lists. Two further consequences:
   surrounding branch is not.
 ---
 
+### 6D. `is_estimated` "unchanged in every case" is exact about the definition and loose about the payload (plan-5 projection fold, 2026-08-24)
+
+**§6B's sentence** — *"exactly the set `sections_without_sample` counts today, so the value is
+unchanged in every case"* — **is true of the formula and not of the payload**, and a reviewer
+reading it as a behavioural promise would file a finding against correct code.
+
+**Exact.** For *identical layer-1 evidence*, the clarified second disjunct counts the same
+participating sections the shipped code counts today. That is what §6B was written to say, and
+it is what makes §6B a clarification rather than a change.
+
+**Loose.** Once narrowing is live the evidence itself is different, so the flag can move:
+
+> A section with **five chair groups at 600 s** and **twenty non-chair groups at 0 s** publishes
+> `is_estimated: true` today (section-wide median `0`, layer 2 fires) and **`false`** after
+> (narrowed median `600`, usable).
+
+**The qualifying clause, which is the normative form from here:** `is_estimated` is unchanged
+under **`section_wide_uniform`**, and **moves under `item_narrowed_uniform` wherever the narrowed
+and section-wide medians differ in usability**. Both behaviours are correct; the second is the
+feature working.
+
+**This is not a scope change and not a contract change** — the key, its type and its meaning are
+untouched, and a derived flag moving when the statistic beneath it narrows is **M1 succeeding**,
+not M6 failing. **Coordinator materiality ruling, recorded under the intention gate:** folded
+without returning to the owner for re-ratification, on the ground that it makes an over-broad
+sentence accurate rather than deciding anything new. Reversing that ruling is one word.
+
+**Consequence for planning:** no criterion may cite §6B as authority for "the payload is
+unchanged". Plan 5 C2 asserts the **definition** on pinned fixtures, never a before/after.
+
+---
+
 ## 7. Response contracts (current → proposed, all surfaces)
 
 Every new field is **non-nullable with an explicit default, always present**
@@ -1789,3 +1825,25 @@ gated and not silently filed.
   phase 4's carried finding **N11** (both narrowing fixtures uniform within category)
   says the phases that serve it may serve it inertly. That is a coverage question for
   phase 6 closeout, not a phase-5 amendment.
+- **Round 10 — RATIFIED (2026-08-24).** The owner ratified the **§1A measurement ledger as
+  presented, all seven entries (M1–M7)**, on the coordinator's ratification surface: intended
+  outcome in plain language, ledger verbatim, §9 scope boundaries, one decision card. Header
+  moves `READY_FOR_RATIFICATION` → **`RATIFIED`**; the pipeline's strongest gate is open and
+  prompts of every role now compile against this document. **One instruction issued with the
+  ratification:** the M1 coverage gap the ledger surfaced on its first day (phase 4's carried
+  N11 — both narrowing fixtures uniform within category, so the outcome the pipeline exists for
+  may be served inertly) is proved in **phase 5, not phase 6** — the coordinator's proposed
+  phase-6 routing contradicted plan 6 §1's own fence (*"no test-behaviour change"*, verified).
+  Phase 5 gains **C8** (trace cell M1), a non-uniform-population criterion whose named mutation
+  breaks the narrowing predicate at its call site, and goes to **8 criteria — at the charter's
+  sizing cap, reason recorded: it arms the ledger's top entry before the pipeline closes.**
+- **Round 11 (2026-08-24) — §6D, from the plan-5 projection's note N4.** §6B's *"the value is
+  unchanged in every case"* is exact about the **definition** and loose about the **payload**:
+  once narrowing is live, a section with five chair groups at 600 s beside twenty non-chair
+  groups at 0 s flips `is_estimated` from `true` to `false`. **§6D** adds the qualifying clause
+  — unchanged under `section_wide_uniform`, moves under `item_narrowed_uniform` wherever the two
+  medians differ in usability — so no reviewer reads a C2 row as asserting pre-phase-5 behaviour.
+  **Coordinator materiality ruling under the intention gate:** folded without re-ratification,
+  because it makes an over-broad sentence accurate rather than deciding anything new, and because
+  a derived flag moving when the statistic beneath it narrows is **M1 succeeding, not M6
+  failing**. Recorded here so the ruling is auditable and reversible in one word.
