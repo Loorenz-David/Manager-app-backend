@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -1710,3 +1710,24 @@ down rather than assumed.
 
 **The approval-gate L4 is owed on the tree that closes fix round 4** — run, not cited, per phase
 3's precedent.
+
+### 2026-08-24 — fix round 4 implemented (Codex)
+
+Consumed the delta re-review's three should-fix findings and four notes within the
+round perimeter. The three edited test files now: mechanically reject a local
+excluded-state predicate definition while checking the amended C13(c) structural
+terms/root; make the C2(c) two-root preconditions independent; remove the struck
+C1(c) evidence-helper assertion; publish reachable SelectedTypical fixture states;
+and make the recursive-walk mutation reach its own nested-module assertion. The
+serializer conversion indentation is corrected. No production file changed.
+
+The rebuilt ledger contains 25 rows: C0=5, C1=2, C2=1, C3=1, C4=1, C5=2, C6=1,
+C7=2, C8=1, C9=2, C10=2, C11=1, C12=1, C13=1, plus the C10(d) anti-regression
+and the new C13(c) faithful-private-copy mutation. Every row was run at its
+named definition/call site and reverted; the full table is in the round-4
+implementer handoff. The focused perimeter is 37 passed. Rule-14 C13(c)
+divergence is declared in that handoff: two structural terms under
+app/beyo_manager/, not the original five terms at repository root.
+
+Handoff: handoffs/implementer/20260824_plan4_fix_round4_handoff.md. Approval-gate
+L4 is the one full-suite run required to close this phase and is recorded there.

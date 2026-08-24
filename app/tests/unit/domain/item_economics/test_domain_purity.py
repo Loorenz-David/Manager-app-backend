@@ -32,6 +32,7 @@ def test_item_economics_domain_walk_is_recursive(monkeypatch, tmp_path):
     nested = tmp_path / "nested" / "module.py"
     nested.parent.mkdir()
     nested.write_text("# controlled recursive-walk probe\n")
+    (tmp_path / "top_level.py").write_text("# keep the helper precondition green under the glob mutant\n")
     modules = _domain_modules()
     assert modules
     assert nested in modules

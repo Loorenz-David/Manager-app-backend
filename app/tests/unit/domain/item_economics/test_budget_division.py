@@ -9,9 +9,14 @@ from beyo_manager.domain.item_economics.budget_division import (
     group_steps_by_section,
 )
 from beyo_manager.domain.item_economics.typical_filters import SectionTypicalEvidence, SelectedTypical
+from beyo_manager.domain.item_economics.typical_constants import TYPICAL_MIN_SAMPLE_SIZE
 
 
-def selected(section, value, basis="section_wide", count=0):
+def selected(section, value, basis=None, count=None):
+    if basis is None:
+        basis = "insufficient_sample" if value is None else "section_wide"
+    if count is None:
+        count = 0 if basis == "insufficient_sample" else TYPICAL_MIN_SAMPLE_SIZE
     evidence = SectionTypicalEvidence(section, None, 0, value, count)
     return SelectedTypical(section, value, basis, evidence, True, count)
 

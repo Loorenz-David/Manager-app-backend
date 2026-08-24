@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import importlib
-import inspect
+import ast
 from dataclasses import fields
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -84,9 +84,17 @@ def test_c2c_no_v1_publish_literal_in_production_or_goldens():
         repository_root / "app" / "beyo_manager",
         repository_root / "app" / "tests" / "integration" / "services" / "queries" / "item_economics" / "goldens",
     ]
-    files = [path for root in roots for path in root.rglob("*") if path.is_file() and path.suffix in {".py", ".json"}]
-    assert files
-    assert all("static_proportional_section_v1" not in path.read_text() for path in files)
+    files_by_root = {
+        root: [path for path in root.rglob("*") if path.is_file() and path.suffix in {".py", ".json"}]
+        for root in roots
+    }
+    for root, files in files_by_root.items():
+        assert files, root
+    assert all(
+        "static_proportional_section_v1" not in path.read_text()
+        for files in files_by_root.values()
+        for path in files
+    )
 
 
 def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_sections():
@@ -103,8 +111,8 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
         "section_wide_uniform", "uniform_basis_v1", "primary_item_category_v1", None,
         frozenset({"a", "b", "c"}),
         {
-                "a": selected("a", 100, "section_wide", 7),
-                "b": selected("b", 200, "section_wide", 8),
+            "a": selected("a", 100, "section_wide", 7),
+            "b": selected("b", 200, "section_wide", 8),
             "c": selected("c", None, "insufficient_sample", 2),
             "excluded": selected("excluded", 300, "item_narrowed", 9),
         },
@@ -498,12 +506,11 @@ async def test_c1_both_consumers_keep_settled_typicals_when_live_clock_moves(db_
         await _cleanup(db_session, values)
 
 
-def test_c1c_typicals_and_evidence_helper_do_not_import_live_clock_terms():
+def test_c1c_typical_filters_does_not_import_live_clock_terms():
     roots = [
         Path(__file__).parents[6] / "app" / "beyo_manager" / "domain" / "item_economics" / "typical_filters.py",
     ]
-    assert roots
-    helper_source = inspect.getsource(selected)
+    assert all(path.exists() for path in roots)
     terms = {
         "live" + "_seconds",
         "load_live" + "_worked_seconds",
@@ -512,9 +519,6 @@ def test_c1c_typicals_and_evidence_helper_do_not_import_live_clock_terms():
     for path in roots:
         source = path.read_text()
         assert not any(term in source for term in terms), path
-    assert not any(term in helper_source for term in terms)
-
-
 def test_c13c_excluded_state_logic_has_one_shared_production_owner():
     root = Path(__file__).parents[6]
     terms = ("EXCLUDED_STEP_STATES", "_step_state_is_excluded")
@@ -532,5 +536,33 @@ def test_c13c_excluded_state_logic_has_one_shared_production_owner():
     }
     assert hits
     assert hits <= allowed
+    for relative_path in hits - {"app/beyo_manager/domain/item_economics/budget_division.py"}:
+        assert "def _step_state_is_excluded" not in (root / relative_path).read_text(), relative_path
     price_scenario = root / "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py"
     assert price_scenario.read_text().count("_step_state_is_excluded") == 2
+
+    excluded_state_names = {"SKIPPED", "CANCELLED", "FAILED"}
+    violating_files = []
+    for path in production_root.rglob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Set):
+                elements = node.elts
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "frozenset"
+                and len(node.args) == 1
+                and isinstance(node.args[0], ast.Set)
+            ):
+                elements = node.args[0].elts
+            else:
+                continue
+            names = {
+                element.value
+                for element in elements
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            } & excluded_state_names
+            if len(names) >= 2:
+                violating_files.append((path, names))
+    assert not violating_files, violating_files
