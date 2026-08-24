@@ -1714,3 +1714,41 @@ Final application perimeter: one test file. Mutation files touched in this round
 unchanged. No architecture boundary changed; `.archgraph/` was not read or touched.
 
 **State:** `IMPLEMENTED`; fix-round 4 is ready for re-review.
+
+### 2026-08-24 — fix round 4 consumed (coordinator) — both items landed, verified by measurement
+
+**Handoff:** `handoffs/implementer/20260824_plan5_fix_round4_handoff.md`. Perimeter: **4 lines in
+one test file**, production untouched. Stamp **2707 passed / 21 failed / 1 skipped**, ∅/∅.
+
+**Three claims verified by the coordinator's own probes, all reverted and md5-restored:**
+
+| probe | result |
+|---|---|
+| **C1(i)** — drop `now=` at the price call site | `test_c1b` fails at **`:127`, the byte-identity assertion** — M7's stated observable, on the right line. Bite: C1(a) + C1(b), as declared |
+| **C8(ii)** — `None` at the service call site | **`test_c8` alone.** Was `test_c1b` + `test_c8` before this round |
+| **C8(i)** — `specs = ()` at the derivation line | `test_c2d` + `test_c5` + `test_c8`. **Was four including `test_c1b`** |
+
+**The decoupling worked and is measured, not argued.** C1(b) runs on `plain_task`, asserts
+byte-identity **first** and `375` second, and **no narrowing mutation reaches it**. M7's only
+composed guard now reddens for clock reasons and clock reasons only.
+
+**One gap, folded here rather than sent back for a round.** The v3 prompt asked that **every**
+mutation's bite set be re-derived by running it. C8(ii) is now declared accurately; **C8(i) is
+still recorded as "re-run C8" when it in fact reddens three tests** — `test_c2d`, `test_c5` and
+`test_c8`. The extra reds are correct behaviour (three rows legitimately observe narrowing at the
+statement), so **nothing is unarmed and no round is owed for it**. The measured set is recorded
+here so the re-review does not file a finding against correct work.
+**C8(i)'s bite set is: `test_c2d` · `test_c5` · `test_c8`.**
+
+**Round 4 also did something worth keeping.** It identified the stamped tree by
+`HEAD + sha256(git diff --binary -- app/)` rather than by a SHA alone — a **content** identity,
+which is exactly the lesson the two halted dispatches paid for, applied by the session rather than
+by the coordinator.
+
+**Notes standing, all accepted and none owed a round:** N2 (C6 row (c) reads back constants the
+test supplied — the class is owned by phase 4's approved guard), N3 (C8(b) reads the served total
+rather than production-time's triple), N5 (`section_ids` built from `groups`, behaviourally
+identical and safer against fakes), and **S1** (§2B S-7's SQL scoping has no wire observable and
+**no row owns it** — deliberately not closed with an invented test).
+
+**State:** `IMPLEMENTED`. Delta re-review dispatched — narrow, three questions.
