@@ -193,8 +193,7 @@ endpoint allocation node, and admin/manager decision node. Expected phase-1 delt
 
 ## Checkpoint and upstream item
 
-- checkpoint commit: recorded by the coordinator after the required `CHECKPOINT (not approved):`
-  commit;
+- checkpoint commit: `6b84ef0e3b89c2c4da7cba9fd33f064044c8ee3c` (`CHECKPOINT (not approved): implement task budget signal phase 1`);
 - closeout commit: recorded after the checkpoint SHA was placed in this handoff;
 - upstream item: none;
 - next handoff: plan-reviewer, phase 1 review against the commit perimeter.
