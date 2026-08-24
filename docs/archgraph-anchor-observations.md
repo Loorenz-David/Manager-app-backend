@@ -446,3 +446,29 @@ Not a session; a snapshot of what the graph currently hands agents.
   and being followed anyway. The standing caveat is unchanged and worth restating in the
   fortnightly summary: **`architecture.yml` still holds ~638 `startLine` keys**, so any agent
   reading stored state is still shown line numbers regardless of how the write path behaves.
+
+### 2026-08-24 — plan-4 final delta re-review (reviewer, Opus 5) — phase closed
+
+- **New evidence written:** none. **Re-anchor activity:** none. **Location findings:** none.
+- **Closing-work language:** none, across the whole phase.
+- **Nothing to report** on the write path — and that is now the seventh consecutive session with
+  nothing to report, which is itself the finding this brief was opened to produce.
+
+**Phase-4 summary for the fortnightly view.** Across the phase: **one** session wrote graph
+evidence during implementation (3 source links, 0 spans), **one** authorized session wrote 2 more
+(0 spans) and rewrote two node descriptions, and **five** sessions touched mapped code without
+proposing a single re-anchor while `staleNodeCount` drifted 2 → 5. **Total spans emitted by any
+agent since the policy change: 0.**
+
+**What actually changed behaviour, as far as this brief can tell.** The policy text is confounded
+— every session in this project reads master plan §8's absolute restatement — so compliance alone
+proves little. The two informative moments were both **decisions**, not compliance: the review
+that surfaced **node identity** (N9) where the old policy would have produced position drift, and
+the maintenance session that **paid an extra reject/re-record cycle** to avoid writing spans when
+its prompt explicitly authorized the cheaper path. **Neither was a prompt following instructions;
+both were the policy being reasoned from.**
+
+**The standing caveats are unchanged and both matter more than the clean write path.**
+`architecture.yml` still carries ~638 `startLine` keys, so any agent *reading* stored state is
+shown line numbers regardless. And **no session has yet run with a prompt silent on anchoring**,
+so the clean test remains unrun. Describe, do not fix.

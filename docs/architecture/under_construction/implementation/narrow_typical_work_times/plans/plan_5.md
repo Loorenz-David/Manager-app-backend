@@ -69,6 +69,38 @@ place where "extend the determinism contract" is the wrong instinct. No
   `tests/integration/services/queries/item_economics/test_price_scenario_query.py` — **read
   `_TypicalSession` before writing a test.**
 
+- **★ Routed here from phase 4's approval gate (2026-08-24) — read before writing task 0.**
+  - **N1 — C13(c)'s different-name guard cannot see the copy you are about to write.** Phase 4
+    shipped a structural claim that **no set literal names two or more of** `SKIPPED` /
+    `CANCELLED` / `FAILED`. It was measured true — **and it is true because no production file
+    writes state sets as strings at all**, not because no private copy exists. **You add
+    price-scenario's private ladder over that same predicate**, so you are the phase that makes
+    the hazard real. **Plant a copy in the codebase's own idiom — enum members, not string
+    literals — and confirm C13(c) reddens *before* you rely on it.** The string probe gives a
+    false pass. This is the **fifth** row-that-cannot-fail in this lineage and the first a
+    reviewer authored.
+  - **N2 — the two `selected()` helpers have DIVERGED, and they share a name.**
+    `test_budget_division.py:14` now **derives** basis from value and count from basis, so it
+    **cannot produce a below-floor `section_wide`**; `test_narrowed_task_economics.py:53` still
+    takes explicit pairs. **Check which one a fixture calls before reasoning about its basis**,
+    and if you need a sub-floor participating typical, construct it explicitly — the unit helper
+    will silently refuse.
+  - **N11 (from phase 4 review round 1) — both narrowing fixtures are uniform within each
+    category.** `seed_categorized_two_section_task` seeds 7×540 and 7×600;
+    `seed_batch_dedupe_fixture` seeds 7×600, 9×900, 11×1200. In every case **median == mean**, and
+    the value is invariant under duplication and reordering. Phase 4's rows discriminate on
+    *counts* and *basis strings*, so it cost nothing there. **Any plan-5 row asserting a typical
+    VALUE needs a non-uniform group multiset first** (§9: a uniform fixture is an inert fixture).
+  - **Where phase 4's evidence ends**, stated by its reviewer so you do not over-trust it: the
+    byte-goldens cover **only** the degenerate case — every `typical_basis` in them is
+    `insufficient_sample`, every typical null, every filter null — so **never cite them as
+    protecting the narrowing payloads**; `item_narrowed` is asserted at exactly zero on the C6
+    fixture; the C5 fixtures cover the floor boundary **from below only**, and nothing exercises
+    a narrowed zero at count ≥ floor (D25 makes that unreachable on *task* surfaces — **your
+    price-scenario ladder is a different surface and must not assume it**); and `sample_count` is
+    unasserted throughout `test_budget_division.py`, so the unit layer proves arithmetic, never
+    disclosure.
+
 ## 3. Dependencies
 
 **Gate: plan 4 `APPROVED`.** C5 asserts equality against production-time's payload, which plan
