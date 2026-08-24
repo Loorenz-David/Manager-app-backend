@@ -75,6 +75,7 @@ class Task(IdentityMixin, Base):
     customer_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("customers.client_id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    customer_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     primary_phone_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     secondary_phone_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     primary_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

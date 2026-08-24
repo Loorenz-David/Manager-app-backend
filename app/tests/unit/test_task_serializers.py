@@ -8,6 +8,7 @@ from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, Ta
 from beyo_manager.domain.tasks.serializers import (
     include_monetary_step_fields,
     serialize_step,
+    serialize_task,
     serialize_task_light,
 )
 
@@ -34,6 +35,44 @@ def test_serialize_task_light_includes_task_schedule_fields():
     assert result["scheduled_start_at"] == "2026-06-26T09:00:00+00:00"
     assert result["scheduled_end_at"] == "2026-06-26T11:00:00+00:00"
     assert result["assortment"] == "three_seater"
+
+
+@pytest.mark.unit
+def test_serialize_task_includes_customer_name_snapshot():
+    task = SimpleNamespace(
+        client_id="tsk_1",
+        task_scalar_id=1,
+        task_type=SimpleNamespace(value="internal"),
+        priority=SimpleNamespace(value="normal"),
+        state=SimpleNamespace(value="pending"),
+        title=None,
+        summary=None,
+        return_source=None,
+        item_location=None,
+        return_method=None,
+        fulfillment_method=None,
+        assortment=None,
+        additional_details=None,
+        ready_by_at=None,
+        scheduled_start_at=None,
+        scheduled_end_at=None,
+        customer_id="cus_1",
+        customer_name_snapshot="Snapshot Customer",
+        primary_phone_number=None,
+        secondary_phone_number=None,
+        primary_email=None,
+        secondary_email=None,
+        address=None,
+        created_at=None,
+        updated_at=None,
+        closed_at=None,
+        is_deleted=False,
+        deleted_at=None,
+    )
+
+    result = serialize_task(task)
+
+    assert result["customer_name_snapshot"] == "Snapshot Customer"
 
 
 def _step_stub():

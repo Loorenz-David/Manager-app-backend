@@ -752,6 +752,7 @@
 | return_method | `TaskReturnMethodEnum | None` | `SAEnum(TaskReturnMethodEnum, name='task_return_method_enum', create_type=True)` |
 | fulfillment_method | `TaskFulfillmentMethodEnum | None` | `SAEnum(TaskFulfillmentMethodEnum, name='task_fulfillment_method_enum', create_type=True)` |
 | customer_id | `str | None` | `String(64)` |
+| customer_name_snapshot | `str | None` | `String(255)` |
 | primary_phone_number | `str | None` | `String(64)` |
 | secondary_phone_number | `str | None` | `String(64)` |
 | primary_email | `str | None` | `String(255)` |

@@ -133,8 +133,21 @@ async def create_task(ctx: ServiceContext) -> dict:
             created_by_id=ctx.user_id,
         )
 
+        customer: Customer | None = None
         if request.customer_id:
-            task.customer_id = request.customer_id
+            customer_row = await ctx.session.execute(
+                select(Customer).where(
+                    Customer.workspace_id == ctx.workspace_id,
+                    Customer.client_id == request.customer_id,
+                    Customer.is_deleted.is_(False),
+                )
+            )
+            customer = customer_row.scalar_one_or_none()
+            if customer is None:
+                raise NotFound("Customer not found.")
+
+            task.customer_id = customer.client_id
+            task.customer_name_snapshot = customer.display_name
             task.primary_phone_number = request.primary_phone_number
             task.secondary_phone_number = request.secondary_phone_number
             task.primary_email = request.primary_email
@@ -175,6 +188,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                 if customer is None:
                     raise NotFound("Customer not found.")
 
+                task.customer_name_snapshot = customer.display_name
                 task.primary_phone_number = request.primary_phone_number or customer.primary_phone_number
                 task.secondary_phone_number = request.secondary_phone_number
                 task.primary_email = request.primary_email or customer.primary_email
