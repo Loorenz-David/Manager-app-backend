@@ -350,3 +350,68 @@ Not a session; a snapshot of what the graph currently hands agents.
   prompt was silent on anchoring). **Unchanged recommendation: describe, do not fix — but note the
   span inventory in `architecture.yml` is still ~638 `startLine` keys, so any agent reading stored
   state is shown line numbers regardless of how well the write path behaves.**
+
+### 2026-08-24 — plan-4 delta re-review round 2 (reviewer, Opus 5)
+
+- **New evidence written:** none. A delta re-review records findings, not deltas, and I made no
+  `archgraph_apply_changes` call. **Span rate still unmeasured** — five sessions now since the
+  policy change with zero new evidence entries.
+- **Re-anchor activity:** none. No `archgraph_repair_anchors` call, and nothing in the round
+  presented itself as an anchoring question.
+- **My own prompt's graph instruction:** the delta re-review prompt is **silent on anchoring**, as
+  round 1's was. Its only perimeter-adjacent instruction is *"Anything under `.archgraph/` is the
+  owner's live work, expected whatever it contains"* — a hands-off clause, not an anchoring one. So
+  this is the second consecutive session whose own prompt says nothing about spans; I read master
+  plan §8 in the read order, so the standing confound still applies.
+- **Review findings about location: one, and it is the same habit outside the graph.** I did not
+  report any line-number discrepancy as drift. But the round's own history is that the coordinator
+  had to withdraw a "no re-run is owed" ruling **because the cited tests moved from `:198`/`:290` to
+  `:277`/`:351`** when round 3 grew the file by 190 lines. Quoting its §8 entry: *"A citation to a
+  tree that has since moved is not evidence for the current tree."* That is exactly the failure the
+  span policy removes **inside** the graph, occurring in prose where the policy does not reach —
+  second consecutive session in which the position-drift failure appears in `file:line` citations
+  rather than in evidence anchors. My own handoff answers it the same way the policy does: the
+  findings cite **symbols and observed assertion text** (`assert (None, 'insufficient_sample', 4) ==
+  (0, 'section_wide', 5)`, `def _step_state_is_excluded`, `test_c13c`) rather than line numbers,
+  except where the failing line **is** the observation (`test_domain_purity.py:13`,
+  `test_narrowed_task_economics.py:514`) — and both of those were read off a live run, not recalled.
+- **Closing-work language:** none. No handoff, plan section or fold in this round described keeping
+  anchors current, addresses pointing at old places, or position repair of any kind.
+- **N9 still routed to the owner, untouched by three sessions in a row.** My handoff restates it as
+  owner-owned without adjudicating it. The authorization boundary continues to hold without being
+  restated to anyone.
+- **Reading:** behaviour side unchanged and now five sessions deep — zero spans emitted, zero
+  drift-triggered re-anchors, zero anchoring vocabulary. The interesting movement is all in the
+  **prose** container: two consecutive rounds where a stale `file:line` citation changed a
+  conclusion (round 1's `:206` variable mis-read, round 3's `:198`/`:290` expiry), and in both the
+  correction was to name the **symbol or the observed text** instead. Nobody proposed that as a
+  policy; it arrived as the cheapest way to be right. Describing only: the span inventory in
+  `architecture.yml` is unchanged at ~638 `startLine` keys, so stored state still shows line numbers
+  to any agent that reads it.
+
+### 2026-08-24 — plan-4 delta re-review (reviewer, Opus 5)
+
+- **New evidence written:** none. A reviewer records no delta.
+- **Re-anchor activity:** none.
+- **Review findings about location:** none about the graph. **N9 restated and left with the
+  owner**, unchanged from round 1: the recorded delta names this phase's contract tests where
+  §7 expected two projection nodes. The handoff's words: *"Agents never adjudicate graph review
+  state, so it stays with the owner; it is not a decision this review needs answered to
+  proceed."* **Third consecutive session to reach the graph's edge, identify a real question,
+  and route it rather than act.**
+- **Closing-work language:** none.
+- **A related observation, logged because it is the same discipline in a different medium.** The
+  reviewer found a corrupted line in a **published prompt** outside every session's perimeter
+  (`3---` instead of `---`, breaking that row's frontmatter), reported it *"under the
+  passing-glance clause"* and explicitly did not touch it. The coordinator then repaired it and
+  **declared the repair in the fold rather than doing it silently**, on the reasoning that
+  restoring a delimiter is not a content edit but the distinction must be written down. Worth
+  logging here because the archgraph authorization boundary and the never-rewrite boundary are
+  the same instinct — *see it, name it, do not act on someone else's artifact unasked* — and both
+  held this round without being restated in the prompt.
+- **Reading:** five sessions, **zero spans emitted, zero drift-triggered re-anchors, zero
+  "keeping anchors current" language.** On the write path the policy's intent is holding
+  convincingly. Two things remain true and unchanged: attribution is still confounded (every
+  session reads master plan §8's absolute restatement), and **the stored state is still ~638
+  `startLine` keys in `architecture.yml`**, so any agent that *reads* an existing item is shown
+  line numbers no matter how well the write path behaves. Describe, do not fix.
