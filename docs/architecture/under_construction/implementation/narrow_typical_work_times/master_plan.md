@@ -564,6 +564,24 @@ were wrong, and only the timestamps showed it).
 
 ---
 
+### Graph meaning gap — phase 4's consumers (D30, 2026-08-24)
+
+Phase 4's graph delta recorded three **source links** and never touched the two consumer
+projections' **descriptions**, which is the meaning content agents actually read. Both still
+describe a pre-narrowing world. `domain-item-economics-typical-filters` **is** current — phases
+1–2 updated meaning properly — so the gap is localized to
+`projection-item-economics-task-production-time` and
+`projection-item-economics-task-budget-allocations`.
+
+**Owner sequenced the repair BEFORE plan 5** so phase 5 opens against a graph whose meaning is
+current. Scoped session authorized by **D30**:
+`prompts/maintenance/20260824_archgraph_phase4_meaning_prompt.md`.
+
+**Standing lesson for every remaining phase's §7 graph paragraph:** *"record the architecture-graph
+delta"* is ambiguous and was read as "add source links". **A phase that changes what a node
+MEANS owes a description rewrite, and the plan must say which of the two it wants.** Plans 5 and
+6 carry the same ambiguous sentence — fix it there before dispatch.
+
 ## 9. Standing rules
 
 Charter rules 1–14 apply in full, plus the **~30-rule earned corpus** adopted by reference

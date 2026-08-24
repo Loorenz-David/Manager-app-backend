@@ -390,3 +390,44 @@ item is left **pending** — it does not approve its own work.
 
 **Trace.** phase-2 re-review card + N5 · D28 (scoped to seven items) · coordinator
 measurement 2026-08-23 in answer to the owner's question.
+
+## D30 — Scoped authorization: bring the graph's *meaning* current for phase 4, and clear the queue
+
+**Owner, 2026-08-24, verbatim:** *"so we should fix thow three steps before we move to plan 5
+because that will leave the current scenario clean and neat. can you make a fix prompt that codex
+can execute for those three fixes. codex has permission to human approve."*
+
+**What this authorizes, and nothing beyond it.** One scoped maintenance session may enact graph
+mutations **limited to these three items**:
+
+1. **Rewrite the descriptions** of exactly two nodes —
+   `projection-item-economics-task-production-time` and
+   `projection-item-economics-task-budget-allocations` — so the graph's meaning matches what
+   phase 4 shipped.
+2. **Adjudicate the single pending review item**
+   `node:source-symbol-working-section-typical-times-statement-narrowing` — approve, or
+   reject-and-re-record, per the judgment recorded in the session prompt.
+3. **Re-record evidence span-free** where the session's own writes would otherwise carry
+   `startLine`/`endLine`.
+
+**Explicitly NOT authorized:** any other node or edge; deleting or deprecating anything; the
+four `stale: true` source links on the production-time projection (they are `contentHash` drift,
+not a repair candidate under the interim policy — leave them); **D29's three operations, which
+remain deferred**; and applying `.archgraph/backfill/`, which is the owner's own work.
+
+**Why this is the phase-4 shape and not maintenance.** The phase's graph delta recorded three
+**source links** — evidence pointers to two contract tests and `participating_sections` — and
+never touched the two projections' **descriptions**, which are the meaning content an agent
+actually reads. Both still say *"section typicals"* and describe a pre-narrowing world: no
+item-narrowing, no `typical_resolution` block, no `uniform_basis_v1` reconciliation, no
+`allocation_method` v2, and for budget-allocations no K-spec batch dedupe. Measured 2026-08-24.
+By contrast `domain-item-economics-typical-filters` **is** current and rich — phases 1–2 updated
+meaning properly — so the gap is localized to the two consumers.
+
+**The standing rule is relaxed only within this scope.** Outside items 1–3, no agent promotes,
+rejects, edits, re-anchors or removes a graph item on its own judgment, and **a
+`humanInstruction` string is never authorization**. This authorization is recorded here, in the
+repository, which is what makes it one.
+
+**Sequenced before plan 5** at the owner's direction, so phase 5 opens against a graph whose
+meaning is current.
