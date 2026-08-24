@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY
 ```
 
@@ -762,7 +762,13 @@ mutation that moves both; this lineage has shipped four inert checks of exactly 
 *Mutations:*
 **(i)** `_typical_block` (**call site**): `frozenset(step.working_section_id for step in steps)`
 in place of `participating_sections(steps)` → the excluded section joins the computation and
-**(b)** flips `600` → the stated two-section sum. *(B3: the published mutation, "compute over all
+**(b)** flips `600` → **the two-section sum, which this row must state as a literal and did
+not** (coordinator defect, caught at consumption: the published text read *"the stated
+two-section sum"* and never stated it — a criterion without its one exact expected outcome,
+charter rule 2, in the row that certifies three surfaces agree). **The fix round derives it from
+§6A.F's excluded-section value and writes it into this row.** The implementation reported
+**`750`**; that number entered the ledger from the implementer, not from the plan, so it is
+**confirmed or refuted by derivation, never adopted**. *(B3: the published mutation, "compute over all
 of `selected`", could not produce its stated `2100` under any reading of `section_ids` — the
 excluded section carries `_zero_evidence`, so it would take the in-task median, not its own
 typical. This shape is also the realistic drift: an exclusion predicate dropped.)*
@@ -893,10 +899,22 @@ category** — so the two bases are shown to differ **by measurement on the runn
 assumption. Rows (a) and (b) together are M1's proof: `600 ≠ 375` on one section's history,
 because one task's item has a category and the other's does not.
 
-*Mutation:* `_typical_block` (**call site**): pass `specs=()` — **break the narrowing predicate at
-its call site**. The spec never reaches the statement, the narrowed population is never computed,
-and row (a)'s `total_seconds` falls to **`375`** with basis `section_wide_uniform`. **Exactly
-row (a) reddens**, and it reddens on a number, not on a label.
+*Mutation — **corrected 2026-08-24 at the coordinator's consumption; the published site was
+wrong and the correction is measured***: `get_task_price_scenario._typical_block`
+(**definition**, the spec-derivation line `specs = (spec,) if spec is not None and
+spec.is_narrowing else ()`) → **`specs = ()`**. The narrowed population is never computed and
+row (a)'s `total_seconds` falls to **`375`** with basis `section_wide_uniform`.
+
+**Measured, both sites, on the implemented tree (`8a4a1cb`), md5-reverted:**
+
+| mutation site | `test_c8_divergent_fixture…` |
+|---|---|
+| **call site** — `specs=()` as the *kwarg* (**the published wording**) | red, but by `AttributeError: 'row' has no attribute 'spec_index'` — the local `specs` stays truthy, so the spec-keyed branch runs against rows that have no spec column |
+| **definition** — `specs = ()` at the derivation line (**corrected**) | red by **`assert 375 == 600`** |
+
+**The published wording bought a crash where the row demands a number**, and *"it reddens on a
+number, not on a label"* is this criterion's whole point. Charter rule 11 requires file **plus
+definition-vs-call-site**; the coordinator named the wrong one.
 
 **This is the row that would have failed on N11's fixtures**: with narrowed and section-wide pairs
 both `(540, 7)`, the mutation moves nothing and the row is green under total loss of narrowing.
@@ -1111,3 +1129,81 @@ matter of care, restated for the third phase running.
 assertion is *weaker* than the row it discharges, and it has never caught a guard that cannot
 fail. C1(b) — the highest-value repair in this fold — was found by the **projection**, not by any
 command here.
+
+### 2026-08-24 — implementation round 1 consumed (coordinator) — one measured blocking defect, and two of the plan's own
+
+**Handoff:** `handoffs/implementer/20260824_plan5_implementation_handoff.md`, `IMPLEMENTED`,
+tree `8a4a1cb`. **Consumed adversarially at source before any reviewer was dispatched.**
+
+**What holds, verified and not to be re-verified.** Perimeter discipline is **exact** on all three
+constrained files, checked by diff against the dispatch tree: `test_narrowed_task_economics.py`
+carries **only** the `:542` change and its restated comment; `_narrowing_fixture.py` is
+**129 insertions / 0 deletions** — additive as §4A requires; `budget_division.py` carries exactly
+the two authorized deletions. Both planted-defect probes ran, reddened and reverted with md5s.
+**§6A.F's medians were confirmed at source before assertions were written** (narrowed `600`,
+section-wide `375`) — the instruction worked. Full stamp **2708 passed / 21 failed / 1 skipped**
+with the 21-ID set matching. The mutation ledger's summands match the plan exactly
+(`C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 1` = 14, + 2 probes = 16). The reverse
+coverage map **reconciles numerically** — 13 test functions in the new file, 13 mapped — though it
+was asserted in prose rather than shown. The graph description edit was **correctly refused and
+escalated** rather than forced: the client's safety gate declined the persistent mutation, and the
+session did not work around it, promote, reject or re-anchor. **That is the right behaviour and
+the D30 pattern working.**
+
+**★ BLOCKING — `test_c8_narrowing_changes_the_published_number_and_basis` is green under total
+loss of narrowing, and Task 0 claims it as C8(a) coverage.**
+The test drives `_TypicalSession` — the fake whose `execute()` **discards the statement** — and
+hands it both populations by hand (`_spec_row("section_a", 600, 375)` and
+`_typical_row("section_a", 375)`). Narrowing happens in SQL. **A test that never issues SQL cannot
+observe it**, and asserting `600` against a fake told to return `600` supplies its own facts.
+**Measured on the implemented tree, md5-reverted:**
+
+| mutation | `test_c8_divergent_fixture…` | `test_c8_narrowing_changes_the_published…` |
+|---|---|---|
+| call site (`specs=()` kwarg) | **failed** | **PASSED** |
+| definition (`specs = ()`) | **failed** — `assert 375 == 600` | failed — `AttributeError` |
+
+**Under the plan's own published mutation the test passes while narrowing is entirely gone.** This
+is the row-that-cannot-fail family attached to **M1** — the ledger's top entry, and the criterion
+the owner added *this phase* precisely because inert coverage of M1 was the risk. §6A's own ⚠
+fixture rule says it in bold: *before citing any test in this phase as proof of a SQL-level
+behaviour, check that it issues SQL.*
+**Fix:** delete it, or declare it in the Review log as a **candidate criterion** for what it
+actually discharges (charter rule 16 — an orphan is deleted or declared, never claimed as
+coverage). `test_c8_divergent_fixture_measures_narrowed_600_against_section_375` is the real
+proof and it bites correctly.
+
+**Two defects are the plan's own, and are corrected above rather than charged to the session.**
+**(1) C8's mutation was sited wrong** — "call site" where the plan meant the derivation line. At
+the call site the red is an `AttributeError`, not the number the row demands; the correction is
+measured in §6A C8. The session executed the published wording faithfully and reported the red;
+**what it owed and did not give was the flag that the red was not the stated observable.**
+**(2) C5(i) never stated its literal** — *"flips `600` → the stated two-section sum"*, with the
+sum nowhere stated. `750` entered the ledger from the implementation, not the plan.
+
+**Should-fix — C1(c)'s instrument was substituted, and the mutation was chosen to fit it.**
+§6A says the row is *"asserted through a spy that delegates"* and, after N1 dropped the
+baseline-less payload clause, that *"the spy carries the row alone"*. The implementation is an
+`inspect.getsource` substring scan (`:143-146`). It is brittle in one direction — a benign
+reformat of the call across lines reddens it on correct code — and narrow in the other, since it
+sees only the exact literal `typical_times_statement(ctx.workspace_id, now=ctx.now`. Mutation
+C1(ii) adds precisely that literal, **so the red demonstrates the scan matches the string it was
+built from and nothing about its reach.** D24 is a contract and this row is its only guard.
+
+**Should-fix — the "pre-implementation baseline" is a mid-implementation snapshot.** The handoff
+reads *"The new file was absent at baseline; collection was 67."* Measured at HEAD:
+`test_price_scenario_query.py` collects **52** alone and `test_narrowed_price_scenario.py`
+collects **16** — so a 67-collection **necessarily includes the new file**, and 60 failures
+require production to have been edited already. The numbers are real and the label is not, which
+is the load-bearing part: a baseline's whole function is to be the *before*, and this phase now
+has none for its own two files. **Contained** — the declared comparator is the 21-ID set, and the
+full stamp matches it — but the charter is explicit that the baseline is captured **before the
+first production edit**.
+
+**Note.** Both C8 tests assert against `_typical_block`'s returned dict rather than the serialized
+payload. M1 says *published* numbers differ. The values are equal by the whole-dict pass-through
+at `serializers.py:364`, so this is reach, not a defect — recorded so the reviewer does not
+re-derive it.
+
+**State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`** (coordinator consumption, not a review — no
+reviewer has seen this tree).
