@@ -3,7 +3,7 @@
 ```
 plan: plan_6
 project: narrow_typical_work_times
-state: NOT_STARTED
+state: PROMPT_READY
 projection_gate: WAIVABLE — no rule-6 code surface. The coordinator records a one-line
                  justification if it waives.
 ```
@@ -128,12 +128,30 @@ not patched from a closeout phase.
    guard's roots cover all of `docs/handoff/`.
    Widen an allowlist rather than removing a filter: removing the guard's extension filter makes
    it crash on a binary file in its own root and go red forever for the wrong reason.
-5. **Architecture graph.** One batched `apply_changes` for whatever this session actually
-   changes (likely: none, if only documents moved — check, do not assert). Then verify the whole
-   project's graph state: `archgraph_status` shows 0 pending / 0 stale / 0 diagnostics, and the
-   nodes plans 2, 4 and 5 touched carry accurate spans. **Re-derive every span from its symbol;
-   never trust a stored one** — all four stored spans were wrong the last time this was checked
-   in this lineage. Agents never promote, reject or edit review items.
+5. **Architecture graph — rewritten at the pre-dispatch lint, 2026-08-24.** The published text
+   is superseded in full; it predates the span-removal policy and is wrong in three ways.
+   **What it now says:**
+   - **This phase changes no code, so it almost certainly owes no graph delta. Check, do not
+     assert** — and if nothing changed, say so and record nothing.
+   - **Anchoring: follow `.archgraph/agent-operating-policy.md`.** It is committed, authoritative,
+     and is the policy's home. Do not take instruction on anchoring from this plan.
+   - **Do not gate on `staleNodeCount`, `pendingReviewCount`, or any count under `.archgraph/`.**
+     The published text demanded *"0 pending / 0 stale / 0 diagnostics"*. Measured 2026-08-24:
+     `staleNodeCount` is **5**, and all five are **outside D31's authorized scope by name**. A
+     session gating on zero would halt on a correct tree. `.archgraph/` is the owner's working
+     area — **report what you observe there; never gate on it.**
+   - **Never promote, reject, edit or re-anchor a graph item on your own judgment.** Adjudication
+     is the owner's, `archgraph_repair_anchors` takes one operation per call, and a
+     `humanInstruction` string is never authorization.
+   - **Known and not yours:** `prompts/maintenance/20260823_archgraph_reanchor_prompt.md` (D29) is
+     live, unconsumed, and **scoped to `re-anchor`, an operation measured on 2026-08-24 to change
+     evidence-anchor records rather than source-link objects** — it cannot remove a span. It must
+     be rewritten before it is ever dispatched. **Do not dispatch or execute it.**
+
+   *Why the published text was wrong:* it demanded accurate **spans** on the nodes plans 2, 4 and
+   5 touched and told the session to re-derive each from its symbol — instructing work the
+   span-removal policy has retired. This is the correction master plan §8's D30 lesson recorded as
+   still owed by plan 6; plan 5's half was applied at its fold.
 6. **Close the tracker.** All six rows `APPROVED`. Move closed prompts and handoffs into
    `archive/plan_<n>/` at the coordinator's closeout ritual, together with the gate commit.
    Historical path references are **not** rewritten — they resolve under `archive/` by
@@ -143,12 +161,33 @@ not patched from a closeout phase.
 
 ## 6. Tests / acceptance criteria
 
+> **⚠ Trace cells added at the pre-dispatch lint, 2026-08-24 — manifest property 5.** This plan
+> was authored before the charter's trace chain and carried none. Assigned below at source, and
+> **two published rows were demoted rather than given a trace they do not have**: a row that
+> serves no measurement-ledger entry and no mechanism contract is cut, not decorated.
+>
+> | row | trace | note |
+> |---|---|---|
+> | **C1** | — | **Demoted to a task obligation.** It guards *this session's own writes*, not a property of the shipped system. Task 1 already runs it first; its planted-defect probe (name the retired identity → the guard reddens) is retained there as a **rule-15 probe**, which is what it always was |
+> | **C2** | **M3** · **M6** | Every published field's nullability and the reachable state producing each null — M6 is "published fields mean what their contract says", and the frontend cannot honour a contract it was not told |
+> | **C3** | **M6** | D25's unreachable shape: `item_narrowed` beside `0` does not occur, and a zero **is** a statistic. A frontend null-check treating a legitimate `0` as "no data" is M6 failing at the last hop |
+> | **C4** | **M3** | The supersession deletes the cached generic typical from the worker-card path — **literally the last place two surfaces could show different typicals for one task**, which is M3's whole subject |
+> | **C5** | — | **Demoted to the closeout ritual.** Tracker rows and Review-log completeness are pipeline bookkeeping, not a measurement. Task 6 owns it, and the plan already conceded it is *"not automatable — stated as a reviewer check"* |
+>
+> **Three criteria remain: C2, C3, C4.** Sizing PASS. Every remaining row traces; the two that
+> could not have been made to trace honestly were cut instead.
+
+
 **C1 — the docs guard is green.** `PYTHONPATH=. pytest tests/unit/docs/` passes, before and
 after every write under a guarded root.
 *Mutation* — name the retired inline-refusal identity verbatim in the new handoff →
 `test_retired_inline_refusal_identity_is_absent_from_live_sources` goes red (its roots cover
 all of `docs/handoff/`).
-*Both sides* — contract: 59 passed; mutation: 1 failed, naming the new file's path.
+*Both sides* — contract: **zero failures**; mutation: 1 failed, naming the new file's path.
+**The count is deliberately not pinned** (corrected at the pre-dispatch lint): the guard collects
+**59** today, and **task 4 of this plan adds pinned assertions to it**, so a criterion asserting
+`59 passed` would fail on green code after the phase's own work. Derive the count when you run it;
+assert the failure count, which is stable.
 
 **C2 — every new payload field in the handoff is annotated nullable-or-not, and every
 annotation names a reachable state that produces the null.** Asserted by a pinned docs test
@@ -213,3 +252,29 @@ plan's Review log is non-empty; the master plan's environment section still matc
 ## 8. Review log
 
 *(empty — append-only; shared by implementer and reviewer)*
+
+### 2026-08-24 — pre-dispatch lint (coordinator), and the projection waived
+
+**Run per `pipeline-coordinator.md` Responsibility 1c, every property by its command.**
+
+| check | result |
+|---|---|
+| **Sizing** | **PASS** — 5 published rows, **3 after demotion** (C2, C3, C4) |
+| **Intention gate** | **PASS** — `planning/intention.md` header reads `RATIFIED`, checked at source |
+| **References resolve** | **PASS.** `tests/unit/docs/` collects; `test_retired_inline_refusal_identity_is_absent_from_live_sources` exists at `test_item_economics_handoff_accuracy.py:221`; all four `docs/domains/item_economics/` files exist; `HANDOFF_TO_FRONTEND_production_time_and_worker_cards_20260818.md` exists |
+| **Counts derived** | **PASS with one correction.** The docs guard collects **59** today (measured, not carried). C2's "six fields" re-counted from its own list = 6 ✓ |
+| **Exact outcomes** | **★ FAIL → fixed.** C1's *"contract: 59 passed"* is **invalidated by this plan's own task 4**, which adds pinned assertions to that very suite. A criterion asserting `59 passed` fails on green code after the phase's own work — the same class as plan 5's C7 allowlist, derived from the pre-task tree. Now asserts **zero failures**, count derived at run time |
+| **Traces** | **★ FAIL → fixed.** The plan predates the trace chain and carried **no** trace cells. C2 → M3·M6, C3 → M6, C4 → M3. **C1 and C5 were demoted, not decorated** — neither serves a ledger entry or a mechanism contract, and the chain says such a row is cut |
+| **Perimeter-vs-guard collision** | **PASS** — no occurrence-count or absence assertion in `tests/unit/docs/` names a file in this phase's perimeter |
+| **Standing instructions naming this plan** | **★ FAIL → fixed.** Master plan §8's D30 lesson records plan 6 as **still owing** the graph-paragraph correction. Applied in task 5 |
+| **Every verb true of the code it names** | **★ FAIL → fixed.** Task 5 told the session to *"re-derive every span from its symbol"* and to require *"0 pending / 0 stale / 0 diagnostics"*. **Both are false now**: the span-removal policy has retired span emission entirely, and `staleNodeCount` is **5** — all five outside D31's scope by name, so a session gating on zero halts on a correct tree |
+
+**Four failures, all caught before a session opened the plan.** Three of the four are the same
+underlying shape: **a sentence that was true when it was written and was never re-derived against
+the tree the session would actually open.**
+
+**Projection waived**, per this plan's own `projection_gate: WAIVABLE`. Justification, one line as
+the gate requires: **no rule-6 code surface — this phase writes documents, changes no production
+code, no test behaviour and no golden**, and the lint above has already discharged the mechanical
+half a projection would have found. The owner is session-constrained and this is the cheapest
+honest saving available.
