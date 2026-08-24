@@ -328,3 +328,25 @@ Not a session; a snapshot of what the graph currently hands agents.
   because the reviewer read master plan §8 in its read order, but the first session whose *own
   prompt* carried no anchoring instruction and which nonetheless reasoned about the graph in
   terms of meaning rather than position.
+
+### 2026-08-24 — plan-4 fix round 3 (implementer, Codex)
+
+- **New evidence written:** none. The handoff states *"No graph delta required. Status was read
+  before implementation and the graph remains owner-owned; no promotion, rejection, edit,
+  deprecation, or removal was attempted."* **Nothing to report on span rate.**
+- **Re-anchor activity:** none, across a round that changed three production files and ~290 lines.
+- **Review findings about location:** none.
+- **Closing-work language:** none.
+- **Explicit deference recorded:** the handoff names **N9** — the review's finding that the graph
+  delta recorded contract tests rather than the two projection nodes §7 expected — and says
+  *"N9 remains an owner decision, not an agent mutation."* Logged because it is the second session
+  in two days to reach the graph's edge, identify a real question about it, and route it to the
+  owner rather than act. The authorization boundary is holding without being restated.
+- **Reading:** cumulative position unchanged and now well-supported on the *behaviour* side — four
+  sessions, zero spans emitted, zero drift-triggered re-anchors, zero "keeping anchors current"
+  language. The **attribution** question is still open: every session in this project reads master
+  plan §8, which states the interim policy absolutely, so none is a clean test of the policy text
+  reaching an agent that has not been told. The nearest thing remains the review round (its own
+  prompt was silent on anchoring). **Unchanged recommendation: describe, do not fix — but note the
+  span inventory in `architecture.yml` is still ~638 `startLine` keys, so any agent reading stored
+  state is shown line numbers regardless of how well the write path behaves.**

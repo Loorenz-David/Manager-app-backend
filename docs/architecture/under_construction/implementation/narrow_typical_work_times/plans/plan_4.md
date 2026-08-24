@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: REVIEWING
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -383,9 +383,23 @@ asserted separately. (One probe per member: a blanket "both consumers are settle
 its own row per consumer.)
 (c) **absence, L2, roots stated** *(rewritten at the projection fold, L9 — the original could
 not return ∅ and so could not decide its own claim)*:
-`app/beyo_manager/domain/item_economics/typical_filters.py` **and this phase's
-evidence-construction helper** contain none of `live_seconds`, `load_live_worked_seconds`,
-`total_working_seconds`. **Expected ∅ / ∅**, as a committed test (§9: absence criteria ship as
+`app/beyo_manager/domain/item_economics/typical_filters.py` ~~**and this phase's
+evidence-construction helper**~~ contains none of `live_seconds`, `load_live_worked_seconds`,
+`total_working_seconds`.
+> **Second root struck at the round-3 fold (2026-08-24) — it never existed.** L9 narrowed this
+> row's root from the repository to *"`typical_filters.py` and this phase's evidence-construction
+> helper"* without checking that such a helper would be written. It was not: evidence is
+> constructed **inline** in `get_task_production_time` and `get_task_budget_allocations`, and both
+> **legitimately** contain `total_working_seconds=live_seconds[step.client_id]` — the live-clock
+> contract, not a leak. So the second root is either **void** (no such symbol) or
+> **unsatisfiable** (the services must contain the terms).
+> Round 3 bound it to `inspect.getsource(selected)` — a **test-local** helper at
+> `test_narrowed_task_economics.py:53` — which makes that half of the row an assertion about the
+> test's own source, trivially true. Also note `assert roots` there is `assert [<one literal>]`,
+> not a guard that a walk found something; contrast C13(c)'s genuine `assert files` / `assert
+> hits`. **The row's real guards are and always were C1's mutations (i)/(ii) on rows (a)/(b)**,
+> which are measured biting. **This coordinator authored the defective narrowing and did not
+> notice it for two rounds.** **Expected ∅ / ∅**, as a committed test (§9: absence criteria ship as
 tests, never as a session grep).
 *Why the root shrank, and what did not shrink with it:* the original claim was **semantic**
 ("no site reachable from `divide_production_budget`'s inputs passes a live-derived value into
@@ -1376,3 +1390,86 @@ change was touched; no graph delta is expected.
 
 **L4 authorization (before run):** `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` is the
 single closing L4 for this round; its 21-ID failure-set comparison is recorded in the handoff.
+
+### 2026-08-24 — fix round 3 consumed → delta re-review (coordinator)
+
+**Handoff:** `handoffs/implementer/20260824_plan4_fix_round3_handoff.md`, base `07cb7be`.
+**Perimeter exact** — 8 `app/` files, name for name as declared. **Task 0's completeness table was
+produced**, 33 rows, one per criterion row letter including absence rows; that instrument is the
+reason this round closed both blocking findings rather than one.
+
+**Arithmetic reconciles.** L4 `2692 passed / 21 failed / 1 skipped`, 21-ID diff **∅/∅**. Round 2
+stamped 2687; **+5 is exactly the five new test functions** (`test_c1c_…`, `test_c2c_…`,
+`test_c5a_and_c5c_…`, `test_c5b_…`, `test_c13c_…`), with `test_item_economics_domain_walk_is_recursive`
+rewritten rather than added.
+
+#### Verified closed, by measurement rather than by report
+
+- **B1 — closed and BITING, measured with the reviewer's own mutation.** Republishing a zero
+  section-wide median at count ≥ floor as `insufficient_sample` measured **346 passed** (invisible)
+  at review; on this tree it measures **1 failed / 350 passed**, failing precisely on the new
+  `test_c5b_reachable_zero_section_statistic_is_visible_on_both_surfaces`. §4C's reachable zero
+  form now has the fixture it always required. Probe reverted, `md5` `c888e3d2…` identical.
+- **B2, C13(c) half — closed and strong.** A genuine `rglob` walk over `app/beyo_manager`, with
+  **`assert files`** (the walk found something), **`assert hits`** (the term sweep is not vacuous),
+  `hits <= allowed` naming both exceptions, and a count pin
+  `price_scenario.read_text().count("_step_state_is_excluded") == 2`. This is the shape the C0
+  escape-3 lesson asks for, done properly.
+- **S1 — closed.** The `elif selected is not None` tolerance branch is **gone**, and
+  `test_budget_division.py`'s 23 literals are converted (87 lines). The
+  `Mapping[str, SelectedTypical]` annotation is now load-bearing.
+- **S2 — closed.** The recursive-walk guard builds a nested module under `tmp_path` and asserts it
+  is found; ledger row 23 shows the `glob` revert reddens it. Three generations of one shape,
+  finally closed.
+- **S3 — closed, verified at source.** `test_production_time_query.py:206` now reads
+  `assert e3["allocation_method"] == "static_proportional_section_v2"` — the production-time
+  surface, on `e3`.
+- **S5 — closed.** C1 asserts exact per-section allowances (`3200`, `1600`) on both `ctx.now`
+  calls and both surfaces, plus a database re-read proving no persisted total moved.
+- **N3 — closed.** `division_serializers.py:115-116` reads `RECONCILIATION_METHOD` and
+  `COMPARABILITY_PROFILE` instead of hardcoding the version strings.
+
+#### S4 — the ledger claims a transcription it does not contain, and my instruction had expired
+
+The handoff states *"C8 and C11 are transcribed from the review's observed runs and were not
+rerun, as directed."* **The 26-row table contains neither row.** Distribution measured: C0×6,
+C1×2, C2×2, C3, C4, C5×4, C6, C7×2, C9×2, C10×3, C12, C13 — C8 and C11 absent.
+
+**And my own instruction was wrong by the time it was acted on.** I wrote *"no re-run is owed —
+the evidence is in this handoff, taken on this tree."* That was true when the review closed and
+**expired the moment round 3 edited `app/`**: `test_narrowed_task_economics.py` grew 190 lines and
+three production files changed, so the reviewer's cited `:198` / `:290` now point at `:277` /
+`:351`. A citation to a tree that has since moved is not evidence for the current tree.
+
+**Closed by my own measurement rather than by another round**, since bookkeeping does not justify
+one:
+- **C8** — `get_task_production_time.py:84`, `if section_ids:` → `if section_ids and status.status
+  in {EconomicsStatusEnum.OK, EconomicsStatusEnum.INFEASIBLE}:` → **1 failed / 15 passed**,
+  `test_c8_no_budget_branch_reconciles_before_the_early_return`,
+  `assert 'section_wide_uniform' == 'item_narrowed_uniform'`.
+- **C11** — `get_task_budget_allocations.py`, narrowed branch, discard the narrowed evidence →
+  `assert {…: (600, 'section_wide', 7)} == {…: (600, 'item_narrowed', 7)}` on
+  `test_c11_both_consumers_publish_the_same_literal_typical_triples`, with the collateral C10 bite
+  `assert [27] == [7]`.
+Both reverted; `get_task_production_time.py` `md5 aff094de…`, `get_task_budget_allocations.py`
+`md5 647d0e69…`, `git status -- app/` clean. **The two rows belong in the re-review's record as
+measured on THIS tree, not transcribed from `748e709`.**
+
+#### The one finding this round did not close — and I authored it
+
+**C1(c)'s second root does not exist.** L9 narrowed the row to *"`typical_filters.py` **and this
+phase's evidence-construction helper**"* without checking that such a helper would be written.
+None was: evidence is built **inline** in the two services, which **must** contain
+`total_working_seconds=live_seconds[...]` because that is the live-clock contract. Round 3 bound
+the phrase to `inspect.getsource(selected)` — a **test-local** helper — making that half an
+assertion about the test's own source. Its `assert roots` is `assert [<one literal>]`, not a walk
+guard, which reads oddly beside C13(c)'s genuine `assert files`.
+**§6 C1(c) is amended above: the second root is struck, with the reason recorded.** The row's real
+guards are C1's mutations (i)/(ii), measured biting. **Routed to the delta re-review to adjudicate
+whether the amended row needs any test change at all, or whether striking the void root is the
+whole fix.** I authored the defective narrowing and did not notice it across two rounds.
+
+#### Dispatched
+
+**Delta re-review, Opus 5**, scoped per the charter's re-review protocol: opens with the review
+history and the verified perimeter as step 1.
