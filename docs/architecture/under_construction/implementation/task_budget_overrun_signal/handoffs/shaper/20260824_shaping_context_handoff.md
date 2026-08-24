@@ -3,7 +3,7 @@ plan: planning (project-level — belongs to no phase)
 role: shaper
 round: 1-3 (the whole shaping session)
 date: 2026-08-24
-state: CLOSED — shaping complete, intention at READY_FOR_RATIFICATION
+state: CLOSED — shaping complete; intention **RATIFIED** by the owner 2026-08-24 (round 5)
 verdict: n/a (shaping produces no verdict)
 actor: Claude Opus 5 (1M context), intention-shaper role
 ---
@@ -12,8 +12,9 @@ actor: Claude Opus 5 (1M context), intention-shaper role
 
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
-Nothing in this document needs the owner. The one outstanding owner act is **D4,
-ratification**, and its surface lives in the intention at **§10.1** — not here.
+Nothing in this document needs the owner. **D4, ratification, was answered 2026-08-24**
+(intention §10.2); the surface presented is at §10.1 and the four confirmations taken
+with it (D5–D8) at §10.3.
 
 ---
 
@@ -235,7 +236,12 @@ fallen off the tie. **Conclusion: call the function; never re-derive the arithme
 
 ---
 
-## 7. ⚠ The collision the next planner must resolve first
+## 7. The collision — **RESOLVED by D5** (intention §10.3, 2026-08-24)
+
+**Resolved on the ratification surface: HC-2 stands; the worker time-pressure handoff is
+a separate project with its own intention.** The text below is kept as written for the
+record of *why* it mattered; nothing in it is still open.
+
 
 `docs/handoff/from_frontend/HANDOFF_TO_BACKEND_worker_time_pressure_20260824.md`
 (dated today, seen by the owner) asks for **two additive fields on

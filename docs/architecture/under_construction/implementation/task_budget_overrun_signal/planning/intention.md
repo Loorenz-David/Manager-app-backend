@@ -1,33 +1,34 @@
 # Intention: Task Budget Overrun Signal (one batched verdict read for the managers task list)
 
 ```
-status: **READY_FOR_RATIFICATION** (round 4, 2026-08-24). **NOT RATIFIED — this header
-        is the shaper's *claim*, not the owner's answer. Nothing here is authority yet
-        and no downstream skill may compile against it.**
-        **0 owner decisions open.** D1 (§3.4), D2 (§6) and D3 (§5.1) are answered and
-        folded. The one act outstanding is **D4, the ratification itself** — the
-        surface is written into **§10.1** so it can be relayed verbatim by whoever
-        next sits with the owner. §10.2 says exactly how to record the answer.
-        **⚠ THE SHAPING SESSION IS CLOSED** at commit `a2fe8b9`. The owner ended the
-        shaper's role at this draft (§11 rounds 3–4). The session's grounding research
-        is preserved in `handoffs/shaper/20260824_shaping_context_handoff.md` — **read
-        it before re-reading any source file**; it carries the verified anchor map and
-        both probes, re-runnable. This document is complete and self-contained by design,
-        and the pipeline's interface from here is artifacts, never conversation.
-        **Next actor: whoever presents §10.1 to the owner.** On RATIFIED →
-        mechanism-inventory (§9 lists what it must reach contract grade).
+status: **RATIFIED** (round 5, 2026-08-24) — ratified by the owner (**David**) on
+        2026-08-24, on the ratification surface written at **§10.1**: the intended
+        outcome in plain language, the **§1A measurement ledger verbatim (all six
+        entries, M1–M6)**, the §8 scope boundaries, and the decision index (D1–D3
+        settled, none outstanding). Before the act, the owner explicitly confirmed four
+        calls the document had made on the owner's behalf — **D5–D8** (§10.3) — and
+        answered "**Yes — ratify as presented**." Recorded in §11 round 5.
+        **This is the pipeline's strongest gate and it is now open** — prompts of every
+        role may compile against this document. A **material** semantic change re-opens
+        it (status back to COLLABORATING); the coordinator records its materiality
+        ruling in §11 for anything it folds without returning here.
+        **Next: mechanism-inventory** (§9 item 2 lists what must reach contract grade).
+        The shaping session's grounding research is preserved in
+        `handoffs/shaper/20260824_shaping_context_handoff.md` — read it before
+        re-reading any source file.
         **⚠ Section-letter precedence:** §3.4 supersedes its own round-1 wording — a
-        second, independent cause of the divergence was found in round 2 and a bound
-        stated on one cause alone was wrong. §11 R4-b supersedes R3-c.
-        **⚠ Before phase 1:** a second frontend handoff wants `budget-allocations`
-        extended, which **HC-2 forbids**. See §11 R4-c — decide there, not in a plan.
+        second, independent cause of the divergence was found in round 2. §11 R4-b
+        supersedes R3-c. **§11 R4-c is RESOLVED by D5** (§10.3): HC-2 stands; the
+        worker time-pressure handoff is a separate project.
+        Prior header, superseded: READY_FOR_RATIFICATION (round 4) — shaper's claim,
+        0 owner decisions open, D4 outstanding.
 role: intention (pipeline root artifact)
 shaped_from: docs/handoff/from_frontend/HANDOFF_TO_BACKEND_task_budget_overrun_signal_20260823.md
              (the frontend's request, authored by the frontend's Claude Opus 5 agent)
              plus owner decisions taken in the shaping conversation of 2026-08-24
-             (S1–S3 round 1; D1–D2 round 2; D3 round 3; R4-a round 4; §11).
+             (S1–S3 round 1; D1–D2 round 2; D3 round 3; R4-a round 4; D4–D8 round 5; §11).
 date: 2026-08-24
-round: 4
+round: 5
 ```
 
 ---
@@ -630,9 +631,9 @@ here is scope.
 
 ---
 
-## 10. Owner decisions — ⚠ **0 OPEN** — and the ratification surface
+## 10. Owner decisions — **RATIFIED, 0 open** — and the ratification surface
 
-**All four round-1 cards are answered.** Each decision lives in the section it governs,
+**Every owner decision is answered, including ratification.** Each lives in the section it governs,
 per the artifact map; they are indexed here, not restated:
 
 | ID | Decision | Answered | Lives in |
@@ -640,7 +641,11 @@ per the artifact map; they are indexed here, not restated:
 | **D1** | The projection subtracts the **task** pot (`allowed − actual`), never the section sum | owner, 2026-08-24 | §3.4 |
 | **D2** | `INFEASIBLE` is budget-bearing and reports `over`; `no_budget` means "we cannot say" | owner, 2026-08-24 | §6 |
 | **D3** | `currency` gains a wire-only fourth member `no_currency`; no fallback chain | owner, 2026-08-24 | §5.1 |
-| **D4** | Ratification — **the one act still outstanding**, below | pending owner | this section |
+| **D4** | **Ratification** — "Yes — ratify as presented", on the §10.1 surface | **owner (David), 2026-08-24** | §10.2, §11 round 5 |
+| **D5** | HC-2 stands; the worker time-pressure handoff is a **separate project** (resolves §11 R4-c) | owner, 2026-08-24 | §10.3, HC-2 |
+| **D6** | The amber (`projected_over`) floor is **60 seconds**, as the frontend chose | owner, 2026-08-24 | §10.3, §3.3 |
+| **D7** | Unknown / deleted / other-workspace ids are **omitted silently**, as `budget-allocations` does | owner, 2026-08-24 | §10.3, §7.3, M4 |
+| **D8** | `over` has **no floor** — one second over the pot is `over` | owner, 2026-08-24 | §10.3, §6 |
 
 Shaping resolutions the owner did not need to arbitrate (repo-derivable, each with a
 rationale in §11): **S4** roles, **S5** rate source, **S6** naming, **S7** money is a
@@ -648,7 +653,7 @@ call, **R2-a** the workspace-currency correction, **R2-b/c** the second divergen
 
 ---
 
-### 10.1 The ratification surface (presented to the owner; **not yet answered**)
+### 10.1 The ratification surface (presented to the owner 2026-08-24; **answered — see §10.2**)
 
 This is the surface the intention gate requires, written into the document rather than
 left in a conversation, because **this shaper's session ends at this draft** (§11 round
@@ -692,7 +697,7 @@ The only act remaining is D4 — the ratification itself.
 
 ---
 
-### 10.2 D4 — the ratification act
+### 10.2 D4 — the ratification act (**ANSWERED: ratified, 2026-08-24**)
 
 **Question:** do you ratify this intention — the objective, the six measurement
 outcomes above, and the scope boundaries — as the authority every plan and test
@@ -721,6 +726,36 @@ changelog entry naming the owner, the date, and *this* surface (§10.1) as the o
 presented. Only the owner's explicit act writes it.
 
 **Trace:** the whole document; charter intention gate.
+
+**Answer (owner, David, 2026-08-24): "Yes — ratify as presented."** Presented through
+the harness's decision prompt after the four §10.3 confirmations, with the §10.1 surface
+relayed whole in the same message — the outcome statement, all six ledger entries with
+their defect families, the ship / does-not-ship boundary, and the decision index. The
+owner had been told, before answering, that from the moment of ratification every plan
+and prompt compiles against this document and that a later change of meaning re-opens
+the gate rather than slipping in.
+
+---
+
+### 10.3 D5–D8 — confirmations taken on the ratification surface
+
+The owner is ratifying for the first time in this pipeline and asked to be walked
+through it. Four places where the document had made a call **on the owner's behalf** —
+inherited from the frontend's handoff or from a sibling endpoint — were put to the owner
+as one-line questions with a story each, **before** the ratification question. All four
+confirmed the text as written; **no section changes**. They are recorded so a future
+reader knows these were consciously owned, not passively inherited.
+
+| ID | Confirmed | Story put to the owner | Alternative declined |
+|---|---|---|---|
+| **D5** | **HC-2 stands. The worker time-pressure handoff (`HANDOFF_TO_BACKEND_worker_time_pressure_20260824.md`) is a separate project** with its own intention and ratification, free to extend `budget-allocations` there. This was the one item that *blocked* ratification (§11 R4-c) and it is now resolved. | A worker mid-step when a deploy lands: if both requests share one project and one changes `budget-allocations`, a mistake there breaks the step card this project swore not to touch. | Merge into one project (re-shape, gate re-opens); or sequence the worker project first. |
+| **D6** | **The `projected_over` floor is 60 seconds** (§3.3), as the frontend chose for its minute-rounding formatter. Raw seconds are always served regardless. | Three stages left whose targets sum to 90 s more than the pot: 60-s floor shows amber "1m over"; a 5-minute floor shows nothing. | A higher floor — fewer amber badges, but the single-task outlook and the list disagree until that screen converges. |
+| **D7** | **Unknown, deleted and other-workspace ids are omitted silently** (§7.3, M4), matching `budget-allocations`. | A colleague deletes a task; the next 45-second poll drops the row and the badge vanishes. | Error on any unknown id — one stale id fails the page of 25, and the frontend needs a second error path. |
+| **D8** | **`over` has no floor** (§6): `over_seconds > 0` is `over`. | The clock ticks past the pot at 14:03:00; at 14:03:01 the strip is red and reads "0m over" for 59 s — a frontend rounding choice, not a backend one. | The same 60-s floor as amber — symmetric, but a task 59 s over reports `within_budget` and a future `over` notification fires a minute late. |
+
+**What D5 does to the header warning.** §11 R4-c said HC-2's survival had to be decided
+before phase 1. It is decided: HC-2 survives. A planner may now cite HC-2 and M6 without
+a caveat.
 
 ---
 
@@ -876,6 +911,25 @@ out of date and the doctrine forbids rewriting them in place.
   alongside so this document's `shaped_from` citation resolves in history). **No code, no
   tests, no graph writes; the suite was never run and no baseline in this project is the
   shaper's.**
+
+**Round 5 — RATIFIED (2026-08-24).** The owner (**David**) ratified the intention on the
+**§10.1 surface**, relayed whole: the intended outcome in plain language, the **§1A
+measurement ledger verbatim — all six entries, M1–M6, each with its defect family**, the
+§8 scope boundaries (ships / does not ship), and the decision index. The answer was
+"**Yes — ratify as presented**." Recorded at §10.2.
+
+- **D5–D8 (owner)** — four confirmations taken **before** the ratification question, on
+  calls the document had made on the owner's behalf; all four confirmed the text as
+  written, no section changes (§10.3). **D5 resolves R4-c**: HC-2 stands, the worker
+  time-pressure request is its own project.
+- **D4 (owner)** — the ratification act itself.
+- **Session note.** The owner said the orchestrator's workflow was already set up
+  externally and that this was the owner's first ratification in the agentic flow; the
+  session's job was to make the surface understandable, ask the questions that remained,
+  and record the act — not to re-open shaping. No mechanism, measurement or scope text
+  changed in this round. The gate is open; **mechanism-inventory is next.**
+
+Open after round 5: **nothing.** The intention is authority.
 
 ---
 
