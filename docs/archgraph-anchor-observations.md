@@ -536,3 +536,12 @@ remains unrun**, and plan 6 is now the last chance in this project to observe on
 
 **Standing caveat unchanged:** `architecture.yml` still carries ~638 `startLine` keys, so any
 agent reading stored state is shown line numbers regardless. Describe, do not fix.
+
+### 2026-08-24 — phase-5 fix round 2 (Codex)
+
+**Nothing to report.** No `archgraph_*` call, no graph write, no anchor of any kind. The session's
+own words: *"No architectural boundary changed, so no graph delta was recorded."* The round-1
+refusal and its unresolved owner authorization were **carried forward unchanged rather than
+retried** — it did not take a second run at a gate that had already declined it, and it did not
+re-raise the card as if it were new. Running total of spans emitted by any agent since the policy
+change: still **0**.
