@@ -1640,3 +1640,27 @@ alone**: no test was invented for a mechanism with no observable.
 
 **State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`**. Fix round 4 dispatched — two items, no
 production change.
+
+### 2026-08-24 — fix round 4 halted on a false gate (coordinator defect), prompt superseded
+
+**The round-4 prompt asserted `git status --porcelain -- app/` would be NOT empty, "round 3's fix
+is uncommitted in the working tree". It was false when it was written.** The coordinator committed
+round 3's work in `387d36e` **in the same act that produced the prompt** — the commit message even
+says *"Includes round 3's uncommitted test-file work"* — so the prompt shipped asserting the
+opposite of what its own commit had just made true.
+
+**The session did exactly the right thing:** checked the gate at source, found it false, **changed
+nothing**, and reported. That is the behaviour every prompt in this project asks for, and it cost
+one session rather than a corrupted round.
+
+**Superseded, not edited** — `prompts/implementer/20260824_plan5_fix_round4_prompt_v2.md`. The
+original is left byte-identical: a prompt reported against is never rewritten. **All seven gate
+conditions in v2 were re-run against the live tree before it was written**, and the table records
+the verified values rather than describing them.
+
+**This is the fifth instance of a defect class the coordinator's own notes name — *gate checks
+describing state my own fold invalidates* — and the first that was not caught before dispatch.**
+The four prior instances were caught by the self-test rule; this one was not run, because the
+prompt and the commit that invalidated it were authored in the same step. **The rule needs its
+timing made explicit: the gate self-test runs after every write the dispatch performs, not while
+the prompt is being drafted.** Routed to `pipeline-coordinator.md` Responsibility 1c.
