@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.domain.pause_reasons.validators import validate_pause_reason_fields
@@ -13,6 +13,19 @@ class PauseReasonCreateRequest(BaseModel):
     pause_type: PauseTypeEnum
     description: str | None = None
     requires_description: bool = False
+    linked_user_ids: list[str] = Field(default_factory=list)
+    linked_working_section_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("linked_user_ids", "linked_working_section_ids")
+    @classmethod
+    def validate_link_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            value = value.strip()
+            if not value:
+                raise ValueError("link identifiers must not be blank.")
+            normalized.append(value)
+        return normalized
 
 
 class PauseReasonUpdateRequest(BaseModel):
@@ -24,6 +37,21 @@ class PauseReasonUpdateRequest(BaseModel):
     pause_type: PauseTypeEnum | None = None
     description: str | None = None
     requires_description: bool | None = None
+    linked_user_ids: list[str] | None = None
+    linked_working_section_ids: list[str] | None = None
+
+    @field_validator("linked_user_ids", "linked_working_section_ids")
+    @classmethod
+    def validate_link_ids(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            raise ValueError("link identifiers must be an array.")
+        normalized: list[str] = []
+        for value in values:
+            value = value.strip()
+            if not value:
+                raise ValueError("link identifiers must not be blank.")
+            normalized.append(value)
+        return normalized
 
 
 class PauseReasonDeleteRequest(BaseModel):

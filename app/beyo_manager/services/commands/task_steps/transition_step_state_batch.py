@@ -40,6 +40,7 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
+from beyo_manager.services.pause_reasons.eligibility import assert_pause_reason_eligible
 
 
 def _format_batch_errors(errors: list[dict]) -> str:
@@ -147,6 +148,15 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
 
         if errors:
             raise ValidationError(_format_batch_errors(errors))
+
+        if pause_reason is not None:
+            await assert_pause_reason_eligible(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                pause_reason_id=pause_reason.client_id,
+                target_user_ids=[credited_user_id],
+                target_working_section_ids={step.working_section_id for step in steps},
+            )
 
         # Capture original task states to detect net changes after applying all steps.
         old_task_states = {t.client_id: t.state for t in tasks}

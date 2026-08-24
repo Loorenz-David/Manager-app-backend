@@ -22,6 +22,10 @@ from beyo_manager.models.tables.execution.execution_task import ExecutionTask
 from beyo_manager.models.tables.roles.workspace_role import WorkspaceRole
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.pause_reasons.pause_reason_user_link import PauseReasonUserLink
+from beyo_manager.models.tables.pause_reasons.pause_reason_working_section_link import (
+    PauseReasonWorkingSectionLink,
+)
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.users.user import User
@@ -1274,6 +1278,107 @@ async def test_declare_auto_pauses_working_step_and_updates_live_state(
     assert current.state is UserShiftStateEnum.IN_PAUSE
     assert current.reason == reason.client_id
     assert current.manually_recorded is True
+
+
+async def test_declare_pause_reason_eligibility_uses_target_worker_and_open_step_sections(
+    db_session,
+) -> None:
+    workspace, worker = await _seed_workspace_worker(db_session)
+    manager = await _seed_user(db_session, "eligibility-manager")
+    base = datetime(2026, 7, 29, 9, tzinfo=timezone.utc)
+    await clock_in_shift_for_user(
+        db_session,
+        workspace.client_id,
+        worker.client_id,
+        base,
+        worker.client_id,
+    )
+    step = await _seed_open_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=base + timedelta(minutes=5),
+    )
+    other_section = WorkingSection(
+        workspace_id=workspace.client_id,
+        name=f"Eligibility other {uuid4().hex}",
+        created_by_id=manager.client_id,
+    )
+    wrong_user_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        manager,
+        name="Wrong user",
+    )
+    wrong_section_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        manager,
+        name="Wrong section",
+    )
+    allowed_reason = await _seed_pause_reason(
+        db_session,
+        workspace,
+        manager,
+        name="Allowed",
+    )
+    db_session.add(other_section)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=wrong_user_reason.client_id,
+                user_id=manager.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=wrong_user_reason.client_id,
+                working_section_id=step.working_section_id,
+            ),
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=wrong_section_reason.client_id,
+                user_id=worker.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=wrong_section_reason.client_id,
+                working_section_id=other_section.client_id,
+            ),
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=allowed_reason.client_id,
+                user_id=worker.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=allowed_reason.client_id,
+                working_section_id=step.working_section_id,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    def worker_ctx(reason_id):
+        return _ctx(
+            db_session,
+            workspace,
+            worker,
+            RoleNameEnum.WORKER.value,
+            {"pause_reason_id": reason_id},
+        )
+
+    with pytest.raises(ValidationError, match="not available"):
+        await declare_worker_state(worker_ctx(wrong_user_reason.client_id))
+    with pytest.raises(ValidationError, match="not available"):
+        await declare_worker_state(worker_ctx(wrong_section_reason.client_id))
+
+    result = await declare_worker_state(worker_ctx(allowed_reason.client_id))
+    await db_session.refresh(step)
+    assert result["paused_steps"] == 1
+    assert step.state is TaskStepStateEnum.PAUSED
 
 
 async def test_declare_overrides_live_projection_without_touching_open_step_pause(

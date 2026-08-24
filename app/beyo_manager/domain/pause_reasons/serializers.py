@@ -13,3 +13,16 @@ def serialize_pause_reason(instance) -> dict:
         "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
         "updated_by_id": instance.updated_by_id,
     }
+
+
+def serialize_configured_pause_reason(
+    instance,
+    *,
+    linked_user_ids,
+    linked_working_section_ids,
+) -> dict:
+    return {
+        **serialize_pause_reason(instance),
+        "linked_user_ids": sorted(linked_user_ids),
+        "linked_working_section_ids": sorted(linked_working_section_ids),
+    }

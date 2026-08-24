@@ -13,7 +13,9 @@ async def test_create_pause_reason_route_forwards_body(monkeypatch):
     async def fake_run_service(command, ctx):
         captured["command"] = command
         captured["ctx"] = ctx
-        return SimpleNamespace(success=True, data={"pause_reason": {"client_id": "par_1"}}, error=None)
+        return SimpleNamespace(
+            success=True, data={"pause_reason": {"client_id": "par_1"}}, error=None
+        )
 
     monkeypatch.setattr(pause_reasons_router, "run_service", fake_run_service)
     result = await pause_reasons_router.route_create_pause_reason(
@@ -43,6 +45,8 @@ async def test_list_pause_reasons_route_forwards_offset_filter(monkeypatch):
         limit=25,
         offset=10,
         pause_type="blocker",
+        user_ids=["usr_1", "usr_2"],
+        working_section_ids=["wsec_1"],
     )
 
     assert captured["command"] is pause_reasons_router.list_pause_reasons
@@ -50,4 +54,6 @@ async def test_list_pause_reasons_route_forwards_offset_filter(monkeypatch):
         "limit": 25,
         "offset": 10,
         "pause_type": "blocker",
+        "user_ids": ["usr_1", "usr_2"],
+        "working_section_ids": ["wsec_1"],
     }

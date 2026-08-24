@@ -36,6 +36,7 @@ from beyo_manager.services.infra.events.worker_shift_realtime import (
     emit_steps_paused,
     emit_worker_shift_state,
 )
+from beyo_manager.services.pause_reasons.eligibility import assert_pause_reason_eligible
 
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,21 @@ async def declare_worker_state(ctx: ServiceContext) -> dict:
         if pause_reason.requires_description and request.description is None:
             raise ValidationError("Description is required for this pause reason.")
 
+        open_working_rows = await _load_open_working_step_rows(
+            ctx.session,
+            ctx.workspace_id,
+            user_id,
+        )
+        await assert_pause_reason_eligible(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            pause_reason_id=pause_reason.client_id,
+            target_user_ids=[user_id],
+            target_working_section_ids={
+                step.working_section_id for _, step, _ in open_working_rows
+            },
+        )
+
         open_declared = (
             await ctx.session.execute(
                 select(UserDeclaredStateRecord)
@@ -123,11 +139,6 @@ async def declare_worker_state(ctx: ServiceContext) -> dict:
             open_declared.closed_by_id = ctx.user_id
             switched_from_id = open_declared.client_id
 
-        open_working_rows = await _load_open_working_step_rows(
-            ctx.session,
-            ctx.workspace_id,
-            user_id,
-        )
         for closing_record, step, task in open_working_rows:
             await _apply_step_transition(
                 ctx,

@@ -9,7 +9,13 @@ from sqlalchemy import select
 
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.pause_reasons.pause_reason_user_link import PauseReasonUserLink
+from beyo_manager.models.tables.pause_reasons.pause_reason_working_section_link import (
+    PauseReasonWorkingSectionLink,
+)
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -23,7 +29,15 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent
 
 
-def _ctx(db_session, *, workspace_id, user_id, items, new_state) -> ServiceContext:
+def _ctx(
+    db_session,
+    *,
+    workspace_id,
+    user_id,
+    items,
+    new_state,
+    pause_reason_id=None,
+) -> ServiceContext:
     return ServiceContext(
         identity={
             "workspace_id": workspace_id,
@@ -36,6 +50,7 @@ def _ctx(db_session, *, workspace_id, user_id, items, new_state) -> ServiceConte
             "new_state": new_state.value,
             "reason": None,
             "description": None,
+            "pause_reason_id": pause_reason_id,
         },
         session=db_session,
     )
@@ -270,6 +285,97 @@ async def test_batch_is_atomic_when_one_item_invalid(db_session, monkeypatch):
         )
     ).scalars().all()
     assert paused_records == []
+
+
+@pytest.mark.integration
+async def test_batch_pause_reason_requires_user_and_every_affected_section(
+    db_session,
+    monkeypatch,
+):
+    _patch_batch_side_effects(monkeypatch)
+    workspace, user = await _seed_workspace_user(db_session)
+    task = await _seed_task(
+        db_session,
+        workspace_id=workspace.client_id,
+        user_id=user.client_id,
+    )
+    steps = [
+        await _seed_step(
+            db_session,
+            workspace_id=workspace.client_id,
+            task_id=task.client_id,
+            user_id=user.client_id,
+            state=TaskStepStateEnum.WORKING,
+        )
+        for _ in range(2)
+    ]
+    reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name=f"Restricted {uuid4().hex[:8]}",
+        slug=f"custom_{uuid4().hex[:8]}",
+        pause_type=PauseTypeEnum.PERSONAL,
+        is_system_managed=False,
+    )
+    db_session.add(reason)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=reason.client_id,
+                user_id=user.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=reason.client_id,
+                working_section_id=steps[0].working_section_id,
+            ),
+        ]
+    )
+    await db_session.flush()
+    items = [
+        {"task_id": task.client_id, "step_id": step.client_id}
+        for step in steps
+    ]
+
+    with pytest.raises(ValidationError, match="not available"):
+        await transition_step_state_batch(
+            _ctx(
+                db_session,
+                workspace_id=workspace.client_id,
+                user_id=user.client_id,
+                items=items,
+                new_state=TaskStepStateEnum.PAUSED,
+                pause_reason_id=reason.client_id,
+            )
+        )
+    assert [await _state_of(db_session, step.client_id) for step in steps] == [
+        TaskStepStateEnum.WORKING,
+        TaskStepStateEnum.WORKING,
+    ]
+
+    db_session.add(
+        PauseReasonWorkingSectionLink(
+            workspace_id=workspace.client_id,
+            pause_reason_id=reason.client_id,
+            working_section_id=steps[1].working_section_id,
+        )
+    )
+    await db_session.flush()
+    await transition_step_state_batch(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            items=items,
+            new_state=TaskStepStateEnum.PAUSED,
+            pause_reason_id=reason.client_id,
+        )
+    )
+    assert [await _state_of(db_session, step.client_id) for step in steps] == [
+        TaskStepStateEnum.PAUSED,
+        TaskStepStateEnum.PAUSED,
+    ]
 
 
 @pytest.mark.integration
