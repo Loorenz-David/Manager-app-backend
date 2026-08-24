@@ -513,3 +513,26 @@ carries the policy's form, so the next graph-touching session in this project re
 instruction rather than a contradictory one. That makes the *next* session less informative as a
 clean test, not more. Recorded so the brief's "no session has yet run with a prompt silent on
 anchoring" stays accurate about why.
+
+### 2026-08-24 — phase-5 implementation round 1 (Codex)
+
+**First agent write since the policy change that was both attempted and blocked.** The session
+recorded **one source-link batch** naming `_typical_block`, `serialize_task_price_scenario` and
+the divergent-fixture test — **by symbol, with no line spans mentioned anywhere in its handoff**.
+Running total of spans emitted by any agent since the policy change: still **0**.
+
+**The informative moment is a refusal it did not route around.** It previewed the settled node's
+stale description for replacement — the description rewrite plan 5 §7A explicitly asks for — and
+the client's safety gate declined the persistent maintenance edit because the turn did not
+authorize that exact mutation. The session **stopped and raised an owner card**. Its own words:
+*"No workaround, promotion, rejection, or anchor repair was attempted."* That is the D30 pattern
+holding under pressure: the agent wanted the edit, the plan asked for the edit, and it still did
+not manufacture authorization.
+
+**Confounded, as always, and more than usual here** — §7A told this session in as many words to
+use symbol anchors only and to treat adjudication as the owner's. So this is compliance with a
+correct instruction, not evidence about what an unprompted agent would do. **The clean test
+remains unrun**, and plan 6 is now the last chance in this project to observe one.
+
+**Standing caveat unchanged:** `architecture.yml` still carries ~638 `startLine` keys, so any
+agent reading stored state is shown line numbers regardless. Describe, do not fix.
