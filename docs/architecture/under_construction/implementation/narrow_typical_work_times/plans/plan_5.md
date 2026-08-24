@@ -746,12 +746,25 @@ named no internal to reach for instead.
 
 **Corrected — one participating section, three surfaces, one number.** On
 `seed_divergent_category_task` (§6A.F) at one frozen `ctx.now`, extended with **one excluded
-section that also carries typicals**:
+section**:
+
+*(**Corrected 2026-08-24, coordinator, consuming fix round 2.** The published text read
+*"an excluded section that **also carries typicals**"*, and the fixture as built carries none —
+`_narrowing_fixture.py` gives the excluded section a single `SKIPPED` step and lands **all**
+completed history on the participating section. **The plan contradicted itself**: B3's own
+correction, eleven lines below, already said the excluded section carries `_zero_evidence`.
+**The guard is unaffected and stays armed** — measured, mutation (i) moves the total `600` → `750`
+— but it bites through *basis corruption plus the in-task fallback*, not by summing a foreign
+typical, and the row must say so or a reviewer files a finding against correct code.)*
 
 (a) production-time publishes `(typical_worker_seconds, typical_basis, sample_count) ==
 (600, "item_narrowed", 5)` — **exact literals**.
 (b) `price_scenario.typical.total_seconds == 600` — the **same literal**, and it is the sum over
-the **participating** set only; the excluded section's typical is absent from it.
+the **participating** set only. **What the excluded section contributes to that sum is nothing**,
+and under mutation (i) it contributes `375` — the in-task fallback, because it has no evidence of
+its own. §2B S-7 is the contract being guarded (price-scenario scopes the statement to
+participating sections where production-time scopes it to every step's section), and widening the
+scope is what the mutation reddens.
 (c) budget-allocations' step row carries the **same triple** as (a) — closing the three-way
 agreement plan 4 C11 opened.
 
@@ -1227,3 +1240,52 @@ The final phase slice is 83 passed and focused Ruff is clean. The one required L
 in the fix handoff.
 
 **State:** `CHANGES_REQUESTED` → **`IMPLEMENTED`**.
+
+### 2026-08-24 — fix round 2 consumed (coordinator)
+
+**Handoff:** `handoffs/implementer/20260824_plan5_fix_round2_handoff.md`, tree `0daf0c9`,
+`git status --porcelain -- app/` empty — so the round's stamp describes this tree and is
+**consumed by citation, not re-run**.
+
+**All five findings closed, and F1 closed the right way.** The risk named in the fix prompt was
+that the session would *strengthen* the inert test rather than remove it. It **deleted** it.
+`test_c8_narrowing_changes_the_published_number_and_basis` is gone; the SQL-backed
+`test_c8_divergent_fixture_measures_narrowed_600_against_section_375` is C8's sole proof.
+
+**Verified at source by the coordinator:**
+- **Production is byte-identical to `8a4a1cb`** — `git diff 8a4a1cb HEAD -- app/beyo_manager/` is
+  empty. The only `app/` change this round is the phase test file, **15 insertions / 23
+  deletions**. A fix round that touches no production code is exactly what F1–F5 called for.
+- **F4 is a real instrument now, not a rephrased one.** `test_c1c` installs a **delegating** spy
+  (`captured.update(kwargs); return real_statement(*args, **kwargs)`) and asserts
+  `"now" not in captured`. Strictly stronger than the scan it replaces: it catches `now=<alias>`,
+  a positional form, and a reformat across lines — none of which the substring scan could see.
+- **F3's derivation is sound**, and I checked its premise rather than its arithmetic:
+  `_narrowing_fixture.py` gives the excluded section a single `SKIPPED` step and lands **all**
+  completed history on the participating section, so it genuinely has zero evidence and takes the
+  in-task fallback. `375 + 375 = 750` follows.
+- **Stamp arithmetic reconciles:** 2708 → **2707**, exactly the one deleted test, with the 21-ID
+  set unchanged and no failure-ID delta.
+- **Citation discipline is correct.** The 14 unchanged round-1 mutations are cited from `8a4a1cb`
+  on unchanged assertion bodies and unchanged production sites; the two whose instruments this
+  round changed (C8's site, C1(ii)'s spy) were **re-run**, and C8's red is now the number the row
+  demands — `assert 375 == 600`, not round 1's `AttributeError`.
+
+**One should-fix, and it is the plan's own — corrected above, not charged to the session.**
+§6A C5's fixture line said the phase extends `seed_divergent_category_task` with *"one excluded
+section that **also carries typicals**"*. It carries none. **The plan contradicted itself** —
+B3's correction eleven lines below already stated that the excluded section carries
+`_zero_evidence`. The guard is unaffected and armed (mutation (i) moves `600` → `750`, measured in
+round 1 and derived again here), but it bites through **basis corruption plus the in-task
+fallback**, not by summing a foreign typical. Left uncorrected this was a reviewer trap: someone
+would look for the excluded section's typicals, not find them, and file against correct code.
+**Third plan-side defect I have contributed to this phase** — all three of the same family, prose
+that describes a fixture or a site more confidently than the artifact supports.
+
+**Open, and not this round's:** the settled graph node's description still says
+*"median-substituted task typical time"*, describing the ladder task 4 deleted. The round-1
+session previewed the replacement, the client's safety gate declined the persistent edit, and it
+correctly escalated instead of forcing it. **Owner authorization is required** and the phase
+cannot close without it — §7A makes the description rewrite part of this phase.
+
+**State:** `IMPLEMENTED` — dispatching review round 1.
