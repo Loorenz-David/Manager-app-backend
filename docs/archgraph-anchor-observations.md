@@ -415,3 +415,34 @@ Not a session; a snapshot of what the graph currently hands agents.
   session reads master plan §8's absolute restatement), and **the stored state is still ~638
   `startLine` keys in `architecture.yml`**, so any agent that *reads* an existing item is shown
   line numbers no matter how well the write path behaves. Describe, do not fix.
+
+### 2026-08-24 — plan-4 graph meaning session (maintenance, Codex, authorized D30)
+
+**The first session in this project to write graph evidence and verify its own span-freedom.**
+
+- **New evidence written: 2. Carrying `startLine`/`endLine`: 0.** Both carry `symbol` + `path`.
+  The session reported both numbers itself because the prompt demanded the self-check, and I
+  confirmed them against `architecture.yml` independently: the re-recorded node holds **0**
+  `startLine` keys and **2** `symbol` keys.
+- **Re-anchor activity:** none. Two node **descriptions** were edited — meaning, not position.
+- **Review adjudication:** the pending item was **rejected, re-recorded span-free, then
+  approved**. Its two original evidence entries each carried a span *and* a symbol; because
+  evidence summaries are immutable, reject-and-re-record was the only way to keep the claims
+  without writing policy-violating spans. **This is the first observed instance of the span
+  policy actually changing a decision** — every prior entry recorded compliance on the write
+  path, where nothing was at stake. Here the compliant path cost an extra reject/re-record
+  cycle and the session took it, giving the reason.
+- **Closing-work language:** none.
+- **Staleness 4 → 5** under fix round 4's test edits, and again **nobody proposed a re-anchor**.
+- **Attribution, at last partially resolved.** This session's prompt *did* state the policy, so
+  it is not a clean test either — **but the decision it made was not one the prompt could have
+  produced by rote**. The prompt recommended reject-and-re-record and explicitly authorized
+  promoting as-is instead; the session weighed the immutability of summaries against the
+  existence of an unapplied backfill and chose the costlier compliant path on its own reasoning.
+  **That is the policy being applied rather than obeyed**, which is closer to what this brief
+  set out to observe than any of the five preceding entries.
+- **Reading:** six sessions, zero spans emitted, zero drift-triggered re-anchors, zero
+  "keeping anchors current" language, and now one case of the policy visibly costing something
+  and being followed anyway. The standing caveat is unchanged and worth restating in the
+  fortnightly summary: **`architecture.yml` still holds ~638 `startLine` keys**, so any agent
+  reading stored state is still shown line numbers regardless of how the write path behaves.

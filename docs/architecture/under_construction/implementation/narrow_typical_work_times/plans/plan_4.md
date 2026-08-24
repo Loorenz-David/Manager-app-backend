@@ -1731,3 +1731,64 @@ app/beyo_manager/, not the original five terms at repository root.
 
 Handoff: handoffs/implementer/20260824_plan4_fix_round4_handoff.md. Approval-gate
 L4 is the one full-suite run required to close this phase and is recorded there.
+
+### 2026-08-24 — fix round 4 consumed (coordinator) — every finding closed, gate stamp RUN
+
+**Handoff:** `handoffs/implementer/20260824_plan4_fix_round4_handoff.md`, checkpoint `97aeaa6`.
+**Perimeter exact and minimal:** three test files, **no production change**
+(`git diff --stat 8670d1b HEAD -- app/` → 3 files, 51 insertions).
+
+**The approval-gate L4 was RUN on the closing tree, not cited** — `BEYO_TEST_SLOT=main
+PYTHONPATH=. pytest -m 'not e2e'` verbatim → **21 failed / 2692 passed / 1 skipped** in 56.27s,
+with the failing set compared **programmatically** against the published 21-ID block:
+`actual − published: ∅`, `published − actual: ∅`. Unchanged from round 3's 2692, which is
+correct — round 4 edited tests and added none.
+
+**All three should-fix verified closed at source, not from the report:**
+- **S1** — `assert "def _step_state_is_excluded" not in (root / relative_path).read_text()` at
+  `:540`, plus the different-name claim over `{"SKIPPED", "CANCELLED", "FAILED"}` at `:544`.
+  The faithful-copy hole the re-review measured is shut, and ledger row 25 is that exact mutant.
+- **S2 — closed by the stronger of the two options offered.** `selected()` now derives
+  `basis` from the value and `count` from the basis
+  (`"insufficient_sample" if value is None else "section_wide"`;
+  `0` or `TYPICAL_MIN_SAMPLE_SIZE`), so an inconsistent pair **cannot be written** rather than
+  merely not being written today. The unreachable `(value, "section_wide", 0)` triple is gone
+  from the fixtures as well as from production.
+- **S3** — renamed to `test_c1c_typical_filters_does_not_import_live_clock_terms`,
+  `helper_source` deleted, and `assert roots` replaced by
+  `assert all(path.exists() for path in roots)` — a guard that can now fail.
+
+**The ledger is 25 rows and every row names its site** (N4 closed): the plan's 23 named
+mutations + the C10(d) anti-regression + S1's new local-`def` mutant. **And it reports a
+self-caught mis-sited probe** — *"An initial C10(ii) probe at the task-index assignment
+definition was green and was discarded as the wrong site"* — then re-sited at the
+`typical_rows.get` call site where it reddens on the discriminating `[9] != [7]`. **A session
+that catches its own false green and says so is the behaviour this project has spent four rounds
+teaching.** N1, N2, N7 closed; the rule-14 divergence for C13(c)'s terms and root is declared in
+the handoff as required.
+
+### 2026-08-24 — graph meaning session consumed (coordinator, D30)
+
+**Handoff:** `handoffs/maintenance/20260824_archgraph_phase4_meaning_handoff.md`.
+**Verified live against the graph, not from the report.**
+
+- **Both projection descriptions now carry the phase's meaning.** Confirmed present in
+  `architecture.yml`: `uniform_basis_v1`, `static_proportional_section_v2`, `typical_resolution`
+  and item-narrowing on **both** nodes, and the K-spec batch language on budget-allocations only
+  — which is right, since production-time takes its spec from `status.typical_filter_spec` and
+  never batches. The live-clock content survived the rewrite intact, as required.
+- **The pending item was rejected, re-recorded span-free, and approved** — the recommended
+  path, with the reasoning stated. Verified at source: the node now carries **0 `startLine`
+  entries, 2 `symbol` entries, `origin: human_confirmed`.**
+- **`pendingReviewCount` 1 → 0**, diagnostics empty, nodes/edges unchanged at 198/298 (in-place
+  description edits, no new nodes). Revision `a055b5ce…` matches the handoff.
+- **Evidence written: 2, carrying spans: 0** — the self-check the prompt demanded, and the
+  **first session in this project to write graph evidence entirely span-free by its own
+  verification** rather than by the coordinator's inspection afterwards.
+- `git status --porcelain -- app/` empty — the session touched no application file, as scoped.
+- `staleNodeCount` 4 → 5: round 4 edited a linked test file. **Not a repair candidate** under
+  the interim policy, and correctly nobody proposed one.
+
+**D30's scope was honoured exactly.** Two named descriptions, one review item, span-free
+evidence. Nothing else — the four `contentHash`-stale source links, D29's deferred operations
+and `.archgraph/backfill/` were all left alone as instructed.
