@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY
 ```
 
@@ -661,6 +661,58 @@ already). Reason: (b) and (c) are the two halves of one determinism contract —
 is that one surface has it and the other deliberately does not — and splitting them across files
 is how one half gets deleted as orphaned.
 
+**(d) — added at the delta-re-review fold (B1). The spec branch's clock, guarded directly.**
+`typical_times_statement` carries **two independent cutoff lines in duplicated source** —
+`get_working_section_typical_times.py:40` on the **spec** branch (`len(specs) > 0`, taken by every
+narrowed task) and `:147` on the **no-spec** branch. Round 4 moved C1(b) to `plain_task`, which was
+right for decoupling and **moved M7's only composed guard off `:40` entirely.**
+
+**Measured by the reviewer.** Planting the clock defect on `:40` alone
+(`(now if now is not None else datetime.now(...))` → `datetime.now(timezone.utc)`, `:147`
+untouched): the phase's two test files **67 passed**, and the **whole suite's bite set is ∅**.
+Re-pointing C1(b) at `narrowed_task` with the same defect applied reddens it at `:127`. **So the
+property was observed before round 4 and by nothing after it.** `test_typical_times_narrowing.py`
+drives the spec branch fifteen times passing `now=NOW` on every call, but its populations sit 1
+day inside and 91 days outside a 90-day line — a two-day shift cannot move either across it.
+
+**Row (d), asserted at statement level, with no `_typical_block` on the path** so no narrowing
+mutation can reach it — which is the property round 4 was chasing:
+
+```python
+spec = TypicalFilterSpec(item_category_ids=frozenset({category_id}))
+inside  = await db_session.execute(typical_times_statement(ws, specs=(spec,), now=FROZEN))
+outside = await db_session.execute(typical_times_statement(ws, specs=(spec,), now=FROZEN + timedelta(seconds=1)))
+# narrowed_sample_count: 5 inside, 0 outside
+```
+
+*Mutation (iii)* — `get_working_section_typical_times.py:40` (**definition**, the **spec** branch's
+cutoff): replace the injected-clock expression with `datetime.now(timezone.utc)` → **row (d) alone
+reddens**, on the sample counts. `:147` is a **separate line** and is row (b)'s; the duplication is
+the hazard both rows exist to cover.
+
+**★ S1 — C1(b)'s two literals must be derived, not typed.** The row's entire discriminating power
+rests on the fixture's `2026-08-01` and the test's `2026-10-30` being **exactly
+`TYPICAL_WINDOW_DAYS` apart**, a subtraction done by hand and asserted nowhere — neither literal
+references the constant. **Measured (reviewer P3b):** with `TYPICAL_WINDOW_DAYS = 91` and the row's
+own mutation C1(i) applied, **`test_c1b` passes** and C1(i)'s red lands only on `test_c1a` — *the
+same observable `test_c1a` already asserts*, which is verbatim the defect round 1's B2 was raised
+to fix. **The row would not announce its death; it would stop being the composed guard while
+staying green.** Charter rule 13: a criterion asserting a configured value asserts its **contract**,
+not its literal.
+
+**Corrected:** export the boundary from the fixture module as a named constant and derive the
+frozen clock from it —
+
+```python
+from ._narrowing_fixture import DIVERGENT_BOUNDARY_CLOSED_AT   # == datetime(2026, 8, 1, tzinfo=utc)
+from beyo_manager.domain.item_economics.typical_constants import TYPICAL_WINDOW_DAYS
+frozen = DIVERGENT_BOUNDARY_CLOSED_AT + timedelta(days=TYPICAL_WINDOW_DAYS)
+```
+
+`seed_divergent_category_task` is this phase's own addition (§4A), so naming that constant is
+inside the perimeter. `test_c5` and `test_c8` run at `2026-08-24T12:00` and are unaffected either
+way — their cutoff is `2026-05-26` and the boundary group qualifies with 85 days to spare.
+
 *Mutations, and note what each actually does (S14):*
 **(i)** `get_task_price_scenario._typical_block` (**call site**): drop the `now=` argument. This
 does **not** remove a clock read from price-scenario — it **hands the cutoff back to the
@@ -679,7 +731,7 @@ byte-identity requirement. Opposite directions, both contract.
 
 | # | fixture | `is_estimated` | also |
 |---|---|---|---|
-| a | every section excluded → participating set empty | `true` | `total_seconds: 0`, `sections_total: 0` |
+| a | every section excluded → participating set empty — **`section_ids` non-empty, `participating_ids` empty** | `true` | `total_seconds: 0`, `sections_total: 0` |
 | b | **exactly one** participating section whose **selected** typical is `None`, beside **one** usable — the fixture pins both | `true` | `sections_without_sample: 1` **(exact)** |
 | c | **exactly one** participating section whose **selected** typical is `0`, and **every other participating section usable** — the fixture pins both | `true` | `sections_without_sample: 1` **(exact)** |
 | d | every participating section has a usable selected value, on a **`section_wide_uniform`** task | `false` | `sections_without_sample: 0` |
@@ -1014,8 +1066,8 @@ State that in the test's docstring — it is the reason the fixture is specified
 
 ### Mutation ledger — summands printed (lint check "counts derived")
 
-`C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2` = **15 named mutations**
-plus **2 required planted-defect probes** (C7 rows (c) and (d)) = **17 ledger rows the round owes.**
+`C1 3 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2` = **16 named mutations**
+plus **2 required planted-defect probes** (C7 rows (c) and (d)) = **18 ledger rows the round owes.**
 
 *Re-derived at the review-round-1 fold: C8 gains its second mutation with row (c) (B1). Criteria
 count is unchanged at **8** — B1 became a **row on C8**, not a ninth criterion, because it is an M1
@@ -1752,3 +1804,64 @@ identical and safer against fakes), and **S1** (§2B S-7's SQL scoping has no wi
 **no row owns it** — deliberately not closed with an invented test).
 
 **State:** `IMPLEMENTED`. Delta re-review dispatched — narrow, three questions.
+
+### 2026-08-24 — delta re-review consumed (coordinator fold)
+
+**Handoff:** `handoffs/reviewer/20260824_plan5_rereview_delta_handoff.md`, Opus 5,
+`CHANGES_REQUESTED` — **1 blocking / 1 should-fix / 3 notes / 0 owner cards**, tree `22da229`.
+The delta held its scope, answered all three questions **by measurement**, and **declined the free
+pass where the prompt aimed it**, which is the right answer.
+
+**Q1 holds.** C1(b) genuinely composes clock and window: the failure is a **difference between two
+calls inside one frozen context**, which is M7's stated observable, and the fixture's alignment is
+what *arms* the row rather than what weakens it.
+
+**Q2 does not hold, and the cause is the coordinator's prescription.** `typical_times_statement`
+carries **two independent cutoff lines in duplicated source** — `:40` on the **spec** branch, taken
+by every narrowed task, and `:147` on the no-spec branch. C1(b) exercised `:40`. **Re-pointing it
+at `plain_task` moved M7's only composed guard onto `:147` and left `:40` guarded by nothing.**
+Measured: planting the clock defect on `:40` alone leaves the phase's files at 67 passed and the
+**whole suite's bite set at ∅**; the same defect against C1(b)'s pre-round-4 form reddens it at
+`:127`. **The coverage did not move to a better place — it left.**
+
+**This is mine, cleanly.** I prescribed the decoupling, I verified that it *decoupled*, and **I
+never asked what the form I was removing had been covering.** The reviewer's Q2 is the question I
+wrote into the prompt; I did not ask it of my own instruction before issuing it. **Fifth plan-side
+defect this phase, and the first that removed working coverage rather than merely describing
+something inaccurately.**
+
+→ **§6A C1(d)**, a statement-level row on the spec branch with **no `_typical_block` on the path**,
+so no narrowing mutation can reach it — the property round 4 was chasing, obtained without giving
+up `:40`. Mutation **C1(iii)** is `:40` alone. **Do not move C1(b) back**: its `plain_task` form is
+right and the coupling argument stands.
+
+**S1 — C1(b) is one config change away from being unable to fail.** Its power rests on two
+hand-typed literals being exactly `TYPICAL_WINDOW_DAYS` apart, asserted nowhere. Measured with
+`TYPICAL_WINDOW_DAYS = 91` plus C1(i): **`test_c1b` passes**, and the red lands only on `test_c1a`
+— the same observable `test_c1a` already asserts, which is verbatim the defect round 1's B2 was
+raised to fix. Corrected by deriving `frozen` from an exported fixture constant plus the real
+`TYPICAL_WINDOW_DAYS`.
+
+**Q3's free pass, declined where aimed and spent where measurement led.** The reviewer checked
+every `_TypicalSession`-based row and found **none of them claims something the SQL decides** —
+they assert kwargs handed to the statement, or Python-side reconciliation over rows the fake
+legitimately supplies. It then broke a genuine SQL property of the spec branch (`TaskStep.state ==
+COMPLETED`) and showed **phase 2 catches it**. So the fake's blindness here is correct scoping,
+**not** a row that cannot fail. The one spec-branch property phase 2 does not guard is `now` —
+which is B1. **The instrument the plan has warned about in bold for four rounds is, on this
+surface, exonerated by measurement.**
+
+**Notes:** **N1** — `_typical_block:157`'s `spec_index != 0` guard is exercised by nothing
+(deleting it is a no-op phase-wide); correct defence-in-depth with no reachable defect today, so
+recorded, **no row added**. **N2** — C2 row (a)'s shipped fixture (`[], []`) empties both
+`section_ids` and `participating_ids` where the criterion specifies only the latter; the row stays
+armed and `test_c3` covers the split, so the **criterion prose is corrected** rather than the test.
+**N3** — 51 orphaned `beyo_test_*_template` databases at `localhost:5433`, growing ~6 per review
+round, nothing in the pipeline drops them → **environment item, master plan, not this phase.**
+
+**Ledger re-derived: `C1 3 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2` = 16 named mutations
++ 2 planted probes = 18 rows.**
+
+**State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`**. Fix round 5 dispatched — two edits, no
+production change. **This is the last round: its acceptance is two measurable facts the
+coordinator will verify directly, so no further review is owed.**
