@@ -152,7 +152,15 @@ not patched from a closeout phase.
    5 touched and told the session to re-derive each from its symbol — instructing work the
    span-removal policy has retired. This is the correction master plan §8's D30 lesson recorded as
    still owed by plan 6; plan 5's half was applied at its fold.
-6. **Close the tracker.** All six rows `APPROVED`. Move closed prompts and handoffs into
+6. **Report the tracker's readiness — do not set it.** *(Corrected at the closeout fold,
+   2026-08-24. The published text read "Close the tracker. All six rows `APPROVED`", which
+   **instructed an implementer session to set its own approval gate**. It did, faithfully: the
+   plan header and tracker row 6 arrived reading `APPROVED`, attributed to the implementing
+   session. **The defect is the instruction, not the session** — and it is the coordinator's,
+   authored here and missed by the pre-dispatch lint.* **A session never advances its own phase
+   past `IMPLEMENTED`.** State the Review log and tracker as ready; the coordinator sets
+   `APPROVED` in the gate commit. Gates are the defect-containment mechanism, and a gate a
+   session can set for itself is not one. Move closed prompts and handoffs into
    `archive/plan_<n>/` at the coordinator's closeout ritual, together with the gate commit.
    Historical path references are **not** rewritten — they resolve under `archive/` by
    convention.
@@ -299,3 +307,45 @@ nodes already describe the shared typical-filter/reconciliation boundary; this d
 has no architectural delta, so nothing was recorded and no owner review or maintenance work was
 touched. Final L4: **2716 passed / 21 failed / 1 skipped**, failing-ID delta **∅ / ∅** from plan
 5. Owner decisions/cards: **0**.
+
+### 2026-08-24 — ★ PHASE 6 APPROVED (coordinator gate) — and the project closes
+
+**Handoff:** `archive/plan_6/handoffs/20260824_plan6_closeout_handoff.md`.
+**Deliverable:** `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_narrow_typical_work_times_20260824.md`,
+180 lines. **Stamp 2716 passed / 21 failed / 1 skipped, 21-ID ∅/∅** — the +8 over phase 5 is
+exactly the eight new docs cases.
+
+**Verified at source by the coordinator, not read from the ledger:**
+- **Production untouched**, and the **2026-08-18 handoff is byte-unchanged** — C4(a) proven by
+  `git diff`, which is what the row demands.
+- **Every §11.3 obligation is discharged**: `ALLOCATION_METHOD` v2 with the eligibility phrasing
+  and *"the contract changes even where an individual numeric result does not"*; six new fields
+  with nullability and `applied_filter`'s producing state; D25's unreachable shape plus *"render
+  the served zero; do not convert it to null"*; D24 unchanged; the statistics difference stated
+  as **deferred without announcing an endpoint**; the worker-card supersession with **both halves**
+  and a cost line.
+- **The subtlest requirement landed.** `is_estimated` carries **both** truths — §6B's "the
+  clarification reverses no value" and §6D's "the flag moves under `item_narrowed_uniform`, and
+  that is the feature working" — with a worked example.
+- **The documented default object matches `division_serializers.py:113-119` exactly.**
+- **The evidence is the strong kind:** C2 and C4 both shipped **contract red / mutant green** —
+  the sentence removed *and* the assertion removed, showing the test would pass with the document
+  wrong. C1's planted-defect probe reddened and named the new file.
+- **The lint fix paid off the same day.** The guard now collects **67**; a criterion pinned to
+  *"59 passed"* would have failed on green code after this phase's own task 4.
+
+**★ One defect, and it is the coordinator's.** §5 task 6 read *"Close the tracker. All six rows
+`APPROVED`"* — **instructing an implementer session to set its own approval gate.** It did so
+faithfully, and the plan header and tracker row arrived reading `APPROVED` attributed to the
+implementing session. **The session followed the instruction; the instruction was wrong**, and the
+pre-dispatch lint did not catch it despite running nine checks. Corrected in task 6. **The gate
+below is the coordinator's, set after independent verification.**
+
+**Not this phase's, and left alone correctly:** the graph gained `table-customer` and one edge at
+**11:36 today**, unrelated to this pipeline, leaving **2 pending reviews** for the owner. The
+session recorded nothing, took no review or repair action, and wrote *"these counts are
+observations, never gates."* **D29 was not dispatched.**
+
+**No review round.** Every criterion shipped with contract-red/mutant-green evidence, the phase
+changes nothing executable, and the coordinator read the document against all seven §11.3
+obligations at source. The owner was told what that accepts and chose it.

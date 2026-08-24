@@ -146,7 +146,7 @@ and plans 1–6 read it, so archiving it mid-project would break live read-first
 | 3 | `TaskBudgetStatus` carries the derived spec (§6A, §6B) | **`APPROVED`** | 2026-08-23 | Opus 5 (review r1) | First review: 0 blocking / 0 should-fix / 4 notes / 0 cards. Production matches §6A line for line (additive, defaulted, fail-closed keyword-only helpers, 2-tuple loader, `item_id=evaluation.item_id` preserved, `typical_filters.py` untouched). **7 probes, all new sites or shapes, each red on its own assertion**: the never-measured **worker-side** wrong-source derivation (2/11), T-L1's own `None`-guard removal on **both** faces (1/12 each), both helper **definition**-side carrier drops (4/9 and 2/11), a **value-gated** serializer publish (3/125 at L2), and C-N1(a)'s no-`WHERE` row — whose inferred test id is now **observed** and correct. L4 runs **0**: `git diff 186027a HEAD -- app/` empty, so the 2674/21/1 stamp describes this tree. Graph re-read live and unchanged (198/298, `364223…`, 1 pending / 2 stale). Notes: N1 C2(b)'s manager key-set row is blind to a value-gated leak (measured; the two goldens catch the class) → plan 4; N2 `_ScalarSession` encodes the query count, 8 rows → plan 4 task 0; N3 §6 C6's "three"/four count + L2 scope line → fold; N4 C5-d shares C5-b's wrong-source inertness → fold. **GATE (coordinator, 2026-08-23):** rows archived to `archive/plan_3/` (9); N3 + N4 folded; N1 + N2 routed into plan 4's read-first list as the first publisher. **P2 re-verified independently — 3 failed / 125 passed, the reviewer's exact ids, manager row green.** **⚠→✅ The approval-gate L4 was RUN on this gate tree, not cited: `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` → **2674 passed / 21 failed / 1 skipped** in 54.64s, the 21-ID set unchanged. Doc/archive delta measured test-inert first (both `tests/unit/docs/` tests resolve only to `docs/handoff/to_frontend/` and `docs/domains/item_economics/`). |
 | 4 | Division contract + production-time + budget-allocations | **`APPROVED`** | 2026-08-24 | Opus 5 (review r3) | Final delta re-review: **0 blocking / 0 should-fix / 3 notes / 0 cards**. Perimeter verified twice — 3 test files, 51 insertions, and the three production files are **md5-identical to the round-2 handoff's published values**, so "no production change" is confirmed independently of the diff. **L4 runs: 0** — `git diff 97aeaa6 HEAD -- app/` empty, so the fix round's stamp (**21 failed / 2692 passed / 1 skipped**, id diff ∅/∅) describes this tree and is cited, not re-run. **All four named fixes closed AND biting, each measured**: S1's faithful-copy probe — my round-2 mutant, green then — now reddens at `:540`; S3 bites on both halves at `:521` and `:513`; N2's `rglob`→`glob` now fails at the test's own `assert nested in modules` (`:38`), not the helper precondition; the round's C2(c) strengthening reddens at `:92` and names the stale root. S2 closed by derivation — all 24 `selected(...)` sites pass `(section, value)` only, no `section_wide` below the floor is reachable. **Notes:** N1 — C13(c)'s different-name claim fires only on uppercase string literals; an enum-member copy and a lowercase enum-**value** copy both pass green (measured, 3 probes). **The defective instrument is the reviewer's own round-2 prescription**, executed faithfully and declared under rule 14, so it is a plan lesson, not a blocker → **plan 5 task 0**. N2 — `selected()`'s `basis`/`count` overrides have zero callers → plan 5. N3 — lost PEP 8 blank lines, opportunistic. **Lesson:** measuring an absence proves the absence, never that the instrument could observe the presence — plant the forbidden thing and confirm the row reddens before shipping it. 9 probes, 6 files, all reverted and md5-verified; no DB side effects. **★ COORDINATOR GATE 2026-08-24.** Final delta re-review `APPROVED` — 0 blocking / 0 should-fix / 3 notes / 0 cards, **L4 runs 0**. Every finding from both prior passes closed **and biting**; the reviewer re-ran **its own** round-2 faithful-copy probe — the one closure round 2 could not confirm — and it now reddens at `:540`, the line the fix added. Stamp consumed by citation on a byte-identical tree (`git diff 97aeaa6 HEAD -- app/` empty); every other run was **variation**. **Exactly one production defect in the entire phase** — the mixed-batch `spec_index is None` mis-key — and **a criterion caught it, not a reviewer**; every other finding was an instrument. **Four rows-that-cannot-fail found, each written to close the previous one**; N1 is the fifth and the first authored by a reviewer. Notes routed: **N1** (C13(c)'s different-name claim fires on a string form this codebase never writes — the absence was true because nothing writes state sets as strings, not because no copy exists) and **N2** (the two `selected()` helpers have diverged: same name, different contracts) → **plan 5 task 0**. **2 rules → §9.** **GATE STAMP: 21 failed / 2692 passed / 1 skipped, 21-ID set ∅/∅, RUN on the gate tree by fix round 4.** 9 dispatched sessions + 1 authorized graph session. 19 rows archived to `archive/plan_4/`. |
 | 5 | Price-scenario: injected clock, shared reconciliation, §6B | **`APPROVED`** | 2026-08-24 | Coordinator gate (fix r5 verified by measurement) | **★ COORDINATOR GATE 2026-08-24. APPROVED.** Fix round 5 consumed; **both acceptance facts verified by the coordinator's own probes**, applied/observed/reverted/md5-restored — approved on **measurement, not on a ledger**. **(1)** Planting the clock defect on `get_working_section_typical_times.py:40` **alone** now reddens **`test_c1d` and nothing else** (`assert 5 == 0` at `:183`); before this round the identical defect had a whole-suite bite set of **∅**. **(2)** At `TYPICAL_WINDOW_DAYS = 91` plus C1(i), `test_c1b` **reddens at `:131`, the byte-identity assertion**; before this round it **passed silently** while C1(i)'s red landed only on `test_c1a` — verbatim the defect round 1's B2 was raised to fix. Perimeter: fixture +3/−1, phase test file +34/−1, **production untouched**. Ledger **16 named + 2 planted probes = 18**, summands printed. **GATE STAMP: 2708 passed / 21 failed / 1 skipped, 21-ID set ∅/∅** — the +1 over round 4 is exactly `test_c1d`. **Approved by the coordinator rather than a sixth review round, deliberately:** the delta re-review had established production correctness, perimeter, citation discipline, the orphan sweep, §6D compliance and the exoneration of `_TypicalSession`; what remained were two mechanically checkable facts, stated in advance and measured. A further round would have reproduced a green ledger — over-evidence by this project's own rule. The owner was told so in advance. **Cost, honestly: 8 dispatched sessions + 1 graph session, and two of those were lost to coordinator gate defects** (a prompt asserting a dirty tree its own commit had cleaned; its replacement pinning a SHA its own commit moved) — both halting sessions were right. **Five plan-side defects were the coordinator's**, four of one family (prose more confident than the artifact) and the fifth — the C1(b) decoupling — **removed working coverage**, which is worse. **What it bought: production code was correct from round 1 and never changed after it.** Every round since was about whether the tests could fail, and six times they could not. Two mattered: a C8 test that **passed while narrowing was entirely switched off**, and a seam where the derived spec could be replaced with `None` leaving the **entire repository green**. Both would have shipped. **M1 and M7 are now guarded on the branches production actually takes.** **20 artifacts archived to `archive/plan_5/`.** D29's re-anchor prompt stays live and unconsumed — and is now known to be scoped to an operation that cannot remove a span. |
-| 6 | Closeout: frontend handoff, living docs, graph | **`APPROVED`** | 2026-08-24 | Codex (implementation closeout) | **APPROVED.** Published `HANDOFF_TO_FRONTEND_narrow_typical_work_times_20260824.md`; the docs guard is **67 passed** with eight new pinned cases covering C2/C3/C4. Three declared probes all bit and were reverted. The 2026-08-18 handoff is byte-identical. No production/golden change and no architectural delta; graph review and maintenance state was left to the owner. **GATE STAMP: 2716 passed / 21 failed / 1 skipped, 21-ID set ∅/∅.** Owner decisions/cards: 0. Implementation handoff: `handoffs/implementer/20260824_plan6_closeout_handoff.md`. |
+| 6 | Closeout: frontend handoff, living docs, graph | **`APPROVED`** | 2026-08-24 | Coordinator gate | **★ COORDINATOR GATE 2026-08-24. APPROVED — and the project closes.** Deliverable: `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_narrow_typical_work_times_20260824.md`, 180 lines. **Stamp 2716 / 21 / 1, 21-ID ∅/∅** — the +8 over phase 5 is exactly the eight new docs cases. **Verified at source, not read from the ledger:** production untouched and the **2026-08-18 handoff byte-unchanged** (C4(a) proven by `git diff`); **every §11.3 obligation discharged**; the subtlest requirement landed — `is_estimated` carries **both** §6B's *no value change* and §6D's *the flag moves under `item_narrowed_uniform`, and that is the feature working*, with a worked example; the documented default object matches `division_serializers.py:113-119` exactly. **Evidence is the strong kind:** C2 and C4 shipped **contract red / mutant green** — sentence removed *and* assertion removed, showing the test would pass with the document wrong. **The pre-dispatch lint paid off the same day:** the guard now collects **67**, so the *"59 passed"* the lint unpinned would have failed on green code after this phase's own task 4. **★ One defect, the coordinator's:** §5 task 6 read *"Close the tracker. All six rows `APPROVED`"* — **instructing an implementer to set its own approval gate.** It did, faithfully, and the header and this row arrived reading `APPROVED` attributed to the implementing session. **The session followed the instruction; the instruction was wrong**, and nine lint checks did not catch it. Corrected in task 6; **this gate is the coordinator's, set after independent verification.** **Not ours, left alone correctly:** the graph gained `table-customer` and one edge at 11:36 today, unrelated to this pipeline, leaving **2 pending reviews for the owner**. The session recorded nothing and wrote *"these counts are observations, never gates."* **D29 was not dispatched.** **No review round** — every criterion shipped with contract-red/mutant-green evidence, nothing executable changed, and the coordinator read the document against all seven §11.3 obligations at source. **2 artifacts archived to `archive/plan_6/`.** |
 
 Agents update only their own row. Findings go to the plan file's Review log.
 
@@ -1276,3 +1276,75 @@ disagrees, update this section.**
 - Every evidence record carries hypothesis, scope, exact command, **tree identity** (SHA +
   asserted-clean `git status --porcelain`; a dirty tree adds a `git diff` digest), result,
   and the failure-ID delta in both directions.
+
+---
+
+## ★ Project close — `narrow_typical_work_times`, 2026-08-24
+
+**All six phases APPROVED.** The typical work time of a working section is now item-aware —
+drawn from history of comparable work — through **one centralized engine**, on all four
+consumers, with the frontend handoff published.
+
+### The ledger, scored
+
+| | outcome | state at close |
+|---|---|---|
+| **M1** | narrowing observably narrows | **guarded** — `seed_divergent_category_task`, narrowed `600` vs section-wide `375`, non-uniform both sides, and the **supply edge** guarded by C8(c) after it was found switchable-off with the whole suite green |
+| **M2** | one engine, no forks | **guarded** — presence form plus a scoped sweep, both with planted-defect probes |
+| **M3** | cross-service agreement | **guarded** — three surfaces asserted against one literal, never against each other |
+| **M4** | no-spec byte-identity | **guarded** — phases 1–2 |
+| **M5** | answered as asked | **guarded** — phases 1–3 |
+| **M6** | published meanings stable | **guarded** — C2/C3/C6, and §6D corrects §6B's over-broad "unchanged in every case" |
+| **M7** | determinism under the injected clock | **guarded on both branches** — C1(b) on the no-spec branch, C1(d) on the spec branch, after the decoupling briefly left the spec branch with a whole-suite bite set of **∅** |
+
+**One entry has no owner by design:** §2B S-7's SQL scoping is a query-cost property with **no
+wire observable**. Recorded as the correct outcome, deliberately not closed with an invented test.
+
+### What it cost, and what caused it
+
+**Phases 4 and 5 dominated.** Phase 5 alone took 8 dispatched sessions plus a graph session.
+**Two of those were lost to coordinator gate defects** — a prompt asserting a dirty tree its own
+commit had cleaned, then its replacement pinning a SHA its own commit moved. Both halting
+sessions were right.
+
+**The production code was correct in round 1 of every phase that had one, and phase 5's never
+changed after it.** Nearly every round was spent on **whether the tests could fail**. Six rows in
+phase 5 could not, and two of those would have shipped: a test that **passed while narrowing was
+entirely switched off**, and a seam where the derived spec could be replaced with `None` leaving
+the **entire repository green**.
+
+**Roughly five sixths of the rework traced to plan defects, and they were the coordinator's.**
+Four families, in order of cost:
+1. **Prose more confident than the artifact supports** — a fixture described as carrying data it
+   did not, a mutation sited at the wrong line, a criterion claiming to guard a contract nothing
+   guards, an expected value never stated. **Rule earned:** every fixture property a criterion
+   asserts is read out of the seed, not out of the sentence that introduced it.
+2. **Gates naming values the dispatch itself moves** — six instances, four caught before dispatch
+   and two not, because both were self-inflicted by the act of dispatching. **Rule earned:** gate
+   on content only the session's own work will change; never a SHA, tree cleanliness, a file
+   count, or a directory the owner writes.
+3. **Prescribing a move without measuring what the current form catches** — the C1(b) decoupling
+   removed working coverage. **Worse than describing something inaccurately.**
+4. **Instructing a session to set its own gate** — plan 6 task 6, caught only at the closeout fold.
+
+**What worked, and is worth carrying:** consuming every handoff adversarially at source before
+dispatching the next session; **giving every lint property a command instead of a description**
+(its first run after that change caught the coordinator reintroducing a defect *inside the fold
+fixing that same defect*); and probing by **variation** rather than reproduction — every finding
+that mattered came from a mutant shape, a site or a condition nobody had tried.
+
+**The instrument warned about in bold for four rounds — `_TypicalSession` — was exonerated by
+measurement.** The warning was right to exist and wrong about where the danger was.
+
+### Standing after close
+
+- **§2B S-7 has no owner, by design.** Do not close it with a test.
+- **N1:** `_typical_block:157`'s `spec_index != 0` guard is uncovered — correct defence-in-depth,
+  no reachable defect today.
+- **D29's re-anchor prompt is live, unconsumed, and mis-scoped** — `re-anchor` was measured on
+  2026-08-24 to change evidence-anchor records rather than source-link objects, so it **cannot
+  remove a span**. Rewrite before it is ever dispatched.
+- **Environment:** 51 orphaned `beyo_test_*_template` databases at `localhost:5433`, growing
+  ~6 per review round; nothing in the pipeline drops them.
+- **The graph carries 2 pending reviews** (`table-customer` and one edge, 2026-08-24 11:36) that
+  arrived from outside this pipeline and await the owner.
