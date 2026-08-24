@@ -154,6 +154,23 @@ async def test_seed_pause_reasons_is_idempotent(db_session):
     await seed_pause_reasons(db_session, workspace.client_id)
     assert lunch.image_url == original_image
 
+    expected_new_reason_images = {
+        "pause_price_tags": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/price-tags.webp",
+        "pause_descriptions": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/descriptions.webp",
+        "pause_photo_editing": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/photo-editing.webp",
+        "pause_moving_furniture": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/moving-furniture.webp",
+        "pause_searching_upholstery": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/searching-upholstery.webp",
+        "pause_workspace_cleaning": "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/workspace-cleaning.webp",
+    }
+    for slug, expected_image_url in expected_new_reason_images.items():
+        seeded_reason = await db_session.scalar(
+            select(PauseReason).where(
+                PauseReason.workspace_id == workspace.client_id,
+                PauseReason.slug == slug,
+            )
+        )
+        assert seeded_reason.image_url == expected_image_url
+
 
 @pytest.mark.integration
 async def test_seed_pause_reason_links_assigns_requested_workers_and_is_idempotent(

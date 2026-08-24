@@ -76,12 +76,12 @@ _PAUSE_REASONS = (
     ("pause_meeting", "Meeting", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/meeting.webp"),
     ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended-shift.webp"),
     ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other.webp"),
-    ("pause_price_tags", "Price tags", PauseTypeEnum.PERSONAL, False, None),
-    ("pause_descriptions", "Descriptions", PauseTypeEnum.PERSONAL, False, None),
-    ("pause_photo_editing", "Photo editing", PauseTypeEnum.PERSONAL, False, None),
-    ("pause_moving_furniture", "Moving furniture", PauseTypeEnum.PERSONAL, False, None),
-    ("pause_searching_upholstery", "Searching upholstery", PauseTypeEnum.PERSONAL, False, None),
-    ("pause_workspace_cleaning", "Workspace cleaning", PauseTypeEnum.PERSONAL, False, None),
+    ("pause_price_tags", "Price tags", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/price-tags.webp"),
+    ("pause_descriptions", "Descriptions", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/descriptions.webp"),
+    ("pause_photo_editing", "Photo editing", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/photo-editing.webp"),
+    ("pause_moving_furniture", "Moving furniture", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/moving-furniture.webp"),
+    ("pause_searching_upholstery", "Searching upholstery", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/searching-upholstery.webp"),
+    ("pause_workspace_cleaning", "Workspace cleaning", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/workspace-cleaning.webp"),
 )
 
 # These associations are bootstrap-managed along with the rows above. An empty tuple means the
