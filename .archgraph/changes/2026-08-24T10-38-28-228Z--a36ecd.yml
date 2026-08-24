@@ -1,0 +1,23 @@
+changeId: 2026-08-24T10-38-28-228Z--a36ecd
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+    after:
+      anchors:
+        - index: 1
+          path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:38:28.228Z
+graphRevisionBefore: bcb7ed9a6353aaf3a7640c3246cd92276d2fd1313081f063927dd7c69b8e4508
+graphRevisionAfter: 185b6698e9551dd31be2449ec6060eb5bd8667f36a52ec662c2ab50792b69ae1
+humanInstruction: D31 item 3 authorizes re-anchoring this exact source link span-free.

@@ -1,0 +1,23 @@
+changeId: 2026-08-24T10-38-19-572Z--ba973c
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: re-anchor
+    before:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+    after:
+      anchors:
+        - index: 0
+          path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:38:19.572Z
+graphRevisionBefore: a2d96b48732550857978c4b5debbb5101de89b91ff4ae34e87faaeeca1c09539
+graphRevisionAfter: bcb7ed9a6353aaf3a7640c3246cd92276d2fd1313081f063927dd7c69b8e4508
+humanInstruction: D31 item 2 authorizes re-anchoring this exact source link span-free.

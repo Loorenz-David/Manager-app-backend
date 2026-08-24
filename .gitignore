@@ -25,3 +25,5 @@ migration_reports/
 
 # Local secrets
 /secretes
+# Archgraph working context — per-session, never shared
+.archgraph/contexts/

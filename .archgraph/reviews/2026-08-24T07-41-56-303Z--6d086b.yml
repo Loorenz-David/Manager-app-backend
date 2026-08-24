@@ -1,0 +1,25 @@
+reviewId: 2026-08-24T07-41-56-303Z--6d086b
+reviewedItemIds:
+  - node:source-symbol-working-section-typical-times-statement-narrowing
+decisions:
+  - itemId: node:source-symbol-working-section-typical-times-statement-narrowing
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: D30 authorizes adjudicating this re-recorded item. The two evidence
+      summaries were verified against the implementation and test, and the
+      re-record preserves both claims with path plus symbol only, with no
+      unnecessary spans.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-24T07:41:56.303Z
+graphRevisionBefore: e3a2d0669e7f87d1dfe58ac300c70d800e45947e3c8208031c47adad73e25f71
+graphRevisionAfter: a055b5ce3a03e9670fc66609f43bea34ef3c7cb115795f1ed6bcbae07930fc79
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: "D30 repository authorization (owner, 2026-08-24): approve the
+  corrected span-free re-record after verifying its implementation and test
+  evidence."
+reviewTokenCorrelation: ddef27919507

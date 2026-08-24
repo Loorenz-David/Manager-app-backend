@@ -1,0 +1,21 @@
+changeId: 2026-08-24T10-38-38-306Z--f4bed1
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before:
+      sourceLink: &a1
+        path: app/tests/integration/services/queries/item_economics/test_narrowed_price_scenario.py
+        symbol: test_c5_three_surfaces_use_the_same_published_literal
+    after:
+      sourceLink: *a1
+      effect: re-accept
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:38:38.306Z
+graphRevisionBefore: 185b6698e9551dd31be2449ec6060eb5bd8667f36a52ec662c2ab50792b69ae1
+graphRevisionAfter: 5ae7bda09d7019a45f8a49fe5000436af30ce20c2925e855d0ec760bb95e3b40
+humanInstruction: D31 item 4 authorizes refreshing only the content hash for
+  this exact symbol-anchored source link.

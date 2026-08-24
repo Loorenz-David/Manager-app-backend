@@ -1,0 +1,19 @@
+changeId: 2026-08-24T10-40-24-379Z--a6a4d9
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+      effect: add
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:40:24.379Z
+graphRevisionBefore: a2b97bcca5b4035261f8da14c499b6d283ba1f2c2dc745538e52fa00399070cd
+graphRevisionAfter: bd39355deed8b2b025196454957765838a9b67c9fa59433a3fd82b43f74e990c
+humanInstruction: D31 item 3 authorizes recording this exact source-link mapping span-free.

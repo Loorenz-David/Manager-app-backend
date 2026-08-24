@@ -231,6 +231,18 @@ a workspace-relative path, what the source shows and why that observation
 implies the architectural concept. Do not copy source bodies or secrets into
 the graph.
 
+Anchor evidence with a path and, where the code has one, a `symbol`. A symbol
+survives the edits above it; a line range does not. The graph is a map of what
+the code means, not an index of where it sits today, and no computation in the
+engine reads a line number — staleness and drift are decided from paths and
+file hashes. Record `startLine` / `endLine` only when the claim is about a
+region that has no name of its own — a configuration block, a migration body,
+one branch inside a long function — and accept that such a span is a
+maintenance debt you have chosen. Omitting a span is the default, not a loss
+of precision. Navigation does not suffer: the VS Code extension opens an
+evidence entry by its symbol first and falls back to lines only when no symbol
+resolves.
+
 Anchor evidence to code that **is** the thing, not to code that calls, imports,
 configures or names it. A route handler that invokes an order service is
 evidence of the handler, not of the service. The tell is inside your own
@@ -242,8 +254,10 @@ anchor is unresolved. A confidently wrong anchor costs more than a missing one,
 because everything downstream — impact, generated context, staleness — is
 computed from it, and nothing later re-checks it.
 
-Source links are implementation anchors: use their path, symbol and line range
-when available. The server computes their content hash. Do not fabricate a
+Source links are implementation anchors: use their path and symbol when
+available. A line range on a source link is a human-accepted address whose
+staleness is hash-based, so it costs nothing there — but it is not a pattern
+to copy into evidence. The server computes their content hash. Do not fabricate a
 confidence field for a source link, whose schema uses its path and location as
 the record of evidence.
 
@@ -480,7 +494,8 @@ Recommended sequence:
 3. `archgraph_get_review_item` to inspect evidence, drift, contradictions,
    uncertainties and the suggested decision for one item.
 4. **Re-derive the claim from source, independently.** Open every cited path
-   and line range with the host's own file tools and state what that code
+   with the host's own file tools, locate the cited symbol (or the named
+   region, where a span stands in for a name), and state what that code
    actually does, in your own words, *before* weighing the item's stored
    `summary` and `inferenceReason`. Then compare the two. Where your reading
    and the stored claim disagree, that disagreement is the finding — report
@@ -573,8 +588,10 @@ architecture, their correctness is machine-checkable, and every new address
 must resolve in the workspace or the batch is refused. Everything that changes
 what the graph *says* is refused by that tool and still needs a human.
 
-Use it where it belongs — keeping the map current as code moves — and reach
-for the previewed tools for everything else. If a repair feels like it needs a
+Use it where it belongs — keeping the map current when files and symbols are
+renamed or removed, and retiring legacy line ranges — and reach for the
+previewed tools for everything else. A span that merely drifted is not a
+repair candidate. If a repair feels like it needs a
 human to look at it, that is the signal it is not a repair.
 
 Recommended sequence:
@@ -612,20 +629,27 @@ practice:
   `inferenceReason`. The address it replaces is preserved under
   `metadata.evidenceHistory` with the instant it was superseded, so nothing
   is lost and the original claim stays auditable. An anchor that omits a
-  symbol or range clears the old one rather than leaving it: a stale span
-  reads as a precision nobody chose. If the *claim* is what is wrong, this is
-  the wrong operation — that is an `edit`, or a `delete`.
+  symbol or range clears the old one rather than leaving it. That is the
+  intended way to retire a line range: re-anchor to path and symbol alone, and
+  the span is gone. If the *claim* is what is wrong, this is the wrong
+  operation — that is an `edit`, or a `delete`.
 - **`unlink` removes one source link.** Until it existed the only way to drop
   a link pointing at a deleted file was to delete the whole node it hung off.
   Nodes only: relationships carry no source links.
-- **Keeping anchors current is closing work, not a separate errand.** A phase
-  that moves or renames code leaves addresses pointing at the old place, and
-  the claims they support are usually still true. Repair them as part of
-  finishing the work, in one batch, rather than reporting the drift and
-  leaving it: an address that survives long enough stops reading as stale and
-  starts reading as a contradiction — the next agent finds something else at
-  that line and has to guess whether the map is wrong or the code is. The
-  dangerous guess is deleting a true relationship.
+- **Keeping anchors current is closing work, not a separate errand — and an
+  anchor is only stale when its path or symbol no longer resolves.** A phase
+  that renames or deletes a file, or renames a symbol, leaves addresses
+  pointing at a place that no longer exists, and the claims they support are
+  usually still true. Repair those as part of finishing the work, in one
+  batch, rather than reporting the drift and leaving it: an address that
+  survives long enough stops reading as stale and starts reading as a
+  contradiction — the next agent finds no such symbol in that file and has to
+  guess whether the map is wrong or the code is. The dangerous guess is
+  deleting a true relationship. A function that moved from line 245 to line
+  367 is **not** such an event: nothing in the engine reacts to it, and a
+  reviewer reading by symbol never sees it. Do not re-anchor for position
+  drift, and do not report it as drift. Where a legacy span is in the way,
+  the repair is to drop it — re-anchor to path and symbol — not to refresh it.
 - **`link` accepts a mapping**, hashing the file at apply time. An exact
   re-record re-hashes in place (a re-accept); an overlapping-but-different one
   is refused, because storage appends and two mappings for the same code with

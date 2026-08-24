@@ -1,0 +1,22 @@
+changeId: 2026-08-24T10-40-16-780Z--9655df
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+        symbol: test_c1_status_matrix_has_twelve_exact_rows
+        startLine: 583
+        endLine: 615
+    after: {}
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:40:16.780Z
+graphRevisionBefore: 28fcee4550338a8edf31601dd5357527373a9c8d6ccaa3158cf0b3104ff0a3ed
+graphRevisionAfter: a2b97bcca5b4035261f8da14c499b6d283ba1f2c2dc745538e52fa00399070cd
+humanInstruction: D31 item 3 authorizes correcting this exact source-link
+  mapping; the existing span-bearing mapping must be unlinked before the
+  span-free mapping is re-recorded.

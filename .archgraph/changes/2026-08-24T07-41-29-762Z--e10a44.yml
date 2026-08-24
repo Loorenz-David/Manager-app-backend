@@ -1,0 +1,92 @@
+changeId: 2026-08-24T07-41-29-762Z--e10a44
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: edit
+    before:
+      description: The task-scoped, read-only production-time view that composes
+        manager budget status with section grouping, section typicals, and
+        deterministic per-step time allowances. Its worked-seconds basis is each
+        non-deleted step's settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live worked-seconds loader and passed both to budget status
+        and into the allocator's response-only step rows, persisted nowhere. It
+        includes ordered section rows and a flat time-only final snapshot
+        without monetary fields, persisted calculation results, or schema
+        changes. It preserves the existing budget-status readiness and tenant
+        boundary while exposing section metadata and live state snapshots.
+    after:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item category-narrowed typical-time
+        evidence, ordered section grouping, and deterministic per-step time
+        allowances. For each task it derives the typical filter from the active
+        PRIMARY item's category and reconciles participating sections through
+        uniform_basis_v1: usable narrowed evidence must be available for every
+        participating section to select one item-narrowed basis, otherwise the
+        participating task falls back together to section-wide, while excluded
+        sections resolve independently. The same SelectedTypical values feed
+        both the displayed typicals and the division weights, and the response
+        carries a typical_resolution block with the task basis, applied filter,
+        participating-section counts by basis, reconciliation method, and
+        comparability profile, plus per-section typical_basis,
+        narrowed_sample_count, and section_sample_count and allocation_method
+        static_proportional_section_v2. Each non-deleted step's worked-seconds
+        input remains its settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live-worked-seconds loader and persisted nowhere. It
+        preserves the tenant boundary and time-only shape, including ordered
+        section rows and a flat final snapshot, and does not expose monetary
+        fields, persist derived results, or change the underlying
+        working-sections typical-times projection."
+    rationale: D30 authorizes bringing the phase-4 projection meaning current; phase
+      4 added item-category narrowing, uniform task-wide reconciliation,
+      resolution metadata, and allocation method v2.
+  - itemId: node:projection-item-economics-task-budget-allocations
+    kind: edit
+    before:
+      description: The batched, read-only task view that combines current committed
+        evaluation budgets, non-deleted live steps, section typicals, and
+        item-economics readiness into per-step allowances. Each step's
+        worked-seconds input is its settled working seconds plus the
+        concurrency-averaged share of any open WORKING interval, taken from one
+        shared live worked-seconds map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values. Its invariant is that the
+        response's time-only fields reconcile with the same non-deleted step set
+        used by budget status.
+    after:
+      description: The batched, read-only task view combines current committed
+        evaluation budgets, non-deleted live steps, item-category-narrowed
+        typical-time evidence, and item-economics readiness into per-step
+        allowances. It derives one filter spec per task, deduplicates equal
+        specs into an ordered sequence, issues one typical-times statement for
+        the batch, and maps each task to its spec position; a non-narrowing task
+        uses spec_index None and resolves against the spec-independent
+        section-wide columns. Participating sections are reconciled through
+        uniform_basis_v1 and excluded sections resolve independently, so one
+        task-wide basis governs the selected typicals used both for displayed
+        step values and for division weights; the response exposes
+        typical_resolution, per-step typical_basis and sample_count, and
+        allocation_method static_proportional_section_v2. Each step's
+        worked-seconds input remains its settled working seconds plus the
+        concurrency-averaged share of any open WORKING interval, taken from one
+        shared live-worked-seconds map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values; its time-only fields reconcile
+        with the same non-deleted step set used by budget status.
+    rationale: D30 authorizes bringing the phase-4 projection meaning current; phase
+      4 added item-category narrowing, uniform task-wide reconciliation, batch
+      spec deduplication, resolution metadata, and allocation method v2.
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-24T07:41:29.762Z
+graphRevisionBefore: 0196645b90b22bd172810b5f4458b1d155ea0fc06552b16552d3931dcd7db9f2
+graphRevisionAfter: 0cab27601858ac69fa2117b6fe7a17766b8e4698b75aa7af064476072de5178e
+humanInstruction: "D30 repository authorization (owner, 2026-08-24): rewrite
+  exactly the two phase-4 projection descriptions and no other settled graph
+  item."
+changeTokenCorrelation: ada5b3ca73b3

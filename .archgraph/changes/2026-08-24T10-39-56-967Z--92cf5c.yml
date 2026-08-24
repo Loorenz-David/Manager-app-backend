@@ -1,0 +1,22 @@
+changeId: 2026-08-24T10-39-56-967Z--92cf5c
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: unlink
+    before:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+        startLine: 184
+        endLine: 315
+    after: {}
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:39:56.967Z
+graphRevisionBefore: 5ae7bda09d7019a45f8a49fe5000436af30ce20c2925e855d0ec760bb95e3b40
+graphRevisionAfter: dbb683c7f986412d6876d9ae67bf7e64150aeb1c0742a13f9eadd2f25d093b0c
+humanInstruction: D31 item 2 authorizes correcting this exact source-link
+  mapping; the existing span-bearing mapping must be unlinked before the
+  span-free mapping is re-recorded.

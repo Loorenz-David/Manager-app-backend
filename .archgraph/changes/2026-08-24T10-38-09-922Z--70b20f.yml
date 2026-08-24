@@ -1,0 +1,46 @@
+changeId: 2026-08-24T10-38-09-922Z--70b20f
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: edit
+    before:
+      description: Manager-only, task-scoped read model that composes workspace-scoped
+        task/item binding, the saved valuation and byline, live item-economics
+        configuration, median-substituted task typical time, and the pure
+        price-scenario model into break-even anchors and a slider domain.
+        Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes. It composes task budget
+        status and so inherits that read's worked-time dependency transitively;
+        it publishes no live worked-time field of its own and reads no open
+        interval record directly.
+    after:
+      description: Manager-only, task-scoped read model that composes workspace-scoped
+        task/item binding, the saved valuation and byline, live item-economics
+        configuration, an item-aware task typical time — drawn from the
+        same-category slice of each participating section's history through the
+        shared typical-times engine, resolved by the shared reconciliation with
+        a zero-duration price terminal, and windowed by the injected request
+        clock so two reads of one task agree — and the pure price-scenario model
+        into break-even anchors and a slider domain. Non-bound bindings govern
+        the payload by nulling valuation/model/anchor/domain structure while
+        keeping the step-derived typical; the projection performs no writes. It
+        composes task budget status and so inherits that read's worked-time
+        dependency transitively; it publishes no live worked-time field of its
+        own and reads no open interval record directly.
+    rationale: "D31 item 1: replace only the stale median-substituted mechanism
+      clause with the implemented item-aware shared-engine,
+      shared-reconciliation, zero-terminal, participating-section,
+      injected-clock meaning; preserve every other description clause verbatim."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:38:09.922Z
+graphRevisionBefore: 501a3ce5180a161eb07ae05ba178f8f2506f12e97839dacff5bedf1ac3fed1b6
+graphRevisionAfter: a2d96b48732550857978c4b5debbb5101de89b91ff4ae34e87faaeeca1c09539
+humanInstruction: "D31 in planning/owner_decisions.md explicitly authorizes item
+  1: this exact description-clause edit on
+  projection-item-economics-task-price-scenario, and grants permission to mark
+  the result human_confirmed."
+changeTokenCorrelation: d91aa401f5f8

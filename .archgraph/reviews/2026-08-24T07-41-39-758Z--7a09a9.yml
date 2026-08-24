@@ -1,0 +1,26 @@
+reviewId: 2026-08-24T07-41-39-758Z--7a09a9
+reviewedItemIds:
+  - node:source-symbol-working-section-typical-times-statement-narrowing
+decisions:
+  - itemId: node:source-symbol-working-section-typical-times-statement-narrowing
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: D30 authorizes adjudicating this pending item. Its content is sound,
+      but both evidence entries carry startLine/endLine despite having symbols;
+      evidence summaries are immutable, so reject-and-re-record is the only way
+      to preserve the claims without writing policy-violating span-bearing
+      evidence.
+retiredItemIds:
+  - node:source-symbol-working-section-typical-times-statement-narrowing
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.0
+timestamp: 2026-08-24T07:41:39.758Z
+graphRevisionBefore: 0cab27601858ac69fa2117b6fe7a17766b8e4698b75aa7af064476072de5178e
+graphRevisionAfter: 434e8be3335221431aa309b468dcb7da5e9b7b52198f338b32338d8135dc9fee
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: "D30 repository authorization (owner, 2026-08-24): reject this
+  span-bearing pending item so it can be re-recorded span-free, then approve the
+  corrected re-record."
+reviewTokenCorrelation: f8f2b6c17cab

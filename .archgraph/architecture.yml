@@ -5453,7 +5453,12 @@ nodes:
     origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-23T10:58:20.332Z
+    updatedAt: 2026-08-23T11:37:04.436Z
+    sourceLinks:
+      - path: app/beyo_manager/domain/item_economics/budget_division.py
+        symbol: participating_sections
+        contentHash: c7ef1d9af199226d7a85dba8f68b34a7e7f29fda01314dfe1dfc59c5e90de6c2
+        linkedAt: 2026-08-23T11:37:04.436Z
   - id: projection-working-section-typical-times
     type: projection
     name: Working section typical times
@@ -5490,17 +5495,26 @@ nodes:
   - id: projection-item-economics-task-budget-allocations
     type: projection
     name: Task budget allocations
-    description: The batched, read-only task view that combines current committed
-      evaluation budgets, non-deleted live steps, section typicals, and
-      item-economics readiness into per-step allowances. Each step's
-      worked-seconds input is its settled working seconds plus the
-      concurrency-averaged share of any open WORKING interval, taken from one
-      shared live worked-seconds map loaded once per request and persisted
-      nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
-      excluded steps, and degrades evaluation-less tasks to explicit no-budget
-      states without persisting derived values. Its invariant is that the
-      response's time-only fields reconcile with the same non-deleted step set
-      used by budget status.
+    description: The batched, read-only task view combines current committed
+      evaluation budgets, non-deleted live steps, item-category-narrowed
+      typical-time evidence, and item-economics readiness into per-step
+      allowances. It derives one filter spec per task, deduplicates equal specs
+      into an ordered sequence, issues one typical-times statement for the
+      batch, and maps each task to its spec position; a non-narrowing task uses
+      spec_index None and resolves against the spec-independent section-wide
+      columns. Participating sections are reconciled through uniform_basis_v1
+      and excluded sections resolve independently, so one task-wide basis
+      governs the selected typicals used both for displayed step values and for
+      division weights; the response exposes typical_resolution, per-step
+      typical_basis and sample_count, and allocation_method
+      static_proportional_section_v2. Each step's worked-seconds input remains
+      its settled working seconds plus the concurrency-averaged share of any
+      open WORKING interval, taken from one shared live-worked-seconds map
+      loaded once per request and persisted nowhere. It omits unknown or
+      cross-workspace tasks, charges non-deleted excluded steps, and degrades
+      evaluation-less tasks to explicit no-budget states without persisting
+      derived values; its time-only fields reconcile with the same non-deleted
+      step set used by budget status.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
@@ -5524,7 +5538,12 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-23T10:58:20.332Z
+    updatedAt: 2026-08-24T07:41:29.734Z
+    sourceLinks:
+      - path: app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py
+        symbol: test_c13_one_participating_sections_patch_moves_both_consumers
+        contentHash: 7f0b420aad40dd4ce68f796d9f0513e6834f85c3b9de8b1a4db4d2ef3780993c
+        linkedAt: 2026-08-23T11:37:04.436Z
   - id: endpoint-working-section-typical-times
     type: endpoint
     name: GET /api/v1/working-sections/typical-times
@@ -5587,17 +5606,28 @@ nodes:
   - id: projection-item-economics-task-production-time
     type: projection
     name: Task production time
-    description: The task-scoped, read-only production-time view that composes
-      manager budget status with section grouping, section typicals, and
-      deterministic per-step time allowances. Its worked-seconds basis is each
-      non-deleted step's settled working seconds plus the concurrency-averaged
+    description: "The task-scoped, read-only production-time view composes manager
+      budget status with active PRIMARY-item category-narrowed typical-time
+      evidence, ordered section grouping, and deterministic per-step time
+      allowances. For each task it derives the typical filter from the active
+      PRIMARY item's category and reconciles participating sections through
+      uniform_basis_v1: usable narrowed evidence must be available for every
+      participating section to select one item-narrowed basis, otherwise the
+      participating task falls back together to section-wide, while excluded
+      sections resolve independently. The same SelectedTypical values feed both
+      the displayed typicals and the division weights, and the response carries
+      a typical_resolution block with the task basis, applied filter,
+      participating-section counts by basis, reconciliation method, and
+      comparability profile, plus per-section typical_basis,
+      narrowed_sample_count, and section_sample_count and allocation_method
+      static_proportional_section_v2. Each non-deleted step's worked-seconds
+      input remains its settled working seconds plus the concurrency-averaged
       share of any open WORKING interval, resolved once per request through the
-      shared live worked-seconds loader and passed both to budget status and
-      into the allocator's response-only step rows, persisted nowhere. It
-      includes ordered section rows and a flat time-only final snapshot without
-      monetary fields, persisted calculation results, or schema changes. It
-      preserves the existing budget-status readiness and tenant boundary while
-      exposing section metadata and live state snapshots.
+      shared live-worked-seconds loader and persisted nowhere. It preserves the
+      tenant boundary and time-only shape, including ordered section rows and a
+      flat final snapshot, and does not expose monetary fields, persist derived
+      results, or change the underlying working-sections typical-times
+      projection."
     tags:
       - item-economics
       - production-time
@@ -5662,7 +5692,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-23T10:58:20.332Z
+    updatedAt: 2026-08-24T07:41:29.734Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -5682,6 +5712,10 @@ nodes:
         endLine: 160
         contentHash: a3915521b3a85445ebe4ade4ef7815cc243f58712f6d6129d2c3e219e4fb4449
         linkedAt: 2026-08-21T08:46:09.249Z
+      - path: app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py
+        symbol: test_c1_both_consumers_keep_settled_typicals_when_live_clock_moves
+        contentHash: 7f0b420aad40dd4ce68f796d9f0513e6834f85c3b9de8b1a4db4d2ef3780993c
+        linkedAt: 2026-08-23T11:37:04.436Z
   - id: endpoint-item-economics-task-production-time
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/production-time
@@ -5879,14 +5913,17 @@ nodes:
     name: Task price scenario
     description: Manager-only, task-scoped read model that composes workspace-scoped
       task/item binding, the saved valuation and byline, live item-economics
-      configuration, median-substituted task typical time, and the pure
-      price-scenario model into break-even anchors and a slider domain.
-      Non-bound bindings govern the payload by nulling
-      valuation/model/anchor/domain structure while keeping the step-derived
-      typical; the projection performs no writes. It composes task budget status
-      and so inherits that read's worked-time dependency transitively; it
-      publishes no live worked-time field of its own and reads no open interval
-      record directly.
+      configuration, an item-aware task typical time — drawn from the
+      same-category slice of each participating section's history through the
+      shared typical-times engine, resolved by the shared reconciliation with a
+      zero-duration price terminal, and windowed by the injected request clock
+      so two reads of one task agree — and the pure price-scenario model into
+      break-even anchors and a slider domain. Non-bound bindings govern the
+      payload by nulling valuation/model/anchor/domain structure while keeping
+      the step-derived typical; the projection performs no writes. It composes
+      task budget status and so inherits that read's worked-time dependency
+      transitively; it publishes no live worked-time field of its own and reads
+      no open interval record directly.
     tags:
       - item-economics
       - price-scenario
@@ -5948,23 +5985,48 @@ nodes:
           inferenceReason: The test verifies the projection's total status branch,
             including its five present and seven absent cases.
           supersededAt: 2026-08-23T10:58:20.332Z
+        - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+          symbol: get_task_price_scenario
+          summary: The query service composes budget status, workspace-scoped task/item
+            resolution, current valuation/byline, live configuration, the task
+            typical block, pure price-model anchors, binding overrides,
+            fingerprinting, and service-side serialization.
+          inferenceReason: This function is the implementation boundary for the task
+            price-scenario projection.
+          supersededAt: 2026-08-24T10:38:19.543Z
+        - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
+          symbol: test_c1_status_matrix_has_twelve_exact_rows
+          summary: The integration contract enumerates all twelve economics statuses and
+            verifies whether the model, anchors, and domain are published.
+          inferenceReason: The test verifies the projection's total status branch,
+            including its five present and seven absent cases.
+          supersededAt: 2026-08-24T10:38:28.198Z
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-23T10:58:20.332Z
+    updatedAt: 2026-08-24T10:40:24.355Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: _typical_block
+        contentHash: 92626a90464097ac69cb3d7ff13cac87423678707d5c7ea17eb5e0f0033783b2
+        linkedAt: 2026-08-24T10:04:22.364Z
+      - path: app/beyo_manager/domain/item_economics/serializers.py
+        symbol: serialize_task_price_scenario
+        contentHash: 2664352e4a4e4c9b456a62dd0ca4286fda3ab0247cc8c39c7677931b2ba957b8
+        linkedAt: 2026-08-24T10:04:22.364Z
+      - path: app/tests/integration/services/queries/item_economics/test_narrowed_price_scenario.py
+        symbol: test_c5_three_surfaces_use_the_same_published_literal
+        contentHash: 522594d765613b4e6c34b367c3436f32c6b6e6324cb99249671d4819ddd25143
+        linkedAt: 2026-08-24T10:04:22.364Z
+        acknowledgedAt: 2026-08-24T10:38:38.264Z
+      - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: get_task_price_scenario
-        startLine: 184
-        endLine: 315
-        contentHash: 89cc8a63fedb2907fd499dee9b0492b030ac59b2db4c384c2186a8f51ed96050
-        linkedAt: 2026-08-21T08:47:28.601Z
+        contentHash: 92626a90464097ac69cb3d7ff13cac87423678707d5c7ea17eb5e0f0033783b2
+        linkedAt: 2026-08-24T10:40:05.844Z
       - path: app/tests/integration/services/queries/item_economics/test_price_scenario_query.py
         symbol: test_c1_status_matrix_has_twelve_exact_rows
-        startLine: 583
-        endLine: 615
-        contentHash: 06f31eed1e40520d0bd475f111fdeeedc33415c8203e88e3055cc9a50688a5c6
-        linkedAt: 2026-08-21T08:47:41.638Z
+        contentHash: 646e4da2a609372d1aa59c41a9134a89a03ae9eaf280584c5f1316a89a89c074
+        linkedAt: 2026-08-24T10:40:24.355Z
   - id: domain-purchase-api-sek-price-normalization
     type: domain
     name: Purchase API SEK price normalization
@@ -6761,15 +6823,10 @@ nodes:
   - id: source-symbol-working-section-typical-times-statement-narrowing
     type: source_symbol
     name: typical_times_statement — ordered filter projection query
-    description: The query builder produces the ordered-filter projection rows for
-      working-section typical times while preserving the no-spec compatibility
-      branch.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
           symbol: typical_times_statement
-          startLine: 28
-          endLine: 142
           summary: The statement uses an outer VALUES spec-index cross join, grouped
             completed section totals, bound workspace predicates, active PRIMARY
             task-item attachment, optional category join, and per-index FILTER
@@ -6779,17 +6836,36 @@ nodes:
             empty-spec snapshot branch intact.
         - path: app/tests/integration/services/queries/working_sections/test_typical_times_narrowing.py
           symbol: test_cardinality_is_section_cross_spec_total_and_history_less_sections_are_materialized
-          startLine: 232
-          endLine: 253
           summary: Integration coverage asserts live-section × K cardinality, excludes
             deleted sections, and materializes sections with no qualifying
             history using zero counts and NULL typical values.
           inferenceReason: This test directly verifies the projection's new row topology
             and outer-attachment behavior at the corrected source span.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
-    createdAt: 2026-08-23T06:03:22.559Z
-    updatedAt: 2026-08-23T06:03:22.559Z
+    createdAt: 2026-08-24T07:41:48.510Z
+    updatedAt: 2026-08-24T07:41:56.277Z
+  - id: table-customer
+    type: table
+    name: customers
+    description: The workspace-scoped customer registry holding the current customer
+      identity and contact profile. It owns canonical display names and contact
+      values for customer-facing workflows, but it does not own task-time
+      historical state. Customer profile edits must remain separate from
+      immutable task snapshots.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/customers/customer.py
+          symbol: Customer
+          summary: The Customer ORM model maps the customers table with workspace
+            ownership, display_name, contact fields, address, status, and
+            soft-deletion state.
+          inferenceReason: This model is the customer registry source from which task
+            creation reads the canonical display name.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-24T11:36:34.944Z
+    updatedAt: 2026-08-24T11:36:34.944Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -12460,3 +12536,19 @@ edges:
     confidence: 0.99
     createdAt: 2026-08-22T20:04:39.774Z
     updatedAt: 2026-08-23T10:58:35.232Z
+  - sourceNodeId: command-task-create
+    relationshipType: reads_from
+    targetNodeId: table-customer
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/tasks/create_task.py
+          symbol: create_task
+          summary: Task creation loads an active Customer for an explicit customer_id or
+            after resolving inline customer data, then copies
+            Customer.display_name into the task snapshot.
+          inferenceReason: The command now directly reads the customer registry as the
+            source for customer_name_snapshot while creating a task.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-24T11:36:34.944Z
+    updatedAt: 2026-08-24T11:36:34.944Z

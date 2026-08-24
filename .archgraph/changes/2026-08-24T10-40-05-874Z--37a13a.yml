@@ -1,0 +1,19 @@
+changeId: 2026-08-24T10-40-05-874Z--37a13a
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: link
+    before: {}
+    after:
+      sourceLink:
+        path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
+        symbol: get_task_price_scenario
+      effect: add
+retiredItemIds: []
+authorizerSource: anchor-repair
+clientInfo:
+  name: codex-mcp-client
+  version: 0.147.0-alpha.6.5
+timestamp: 2026-08-24T10:40:05.874Z
+graphRevisionBefore: dbb683c7f986412d6876d9ae67bf7e64150aeb1c0742a13f9eadd2f25d093b0c
+graphRevisionAfter: 28fcee4550338a8edf31601dd5357527373a9c8d6ccaa3158cf0b3104ff0a3ed
+humanInstruction: D31 item 2 authorizes recording this exact source-link mapping span-free.
