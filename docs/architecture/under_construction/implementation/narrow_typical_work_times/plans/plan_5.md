@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 
@@ -1865,3 +1865,30 @@ round, nothing in the pipeline drops them → **environment item, master plan, n
 **State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`**. Fix round 5 dispatched — two edits, no
 production change. **This is the last round: its acceptance is two measurable facts the
 coordinator will verify directly, so no further review is owed.**
+
+### 2026-08-24 — fix round 5 closeout (Codex)
+
+Applied the two requested test-only corrections. `_narrowing_fixture.py` now exports
+`DIVERGENT_BOUNDARY_CLOSED_AT`, and the existing seed uses that same value. C1(b) derives
+`FROZEN` from that boundary plus `TYPICAL_WINDOW_DAYS`; the new C1(d) executes the spec-branch
+statement directly and asserts narrowed sample counts of `5` at `FROZEN` and `0` one second later.
+No production file changed.
+
+Task-0 coverage remains complete in both directions. The new row maps to
+`test_c1d_spec_branch_uses_the_injected_clock_at_the_statement_level`; all prior test-to-row
+assignments are carried from fix round 4 and no orphan tests were added.
+
+Named mutation ledger: `C1 3 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2` = 16 named
+mutations, plus 2 planted probes = 18 rows. Re-ran C1(i), which failed C1(b) on the byte-identity
+assertion (before its numeric assertion), and C1(iii), which failed C1(d) alone on the outside
+sample count. The remaining 14 named rows and 2 planted probes are cited from fix round 4 per the
+prompt; their sites and assertion bodies were unchanged except for the explicitly re-run C1(b)
+clock derivation.
+
+Pre-edit targeted baseline: 71 passed across the three phase integration files. Final targeted
+surface: 72 passed. Focused Ruff: clean. Authoritative L4:
+`BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` → 2708 passed / 21 failed / 1 skipped /
+2 warnings; failure-ID delta ∅/∅ against the carried 21-ID baseline. The graph was read for status,
+valid and unchanged by this test-only work; no graph delta is due. No owner decisions are required.
+
+**State:** `CHANGES_REQUESTED` → **`IMPLEMENTED`**.

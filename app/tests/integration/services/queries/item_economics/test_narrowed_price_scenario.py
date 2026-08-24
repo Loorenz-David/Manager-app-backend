@@ -18,6 +18,7 @@ from beyo_manager.domain.item_economics.typical_filters import (
     TypicalFilterSpec,
     derive_spec_from_primary_item,
 )
+from beyo_manager.domain.item_economics.typical_constants import TYPICAL_WINDOW_DAYS
 from beyo_manager.services.queries.item_economics.get_task_budget_allocations import (
     get_task_budget_allocations,
 )
@@ -36,9 +37,12 @@ from tests.integration.services.queries.item_economics.test_price_scenario_query
     module,
 )
 from tests.integration.services.queries.item_economics._narrowing_fixture import (
+    DIVERGENT_BOUNDARY_CLOSED_AT,
     cleanup_divergent_category_fixture,
     seed_divergent_category_task,
 )
+
+FROZEN = DIVERGENT_BOUNDARY_CLOSED_AT + timedelta(days=TYPICAL_WINDOW_DAYS)
 
 
 def _spec_row(section_id: str, narrowed: int | None, section: int | None, *, narrowed_count=5, section_count=12):
@@ -98,7 +102,7 @@ async def test_c1b_same_frozen_context_produces_byte_identical_typicals(
     db_session, monkeypatch
 ):
     fixture = await seed_divergent_category_task(db_session)
-    frozen = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    frozen = FROZEN
     wall_clock = iter((frozen - timedelta(seconds=1), frozen + timedelta(seconds=1)))
 
     class FakeDatetime:
@@ -150,6 +154,35 @@ async def test_c1c_working_section_typicals_keep_the_default_statement_clock(mon
 
     assert calls
     assert "now" not in captured
+
+
+@pytest.mark.integration
+async def test_c1d_spec_branch_uses_the_injected_clock_at_the_statement_level(db_session):
+    fixture = await seed_divergent_category_task(db_session)
+    workspace = fixture["workspace"]
+    category_id = fixture["category_id"]
+    spec = TypicalFilterSpec(item_category_ids=frozenset({category_id}))
+
+    try:
+        inside = await db_session.execute(
+            typical_times_module.typical_times_statement(
+                workspace.client_id, specs=(spec,), now=FROZEN
+            )
+        )
+        outside = await db_session.execute(
+            typical_times_module.typical_times_statement(
+                workspace.client_id,
+                specs=(spec,),
+                now=FROZEN + timedelta(seconds=1),
+            )
+        )
+        inside_row = next(row for row in inside if row.client_id == fixture["section"].client_id)
+        outside_row = next(row for row in outside if row.client_id == fixture["section"].client_id)
+
+        assert inside_row.narrowed_sample_count == 5
+        assert outside_row.narrowed_sample_count == 0
+    finally:
+        await cleanup_divergent_category_fixture(db_session, fixture)
 
 
 @pytest.mark.parametrize(

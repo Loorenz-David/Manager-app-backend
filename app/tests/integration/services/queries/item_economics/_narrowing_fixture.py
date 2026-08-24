@@ -20,6 +20,8 @@ from beyo_manager.models.tables.users.user import User
 from beyo_manager.models.tables.workspaces.workspace import Workspace
 from tests.integration.services.queries.item_economics.test_budget_allocations_query import _cleanup
 
+DIVERGENT_BOUNDARY_CLOSED_AT = datetime(2026, 8, 1, tzinfo=timezone.utc)
+
 
 async def seed_narrowing_history(db_session):
     """Reuse the approved economics seed and expose its objects to narrowing cases."""
@@ -317,7 +319,7 @@ async def seed_divergent_category_task(db_session):
                 total_dependencies=0,
                 completed_dependencies=0,
                 total_working_seconds=seconds,
-                closed_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                closed_at=DIVERGENT_BOUNDARY_CLOSED_AT,
                 created_by_id=user.client_id,
             )
             db_session.add_all([history_task, history_item, history_task_item, history_step])
