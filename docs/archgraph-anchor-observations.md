@@ -600,3 +600,29 @@ was *asked* to remove spans and had to find the operation that could. `staleNode
 **The standing caveat is unchanged and the clean test is still unrun** — every prompt in this
 project restates the policy, so no session has yet been observed with a prompt silent on
 anchoring. **Plan 6 is the last chance to observe one.** Describe, do not fix.
+
+### 2026-08-24 — phase-6 closeout. Project close, and the closest thing yet to a clean test.
+
+**The prompt did not restate the anchoring rules.** For the first time it pointed at
+`.archgraph/agent-operating-policy.md` — committed the same day — as the authority, rather than
+repeating the policy in the prompt's own words. **The session recorded nothing at all**, correctly:
+it searched, read `domain-item-economics-typical-filters`, concluded the phase changed no
+architectural meaning, and wrote *"the architectural delta is none and nothing was recorded."*
+
+**So the anchoring question went untested one more time — because there was nothing to anchor.**
+That is the honest reading, and the brief should not claim more.
+
+**What it did demonstrate is the count-gating rule.** The graph had gained `table-customer` and one
+edge at 11:36, from outside this pipeline, leaving **6 stale nodes and 2 pending reviews**. The
+session reported those numbers and wrote *"these counts are observations, never gates"* — and took
+no review, maintenance, re-anchor or repair action on any of it. **A session that found unexpected
+pending reviews in the owner's working area and left them entirely alone.** That is the behaviour
+the standing rule asks for, observed under a condition that could have tempted otherwise.
+
+**Running total across the whole project: spans emitted by any agent since the policy change: 0.**
+Two sessions wrote to the graph (phase-5 implementation, and the D31 maintenance); both
+symbol-anchored, and the maintenance session had to discover that `re-anchor` cannot remove a span.
+
+**The brief stays open for the next project.** The clean test — a graph-writing session whose
+prompt is silent on anchoring — has still never run, and this project can no longer run it.
+Describe, do not fix.
