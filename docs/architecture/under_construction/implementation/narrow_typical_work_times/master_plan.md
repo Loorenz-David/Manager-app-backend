@@ -1008,6 +1008,13 @@ in §2. Restated here only where they bite hardest on *this* feature:
   the phase does not own and cannot affect. **Gate on `git status --porcelain -- app/` and on
   the plan's own perimeter; declare foreign directories expected-whatever-they-contain.**
   A gate that fires on someone else's work trains sessions to ignore gates.
+- **Gate on an artifact's content, never on a count of its parts** (plan-4 review dispatch,
+  2026-08-24 — **fourth** instance of the count-in-a-prompt class in this phase alone, after
+  "nine"/"ten"/"eleven" on the §4 perimeter). The review prompt's gate said §8 carries "five"
+  dated entries; it carries seven, so a faithful reviewer would have stopped and reported over a
+  coordinator miscount. **A count is a claim with a shorter shelf life than the thing it counts**
+  — every fold appends another entry. Name the specific entry that must be present instead; it is
+  both more robust and more informative about what the session is checking for.
 - **An adjudication that overrides a session's own diagnosis must ship with the condition that
   would refute it** (plan-4 fix round 2, 2026-08-23). The implementer halted on C10(d) calling
   it a production defect; the coordinator ruled it a fixture defect, reasoning *"C9 asserts

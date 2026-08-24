@@ -26,9 +26,11 @@ authorities, and to attack the tests that are supposed to protect them.**
 1. `git merge-base --is-ancestor 353a8c9 HEAD` succeeds. **Do not pin `HEAD` to a SHA** — doc
    commits land on top of the implementation while you work.
 2. `plans/plan_4.md` header reads **`state: REVIEWING`** and `master_plan.md` §4 row 4 agrees.
-3. `plans/plan_4.md` §8 carries **five** 2026-08-23/24 entries: the projection fold, the
-   coordinator consumption of it, the round-1 consumption, the misadjudicated halt, and the
-   round-2 + correction-2 consumption. A missing entry means a partially folded plan.
+3. `plans/plan_4.md` §8 ends with the entry **"2026-08-24 — fix round 2 + correction 2 consumed
+   → `REVIEWING`"**, and §6B exists. If that last entry is absent you have a partially folded
+   plan and must stop. *(Gate on that entry, not on a count of entries — the coordinator's first
+   draft of this line said "five" where there are seven, which would have halted you over a
+   miscount. §9's rule about counts in prompt sentences has now fired four times in this phase.)*
 4. `git status --porcelain -- app/` is **empty**. Anything under `.archgraph/` is the owner's
    live work and is **expected whatever it contains** — never enumerate it, diff it, or halt on it.
 
