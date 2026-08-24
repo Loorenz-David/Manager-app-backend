@@ -27,6 +27,11 @@ _PACKAGE = _APP_ROOT / "beyo_manager"
 
 _OPERATIONAL = _HANDOFFS / "to_frontend" / "HANDOFF_TO_FRONTEND_item_economics_operational_20260815.md"
 _CONFIGURATION = _HANDOFFS / "to_frontend" / "HANDOFF_TO_FRONTEND_item_economics_configuration_20260815.md"
+_NARROW_TYPICALS = (
+    _HANDOFFS
+    / "to_frontend"
+    / "HANDOFF_TO_FRONTEND_narrow_typical_work_times_20260824.md"
+)
 
 _PREFIX = "/api/v1/item-economics"
 
@@ -225,6 +230,83 @@ def test_retired_inline_refusal_identity_is_absent_from_live_sources() -> None:
             if root == _APP_ROOT and ".venv" in path.relative_to(root).parts:
                 continue
             assert retired_identity not in path.read_text(), path
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("field", "required_statement"),
+    [
+        (
+            "typical_basis",
+            "`typical_basis` is **non-nullable**, always present, and defaults to "
+            "`\"insufficient_sample\"` when no selected typical is available.",
+        ),
+        (
+            "sample_count",
+            "`sample_count` is **non-nullable**, always present, and defaults to `0`.",
+        ),
+        (
+            "narrowed_sample_count",
+            "`narrowed_sample_count` is **non-nullable**, always present, and defaults to `0`.",
+        ),
+        (
+            "section_sample_count",
+            "`section_sample_count` is **non-nullable**, always present, and defaults to `0`.",
+        ),
+        (
+            "typical_resolution",
+            "`typical_resolution` is **non-nullable**, always present, and defaults to the "
+            "complete section-wide/zero-count object shown below.",
+        ),
+        (
+            "applied_filter",
+            "`applied_filter` is the one **nullable** new field. Its key is always present; "
+            "its value is `null` when the task's primary item has no category, or there is "
+            "no primary item.",
+        ),
+    ],
+    ids=[
+        "typical-basis",
+        "sample-count",
+        "narrowed-sample-count",
+        "section-sample-count",
+        "typical-resolution",
+        "applied-filter",
+    ],
+)
+def test_narrow_typicals_handoff_pins_new_field_nullability(
+    field: str, required_statement: str
+) -> None:
+    text = " ".join(_text(_NARROW_TYPICALS).split())
+    assert f"`{field}`" in text
+    assert " ".join(required_statement.split()) in text
+
+
+@pytest.mark.unit
+def test_narrow_typicals_handoff_pins_d25_zero_reachability() -> None:
+    text = " ".join(_text(_NARROW_TYPICALS).split())
+    for required in (
+        "`typical_basis: \"item_narrowed\"` beside `typical_worker_seconds: 0` is "
+        "**unreachable on every task surface**.",
+        "The reachable zero-statistic form is `typical_basis: \"section_wide\"` beside "
+        "`typical_worker_seconds: 0`.",
+        "A zero is a statistic and is never published as `insufficient_sample`.",
+    ):
+        assert " ".join(required.split()) in text
+
+
+@pytest.mark.unit
+def test_narrow_typicals_handoff_supersedes_the_worker_card_source() -> None:
+    text = " ".join(_text(_NARROW_TYPICALS).split())
+    for required in (
+        "`HANDOFF_TO_FRONTEND_production_time_and_worker_cards_20260818.md`",
+        "§Worker task-step cards",
+        "This supersedes **exactly one instruction** in that section.",
+        "The cards' fallback typical now comes from `budget-allocations` "
+        "`steps[].typical_worker_seconds`.",
+        "Delete the bootstrap `typical-times` fetch, cache, and join from the card path.",
+    ):
+        assert " ".join(required.split()) in text
 
 
 @pytest.mark.unit

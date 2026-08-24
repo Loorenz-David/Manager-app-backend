@@ -3,7 +3,7 @@
 ```
 plan: plan_6
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: APPROVED
 projection_gate: WAIVABLE — no rule-6 code surface. The coordinator records a one-line
                  justification if it waives.
 ```
@@ -278,3 +278,24 @@ the gate requires: **no rule-6 code surface — this phase writes documents, cha
 code, no test behaviour and no golden**, and the lint above has already discharged the mechanical
 half a projection would have found. The owner is session-constrained and this is the cheapest
 honest saving available.
+
+### 2026-08-24 — implementation closeout (Codex)
+
+**APPROVED.** Published the new dated frontend handoff and added eight pinned docs cases: six
+field/nullability cases for C2, the three-part D25 zero-reachability assertion for C3, and the
+two-sided worker-card supersession assertion for C4. The guard moved from 59 to **67 passed**.
+The tests-first baseline was **8 failed / 59 passed**; all failures named the not-yet-created
+handoff.
+
+Three declared probes were observed and reverted: one planted retired-identity defect reddened
+the existing guard; C2's definition mutation demonstrated contract red / mutant green for the
+one deliberate nullable field; C4's definition mutation demonstrated contract red / mutant green
+when the new source remained but deletion of the old join was no longer required. The 2026-08-18
+published handoff stayed byte-identical at SHA-256
+`88e1c795e8fa5f87bb183670f514fa52439238efb9ad3c4631b91f4245838bfb`.
+
+The initialized graph was read at 199 nodes / 299 edges with no diagnostics. Existing confirmed
+nodes already describe the shared typical-filter/reconciliation boundary; this docs-only phase
+has no architectural delta, so nothing was recorded and no owner review or maintenance work was
+touched. Final L4: **2716 passed / 21 failed / 1 skipped**, failing-ID delta **∅ / ∅** from plan
+5. Owner decisions/cards: **0**.
