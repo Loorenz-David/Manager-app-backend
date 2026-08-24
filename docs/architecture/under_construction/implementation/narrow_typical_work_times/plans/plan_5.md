@@ -235,7 +235,7 @@ byte-identity requirement. The two rows are opposite directions and both are con
 | # | fixture | `is_estimated` | also |
 |---|---|---|---|
 | a | a task whose every section is excluded → participating set empty | `true` | `total_seconds: 0`, `sections_total: 0` |
-| b | ≥1 participating section whose **selected** typical is `None` | `true` | `sections_without_sample >= 1` |
+| b | **exactly one** participating section whose **selected** typical is `None`, beside **one** that is usable — the fixture pins both | `true` | `sections_without_sample: 1` **(exact)** |
 | c | ≥1 participating section whose **selected** typical is `0` | `true` | the `<= 0` half |
 | d | every participating section has a usable selected value, on a **`section_wide_uniform`** task | `false` | `sections_without_sample: 0` |
 *Mutations, one per row*:
@@ -320,10 +320,29 @@ median of its own — it calls `apply_business_fallback` **exactly once** and co
 `Fraction`-median construction, no `percentile` computation and no comparison against
 `TYPICAL_MIN_SAMPLE_SIZE`. Asserted by reading the function's source and by a spy on
 `apply_business_fallback`.
-*Absence sweep (L4, reviewer-verified, root = repository root, terms stated)*: `percentile_cont`
-· `TYPICAL_MIN_SAMPLE_SIZE` · `_median` · `median(`. Expected: hits only in
-`typical_constants.py`, `typical_filters.py`, `get_working_section_typical_times.py`,
-`budget_division.py` and enumerated test files. Any other hit is a fork.
+*Absence sweep — **corrected at the plan lint, 2026-08-24, before dispatch. As originally
+written this row could not be made green honestly.*** Measured at source:
+- **`TYPICAL_MIN_SAMPLE_SIZE` is in 7 production files, not 4.** The original allowlist omitted
+  `division_serializers.py` and `get_task_production_time.py`, which read the floor legitimately.
+- **`_median` is in 4**, and two of them — `domain/analytics/insights/stats.py:5` and
+  `domain/analytics/estimation/strategies.py:6` — are `from statistics import median as _median`,
+  an unrelated local alias in another domain. **They can never be removed, so a repository-root
+  sweep for `_median` can never return the expected set.**
+- **`median(` matches 12 files** including tests, and "enumerated test files" enumerated none.
+
+**Corrected form — root = `app/beyo_manager/domain/item_economics/` +
+`app/beyo_manager/services/queries/item_economics/`** (the item-economics surface; the analytics
+domain is out of root by construction, not by exception). Terms: `percentile_cont` · `_median` ·
+`median(`. **Expected hits, enumerated by name:** `typical_filters.py`,
+`get_working_section_typical_times.py` (out of this root — retained here only as the statement's
+home, see below), `budget_division.py`. **Any other hit is a fork.**
+`TYPICAL_MIN_SAMPLE_SIZE` is **dropped from the term set** — it is a legitimately shared
+constant across 7 files and sweeping for it measures nothing. Its real guard is the **presence**
+form: `_typical_block` contains no comparison against it.
+**Planted-defect probe required (charter rule 15):** before relying on this row, add a private
+`_median(usable)` ladder to a file inside the root and outside the allowlist, and record the
+observed red. An absence measured true may be true only because nothing writes that form —
+this lineage has now produced that exact defect twice.
 *Mutation* — `_typical_block` (definition): reintroduce the private `usable` / `_median(usable)`
 ladder → the spy records zero `apply_business_fallback` calls and the source assertion fails.
 *Why the presence form is primary*: the corpus rule — *record the search terms beside an
@@ -355,3 +374,25 @@ defeated by the codebase's own wrapper.
 ## 8. Review log
 
 *(empty — append-only; shared by implementer and reviewer)*
+
+### 2026-08-24 — plan lint before dispatch (coordinator) — the first run of the new contract
+
+Run per `pipeline-coordinator.md` **Responsibility 1c**, introduced after phase 4 closed. **Two
+defects caught before any session opened the plan**, both of shapes that cost phase 4 real rounds.
+
+| lint check | result |
+|---|---|
+| **Sizing ≤ 8 criteria** | **PASS — 7** (C1–C7). Plan 4's 14 would have been refused |
+| **References resolve** | **PASS.** All 4 cited `app/` paths and all 11 bare filenames resolve; the one absent path (`test_narrowed_price_scenario.py`) is declared under §4 *New* and is correctly absent. The `_median` bridge is real — `budget_division.py:26`, imported at `get_task_price_scenario.py:13` — so task 0's target exists |
+| **Counts derived** | **PASS** — 12 named mutation markers across C1–C7, counted from the criteria rather than carried from anywhere |
+| **Exact expected outcomes** | **★ FAIL → fixed.** C2 row (b) asserted `sections_without_sample >= 1` — a disjunction, charter rule 2. **This is the identical defect the phase-4 reviewer found in C5(c)**, caught here before dispatch instead of at round 3. Now `sections_without_sample: 1` exact, with the fixture pinned to one unusable section beside one usable |
+| **Absence rows are satisfiable** | **★ FAIL → fixed.** C7's sweep, at repository root, expected hits in 4 named files. Measured: `TYPICAL_MIN_SAMPLE_SIZE` is in **7** production files; `_median` is in **4**, of which two are `from statistics import median as _median` in `domain/analytics/` — an unrelated alias that **can never be removed**, so the row could never return its expected set; and `median(` matches **12** files while "enumerated test files" enumerated none. **Root narrowed to the item-economics surface, allowlist re-derived by measurement, `TYPICAL_MIN_SAMPLE_SIZE` dropped from the term set** (a shared constant proves nothing), and a **planted-defect probe** is now required before the row is relied on |
+
+**Both failures are the same family as phase 4's C13(c)** — an absence row whose instrument
+cannot observe the presence it forbids, and a criterion stating a range where it means a value.
+**That family has now produced a defect in three consecutive phases**, which is the argument for
+the lint being mechanical rather than a matter of care.
+
+**What the lint did not check, stated so its pass is not over-read** (charter, phase manifest):
+it cannot tell whether a criterion's assertion is *weaker* than the row it discharges, and it has
+never caught a guard that cannot fail. Those remain the projection's and the reviewer's work.
