@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: APPROVED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -1792,3 +1792,112 @@ the handoff as required.
 **D30's scope was honoured exactly.** Two named descriptions, one review item, span-free
 evidence. Nothing else — the four `contentHash`-stale source links, D29's deferred operations
 and `.archgraph/backfill/` were all left alone as instructed.
+
+### 2026-08-24 — final delta re-review (Opus 5, round 3) — **`APPROVED`**
+
+**Handoff:** `handoffs/reviewer/20260824_plan4_rereview2_handoff.md`. Tree `5d60d68`,
+`git status --porcelain -- app/` empty. **0 blocking / 0 should-fix / 3 notes / 0 cards.**
+
+**Perimeter verified twice.** `git diff --stat 8670d1b HEAD -- app/` → 3 test files,
+51 insertions / 13 deletions, every hunk declared in the fix handoff. **No production change** —
+independently confirmed by md5: `get_task_production_time.py` `aff094de…`,
+`get_task_price_scenario.py` `8a261d76…`, `typical_filters.py` `c888e3d2…` are byte-identical to
+the round-2 handoff's published values.
+
+**L4 runs: 0.** `git diff 97aeaa6 HEAD -- app/` empty and `97aeaa6` is the checkpoint the fix
+round stamped, so **21 failed / 2692 passed / 1 skipped**, id diff ∅/∅, describes this tree and is
+consumed by citation. All nine probes are L1 and every one is variation.
+
+**The four named checks are closed *and biting*, each measured by me:**
+
+| # | mutant | fires at |
+|---|---|---|
+| **S1** | round-2's own probe re-run — shared import dropped, same-name local `def` in `get_task_price_scenario.py`, occurrence count preserved at 2 | `test_narrowed_task_economics.py:540` (round 2: **green**) |
+| **S3**a | `total_working_seconds` added to `typical_filters.py` | `:521` |
+| **S3**b | C1(c) root → `typical_filterz.py` | `:513` |
+| **N2** | `rglob` → `glob` in `_domain_modules` | `test_domain_purity.py:38` — the test's own recursion claim, not the helper precondition |
+| **N1** | C2(c) goldens root → `goldenz` | `:92`, and it names the stale root |
+
+**S2 closed by derivation.** All 24 `selected(...)` call sites pass `(section, value)` only; no
+reachable combination yields `section_wide` below `TYPICAL_MIN_SAMPLE_SIZE`.
+
+**Findings — three notes, all routed, none blocking:**
+- **N1 (note) — C13(c)'s different-name claim fires on a string form this codebase never
+  writes.** Measured three ways in `get_task_production_time.py`: an enum-member copy
+  (`frozenset({TaskStepStateEnum.SKIPPED, …})`) → **green**; a lowercase enum-**value** copy
+  (`{"skipped","cancelled","failed"}`, which is what `_step_state_is_excluded` actually compares
+  against) → **green**; the uppercase member-name literal → **red**. The one form it catches is
+  the one nobody writes. **This is the reviewer's own round-2 prescription being wrong** — the
+  implementer executed it exactly and declared the rule-14 divergence properly, so it is a plan
+  lesson, not a blocker; and the half ever *measured* to have a hole is closed (S1). Correction:
+  match all three writings with `budget_division.py` as the single exception. **→ plan 5, task 0**,
+  before the price-scenario ladder lands.
+- **N2 (note) — `selected()`'s `basis`/`count` overrides now have zero callers**: dead
+  scaffolding (rule 4) and the only remaining route to an inconsistent pair. **→ plan 5.**
+  Related, not a defect: mutating the derivation to `count = 0` leaves the file 17 passed —
+  nothing observes basis/count there, by design.
+- **N3 (note)** — the two blank lines between the C1(c) and C13(c) tests were lost with the
+  deleted assertion; both still collect, no ruff config in `backend/`. Opportunistic.
+
+**Lessons for the plans:** (1) an absence claim over a literal must be written in the idiom the
+codebase uses — *measuring an absence proves the absence, never that the instrument could observe
+the presence*; **plant the thing an absence row forbids and confirm it reddens, before shipping
+the row.** (2) A reviewer-prescribed instrument is not exempt from the reviewer's own lens.
+
+**Evidence boundary for plan 5** (extends the round-2 handoff's section, which still holds
+unchanged): the two `selected()` helpers have **diverged** — the unit one now emits only
+`(value, section_wide, 5)` / `(None, insufficient_sample, 0)`, the integration one at `:53` still
+takes explicit pairs; and C13(c) covers **same-name** copies only.
+
+**Mutation-probe declaration:** nine probes, six files, all reverted and md5-verified identical;
+no database or state side effects (every probed test is a file sweep, a pure unit test, or writes
+only under `tmp_path`). Full table in the handoff.
+
+### 2026-08-24 — ★ PHASE 4 APPROVED (final delta re-review, round 3)
+
+**Handoff:** `handoffs/reviewer/20260824_plan4_rereview2_handoff.md`, Opus 5, tree `5d60d68`.
+**`APPROVED` — 0 blocking / 0 should-fix / 3 notes / 0 owner cards. L4 runs: 0.**
+
+**Every finding from both prior review passes is closed *and biting*, and the reviewer measured
+the closures it had not personally measured.** The one that mattered: it re-ran **its own**
+round-2 faithful-copy probe against the C13(c) fix — the finding whose closure round 2 could not
+confirm — and it now reddens at `:540`, the exact line the fix added. B2 is confirmed shut by the
+session that found it open.
+
+**Evidence discipline, recorded because it is the standard to hold to.** `git diff 97aeaa6 HEAD
+-- app/` empty, so fix round 4's gate stamp (**21 failed / 2692 passed / 1 skipped**, id diff
+∅/∅) describes the reviewed tree and was **consumed by citation, not re-run**. Everything else
+ran at L1 on named ids, and **every run was variation** — a mutant shape or site no prior record
+used. Perimeter confirmed twice over: by diff, and independently by md5 against values the
+reviewer itself recorded in round 2.
+
+**Three notes, none blocking, all routed forward:**
+- **N1 — C13(c)'s different-name claim fires on a string form this codebase never writes.** The
+  absence was measured true *because no production file writes state sets as strings at all*, not
+  because no private copy exists. **This is the fifth "row that cannot fail" in this phase and
+  the first authored by a reviewer rather than an implementer.** → **plan 5 task 0**, which is
+  where price-scenario grows its private ladder over the same predicate.
+- **N2 — `selected()`'s `basis`/`count` overrides now have zero callers**, and the two `selected()`
+  helpers in this tree have **diverged**: the unit one can no longer produce a below-floor
+  `section_wide`; the integration one still takes explicit pairs. Same name, different contracts.
+  → **plan 5**, flagged as a reading trap.
+- **N3** — blank lines, cosmetic.
+
+**Two lessons into master plan §9**, both about instruments rather than code:
+1. **Before shipping an absence row, plant the thing it forbids and confirm the row reddens.**
+   Measuring an absence proves the absence; it does not prove the instrument could ever observe
+   the presence. This is rule 11's discipline for safety tests, applied to absence rows.
+2. **A reviewer-prescribed instrument is not exempt from the reviewer's own lens.** Round 2 handed
+   down a three-line correction; the implementer executed it exactly and declared its divergence
+   properly. **The defect entered through the prescription.** A prescription precise enough to be
+   transcribed literally must be measured as literally as it is written.
+
+**Phase totals.** 9 dispatched sessions — 1 projection, 2 coordinator consumptions of it, 4
+implementation/fix rounds, 3 review passes — plus one authorized graph-meaning session.
+**Exactly one production defect in the whole phase** (the mixed-batch `spec_index is None`
+mis-key), and **a criterion caught it, not a reviewer.** Every other finding was an instrument.
+**Four "rows that cannot fail" were found, each written to close the previous one**; N1 is the
+fifth. The prior on that class is high and plan 5 should budget for it.
+
+**Gate stamp:** `21 failed / 2692 passed / 1 skipped`, 21-ID set unchanged (∅/∅), **run on the
+gate tree by fix round 4 and cited here on a byte-identical tree.**
