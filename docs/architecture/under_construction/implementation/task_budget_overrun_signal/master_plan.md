@@ -100,7 +100,7 @@ APPROVED. Every implementation and fix cycle is committed at `IMPLEMENTED` as
 
 | Phase | Title | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Pure rule — `budget_signal.py` (§§3A, 4A, 5A.3, 6A.2/6A.3) | `IMPLEMENTED` | 2026-08-24 | Codex | Pure rule and 40-row criterion suite implemented; 35/35 L1 mutations reddened; L1 63 passed, L2 611 passed, L4 baseline unchanged (21 failed / 2758 passed / 1 skipped) |
+| 1 | Pure rule — `budget_signal.py` (§§3A, 4A, 5A.3, 6A.2/6A.3) | `APPROVED` | 2026-08-24 | coordinator | Review r1 findings dispositioned: neither expands plan-1 acceptance; production rule, 35 row mutations, and baseline evidence accepted; no fix cycle |
 | 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `NOT_STARTED` | 2026-08-24 | planner | 8 criteria; projection **mandatory**; integration tests on the disposable DB |
 | 3 | Route + HC-2a artifacts + `to_frontend` handoff (§§7A.3–7A.6, §8 item 5) | `NOT_STARTED` | 2026-08-24 | planner | 6 criteria; projection waivable (coordinator's call); graph delta = endpoint node |
 
