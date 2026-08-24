@@ -1,0 +1,44 @@
+reviewId: 2026-08-24T13-41-03-580Z--1a79e6
+reviewedItemIds:
+  - edge:command-task-create--reads_from-->table-customer
+  - node:table-customer
+decisions:
+  - itemId: edge:command-task-create--reads_from-->table-customer
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "D32. Relationship is true but its evidence states a mechanism that
+      does not exist: the summary claims create_task 'copies
+      Customer.display_name into the task snapshot' and the inferenceReason
+      names customer_name_snapshot. Measured 2026-08-24: customer_name_snapshot
+      appears 0 times under beyo_manager/, and customer.display_name is read 0
+      times in create_task.py. What the command actually copies from the
+      Customer row is contact data (create_task.py:178-181). Evidence summaries
+      are immutable, so this is rejected and re-recorded with accurate
+      evidence."
+  - itemId: node:table-customer
+    decision: reject
+    previousOrigin: ai_inferred
+    rationale: "D32. The node and its description are correct, but its evidence
+      inferenceReason asserts the same false mechanism -- 'the customer registry
+      source from which task creation reads the canonical display name'.
+      Measured: create_task reads contact fields from the Customer row, and
+      takes display_name from the request, not from this model. Rejected and
+      re-recorded with accurate evidence rather than promoted with a false
+      reason."
+retiredItemIds:
+  - edge:command-task-create--reads_from-->table-customer
+  - node:table-customer
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.241
+timestamp: 2026-08-24T13:41:03.580Z
+graphRevisionBefore: 9c7b1200b9e68d12efd85e9c7ef4498a8b70fc6122bbc655410ab16f645c0e0f
+graphRevisionAfter: 61337b0964351d7508d5cf4ef24b5f4fe62919a217e632105c0d620f90666560
+evidenceSummary: 2 evidence entries across 2 files; no drift detected
+humanInstruction: D32 in planning/owner_decisions.md authorizes checking these
+  two pending items, correcting them if wrong, and then moving them to
+  human_confirmed. Both are rejected here only so they can be re-recorded with
+  accurate evidence in the same session; evidence summaries are immutable and
+  reject-and-re-record is the only correction path.
+reviewTokenCorrelation: dde7a2097531

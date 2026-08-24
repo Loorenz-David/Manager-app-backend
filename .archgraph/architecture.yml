@@ -6845,6 +6845,118 @@ nodes:
     confidence: 0.97
     createdAt: 2026-08-24T07:41:48.510Z
     updatedAt: 2026-08-24T07:41:56.277Z
+  - id: domain-pause-reason-eligibility
+    type: domain
+    name: Pause Reason Eligibility
+    description: "Determines whether a configured pause reason may justify a pause
+      for target users and working sections. User and section links are
+      independent whitelists: an empty whitelist is unrestricted, every supplied
+      target must be allowed, and both dimensions must pass. The same rule
+      governs filtered discovery and command-time admission. System-authored
+      transition reasons remain outside this configured pause-reason boundary."
+    tags:
+      - pause-reasons
+      - eligibility
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Filters configured pause reasons by target user and working-section
+            sets using unrestricted fallback, all-target matching, and AND
+            composition.
+          inferenceReason: The query expresses the externally visible pause-reason
+            eligibility rule.
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+          summary: Rejects a configured pause reason that is not eligible for the credited
+            user and persisted step section.
+          inferenceReason: Runtime command admission enforces the same eligibility boundary.
+    origin: human_confirmed
+    confidence: 0.97
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - id: table-pause-reason-user-link
+    type: table
+    name: pause_reason_user_links
+    description: Workspace-scoped association table linking configured pause reasons
+      to users. A unique workspace, pause-reason, and user tuple prevents
+      duplicate eligibility links. Pause-reason deletion cascades to links while
+      user and workspace deletion is restricted.
+    tags:
+      - pause-reasons
+      - users
+      - association-table
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/__init__.py
+          startLine: 22
+          endLine: 22
+          summary: Registers the pause-reason user-link model in the application metadata.
+          inferenceReason: Model registration establishes the association as an
+            application table.
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Queries PauseReasonUserLink by workspace, pause reason, and active user
+            membership.
+          inferenceReason: The list query consumes this table as the configured user whitelist.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - id: table-pause-reason-working-section-link
+    type: table
+    name: pause_reason_working_section_links
+    description: Workspace-scoped association table linking configured pause reasons
+      to working sections. A unique workspace, pause-reason, and working-section
+      tuple prevents duplicate eligibility links. Pause-reason deletion cascades
+      to links while working-section and workspace deletion is restricted.
+    tags:
+      - pause-reasons
+      - working-sections
+      - association-table
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/__init__.py
+          startLine: 23
+          endLine: 23
+          summary: Registers the pause-reason working-section-link model in the
+            application metadata.
+          inferenceReason: Model registration establishes the association as an
+            application table.
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Queries PauseReasonWorkingSectionLink by workspace, pause reason, and
+            nondeleted working section.
+          inferenceReason: The list query consumes this table as the configured
+            working-section whitelist.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - id: command-declare-worker-state
+    type: command
+    name: Declare Worker State
+    description: Declares a worker's explicit state and maintains the current
+      declared-state record. Pause declarations resolve the target worker and
+      the sections of their open work before validating a configured pause
+      reason. The command then updates the worker state and emits its existing
+      state-change effects.
+    tags:
+      - workers
+      - state
+      - command
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/users/declare_worker_state.py
+          symbol: declare_worker_state
+          summary: Handles worker state declarations and validates pause-reason
+            eligibility for the target worker and open work sections.
+          inferenceReason: This function is the application command boundary for
+            worker-declared pause state.
+    origin: human_confirmed
+    confidence: 0.96
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
   - id: table-customer
     type: table
     name: customers
@@ -6853,19 +6965,24 @@ nodes:
       values for customer-facing workflows, but it does not own task-time
       historical state. Customer profile edits must remain separate from
       immutable task snapshots.
+    tags:
+      - customers
+      - registry
     metadata:
       evidence:
         - path: app/beyo_manager/models/tables/customers/customer.py
           symbol: Customer
           summary: The Customer ORM model maps the customers table with workspace
-            ownership, display_name, contact fields, address, status, and
-            soft-deletion state.
-          inferenceReason: This model is the customer registry source from which task
-            creation reads the canonical display name.
-    origin: ai_inferred
+            ownership, a display_name, primary and secondary phone and email
+            fields, an address, a status enum and a soft-deletion flag, indexed
+            by workspace with display_name and phone.
+          inferenceReason: This model is the workspace-scoped customer registry. Task
+            creation reads a row from it to populate a task's contact fields; it
+            does not read display_name from here.
+    origin: human_confirmed
     confidence: 0.93
-    createdAt: 2026-08-24T11:36:34.944Z
-    updatedAt: 2026-08-24T11:36:34.944Z
+    createdAt: 2026-08-24T13:41:20.489Z
+    updatedAt: 2026-08-24T13:41:38.667Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -12536,19 +12653,146 @@ edges:
     confidence: 0.99
     createdAt: 2026-08-22T20:04:39.774Z
     updatedAt: 2026-08-23T10:58:35.232Z
+  - sourceNodeId: table-pause-reason-user-link
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason
+    description: Each user eligibility link belongs to one configured pause reason.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Correlates PauseReasonUserLink.pause_reason_id with
+            PauseReason.client_id.
+          inferenceReason: The user association is structurally subordinate to its owning
+            pause reason.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: table-pause-reason-working-section-link
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason
+    description: Each working-section eligibility link belongs to one configured
+      pause reason.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Correlates PauseReasonWorkingSectionLink.pause_reason_id with
+            PauseReason.client_id.
+          inferenceReason: The working-section association is structurally subordinate to
+            its owning pause reason.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: domain-pause-reason-eligibility
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason-user-link
+    description: User eligibility is derived from the configured pause-reason user links.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Uses user-link existence and active-membership counts to select reasons
+            for requested users.
+          inferenceReason: The eligibility domain consumes this table as its user
+            whitelist authority.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: domain-pause-reason-eligibility
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason-working-section-link
+    description: Working-section eligibility is derived from the configured
+      pause-reason working-section links.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/pause_reasons/list_pause_reasons.py
+          symbol: list_pause_reasons
+          summary: Uses section-link existence and nondeleted-section counts to select
+            reasons for requested sections.
+          inferenceReason: The eligibility domain consumes this table as its
+            working-section whitelist authority.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: command-transition-step-state
+    relationshipType: depends_on
+    targetNodeId: domain-pause-reason-eligibility
+    description: A credited task-step pause must use a pause reason eligible for the
+      credited worker and the step's actual working section.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+          summary: Validates a supplied pause reason against the transition credit user
+            and persisted step section before mutation.
+          inferenceReason: The single-step command delegates configured pause admission to
+            the eligibility domain.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: command-transition-step-state-batch
+    relationshipType: depends_on
+    targetNodeId: domain-pause-reason-eligibility
+    description: A batch pause must use a pause reason eligible for the performer
+      and every affected step section.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state_batch.py
+          symbol: transition_step_state_batch
+          summary: Validates a supplied pause reason against the performer and all loaded
+            step sections before batch mutations.
+          inferenceReason: The batch command delegates configured pause admission to the
+            eligibility domain.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
+  - sourceNodeId: command-declare-worker-state
+    relationshipType: depends_on
+    targetNodeId: domain-pause-reason-eligibility
+    description: A worker pause-state declaration must use a pause reason eligible
+      for the target worker and all sections represented by open work.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/users/declare_worker_state.py
+          symbol: declare_worker_state
+          summary: Resolves the target worker and open-work sections and validates the
+            supplied pause reason before state mutation.
+          inferenceReason: The worker-state command delegates configured pause admission
+            to the eligibility domain.
+    origin: human_confirmed
+    confidence: 0.98
+    createdAt: 2026-08-24T13:32:45.345Z
+    updatedAt: 2026-08-24T13:38:18.227Z
   - sourceNodeId: command-task-create
     relationshipType: reads_from
     targetNodeId: table-customer
+    description: Task creation reads the customer registry to populate a task's
+      contact fields, falling back to the registry only where the request does
+      not supply a value.
     metadata:
       evidence:
         - path: app/beyo_manager/services/commands/tasks/create_task.py
           symbol: create_task
-          summary: Task creation loads an active Customer for an explicit customer_id or
-            after resolving inline customer data, then copies
-            Customer.display_name into the task snapshot.
-          inferenceReason: The command now directly reads the customer registry as the
-            source for customer_name_snapshot while creating a task.
-    origin: ai_inferred
+          summary: When a task carries a customer_id, create_task selects a Customer
+            filtered by workspace_id, client_id and is_deleted false, raises
+            NotFound when none matches, and then sets the task's primary and
+            secondary phone numbers, primary and secondary emails and address
+            from the customer row wherever the request did not supply them.
+          inferenceReason: "The command reads the customer registry directly as a fallback
+            source for task contact fields. Recorded explicitly because a prior
+            inference claimed it copies Customer.display_name into a
+            customer_name_snapshot: measured 2026-08-24, that field does not
+            exist anywhere under beyo_manager and create_task never reads
+            customer.display_name -- the only display name it uses comes from
+            the request when creating a customer inline."
+    origin: human_confirmed
     confidence: 0.97
-    createdAt: 2026-08-24T11:36:34.944Z
-    updatedAt: 2026-08-24T11:36:34.944Z
+    createdAt: 2026-08-24T13:41:20.489Z
+    updatedAt: 2026-08-24T13:41:38.667Z

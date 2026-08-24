@@ -1344,7 +1344,23 @@ measurement.** The warning was right to exist and wrong about where the danger w
 - **D29's re-anchor prompt is live, unconsumed, and mis-scoped** — `re-anchor` was measured on
   2026-08-24 to change evidence-anchor records rather than source-link objects, so it **cannot
   remove a span**. Rewrite before it is ever dispatched.
-- **Environment:** 51 orphaned `beyo_test_*_template` databases at `localhost:5433`, growing
-  ~6 per review round; nothing in the pipeline drops them.
-- **The graph carries 2 pending reviews** (`table-customer` and one edge, 2026-08-24 11:36) that
-  arrived from outside this pipeline and await the owner.
+- **Environment — RESOLVED 2026-08-24 (D32).** The orphaned test templates lived on the **Docker**
+  Postgres (`app-postgres-1`, `localhost:5433`), not the native server on 5432. **50 of 51 dropped,
+  0 failures: 832 MB → 16 MB.** `beyo_test_main_template` was excluded by name and kept — it is the
+  live slot's template — and the suite was re-run afterwards to prove it (16 passed). All 51 were
+  `_template` databases with **zero active connections**; no per-worker leftovers existed.
+  **Still unfixed: nothing in the pipeline drops them**, so they will accumulate again at roughly
+  six per review round. That is a tooling gap, not a cleanup gap.
+- **The graph's 2 pending reviews — RESOLVED 2026-08-24 (D32), and one was wrong.** The
+  relationship `command-task-create --reads_from--> table-customer` was **true**; its evidence was
+  **false in its specifics**, claiming the command *"copies `Customer.display_name` into the task
+  snapshot"* and naming a field **`customer_name_snapshot`**. Measured: that field appears **0
+  times** anywhere under `beyo_manager/`, and `customer.display_name` is read **0 times** in
+  `create_task.py`. What the command actually copies from the Customer row is contact data
+  (`create_task.py:178-181`); the only display name in that file comes from the **request**, when
+  creating a customer inline. Both items were **rejected and re-recorded** — evidence summaries are
+  immutable, and `edit` corrects a description but never a summary — then promoted to
+  **`human_confirmed`**. **The refuted claim is now written into the new evidence** so it is not
+  re-inferred. `pendingReviewCount` **2 → 0**.
+- **Six stale nodes remain, deliberately** — outside D32's scope by name, as they were outside
+  D31's. Not this pipeline's to adjudicate.

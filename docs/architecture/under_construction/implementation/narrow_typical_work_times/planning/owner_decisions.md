@@ -485,3 +485,50 @@ work.
 rejects, edits, re-anchors or removes a graph item on its own judgment, and **a `humanInstruction`
 string is never authorization**. This authorization is recorded here, in the repository, which is
 what makes it one.
+
+---
+
+## D32 — Post-close standing items: check and correct the graph, then confirm; clean the test databases
+
+**Owner, 2026-08-24, verbatim:** *"we should fix all that standing after the close, the graph should
+be checked, if correction need it corrected, then move to human confirmed. about the test database.
+it should be cleaned ."*
+
+**Scope 1 — the two pending graph reviews**, `node:table-customer` and
+`edge:command-task-create--reads_from-->table-customer`, both `ai_inferred`, created 2026-08-24
+11:36 **from outside this pipeline**. The owner authorizes: verify at source, **correct if wrong**,
+then move to `human_confirmed`.
+
+**Measured finding (coordinator, 2026-08-24).** The **relationship is true** — `create_task.py`
+imports `Customer` and selects it filtered by `workspace_id`, `client_id` and
+`is_deleted.is_(False)`, raising `NotFound` when absent. **The stated mechanism is false in both
+items:**
+
+- The edge's summary claims task creation *"copies `Customer.display_name` into the task
+  snapshot"*, and its `inferenceReason` names **`customer_name_snapshot`** as the field.
+- The node's `inferenceReason` calls the model *"the customer registry source from which task
+  creation reads the canonical display name."*
+
+Measured: **`customer_name_snapshot` appears 0 times anywhere under `beyo_manager/`**, and
+**`customer.display_name` is read 0 times in `create_task.py`**. What the command actually copies
+from the Customer row is contact data — `primary_phone_number`, `secondary_phone_number`,
+`primary_email`, `secondary_email`, `address` (`create_task.py:178-181`). The only `display_name`
+in that file is `request.customer_display_name`, used when **creating** a customer from inline
+data, not when reading one.
+
+**Correction path: reject and re-record.** Evidence summaries are immutable — no write path edits
+one — so the items are rejected with the reason, re-recorded with accurate summaries, and then
+confirmed. A same-id re-record re-enters the review queue by design.
+
+**Scope 2 — the orphaned test databases.** ~51 `beyo_test_*_template` databases on
+`localhost:5433`, left by prior probe and review sessions, growing ~6 per review round, with
+nothing in the pipeline dropping them. The owner authorizes cleaning them.
+**Bounded by the coordinator, not by the owner's sentence:** **anything the live test slot needs
+stays.** The active slot's databases and any template the current suite builds from are excluded,
+identified before anything is dropped, and named in the report.
+
+**Explicitly NOT authorized by this decision:** the six stale nodes; any other node, edge or
+evidence entry; `.archgraph/backfill/`; and **D29's re-anchor prompt, which remains deferred and
+mis-scoped**. Outside these two scopes the standing rule is unchanged — no agent promotes,
+rejects, edits or re-anchors on its own judgment, and a `humanInstruction` string is never
+authorization. This authorization is recorded here, in the repository, which is what makes it one.

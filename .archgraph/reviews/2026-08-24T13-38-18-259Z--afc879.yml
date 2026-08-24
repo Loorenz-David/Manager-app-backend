@@ -1,0 +1,93 @@
+reviewId: 2026-08-24T13-38-18-259Z--afc879
+reviewedItemIds:
+  - node:domain-pause-reason-eligibility
+  - node:table-pause-reason-user-link
+  - node:table-pause-reason-working-section-link
+  - node:command-declare-worker-state
+  - edge:table-pause-reason-user-link--depends_on-->table-pause-reason
+  - edge:table-pause-reason-working-section-link--depends_on-->table-pause-reason
+  - edge:domain-pause-reason-eligibility--depends_on-->table-pause-reason-user-link
+  - edge:domain-pause-reason-eligibility--depends_on-->table-pause-reason-working-section-link
+  - edge:command-transition-step-state--depends_on-->domain-pause-reason-eligibility
+  - edge:command-transition-step-state-batch--depends_on-->domain-pause-reason-eligibility
+  - edge:command-declare-worker-state--depends_on-->domain-pause-reason-eligibility
+decisions:
+  - itemId: node:domain-pause-reason-eligibility
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: node:table-pause-reason-user-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: node:table-pause-reason-working-section-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: node:command-declare-worker-state
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: edge:table-pause-reason-user-link--depends_on-->table-pause-reason
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: edge:table-pause-reason-working-section-link--depends_on-->table-pause-reason
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: edge:domain-pause-reason-eligibility--depends_on-->table-pause-reason-user-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms eligibility consumes both
+      association tables; parallel depends_on edges are intentional.
+  - itemId: edge:domain-pause-reason-eligibility--depends_on-->table-pause-reason-working-section-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms eligibility consumes both
+      association tables; parallel depends_on edges are intentional.
+  - itemId: edge:command-transition-step-state--depends_on-->domain-pause-reason-eligibility
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms command-time eligibility
+      validation; the existing event-bus dependency is an additional legitimate
+      dependency.
+  - itemId: edge:command-transition-step-state-batch--depends_on-->domain-pause-reason-eligibility
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+  - itemId: edge:command-declare-worker-state--depends_on-->domain-pause-reason-eligibility
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Independent source review confirms the recorded claim and evidence
+      with no unresolved contradiction.
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: codex-mcp-client
+  version: 0.149.1
+timestamp: 2026-08-24T13:38:18.259Z
+graphRevisionBefore: f9731626045194422ff309f048da6327fda10b88ab35a9c9e34e578f0ebb1d29
+graphRevisionAfter: 9c7b1200b9e68d12efd85e9c7ef4498a8b70fc6122bbc655410ab16f645c0e0f
+evidenceSummary: 14 evidence entries across 5 files; no drift detected
+humanInstruction: User explicitly authorized promotion of the reviewed
+  pause-reason eligibility nodes and relationships in this conversation.
+reviewTokenCorrelation: ab05e3ed12b3
