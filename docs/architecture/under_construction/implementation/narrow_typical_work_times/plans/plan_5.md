@@ -619,6 +619,27 @@ the boundary group, the two exact literals — **one cell each**. *"Implemented 
 entry for a row specified this precisely, and the round-1 coverage map claiming *"boundary inclusion"*
 for a file in which `closed_at`, `timedelta` and a fake `datetime` appear nowhere is why.
 
+**★ Corrected again at the fix-round-3 fold (coordinator, measured): C1(b) runs on `plain_task`,
+not `narrowed_task`.** Round 3 implemented this row DB-backed and prescribed-instrument-correct — and
+pointed it at the **narrowed** task, asserting `600`. That couples **M7's only composed guard to
+M1's mechanism**: measured on the round-3 tree, `specs = ()` at the derivation line reddens
+**four** tests including `test_c1b`, and passing `None` at the service call site reddens **two**,
+also including `test_c1b`. **A clock row that reddens for a narrowing defect no longer identifies
+the clock as the cause** — §8A lesson 3, one round after it was written.
+
+**Corrected form:** drive `plain_task` (§6A.F, category-less, non-narrowing). The section-wide
+value is `375` with the boundary group in, `0` with it out, so the row still reddens **on a
+number** under C1(i), and **no narrowing mutation touches it**. Everything else round 3 built for
+this row stands: the real `db_session`, the `FakeDatetime` on
+`…get_working_section_typical_times.datetime` returning `ctx.now - 1s` then `ctx.now + 1s`, and the
+fixture's `max(closed_at) == 2026-08-01` sitting exactly 90 days before a frozen
+`ctx.now = 2026-10-30`.
+
+**Assertion order, while the row is being edited:** put the byte-identity assertion **first**. As
+shipped the numeric assertion precedes it, so under C1(i) pytest stops at the number and
+**byte-identity never executes** — the row's own stated observable, and M7's, is never the failing
+line.
+
 **Corrected:** monkeypatch
 `beyo_manager.services.queries.working_sections.get_working_section_typical_times.datetime`
 (a module attribute — `datetime` is imported into that namespace at `:5`) with a fake whose
@@ -1543,3 +1564,79 @@ values remain unasserted for price-scenario; the reviewer declined to file it an
 same grounds it gave.
 
 **State:** `CHANGES_REQUESTED`. Fix round 3 dispatched.
+
+### 2026-08-24 — fix round 3 closeout (Codex)
+
+Resolved B1 and B2 with test-only changes. C8 now drives `get_task_price_scenario` end to end
+against `seed_divergent_category_task` and asserts the served payload's `typical.total_seconds`
+(`600` narrowed versus `375` plain). C1(b) now uses the real database-backed divergent fixture,
+the prescribed fake `working_sections.get_working_section_typical_times.datetime`, a group at
+`max(closed_at) == ctx.now - 90 days`, and exact totals: `600` under both contract calls; under
+the call-site clock mutation, `600` then `0`. C1(c) now asserts its spy was invoked; C4(a) asserts
+`is_estimated`; the remaining C6/C8/C1 divergences are declared in the handoff below.
+
+**C1(b) prescribed elements, one by one:** fake `datetime` implemented; boundary group supplied by
+`seed_divergent_category_task` at `2026-08-01 00:00 UTC` with frozen `ctx.now` at
+`2026-10-30 00:00 UTC`; contract and mutation totals are the exact literals `600` / `600` and
+`600` / `0` respectively.
+
+**Mutation ledger:** `C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2 = 15` named
+mutations, plus `C7(c) 1 · C7(d) 1 = 2` planted-defect probes, **17 total**. All 17 were applied,
+observed, reverted, and the mutation files were md5-verified. The C8 call-site mutation reddened
+the served number (`375 == 600`); the C1(b) call-site mutation reddened the numeric contract
+(`600 == 0`), not a kwargs assertion.
+
+**Note dispositions:** N1 and N4 are one-line assertion strengthenings. N2 declares that C6(c)
+reads constants supplied by its hand-built selection and does not add coverage. N3 is partly closed
+by C8's served-payload form, but C8(b) still does not assert production-time's named triple; this
+surface divergence is declared rather than adding new coverage. N5 declares `section_ids` is built
+from `groups` as a behaviourally identical, fake-session-safer implementation. S1 remains the
+correct plan disposition: §2B S-7 is a query-cost property with no wire observable and no owner;
+no test was invented.
+
+**State:** `IMPLEMENTED`.
+
+### 2026-08-24 — fix round 3 consumed (coordinator) — both blocking findings closed, one measured should-fix
+
+**Handoff:** `handoffs/implementer/20260824_plan5_fix_round3_handoff.md`. Perimeter: **one test
+file**, 50 insertions / 55 deletions; **production untouched**, verified by diff. Ledger summands
+correct at **15 + 2 = 17**. Stamp **2707 passed / 21 failed / 1 skipped**, 21-ID set enumerated in
+full and ∅/∅.
+
+**B1 closed, and closed in the preferred form.** C8 now drives `get_task_price_scenario` **end to
+end** and asserts the **served payload**, which also resolves N3's wire-reach half. Verified by the
+coordinator at source: passing `None` at `:236` reddens the row on `assert 375 == 600`. The
+mutation that left the entire repository green one round ago now bites.
+
+**B2 closed, and every prescribed element declared.** C1(b) is DB-backed on a real session, with
+the prescribed `FakeDatetime` on `…get_working_section_typical_times.datetime` returning
+`ctx.now - 1s` then `ctx.now + 1s`, and the fixture's `max(closed_at) == 2026-08-01` exactly 90
+days before a frozen `ctx.now = 2026-10-30`. **The fixture was not modified** — round 3 chose
+`frozen` to land the existing timestamp on the boundary, which is the cheaper and better move. The
+row reddens on `assert 600 == 0`, a number.
+
+**★ SHOULD-FIX, measured by the coordinator, and it is round 3's own doing.** Pointing C1(b) at
+**`narrowed_task`** made the clock row sensitive to narrowing. Measured on the round-3 tree, both
+probes reverted and md5-verified:
+
+| mutation | declared bite | **measured** bite |
+|---|---|---|
+| C8(ii) — `None` at the service call site | C8(c) | **`test_c1b` + `test_c8`** |
+| C8(i) — `specs = ()` at the derivation line | C8(a) | **`test_c1b` + `test_c2d` + `test_c5` + `test_c8`** |
+
+The extra reds are **correct behaviour** — a test asserting an exact served value is properly
+sensitive to anything that changes it — so nothing here is unarmed. **The defects are two:** the
+ledger's declared bite sets are narrower than the truth, which costs the next reviewer a finding on
+correct work; and **M7's only composed guard now reddens for M1 reasons**, so its red no longer
+names the clock. §8A lesson 3, one round after it was written. → **§6A C1(b) amended: run it on
+`plain_task`.** That decouples the row and narrows both bite sets in one edit.
+
+**Note, folded into the same amendment:** C1(b)'s numeric assertion precedes its byte-identity
+assertion, so under C1(i) pytest stops at the number and **byte-identity never executes**. Reorder.
+
+**Notes closed:** N1 (C4 asserts both observables), N4 (`test_c1c` asserts the spy was invoked),
+N2/N3/N5 declared rather than covered — all correct dispositions, and **S1 was correctly left
+alone**: no test was invented for a mechanism with no observable.
+
+**State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`**. Fix round 4 dispatched — two items, no
+production change.

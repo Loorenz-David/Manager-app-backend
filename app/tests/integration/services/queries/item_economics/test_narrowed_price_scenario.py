@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -94,58 +94,52 @@ async def test_c1a_typical_block_passes_the_request_clock_to_the_statement(monke
 
 
 @pytest.mark.integration
-async def test_c1b_same_frozen_context_produces_byte_identical_typicals(monkeypatch):
-    frozen = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
-    captured = []
-    real_statement = module.typical_times_statement
+async def test_c1b_same_frozen_context_produces_byte_identical_typicals(
+    db_session, monkeypatch
+):
+    fixture = await seed_divergent_category_task(db_session)
+    frozen = datetime(2026, 10, 30, tzinfo=timezone.utc)
+    wall_clock = iter((frozen - timedelta(seconds=1), frozen + timedelta(seconds=1)))
 
-    def spy(*args, **kwargs):
-        captured.append(kwargs.get("now"))
-        return real_statement(*args, **kwargs)
+    class FakeDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return next(wall_clock)
 
-    monkeypatch.setattr(module, "typical_times_statement", spy)
+    monkeypatch.setattr(typical_times_module, "datetime", FakeDatetime)
 
     def make_context():
-        context = _ctx(
-            _TypicalSession([_step("section_a")], [_typical_row("section_a", 600)])
+        return ServiceContext(
+            identity={
+                "workspace_id": fixture["workspace"].client_id,
+                "user_id": "usr",
+                "role_name": "manager",
+            },
+            incoming_data={"task_client_id": fixture["narrowed_task"].client_id},
+            query_params={},
+            session=db_session,
+            now=frozen,
         )
-        context.now = frozen
-        return context
 
-    first = await module._typical_block(make_context(), "tsk_scenario", None)
-    second = await module._typical_block(make_context(), "tsk_scenario", None)
-    def public(typical):
-        return serialize_task_price_scenario(
-            {
-                "task_id": "task",
-                "status": "not_evaluated",
-                "item_binding": "bound",
-                "can_commit": False,
-                "currency": None,
-                "calculation_version": 2,
-                "config_fingerprint": None,
-                "item": None,
-                "saved": None,
-                "model": None,
-                "typical": typical,
-                "anchors": None,
-                "domain": None,
-            }
-        )["typical"]
-
-    assert json.dumps(public(first), sort_keys=True) == json.dumps(
-        public(second), sort_keys=True
-    )
-    assert captured == [frozen, frozen]
-    assert first["total_seconds"] == second["total_seconds"] == 600
+    try:
+        first = await module.get_task_price_scenario(make_context())
+        second = await module.get_task_price_scenario(make_context())
+        assert first["typical"]["total_seconds"] == second["typical"]["total_seconds"] == 600
+        assert json.dumps(first["typical"], sort_keys=True) == json.dumps(
+            second["typical"], sort_keys=True
+        )
+    finally:
+        await cleanup_divergent_category_fixture(db_session, fixture)
 
 
 @pytest.mark.integration
 async def test_c1c_working_section_typicals_keep_the_default_statement_clock(monkeypatch):
     captured = {}
+    calls = []
     real_statement = typical_times_module.typical_times_statement
 
     def spy(*args, **kwargs):
+        calls.append(args)
         captured.update(kwargs)
         return real_statement(*args, **kwargs)
 
@@ -154,6 +148,7 @@ async def test_c1c_working_section_typicals_keep_the_default_statement_clock(mon
         _ctx(_TypicalSession([], []))
     )
 
+    assert calls
     assert "now" not in captured
 
 
@@ -227,16 +222,22 @@ async def test_c3_counts_only_participating_selected_typicals():
 
 
 @pytest.mark.parametrize(
-    ("rows", "expected"),
-    [([], 0), ([_typical_row("a", 600), _typical_row("b", 900), _typical_row("c", None)], 2250)],
+    ("rows", "expected_total", "expected_estimated"),
+    [
+        ([], 0, True),
+        ([_typical_row("a", 600), _typical_row("b", 900), _typical_row("c", None)], 2250, True),
+    ],
 )
 @pytest.mark.integration
-async def test_c4_price_terminal_and_median_are_duration_values(rows, expected):
+async def test_c4_price_terminal_and_median_are_duration_values(
+    rows, expected_total, expected_estimated
+):
     steps = [_step(section) for section in ("a", "b", "c")[: len(rows) or 3]]
     result = await module._typical_block(
         _ctx(_TypicalSession(steps, rows)), "tsk_scenario", None
     )
-    assert result["total_seconds"] == expected
+    assert result["total_seconds"] == expected_total
+    assert result["is_estimated"] is expected_estimated
 
 
 @pytest.mark.integration
@@ -383,7 +384,6 @@ async def test_c8_divergent_fixture_measures_narrowed_600_against_section_375(db
     workspace = fixture["workspace"]
     narrowed_task = fixture["narrowed_task"]
     plain_task = fixture["plain_task"]
-    item = fixture["base_values"][5]
     now = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
 
     def context(task_id):
@@ -393,15 +393,10 @@ async def test_c8_divergent_fixture_measures_narrowed_600_against_section_375(db
         )
 
     try:
-        narrowed = await module._typical_block(
-            context(narrowed_task.client_id),
-            narrowed_task.client_id,
-            derive_spec_from_primary_item(item),
-        )
-        plain = await module._typical_block(context(plain_task.client_id), plain_task.client_id, None)
-        assert narrowed["total_seconds"] == 600
-        assert narrowed["typical_resolution"].task_typical_basis == "item_narrowed_uniform"
-        assert plain["total_seconds"] == 375
-        assert narrowed["total_seconds"] != plain["total_seconds"]
+        narrowed = await module.get_task_price_scenario(context(narrowed_task.client_id))
+        plain = await module.get_task_price_scenario(context(plain_task.client_id))
+        assert narrowed["typical"]["total_seconds"] == 600
+        assert plain["typical"]["total_seconds"] == 375
+        assert narrowed["typical"]["total_seconds"] != plain["typical"]["total_seconds"]
     finally:
         await cleanup_divergent_category_fixture(db_session, fixture)
