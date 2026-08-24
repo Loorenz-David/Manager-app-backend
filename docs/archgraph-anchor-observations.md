@@ -545,3 +545,37 @@ refusal and its unresolved owner authorization were **carried forward unchanged 
 retried** — it did not take a second run at a gate that had already declined it, and it did not
 re-raise the card as if it were new. Running total of spans emitted by any agent since the policy
 change: still **0**.
+
+### 2026-08-24 — phase-5 graph maintenance under D31 (Codex)
+
+**The most informative session this brief has logged, and it is a tool finding, not a compliance
+one.**
+
+**`re-anchor` does not remove a span.** Items 2 and 3 of D31 asked for two span-bearing source
+links to be re-anchored span-free. The session's first attempt used `kind: re-anchor`
+(10:38:19, 10:38:28). **Both calls succeeded.** Neither removed the span: what moved was the
+node's two *evidence* entries, superseded by **byte-identical span-free copies**, while the two
+*source links* kept their `startLine`/`endLine` and stayed `stale: true`. I read the node between
+the two attempts and saw exactly that — a green tool response over an unchanged anchor.
+
+**The session detected it and completed the items as `unlink` then `link`** (10:39:56–10:40:24),
+which did remove the spans. `staleNodeCount` fell **6 → 5** only after that.
+
+**Two consequences the owner should hold.** First, **D29's deferred prompt is scoped to
+`archgraph_repair_anchors`** and therefore to an operation that **cannot perform what the
+span-removal policy asks** — it must be rewritten before it is ever dispatched, not merely
+re-scoped. Second, the residue is two byte-identical `evidenceHistory` entries: history noise,
+live state clean, **not a repair candidate**.
+
+**`humanInstruction` was used the right way, and the distinction is the whole rule.** Every one of
+the eight change records cites **D31 by name and item number** — an authorization that exists in
+the repository, written before the session opened. That is a citation. The anti-pattern the
+standing rule forbids is a session composing its own justification in that field and proceeding on
+it. This is the first session in this project to demonstrate the correct half of that distinction.
+
+**Spans emitted by any agent since the policy change: still 0** — and now measured against a
+session that was *asked* to remove them and had to find the right operation to do it.
+
+**Confounded as always:** the prompt named the policy explicitly. **No handoff was written**, so
+the session's own reasoning about the failed `re-anchor` is lost; only the change records survive.
+Describe, do not fix.

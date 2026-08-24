@@ -1289,3 +1289,50 @@ correctly escalated instead of forcing it. **Owner authorization is required** a
 cannot close without it — §7A makes the description rewrite part of this phase.
 
 **State:** `IMPLEMENTED` — dispatching review round 1.
+
+### 2026-08-24 — architecture graph brought current (maintenance, D31) — §7A discharged
+
+**Authorization:** `planning/owner_decisions.md` **D31**, the owner's recorded grant of permission
+to edit and to mark `human_confirmed`, bounded to four operations on one node.
+**Verified at source by the coordinator** (`archgraph_status`, `archgraph_get_node`, and the eight
+change records under `.archgraph/changes/`); **no handoff was written**, so this entry is the
+record.
+
+**All four operations landed.** Final state: `staleNodeCount` **6 → 5**, `pendingReviewCount`
+**0**, no diagnostics, node `origin: human_confirmed`, `reviewState: reviewed`.
+
+1. **Description (10:38:09, `kind: edit`).** *"median-substituted task typical time"* — the
+   private ladder task 4 deleted — is gone, replaced by the item-aware clause naming the
+   same-category slice, the shared engine, the shared reconciliation with its zero-duration price
+   terminal, and the injected request clock. **Every other clause is preserved verbatim**, which
+   is what makes the change reviewable by eye. **§7A's description-rewrite obligation is
+   discharged.**
+2–3. **Both span-bearing source links re-anchored span-free** — `get_task_price_scenario`
+   (was `184–315`) and `test_c1_status_matrix_has_twelve_exact_rows` (was `583–615`).
+4. **The C5 link's `contentHash` refreshed** (`92c5cb67…` → `522594d7…`), the drift that opened
+   between implementation round 1 and fix round 2.
+
+**A tool finding worth more than the maintenance itself, and it is measured.** The session's
+**first** attempt at items 2 and 3 used `kind: re-anchor` (10:38:19, 10:38:28). That call
+**succeeded and did not remove the spans** — it superseded the node's two *evidence* entries with
+byte-identical span-free copies, leaving both *source links* still carrying `startLine`/`endLine`
+and still `stale: true`. The coordinator's mid-flight read caught exactly that state. **The
+session caught it too**, and completed items 2 and 3 as **`unlink` then `link`** (10:39:56–10:40:24),
+which did remove them.
+
+**So `re-anchor` is not the operation that removes a span; unlink-and-relink is.** Two
+consequences: **D29's still-deferred prompt is scoped to an operation that cannot do what the
+span-removal policy asks**, and must be rewritten before it is ever dispatched; and the residue
+of the failed attempt is two byte-identical `evidenceHistory` entries — history noise, not live
+state, and not a repair candidate.
+
+**`humanInstruction` was used correctly**, and the distinction is worth recording because the
+standing rule turns on it: every record cites **D31 by name and by item number** as an
+authorization that exists in the repository. That is a citation, not a self-issued permission —
+the anti-pattern the rule forbids is a session writing its own justification into that field and
+proceeding on it.
+
+**One process gap, recorded not charged:** the prompt required a handoff carrying six named
+verification items, and none was written. The graph's own change records are a complete audit
+trail, so nothing is unverifiable — but the coordinator reconstructed it rather than reading it,
+and a session that self-corrected mid-run is exactly the session whose reasoning was worth having.

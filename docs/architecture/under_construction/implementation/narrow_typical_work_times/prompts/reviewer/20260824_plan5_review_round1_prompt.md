@@ -99,6 +99,18 @@ sites, conditions and mutant shapes nobody has tried — not on reproducing a gr
 
 Every probe: apply, observe, revert, **verify md5**, and declare it.
 
+## The graph item — CLOSED 2026-08-24 10:40, after this prompt was written
+
+**Amendment, added before dispatch.** The section below described the graph work as outstanding.
+It is **done**: D31 authorized it, a maintenance session executed all four operations, and the
+coordinator verified the result at source — the description no longer says *"median-substituted
+task typical time"*, both span-bearing source links are re-anchored span-free, the third link's
+hash is refreshed, and `staleNodeCount` fell **6 → 5** with `pendingReviewCount` **0**.
+
+**Nothing about the graph is a finding for you.** Do not re-verify it, do not re-anchor anything,
+and do not treat the five remaining stale nodes as this phase's — they are out of D31's scope by
+name. The section below is retained for context only.
+
 ## Open, and not the implementer's fault
 
 The settled graph node `projection-item-economics-task-price-scenario` still describes a
