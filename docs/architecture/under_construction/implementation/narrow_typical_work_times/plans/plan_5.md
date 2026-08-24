@@ -1664,3 +1664,26 @@ The four prior instances were caught by the self-test rule; this one was not run
 prompt and the commit that invalidated it were authored in the same step. **The rule needs its
 timing made explicit: the gate self-test runs after every write the dispatch performs, not while
 the prompt is being drafted.** Routed to `pipeline-coordinator.md` Responsibility 1c.
+
+### 2026-08-24 — round 4 halted a second time; the gate is now content-only (v3)
+
+**The v2 prompt pinned `HEAD` to `387d36e`. Committing v2 moved `HEAD`.** Same defect as v1, inside
+the fix for v1 — and the doctrine change v1 produced (*"self-test last"*) did not prevent it,
+because **"last" is not a fixed point: the dispatch's own commit always comes after the self-test.**
+
+**Both sessions halted correctly and changed nothing. Both were right.** Two sessions spent on the
+coordinator's gate rather than on the work.
+
+**The correct rule, now in `pipeline-coordinator.md`:** *a gate must never name a value the dispatch
+itself moves.* Never a commit SHA, never tree cleanliness, never a file count, never a directory
+the owner also writes. **Gate on content that only the session's own work will change** — a
+`state:` header, a symbol at a path, a value in a row, the environment.
+
+**v3's gate is content-only**, and its sixth check is
+`grep narrowed_task … test_narrowed_price_scenario.py` inside `test_c1b_…` — which is *the work
+itself*. That is strictly better than a SHA: it proves the work is outstanding, and it tells a
+session arriving after the work is already done to stop rather than redo it. All six checks were
+re-run before v3 was written, and **committing v3 touches `docs/` only, so it moves none of them.**
+
+Earlier prompts are left byte-identical. **Sixth instance of this class; the first four were caught
+before dispatch, and these two were not because both were self-inflicted by the act of dispatching.**
