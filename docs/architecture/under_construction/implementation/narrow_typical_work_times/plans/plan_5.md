@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: PROMPT_READY
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 
@@ -1047,6 +1047,39 @@ contradicts itself on this handoff's `role` column — *Position and dispatch* s
 folder. Not a plan finding.
 
 **State:** `PROJECTING` → **`PROMPT_READY`**.
+
+### 2026-08-24 — implementation closeout (Codex)
+
+Implemented the phase-5 price-scenario change: the price typical block now receives the request
+clock and the budget-status filter spec, scopes SQL to participating sections, reconciles through
+the shared `SectionTypicalEvidence` / `reconcile_task_typicals` path, uses the price-specific zero
+terminal, publishes participating-section counts and `typical_resolution`, and serializes the
+shared six-key resolution shape. Removed the obsolete `budget_division` median bridge. Widened
+the existing fakes and call sites without re-attributing their prior criteria; added the divergent
+fixture and the 16-test phase contract. The fixture was checked at source: narrowed values
+500·550·600·650·700 resolve to 600; the same history without a category resolves to 375.
+
+Task-0 coverage was completed in both directions. Every phase test maps to C1–C8; the map is
+recorded in the implementation handoff. The named mutation ledger produced 14 observed reds
+(C1 2, C2 3, C3 2, C4 2, C5 2, C6 1, C7 1, C8 1), plus both required planted-defect probes,
+for 16 observed and reverted rows. The two authorized read-only probes were md5-verified back
+to their pre-probe values. No candidate criteria were added.
+
+Verification: the pre-edit slice was 60 failed / 7 passed from 67 collected; the final phase
+slice is 84 passed; the item-economics L2 slice is 367 passed; focused Ruff is clean. The exact
+L4 stamp `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` is 2708 passed / 21 failed /
+1 skipped, with the published 21-ID baseline failure set unchanged. The intended `app/` perimeter
+is the seven files listed in the implementation handoff; the two read-only probe files are clean.
+
+Architecture graph: three additive source links were recorded in one batch at revision
+`501a3ce5180a161eb07ae05ba178f8f2506f12e97839dacff5bedf1ac3fed1b6`; final status is valid,
+198 nodes / 298 edges, six stale nodes, zero pending reviews, zero diagnostics. The requested
+settled-node description rewrite was previewed but refused by the client's safety gate because
+the current turn did not explicitly authorize that exact maintenance edit. It remains the sole
+owner follow-up; no workaround or promotion was attempted.
+
+**State:** `PROMPT_READY` → **`IMPLEMENTED`**. Owner decision required: authorize that exact
+settled-node description maintenance edit, if the owner wants the stale wording replaced.
 
 ### 2026-08-24 — plan lint, second run (coordinator) — against the amended plan, with the ten new commands
 

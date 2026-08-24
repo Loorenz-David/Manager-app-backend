@@ -16,14 +16,9 @@ from beyo_manager.domain.item_economics.typical_constants import (
 from beyo_manager.domain.item_economics.typical_filters import (
     SelectedTypical,
     apply_business_fallback,
-    median,
 )
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
 from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
-
-
-# Backward-compatible private import for the existing price-scenario query.
-_median = median
 
 
 ALLOCATION_METHOD = "static_proportional_section_v2"

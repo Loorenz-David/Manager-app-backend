@@ -220,6 +220,135 @@ async def seed_batch_dedupe_fixture(db_session):
     }
 
 
+async def seed_divergent_category_task(db_session):
+    """Seed the non-uniform narrowed/section-wide populations required by C5/C8."""
+
+    values = await _seed(db_session)
+    workspace, user, section, narrowed_task, plain_task, item, *_ = values
+    token = uuid4().hex[:10]
+    category = ItemCategory(
+        client_id=f"itc_divergent_chair_{token}",
+        workspace_id=workspace.client_id,
+        name=f"Divergent chair {token}",
+        major_category=ItemMajorCategoryEnum.SEAT,
+        created_by_id=user.client_id,
+    )
+    for base_step in values[11]:
+        base_step.is_deleted = True
+    db_session.add(category)
+    await db_session.flush()
+    item.item_category_id = category.client_id
+    await db_session.flush()
+    excluded_section = WorkingSection(
+        client_id=f"wsec_divergent_excluded_{token}",
+        workspace_id=workspace.client_id,
+        name=f"Excluded divergent {token}",
+    )
+    db_session.add(excluded_section)
+    await db_session.flush()
+
+    for task, suffix in ((narrowed_task, "narrowed"), (plain_task, "plain")):
+        db_session.add(
+            TaskStep(
+                client_id=f"tsp_divergent_target_{suffix}_{token}",
+                workspace_id=workspace.client_id,
+                task_id=task.client_id,
+                working_section_id=section.client_id,
+                state=TaskStepStateEnum.PENDING,
+                readiness_status=TaskStepReadinessStatusEnum.READY,
+                total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=0,
+                created_by_id=user.client_id,
+            )
+        )
+
+    db_session.add(
+        TaskStep(
+            client_id=f"tsp_divergent_target_excluded_{token}",
+            workspace_id=workspace.client_id,
+            task_id=narrowed_task.client_id,
+            working_section_id=excluded_section.client_id,
+            state=TaskStepStateEnum.SKIPPED,
+            readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=0,
+            created_by_id=user.client_id,
+        )
+    )
+
+    populations = (
+        ("chair", (500, 550, 600, 650, 700)),
+        ("other", (100, 150, 200, 250, 300, 350, 400)),
+    )
+    for population, values_for_population in populations:
+        for history_index, seconds in enumerate(values_for_population):
+            history_task = Task(
+                client_id=f"tsk_divergent_history_{population}_{token}_{history_index}",
+                workspace_id=workspace.client_id,
+                task_scalar_id=9000 + (0 if population == "chair" else 100) + history_index,
+                task_type=TaskTypeEnum.INTERNAL,
+                state=TaskStateEnum.ASSIGNED,
+                created_by_id=user.client_id,
+            )
+            history_item = Item(
+                client_id=f"itm_divergent_history_{population}_{token}_{history_index}",
+                workspace_id=workspace.client_id,
+                item_category_id=(category.client_id if population == "chair" else None),
+                state=ItemStateEnum.READY,
+                created_by_id=user.client_id,
+            )
+            history_task_item = TaskItem(
+                client_id=f"tim_divergent_history_{population}_{token}_{history_index}",
+                workspace_id=workspace.client_id,
+                task_id=history_task.client_id,
+                item_id=history_item.client_id,
+                role=TaskItemRoleEnum.PRIMARY,
+                created_by_id=user.client_id,
+            )
+            history_step = TaskStep(
+                client_id=f"tsp_divergent_history_{population}_{token}_{history_index}",
+                workspace_id=workspace.client_id,
+                task_id=history_task.client_id,
+                working_section_id=section.client_id,
+                state=TaskStepStateEnum.COMPLETED,
+                readiness_status=TaskStepReadinessStatusEnum.READY,
+                total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=seconds,
+                closed_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                created_by_id=user.client_id,
+            )
+            db_session.add_all([history_task, history_item, history_task_item, history_step])
+
+    await db_session.flush()
+    return {
+        "base_values": values,
+        "workspace": workspace,
+        "user": user,
+        "section": section,
+        "narrowed_task": narrowed_task,
+        "plain_task": plain_task,
+        "category_id": category.client_id,
+        "category": category,
+        "excluded_section": excluded_section,
+    }
+
+
+async def cleanup_divergent_category_fixture(db_session, fixture):
+    values = fixture["base_values"]
+    workspace_id = fixture["workspace"].client_id
+    await db_session.execute(delete(TaskStep).where(TaskStep.workspace_id == workspace_id))
+    await db_session.execute(delete(ItemCostEvaluation).where(ItemCostEvaluation.workspace_id == workspace_id))
+    await db_session.execute(delete(ItemValuation).where(ItemValuation.workspace_id == workspace_id))
+    await db_session.execute(delete(TaskItem).where(TaskItem.workspace_id == workspace_id))
+    await db_session.execute(delete(Item).where(Item.workspace_id == workspace_id))
+    await db_session.execute(delete(Task).where(Task.workspace_id == workspace_id))
+    await db_session.execute(delete(ItemCategory).where(ItemCategory.workspace_id == workspace_id))
+    await _cleanup(db_session, values)
+
+
 async def seed_layer2_visibility_fixture(db_session, *, zero_section: bool):
     """Seed real task surfaces for below-floor and reachable-zero disclosure rows."""
 

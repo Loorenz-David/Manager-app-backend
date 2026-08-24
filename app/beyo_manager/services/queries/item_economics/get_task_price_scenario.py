@@ -10,9 +10,8 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_METHOD,
     TYPICAL_MIN_SAMPLE_SIZE,
     TYPICAL_WINDOW_DAYS,
-    _median,
-    _step_state_is_excluded,
     group_steps_by_section,
+    participating_sections,
 )
 from beyo_manager.domain.item_economics.calculator import (
     CALCULATION_VERSION,
@@ -33,6 +32,12 @@ from beyo_manager.domain.item_economics.price_scenario import (
 )
 from beyo_manager.domain.item_economics.serializers import (
     serialize_task_price_scenario,
+)
+from beyo_manager.domain.item_economics.typical_filters import (
+    SectionTypicalEvidence,
+    TypicalFilterSpec,
+    apply_business_fallback,
+    reconcile_task_typicals,
 )
 from beyo_manager.models.tables.item_economics.item_valuation import ItemValuation
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -97,7 +102,11 @@ async def _current_valuation(ctx: ServiceContext, item_id: str) -> ItemValuation
     )
 
 
-async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
+async def _typical_block(
+    ctx: ServiceContext,
+    task_id: str,
+    spec: TypicalFilterSpec | None,
+) -> dict:
     steps = (
         (
             await ctx.session.execute(
@@ -128,53 +137,81 @@ async def _typical_block(ctx: ServiceContext, task_id: str) -> dict:
         .scalars()
         .all()
     )
-    participating = [
-        group
-        for group in group_steps_by_section(steps)
-        if any(not _step_state_is_excluded(step) for step in group["steps"])
-    ]
-    section_ids = {group["working_section_id"] for group in participating}
-    typicals: dict[str, int | None] = {}
-    if section_ids:
+    groups = group_steps_by_section(steps)
+    participating_ids = participating_sections(steps)
+    section_ids = frozenset(group["working_section_id"] for group in groups)
+    specs = (spec,) if spec is not None and spec.is_narrowing else ()
+    evidence_by_section: dict[str, SectionTypicalEvidence] = {}
+    if participating_ids:
         result = await ctx.session.execute(
-            typical_times_statement(ctx.workspace_id).where(
-                WorkingSection.client_id.in_(section_ids)
+            typical_times_statement(
+                ctx.workspace_id,
+                now=ctx.now,
+                specs=specs,
+            ).where(
+                WorkingSection.client_id.in_(participating_ids)
             )
         )
-        typicals = {
-            row.client_id: (
-                int(row.typical_worker_seconds)
-                if row.typical_worker_seconds is not None
-                else None
-            )
-            for row in result
-        }
+        for row in result:
+            if specs:
+                if int(row.spec_index) != 0:
+                    continue
+                evidence_by_section[row.client_id] = SectionTypicalEvidence(
+                    row.client_id,
+                    int(row.narrowed_typical_worker_seconds)
+                    if row.narrowed_typical_worker_seconds is not None
+                    else None,
+                    int(row.narrowed_sample_count or 0),
+                    int(row.section_typical_worker_seconds)
+                    if row.section_typical_worker_seconds is not None
+                    else None,
+                    int(row.section_sample_count or 0),
+                )
+            else:
+                evidence_by_section[row.client_id] = SectionTypicalEvidence(
+                    row.client_id,
+                    None,
+                    0,
+                    int(row.typical_worker_seconds)
+                    if row.typical_worker_seconds is not None
+                    else None,
+                    int(row.sample_count or 0),
+                )
 
-    usable = [
-        Fraction(typical, 1)
-        for typical in (
-            typicals.get(group["working_section_id"]) for group in participating
-        )
-        if typical is not None and typical > 0
+    selection = reconcile_task_typicals(
+        evidence_by_section,
+        spec if specs else None,
+        participating_ids,
+        section_ids,
+    )
+    ordered_participating_ids = [
+        group["working_section_id"]
+        for group in groups
+        if group["working_section_id"] in participating_ids
     ]
-    fallback = _median(usable) if usable else Fraction(0, 1)
-    sections_without_sample = 0
-    total_seconds = 0
-    for group in participating:
-        typical = typicals.get(group["working_section_id"])
-        if typical is None or typical <= 0:
-            sections_without_sample += 1
-            resolved = fallback
-        else:
-            resolved = Fraction(typical, 1)
-        total_seconds += round_half_even(resolved.numerator, resolved.denominator)
-
-    sections_total = len(participating)
+    selected_values = [
+        selection.selected[section_id].typical_worker_seconds
+        for section_id in ordered_participating_ids
+    ]
+    resolved_values = apply_business_fallback(
+        selected_values,
+        terminal=Fraction(0, 1),
+    )
+    total_seconds = sum(
+        round_half_even(value.numerator, value.denominator) for value in resolved_values
+    )
+    sections_without_sample = sum(
+        selection.selected[section_id].typical_worker_seconds is None
+        or selection.selected[section_id].typical_worker_seconds <= 0
+        for section_id in participating_ids
+    )
+    sections_total = len(participating_ids)
     return {
         "total_seconds": total_seconds,
         "is_estimated": sections_total == 0 or sections_without_sample > 0,
         "sections_without_sample": sections_without_sample,
         "sections_total": sections_total,
+        "typical_resolution": selection,
         "method": TYPICAL_METHOD,
         "window_days": TYPICAL_WINDOW_DAYS,
         "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
@@ -194,7 +231,11 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
     # the tenant boundary identical to them.
     budget_status = await get_task_budget_status(ctx)
     task, item = await _load_task_and_item(ctx)
-    typical = await _typical_block(ctx, task.client_id)
+    typical = await _typical_block(
+        ctx,
+        task.client_id,
+        budget_status.typical_filter_spec,
+    )
 
     valuation = None
     created_by = None

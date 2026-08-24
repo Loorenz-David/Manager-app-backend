@@ -539,7 +539,9 @@ def test_c13c_excluded_state_logic_has_one_shared_production_owner():
     for relative_path in hits - {"app/beyo_manager/domain/item_economics/budget_division.py"}:
         assert "def _step_state_is_excluded" not in (root / relative_path).read_text(), relative_path
     price_scenario = root / "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py"
-    assert price_scenario.read_text().count("_step_state_is_excluded") == 2
+    # The predicate now has one owner: budget_division.participating_sections.
+    # Price-scenario no longer names it.
+    assert price_scenario.read_text().count("_step_state_is_excluded") == 0
 
     excluded_state_names = {"SKIPPED", "CANCELLED", "FAILED"}
     violating_files = []

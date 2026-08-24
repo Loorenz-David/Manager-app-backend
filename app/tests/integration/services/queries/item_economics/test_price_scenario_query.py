@@ -125,7 +125,7 @@ async def test_c3_zero_typical_is_not_usable_and_uses_the_median() -> None:
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario")
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
 
     assert result["total_seconds"] == 200
     assert result["sections_without_sample"] == 1
@@ -144,7 +144,7 @@ async def test_c4_even_median_is_quantised_once_per_substituted_section() -> Non
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario")
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
 
     assert result["total_seconds"] == 41
     assert result["sections_without_sample"] == 2
@@ -161,7 +161,7 @@ async def test_phase3_c3_half_even_median_differs_from_truncation() -> None:
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario")
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
 
     assert result["total_seconds"] == 35
     assert result["sections_without_sample"] == 1
@@ -182,7 +182,7 @@ async def test_c5_each_excluded_state_removes_its_section(state) -> None:
         [_typical_row("wsec_live", 100)],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario")
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
 
     assert result["sections_total"] == 1
     assert result["total_seconds"] == 100
@@ -195,7 +195,7 @@ async def test_c5_deleted_steps_do_not_create_a_participating_section() -> None:
         [_typical_row("wsec_live", 100)],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario")
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
 
     assert result["sections_total"] == 1
     assert result["total_seconds"] == 100
@@ -206,6 +206,7 @@ async def test_c6_nonempty_no_evidence_is_estimated_zero() -> None:
     result = await module._typical_block(
         _ctx(_TypicalSession([_step("wsec_missing")], [])),
         "tsk_scenario",
+        None,
     )
 
     assert result["total_seconds"] == 0
@@ -218,6 +219,7 @@ async def test_c6_empty_participating_set_is_estimated_zero() -> None:
     result = await module._typical_block(
         _ctx(_TypicalSession([], [])),
         "tsk_scenario",
+        None,
     )
 
     assert result["total_seconds"] == 0
@@ -230,6 +232,7 @@ async def test_c19_missing_typical_statement_row_uses_defensive_lookup() -> None
     result = await module._typical_block(
         _ctx(_TypicalSession([_step("wsec_deleted_row")], [])),
         "tsk_scenario",
+        None,
     )
 
     assert result["sections_total"] == 1
@@ -346,6 +349,7 @@ async def test_phase5_c3_typical_counts_only_the_requested_tasks_steps(
                 session=db_session,
             ),
             requested_task.client_id,
+            None,
         )
 
         # The requested task works one section whose typical is 300 s. The other task
@@ -557,7 +561,9 @@ async def _run_scenario(
     }
 
     async def fake_status(_ctx):
-        return SimpleNamespace(status=status, item_binding=binding)
+        return SimpleNamespace(
+            status=status, item_binding=binding, typical_filter_spec=None
+        )
 
     async def fake_task_and_item(_ctx):
         return objects.task, objects.item
@@ -568,7 +574,7 @@ async def _run_scenario(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id):
+    async def fake_typical(_ctx, _task_id, _spec):
         return typical
 
     monkeypatch.setattr(module, "get_task_budget_status", fake_status)
@@ -956,6 +962,7 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
         return SimpleNamespace(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
+            typical_filter_spec=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -964,7 +971,7 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id):
+    async def fake_typical(_ctx, _task_id, _spec):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,
@@ -1098,6 +1105,7 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
         return SimpleNamespace(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
+            typical_filter_spec=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -1106,7 +1114,7 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id):
+    async def fake_typical(_ctx, _task_id, _spec):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,
@@ -1257,6 +1265,7 @@ async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
         return SimpleNamespace(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
+            typical_filter_spec=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -1265,7 +1274,7 @@ async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id):
+    async def fake_typical(_ctx, _task_id, _spec):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,

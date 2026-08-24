@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
+from beyo_manager.domain.item_economics.division_serializers import serialize_typical_resolution
 
 
 def _date(value: object) -> str | None:
@@ -302,6 +303,10 @@ def serialize_task_price_scenario(scenario: dict) -> dict:
     saved = scenario["saved"]
     model = scenario["model"]
     domain = scenario["domain"]
+    typical = dict(scenario["typical"])
+    typical["typical_resolution"] = serialize_typical_resolution(
+        typical.get("typical_resolution")
+    )
     if saved is not None:
         valuation = saved["valuation"]
         created_by = saved["created_by"]
@@ -361,7 +366,7 @@ def serialize_task_price_scenario(scenario: dict) -> dict:
         ),
         "saved": saved_payload,
         "model": model_payload,
-        "typical": scenario["typical"],
+        "typical": typical,
         "anchors": scenario["anchors"],
         "domain": (
             {
