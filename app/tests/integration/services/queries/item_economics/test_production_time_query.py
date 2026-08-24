@@ -203,6 +203,7 @@ async def test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape(db_session):
         e2_row = e2["budget_allocations"][0]
         e3_row = next(row for row in e3["sections"] if row["working_section_id"] == section.client_id)
         assert all(row["allocation_method"] == "static_proportional_section_v2" for row in e2["budget_allocations"])
+        assert e3["allocation_method"] == "static_proportional_section_v2"
         assert sum(step["allowance_seconds"] for step in e2_row["steps"] if step["allowance_seconds"] is not None) == e3_row["allowance_seconds"]
         assert e2_row["allocation_method"] == ALLOCATION_METHOD == "static_proportional_section_v2"
         assert set(e2_row) == {"task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "typical_resolution", "steps"}
@@ -317,6 +318,7 @@ async def test_c15_c21_c22_task_scope_and_soft_deleted_section_outer_join(db_ses
         assert row["section_name"] is None
         assert row["order_list"] is None
         assert row["typical"]["typical_worker_seconds"] is None
+        assert row["typical"]["typical_basis"] == "insufficient_sample"
         assert row["typical"]["sample_count"] == 0
         assert row["section_name_snapshot"] == "Upholstery"
         assert section_name == "Upholstery"

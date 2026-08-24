@@ -11,7 +11,12 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_WINDOW_DAYS,
 )
 from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
-from beyo_manager.domain.item_economics.typical_filters import TaskTypicalSelection, TypicalFilterSpec
+from beyo_manager.domain.item_economics.typical_filters import (
+    COMPARABILITY_PROFILE,
+    RECONCILIATION_METHOD,
+    TaskTypicalSelection,
+    TypicalFilterSpec,
+)
 
 
 def _decimal(value: object) -> str | None:
@@ -107,8 +112,8 @@ def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict
         }
     return {
         "task_typical_basis": "section_wide_uniform",
-        "reconciliation_method": "uniform_basis_v1",
-        "comparability_profile": "primary_item_category_v1",
+        "reconciliation_method": RECONCILIATION_METHOD,
+        "comparability_profile": COMPARABILITY_PROFILE,
         "applied_filter": None,
         "participating_section_count": 0,
         "sections_by_basis": counts,

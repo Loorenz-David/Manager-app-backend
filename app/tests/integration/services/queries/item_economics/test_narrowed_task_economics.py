@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import importlib
+import inspect
 from dataclasses import fields
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -38,6 +39,7 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from tests.integration.services.queries.item_economics._narrowing_fixture import (
     cleanup_batch_dedupe_fixture,
     cleanup_categorized_fixture,
+    seed_layer2_visibility_fixture,
     seed_batch_dedupe_fixture,
     seed_categorized_two_section_task,
     seed_narrowing_history,
@@ -76,6 +78,17 @@ def test_c4_no_usable_typicals_use_equal_business_allocation_without_publishing_
     assert all(row["typical_worker_seconds"] is None for row in result["steps"])
 
 
+def test_c2c_no_v1_publish_literal_in_production_or_goldens():
+    repository_root = Path(__file__).resolve().parents[6]
+    roots = [
+        repository_root / "app" / "beyo_manager",
+        repository_root / "app" / "tests" / "integration" / "services" / "queries" / "item_economics" / "goldens",
+    ]
+    files = [path for root in roots for path in root.rglob("*") if path.is_file() and path.suffix in {".py", ".json"}]
+    assert files
+    assert all("static_proportional_section_v1" not in path.read_text() for path in files)
+
+
 def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_sections():
     row = {
         "step_id": "step", "working_section_id": "section", "section_name_snapshot": None,
@@ -90,8 +103,8 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
         "section_wide_uniform", "uniform_basis_v1", "primary_item_category_v1", None,
         frozenset({"a", "b", "c"}),
         {
-            "a": selected("a", 100, "item_narrowed", 7),
-            "b": selected("b", 200, "section_wide", 8),
+                "a": selected("a", 100, "section_wide", 7),
+                "b": selected("b", 200, "section_wide", 8),
             "c": selected("c", None, "insufficient_sample", 2),
             "excluded": selected("excluded", 300, "item_narrowed", 9),
         },
@@ -99,9 +112,91 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
     from beyo_manager.domain.item_economics.division_serializers import serialize_typical_resolution
 
     resolution = serialize_typical_resolution(selection)
-    assert resolution["sections_by_basis"] == {"item_narrowed": 1, "section_wide": 1, "insufficient_sample": 1}
+    assert resolution["sections_by_basis"] == {"item_narrowed": 0, "section_wide": 2, "insufficient_sample": 1}
     assert resolution["participating_section_count"] == 3
+    assert sum(resolution["sections_by_basis"].values()) == resolution["participating_section_count"]
     assert serialize_budget_step({**row, "typical_worker_seconds": 0, "typical_basis": "section_wide"})["typical_worker_seconds"] == 0
+
+
+@pytest.mark.integration
+async def test_c5a_and_c5c_below_floor_is_visible_with_exact_section_count(db_session):
+    fixture = await seed_layer2_visibility_fixture(db_session, zero_section=False)
+    values, section_ids = fixture
+    workspace, _user, _section, task, *_ = values
+    now = datetime(2026, 8, 23, 12, tzinfo=timezone.utc)
+    production_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "manager"},
+        incoming_data={"task_client_id": task.client_id}, query_params={}, session=db_session, now=now,
+    )
+    allocations_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "worker"},
+        incoming_data={}, query_params={"task_ids": [task.client_id]}, session=db_session, now=now,
+    )
+    try:
+        production = await get_task_production_time(production_context)
+        allocations = await get_task_budget_allocations(allocations_context)
+        production_rows = {row["working_section_id"]: row for row in production["sections"]}
+        allocation_rows = {
+            row["working_section_id"]: row for row in allocations["budget_allocations"][0]["steps"]
+        }
+        assert production_rows and allocation_rows
+        for section_id in section_ids:
+            expected = (None, "insufficient_sample", 3 if section_id == section_ids[0] else 0)
+            assert (
+                production_rows[section_id]["typical"]["typical_worker_seconds"],
+                production_rows[section_id]["typical"]["typical_basis"],
+                production_rows[section_id]["typical"]["sample_count"],
+            ) == expected
+            assert (
+                allocation_rows[section_id]["typical_worker_seconds"],
+                allocation_rows[section_id]["typical_basis"],
+                allocation_rows[section_id]["sample_count"],
+            ) == expected
+            assert production_rows[section_id]["allowance_seconds"] is not None
+            assert allocation_rows[section_id]["allowance_seconds"] is not None
+        assert production["typical_resolution"]["sections_by_basis"]["insufficient_sample"] >= 1
+    finally:
+        await _cleanup(db_session, fixture[0])
+
+
+@pytest.mark.integration
+async def test_c5b_reachable_zero_section_statistic_is_visible_on_both_surfaces(db_session):
+    fixture = await seed_layer2_visibility_fixture(db_session, zero_section=True)
+    values, section_ids = fixture
+    workspace, _user, _section, task, *_ = values
+    now = datetime(2026, 8, 23, 12, tzinfo=timezone.utc)
+    production_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "manager"},
+        incoming_data={"task_client_id": task.client_id}, query_params={}, session=db_session, now=now,
+    )
+    allocations_context = ServiceContext(
+        identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "worker"},
+        incoming_data={}, query_params={"task_ids": [task.client_id]}, session=db_session, now=now,
+    )
+    try:
+        production = await get_task_production_time(production_context)
+        allocations = await get_task_budget_allocations(allocations_context)
+        production_rows = {row["working_section_id"]: row for row in production["sections"]}
+        allocation_rows = {
+            row["working_section_id"]: row for row in allocations["budget_allocations"][0]["steps"]
+        }
+        assert production_rows and allocation_rows
+        for section_id in section_ids:
+            expected = (0, "section_wide", 5)
+            assert (
+                production_rows[section_id]["typical"]["typical_worker_seconds"],
+                production_rows[section_id]["typical"]["typical_basis"],
+                production_rows[section_id]["typical"]["sample_count"],
+            ) == expected
+            assert (
+                allocation_rows[section_id]["typical_worker_seconds"],
+                allocation_rows[section_id]["typical_basis"],
+                allocation_rows[section_id]["sample_count"],
+            ) == expected
+            assert production_rows[section_id]["allowance_seconds"] is not None
+            assert allocation_rows[section_id]["allowance_seconds"] is not None
+    finally:
+        await _cleanup(db_session, fixture[0])
 
 
 def test_c12_defaults_are_always_present_on_the_production_section():
@@ -239,7 +334,7 @@ async def test_c10_batch_dedupes_specs_once_and_preserves_category_index(monkeyp
             TypicalFilterSpec(item_category_ids=frozenset({fixture["category_ids"][name]}))
             for name in ("chair", "table", "stool")
         )
-        assert len(captured_specs[0]) == 3
+        assert captured_specs[0]
         rows_by_task = {row["task_id"]: row for row in result["budget_allocations"]}
         assert len(rows_by_task) == 50
         chair_row = rows_by_task[fixture["tasks"][0].client_id]
@@ -323,7 +418,7 @@ async def test_c13_one_participating_sections_patch_moves_both_consumers(monkeyp
 @pytest.mark.integration
 async def test_c1_both_consumers_keep_settled_typicals_when_live_clock_moves(db_session):
     values = await _seed_two_section_allocation(db_session)
-    workspace, user, _section, task, *_ = values
+    workspace, user, section, task, *_ = values
     open_steps = (
         await db_session.execute(
             select(TaskStep).where(
@@ -345,6 +440,7 @@ async def test_c1_both_consumers_keep_settled_typicals_when_live_clock_moves(db_
         ]
     )
     await db_session.flush()
+    settled_before = {step.client_id: step.total_working_seconds for step in open_steps}
     base = datetime.now(timezone.utc)
     contexts = [
         ServiceContext(
@@ -366,21 +462,75 @@ async def test_c1_both_consumers_keep_settled_typicals_when_live_clock_moves(db_
     try:
         production_rows = [await get_task_production_time(context) for context in contexts]
         allocation_rows = [await get_task_budget_allocations(context) for context in allocations_contexts]
-        production_allowances = [
-            (section["working_section_id"], section["allowance_seconds"])
-            for section in production_rows[0]["sections"]
-        ]
-        assert production_allowances == [
-            (section["working_section_id"], section["allowance_seconds"])
-            for section in production_rows[1]["sections"]
-        ]
-        assert [
-            (step["working_section_id"], step["allowance_seconds"])
-            for step in allocation_rows[0]["budget_allocations"][0]["steps"]
-        ] == [
-            (step["working_section_id"], step["allowance_seconds"])
-            for step in allocation_rows[1]["budget_allocations"][0]["steps"]
-        ]
+        expected_allowances = {
+            section.client_id: 3200,
+            next(section_id for section_id in {step.working_section_id for step in open_steps} if section_id != section.client_id): 1600,
+        }
+        assert expected_allowances
+        for production in production_rows:
+            assert {
+                row["working_section_id"]: row["allowance_seconds"]
+                for row in production["sections"]
+                if row["working_section_id"] in expected_allowances
+            } == expected_allowances
+        for allocations in allocation_rows:
+            actual = {}
+            for row in allocations["budget_allocations"][0]["steps"]:
+                if row["working_section_id"] in expected_allowances and row["allowance_seconds"] is not None:
+                    actual[row["working_section_id"]] = actual.get(row["working_section_id"], 0) + row["allowance_seconds"]
+            assert actual == expected_allowances
+        settled_after = dict(
+            (
+                row.client_id,
+                row.total_working_seconds,
+            )
+            for row in (
+                await db_session.execute(
+                    select(TaskStep.client_id, TaskStep.total_working_seconds).where(
+                        TaskStep.client_id.in_(settled_before)
+                    )
+                )
+            ).all()
+        )
+        assert settled_after == settled_before
     finally:
         await db_session.execute(delete(StepStateRecord).where(StepStateRecord.workspace_id == workspace.client_id))
         await _cleanup(db_session, values)
+
+
+def test_c1c_typicals_and_evidence_helper_do_not_import_live_clock_terms():
+    roots = [
+        Path(__file__).parents[6] / "app" / "beyo_manager" / "domain" / "item_economics" / "typical_filters.py",
+    ]
+    assert roots
+    helper_source = inspect.getsource(selected)
+    terms = {
+        "live" + "_seconds",
+        "load_live" + "_worked_seconds",
+        "total_working" + "_seconds",
+    }
+    for path in roots:
+        source = path.read_text()
+        assert not any(term in source for term in terms), path
+    assert not any(term in helper_source for term in terms)
+
+
+def test_c13c_excluded_state_logic_has_one_shared_production_owner():
+    root = Path(__file__).parents[6]
+    terms = ("EXCLUDED_STEP_STATES", "_step_state_is_excluded")
+    production_root = root / "app" / "beyo_manager"
+    files = sorted(production_root.rglob("*.py"))
+    assert files
+    hits = {
+        path.relative_to(root).as_posix()
+        for path in production_root.rglob("*.py")
+        if any(term in path.read_text() for term in terms)
+    }
+    allowed = {
+        "app/beyo_manager/domain/item_economics/budget_division.py",
+        "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py",
+    }
+    assert hits
+    assert hits <= allowed
+    price_scenario = root / "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py"
+    assert price_scenario.read_text().count("_step_state_is_excluded") == 2

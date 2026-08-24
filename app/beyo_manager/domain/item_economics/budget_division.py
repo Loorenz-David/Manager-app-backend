@@ -268,20 +268,14 @@ def _step_result(
 ) -> dict[str, Any]:
     section_id = _value(step, "working_section_id")
     selected = typicals.get(section_id)
-    if isinstance(selected, SelectedTypical):
-        typical_worker_seconds = selected.typical_worker_seconds
-        typical_basis = selected.typical_basis
-        sample_count = selected.sample_count
-    elif selected is not None:
-        # Keep the pure helper tolerant of old unit-call shapes while all service
-        # callers use SelectedTypical as the contract requires.
-        typical_worker_seconds = selected
-        typical_basis = "section_wide" if selected is not None else "insufficient_sample"
-        sample_count = 0
-    else:
+    if selected is None:
         typical_worker_seconds = None
         typical_basis = "insufficient_sample"
         sample_count = 0
+    else:
+        typical_worker_seconds = selected.typical_worker_seconds
+        typical_basis = selected.typical_basis
+        sample_count = selected.sample_count
     return {
         "step_id": _value(step, "client_id"),
         "working_section_id": section_id,

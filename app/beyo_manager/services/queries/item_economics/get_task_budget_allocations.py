@@ -270,8 +270,8 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
             elif specs:
                 evidence_by_section[section_id] = SectionTypicalEvidence(
                     section_id,
-                    int(row.narrowed_typical_worker_seconds) if task_spec_index is not None and row.narrowed_typical_worker_seconds is not None else None,
-                    int(row.narrowed_sample_count or 0) if task_spec_index is not None else 0,
+                    int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
+                    int(row.narrowed_sample_count or 0),
                     int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
                     int(row.section_sample_count or 0),
                 )

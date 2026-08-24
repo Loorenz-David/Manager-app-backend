@@ -3,7 +3,7 @@
 ```
 plan: plan_4
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY — SATISFIED (round 0, 2026-08-23, AMENDMENTS_REQUIRED, fully routed)
 ```
 
@@ -772,7 +772,7 @@ allowance moves (`distributable_seconds` is unchanged but `total_weight` grows).
 inert — a faithful copy is what an implementer writes, and a faithful copy agrees. Naming the
 **disagreeing form** is what makes it bite.
 
-## 6B. Coordinator consumption fold — corrections to §6A (2026-08-23)
+## 6B. Coordinator consumption fold — corrections to §6 as amended at the projection fold (2026-08-23)
 
 The projection ledger was consumed adversarially at source before this prompt was dispatched.
 **Nineteen of its twenty rows were verified and are carried unchanged**; L14's four corrected
@@ -952,7 +952,7 @@ correct. Added or corrected — full detail in **§6B**:
 |---|---|---|---|
 | C-1 | **blocking** | §4 *Modified — documentation* · §5 task 9c | the surface has no test, so a test-based probe was green on it by construction |
 | C-2 | **blocking** | §2 tripwire · §6 C4 mutation site struck | the guard's directory was outside all four of the probe's path groups |
-| C-3 | should-fix | §6A L9's citations, corrected in place | this fold transcribed them from the ledger without re-deriving |
+| C-3 | should-fix | §6 as amended at the projection fold, L9's citations, corrected in place | this fold transcribed them from the ledger without re-deriving |
 | C-4 | note | — (recorded) | none: the fold correctly went **beyond** L3's stated scope |
 | C-5 | note | §4 rationale | a second independent reason to edit an already-listed file |
 
@@ -962,7 +962,7 @@ correct. Added or corrected — full detail in **§6B**:
 sweeps: `divide_production_budget` referenced in 8 files (2 of them string-scans, not callers);
 `DivisionStep` in 5; `ALLOCATION_METHOD` publish sites exactly 3, all reached by C2's mutation.
 
-**Provenance note, recorded deliberately.** §6A and this section were written by two different
+**Provenance note, recorded deliberately.** §6 as amended at the projection fold and this section were written by two different
 coordinator sessions against the same handoff. The second found two blocking defects the first
 did not, and one defect *in* the first. That is the case for consuming a fold as an artifact
 rather than trusting it — the same rule this project already applies to implementer handoffs,
@@ -1232,7 +1232,7 @@ variable, so the fix doubled the covered half. Guarded only by the byte-golden. 
 `f(a) == f(b)` with no exact literals and no non-emptiness guard, against a criterion demanding
 "exact literals per section" — on the Critical rank 5 row.
 
-**Notes N1–N11** in the handoff: the missing `§6A` section four artifacts cite (N1); task 11's owed
+**Notes N1–N11** in the handoff: the missing section previously cited as `§6A` (now §6 as amended at the projection fold) (N1); task 11's owed
 docs-guard record (N2, measured **59 passed**); `serialize_typical_resolution` hardcoding the two
 version strings instead of the constants (N3); the dead `typical=` parameter (N4); C6's `{1,1,1}` vs
 the specified `{0,2,1}` and the unasserted `sum(...) == participating_section_count` clause (N5);
@@ -1353,3 +1353,26 @@ reading the new test file and asking which criteria were missing, which cannot s
 whose test is merely weaker, nor an absence row that has no test file to be missing from.
 **Fix round 3's prompt therefore opens with a completeness pass over every criterion and every
 row letter, absence rows included, as its first task rather than its last.**
+
+### 2026-08-24 — fix round 3 implemented (Codex)
+
+The completeness table is in `handoffs/implementer/20260824_plan4_fix_round3_handoff.md`; every
+C0–C13 row letter has a committed test, including C1(c), C2(c), and C13(c) absence rows. Real
+session fixtures now cover C5(a)'s below-floor count 3, C5(b)'s reachable zero section-wide
+statistic `(0, "section_wide", 5)` on both surfaces, and C5(c)'s insufficient-sample basis
+count. C1 uses an accruing open WORKING record and exact allowance literals on both consumers and
+both clock calls. The old `_step_result` tolerance branch, dead `typical=None` helper argument,
+and dead mixed-batch conditionals are removed; serializer defaults read canonical constants;
+the recursive purity walk is fixture-controlled; C6 has the exact `{0,2,1}` distribution and
+sum assertion; stale §6A citations are rewritten to §6 as amended at the projection fold.
+
+Focused evidence: **51 passed** for the modified domain/service/integration set and **59 passed**
+for `tests/unit/docs`. The 23 named mutations plus the correction2 anti-regression and the two
+C5 fixture flips are recorded with observed IDs and assertion sites in the implementer handoff;
+C8/C11 use the reviewer's already-observed bites. C0 escape 2's `replace(..., 1)` divergence is
+also explained there: it is fail-closed and stronger than a count-only pin. No published handoff,
+golden, price-scenario surface, router README, architecture-graph node, or owner `.archgraph/`
+change was touched; no graph delta is expected.
+
+**L4 authorization (before run):** `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'` is the
+single closing L4 for this round; its 21-ID failure-set comparison is recorded in the handoff.

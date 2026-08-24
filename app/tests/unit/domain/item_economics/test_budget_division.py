@@ -8,9 +8,15 @@ from beyo_manager.domain.item_economics.budget_division import (
     divide_production_budget,
     group_steps_by_section,
 )
+from beyo_manager.domain.item_economics.typical_filters import SectionTypicalEvidence, SelectedTypical
 
 
-def step(client_id, state="pending", section="section", worked=0, sequence_order=None, typical=None, deleted=False):
+def selected(section, value, basis="section_wide", count=0):
+    evidence = SectionTypicalEvidence(section, None, 0, value, count)
+    return SelectedTypical(section, value, basis, evidence, True, count)
+
+
+def step(client_id, state="pending", section="section", worked=0, sequence_order=None, deleted=False):
     return DivisionStep(
         client_id=client_id,
         state=state,
@@ -28,8 +34,8 @@ def allocated_rows(result):
 def test_largest_remainder_preserves_distributable_sum():
     result = divide_production_budget(
         Decimal("1.01"),
-        [step("a", typical=1), step("b", typical=1), step("c", typical=1)],
-        {"section": 1},
+        [step("a"), step("b"), step("c")],
+        {"section": selected("section", 1)},
     )
     rows = allocated_rows(result)
     assert sum(row["allowance_seconds"] for row in rows) == 61
@@ -39,8 +45,8 @@ def test_largest_remainder_preserves_distributable_sum():
 def test_excluded_consumption_is_charged_before_division_and_clamped():
     result = divide_production_budget(
         Decimal("60.00"),
-        [step("failed", "failed", worked=2400), step("live-a", typical=1), step("live-b", typical=1)],
-        {"section": 1},
+        [step("failed", "failed", worked=2400), step("live-a"), step("live-b")],
+        {"section": selected("section", 1)},
     )
     assert result["distributable_seconds"] == 1200
     assert sum(row["allowance_seconds"] or 0 for row in allocated_rows(result)) == 1200
@@ -48,8 +54,8 @@ def test_excluded_consumption_is_charged_before_division_and_clamped():
 
     clamped = divide_production_budget(
         Decimal("1.00"),
-        [step("failed", "failed", worked=100), step("live", typical=1)],
-        {"section": 1},
+        [step("failed", "failed", worked=100), step("live")],
+        {"section": selected("section", 1)},
     )
     assert clamped["distributable_seconds"] == 0
     assert next(row for row in clamped["steps"] if row["step_id"] == "live")["allowance_seconds"] == 0
@@ -59,15 +65,16 @@ def test_excluded_consumption_is_charged_before_division_and_clamped():
 def test_typicals_proportionally_weight_and_missing_typicals_split_equally():
     proportional = divide_production_budget(
         Decimal("90.00"),
-        [step("a", section="a", typical=3600), step("b", section="b", typical=1800)],
-        {"a": 3600, "b": 1800},
+        [step("a", section="a"), step("b", section="b")],
+        {"a": selected("a", 3600), "b": selected("b", 1800)},
     )
     rows = {row["step_id"]: row for row in allocated_rows(proportional)}
     assert rows["a"]["allowance_seconds"] == 3600
     assert rows["b"]["allowance_seconds"] == 1800
 
     equal = divide_production_budget(
-        Decimal("1.00"), [step("a", section="a"), step("b", section="b")], {"a": None, "b": None}
+        Decimal("1.00"), [step("a", section="a"), step("b", section="b")],
+        {"a": selected("a", None), "b": selected("b", None)},
     )
     assert [row["allowance_seconds"] for row in allocated_rows(equal)] == [30, 30]
 
@@ -75,8 +82,8 @@ def test_typicals_proportionally_weight_and_missing_typicals_split_equally():
 def test_tie_order_is_nulls_last_then_client_id():
     result = divide_production_budget(
         Decimal("0.05"),
-        [step("b", sequence_order=None, typical=1), step("a", sequence_order=None, typical=1)],
-        {"section": 1},
+        [step("b", sequence_order=None), step("a", sequence_order=None)],
+        {"section": selected("section", 1)},
     )
     rows = {row["step_id"]: row for row in allocated_rows(result)}
     assert rows["a"]["allowance_seconds"] == 2
@@ -84,8 +91,8 @@ def test_tie_order_is_nulls_last_then_client_id():
 
     result = divide_production_budget(
         Decimal("0.05"),
-        [step("a", sequence_order=None, typical=1), step("z", sequence_order=1, typical=1)],
-        {"section": 1},
+        [step("a", sequence_order=None), step("z", sequence_order=1)],
+        {"section": selected("section", 1)},
     )
     rows = {row["step_id"]: row for row in allocated_rows(result)}
     assert rows["a"]["allowance_seconds"] == 1
@@ -93,26 +100,26 @@ def test_tie_order_is_nulls_last_then_client_id():
 
 
 def test_live_step_set_redivides_and_removed_steps_are_not_in_universe():
-    base = [step("a", typical=1), step("b", typical=1)]
-    with_new = divide_production_budget(Decimal("1.00"), base + [step("c", typical=1)], {"section": 1})
+    base = [step("a"), step("b")]
+    with_new = divide_production_budget(Decimal("1.00"), base + [step("c")], {"section": selected("section", 1)})
     assert sum(row["allowance_seconds"] for row in allocated_rows(with_new)) == 60
     after_skip = divide_production_budget(
-        Decimal("1.00"), [base[0], step("b", "skipped", worked=10)], {"section": 1}
+        Decimal("1.00"), [base[0], step("b", "skipped", worked=10)], {"section": selected("section", 1)}
     )
     assert next(row for row in after_skip["steps"] if row["step_id"] == "a")["allowance_seconds"] == 50
     assert next(row for row in after_skip["steps"] if row["step_id"] == "b")["share_state"] == "excluded"
-    deleted = divide_production_budget(Decimal("1.00"), [step("a", deleted=True), base[1]], {"section": 1})
+    deleted = divide_production_budget(Decimal("1.00"), [step("a", deleted=True), base[1]], {"section": selected("section", 1)})
     assert {row["step_id"] for row in deleted["steps"]} == {"b"}
 
 
 def test_live_partition_includes_working_paused_and_completed_steps():
     live = [
-        step("pending", "pending", typical=1),
-        step("working", "working", typical=1),
-        step("paused", "paused", typical=1),
-        step("completed", "completed", typical=1),
+        step("pending", "pending"),
+        step("working", "working"),
+        step("paused", "paused"),
+        step("completed", "completed"),
     ]
-    base = divide_production_budget(Decimal("1.00"), live, {"section": 1})
+    base = divide_production_budget(Decimal("1.00"), live, {"section": selected("section", 1)})
     assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(base)} == {
         "pending": 20,
         "working": 20,
@@ -122,8 +129,8 @@ def test_live_partition_includes_working_paused_and_completed_steps():
 
     with_new = divide_production_budget(
         Decimal("1.00"),
-        [*live, step("new", "pending", typical=1)],
-        {"section": 1},
+        [*live, step("new", "pending")],
+        {"section": selected("section", 1)},
     )
     assert {row["step_id"]: row["allowance_seconds"] for row in allocated_rows(with_new)} == {
         "pending": 15,
@@ -135,8 +142,8 @@ def test_live_partition_includes_working_paused_and_completed_steps():
 
     after_skip = divide_production_budget(
         Decimal("1.00"),
-        [live[0], live[1], live[2], step("completed", "skipped", typical=1)],
-        {"section": 1},
+        [live[0], live[1], live[2], step("completed", "skipped")],
+        {"section": selected("section", 1)},
     )
     rows = {row["step_id"]: row for row in after_skip["steps"]}
     assert {step_id: rows[step_id]["allowance_seconds"] for step_id in ("pending", "working", "paused")} == {
@@ -151,7 +158,7 @@ def test_fallback_median_interpolates_even_values():
     result = divide_production_budget(
         Decimal("100.00"),
         [step("missing", section="missing"), step("one", section="one"), step("two", section="two"), step("three", section="three")],
-        {"missing": None, "one": 600, "two": 1200, "three": 6000},
+        {"missing": selected("missing", None), "one": selected("one", 600), "two": selected("two", 1200), "three": selected("three", 6000)},
     )
     rows = {row["step_id"]: row for row in allocated_rows(result)}
     assert rows["missing"]["typical_worker_seconds"] is None
@@ -161,18 +168,18 @@ def test_fallback_median_interpolates_even_values():
     even = divide_production_budget(
         Decimal("100.00"),
         [step("missing", section="missing"), step("a", section="a"), step("b", section="b"), step("c", section="c"), step("d", section="d")],
-        {"missing": None, "a": 600, "b": 1200, "c": 1800, "d": 6000},
+        {"missing": selected("missing", None), "a": selected("a", 600), "b": selected("b", 1200), "c": selected("c", 1800), "d": selected("d", 6000)},
     )
     assert next(row for row in allocated_rows(even) if row["step_id"] == "missing")["allowance_seconds"] == 811
 
 
 def test_no_budget_and_zero_typicals():
-    no_budget = divide_production_budget(None, [step("a", typical=3600)], {"section": 3600})
+    no_budget = divide_production_budget(None, [step("a")], {"section": selected("section", 3600)})
     assert no_budget["steps"][0]["share_state"] == "no_budget"
     assert no_budget["steps"][0]["allowance_seconds"] is None
 
     zero = divide_production_budget(
-        Decimal("1.00"), [step("a", typical=0), step("b", typical=0)], {"section": 0}
+        Decimal("1.00"), [step("a"), step("b")], {"section": selected("section", 0)},
     )
     assert sum(row["allowance_seconds"] for row in allocated_rows(zero)) == 60
 
@@ -181,7 +188,7 @@ def test_all_excluded_steps_return_task_figures_without_division():
     result = divide_production_budget(
         Decimal("10.00"),
         [step("skipped", "skipped", worked=120), step("failed", "failed", worked=60)],
-        {"section": 1},
+        {"section": selected("section", 1)},
     )
     assert result["budget_seconds"] == 600
     assert result["charged_seconds"] == 180
@@ -196,9 +203,9 @@ def test_deleted_skipped_step_is_outside_budget_universe_but_live_skipped_is_cha
         [
             step("deleted", "skipped", worked=300, deleted=True),
             step("live-skipped", "skipped", worked=120),
-            step("working", "working", typical=1),
+            step("working", "working"),
         ],
-        {"section": 1},
+        {"section": selected("section", 1)},
     )
     rows = {row["step_id"]: row for row in result["steps"]}
     assert result["charged_seconds"] == 120
@@ -210,7 +217,7 @@ def test_deleted_skipped_step_is_outside_budget_universe_but_live_skipped_is_cha
 
 def test_half_even_budget_seconds_quantization():
     result = divide_production_budget(
-        Decimal("195.01"), [step("a", typical=1), step("b", typical=1), step("c", typical=1)], {"section": 1}
+        Decimal("195.01"), [step("a"), step("b"), step("c")], {"section": selected("section", 1)},
     )
     assert result["budget_seconds"] == 11701
     assert sum(row["allowance_seconds"] for row in allocated_rows(result)) == 11701
@@ -231,7 +238,7 @@ def test_c5_section_unit_weights_a_reassigned_section_once():
             step("upholstery-a", section="upholstery"),
             step("upholstery-b", section="upholstery"),
         ],
-        {"structural": 3600, "sanding": 1800, "upholstery": 3600},
+        {"structural": selected("structural", 3600), "sanding": selected("sanding", 1800), "upholstery": selected("upholstery", 3600)},
     )
     allowances = {row["working_section_id"]: row["allowance_seconds"] for row in result["sections"]}
     assert allowances == {"structural": 4320, "sanding": 2160, "upholstery": 4320}
@@ -250,7 +257,7 @@ def test_c7_multi_open_governing_step_and_equal_remainder_tie_are_deterministic(
         created_at=now - timedelta(minutes=1),
         latest_state_record=SimpleNamespace(entered_at=now - timedelta(minutes=1)),
     )
-    result = divide_production_budget(Decimal("0.05"), [second, first], {"section": 1})
+    result = divide_production_budget(Decimal("0.05"), [second, first], {"section": selected("section", 1)})
     rows = {row["step_id"]: row for row in result["steps"]}
     assert rows["first"]["allowance_seconds"] == 2
     assert rows["second"]["allowance_seconds"] == 1
@@ -277,7 +284,7 @@ def test_c6c_multi_open_governing_precedence_is_entered_created_then_client_id()
     result = divide_production_budget(
         Decimal("1.00"),
         [created_winner, client_id_winner, entered_winner],
-        {"section": 1},
+        {"section": selected("section", 1)},
     )
     assert result["sections"][0]["state"] == "pending"
 
@@ -298,7 +305,7 @@ def test_c6_later_live_step_governs_section_state():
 def test_c10_section_allowances_sum_exactly_on_indivisible_budget():
     result = divide_production_budget(
         Decimal("1.01"),
-        [step("a", section="a", typical=1), step("b", section="b", typical=1), step("c", section="c", typical=1)],
-        {"a": 1, "b": 1, "c": 1},
+        [step("a", section="a"), step("b", section="b"), step("c", section="c")],
+        {"a": selected("a", 1), "b": selected("b", 1), "c": selected("c", 1)},
     )
     assert sum(row["allowance_seconds"] for row in result["sections"]) == result["distributable_seconds"] == 61

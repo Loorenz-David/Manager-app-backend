@@ -220,6 +220,54 @@ async def seed_batch_dedupe_fixture(db_session):
     }
 
 
+async def seed_layer2_visibility_fixture(db_session, *, zero_section: bool):
+    """Seed real task surfaces for below-floor and reachable-zero disclosure rows."""
+
+    values = await _seed(db_session)
+    workspace, user, section, task, *_ = values
+    token = uuid4().hex[:10]
+    second_section = WorkingSection(
+        client_id=f"wsec_layer2_{token}", workspace_id=workspace.client_id, name="Layer 2 second"
+    )
+    db_session.add(second_section)
+    for base_step in values[11]:
+        base_step.is_deleted = True
+    await db_session.flush()
+
+    db_session.add_all([
+        TaskStep(
+            client_id=f"tsp_layer2_target_{token}_{index}", workspace_id=workspace.client_id,
+            task_id=task.client_id, working_section_id=section_id,
+            state=TaskStepStateEnum.PENDING, readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0, completed_dependencies=0, total_working_seconds=0,
+            created_by_id=user.client_id,
+        )
+        for index, section_id in enumerate((section.client_id, second_section.client_id))
+    ])
+    history_counts = (5, 5) if zero_section else (3, 0)
+    for section_index, (section_id, history_count) in enumerate(
+        zip((section.client_id, second_section.client_id), history_counts)
+    ):
+        for history_index in range(history_count):
+            history_task = Task(
+                client_id=f"tsk_layer2_history_{token}_{section_index}_{history_index}",
+                workspace_id=workspace.client_id, task_scalar_id=8000 + section_index * 100 + history_index,
+                task_type=TaskTypeEnum.INTERNAL, state=TaskStateEnum.ASSIGNED, created_by_id=user.client_id,
+            )
+            history_step = TaskStep(
+                client_id=f"tsp_layer2_history_{token}_{section_index}_{history_index}",
+                workspace_id=workspace.client_id, task_id=history_task.client_id,
+                working_section_id=section_id, state=TaskStepStateEnum.COMPLETED,
+                readiness_status=TaskStepReadinessStatusEnum.READY, total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=0 if zero_section else 600 + history_index * 60,
+                closed_at=datetime.now(timezone.utc) - timedelta(days=1), created_by_id=user.client_id,
+            )
+            db_session.add_all([history_task, history_step])
+    await db_session.flush()
+    return values, (section.client_id, second_section.client_id)
+
+
 async def cleanup_batch_dedupe_fixture(db_session, fixture):
     workspace_id = fixture["workspace"].client_id
     await db_session.execute(delete(TaskStep).where(TaskStep.workspace_id == workspace_id))

@@ -27,8 +27,14 @@ def test_item_economics_domain_has_no_spec_identity_hashing():
         assert not any(term in source for term in FINGERPRINT_TERMS), module
 
 
-def test_item_economics_domain_walk_is_recursive():
-    assert _domain_modules() == sorted(PACKAGE_ROOT.rglob("*.py"))
+def test_item_economics_domain_walk_is_recursive(monkeypatch, tmp_path):
+    monkeypatch.setitem(globals(), "PACKAGE_ROOT", tmp_path)
+    nested = tmp_path / "nested" / "module.py"
+    nested.parent.mkdir()
+    nested.write_text("# controlled recursive-walk probe\n")
+    modules = _domain_modules()
+    assert modules
+    assert nested in modules
 
 
 def test_item_economics_domain_walk_requires_a_nonempty_package(monkeypatch, tmp_path):
