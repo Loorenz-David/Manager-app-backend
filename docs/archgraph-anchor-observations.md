@@ -579,3 +579,24 @@ session that was *asked* to remove them and had to find the right operation to d
 **Confounded as always:** the prompt named the policy explicitly. **No handoff was written**, so
 the session's own reasoning about the failed `re-anchor` is lost; only the change records survive.
 Describe, do not fix.
+
+### 2026-08-24 — phase-5 close. Correction to the D31 entry.
+
+**An earlier entry said the graph-maintenance session wrote no handoff. That was wrong** — it had
+simply not landed when I looked. `20260824_plan5_archgraph_meaning_handoff.md` exists, quotes the
+new description in full, and **independently reports the `re-anchor` finding**: *"that operation
+changes evidence-anchor records rather than source-link objects."*
+
+**So the session found it, documented it, and corrected its own approach without being told.** The
+earlier entry credited it with self-correction inferred from the change records; it deserves the
+credit for the reasoning as well.
+
+**Phase-5 summary for the fortnightly view.** Two sessions wrote to the graph: implementation
+round 1 (three source links, **symbol-anchored, no spans**) and the D31 maintenance session (one
+description edit, two span-bearing links **replaced span-free**, one hash refresh). **Total spans
+emitted by any agent since the policy change: still 0**, and now measured against a session that
+was *asked* to remove spans and had to find the operation that could. `staleNodeCount` **6 → 5**.
+
+**The standing caveat is unchanged and the clean test is still unrun** — every prompt in this
+project restates the policy, so no session has yet been observed with a prompt silent on
+anchoring. **Plan 6 is the last chance to observe one.** Describe, do not fix.

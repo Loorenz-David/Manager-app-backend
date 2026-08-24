@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: APPROVED
 projection_gate: MANDATORY
 ```
 
@@ -1892,3 +1892,45 @@ surface: 72 passed. Focused Ruff: clean. Authoritative L4:
 valid and unchanged by this test-only work; no graph delta is due. No owner decisions are required.
 
 **State:** `CHANGES_REQUESTED` → **`IMPLEMENTED`**.
+
+### 2026-08-24 — ★ PHASE 5 APPROVED (coordinator gate)
+
+**Fix round 5 consumed. Both acceptance facts verified by the coordinator's own probes**, applied,
+observed, reverted and md5-restored — this phase is approved on **measurement**, not on a ledger.
+
+| acceptance fact | probe | result |
+|---|---|---|
+| C1(d) closes the spec branch | plant the clock defect on `get_working_section_typical_times.py:40` **only**, `:147` untouched | **1 failed / 15 passed** — `test_c1d` **alone**, at `:183`, `assert 5 == 0`. Before this round the same defect had a whole-suite bite set of **∅** |
+| C1(b) survives config drift | `TYPICAL_WINDOW_DAYS = 91` **plus** C1(i) | `test_c1b` **reddens at `:131`, the byte-identity assertion**. Before this round it **passed silently** and C1(i)'s red landed only on `test_c1a` |
+
+**Perimeter:** `_narrowing_fixture.py` +3/−1 (naming the constant the seed already used) and the
+phase test file +34/−1. **Production untouched.** Ledger **16 named + 2 planted probes = 18**,
+summands printed. **GATE STAMP: 2708 passed / 21 failed / 1 skipped, 21-ID set ∅/∅** — the +1 over
+round 4 is exactly `test_c1d`.
+
+**Approved by the coordinator rather than by a further review round, deliberately and on the
+record.** The delta re-review established everything else — production correctness, perimeter,
+citation discipline, the orphan sweep, §6D compliance, and the exoneration of `_TypicalSession`.
+What remained were **two mechanically checkable facts**, both stated in advance, both measured
+above. A sixth review round would have reproduced a green ledger, which this project's own rule
+calls over-evidence. **The owner was told this in advance and proceeded on that basis.**
+
+**Correction to the D31 record.** An earlier entry stated *"no handoff was written"* for the graph
+maintenance session. **That was wrong** — `20260824_plan5_archgraph_meaning_handoff.md` exists and
+had simply not landed when the coordinator looked. It quotes the new description in full and
+**independently reports the `re-anchor` finding**: *"that operation changes evidence-anchor records
+rather than source-link objects."* The session found it, documented it, and corrected its own
+approach. Credit where the earlier entry withheld it.
+
+**What this phase cost, honestly.** Eight dispatched sessions plus one graph session. **Two of
+them were lost to coordinator gate defects** — a prompt asserting a dirty tree its own commit had
+cleaned, and its replacement pinning a SHA its own commit moved. Both halting sessions were right.
+**Five plan-side defects were the coordinator's**, four of one family (prose describing a fixture
+or a site more confidently than the artifact supported) and the fifth — the C1(b) decoupling —
+**removed working coverage**, which is worse than describing something inaccurately.
+
+**What the phase bought.** **Production code was correct from round 1** and never changed after it.
+Every round since was about whether the tests could fail — and they could not, six times. The two
+that mattered: a C8 test that **passed while narrowing was entirely switched off**, and a seam
+where the derived spec could be replaced with `None` leaving the **entire repository green**. Both
+would have shipped. **M1 and M7 are now guarded on the branches production actually takes.**
