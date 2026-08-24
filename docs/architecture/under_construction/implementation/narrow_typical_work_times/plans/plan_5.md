@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 
@@ -1687,3 +1687,30 @@ re-run before v3 was written, and **committing v3 touches `docs/` only, so it mo
 
 Earlier prompts are left byte-identical. **Sixth instance of this class; the first four were caught
 before dispatch, and these two were not because both were self-inflicted by the act of dispatching.**
+
+### 2026-08-24 — fix round 4 closeout (Codex) — two test-only corrections
+
+Applied the two dispatched corrections in
+`app/tests/integration/services/queries/item_economics/test_narrowed_price_scenario.py` only:
+C1(b) now drives `plain_task`, so its section-wide result is the exact literal `375`, and the
+byte-identity assertion now precedes the numeric assertion. `_narrowing_fixture.py` was not
+modified; production code was not modified.
+
+The pre-edit targeted baseline was **83 passed** across the three phase-5 integration files.
+After the edit, the same three files passed **83**, and focused Ruff passed. The authoritative
+L4 stamp was `BEYO_TEST_SLOT=main PYTHONPATH=. pytest -m 'not e2e'`: **2707 passed / 21 failed /
+1 skipped / 2 warnings**, with failure-ID delta **∅/∅** against the carried 21-ID baseline.
+
+The round-4 mutation evidence re-ran C1(i), C8(i), and C8(ii), because their assertion paths were
+changed or coupled to the edited C1(b) row. C1(i) reddened C1(a) with `KeyError: 'now'` and C1(b)
+with differing serialized JSON; the reordered byte-identity assertion therefore fired before the
+numeric literal. C8(i) and C8(ii) each reddened the served narrowed assertion at `assert 375 == 600`.
+The remaining 14 ledger rows and the two planted probes are cited from the round-3 handoff as
+site- and tree-unaffected; the prompt explicitly permits those citations. All 17 rows therefore
+remain accounted for: `15 + 2`.
+
+Final application perimeter: one test file. Mutation files touched in this round were
+`get_task_price_scenario.py` only, applied and reverted for the three re-runs; its final md5 is
+unchanged. No architecture boundary changed; `.archgraph/` was not read or touched.
+
+**State:** `IMPLEMENTED`; fix-round 4 is ready for re-review.

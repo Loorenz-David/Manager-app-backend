@@ -115,7 +115,7 @@ async def test_c1b_same_frozen_context_produces_byte_identical_typicals(
                 "user_id": "usr",
                 "role_name": "manager",
             },
-            incoming_data={"task_client_id": fixture["narrowed_task"].client_id},
+            incoming_data={"task_client_id": fixture["plain_task"].client_id},
             query_params={},
             session=db_session,
             now=frozen,
@@ -124,10 +124,10 @@ async def test_c1b_same_frozen_context_produces_byte_identical_typicals(
     try:
         first = await module.get_task_price_scenario(make_context())
         second = await module.get_task_price_scenario(make_context())
-        assert first["typical"]["total_seconds"] == second["typical"]["total_seconds"] == 600
         assert json.dumps(first["typical"], sort_keys=True) == json.dumps(
             second["typical"], sort_keys=True
         )
+        assert first["typical"]["total_seconds"] == second["typical"]["total_seconds"] == 375
     finally:
         await cleanup_divergent_category_fixture(db_session, fixture)
 
