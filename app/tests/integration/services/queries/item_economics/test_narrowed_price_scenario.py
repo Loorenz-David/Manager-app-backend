@@ -140,10 +140,21 @@ async def test_c1b_same_frozen_context_produces_byte_identical_typicals(monkeypa
     assert first["total_seconds"] == second["total_seconds"] == 600
 
 
-def test_c1c_working_section_typicals_keep_the_default_statement_clock():
-    source = inspect.getsource(typical_times_module.get_working_section_typical_times)
-    assert "typical_times_statement(ctx.workspace_id)" in source
-    assert "typical_times_statement(ctx.workspace_id, now=ctx.now" not in source
+@pytest.mark.integration
+async def test_c1c_working_section_typicals_keep_the_default_statement_clock(monkeypatch):
+    captured = {}
+    real_statement = typical_times_module.typical_times_statement
+
+    def spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_statement(*args, **kwargs)
+
+    monkeypatch.setattr(typical_times_module, "typical_times_statement", spy)
+    await typical_times_module.get_working_section_typical_times(
+        _ctx(_TypicalSession([], []))
+    )
+
+    assert "now" not in captured
 
 
 @pytest.mark.parametrize(
@@ -364,25 +375,6 @@ def test_c7_item_economics_fork_sweep_finds_only_the_shared_median():
         if any(term in path.read_text() for term in ("percentile_cont", "_median", "median("))
     }
     assert hits == {"typical_filters.py"}
-
-
-@pytest.mark.integration
-async def test_c8_narrowing_changes_the_published_number_and_basis():
-    spec = TypicalFilterSpec(item_category_ids=frozenset({"icat_chair"}))
-    narrowed = await module._typical_block(
-        _ctx(_TypicalSession([_step("section_a")], [_spec_row("section_a", 600, 375)])),
-        "tsk_scenario",
-        spec,
-    )
-    broad = await module._typical_block(
-        _ctx(_TypicalSession([_step("section_a")], [_typical_row("section_a", 375)])),
-        "tsk_scenario",
-        None,
-    )
-    assert narrowed["total_seconds"] == 600
-    assert narrowed["typical_resolution"].task_typical_basis == "item_narrowed_uniform"
-    assert broad["total_seconds"] == 375
-    assert narrowed["total_seconds"] != broad["total_seconds"]
 
 
 @pytest.mark.integration

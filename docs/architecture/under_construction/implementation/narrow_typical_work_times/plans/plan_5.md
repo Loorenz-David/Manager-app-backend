@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: CHANGES_REQUESTED
+state: IMPLEMENTED
 projection_gate: MANDATORY
 ```
 
@@ -762,16 +762,13 @@ mutation that moves both; this lineage has shipped four inert checks of exactly 
 *Mutations:*
 **(i)** `_typical_block` (**call site**): `frozenset(step.working_section_id for step in steps)`
 in place of `participating_sections(steps)` → the excluded section joins the computation and
-**(b)** flips `600` → **the two-section sum, which this row must state as a literal and did
-not** (coordinator defect, caught at consumption: the published text read *"the stated
-two-section sum"* and never stated it — a criterion without its one exact expected outcome,
-charter rule 2, in the row that certifies three surfaces agree). **The fix round derives it from
-§6A.F's excluded-section value and writes it into this row.** The implementation reported
-**`750`**; that number entered the ledger from the implementer, not from the plan, so it is
-**confirmed or refuted by derivation, never adopted**. *(B3: the published mutation, "compute over all
+**(b)** flips `600` → **`750`**. Derivation from §6A.F: the excluded section makes
+`narrowed_uniform` false, so the real section contributes its section-wide median `375`; the
+excluded section has no evidence and receives the same usable-value fallback `375`; the mutated
+two-section sum is therefore `375 + 375 = 750`. *(B3: the published mutation, "compute over all
 of `selected`", could not produce its stated `2100` under any reading of `section_ids` — the
-excluded section carries `_zero_evidence`, so it would take the in-task median, not its own
-typical. This shape is also the realistic drift: an exclusion predicate dropped.)*
+excluded section carries `_zero_evidence`, so it takes the in-task median, not its own typical.
+This shape is also the realistic drift: an exclusion predicate dropped.)*
 **(ii)** `get_task_price_scenario._typical_block` (**definition**): rebuild the private ladder and
 resolve typicals locally instead of through `reconcile_task_typicals` → price-scenario's number
 diverges from the literal, so **(b)** reddens while (a) and (c) stay green — **which is exactly
@@ -1207,3 +1204,26 @@ re-derive it.
 
 **State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`** (coordinator consumption, not a review — no
 reviewer has seen this tree).
+
+### 2026-08-24 — fix round 2 closeout (Codex)
+
+Resolved the coordinator's F1–F5 findings. F1: deleted the inert
+`test_c8_narrowing_changes_the_published_number_and_basis`; the SQL-backed divergent fixture
+test is the sole C8 proof. F2: re-ran C8's corrected definition-site mutation
+(`specs = ()`) and observed the required numeric red, `assert 375 == 600`. F3: derived C5(i)'s
+literal from the fixture: the excluded section makes the narrowed-uniform branch unavailable,
+so the real section contributes `375`, the evidence-free excluded section receives fallback
+`375`, and the mutated total is `375 + 375 = 750`; §6A now states `750`. F4: replaced the
+source scan with a delegating spy on the working-sections module's imported statement symbol;
+the probe adding `now=ctx.now` reddens on the captured kwarg. F5: the implementation handoff's
+baseline wording is corrected below: its 67-case slice was post-authoring and post-edit, not a
+pre-edit baseline.
+
+The fix perimeter is one test file plus the plan, tracker, and fix handoff; production is unchanged
+relative to `8a4a1cb`. The C8 and C1(ii) probes were applied and reverted. Retained round-1
+mutation evidence is cited for unchanged assertions; the edited file changes only the deleted
+inert test and C1(c)'s instrument, so no other retained assertion or named mutation site changed.
+The final phase slice is 83 passed and focused Ruff is clean. The one required L4 stamp follows
+in the fix handoff.
+
+**State:** `CHANGES_REQUESTED` → **`IMPLEMENTED`**.
