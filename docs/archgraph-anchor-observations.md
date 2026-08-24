@@ -626,3 +626,49 @@ symbol-anchored, and the maintenance session had to discover that `re-anchor` ca
 **The brief stays open for the next project.** The clean test — a graph-writing session whose
 prompt is silent on anchoring — has still never run, and this project can no longer run it.
 Describe, do not fix.
+
+---
+
+### 2026-08-24 — intention shaping, task budget overrun signal. Read-only session; first *measured* span rate on stored evidence.
+
+**The prompt was silent on anchoring**, as the previous entry hoped. It was also silent on the
+graph: the owner said only *"you can use archgraph to quickly gain context on the item domain"*.
+The session read the skill pointer, then `.archgraph/agent-operating-policy.md`, then ran
+`status` + four `search_nodes` + two `get_node`. **It wrote nothing** — an intention-shaping
+session produces no architectural delta, so there was again nothing to anchor.
+
+**The clean test therefore still has not run.** Four sessions now. Spans emitted by any agent
+since the policy change: still **0**, and still unmeasured rather than good.
+
+**What this session did produce is the first non-trivial sample of stored evidence.** Two
+`get_node` calls returned, between them, **14 current evidence entries** (3 node-level, 11 on
+relationships). Span rate:
+
+| | count |
+|---|---|
+| Current evidence entries read | 14 |
+| Carrying `startLine`/`endLine` | **1** |
+| That one also carrying a `symbol` | **0** |
+
+The single span is on `domain-item-economics --contains--> projection-item-economics-task-budget-allocations`
+(`get_task_budget_allocations.py`, 100–283). It has **no `symbol` field** — which is precisely the
+case the policy reserves spans for, a region with no name of its own. Every other entry is
+path+symbol and span-free. **On this sample, stored evidence already matches the policy**, which
+is a better picture than the 2026-08-23 summary's "2 of 2 carrying a span" suggested; that summary
+measured one pending review item, not the settled graph.
+
+**Two things the tool still hands an agent whether or not it wants them.** `evidenceHistory`
+entries retain their `startLine`/`endLine` alongside `supersededAt` — so the superseded record of
+a span-free entry still shows the numbers it used to carry. And `sourceLinks` carry ranges, which
+the policy permits and explicitly says is not a pattern to copy into evidence. An agent reading a
+node sees spans in both places before it sees the span-free current evidence.
+
+**Staleness, reported and not acted on.** All four `sourceLinks` on
+`projection-item-economics-task-production-time` and the one on the allocations projection came
+back `stale: true`; `status` reported 6 stale nodes and 3 pending reviews. The session took no
+repair, re-anchor, review or maintenance action on any of it, and did not raise it as a finding —
+the counts stayed observations. Consistent with the count-gating behaviour the previous entry
+recorded, under a session that had every opportunity to tidy.
+
+**Describe, do not fix. The brief stays open** — and the next graph-*writing* session in this
+workspace is still the one that matters.
