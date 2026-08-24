@@ -1,28 +1,33 @@
 # Intention: Task Budget Overrun Signal (one batched verdict read for the managers task list)
 
 ```
-status: **READY_FOR_RATIFICATION** (round 3, 2026-08-24). **NOT RATIFIED — this header
+status: **READY_FOR_RATIFICATION** (round 4, 2026-08-24). **NOT RATIFIED — this header
         is the shaper's *claim*, not the owner's answer. Nothing here is authority yet
         and no downstream skill may compile against it.**
         **0 owner decisions open.** D1 (§3.4), D2 (§6) and D3 (§5.1) are answered and
         folded. The one act outstanding is **D4, the ratification itself** — the
         surface is written into **§10.1** so it can be relayed verbatim by whoever
         next sits with the owner. §10.2 says exactly how to record the answer.
-        **⚠ THE SHAPING SESSION IS CLOSED.** The owner ended the shaper's role at this
-        draft (§11 round 3); this document is complete and self-contained by design,
+        **⚠ THE SHAPING SESSION IS CLOSED** at commit `a2fe8b9`. The owner ended the
+        shaper's role at this draft (§11 rounds 3–4). The session's grounding research
+        is preserved in `handoffs/shaper/20260824_shaping_context_handoff.md` — **read
+        it before re-reading any source file**; it carries the verified anchor map and
+        both probes, re-runnable. This document is complete and self-contained by design,
         and the pipeline's interface from here is artifacts, never conversation.
         **Next actor: whoever presents §10.1 to the owner.** On RATIFIED →
         mechanism-inventory (§9 lists what it must reach contract grade).
         **⚠ Section-letter precedence:** §3.4 supersedes its own round-1 wording — a
         second, independent cause of the divergence was found in round 2 and a bound
-        stated on one cause alone was wrong.
+        stated on one cause alone was wrong. §11 R4-b supersedes R3-c.
+        **⚠ Before phase 1:** a second frontend handoff wants `budget-allocations`
+        extended, which **HC-2 forbids**. See §11 R4-c — decide there, not in a plan.
 role: intention (pipeline root artifact)
 shaped_from: docs/handoff/from_frontend/HANDOFF_TO_BACKEND_task_budget_overrun_signal_20260823.md
              (the frontend's request, authored by the frontend's Claude Opus 5 agent)
              plus owner decisions taken in the shaping conversation of 2026-08-24
-             (S1–S3 round 1; D1–D2 round 2; D3 round 3; §11).
+             (S1–S3 round 1; D1–D2 round 2; D3 round 3; R4-a round 4; §11).
 date: 2026-08-24
-round: 3
+round: 4
 ```
 
 ---
@@ -843,6 +848,34 @@ pending it, on the owner's instruction.
 
 Open after round 3: **0 owner decisions.** Outstanding: **D4, ratification** (§10.2),
 which is the owner's act alone.
+
+**Round 4 — artifacts committed and the session closed (2026-08-24).** No semantic
+change; the gate does **not** re-open. Recorded because two round-3 statements are now
+out of date and the doctrine forbids rewriting them in place.
+
+- **R4-a (owner instruction) — commit, and leave the research behind.** The owner asked
+  for this session's grounding to be written down so the next agent does not re-derive
+  it. Produced:
+  `handoffs/shaper/20260824_shaping_context_handoff.md` — the verified anchor map, the
+  facts established, both probes **verbatim and re-runnable**, an explicit list of what
+  the session did *not* do, and the collision in R4-c.
+- **R4-b — this supersedes R3-c.** R3-c said no folder beyond `planning/` was created.
+  `handoffs/shaper/` now exists, holding one real row. The rest of R3-c stands: `plans/`
+  and `prompts/<role>/` are still the coordinator's to establish.
+- **R4-c — a second frontend handoff collides with HC-2, and the owner has seen it.**
+  `docs/handoff/from_frontend/HANDOFF_TO_BACKEND_worker_time_pressure_20260824.md` asks
+  for two additive fields **on `budget-allocations`** — step state and a live per-step
+  remaining share — so a worker starting a "36m" step knows the task has 27 minutes
+  left. Same overrun problem, worker's side. **HC-2 forbids touching that endpoint**, and
+  HC-2 is load-bearing for **M6**. Whether HC-2 survives contact with that request must
+  be decided **before phase 1**: relaxing it after a plan exists is a material semantic
+  change that re-opens this gate. Not resolved here — the shaper read only its summary,
+  and it is a different request with its own shaping ahead of it.
+- **R4-d — closing commit `a2fe8b9`** carries this document, the context handoff, the
+  appended archgraph observation entry, and the frontend's 2026-08-23 handoff (committed
+  alongside so this document's `shaped_from` citation resolves in history). **No code, no
+  tests, no graph writes; the suite was never run and no baseline in this project is the
+  shaper's.**
 
 ---
 
