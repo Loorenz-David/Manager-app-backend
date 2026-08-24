@@ -3,7 +3,7 @@
 ```
 plan: plan_5
 project: narrow_typical_work_times
-state: IMPLEMENTED
+state: CHANGES_REQUESTED
 projection_gate: MANDATORY
 ```
 
@@ -602,6 +602,23 @@ contract that is trivially true (`now=ctx.now` reads no clock), and under mutati
 on the same side of both cutoffs unless `max(closed_at)` lands inside a microseconds-wide window
 no test can aim at. **The mutant's red was a race the row lost ~always** — the highest-prior
 defect family in this lineage, and the row belonged to it.
+**★ Shipped inert anyway — review round 1, B2, measured.** The round implemented this row as two
+calls against **two `_TypicalSession` instances built from identical hand-supplied rows**. That fake
+discards the statement, so the two results are `f(x)` and `f(x)` over the same `x`: the byte-identity
+assertion is a tautology. Under this row's own mutation C1(i) the red lands at `:139` — the spy's
+kwarg list, **the same observable `test_c1a` already asserts at `:92`** — while the byte-identity
+assertion at `:136-138` **executed and passed under total loss of the injected clock**. No fake
+`datetime`, no boundary group, no 90-day pin, no SQL. **Charter rule 12: a named mutation must reach
+every sub-check**, and this one reaches the sub-check already covered and misses the row's entire
+distinguishing content. Sixth row-that-cannot-fail in this project, and the second inside a row
+rewritten to escape the family.
+
+**Ledger requirement, earned here and binding on this row:** when a plan prescribes an instrument to
+the line, the round's ledger states **which prescribed element it implemented** — the fake `datetime`,
+the boundary group, the two exact literals — **one cell each**. *"Implemented C1(b)"* is not a ledger
+entry for a row specified this precisely, and the round-1 coverage map claiming *"boundary inclusion"*
+for a file in which `closed_at`, `timedelta` and a fake `datetime` appear nowhere is why.
+
 **Corrected:** monkeypatch
 `beyo_manager.services.queries.working_sections.get_working_section_typical_times.datetime`
 (a module attribute — `datetime` is imported into that namespace at `:5`) with a fake whose
@@ -712,7 +729,11 @@ reading; C2(ii) is the flag-site reading. Two sites, two rows, stated separately
 *(trace **M3** — HC-2's third clause: terminals may differ where the selected typical is genuinely
 absent, and each surface makes its firing visible)*
 
-(a) No usable typical anywhere in the task → `total_seconds: 0` and `is_estimated: true`.
+(a) No usable typical anywhere in the task → `total_seconds: 0` **and** `is_estimated: true`.
+**Both observables are asserted** — review round 1 **N1** measured that the shipped test asserts
+`total_seconds` only (`test_narrowed_price_scenario.py:239`). No coverage was lost (an `is_estimated`
+that dropped its `sections_without_sample > 0` disjunct reddens C2(b) and C2(c)), but **a criterion's
+closing observable is a criterion**, and one line closes it.
 (b) A mixed task — participating selected values `600`, `900`, and one `None` → the unusable
 section takes the in-task median: `total_seconds == 600 + 900 + 750 == 2250`.
 
@@ -762,9 +783,17 @@ typical, and the row must say so or a reviewer files a finding against correct c
 (b) `price_scenario.typical.total_seconds == 600` — the **same literal**, and it is the sum over
 the **participating** set only. **What the excluded section contributes to that sum is nothing**,
 and under mutation (i) it contributes `375` — the in-task fallback, because it has no evidence of
-its own. §2B S-7 is the contract being guarded (price-scenario scopes the statement to
-participating sections where production-time scopes it to every step's section), and widening the
-scope is what the mutation reddens.
+its own. **What mutation (i) proves, stated accurately — corrected at the review-round-1 fold (S1), and the
+sentence it replaces was the coordinator's.** The published text claimed this row guards **§2B S-7**,
+the statement's SQL `.where` scoping. **It does not, and nothing does.** Measured (reviewer P3):
+deleting `.where(WorkingSection.client_id.in_(participating_ids))` outright leaves the L2
+item-economics surface at **366 passed**, because extra rows land in `evidence_by_section` and
+`reconcile_task_typicals` iterates `section_ids` (`typical_filters.py:272-275`), so foreign sections
+are ignored. **§2B S-7's scoping is a query-cost property with no wire observable, and no row owns
+it.** That is recorded as the **correct outcome, not a gap to close**: inventing a criterion for a
+mechanism with no observable is how the fifth-generation cannot-fail row gets built. What mutation (i)
+does prove is that the **participating set is computed through `participating_sections`**, and that
+widening *that* moves the published total.
 (c) budget-allocations' step row carries the **same triple** as (a) — closing the three-way
 agreement plan 4 C11 opened.
 
@@ -909,6 +938,38 @@ category** — so the two bases are shown to differ **by measurement on the runn
 assumption. Rows (a) and (b) together are M1's proof: `600 ≠ 375` on one section's history,
 because one task's item has a category and the other's does not.
 
+**(c) — added at the review-round-1 fold (B1). The edge that feeds the function, not only the
+function.** A test must observe that **`get_task_price_scenario` supplies `_typical_block` with the
+spec `get_task_budget_status` derived** — the one production edge that carries the task's item
+category into this consumer, and the edge phase 5 exists to build.
+
+**Why it is here and blocking.** Measured by the reviewer at `get_task_price_scenario.py:234-238`,
+replacing the third argument with `None`: L2 item-economics **366 passed**; full suite **21 failed /
+2707 passed / 1 skipped, the exact 21-ID baseline, no failure-ID delta in either direction**.
+**Narrowing can be switched off entirely for this consumer with the whole repository green.** Every
+row that exercises narrowing — C5 and C8(a)(b) — calls `module._typical_block(...)` **directly** and
+hands it a spec the test derived itself (`:265`, `:399`); the four `_run_scenario`-family tests that
+do call the service monkeypatch `_typical_block` away and their `fake_status` returns
+`typical_filter_spec=None`. The fifth service call site (`:876`) is a `NotFound` path that never
+reaches the typical block (verified by the coordinator). **So nothing observes the seam.**
+
+*Failure this catches:* a later refactor of `get_task_budget_status`'s return shape, a defaulted
+keyword, or a merge dropping the argument — and every price-scenario answer silently reverts to
+section-wide, still publishing a well-formed `typical_resolution` with
+`task_typical_basis: "section_wide_uniform"` and `applied_filter: null`. **No error, no red test, a
+plausible wrong number.**
+
+*Form — cheapest that bites, implementer's choice of the two:* either **(i)** a spy on
+`module._typical_block` asserting it receives the spec derived from the task's own PRIMARY item, or
+**(ii)** drive `get_task_price_scenario(ctx)` **end to end** on `seed_divergent_category_task` and
+assert `typical["total_seconds"] == 600` there. **(ii) is preferred** — it also closes the standing
+note that C8 asserts `_typical_block`'s dict rather than the served payload.
+
+*Mutation for (c)*: `get_task_price_scenario.py:237` (**call site**) — pass `None` in place of
+`budget_status.typical_filter_spec`. **Row (c) alone must redden**, and the ledger records the
+observed red. *(This is the mutation the reviewer ran to establish the finding: it is known to leave
+the entire suite green today, so a round that reports it as red without a new test has not run it.)*
+
 *Mutation — **corrected 2026-08-24 at the coordinator's consumption; the published site was
 wrong and the correction is measured***: `get_task_price_scenario._typical_block`
 (**definition**, the spec-derivation line `specs = (spec,) if spec is not None and
@@ -932,8 +993,12 @@ State that in the test's docstring — it is the reason the fixture is specified
 
 ### Mutation ledger — summands printed (lint check "counts derived")
 
-`C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 1` = **14 named mutations**
-plus **2 required planted-defect probes** (C7 rows (c) and (d)) = **16 ledger rows the round owes.**
+`C1 2 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1 · C7 1 · C8 2` = **15 named mutations**
+plus **2 required planted-defect probes** (C7 rows (c) and (d)) = **17 ledger rows the round owes.**
+
+*Re-derived at the review-round-1 fold: C8 gains its second mutation with row (c) (B1). Criteria
+count is unchanged at **8** — B1 became a **row on C8**, not a ninth criterion, because it is an M1
+defect of exactly C8's kind (the feature ships inert) and the sizing cap holds.*
 
 *The published plan said 12, and the lint certified that number as "counted from the criteria".
 It was not: the criteria as published summed to **14**, and this fold removes one (C2 iv) and adds
@@ -1336,3 +1401,145 @@ proceeding on it.
 verification items, and none was written. The graph's own change records are a complete audit
 trail, so nothing is unverifiable — but the coordinator reconstructed it rather than reading it,
 and a session that self-corrected mid-run is exactly the session whose reasoning was worth having.
+
+### 2026-08-24 — review round 1 (Opus 5) — `CHANGES_REQUESTED`
+
+**Handoff:** `handoffs/reviewer/20260824_plan5_review_round1_handoff.md`.
+**2 blocking / 1 should-fix / 5 notes / 0 owner cards.** Tree `86bf894`, `app/` clean,
+`git diff 0daf0c9 HEAD -- app/` empty — the fix round's stamp (2707/21/1, 21-ID set) describes this
+tree and was **consumed by citation**. **L4 runs: 1**, authorized before the run as a
+repository-rooted absence claim (master plan §10). Every other run was variation: 5 probes, 2 files,
+all reverted and md5-verified (`213a38a0…`, `b4629884…`), no DB side effects. Production code is
+correct; both blocking findings are about what watches it, and plan 6 forbids test-behaviour change.
+
+**★ B1 — the derived spec reaches `_typical_block` through an edge no test in the repository
+observes.** `get_task_price_scenario.py:234-238` is the only site supplying `spec`. Replacing
+`budget_status.typical_filter_spec` with `None`: L2 item-economics **366 passed**; **L4 21 failed /
+2707 passed / 1 skipped, 21-ID set ∅/∅**. C5 and C8 call `module._typical_block(...)` directly with a
+test-derived spec (`:265`, `:399`); the four service-level tests monkeypatch `_typical_block` away
+(`test_price_scenario_query.py:577, :974, :1117, :1277`) and their `fake_status` returns
+`typical_filter_spec=None`. Price-scenario could stop narrowing entirely and publish
+`section_wide_uniform` / `applied_filter: null` with the whole suite green — **M1's own defect family
+on the consumer this phase exists to onboard**. Distinct from the coordinator's settled note (that one
+is downstream reach, dict-vs-payload; this is upstream, who supplies the spec). **Also a plan gap:**
+§5A S13 pinned the source as a *task* and no §6A row covers it. Correction: a row spying on
+`module._typical_block` for the status-derived spec, or one row driven through
+`get_task_price_scenario(ctx)`; named mutation *pass `None` at `get_task_price_scenario.py:237`
+(call site)*, with the observed red recorded.
+
+**★ B2 — C1(b) shipped inert in the half the projection rewrote it to arm, and the prescribed
+instrument was replaced undeclared.** §6A C1(b) prescribes a fake `datetime` on the working-sections
+module, a group pinned at `max(closed_at) == ctx.now - 90 days`, and two differing `total_seconds`
+literals under mutation (i). Shipped
+(`test_narrowed_price_scenario.py:97-140`): two calls against two `_TypicalSession` instances built
+from identical hand-supplied rows — the fake §6A's own ⚠ rule names, which discards the statement. No
+fake `datetime`, no boundary group, no SQL. **Measured under mutation (i): 2 failed / 13 passed, the
+red at `:139` (`assert captured == [frozen, frozen]` — the same observable C1(a) asserts at `:92`),
+while the byte-identity assertion at `:136-138` executed and passed.** Charter rule 12: the mutation
+reaches one sub-check and misses the row's whole distinguishing content — M7's stated observable.
+Rule 14: undeclared divergence; and the implementation handoff's coverage map claims *"boundary
+inclusion"*, a property `closed_at` / `90` / `timedelta` / a fake `datetime` nowhere appear in this
+file to support. **Still guarded, so the correction is scoped:** C1(a) proves `now=ctx.now` reaches
+the statement and phase 2's `test_phase2_live_surfaces.py:983-989` proves the statement turns it into
+`now - 90 days`; what nothing observes is the two composed — a boundary group moving because the
+injected clock moved.
+
+**S1 — §6A C5(b) names §2B S-7 as the contract it guards; the statement's scoping has no guard at
+all.** Deleting `.where(WorkingSection.client_id.in_(participating_ids))` (`:151-153`) outright leaves
+L2 at **366 passed**: extra rows land in `evidence_by_section` and `reconcile_task_typicals` iterates
+`section_ids` (`typical_filters.py:272-275`), so they are ignored. C5's mutation (i) mutates the
+**participating-set computation**, not the `.where`. **Correction is to restate, not to test** — the
+scope is a query-cost property with no wire observable, so no row can own it; inventing one recreates
+the cannot-fail shape.
+
+**Notes.** **N1** C4(a) asserts `total_seconds` only; its stated `is_estimated: true` is unasserted
+(no coverage lost — C2(b)/(c) redden on that disjunct). **N2** C6 runs on a hand-built
+`TaskTypicalSelection`, not the `seed_categorized_two_section_task` its row names, and re-imports
+`"icat_chair"` — the literal S1 deleted as unproducible; its 2-vs-2 fixture cannot tell
+`len(participating_section_ids)` from `len(selected)`, *measured*: that mutant reddens phase 4's
+`test_narrowed_task_economics.py:124` (`assert 4 == 3`), **C6 stays green**. **N3** C8(b) asserts
+price-scenario's `total_seconds` (`:404`) rather than production-time's `sections[].typical` triple
+the row names, so the section-wide basis and count go unasserted, and `None` is passed rather than a
+spec derived from `plain_task`. **N4** `test_c1c`'s `assert "now" not in captured` is true of `{}`:
+`get_working_section_typical_times.py:192` passes **no** kwargs, so the row also survives the call
+disappearing (rule 15 itself is discharged — F4's probe observed the presence). **N5** `section_ids`
+is built from `groups` (`:142`), not §5A task 4 B3's pinned `frozenset(step.working_section_id for
+step in steps)` — behaviourally identical and better against fakes, but undeclared.
+
+**Verified correct and not to be re-derived next round:** §6B implemented verbatim (`:203-213`);
+no behavioural regression on the pre-existing path (old/new bodies compared line by line, the three
+inherited arithmetic rows still at 200/41/35); §6D honoured — no row asserts a payload before/after;
+`serialize_typical_resolution(None)` returns the full six-key default, so §7's always-present promise
+holds on the four legacy doubles; **citation discipline honest** — `git diff 8a4a1cb HEAD` on the
+phase test file touches exactly the rewritten `test_c1c` and the deleted inert C8 test, and both
+bound mutations were re-run, so the 14 retained citations hold; **zero orphans**, counted (12 test
+functions / 15 cases, all mapped; no test added or removed in `test_price_scenario_query.py`);
+perimeter is exactly §4/§4A's seven files; both text-scanning guards satisfied, not merely unbroken;
+C7(b)'s `parents[6]` root is correct and neither swept directory has a sub-package; `routers/README.md`
+carries prose only for price-scenario, so nothing rots (plan-4 C-1 lesson applied); **TZ-independent
+at UTC+14 and UTC-11**.
+
+**State:** `IMPLEMENTED` → **`CHANGES_REQUESTED`**.
+
+### 2026-08-24 — review round 1 consumed (coordinator fold)
+
+**Handoff:** `handoffs/reviewer/20260824_plan5_review_round1_handoff.md`, Opus 5,
+`CHANGES_REQUESTED` — **2 blocking / 1 should-fix / 5 notes / 0 owner cards**, tree `86bf894`,
+**L4 runs 1** with its authorization line written before the run. **The strongest review this
+project has produced**, and the reason is method: every probe was a **variation** — a mutant shape,
+a site or a condition nobody in this phase had tried — and none reproduced a green ledger.
+
+**Both blocking findings verified independently by the coordinator, by reading rather than
+re-running:**
+
+**B1 — the seam.** Production has exactly **one** call site supplying the spec (`:234`). Five test
+call sites of `get_task_price_scenario` exist; **four monkeypatch `_typical_block` away**
+(`:584, :988, :1131, :1291`) and the fifth (`:876`) is a `NotFound` path that never reaches it —
+so the reviewer's "four" is complete and its conclusion is if anything stronger than stated.
+Narrowing can be switched off for this consumer with the whole suite green (∅/∅ on the 21-ID set).
+→ **§6A C8(c)**, with its own mutation. Criteria stay at **8**; the sizing cap holds.
+
+**B2 — C1(b) shipped inert in the half it was rewritten to arm.** Read at source: both calls go
+through `make_context()`, which builds **two `_TypicalSession` instances from identical
+hand-supplied rows**, so the byte-identity assertion is `f(x) == f(x)`. No fake `datetime`, no
+boundary group, no 90-day pin. The mutation's red lands only on the spy's kwarg list — the same
+observable C1(a) already asserts. → §6A C1(b) amended with the measurement and a **per-element
+ledger requirement**.
+
+**Two of the three non-note findings are mine.** **S1:** §6A C5(b) claimed to guard §2B S-7's SQL
+scoping; the reviewer deleted the `.where` outright and got **366 passed**. That scoping is a
+**cost property with no wire observable, and no row owns it** — restated as the correct outcome
+rather than closed with an invented row. **B1 is a plan gap:** no §6A row covered the edge, and the
+manifest's reverse-trace check **cannot see a missing edge, because every link it checks is a row
+that exists**.
+
+**And B1 is a miss I should own precisely.** At the round-1 consumption I observed that both C8
+tests call `module._typical_block(...)` directly, and I ranked it *"reach, not a defect"* by
+reasoning about the **downstream** serializer pass-through. The defect was **upstream** — who
+supplies the spec — and the pass-through argument never touched it. I looked straight at the seam
+and asked the wrong side of it. **Second lesson from the same round:** I caught C1(c)'s undeclared
+instrument substitution and did not sweep the file for others; C1(b) had the identical defect four
+rows above it. **One undeclared substitution is a reason to check them all.**
+
+**Notes folded:** N1 → C4(a)'s second observable is now asserted. N2 (C6 runs on a hand-built
+selection and re-imports the `"icat_chair"` literal S1 deleted) and N3 (C8(b) reads `_typical_block`
+where the row names production-time's triple) and N4 (`test_c1c`'s absence assertion is true of an
+empty dict) and N5 (`section_ids` built from `groups`, not `steps` — behaviourally identical and
+strictly better against fake sessions) → **fix round 3**, each as a declaration or a one-line
+strengthening, none as new coverage.
+
+**Recorded as verified, so no later round re-derives it:** production is right — §6B implemented
+verbatim at `:203-211`, `terminal=Fraction(0, 1)` at `:198`, no behavioural regression on the
+pre-existing path; **§6D honoured on every row**; `typical_resolution` always present and non-null
+on the wire; **zero orphan tests**, counted not asserted (12 functions, all mapped); the 14 cited
+mutations' citations are **honest** — the fix round touched exactly two regions and both bound
+mutations were re-run; C7(b)'s sweep root resolves correctly; `routers/README.md` rots nothing;
+and TZ independence measured at **UTC+14 and UTC-11**.
+
+**Where the review's evidence ends, in its own words:** it did not re-run the 14 cited reds (it
+verified the citations' validity, not the reds), did not exercise the service end-to-end against a
+database, and did not measure query cost — which S1 makes invisible anyway. `sections_by_basis`'s
+values remain unasserted for price-scenario; the reviewer declined to file it and I agree, on the
+same grounds it gave.
+
+**State:** `CHANGES_REQUESTED`. Fix round 3 dispatched.
