@@ -44,6 +44,7 @@ _ROUTES = [
     ("POST", "/api/v1/item-economics/projections/ice_1/promote", None),
     ("GET", "/api/v1/item-economics/items/itm_1/economics", None),
     ("GET", "/api/v1/item-economics/tasks/tsk_1/price-scenario", None),
+    ("GET", "/api/v1/item-economics/tasks/budget-signals?task_ids=tsk_1", None),
 ]
 
 _ALL_ROLE_ROUTES = [

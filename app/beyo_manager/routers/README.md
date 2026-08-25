@@ -77,6 +77,7 @@
 | DELETE | /api/v1/item-economics/projections/{client_id} | item-economics | route_delete_item_cost_projection_api_v1_item_economics_projections__client_id__delete |
 | POST | /api/v1/item-economics/projections/{client_id}/promote | item-economics | route_promote_item_cost_projection_api_v1_item_economics_projections__client_id__promote_post |
 | GET | /api/v1/item-economics/tasks/budget-allocations | item-economics | route_get_task_budget_allocations_api_v1_item_economics_tasks_budget_allocations_get |
+| GET | /api/v1/item-economics/tasks/budget-signals | item-economics | route_get_task_budget_signals_api_v1_item_economics_tasks_budget_signals_get |
 | GET | /api/v1/item-economics/tasks/{task_client_id}/budget-status | item-economics | route_get_task_budget_status_api_v1_item_economics_tasks__task_client_id__budget_status_get |
 | GET | /api/v1/item-economics/tasks/{task_client_id}/production-time | item-economics | route_get_task_production_time_api_v1_item_economics_tasks__task_client_id__production_time_get |
 | GET | /api/v1/item-economics/tasks/{task_client_id}/price-scenario | item-economics | route_get_task_price_scenario_api_v1_item_economics_tasks__task_client_id__price_scenario_get |
@@ -1698,6 +1699,46 @@ None
 | detail[].type | string | Yes |  |
 
 Returns time-only, statically proportional per-step allocations for up to 50 workspace-scoped tasks.
+
+### GET /api/v1/item-economics/tasks/budget-signals
+- **Tag**: item-economics
+- **OperationId**: route_get_task_budget_signals_api_v1_item_economics_tasks_budget_signals_get
+
+#### Parameters
+| Name | In | Required | Type |
+| --- | --- | --- | --- |
+| task_ids | query | Yes | array[string] |
+
+#### Request Body
+None
+
+#### Responses
+- **200**: Successful Response
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| ok | boolean | Yes |  |
+| data.budget_signals[] | array[object] | Yes |  |
+| data.budget_signals[].task_id | string | Yes |  |
+| data.budget_signals[].budget_state | string | Yes | no_budget \| over \| projected_over \| within_budget |
+| data.budget_signals[].over_seconds | integer | Yes |  |
+| data.budget_signals[].over_cost_minor | integer | Yes |  |
+| data.budget_signals[].projected_over_seconds | integer | Yes |  |
+| data.budget_signals[].projected_over_cost_minor | integer | Yes |  |
+| data.budget_signals[].currency | string | Yes | swedish_krona \| danish_krona \| euro \| no_currency |
+| data.budget_signals[].allowed_seconds | integer | Yes |  |
+| data.budget_signals[].actual_worked_seconds | integer | Yes |  |
+| data.budget_signals[].cost_per_worker_minute_ten_thousandths | integer | Yes |  |
+| warnings[] | string | Yes |  |
+- **422**: Validation Error
+  - Content-Type: application/json
+| Field Path | Type | Required | Enum |
+| --- | --- | --- | --- |
+| detail[].loc | array[integer | string] | Yes |  |
+| detail[].msg | string | Yes |  |
+| detail[].type | string | Yes |  |
+
+Returns one flat, costed budget-signal row per visible requested task, ordered by `task_id` ascending.
 
 ### GET /api/v1/item-economics/tasks/{task_client_id}/production-time
 - **Tag**: item-economics

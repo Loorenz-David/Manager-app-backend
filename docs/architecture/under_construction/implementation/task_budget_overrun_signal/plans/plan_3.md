@@ -187,3 +187,18 @@ the retired inline-price identity. Do not add the path to `docs/domains/item_eco
 ## 9. Review log
 
 *(append-only)*
+
+- **Projection waiver recorded (2026-08-25).** The coordinator waived this plan's waivable
+  projection gate: it wires the approved Phase-2 service into one route and its four HC-2a
+  artifacts, plus the required frontend handoff; it introduces no new derivation or rule-6
+  mechanism. The owner also directed that no further projection sessions be run. Proceed to
+  implementation under the full criteria and review gates.
+
+- **Implementation closeout (2026-08-25, Codex).** Implemented the manager-only route directly
+  after the all-role budget-allocation route, moved the fixed batch pair ahead of every
+  parameterized task route to satisfy C1(b), updated the four HC-2a artifacts, and published
+  `HANDOFF_TO_FRONTEND_task_budget_overrun_signal_20260825.md`. The nine declared mutations
+  all reddened their named assertions and were reverted. L1 targeted evidence is 128 passed;
+  L2 radius is 653 passed; docs guard is 70 passed; the one final L4 stamp and its 21-ID delta
+  are recorded in the implementer handoff. Graph closeout added one endpoint and two links in
+  one batch; no existing graph item was promoted, rejected, edited, or removed.

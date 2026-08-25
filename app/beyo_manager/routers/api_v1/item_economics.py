@@ -32,6 +32,7 @@ from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_economics_configuration_status import get_economics_configuration_status
 from beyo_manager.services.queries.item_economics.get_item_lifetime_economics import get_item_lifetime_economics
 from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
+from beyo_manager.services.queries.item_economics.get_task_budget_signals import get_task_budget_signals
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
 from beyo_manager.services.queries.item_economics.get_task_budget_status_worker import get_task_budget_status_worker
 from beyo_manager.services.queries.item_economics.get_task_production_time import get_task_production_time
@@ -315,6 +316,36 @@ async def route_delete_item_valuation(
     )
 
 
+# Fixed batch paths must precede every parameterized task route.
+@router.get("/tasks/budget-allocations")
+async def route_get_task_budget_allocations(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+    task_ids: list[str] = Query(...),
+):
+    return await _run(
+        get_task_budget_allocations,
+        claims,
+        session,
+        query={"task_ids": task_ids},
+    )
+
+
+# The fixed routes remain together before every parameterized task route.
+@router.get("/tasks/budget-signals")
+async def route_get_task_budget_signals(
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+    task_ids: list[str] = Query(...),
+):
+    return await _run(
+        get_task_budget_signals,
+        claims,
+        session,
+        query={"task_ids": task_ids},
+    )
+
+
 @router.post("/tasks/{task_client_id}/evaluations/commit")
 async def route_commit_item_cost_evaluation(
     task_client_id: str,
@@ -341,21 +372,6 @@ async def route_list_task_evaluations(
         claims,
         session,
         data={"task_client_id": task_client_id},
-    )
-
-
-# Fixed batch path must precede the parameterized task route block.
-@router.get("/tasks/budget-allocations")
-async def route_get_task_budget_allocations(
-    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
-    session: AsyncSession = Depends(get_db),
-    task_ids: list[str] = Query(...),
-):
-    return await _run(
-        get_task_budget_allocations,
-        claims,
-        session,
-        query={"task_ids": task_ids},
     )
 
 
