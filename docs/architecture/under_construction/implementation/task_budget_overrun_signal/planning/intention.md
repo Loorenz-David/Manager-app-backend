@@ -1,9 +1,9 @@
 # Intention: Task Budget Overrun Signal (one batched verdict read for the managers task list)
 
 ```
-status: **RATIFIED** (round 12, 2026-08-25) — last full re-ratification by the owner
+status: **RATIFIED** (round 13, 2026-08-25) — last full re-ratification by the owner
         (**David**) was on 2026-08-24, on the re-ratification surface at **§10.6**;
-        rounds 11–12 are owner-approved precision amendments that preserved RATIFIED. The owner answered
+        rounds 11–13 are owner-approved precision amendments that preserved RATIFIED. The owner answered
         **"yes"** after that surface was relayed: D9's forecast-versus-incurred
         distinction, D10's no-work-ahead guard, the production-time convergence caveat,
         and the four non-visible contract resolutions. This restores the pipeline's
@@ -99,8 +99,11 @@ arithmetic and publishes its verdict.
   `budget-allocations` per-step and are correct today; this is an additive sibling, not
   a replacement. Deleting this feature must leave zero residue.
   - **HC-2a — enumerated exception.** Mounting a new item-economics route trips the v1
-    route-mirror tripwires by design. Exactly **four** artifacts change, by addition
-    only, each reverted by one edit:
+    route-mirror tripwires by design. Exactly **four** artifacts change. Artifacts 1–3 are
+    additive and revert by one edit; artifact 4 adds the route and deliberately relocates the
+    existing fixed `budget-allocations` route immediately before it, so both fixed batch paths
+    precede every parameterized `/tasks/...` route. Reverting artifact 4 therefore takes two
+    edits. The relocation changes no endpoint's payload or dispatch destination:
     1. `app/tests/unit/routers/test_phase9_item_economics_route_mirror.py` —
        `_EXPECTED_ROUTES` (+1 row, `:33`) and both count assertions **26 → 27**
        (`:127`, `:128`);
@@ -1380,8 +1383,10 @@ the durable guard is placement, not the current absence.
 
 **Contract.** The new decorator is declared **immediately after**
 `@router.get("/tasks/budget-allocations")` (`routers/api_v1/item_economics.py:348`), which
-puts it ahead of every parameterized `/tasks/...` GET in the file and keeps the two batch
-paths adjacent. **Invariant:** a request to `/api/v1/item-economics/tasks/budget-signals`
+puts both fixed batch paths ahead of every parameterized `/tasks/...` route in the file and
+keeps them adjacent. The pre-existing `budget-allocations` decorator is deliberately relocated
+with no payload or dispatch change, so this durable ordering survives a future bare wildcard
+route. **Invariant:** a request to `/api/v1/item-economics/tasks/budget-signals`
 dispatches to `get_task_budget_signals` and to no other service — the shape
 `test_budget_division_routes.py` already uses for the sibling. **Registers against M6.**
 
@@ -2115,6 +2120,14 @@ The owner approved correcting the row contract's typed count from eight numeric 
 seven: `task_id`, `budget_state`, and `currency` are strings; the remaining seven fields are
 integers. This corrects wording only — the fixed ten-key shape, field ownership, defaults, and
 all product semantics remain unchanged — so the intention remains `RATIFIED`.
+
+**Round 13 — RATIFIED, owner-approved HC-2a route-ordering clarification (2026-08-25).**
+The owner accepted review round 1's recommendation to keep the deliberate relocation of the
+pre-existing fixed `budget-allocations` route. HC-2a now records artifact 4 truthfully: it adds
+the new route and moves that fixed sibling immediately before it, making the fixed batch pair
+precede every parameterized `/tasks/...` route. §7A.4 now names the same stronger invariant.
+The route table, payloads, roles, and current dispatch destinations are unchanged; this is a
+record-precision amendment, not a product-semantic change, so the intention remains `RATIFIED`.
 
 ---
 

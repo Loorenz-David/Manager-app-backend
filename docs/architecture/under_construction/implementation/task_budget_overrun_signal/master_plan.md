@@ -4,7 +4,7 @@
 project: task_budget_overrun_signal
 role: master plan (coordination hub — indexes plans/, prompts/<role>/, handoffs/<role>/, archive/)
 authored: 2026-08-24, implementation-planner round 1 (Claude Fable 5)
-intention: planning/intention.md — status RATIFIED (round 12, 2026-08-25), mechanism-inventory complete
+intention: planning/intention.md — status RATIFIED (round 13, 2026-08-25), mechanism-inventory complete
 tree at authoring: f376928 (app/ byte-identical to the narrow_typical_work_times gate 49a6e50 — `git diff --stat 49a6e50 HEAD -- app/` is empty)
 ```
 
@@ -102,7 +102,7 @@ APPROVED. Every implementation and fix cycle is committed at `IMPLEMENTED` as
 |---|---|---|---|---|---|
 | 1 | Pure rule — `budget_signal.py` (§§3A, 4A, 5A.3, 6A.2/6A.3) | `APPROVED` | 2026-08-24 | coordinator | Review r1 findings dispositioned: neither expands plan-1 acceptance; production rule, 35 row mutations, and baseline evidence accepted; no fix cycle |
 | 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `APPROVED` | 2026-08-25 | Claude Opus 5 (re-review r1) | B1 and N2 closed; perimeter is the one allowed test file; all four declared hashes and the normal-side app-diff digest reproduce, so the fresh 19/19 ledger is tree-bound; C8(e)'s `(60, 4, 810, 51, over)` re-derived from source and confirmed the sole witness for the field-mapping class by an independent serializer-site probe (1 failed / 28 passed); L4 budget 0, spent 0; N5/N6 carried to the coordinator |
-| 3 | Route + HC-2a artifacts + `to_frontend` handoff (§§7A.3–7A.6, §8 item 5) | `IMPLEMENTED` | 2026-08-25 | Codex | Route and four HC-2a artifacts shipped; dated frontend handoff published; 128 targeted tests, 653-test L2 radius, docs guard 70 passed; final L4 stamp recorded in implementer handoff |
+| 3 | Route + HC-2a artifacts + `to_frontend` handoff (§§7A.3–7A.6, §8 item 5) | `APPROVED` | 2026-08-25 | Claude Opus 5 (re-review r1) | SF1 closed: C4(d) asserts one exact cell per field, proven by a **string**-row `Required` mutation the fix ledger never ran (1 failed / 5 passed). Perimeter `032b0d3..709fe7c` is exactly the allowed test file + fix handoff; `git diff -- app/` empty at `709fe7c`. Field enumeration derived from the test AST, the README and `serialize_budget_signal` — ∅/∅ all three ways. L4 budget 1, spent 1: 21 failed / 2800 passed / 1 skipped, baseline delta ∅/∅, six C5(a) siblings green. N7/N8 carried as plan lessons; zero owner cards |
 
 ## 5. Contract resolution
 

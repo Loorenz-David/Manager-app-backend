@@ -202,3 +202,98 @@ the retired inline-price identity. Do not add the path to `docs/domains/item_eco
   L2 radius is 653 passed; docs guard is 70 passed; the one final L4 stamp and its 21-ID delta
   are recorded in the implementer handoff. Graph closeout added one endpoint and two links in
   one batch; no existing graph item was promoted, rejected, edited, or removed.
+
+- **First review dispatched (2026-08-25, coordinator).** Review the full Phase 3 criteria and
+  semantic authorities. Reconcile the implementation evidence against checkpoint `c83c815` and
+  evidence-record commit `032b0d3`; specifically determine whether the endpoint graph delta,
+  currently mixed with unrelated unstaged `.archgraph/architecture.yml` work, has acceptable
+  phase provenance and is ready for an approval-gate commit.
+
+- **Review round 1 (2026-08-25, Claude Opus 5 — CHANGES_REQUESTED).** Tree `032b0d3`, `app/` clean
+  and byte-identical to checkpoint `c83c815`; dirty-tree digest `974275ab…`. Perimeter
+  `18f774f..c83c815` is exactly the seven §4 paths plus tracker, this Review log and the implementer
+  handoff — C5(b) holds. One closing L4 (`-m 'not e2e'`) → **21 failed / 2800 passed / 1 skipped**,
+  IDs compared member-by-member against the published durable set: **∅/∅**; all six C5(a) sibling
+  files green.
+  **SF1 (should-fix, the only fix required).** C4(d) requires each of the ten
+  `data.budget_signals[].<field>` README rows to be `Required: Yes` with the seven numerics typed
+  `integer`; `test_budget_signals_readme_detail_documents_the_ten_field_contract` asserts neither —
+  it pins only the two string rows as literals and uses `count("| Yes |") >= 10`, which the section
+  satisfies 17 times. Mutation `over_seconds: integer|Yes → string|No` in `routers/README.md` left
+  **5 passed**. Correction: assert the exact cell trio per field; fix round runs two mutations (one
+  type, one `Required`, on different rows — rule 12).
+  **N1.** The pre-existing `budget-allocations` decorator was relocated above the parameterized
+  evaluation routes to satisfy C1(b). Required by the plan, declared by the implementer,
+  behaviourally inert (no `/tasks/{…}` route can match a two-segment fixed path). Not a finding —
+  but intention HC-2a ("by addition only, each reverted by one edit") and §7A.4 ("ahead of every
+  parameterized `/tasks/...` **GET**") no longer describe the tree. **Owner card 1.**
+  **N2.** C4(a) names the operation-id column; its home test matches method and path only. Verified
+  correct independently: 27/27 README operation ids match the generated OpenAPI.
+  **N3.** C2(c) compares the *union* of `_ROUTES` and `_ALL_ROLE_ROUTES`, so it cannot see a
+  double-listed row; the exclusion is enforced by the all-roles test (MUT-03's four reds).
+  **N4.** MUT-01 tripped C1(b)'s first assertion, so its precedence sub-check was unmutated. Closed
+  here by variation — fixed pair moved back below the evaluation routes with adjacency preserved:
+  red at `assert 19 < 16`.
+  **N5.** C6(e) guards the frontend handoff's ten-field table by its header row only; deleting three
+  of the ten rows left **3 passed**. Plan defect, not an implementation one — routed as a candidate
+  criterion, with C6(a)/C6(b) heading-locality as the same shape.
+  **N6.** The implementer handoff's prose names 22 IDs for the 21-ID baseline (one test counted
+  twice); the measured set is correct.
+  All four probes reverted and checksum-verified; no graph tool called and no graph state touched.
+  Full detail: `handoffs/reviewer/20260825_plan_3_review_round_1.md`.
+
+- **Coordinator disposition after review r1 (2026-08-25).** The owner approved card 1's
+  recommendation: keep the fixed `budget-allocations` relocation and record the stronger route
+  ordering. Intention round 13 amends HC-2a and §7A.4 as a RATIFIED record-precision correction;
+  it changes neither payload nor current dispatch. **SF1 proceeds to a one-file fix round:**
+  C4(d)'s test must assert every README field's exact type and `Required: Yes` cell, with the
+  reviewer's two distinct mutations. N2 (operation-id guard), N3 (union observation), N4
+  (sequential-assertion mutation coverage), N5 (handoff-table candidate criterion), and N6
+  (historical handoff prose count) are recorded lessons only. They do not expand this closing
+  fix or authorize alteration of the published handoff.
+
+- **Fix round 1 closeout (2026-08-25, Codex).** SF1 is closed in the sole allowed implementation
+  file, `app/tests/unit/routers/api_v1/test_budget_signals_route.py`: C4(d) now asserts the exact
+  `string|Yes` cell for `task_id`, `budget_state`, and `currency`, and the exact `integer|Yes`
+  cell for each of the seven numeric fields. The two required README mutations (numeric type and
+  a different numeric Required marker) both reddened this test and were reverted to checksum
+  `e23b93f8b17cb1d9034383a255254e81ec00f1f48b53a7cec6a1697e90db6620`. L1 is 13 passed; the
+  single closing L4 and its durable 21-ID delta are recorded in the fix handoff. No production,
+  README, frontend handoff, or graph state changed; N2–N6 remain non-blocking lessons.
+
+- **Re-review dispatched (2026-08-25, coordinator).** Delta scope is SF1 and the sole committed
+  test-file change in checkpoint `709fe7c`; review round 1's route, handoff, graph-provenance,
+  and non-blocking-note dispositions are settled. The fix handoff's L4 digest intentionally
+  excludes dirty paths, so it is not a complete charter tree identity; the re-review takes the
+  one authoritative closing L4 stamp on its actual handover tree.
+
+- **Re-review round 1 (2026-08-25, Claude Opus 5 — APPROVED).** Perimeter `032b0d3..709fe7c` is
+  exactly two paths — the sole allowed test file and the fix handoff; no production, README,
+  frontend-handoff or `.archgraph/` path. Tree `709fe7c` with `git diff -- app/` **empty**
+  (`e3b0c442…b855`, the empty-string digest), so the tested source is byte-identical to the
+  checkpoint; full tracked-diff digest `51d65ecf…`; dirt confined to project docs plus pre-existing
+  `.archgraph`/anchor-observation work. README sha256 `e23b93f8…6620` at entry and exit.
+  **SF1 CLOSED.** C4(d) now asserts one exact cell per field. Derived, not transcribed: the test's
+  AST gives 3 string + 7 numeric = 10 distinct fields, overlap ∅; the README section gives 10
+  `data.budget_signals[].<field>` rows; set difference both ways **∅/∅**; and those ten names are
+  exactly the keys `serialize_budget_signal` emits (`division_serializers.py:74-88`), so the
+  documented contract is the served contract. The section split is heading-local and `#### `
+  sub-headings do not terminate it. Both declared fix mutations are credible from the assertion
+  structure; their L1 evidence was consumed by citation, not re-run.
+  **Probe by variation (the sub-check the ledger missed):** `currency` `| string | Yes |` →
+  `| string | No |` — a **string** row — reddened the string-loop exact-cell assertion,
+  **1 failed / 5 passed**. Reverted, checksum verified.
+  One closing L4 (`-m 'not e2e'`, budget 1, spent 1, authorization recorded pre-run) →
+  **21 failed / 2800 passed / 1 skipped**; failing-ID set differenced member-by-member against the
+  durable 21-ID baseline: **∅/∅**. The six C5(a) siblings plus this phase's test file collect 97
+  tests, none in the failing set.
+  **N7 (note).** The repair dropped the pre-fix per-field occurrence guard; a contradictory
+  duplicate `currency` row (`integer | No`) leaves **6 passed**. Not chargeable to C4(d), which
+  does not forbid an eleventh row — plan lesson, folded with N5.
+  **N8 (note).** Rule 12: both declared mutations landed on the numeric loop, so the three
+  string-field assertions had no ledger mutation. The r1 correction said "different rows"; rule 12
+  wants one per sub-check. Closed empirically by this review's probe. Prompt-authorship lesson.
+  Zero blocking, zero should-fix, zero owner cards. Both probes reverted and checksum-verified; no
+  graph tool called and no graph state touched; the mixed `.archgraph/architecture.yml` hunks are
+  preserved for the approval closeout.
+  Full detail: `handoffs/reviewer/20260825_plan_3_re_review_round_1.md`.

@@ -7010,6 +7010,33 @@ nodes:
     confidence: 0.95
     createdAt: 2026-08-25T04:17:27.720Z
     updatedAt: 2026-08-25T04:17:27.720Z
+  - id: endpoint-item-economics-task-budget-signals
+    type: endpoint
+    name: GET /api/v1/item-economics/tasks/budget-signals
+    description: Manager-only batched endpoint that returns one flat budget-signal
+      row for each visible requested task. It accepts repeatable task_ids,
+      delegates the raw-list cap and projection composition to the task
+      budget-signals read model, and preserves the standard success and
+      validation/error envelope boundary. Its fixed path is mounted immediately
+      after the budget-allocations batch route and before parameterized task
+      routes. The endpoint refuses WORKER and SELLER identities with 403 and
+      must keep the ten-field row shape, ascending task ordering, silent
+      omission, and no server timestamp contract.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_signals
+          startLine: 335
+          endLine: 347
+          summary: The route requires ADMIN and MANAGER, accepts repeatable task_ids,
+            delegates through _run to get_task_budget_signals, and is declared
+            directly after the fixed budget-allocations route.
+          inferenceReason: This named handler is the external HTTP boundary for the
+            manager-only task budget-signals projection.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-08-25T06:35:03.125Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -12919,3 +12946,35 @@ edges:
     confidence: 0.95
     createdAt: 2026-08-25T04:17:27.720Z
     updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: endpoint-item-economics-task-budget-signals
+    relationshipType: accepts
+    targetNodeId: projection-item-economics-task-budget-signals
+    description: The endpoint serves the task budget-signals read projection as its
+      response data.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_signals
+          summary: The handler passes get_task_budget_signals to the shared _run service
+            boundary.
+          inferenceReason: The route's delegated service is the projection it accepts.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-08-25T06:35:03.125Z
+  - sourceNodeId: endpoint-item-economics-task-budget-signals
+    relationshipType: governed_by
+    targetNodeId: decision-money-audience-admin-manager-only
+    description: The endpoint applies the settled item-economics money audience boundary.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/item_economics.py
+          symbol: route_get_task_budget_signals
+          summary: The route's dependency is require_roles([ADMIN, MANAGER]); WORKER and
+            SELLER are not admitted.
+          inferenceReason: The handler is an HTTP enforcement point for the existing
+            money-audience decision.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-08-25T06:35:03.125Z
