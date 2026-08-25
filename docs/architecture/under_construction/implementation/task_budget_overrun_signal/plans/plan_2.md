@@ -3,7 +3,6 @@
 ```
 plan: plan_2
 project: task_budget_overrun_signal
-state: NOT_STARTED
 projection_gate: MANDATORY (rule-6 mechanisms: the allocator call's typicals, ordering, the no_budget construction, money on the production path)
 ```
 
@@ -116,7 +115,7 @@ Rows are read from `result["budget_signals"]`.
 
 | Row | Fixture | Assertion | Expected |
 |---|---|---|---|
-| C3(a) | unevaluated task whose one `working` step carries `total_working_seconds = 1200` | the whole row | `task_id`, `budget_state "no_budget"`, `currency "no_currency"`, and **all eight numerics `== 0`** — `actual_worked_seconds` included |
+| C3(a) | unevaluated task whose one `working` step carries `total_working_seconds = 1200` | the whole row | `task_id`, `budget_state "no_budget"`, `currency "no_currency"`, and **all seven numerics `== 0`** — `actual_worked_seconds` included |
 | C3(b) | the same task; its item carries an `ItemValuation` with `currency = SWEDISH_KRONA` | `currency` | `"no_currency"` — the valuation is never consulted |
 | C3(c) | evaluated task with `evaluation.currency = EURO` | `currency` | `"euro"` and `type(...) is str` |
 
@@ -125,7 +124,7 @@ Rows are read from `result["budget_signals"]`.
 | Row | Fixture | Assertion | Expected |
 |---|---|---|---|
 | C4(a) | one evaluated task + one unevaluated task | `set(row.keys())` on **both** rows | exactly `{task_id, budget_state, over_seconds, over_cost_minor, projected_over_seconds, projected_over_cost_minor, currency, allowed_seconds, actual_worked_seconds, cost_per_worker_minute_ten_thousandths}` (derived: 10) |
-| C4(b) | both rows | per key: the eight numerics `type(v) is int and v >= 0`; `task_id`, `budget_state`, `currency` `type(v) is str`; `budget_state in BUDGET_STATES`; `currency in CURRENCY_VOCABULARY` | True |
+| C4(b) | both rows | first `len(rows) == 2`; then per key: the seven numerics `type(v) is int and v >= 0`; `task_id`, `budget_state`, `currency` `type(v) is str`; `budget_state in BUDGET_STATES`; `currency in CURRENCY_VOCABULARY` | True |
 | C4(c) | the whole `result` dict | `set(result.keys())`; then a recursive walk finds **no `list` or `dict` inside any row** (the only list is `budget_signals` itself) | exactly `{budget_signals}`; True |
 
 ### C5 — cardinality, duplicates, visibility, cap · trace **§7A.1, §7.3 (D7) → M4**
@@ -162,8 +161,9 @@ Rows are read from `result["budget_signals"]`.
 | C8(b) | settled **3602** | `over_seconds` | `2` (the minute-domain derivation gives `1`) |
 | C8(c) | the evaluation's `cost_per_worker_minute_minor_snapshot = Decimal("3.7500")` while its `ProductionCostBasisVersion.cost_per_worker_minute_minor = Decimal("9.9999")`; explicitly `await db_session.refresh(evaluation)` before reading the rate | `cost_per_worker_minute_ten_thousandths`; and `== int(evaluation.cost_per_worker_minute_minor_snapshot.scaleb(4))` on the **ORM-read** value, `== evaluation.cost_per_worker_minute_minor_snapshot * 10_000` exactly | `37500` — the snapshot, never the live basis |
 | C8(d) | settled **3608** | `over_seconds, over_cost_minor, budget_state` | `8, 0, over` |
+| C8(e) | evaluated task, `allowed = Decimal("-12.50")`, rate `Decimal("3.7500")`, two steps: `a` working in section A with `total_working_seconds = 60`, `b` pending in section B with `0`; no open record | `over_seconds, over_cost_minor, projected_over_seconds, projected_over_cost_minor, budget_state` | `60, 4, 810, 51, over` — re-derived through `calculate_consumed_cost_minor`; Task 0 re-derives it |
 
-### 6.1 Named mutations — the closed set (18)
+### 6.1 Named mutations — the closed set (19)
 
 | # | Mutation (site) | Must redden |
 |---|---|---|
@@ -185,6 +185,7 @@ Rows are read from `result["budget_signals"]`.
 | MUT-16 | `app/beyo_manager/domain/item_economics/budget_signal.py`, definition site `compute_budget_signal`: derive `over_seconds` as `max(0, int(-calculate_remaining_worker_minutes(Decimal(allowed), calculate_actual_worker_minutes(actual)) * 60))` | C8(b) |
 | MUT-17 | `get_task_budget_signals.py`, call site: use the matching entry from the loaded `basis_versions` list's `cost_per_worker_minute_minor` instead of `evaluation.cost_per_worker_minute_minor_snapshot` | C8(c) |
 | MUT-18 | `get_task_budget_signals.py`, definition site: move the raw-list cap check until after the visibility query | C5(d) (statement count becomes non-zero) |
+| MUT-19 | `get_task_budget_signals.py`, call site: transpose `over_cost_minor` and `projected_over_cost_minor` in the per-task row dict | C8(e) |
 
 Plus two **exception-shape probes** recorded as ledger rows (not criteria): in
 `app/beyo_manager/domain/item_economics/budget_signal.py`, definition site
@@ -247,6 +248,11 @@ the deliberately arbitrary rate; C3(a)'s red is `actual_worked_seconds`, not mon
   baseline: **21 failed / 2786 passed / 1 skipped**, with an empty failing-ID delta. Its executable
   tree retains the Plan-2 service, serializer, integration-test, and C19 hashes from implementation
   round 2, so the evidence unblocks the Plan-2 checkpoint without a redundant full-suite run.
+- **Review r1 findings folded (2026-08-25).** Owner-approved intention/master-plan field-count
+  clarification now names seven numeric fields and updates the intention header to round 12.
+  Before the bounded B1 fix, C4(b) gains its two-row non-vacuity assertion, C4(c)'s test must
+  assert a non-empty `budget_signals` list, and C8(e)/MUT-19 add the unequal, non-zero money-pair
+  witness: `60, 4, 810, 51, over`. The phase remains `CHANGES_REQUESTED` pending that fix.
 - **Implementation round 2 blocked at close (2026-08-25, Codex).** The bounded continuation changed
   only C19's closed consumer set and restored the serializer's pre-round-1 formatting outside
   the two additive budget-signal functions and two `__all__` entries. The service and Plan-2
@@ -272,3 +278,50 @@ the deliberately arbitrary rate; C3(a)'s red is `actual_worked_seconds`, not mon
   task-budget-signals graph projection and its six relationships. The unrelated bootstrap
   graph node/edges and the waived re-projection queue prompt remain unstaged. Checkpoint subject:
   `CHECKPOINT (not approved): task budget signal phase 2`.
+- **Review round 1 — `CHANGES_REQUESTED` (2026-08-25, Claude Opus 5).** Full first-review
+  checklist on `8a63402`. Gates passed; all seven declared SHA-256 hashes reproduce; trace chain
+  bijective 28↔28 with no orphan test; all six §9 rule 7 traps escaped by named fixtures. The
+  loading half is proven **structurally**: an AST-normalized comparison against
+  `get_task_budget_allocations` yields exactly four deltas (function name, error identity,
+  the added `.order_by(Task.client_id.asc())`, the tail), which discharges §3A.1's
+  element-for-element invariant and HC-2's copy rule by construction and makes the never-exercised
+  item-narrowing branch a non-issue. Reviewer L4 (1 of 1, authorized pre-run): **21 failed / 2786
+  passed / 1 skipped**, durable-baseline additions `∅`, removals `∅`.
+  **B1 (should-fix)** — no criterion can observe a transposition of `over_cost_minor` and
+  `projected_over_cost_minor` in the row dict (`get_task_budget_signals.py:406-421`): measured
+  **28 passed** under probe PR-A, while the control probe PR-B (`allowed_seconds` ⇄
+  `actual_worked_seconds`) reddened C7(b). Cause: C8(a) `9/9`, C8(d) `0/0` and C3(a) `0/0` make
+  the pair numerically equal, and C2(b) — the one fixture where they differ (`0`/`47`) — asserts
+  neither. Violates intention §4.3, §5.1, §5A.1 → **M2**, and charter rule 2's companion.
+  Correction: add **C8(e)** — trace §4.3, §5.1, §4A.1 → M2; fixture `allowed = Decimal("-12.50")`,
+  rate `3.7500`, steps `a` (`working`, section A, 60 s) and `b` (`pending`, section B, 0), no open
+  record; assert `over_seconds, over_cost_minor, projected_over_seconds,
+  projected_over_cost_minor, budget_state` = `60, 4, 810, 51, over` (re-derived through the
+  shipped `calculate_consumed_cost_minor`; re-derive again in Task 0 per §9 rule 3) — and
+  **MUT-19**, `get_task_budget_signals.py` call site, transpose the two cost keys; C8(e) must
+  redden. Closed set becomes 19. Extending C2(b) alone is insufficient: a zero operand cannot
+  separate a mapping from a constant. C8(e) also lands §6A.2's "60 s logged, work still ahead"
+  row on the service path.
+  **N1 (note)** — "the eight numerics" is wrong; the row has seven (`task_id` is a string).
+  Sites: intention §5A.2 and §6A.2 row 1, master plan §6.6, and this plan's C3(a) and C4(b) cells
+  (C4(b) lists three strings *and* eight numerics — eleven fields in a ten-field row). Code and
+  tests use seven and are correct. Owner card 1 gates the intention amendment.
+  **N2 (note)** — C4(b) and C4(c)'s flatness half pass vacuously on an empty `budget_signals`
+  list; add `assert len(rows) == 2` and `assert result["budget_signals"]`. Fold into the B1 fix
+  cycle. C4(c)'s "recursive walk" wording vs the test's single-level scan is equivalent in effect;
+  no action.
+  **N3 / N4 (notes, routed to the coordinator, not to the fix cycle)** — the intention header
+  still reads `round 10` after the round-11 amendment; and every plan file's `state:` header says
+  `NOT_STARTED`, including approved Plan 1.
+  Full findings, verified-correct items V1–V14, mutation-probe declaration, carry-forward table,
+  four lessons and owner card 1: `handoffs/reviewer/20260825_plan_2_review_round_1.md`.
+- **Fix round 1 implemented (2026-08-25, Codex).** Added the owner-authorized C8(e) fixture
+  with the independently re-derived tuple `60, 4, 810, 51, over`, added the C4(b)/C4(c)
+  non-vacuity assertions, and freshly executed the closed 19-mutation set after the test-file
+  edit. Every mutation reddened, including MUT-19's money-key transposition. Final evidence:
+  L1 **29 passed**, L2 **640 passed**, and the one L4 stamp **21 failed / 2787 passed /
+  1 skipped**, with additions `∅` and removals `∅` against the durable 21-ID baseline. Ruff
+  and diff checks passed. No production or architecture-graph meaning changed; the existing
+  pending task-budget-signals projection and its six relationships remain sufficient. Full
+  trace, mutation ledger, perimeter, evidence, and graph assessment:
+  `handoffs/implementer/20260825_plan_2_fix_round_1.md`.

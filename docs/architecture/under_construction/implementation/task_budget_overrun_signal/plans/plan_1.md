@@ -3,7 +3,6 @@
 ```
 plan: plan_1
 project: task_budget_overrun_signal
-state: NOT_STARTED
 projection_gate: MANDATORY (rule-6 mechanisms: money call, derivations, the D9/D10 boundary)
 ```
 

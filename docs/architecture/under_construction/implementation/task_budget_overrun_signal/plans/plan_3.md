@@ -3,7 +3,6 @@
 ```
 plan: plan_3
 project: task_budget_overrun_signal
-state: NOT_STARTED
 projection_gate: WAIVABLE — coordinator's call (route wiring, hand-maintained docs, no derivation); recommended justification: "no rule-6 mechanism; every payload figure was proven in phases 1–2"
 ```
 
@@ -121,7 +120,7 @@ session suffices).
 | C4(a) | mirror test `test_readme_quick_index_mirrors_every_shipped_route` | green | the README row `\| GET \| /api/v1/item-economics/tasks/budget-signals \| item-economics \| route_get_task_budget_signals_api_v1_item_economics_tasks_budget_signals_get \|` present |
 | C4(b) | `test_router_source_matches_the_hand_written_route_and_role_set` | green | the table row carries `_ADMIN_MANAGER` |
 | C4(c) | `test_the_registry_ships_twenty_seven_routes` (renamed) | both assertions `== 27` | True (derived: 26 + 1) |
-| C4(d) | `test_budget_signals_route.py` reads `routers/README.md` | the heading `### GET /api/v1/item-economics/tasks/budget-signals` exists once and is followed (before the next `### `) by the ten `data.budget_signals[].<field>` rows, each `Required: Yes`, with `budget_state` and `currency` typed `string` and the eight numerics `integer` | True |
+| C4(d) | `test_budget_signals_route.py` reads `routers/README.md` | the heading `### GET /api/v1/item-economics/tasks/budget-signals` exists once and is followed (before the next `### `) by the ten `data.budget_signals[].<field>` rows, each `Required: Yes`, with `budget_state` and `currency` typed `string` and the seven numerics `integer` | True |
 
 ### C5 — collateral: nothing else moved · trace **HC-2, HC-2a → M6** (gate evidence, not a test)
 

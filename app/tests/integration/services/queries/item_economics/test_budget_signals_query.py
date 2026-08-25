@@ -629,6 +629,7 @@ async def test_c4_b_row_values_have_closed_types_and_vocabularies(db_session):
                 )
             )
         )["budget_signals"]
+        assert len(rows) == 2
         for row in rows:
             assert all(type(row[key]) is int and row[key] >= 0 for key in NUMERIC_KEYS)
             assert all(
@@ -646,6 +647,7 @@ async def test_c4_c_envelope_is_exact_and_rows_are_flat(db_session):
             _ctx(db_session, data.workspace.client_id, [task.client_id])
         )
         assert set(result) == {"budget_signals"}
+        assert result["budget_signals"]
         assert not any(
             isinstance(value, (list, dict))
             for row in result["budget_signals"]
@@ -985,3 +987,35 @@ async def test_c8_d_nonzero_overrun_can_legitimately_cost_zero(db_session):
             0,
             "over",
         )
+
+
+@pytest.mark.integration
+async def test_c8_e_money_fields_map_to_distinct_nonzero_operands(db_session):
+    async with _case(db_session) as data:
+        task = await data.task("c8e")
+        await data.evaluation(task, allowed=Decimal("-12.50"))
+        await data.step(
+            task,
+            "c8e_a",
+            section=data.section_a,
+            state=TaskStepStateEnum.WORKING,
+            worked=60,
+        )
+        await data.step(
+            task,
+            "c8e_b",
+            section=data.section_b,
+            state=TaskStepStateEnum.PENDING,
+            worked=0,
+            order=2,
+        )
+        row = (
+            await _get(_ctx(db_session, data.workspace.client_id, [task.client_id]))
+        )["budget_signals"][0]
+        assert (
+            row["over_seconds"],
+            row["over_cost_minor"],
+            row["projected_over_seconds"],
+            row["projected_over_cost_minor"],
+            row["budget_state"],
+        ) == (60, 4, 810, 51, "over")

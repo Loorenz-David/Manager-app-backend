@@ -4,7 +4,7 @@
 project: task_budget_overrun_signal
 role: master plan (coordination hub — indexes plans/, prompts/<role>/, handoffs/<role>/, archive/)
 authored: 2026-08-24, implementation-planner round 1 (Claude Fable 5)
-intention: planning/intention.md — status RATIFIED (round 10, 2026-08-24), mechanism-inventory complete
+intention: planning/intention.md — status RATIFIED (round 12, 2026-08-25), mechanism-inventory complete
 tree at authoring: f376928 (app/ byte-identical to the narrow_typical_work_times gate 49a6e50 — `git diff --stat 49a6e50 HEAD -- app/` is empty)
 ```
 
@@ -101,7 +101,7 @@ APPROVED. Every implementation and fix cycle is committed at `IMPLEMENTED` as
 | Phase | Title | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure rule — `budget_signal.py` (§§3A, 4A, 5A.3, 6A.2/6A.3) | `APPROVED` | 2026-08-24 | coordinator | Review r1 findings dispositioned: neither expands plan-1 acceptance; production rule, 35 row mutations, and baseline evidence accepted; no fix cycle |
-| 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `IMPLEMENTED` | 2026-08-25 | Codex | L1 28 passed, L2 639 passed; maintenance L4 matched the durable 21-ID baseline exactly (2786 passed, 1 skipped); checkpoint created for independent review |
+| 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `IMPLEMENTED` | 2026-08-25 | Codex (fix r1) | C8(e), MUT-19, and the C4 non-vacuity assertions are complete; L1 29 passed, L2 640 passed, all 19 named mutations reddened, and the one L4 stamp was 21 failed / 2787 passed / 1 skipped with an empty durable-baseline ID delta |
 | 3 | Route + HC-2a artifacts + `to_frontend` handoff (§§7A.3–7A.6, §8 item 5) | `NOT_STARTED` | 2026-08-24 | planner | 6 criteria; projection waivable (coordinator's call); graph delta = endpoint node |
 
 ## 5. Contract resolution
@@ -282,7 +282,7 @@ Router-test row (in `_ROUTES`): `("GET", "/api/v1/item-economics/tasks/budget-si
 |---|---|---|
 | `budget_state` | string | exactly `no_budget \| over \| projected_over \| within_budget` |
 | `currency` | string | exactly `swedish_krona \| danish_krona \| euro \| no_currency` |
-| the eight numerics | number (JSON integer) | `>= 0`; never `null`, never a string |
+| the seven numerics | number (JSON integer) | `>= 0`; never `null`, never a string |
 
 ### 6.7 Architecture-graph ids (recorded at phase close, §8)
 

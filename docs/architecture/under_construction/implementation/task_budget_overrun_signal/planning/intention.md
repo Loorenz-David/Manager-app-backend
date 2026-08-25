@@ -1,7 +1,7 @@
 # Intention: Task Budget Overrun Signal (one batched verdict read for the managers task list)
 
 ```
-status: **RATIFIED** (round 10, 2026-08-24) — re-ratified by the owner (**David**) on
+status: **RATIFIED** (round 12, 2026-08-25) — re-ratified by the owner (**David**) on
         2026-08-24, on the re-ratification surface at **§10.6**. The owner answered
         **"yes"** after that surface was relayed: D9's forecast-versus-incurred
         distinction, D10's no-work-ahead guard, the production-time convergence caveat,
@@ -960,7 +960,7 @@ When the task is not budget-bearing (§6A.1) the row is **built from constants**
 {task_id, "no_budget", 0, 0, 0, 0, "no_currency", 0, 0, 0}
 ```
 
-— all eight numeric fields `0`, including `actual_worked_seconds`, which the task may well
+— all seven numeric fields `0`, including `actual_worked_seconds`, which the task may well
 have. This resolves an ambiguity §5.2 left open: its table gives `allowed_seconds` and
 `cost_per_worker_minute_ten_thousandths` the qualifier "`0` under `no_budget`" but gives
 `actual_worked_seconds` a bare default. Both readings render identically — nothing on a
@@ -1111,7 +1111,7 @@ their combinations; there are no ties, because the ranking is a first-match casc
 
 | # | budget-bearing? | `over_seconds > 0`? | `projected_over_seconds >= 60` **and** `remaining_commitment > 0`? | `budget_state` | figures served |
 |---|---|---|---|---|---|
-| 1 | **no** | — | — | `no_budget` | all eight numeric fields `0` (§5A.2) |
+| 1 | **no** | — | — | `no_budget` | all seven numeric fields `0` (§5A.2) |
 | 2 | yes | yes | yes | `over` | **both** pairs non-zero |
 | 3 | yes | yes | no, but `projected_over_seconds > 0` | `over` | over pair non-zero; projected pair non-zero **below the floor** |
 | 4 | yes | yes | no, `projected_over_seconds == 0` | `over` | over pair only |
@@ -2108,6 +2108,12 @@ table the pre-existing-file perimeter and reserves the four HC-2a artifacts for 
 3. This is a precision correction: phase 2's additive serializer pair remains where
 HC-2 and the local serialization contract already placed it; product semantics and the
 round-10 ratification remain unchanged.
+
+**Round 12 — RATIFIED, owner-approved numeric-field-count clarification (2026-08-25).**
+The owner approved correcting the row contract's typed count from eight numeric fields to
+seven: `task_id`, `budget_state`, and `currency` are strings; the remaining seven fields are
+integers. This corrects wording only — the fixed ten-key shape, field ownership, defaults, and
+all product semantics remain unchanged — so the intention remains `RATIFIED`.
 
 ---
 
