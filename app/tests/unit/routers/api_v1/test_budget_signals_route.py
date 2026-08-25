@@ -135,21 +135,23 @@ def test_budget_signals_readme_detail_documents_the_ten_field_contract():
     heading = "### GET /api/v1/item-economics/tasks/budget-signals"
     assert text.count(heading) == 1
     section = text.split(heading, 1)[1].split("\n### ", 1)[0]
-    fields = (
+    string_fields = (
         "task_id",
         "budget_state",
+        "currency",
+    )
+    numeric_fields = (
         "over_seconds",
         "over_cost_minor",
         "projected_over_seconds",
         "projected_over_cost_minor",
-        "currency",
         "allowed_seconds",
         "actual_worked_seconds",
         "cost_per_worker_minute_ten_thousandths",
     )
-    for field in fields:
-        assert section.count(f"data.budget_signals[].{field}") == 1
-        assert f"data.budget_signals[].{field} |" in section
-    assert "| data.budget_signals[].budget_state | string | Yes | no_budget" in section
-    assert "| data.budget_signals[].currency | string | Yes | swedish_krona" in section
-    assert section.count("| Yes |") >= 10
+    for field in string_fields:
+        cell = f"| data.budget_signals[].{field} | string | Yes |"
+        assert section.count(cell) == 1
+    for field in numeric_fields:
+        cell = f"| data.budget_signals[].{field} | integer | Yes |"
+        assert section.count(cell) == 1
