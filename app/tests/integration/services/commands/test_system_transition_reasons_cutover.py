@@ -18,7 +18,12 @@ from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, Ta
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.domain.transitions.enums import TransitionReasonEnum
 from beyo_manager.domain.users.enums import UserShiftStateEnum
+from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.pause_reasons.pause_reason_user_link import PauseReasonUserLink
+from beyo_manager.models.tables.pause_reasons.pause_reason_working_section_link import (
+    PauseReasonWorkingSectionLink,
+)
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -449,6 +454,106 @@ async def test_worker_chosen_pause_keeps_its_catalog_reference_and_stays_untyped
     )
     assert paused.pause_reason_id == reason.client_id
     assert paused.transition_reason is None
+
+
+async def test_single_step_pause_eligibility_uses_credited_worker_and_actual_section(
+    db_session,
+    monkeypatch,
+) -> None:
+    _patch_single_step_side_effects(monkeypatch)
+    workspace, worker = await _seed_zero_catalog_workspace(db_session)
+    manager = User(
+        username=f"manager_{uuid4().hex}",
+        email=f"manager_{uuid4().hex}@example.com",
+        password="test-password-hash",
+    )
+    db_session.add(manager)
+    await db_session.flush()
+
+    now = datetime(2026, 7, 20, 11, 30, tzinfo=timezone.utc)
+    allowed_step, allowed_task, _ = await _seed_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=now,
+    )
+    denied_step, denied_task, _ = await _seed_step(
+        db_session,
+        workspace,
+        worker,
+        state=TaskStepStateEnum.WORKING,
+        entered_at=now,
+    )
+    allowed_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name="Credited worker reason",
+        pause_type=PauseTypeEnum.PERSONAL,
+        created_by_id=manager.client_id,
+    )
+    denied_reason = PauseReason(
+        workspace_id=workspace.client_id,
+        name="Actor-only reason",
+        pause_type=PauseTypeEnum.PERSONAL,
+        created_by_id=manager.client_id,
+    )
+    db_session.add_all([allowed_reason, denied_reason])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=allowed_reason.client_id,
+                user_id=worker.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=allowed_reason.client_id,
+                working_section_id=allowed_step.working_section_id,
+            ),
+            PauseReasonUserLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=denied_reason.client_id,
+                user_id=manager.client_id,
+            ),
+            PauseReasonWorkingSectionLink(
+                workspace_id=workspace.client_id,
+                pause_reason_id=denied_reason.client_id,
+                working_section_id=denied_step.working_section_id,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    await transition_step_state(
+        _ctx(
+            db_session,
+            workspace,
+            manager,
+            {
+                "task_id": allowed_task.client_id,
+                "step_id": allowed_step.client_id,
+                "new_state": TaskStepStateEnum.PAUSED.value,
+                "pause_reason_id": allowed_reason.client_id,
+                "credited_user_id": worker.client_id,
+            },
+        )
+    )
+    with pytest.raises(ValidationError, match="not available"):
+        await transition_step_state(
+            _ctx(
+                db_session,
+                workspace,
+                manager,
+                {
+                    "task_id": denied_task.client_id,
+                    "step_id": denied_step.client_id,
+                    "new_state": TaskStepStateEnum.PAUSED.value,
+                    "pause_reason_id": denied_reason.client_id,
+                    "credited_user_id": worker.client_id,
+                },
+            )
+        )
 
 
 # ------------------------------------------------------- criteria 6-10: the rebuild

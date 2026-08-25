@@ -24,7 +24,9 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.services.commands.customers.find_or_create_customer import find_or_create_customer
 from beyo_manager.services.commands.items._create_item_in_session import create_item_in_session
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
-from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
+from beyo_manager.services.commands.items.create_item_upholstery import (
+    ensure_item_upholstery_in_session,
+)
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
     enqueue_item_zone_location_push,
@@ -131,8 +133,21 @@ async def create_task(ctx: ServiceContext) -> dict:
             created_by_id=ctx.user_id,
         )
 
+        customer: Customer | None = None
         if request.customer_id:
-            task.customer_id = request.customer_id
+            customer_row = await ctx.session.execute(
+                select(Customer).where(
+                    Customer.workspace_id == ctx.workspace_id,
+                    Customer.client_id == request.customer_id,
+                    Customer.is_deleted.is_(False),
+                )
+            )
+            customer = customer_row.scalar_one_or_none()
+            if customer is None:
+                raise NotFound("Customer not found.")
+
+            task.customer_id = customer.client_id
+            task.customer_name_snapshot = customer.display_name
             task.primary_phone_number = request.primary_phone_number
             task.secondary_phone_number = request.secondary_phone_number
             task.primary_email = request.primary_email
@@ -173,6 +188,7 @@ async def create_task(ctx: ServiceContext) -> dict:
                 if customer is None:
                     raise NotFound("Customer not found.")
 
+                task.customer_name_snapshot = customer.display_name
                 task.primary_phone_number = request.primary_phone_number or customer.primary_phone_number
                 task.secondary_phone_number = request.secondary_phone_number
                 task.primary_email = request.primary_email or customer.primary_email
@@ -413,18 +429,10 @@ async def create_task(ctx: ServiceContext) -> dict:
                     "upholstery_id is required when source is INTERNAL unless positive amount_meters is provided."
                 )
 
-            await _create_item_upholstery_in_session(
-                session=ctx.session,
-                workspace_id=ctx.workspace_id,
+            await ensure_item_upholstery_in_session(
+                ctx,
                 item_id=item_id,
-                upholstery_id=request.item_upholstery.upholstery_id,
-                name=request.item_upholstery.name,
-                code=request.item_upholstery.code,
-                amount_meters=request.item_upholstery.amount_meters,
-                source=request.item_upholstery.source,
-                time_to_fix_in_seconds=request.item_upholstery.time_to_fix_in_seconds,
-                user_id=ctx.user_id,
-                client_id=request.item_upholstery.client_id,
+                data=request.item_upholstery.model_dump(exclude_unset=True),
             )
 
         created_steps: list[TaskStep] = []

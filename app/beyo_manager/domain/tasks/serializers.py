@@ -45,6 +45,7 @@ def serialize_task(
         "scheduled_start_at": task.scheduled_start_at.isoformat() if task.scheduled_start_at else None,
         "scheduled_end_at": task.scheduled_end_at.isoformat() if task.scheduled_end_at else None,
         "customer_id": task.customer_id,
+        "customer_name_snapshot": task.customer_name_snapshot,
         "primary_phone_number": task.primary_phone_number,
         "secondary_phone_number": task.secondary_phone_number,
         "primary_email": task.primary_email,

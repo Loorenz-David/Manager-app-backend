@@ -14,7 +14,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
 from beyo_manager.services.commands.history.message_builder import build_create_message
 from beyo_manager.services.commands.items._create_item_in_session import create_item_in_session
 from beyo_manager.services.commands.items.batch_create_item_issues import _create_item_issues_in_session
-from beyo_manager.services.commands.items.create_item_upholstery import _create_item_upholstery_in_session
+from beyo_manager.services.commands.items.create_item_upholstery import (
+    ensure_item_upholstery_in_session,
+)
 from beyo_manager.services.commands.items.requests import parse_create_item_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -102,17 +104,18 @@ async def create_item(ctx: ServiceContext) -> dict:
                 if upholstery_code is None:
                     upholstery_code = upholstery.code
 
-            await _create_item_upholstery_in_session(
-                session=ctx.session,
-                workspace_id=ctx.workspace_id,
+            await ensure_item_upholstery_in_session(
+                ctx,
                 item_id=item.client_id,
-                upholstery_id=iup_input.upholstery_id,
-                name=upholstery_name,
-                code=upholstery_code,
-                amount_meters=iup_input.amount_meters,
-                source=iup_input.source,
-                time_to_fix_in_seconds=iup_input.time_to_fix_in_seconds,
-                user_id=ctx.user_id,
+                data={
+                    "client_id": iup_input.client_id,
+                    "upholstery_id": iup_input.upholstery_id,
+                    "name": upholstery_name,
+                    "code": upholstery_code,
+                    "amount_meters": iup_input.amount_meters,
+                    "source": iup_input.source,
+                    "time_to_fix_in_seconds": iup_input.time_to_fix_in_seconds,
+                },
             )
 
         username = ctx.identity.get("username")

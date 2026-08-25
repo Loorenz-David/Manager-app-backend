@@ -19,6 +19,8 @@ from beyo_manager.models.tables.notifications import push_subscription  # noqa: 
 
 # --- Pause reasons (depends on workspaces, users) ---
 from beyo_manager.models.tables.pause_reasons import pause_reason  # noqa: F401
+from beyo_manager.models.tables.pause_reasons import pause_reason_user_link  # noqa: F401
+from beyo_manager.models.tables.pause_reasons import pause_reason_working_section_link  # noqa: F401
 
 from beyo_manager.models.tables.files import pending_upload  # noqa: F401
 from beyo_manager.models.tables.content import content_mention  # noqa: F401

@@ -52,6 +52,7 @@ from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
 from beyo_manager.services.infra.events.domain_event import BatchWorkspaceEvent, WorkspaceEvent
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
+from beyo_manager.services.pause_reasons.eligibility import assert_pause_reason_eligible
 
 
 _ALLOWED_TRANSITIONS: dict[TaskStepStateEnum, set[TaskStepStateEnum]] = {
@@ -174,6 +175,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         old_task_state = task.state
 
         pause_reason = None
+        credited_user_id = _resolve_transition_credit_user_id(ctx, request)
         if request.pause_reason_id is not None:
             pause_reason = await ctx.session.scalar(
                 select(PauseReason).where(
@@ -186,9 +188,15 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                 raise NotFound("Pause reason not found.")
             if pause_reason.requires_description and not (request.description or "").strip():
                 raise ValidationError("A description is required for the selected pause reason.")
+            await assert_pause_reason_eligible(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                pause_reason_id=pause_reason.client_id,
+                target_user_ids=[credited_user_id],
+                target_working_section_ids=[step.working_section_id],
+            )
 
         # Resolve credit user early — needed for both auto-pause enforcement and outbox event.
-        credited_user_id = _resolve_transition_credit_user_id(ctx, request)
         # Deduplicated: covers records created by the performer AND by the credited worker,
         # so the auto-pause fires correctly when a manager acts on behalf of a worker.
         effective_user_ids = list({ctx.user_id, credited_user_id})

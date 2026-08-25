@@ -55,7 +55,7 @@ Terminal states: `FAILED`, `CANCELLED`. Transitions enforced by domain guards.
 - `INTERNAL`: internal operational task (no customer context required).
 
 ### Contact snapshot fields
-`primary_phone_number`, `secondary_phone_number`, `primary_email`, `secondary_email`, `address` on `tasks` are **task-time snapshots** taken at task creation. Customer profile edits must never retroactively overwrite these values.
+`customer_name_snapshot`, `primary_phone_number`, `secondary_phone_number`, `primary_email`, `secondary_email`, `address` on `tasks` are **task-time snapshots** taken at task creation. Customer profile edits must never retroactively overwrite these values.
 
 ### `task_scalar_id`
 A human-readable sequential identifier within a workspace. UNIQUE(workspace_id, task_scalar_id). The command layer is responsible for generating a unique scalar ID within the workspace scope.

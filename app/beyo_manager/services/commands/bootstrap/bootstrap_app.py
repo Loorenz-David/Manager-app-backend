@@ -8,7 +8,10 @@ from beyo_manager.services.commands.bootstrap.phases.seed_issue_types import see
 from beyo_manager.services.commands.bootstrap.phases.seed_item_economics_configuration import (
     seed_item_economics_configuration,
 )
-from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import seed_pause_reasons
+from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import (
+    seed_pause_reason_links,
+    seed_pause_reasons,
+)
 from beyo_manager.services.commands.bootstrap.phases.seed_sku_templates import seed_sku_templates
 from beyo_manager.services.commands.bootstrap.phases.seed_email_connection import seed_email_connection
 from beyo_manager.services.commands.bootstrap.phases.seed_upholsteries import delete_seeded_upholsteries
@@ -58,6 +61,12 @@ async def bootstrap_app(ctx: ServiceContext) -> dict:
             workspace_result,
             section_ids,
             user_result["admin_user_id"],
+        )
+        await seed_pause_reason_links(
+            ctx.session,
+            workspace_id=workspace_result["workspace_id"],
+            pause_reason_ids=pause_reason_ids,
+            worker_user_ids=worker_result,
         )
         fayoz_user_id = worker_result.get("Fayoz")
         if fayoz_user_id is None:

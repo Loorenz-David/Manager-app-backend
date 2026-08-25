@@ -1,8 +1,15 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.pause_reasons.enums import PauseTypeEnum
+from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.pause_reasons.pause_reason import PauseReason
+from beyo_manager.models.tables.pause_reasons.pause_reason_user_link import (
+    PauseReasonUserLink,
+)
+from beyo_manager.models.tables.pause_reasons.pause_reason_working_section_link import (
+    PauseReasonWorkingSectionLink,
+)
 
 
 # slug, name, pause type, requires-description, image-url
@@ -69,7 +76,25 @@ _PAUSE_REASONS = (
     ("pause_meeting", "Meeting", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/meeting.webp"),
     ("pause_ended_shift", "Ended shift", PauseTypeEnum.BLOCKER, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/ended-shift.webp"),
     ("pause_other", "Other", PauseTypeEnum.PERSONAL, True, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/other.webp"),
+    ("pause_price_tags", "Price tags", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/price-tags.webp"),
+    ("pause_descriptions", "Descriptions", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/descriptions.webp"),
+    ("pause_photo_editing", "Photo editing", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/photo-editing.webp"),
+    ("pause_moving_furniture", "Moving furniture", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/moving-furniture.webp"),
+    ("pause_searching_upholstery", "Searching upholstery", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/searching-upholstery.webp"),
+    ("pause_workspace_cleaning", "Workspace cleaning", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/workspace-cleaning.webp"),
 )
+
+# These associations are bootstrap-managed along with the rows above. An empty tuple means the
+# seeded reason is unrestricted by worker, so ``pause_workspace_cleaning`` is available to everyone.
+# ``pause_moving_furniture`` intentionally has two workers and remains one shared reason.
+_PAUSE_REASON_WORKER_LINKS: dict[str, tuple[str, ...]] = {
+    "pause_price_tags": ("Vitalii",),
+    "pause_descriptions": ("Vitalii",),
+    "pause_photo_editing": ("Vitalii",),
+    "pause_moving_furniture": ("Vitalii", "Nazar"),
+    "pause_searching_upholstery": ("Roman",),
+    "pause_workspace_cleaning": (),
+}
 
 
 async def seed_pause_reasons(session: AsyncSession, workspace_id: str) -> dict[str, str]:
@@ -108,3 +133,55 @@ async def seed_pause_reasons(session: AsyncSession, workspace_id: str) -> dict[s
         pause_reason_ids[slug] = pause_reason.client_id
 
     return pause_reason_ids
+
+
+async def seed_pause_reason_links(
+    session: AsyncSession,
+    workspace_id: str,
+    pause_reason_ids: dict[str, str],
+    worker_user_ids: dict[str, str],
+) -> None:
+    managed_pause_reason_ids = [
+        pause_reason_ids[slug] for slug in _PAUSE_REASON_WORKER_LINKS
+    ]
+
+    missing_workers = sorted(
+        {
+            worker_name
+            for worker_names in _PAUSE_REASON_WORKER_LINKS.values()
+            for worker_name in worker_names
+            if worker_name not in worker_user_ids
+        }
+    )
+    if missing_workers:
+        raise ValidationError(
+            "Bootstrap workers are missing for pause-reason links: "
+            + ", ".join(missing_workers)
+        )
+
+    # Reconcile both dimensions so rerunning bootstrap restores the declared worker scope and
+    # keeps the seeded all-workers reason unrestricted. Working-section links are cleared because
+    # none of these new reasons is constrained to a specific section.
+    await session.execute(
+        delete(PauseReasonUserLink).where(
+            PauseReasonUserLink.workspace_id == workspace_id,
+            PauseReasonUserLink.pause_reason_id.in_(managed_pause_reason_ids),
+        )
+    )
+    await session.execute(
+        delete(PauseReasonWorkingSectionLink).where(
+            PauseReasonWorkingSectionLink.workspace_id == workspace_id,
+            PauseReasonWorkingSectionLink.pause_reason_id.in_(managed_pause_reason_ids),
+        )
+    )
+
+    session.add_all(
+        PauseReasonUserLink(
+            workspace_id=workspace_id,
+            pause_reason_id=pause_reason_ids[pause_reason_slug],
+            user_id=worker_user_ids[worker_name],
+        )
+        for pause_reason_slug, worker_names in _PAUSE_REASON_WORKER_LINKS.items()
+        for worker_name in worker_names
+    )
+    await session.flush()

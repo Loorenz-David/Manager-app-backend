@@ -66,6 +66,8 @@ Do not hard-delete issue rows. `is_deleted` / `deleted_at` lifecycle only.
 Represents the **upholstery planning context** for an item. One active upholstery planning context should exist per item at a time (future multi-upholstery support is not implemented in this phase).
 
 - `source`: `INTERNAL` (workspace owns the material) or `CUSTOMER` (customer supplies the material). This is **provenance**, not stock reservation state.
+- At most one non-deleted upholstery planning context may exist per item. Creation workflows reuse that context while its active requirement is non-terminal; after `COMPLETED` or `FAILED`, the old context is soft-deleted and a new context is created.
+- The partial unique index `uix_item_upholsteries_current_workspace_item` enforces this invariant at the database boundary. Existing duplicate rows must be resolved before that migration can be applied.
 - `upholstery_id` is nullable — preserves historical survivability when upstream catalog rows are retired.
 - `name` and `code` may preserve sourcing snapshot values independent from catalog evolution (replay-safe rendering).
 
