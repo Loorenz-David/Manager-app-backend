@@ -325,3 +325,43 @@ the deliberately arbitrary rate; C3(a)'s red is `actual_worked_seconds`, not mon
   pending task-budget-signals projection and its six relationships remain sufficient. Full
   trace, mutation ledger, perimeter, evidence, and graph assessment:
   `handoffs/implementer/20260825_plan_2_fix_round_1.md`.
+- **Re-review round 1 — `APPROVED` (2026-08-25, Claude Opus 5).** Delta-scoped on `8dc3a06`.
+  Gates passed. Verified perimeter: of ten changed paths exactly one is executable — the allowed
+  integration test (+34, −0); the other nine are the declared coordinator fold (intention round
+  12 and the N1 "seven numerics" cells, the N4 `state:` headers, plan 3 C4(d)) plus this cycle's
+  prompts and handoffs, each provenance-checked and none misfiled. All four declared SHA-256
+  identities reproduce, and `git diff 8a63402 8dc3a06 -- app/ | shasum -a 256` reproduces the
+  declared normal-side digest `44a644dc…1a85fb`, so the fresh 19/19 ledger — including the
+  eighteen re-run after the test-file edit — is valid tree-bound evidence consumed by citation.
+  **B1 closed.** C8(e)'s `(60, 4, 810, 51, over)` was re-derived from source without running the
+  test: `INFEASIBLE ∈ _BUDGET_STATUSES` makes the row budget-bearing; `_budget_seconds(-12.50) =
+  -750` → `distributable_seconds 0` → both allowances `0` → `remaining_commitment 0`;
+  `over 60`, `projected 810`, and `calculate_consumed_cost_minor` gives `4` and `51` under
+  ROUND_HALF_EVEN. The fixture is order-independent (a zero distributable pot makes typical
+  weights irrelevant), all four numerics are non-zero and pairwise distinct, and the assertion is
+  a single tuple comparison so rule 12's short-circuit hazard does not apply. MUT-19 is sited at
+  the row dict as declared and its recorded red `(60, 51, 810, 4, over)` swaps exactly positions
+  2 and 4. **N2 closed**: `len(rows) == 2` precedes C4(b)'s loop, `assert result["budget_signals"]`
+  precedes C4(c)'s flatness walk. Trace chain 29↔29, bijective, no orphan test. **N1/N3/N4
+  closed** — no live artifact still says "eight numerics"; the remaining repo hits are archived
+  history and correct unrelated uses (the eight-member `TaskStepStateEnum`, the eight-field
+  `BudgetSignal` dataclass). New evidence bought (variation, not reproduction): **PR-C**, the same
+  money transposition planted at the *serializer* projection — a site no named mutation covers —
+  measured **1 failed / 28 passed** at L1 file scope, the single failure being C8(e). C8(e) is
+  therefore the only witness in the phase for the field-mapping class, and the 28 greens double as
+  a free clean-file confirmation, so no separate clean L1 was run. Probe reverted; the serializer
+  re-hashes byte-identical. **L4 budget 0, spent 0** — no full-suite run.
+  **N5 (note)** — `intention.md:3-4` now stamps `round 12, 2026-08-25` while the same sentence
+  says "re-ratified by the owner on 2026-08-24"; split the current-round stamp from the last
+  ratifying act. **N6 (note)** — the "Review r1 findings folded" entry sits above the
+  implementation-round-2 and closeout entries it postdates, so this append-only log no longer
+  reads in round order. Both routed to the coordinator; neither is phase-2 fix scope. Full
+  perimeter table, verified-correct items W1–W11, PR-C declaration, carry-forward dispositions
+  and three lessons: `handoffs/reviewer/20260825_plan_2_re_review_round_1.md`.
+- **Coordinator disposition of re-review notes (2026-08-25).** N5 is corrected in the intention
+  header: the current round stamp is separate from the last full re-ratification date, and rounds
+  11–12 are identified as precision amendments. N6 is resolved without moving append-only history:
+  the earlier “Review r1 findings folded” entry was recorded after review r1 but sits before two
+  pre-existing entries because the coordinator folded it into the body before the fix checkpoint;
+  this disposition is the chronological pointer for future readers. Phase 2 is approved and ready
+  for the closeout archive and gate commit.

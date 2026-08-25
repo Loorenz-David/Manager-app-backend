@@ -1,8 +1,9 @@
 # Intention: Task Budget Overrun Signal (one batched verdict read for the managers task list)
 
 ```
-status: **RATIFIED** (round 12, 2026-08-25) — re-ratified by the owner (**David**) on
-        2026-08-24, on the re-ratification surface at **§10.6**. The owner answered
+status: **RATIFIED** (round 12, 2026-08-25) — last full re-ratification by the owner
+        (**David**) was on 2026-08-24, on the re-ratification surface at **§10.6**;
+        rounds 11–12 are owner-approved precision amendments that preserved RATIFIED. The owner answered
         **"yes"** after that surface was relayed: D9's forecast-versus-incurred
         distinction, D10's no-work-ahead guard, the production-time convergence caveat,
         and the four non-visible contract resolutions. This restores the pipeline's
