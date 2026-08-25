@@ -20,6 +20,10 @@ from beyo_manager.domain.item_economics.configuration import (
     resolve_major_category,
 )
 from beyo_manager.domain.item_economics.division_serializers import serialize_budget_allocations
+from beyo_manager.domain.item_economics.remaining_production_pressure import (
+    PRESSURE_METHOD,
+    compute_remaining_pressure,
+)
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
 from beyo_manager.domain.item_economics.typical_filters import (
     SectionTypicalEvidence,
@@ -289,6 +293,11 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         )
         allowed = evaluation.allowed_worker_minutes if evaluation is not None and status in _BUDGET_STATUSES else None
         division = divide_production_budget(allowed, division_steps, selection.selected)
+        pressure = compute_remaining_pressure(division)
+        for step in division["steps"]:
+            step["pressure_share_seconds"] = pressure.pressure_share_seconds_by_step_id[
+                str(step["step_id"])
+            ]
         actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
         if status in _BUDGET_STATUSES and allowed is not None:
             actual_minutes = calculate_actual_worker_minutes(actual_seconds)
@@ -307,6 +316,8 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "actual_worker_seconds": actual_seconds,
                 "remaining_worker_minutes": remaining_minutes,
                 "allocation_method": ALLOCATION_METHOD,
+                "pressure_ratio": pressure.pressure_ratio,
+                "pressure_method": PRESSURE_METHOD,
                 "typical_resolution": selection,
                 "steps": division["steps"],
             }

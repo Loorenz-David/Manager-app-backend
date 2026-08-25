@@ -206,8 +206,8 @@ async def test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape(db_session):
         assert e3["allocation_method"] == "static_proportional_section_v2"
         assert sum(step["allowance_seconds"] for step in e2_row["steps"] if step["allowance_seconds"] is not None) == e3_row["allowance_seconds"]
         assert e2_row["allocation_method"] == ALLOCATION_METHOD == "static_proportional_section_v2"
-        assert set(e2_row) == {"task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "typical_resolution", "steps"}
-        assert result_keys(e2_row["steps"][0]) == {"step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count", "allowance_seconds", "worked_seconds", "left_seconds", "share_state"}
+        assert set(e2_row) == {"task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "pressure_ratio", "pressure_method", "typical_resolution", "steps"}
+        assert result_keys(e2_row["steps"][0]) == {"step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count", "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds"}
         assert sum(row["worked_seconds"] for row in e3["sections"]) == e3["budget"]["actual_worker_seconds"]
     finally:
         await _cleanup(db_session, values)

@@ -133,6 +133,7 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
         "steps": [
             {
                 "step_id": "tsp_1",
+                "state": "pending",
                 "working_section_id": "wsec_1",
                 "section_name_snapshot": "Upholstery",
                 "typical_worker_seconds": 3600,
@@ -153,11 +154,11 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
         "working_section_id", "section_name", "typical_worker_seconds", "sample_count", "method", "window_days", "min_sample_size"
     }
     assert set(serialize_budget_allocation(task)) == {
-        "task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "typical_resolution", "steps"
+        "task_id", "status", "allowed_worker_minutes", "actual_worker_seconds", "remaining_worker_minutes", "allocation_method", "pressure_ratio", "pressure_method", "typical_resolution", "steps"
     }
     assert set(serialize_budget_step(task["steps"][0])) == {
-        "step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count",
-        "allowance_seconds", "worked_seconds", "left_seconds", "share_state",
+        "step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count",
+        "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
     }
     payload = serialize_budget_allocation(task)
     assert not any("money" in key or "minor" in key for key in payload)

@@ -273,6 +273,7 @@ def _step_result(
         sample_count = selected.sample_count
     return {
         "step_id": _value(step, "client_id"),
+        "state": _state_value(_value(step, "state")),
         "working_section_id": section_id,
         "section_name_snapshot": _value(step, "working_section_name_snapshot"),
         "typical_worker_seconds": typical_worker_seconds,

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from decimal import Decimal, localcontext
+from fractions import Fraction
 
 from beyo_manager.domain.item_economics.budget_division import ALLOCATION_METHOD
 from beyo_manager.domain.item_economics.budget_division import (
@@ -11,6 +13,7 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_WINDOW_DAYS,
 )
 from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
+from beyo_manager.domain.item_economics.remaining_production_pressure import PRESSURE_METHOD
 from beyo_manager.domain.item_economics.typical_filters import (
     COMPARABILITY_PROFILE,
     RECONCILIATION_METHOD,
@@ -21,6 +24,14 @@ from beyo_manager.domain.item_economics.typical_filters import (
 
 def _decimal(value: object) -> str | None:
     return str(value) if value is not None else None
+
+
+def _fraction_decimal(value: Fraction | None) -> str | None:
+    if value is None:
+        return None
+    with localcontext() as context:
+        context.prec = 50
+        return str(Decimal(value.numerator) / Decimal(value.denominator))
 
 
 def serialize_typical_time(row: dict) -> dict:
@@ -42,6 +53,7 @@ def serialize_typical_times(rows: Iterable[dict]) -> dict:
 def serialize_budget_step(row: dict) -> dict:
     return {
         "step_id": row["step_id"],
+        "state": row["state"],
         "working_section_id": row["working_section_id"],
         "section_name_snapshot": row["section_name_snapshot"],
         "typical_worker_seconds": row["typical_worker_seconds"],
@@ -51,6 +63,7 @@ def serialize_budget_step(row: dict) -> dict:
         "worked_seconds": row["worked_seconds"],
         "left_seconds": row["left_seconds"],
         "share_state": row["share_state"],
+        "pressure_share_seconds": row.get("pressure_share_seconds"),
     }
 
 
@@ -62,6 +75,8 @@ def serialize_budget_allocation(row: dict) -> dict:
         "actual_worker_seconds": row["actual_worker_seconds"],
         "remaining_worker_minutes": _decimal(row["remaining_worker_minutes"]),
         "allocation_method": row.get("allocation_method", ALLOCATION_METHOD),
+        "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
+        "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
         "steps": [serialize_budget_step(step) for step in row["steps"]],
     }
@@ -174,6 +189,7 @@ def serialize_production_time_section(row: dict, typical: dict | None = None) ->
         "allowance_seconds": row.get("allowance_seconds"),
         "left_seconds": row.get("left_seconds"),
         "share_state": row["share_state"],
+        "pressure_share_seconds": row.get("pressure_share_seconds"),
         "typical": {
             "typical_worker_seconds": typical.get("typical_worker_seconds"),
             "sample_count": typical.get("sample_count", 0),
@@ -205,6 +221,8 @@ def serialize_task_production_time(row: dict) -> dict:
         "status": _enum_value(status),
         "item_binding": row["item_binding"],
         "allocation_method": ALLOCATION_METHOD,
+        "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
+        "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
         "budget": {
             "allowed_worker_minutes": _decimal(row.get("allowed_worker_minutes")),

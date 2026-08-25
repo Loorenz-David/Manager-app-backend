@@ -7067,6 +7067,35 @@ nodes:
     confidence: 0.97
     createdAt: 2026-08-25T06:35:03.125Z
     updatedAt: 2026-08-25T06:35:03.125Z
+  - id: projection-item-economics-remaining-production-pressure
+    type: projection
+    name: Remaining production pressure
+    description: A pure read-time allocation of the production budget still
+      distributable to each open task step. It owns only pressure shares and
+      their ratio; it does not modify the established production-budget
+      division, persist a value, or turn a share into a countdown. A step keeps
+      its own share while it is within its served allowance, while settled steps
+      and live consuming steps charge the remaining numerator. Its integer
+      shares use the division's deterministic largest-remainder rule, and its
+      ratio remains honest when above or below one.
+    tags:
+      - item-economics
+      - budget-allocation
+      - read-model
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/item_economics/remaining_production_pressure.py
+          symbol: compute_remaining_pressure
+          summary: The pure function classifies unchanged division step rows, computes the
+            remaining distributable numerator and open-allowance denominator,
+            then allocates shares with the allocator's largest-remainder helper.
+          inferenceReason: This symbol implements the independently named
+            remaining-production-pressure projection and its non-countdown
+            allocation invariant.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-08-25T09:24:40.005Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -13042,3 +13071,35 @@ edges:
     confidence: 0.96
     createdAt: 2026-08-25T06:35:03.125Z
     updatedAt: 2026-08-25T06:35:03.125Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: depends_on
+    targetNodeId: projection-item-economics-remaining-production-pressure
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          summary: The allocation query computes remaining pressure from its one division
+            result and attaches the returned ratio and step shares before
+            serialization.
+          inferenceReason: The budget-allocation projection depends on the shared pressure
+            projection for its additive pressure fields.
+    origin: ai_inferred
+    confidence: 0.98
+    createdAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-08-25T09:24:40.005Z
+  - sourceNodeId: projection-item-economics-task-production-time
+    relationshipType: depends_on
+    targetNodeId: projection-item-economics-remaining-production-pressure
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_production_time.py
+          symbol: get_task_production_time
+          summary: The production-time query computes remaining pressure from its one
+            division result and folds returned open-step shares into each
+            section before serialization.
+          inferenceReason: The production-time projection depends on the shared pressure
+            projection for its additive task ratio and section shares.
+    origin: ai_inferred
+    confidence: 0.98
+    createdAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-08-25T09:24:40.005Z

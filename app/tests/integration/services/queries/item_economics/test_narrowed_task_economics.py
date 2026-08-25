@@ -99,13 +99,13 @@ def test_c2c_no_v1_publish_literal_in_production_or_goldens():
 
 def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_sections():
     row = {
-        "step_id": "step", "working_section_id": "section", "section_name_snapshot": None,
+        "step_id": "step", "state": "pending", "working_section_id": "section", "section_name_snapshot": None,
         "typical_worker_seconds": None, "typical_basis": "insufficient_sample", "sample_count": 3,
         "allowance_seconds": 60, "worked_seconds": 0, "left_seconds": 60, "share_state": "on_track",
     }
     assert set(serialize_budget_step(row)) == {
-        "step_id", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
-        "typical_basis", "sample_count", "allowance_seconds", "worked_seconds", "left_seconds", "share_state",
+        "step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
+        "typical_basis", "sample_count", "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
     }
     selection = TaskTypicalSelection(
         "section_wide_uniform", "uniform_basis_v1", "primary_item_category_v1", None,
