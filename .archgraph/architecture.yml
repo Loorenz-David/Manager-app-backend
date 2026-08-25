@@ -6983,6 +6983,36 @@ nodes:
     confidence: 0.93
     createdAt: 2026-08-24T13:41:20.489Z
     updatedAt: 2026-08-24T13:41:38.667Z
+  - id: command-bootstrap-pause-reason-seeding
+    type: command
+    name: Bootstrap Pause-Reason Seeding
+    description: Seeds the workspace's default pause-reason catalog and reconciles
+      the bootstrap-managed worker links. It creates the worker-specific
+      reasons, shares Moving furniture across Vitalii and Nazar, and leaves
+      Workspace cleaning unrestricted for all workers. Images remain unset until
+      bootstrap assets are supplied. Reruns must preserve IDs while restoring
+      the declared link scope and clearing unsupported working-section links.
+    tags:
+      - bootstrap
+      - pause-reasons
+      - configuration
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_pause_reasons.py
+          symbol: seed_pause_reason_links
+          summary: Deletes and recreates the managed user links, clears working-section
+            links, and validates the named bootstrap workers.
+          inferenceReason: This phase is the implementation boundary for the requested
+            seeded eligibility assignments.
+        - path: app/beyo_manager/services/commands/bootstrap/bootstrap_app.py
+          symbol: bootstrap_app
+          summary: Runs pause-reason link reconciliation after worker seeding has produced
+            the worker-name-to-user-ID map.
+          inferenceReason: The bootstrap orchestrator establishes the required phase ordering.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-08-24T13:47:21.336Z
   - id: projection-item-economics-task-budget-signals
     type: projection
     name: Task budget signals
@@ -12850,6 +12880,40 @@ edges:
     confidence: 0.97
     createdAt: 2026-08-24T13:41:20.489Z
     updatedAt: 2026-08-24T13:41:38.667Z
+  - sourceNodeId: command-bootstrap-pause-reason-seeding
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason-user-link
+    description: Bootstrap persistence requires the pause-reason-to-user association table.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_pause_reasons.py
+          symbol: seed_pause_reason_links
+          summary: Deletes and inserts PauseReasonUserLink rows for the managed seeded
+            reasons.
+          inferenceReason: The bootstrap phase directly persists its worker eligibility
+            through this table.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-08-24T13:47:21.336Z
+  - sourceNodeId: command-bootstrap-pause-reason-seeding
+    relationshipType: depends_on
+    targetNodeId: table-pause-reason-working-section-link
+    description: Bootstrap reconciliation requires the
+      pause-reason-to-working-section association table to clear unsupported
+      section restrictions.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/bootstrap/phases/seed_pause_reasons.py
+          symbol: seed_pause_reason_links
+          summary: Deletes PauseReasonWorkingSectionLink rows for the managed seeded
+            reasons.
+          inferenceReason: The bootstrap phase maintains the invariant that these newly
+            seeded reasons are not section-constrained.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-08-24T13:47:21.336Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-item-economics-task-budget-signals
