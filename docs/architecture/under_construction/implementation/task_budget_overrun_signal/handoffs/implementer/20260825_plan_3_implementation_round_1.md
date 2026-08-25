@@ -114,7 +114,29 @@ Probe-only file list, each applied and reverted: `app/beyo_manager/services/quer
 - L1 final targeted command: `PYTHONPATH=. pytest tests/unit/routers/api_v1/test_budget_signals_route.py tests/unit/routers/api_v1/test_item_economics_router.py tests/unit/routers/test_phase9_item_economics_route_mirror.py tests/unit/docs/test_budget_signals_handoff.py -q` → **128 passed**.
 - Docs guard: `PYTHONPATH=. pytest tests/unit/docs/ -q` → **70 passed**.
 - L2 command: `PYTHONPATH=. pytest tests/unit/domain/item_economics tests/integration/services/queries/item_economics tests/unit/routers/api_v1 tests/unit/routers/test_phase9_item_economics_route_mirror.py tests/unit/docs -q` → **653 passed**.
-- Final L4 command and result: to be filled on the final handover tree, using the durable baseline of **21 failing IDs** and recording both failing-ID sets.
+- Final L4 command: `PYTHONPATH=. pytest -m 'not e2e'` from `backend/app/` on checkpoint tree
+  `c83c815` → **21 failed / 2800 passed / 1 skipped / 2 warnings**. The 21 failing IDs exactly
+  match the durable baseline in `HANDOFF_TO_FRONTEND_live_working_time_clock_20260822.md` §7:
+  `test_legacy_seat_height_without_height_maps_without_zero_values`,
+  `test_legacy_multiline_rerun_is_idempotent_and_protects_existing_values`,
+  `test_sign_in_user_preserves_custom_workspace_role_name`,
+  the three `test_set_current_stored_amount_inventory_*` tests,
+  `test_seed_item_economics_creates_requested_configuration_and_updates_owned_values`,
+  `test_route_list_item_issues_forwards_client_id`,
+  `test_route_delete_item_issues_forwards_ids`,
+  `test_route_list_upholstery_inventories_passes_filter_query_params`,
+  the two `test_batch_update_item_positions_*` tests,
+  the two `test_batch_working_section_integration` tests,
+  `test_worker_working_sections_excludes_counts_for_deleted_parent_tasks`,
+  the two `test_working_section_ordering_*` tests,
+  `test_split_services_return_disjoint_worker_shapes`,
+  `test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections`,
+  `test_serialize_case_type_entry_returns_contract_fields`, and the two `test_audit_log` tests.
+  Failure-ID delta against the 21-ID baseline: **additions ∅ / removals ∅**. Tree identity is
+  checkpoint `c83c815` plus dirty tracked-tree diff digest
+  `dc386467bd7d0653975786c52773a6c9ecf40dee0d8715219299978d09612d99`; phase files are clean
+  relative to that checkpoint. The remaining dirty paths are pre-existing architecture/bootstrap
+  work and were not staged by this session.
 - No formatter/linter mutation was required; `git diff --check` is clean.
 
 ## Architecture graph delta
