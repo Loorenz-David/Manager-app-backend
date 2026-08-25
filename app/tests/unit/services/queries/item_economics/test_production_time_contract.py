@@ -11,7 +11,11 @@ def test_c19_division_has_one_allocator_and_services_only_consume_it():
         for path in services.glob("*.py")
         if "divide_production_budget" in path.read_text()
     }
-    assert importing == {"get_task_budget_allocations", "get_task_production_time"}
+    assert importing == {
+        "get_task_budget_allocations",
+        "get_task_budget_signals",
+        "get_task_production_time",
+    }
     for name in importing:
         source = (services / f"{name}.py").read_text()
         assert "Fraction" not in source

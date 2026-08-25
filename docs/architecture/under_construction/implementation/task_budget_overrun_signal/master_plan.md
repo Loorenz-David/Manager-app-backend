@@ -32,7 +32,7 @@ seam between phases 2 and 3 is the service's dict return value (stable; the sibl
 
 | Content | Artifact |
 |---|---|
-| Product semantics, HC-1…HC-7, the ledger M1–M6, every mechanism contract (§§3–7A), owner decisions D1–D10 | `planning/intention.md` (**RATIFIED**, round 10) |
+| Product semantics, HC-1…HC-7, the ledger M1–M6, every mechanism contract (§§3–7A), owner decisions D1–D10 | `planning/intention.md` (**RATIFIED**, round 11) |
 | Grounding research, probes verbatim, the shaper's anchor map | `handoffs/shaper/20260824_shaping_context_handoff.md` (reference, never authority) |
 | Inventory ranking, probes P1–P12, planner routing hazards (§6) | `handoffs/planner/20260824_mechanism_inventory_round_1.md` |
 | The frontend's request (read-only; **never edited** — memory `never-rewrite-a-published-handoff`) | `docs/handoff/from_frontend/HANDOFF_TO_BACKEND_task_budget_overrun_signal_20260823.md` |
@@ -101,7 +101,7 @@ APPROVED. Every implementation and fix cycle is committed at `IMPLEMENTED` as
 | Phase | Title | State | Date | Actor | Note |
 |---|---|---|---|---|---|
 | 1 | Pure rule — `budget_signal.py` (§§3A, 4A, 5A.3, 6A.2/6A.3) | `APPROVED` | 2026-08-24 | coordinator | Review r1 findings dispositioned: neither expands plan-1 acceptance; production rule, 35 row mutations, and baseline evidence accepted; no fix cycle |
-| 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `NOT_STARTED` | 2026-08-24 | planner | 8 criteria; projection **mandatory**; integration tests on the disposable DB |
+| 2 | Service + serializer — `get_task_budget_signals.py`, `serialize_budget_signals` (§§3A.1, 5A.1/5A.2, 6A.1, 6A.4, 7A.1/7A.2, M2 on the production path) | `IMPLEMENTED` | 2026-08-25 | Codex | L1 28 passed, L2 639 passed; maintenance L4 matched the durable 21-ID baseline exactly (2786 passed, 1 skipped); checkpoint created for independent review |
 | 3 | Route + HC-2a artifacts + `to_frontend` handoff (§§7A.3–7A.6, §8 item 5) | `NOT_STARTED` | 2026-08-24 | planner | 6 criteria; projection waivable (coordinator's call); graph delta = endpoint node |
 
 ## 5. Contract resolution
@@ -153,6 +153,7 @@ the same edit, before using it.
 | `app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py` | 2 | **NEW** — the batched query service |
 | `app/beyo_manager/domain/item_economics/division_serializers.py` | 2 | **MOD, additive**: `serialize_budget_signal`, `serialize_budget_signals`, two `__all__` entries. **Nothing existing in the file changes** |
 | `app/tests/integration/services/queries/item_economics/test_budget_signals_query.py` | 2 | **NEW** — self-contained fixtures (copies, never imports, the sibling test's `_seed`) |
+| `app/tests/unit/services/queries/item_economics/test_production_time_contract.py` | 2 | **MOD, inherited contract update** — C19's closed allocator-consumer set adds `get_task_budget_signals`; no other assertion changes |
 | `app/beyo_manager/routers/api_v1/item_economics.py` | 3 | **MOD, additive** — HC-2a artifact 4: one import, one route declared **immediately after** `route_get_task_budget_allocations` (`:347-360` today) |
 | `app/beyo_manager/routers/README.md` | 3 | **MOD, additive** — HC-2a artifact 2: one Quick Index row after `:79`, one detail section after the `budget-allocations` section (`:1648-1700`) |
 | `app/tests/unit/routers/test_phase9_item_economics_route_mirror.py` | 3 | **MOD** — HC-2a artifact 1: `_EXPECTED_ROUTES` +1 row (`:33` opens; sibling row at `:60`), both counts `26 → 27` (`:127-128`), **and the function name** `test_the_registry_ships_twenty_six_routes` (`:124`) → `..._twenty_seven_routes` (§7A.6) |
@@ -161,7 +162,7 @@ the same edit, before using it.
 | `app/tests/unit/docs/test_budget_signals_handoff.py` | 3 | **NEW** — pins the frontend handoff's corrections |
 | `docs/handoff/to_frontend/HANDOFF_TO_FRONTEND_task_budget_overrun_signal_<YYYYMMDD>.md` | 3 | **NEW** — date = the day phase 3 is implemented; follows `TEMPLATE_HANDOFF_TO_FRONTEND.md` headings |
 
-**No other pre-existing file is touched in any phase** (M6). In particular: not
+**No pre-existing file outside the phase-specific §6.1 table is touched** (M6). In particular: not
 `budget_division.py`, not `calculator.py`, not `get_task_budget_allocations.py`, not the
 sibling test files, not `docs/domains/item_economics/*`, not `Application_contracts`.
 
@@ -365,9 +366,10 @@ The charter's rules 1–16 apply in full. Project-specific, each with its reason
    derived value set or `budget_division._step_state_is_terminal`.
 5. **Money is a call.** Any arithmetic on seconds × rate outside `calculator.py:326` is a
    defect, however clean (§4A.1 lists the three prohibited derivations for grep).
-6. **Four pre-existing files, no more** (HC-2a; M6). Any other pre-existing file in a diff
-   is an automatic finding. Sibling *test* files included — copy their fixtures, never edit
-   them.
+6. **The phase-specific §6.1 file table is the pre-existing-file perimeter** (HC-2a; M6).
+   Any pre-existing file outside that table is an automatic finding. The four HC-2a
+   route-mirror artifacts are phase 3's pre-existing-file set. Sibling *test* files remain
+   excluded — copy their fixtures, never edit them.
 7. **Rows that cannot fail — the six this project invites** (inventory §6): equal typicals
    under §3A.1; no completed section under §3A.2; a two-call ordering test that does not
    reverse the request; an infeasible fixture that always logs work; a `no_budget` fixture

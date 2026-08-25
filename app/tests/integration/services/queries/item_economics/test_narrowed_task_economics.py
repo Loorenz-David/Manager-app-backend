@@ -338,15 +338,16 @@ async def test_c10_batch_dedupes_specs_once_and_preserves_category_index(monkeyp
     try:
         result = await get_task_budget_allocations(context)
         assert len(captured_specs) == 1
-        assert captured_specs[0] == tuple(
+        assert set(captured_specs[0]) == {
             TypicalFilterSpec(item_category_ids=frozenset({fixture["category_ids"][name]}))
             for name in ("chair", "table", "stool")
-        )
+        }
         assert captured_specs[0]
         rows_by_task = {row["task_id"]: row for row in result["budget_allocations"]}
         assert len(rows_by_task) == 50
-        chair_row = rows_by_task[fixture["tasks"][0].client_id]
-        assert [step["sample_count"] for step in chair_row["steps"]] == [7]
+        for task_index, sample_count in ((0, 7), (20, 9), (35, 11)):
+            row = rows_by_task[fixture["tasks"][task_index].client_id]
+            assert [step["sample_count"] for step in row["steps"]] == [sample_count]
         for task in fixture["tasks"][45:]:
             row = rows_by_task[task.client_id]
             assert row["typical_resolution"]["applied_filter"] is None

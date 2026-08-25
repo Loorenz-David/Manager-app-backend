@@ -71,6 +71,27 @@ def serialize_budget_allocations(rows: Iterable[dict]) -> dict:
     return {"budget_allocations": [serialize_budget_allocation(row) for row in rows]}
 
 
+def serialize_budget_signal(row: dict) -> dict:
+    return {
+        "task_id": row["task_id"],
+        "budget_state": row["budget_state"],
+        "over_seconds": row["over_seconds"],
+        "over_cost_minor": row["over_cost_minor"],
+        "projected_over_seconds": row["projected_over_seconds"],
+        "projected_over_cost_minor": row["projected_over_cost_minor"],
+        "currency": row["currency"],
+        "allowed_seconds": row["allowed_seconds"],
+        "actual_worked_seconds": row["actual_worked_seconds"],
+        "cost_per_worker_minute_ten_thousandths": row[
+            "cost_per_worker_minute_ten_thousandths"
+        ],
+    }
+
+
+def serialize_budget_signals(rows: Iterable[dict]) -> dict:
+    return {"budget_signals": [serialize_budget_signal(row) for row in rows]}
+
+
 def _enum_value(value: object) -> object:
     return getattr(value, "value", value)
 
@@ -210,6 +231,8 @@ def serialize_task_production_time(row: dict) -> dict:
 __all__ = [
     "serialize_budget_allocation",
     "serialize_budget_allocations",
+    "serialize_budget_signal",
+    "serialize_budget_signals",
     "serialize_budget_step",
     "serialize_typical_time",
     "serialize_typical_times",

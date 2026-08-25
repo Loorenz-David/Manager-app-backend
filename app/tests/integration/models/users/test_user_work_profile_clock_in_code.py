@@ -7,7 +7,7 @@ only while the code is set.
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.models.tables.users.user import User
@@ -30,12 +30,33 @@ async def _seed_user(db_session) -> User:
     return user
 
 
-async def _two_workspaces(db_session) -> tuple[Workspace, Workspace]:
+async def _seed_two_workspaces(db_session) -> tuple[Workspace, Workspace]:
+    suffix = uuid4().hex
     workspaces = (
-        await db_session.execute(select(Workspace).order_by(Workspace.client_id).limit(2))
-    ).scalars().all()
-    assert len(workspaces) == 2, "this test needs two workspaces in the test database"
-    return workspaces[0], workspaces[1]
+        Workspace(client_id=f"ws-clock-code-a-{suffix}", name=f"Clock code A {suffix}"),
+        Workspace(client_id=f"ws-clock-code-b-{suffix}", name=f"Clock code B {suffix}"),
+    )
+    db_session.add_all(workspaces)
+    await db_session.flush()
+    return workspaces
+
+
+async def _cleanup_owned_rows(
+    db_session,
+    workspaces: tuple[Workspace, Workspace],
+    users: list[User],
+) -> None:
+    workspace_ids = [workspace.client_id for workspace in workspaces]
+    await db_session.execute(
+        delete(UserWorkProfile).where(UserWorkProfile.workspace_id.in_(workspace_ids))
+    )
+    if users:
+        await db_session.execute(
+            delete(User).where(User.client_id.in_([user.client_id for user in users]))
+        )
+    await db_session.execute(
+        delete(Workspace).where(Workspace.client_id.in_(workspace_ids))
+    )
 
 
 def _profile(workspace: Workspace, user: User, code: str | None) -> UserWorkProfile:
@@ -48,57 +69,82 @@ def _profile(workspace: Workspace, user: User, code: str | None) -> UserWorkProf
 
 
 async def test_duplicate_clock_in_code_in_one_workspace_is_rejected(db_session) -> None:
-    workspace, _ = await _two_workspaces(db_session)
-    code = uuid4().hex[:10]
-    first = await _seed_user(db_session)
-    second = await _seed_user(db_session)
-    db_session.add(_profile(workspace, first, code))
-    await db_session.flush()
-
-    db_session.add(_profile(workspace, second, code))
-    with pytest.raises(IntegrityError) as exc_info:
+    workspaces = await _seed_two_workspaces(db_session)
+    users: list[User] = []
+    try:
+        code = uuid4().hex[:10]
+        users.extend([await _seed_user(db_session), await _seed_user(db_session)])
+        db_session.add(_profile(workspaces[0], users[0], code))
         await db_session.flush()
 
-    assert "uix_user_work_profiles_workspace_clock_code" in str(exc_info.value)
+        with pytest.raises(IntegrityError) as exc_info:
+            async with db_session.begin_nested():
+                db_session.add(_profile(workspaces[0], users[1], code))
+                await db_session.flush()
+
+        assert "uix_user_work_profiles_workspace_clock_code" in str(exc_info.value)
+    finally:
+        await _cleanup_owned_rows(db_session, workspaces, users)
 
 
 async def test_same_clock_in_code_in_two_workspaces_is_allowed(db_session) -> None:
-    first_workspace, second_workspace = await _two_workspaces(db_session)
-    code = uuid4().hex[:10]
-    first = await _seed_user(db_session)
-    second = await _seed_user(db_session)
+    workspaces = await _seed_two_workspaces(db_session)
+    users: list[User] = []
+    try:
+        code = uuid4().hex[:10]
+        users.extend([await _seed_user(db_session), await _seed_user(db_session)])
 
-    db_session.add_all(
-        [
-            _profile(first_workspace, first, code),
-            _profile(second_workspace, second, code),
-        ]
-    )
-    await db_session.flush()
-
-    stored = (
-        await db_session.execute(
-            select(UserWorkProfile.workspace_id).where(UserWorkProfile.clock_in_code == code)
+        db_session.add_all(
+            [
+                _profile(workspaces[0], users[0], code),
+                _profile(workspaces[1], users[1], code),
+            ]
         )
-    ).scalars().all()
-    assert sorted(stored) == sorted([first_workspace.client_id, second_workspace.client_id])
+        await db_session.flush()
+
+        stored = (
+            (
+                await db_session.execute(
+                    select(UserWorkProfile.workspace_id).where(
+                        UserWorkProfile.clock_in_code == code
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert sorted(stored) == sorted(workspace.client_id for workspace in workspaces)
+    finally:
+        await _cleanup_owned_rows(db_session, workspaces, users)
 
 
 async def test_index_is_partial_so_unassigned_codes_never_collide(db_session) -> None:
-    workspace, _ = await _two_workspaces(db_session)
-    first = await _seed_user(db_session)
-    second = await _seed_user(db_session)
+    workspaces = await _seed_two_workspaces(db_session)
+    users: list[User] = []
+    try:
+        users.extend([await _seed_user(db_session), await _seed_user(db_session)])
 
-    db_session.add_all([_profile(workspace, first, None), _profile(workspace, second, None)])
-    await db_session.flush()
-
-    unassigned = (
-        await db_session.execute(
-            select(UserWorkProfile.client_id).where(
-                UserWorkProfile.workspace_id == workspace.client_id,
-                UserWorkProfile.user_id.in_([first.client_id, second.client_id]),
-                UserWorkProfile.clock_in_code.is_(None),
-            )
+        db_session.add_all(
+            [
+                _profile(workspaces[0], users[0], None),
+                _profile(workspaces[0], users[1], None),
+            ]
         )
-    ).scalars().all()
-    assert len(unassigned) == 2
+        await db_session.flush()
+
+        unassigned = (
+            (
+                await db_session.execute(
+                    select(UserWorkProfile.client_id).where(
+                        UserWorkProfile.workspace_id == workspaces[0].client_id,
+                        UserWorkProfile.user_id.in_([user.client_id for user in users]),
+                        UserWorkProfile.clock_in_code.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(unassigned) == 2
+    finally:
+        await _cleanup_owned_rows(db_session, workspaces, users)

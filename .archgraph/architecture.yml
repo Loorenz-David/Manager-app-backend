@@ -6983,6 +6983,33 @@ nodes:
     confidence: 0.93
     createdAt: 2026-08-24T13:41:20.489Z
     updatedAt: 2026-08-24T13:41:38.667Z
+  - id: projection-item-economics-task-budget-signals
+    type: projection
+    name: Task budget signals
+    description: The task budget signals projection is a batched, read-only
+      manager-list view that turns current committed budgets and live work into
+      one flat verdict row per visible requested task. It owns the raw-id cap,
+      workspace visibility, deterministic ordering, reconciled typical
+      selection, allocation, and signal composition; it persists nothing and is
+      not an HTTP endpoint. Tasks without a current committed evaluation remain
+      present as constructed no-budget rows, while unknown, deleted, and
+      cross-workspace tasks are omitted. It must keep query count independent of
+      batch size, use the injected request clock and committed evaluation
+      snapshot, and preserve the exact flat ten-field row contract.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The batched query caps raw task ids, loads visible tasks and current
+            evaluations and steps in batches, derives live worked seconds and
+            reconciled typicals, invokes the shared allocator and signal rule,
+            and returns flat serialized rows.
+          inferenceReason: This named service is the implementation boundary for an
+            independently consumable task-budget-signal read projection.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -12796,3 +12823,99 @@ edges:
     confidence: 0.97
     createdAt: 2026-08-24T13:41:20.489Z
     updatedAt: 2026-08-24T13:41:38.667Z
+  - sourceNodeId: domain-item-economics
+    relationshipType: contains
+    targetNodeId: projection-item-economics-task-budget-signals
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service is implemented in the item-economics query package and
+            composes item-economics allocation, configuration, signal, and
+            serializer boundaries.
+          inferenceReason: The projection is an item-economics read boundary contained by
+            the existing Item Economics domain.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: projection-item-economics-task-budget-signals
+    relationshipType: reads_from
+    targetNodeId: table-task-step
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service batch-loads non-deleted task steps for all visible
+            requested tasks and uses them to construct allocator rows and actual
+            worked totals.
+          inferenceReason: Task-step rows are a direct input to every budget signal.
+    origin: ai_inferred
+    confidence: 0.96
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: projection-item-economics-task-budget-signals
+    relationshipType: reads_from
+    targetNodeId: table-item-cost-evaluation
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service selects current, non-deleted committed evaluations and uses
+            their allowed minutes, currency, and snapshot rate.
+          inferenceReason: The current committed evaluation supplies the budget-bearing
+            and monetary operands of the signal.
+    origin: ai_inferred
+    confidence: 0.97
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: projection-item-economics-task-budget-signals
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service loads one live-worked-seconds map for all visible steps
+            using ctx.now and uses it in the allocator and actual-worked total.
+          inferenceReason: Present-tense worked time is derived through the shared
+            live-worked-seconds projection.
+    origin: ai_inferred
+    confidence: 0.98
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: projection-item-economics-task-budget-signals
+    relationshipType: reads_from
+    targetNodeId: table-step-state-record
+    description: The signal projection derives its present-tense worked-time input
+      from open step-state intervals through the shared live-worked-seconds
+      loader and persists none of it.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service delegates its live step-time input to
+            load_live_worked_seconds for the visible step set and injected
+            clock.
+          inferenceReason: That loader's open-interval population makes step-state records
+            an architectural source dependency of the signal projection.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z
+  - sourceNodeId: source-file-item-economics-budget-division
+    relationshipType: implements
+    targetNodeId: projection-item-economics-task-budget-signals
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: The service calls divide_production_budget with allowed minutes, loaded
+            DivisionStep rows, and the reconciled selected typicals before
+            computing each signal.
+          inferenceReason: The shared budget-division source supplies the projection's
+            exact per-section allowance and commitment calculation boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-08-25T04:17:27.720Z

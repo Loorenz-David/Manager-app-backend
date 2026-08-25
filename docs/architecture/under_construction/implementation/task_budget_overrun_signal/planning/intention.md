@@ -168,7 +168,7 @@ what it must not get wrong; M6 is what it must not break.
 | **M3** | A section already past its own slice contributes **0** to the projection, never a negative — and a fixture where one section's overrun would otherwise cancel another section's real remaining work produces a signal, not silence. | **The quiet cancellation.** How far an already-overrunning section will *keep* overrunning is not knowable; letting it subtract erases a different stage's genuine remaining commitment and the task reads as fine. | §3.3; handoff acceptance criterion 6; frontend `buildOutlook` comment |
 | **M4** | Every visible requested task is **present** in the response with an explicit `budget_state` — including tasks with no usable committed evaluation, which return `no_budget`. Only unknown, deleted, and other-workspace ids are omitted. The response for N tasks is N flat rows with **no nested array at any depth**. | **Silent omission read as reassurance.** A task dropped from the payload renders as no badge, which a manager reads as "within budget". Plus the shape regression the whole handoff exists to prevent: nesting creeping back in. | **HC-4**; handoff acceptance criteria 4 and 9; `budget-allocations` §1 |
 | **M5** | Two calls a few seconds apart against unchanged state differ only in the time-dependent figures — never in `budget_state`, never in row membership or ordering, never in `allowed_seconds`. | **Verdict flicker.** `budget_state` is the intended future event trigger; a verdict that oscillates at a boundary becomes a notification per poll. Stability here is what makes the event tractable later, even though this pipeline ships no event. | handoff acceptance criterion 7; §7.3 |
-| **M6** | No existing payload, rule, or persisted value changes: `budget-allocations`, `production-time`, `budget-status` and `price-scenario` serve byte-identical responses for identical state before and after, and the four HC-2a artifacts are the only pre-existing files touched. | **Collateral regression.** The workers-app step cards and the managers single-task surface both ride the read models this feature reuses; a "small refactor into shared code" is how they break. | **HC-2**; **HC-2a** |
+| **M6** | No existing payload, rule, or persisted value changes: `budget-allocations`, `production-time`, `budget-status` and `price-scenario` serve byte-identical responses for identical state before and after; no pre-existing file outside the phase-specific master-plan §6.1 table is touched; and the four HC-2a artifacts are the only pre-existing files touched in phase 3. | **Collateral regression.** The workers-app step cards and the managers single-task surface both ride the read models this feature reuses; a "small refactor into shared code" is how they break. | **HC-2**; **HC-2a** |
 
 **Mechanism contracts are traceable targets in their own right** (charter trace chain,
 link 2). The contracts this intention carries register here against the outcome each
@@ -2100,6 +2100,14 @@ changing any product meaning: §6A.2A replaces the unreachable row 4 and stale
 no-evaluation detailed-status computation structurally held. These are precision and
 observability corrections, not a material semantic amendment; the round-9 ratification
 stands and the header remains `RATIFIED`.
+
+**Round 11 — RATIFIED, owner-approved M6 perimeter clarification (2026-08-24).** The
+owner approved the projection card's recommendation to correct M6's over-broad
+"four pre-existing files" wording. M6 now makes the phase-specific master-plan §6.1
+table the pre-existing-file perimeter and reserves the four HC-2a artifacts for phase
+3. This is a precision correction: phase 2's additive serializer pair remains where
+HC-2 and the local serialization contract already placed it; product semantics and the
+round-10 ratification remain unchanged.
 
 ---
 

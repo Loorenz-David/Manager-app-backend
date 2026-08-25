@@ -40,7 +40,7 @@ code is copied into the new service, never extracted into a shared helper (HC-2;
   serializer pair to mirror), `:210-220` (`__all__`);
   `models/tables/item_economics/item_cost_evaluation.py:30-39, :56` (currency, snapshot,
   allowed, the unique partial index); `tests/integration/services/queries/item_economics/
-  test_budget_allocations_query.py:31-131` (the fixture kit to copy: `_seed`, `_ctx`,
+  test_budget_allocations_query.py:31-131, :229-244` (the fixture kit to copy: `_seed`, `_ctx`,
   `_seed_two_section_allocation`, `_cleanup`) and `:178-208` (the statement-counting
   technique); `test_live_worked_seconds.py` (how an open `StepStateRecord` is seeded and what
   share a single user's open interval contributes).
@@ -56,6 +56,7 @@ Phase 1 **APPROVED**. Gate: intention header `RATIFIED`; projection routed or wa
 | `app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py` | NEW |
 | `app/beyo_manager/domain/item_economics/division_serializers.py` | MOD, additive only (two functions, two `__all__` entries) |
 | `app/tests/integration/services/queries/item_economics/test_budget_signals_query.py` | NEW |
+| `app/tests/unit/services/queries/item_economics/test_production_time_contract.py` | MOD, inherited C19 consumer-set update only: add `get_task_budget_signals` |
 
 ## 5. Ordered tasks
 
@@ -65,8 +66,13 @@ Phase 1 **APPROVED**. Gate: intention header `RATIFIED`; projection routed or wa
    the exact share one user's single open `WORKING` record contributes after 60 s of
    `ctx.now` advance (the plan asserts **60**; if the loader's divisor makes it otherwise,
    that is a finding against C7(b) — do not adjust the test). Write the trace map.
-1. Write `test_budget_signals_query.py` from §6. Fixture kit copied from the sibling test;
-   every test that commits rows owns a `try/finally` delete (charter rule 11½). Role in the
+1. Write `test_budget_signals_query.py` from §6. Copy the sibling fixture *components*, but
+   use a fresh task per criterion row and attach **only** the steps named by that row; do not
+   call `_seed` as an opaque ready-made task. Parameterise each committed evaluation's allowed
+   minutes, snapshot rate, currency, and basis rate; every divergent evaluation uses its own
+   task, item, and current evaluation. Historical `closed_at` values are derived from the
+   fixed test `ctx.now`; `_cleanup` deletes `StepStateRecord` rows before `TaskStep` rows.
+   Every test that commits rows owns a `try/finally` delete (charter rule 11½). Role in the
    context: `"manager"` (the service is not role-aware, but the fixture should not lie).
 2. Add `serialize_budget_signal` / `serialize_budget_signals` (§6.4) — ten keys copied through,
    no `_decimal`, no `str()`, no `.get()` defaults.
@@ -80,18 +86,20 @@ Phase 1 **APPROVED**. Gate: intention header `RATIFIED`; projection routed or wa
 ## 6. Tests / acceptance criteria
 
 Conventions: evaluation `cost_per_worker_minute_minor_snapshot = Decimal("3.7500")`,
-`currency = SWEDISH_KRONA`, `allowed_worker_minutes = Decimal("60.00")` unless stated; steps
-carry their worked seconds in `total_working_seconds` and **no open `StepStateRecord`**
-unless stated (so live seconds == settled seconds); a single working section unless stated;
-`ctx = ServiceContext(identity={"workspace_id", "user_id", "role_name": "manager"},
-query_params={"task_ids": [...]}, session=db_session, now=<fixed aware datetime>)`. Rows are
-read from `result["budget_signals"]`.
+`currency = SWEDISH_KRONA`, `allowed_worker_minutes = Decimal("60.00")` unless stated; each
+criterion row uses a fresh task whose step set is **exactly** the steps named in that row;
+steps carry their worked seconds in `total_working_seconds` and **no open `StepStateRecord`**
+unless stated (so live seconds == settled seconds); a single working section unless stated.
+Set a fixed aware `T`; every historical `closed_at` is derived from `T` and stays within the
+90-day typical window. Construct contexts as
+`ServiceContext(identity={"workspace_id": workspace_id, "user_id": user_id, "role_name": "manager"}, incoming_data={}, query_params={"task_ids": [...]}, session=db_session, now=T)`.
+Rows are read from `result["budget_signals"]`.
 
 ### C1 — the allocator call and the query shape · trace **§3.1, §3A.1, §7A.6 (HC-7) → M1, M6**
 
 | Row | Fixture | Assertion | Expected |
 |---|---|---|---|
-| C1(a) | two sections `A`, `B` with seeded completed history (five samples each: `A` median **3600**, `B` median **1800** — copy `_seed_two_section_allocation`'s loop); the task: `A` `completed` worked 2400, `B` `pending` worked 0 | `projected_over_seconds, budget_state` | `0, within_budget` — allowances split 2400/1200, `B` left 1200, pot 1200. **Under an equal split** (typicals `None`) the same state gives `600, projected_over` |
+| C1(a) | two sections `A`, `B` with seeded completed history (five samples each: `A` median **3600**, `B` median **1800** — copy `_seed_two_section_allocation`'s loop with `closed_at = T - 1 day`); the task has **only** `A` `completed` worked 2400 with `closed_at is None`, and `B` `pending` worked 0 | `projected_over_seconds, budget_state` | `0, within_budget` — allowances split 2400/1200, `B` left 1200, pot 1200. **Under an equal split** (typicals `None`) the same state gives `600, projected_over` |
 | C1(b) | the C1(a) task requested alone, then together with two further evaluated tasks (no open records) — count statements with a `before_cursor_execute` listener as `test_budget_allocations_query.py:178-208` does | `count(three) == count(one)` | True (rule 13: **not** the literal twelve) |
 
 ### C2 — budget-bearing ⟺ a current committed evaluation · trace **§6A.1, §6 (D2) → M4**
@@ -100,7 +108,7 @@ read from `result["budget_signals"]`.
 |---|---|---|---|
 | C2(a) | committed evaluation, `60.00`, one `pending` step 0 | `budget_state != "no_budget"`; `currency` | `within_budget`; `"swedish_krona"` |
 | C2(b) | committed evaluation, **`Decimal("-12.50")`**, one `pending` step, no work (P-C on the production path) | `budget_state, projected_over_seconds, over_seconds, allowed_seconds, cost_per_worker_minute_ten_thousandths` | `projected_over, 750, 0, 0, 37500` |
-| C2(c) | **no** evaluation; primary item present with an `ItemValuation` (`SWEDISH_KRONA`) — the sibling `_seed`'s `unevaluated_task` | `budget_state` | `no_budget` |
+| C2(c) | **no** evaluation; its fresh task's primary item has an `ItemValuation` (`SWEDISH_KRONA`) | `budget_state` | `no_budget` |
 | C2(d) | a committed evaluation with `superseded_at` set and **no** current one | `budget_state` | `no_budget` |
 | C2(e) | a committed evaluation with `is_deleted = True` and no current one | `budget_state` | `no_budget` |
 
@@ -118,7 +126,7 @@ read from `result["budget_signals"]`.
 |---|---|---|---|
 | C4(a) | one evaluated task + one unevaluated task | `set(row.keys())` on **both** rows | exactly `{task_id, budget_state, over_seconds, over_cost_minor, projected_over_seconds, projected_over_cost_minor, currency, allowed_seconds, actual_worked_seconds, cost_per_worker_minute_ten_thousandths}` (derived: 10) |
 | C4(b) | both rows | per key: the eight numerics `type(v) is int and v >= 0`; `task_id`, `budget_state`, `currency` `type(v) is str`; `budget_state in BUDGET_STATES`; `currency in CURRENCY_VOCABULARY` | True |
-| C4(c) | the whole `result` dict | a recursive walk finds **no `list` or `dict` inside any row** (the only list is `budget_signals` itself) | True |
+| C4(c) | the whole `result` dict | `set(result.keys())`; then a recursive walk finds **no `list` or `dict` inside any row** (the only list is `budget_signals` itself) | exactly `{budget_signals}`; True |
 
 ### C5 — cardinality, duplicates, visibility, cap · trace **§7A.1, §7.3 (D7) → M4**
 
@@ -152,10 +160,10 @@ read from `result["budget_signals"]`.
 |---|---|---|---|
 | C8(a) | evaluated task, one `completed` step settled **3736** | `over_seconds, over_cost_minor, projected_over_seconds, projected_over_cost_minor, budget_state` | `136, 9, 136, 9, over` |
 | C8(b) | settled **3602** | `over_seconds` | `2` (the minute-domain derivation gives `1`) |
-| C8(c) | the evaluation's `cost_per_worker_minute_minor_snapshot = Decimal("3.7500")` while its `ProductionCostBasisVersion.cost_per_worker_minute_minor = Decimal("9.9999")` | `cost_per_worker_minute_ten_thousandths`; and `== int(evaluation.cost_per_worker_minute_minor_snapshot.scaleb(4))` on the **ORM-read** value, `== evaluation.cost_per_worker_minute_minor_snapshot * 10_000` exactly | `37500` — the snapshot, never the live basis |
+| C8(c) | the evaluation's `cost_per_worker_minute_minor_snapshot = Decimal("3.7500")` while its `ProductionCostBasisVersion.cost_per_worker_minute_minor = Decimal("9.9999")`; explicitly `await db_session.refresh(evaluation)` before reading the rate | `cost_per_worker_minute_ten_thousandths`; and `== int(evaluation.cost_per_worker_minute_minor_snapshot.scaleb(4))` on the **ORM-read** value, `== evaluation.cost_per_worker_minute_minor_snapshot * 10_000` exactly | `37500` — the snapshot, never the live basis |
 | C8(d) | settled **3608** | `over_seconds, over_cost_minor, budget_state` | `8, 0, over` |
 
-### 6.1 Named mutations — the closed set (17)
+### 6.1 Named mutations — the closed set (18)
 
 | # | Mutation (site) | Must redden |
 |---|---|---|
@@ -174,14 +182,20 @@ read from `result["budget_signals"]`.
 | MUT-13 | `continue` when `evaluation is None` | C5(f), C2(c) |
 | MUT-14 | delete `.order_by(Task.client_id.asc())` | C6(a) or C6(b) — **if neither reddens** (the heap happened to return ascending order) record a miss and grow the fixture to five ids; do not declare the mutation covered |
 | MUT-15 | `load_live_worked_seconds(..., datetime.now(timezone.utc))` instead of `ctx.now` | C7(b) (delta ≠ 60) — run under `TZ=UTC` and the host zone |
-| MUT-16 | `over_seconds` derived as `max(0, int(-calculate_remaining_worker_minutes(Decimal(allowed), calculate_actual_worker_minutes(actual)) * 60))` | C8(b) |
-| MUT-17 | `cost_per_worker_minute_minor_snapshot=basis.cost_per_worker_minute_minor` at the call site | C8(c) |
+| MUT-16 | `app/beyo_manager/domain/item_economics/budget_signal.py`, definition site `compute_budget_signal`: derive `over_seconds` as `max(0, int(-calculate_remaining_worker_minutes(Decimal(allowed), calculate_actual_worker_minutes(actual)) * 60))` | C8(b) |
+| MUT-17 | `get_task_budget_signals.py`, call site: use the matching entry from the loaded `basis_versions` list's `cost_per_worker_minute_minor` instead of `evaluation.cost_per_worker_minute_minor_snapshot` | C8(c) |
+| MUT-18 | `get_task_budget_signals.py`, definition site: move the raw-list cap check until after the visibility query | C5(d) (statement count becomes non-zero) |
 
-Plus two **exception-shape probes** recorded as ledger rows (not criteria): pass
-`Decimal(over_seconds)` into the money call (expect `TypeError` to surface from the service
-in C8(a) — the production consequence is a 500 with no identity, §4A.1); use
+Plus two **exception-shape probes** recorded as ledger rows (not criteria): in
+`app/beyo_manager/domain/item_economics/budget_signal.py`, definition site
+`compute_budget_signal`, pass `Decimal(over_seconds)` into the money call (expect `TypeError`
+to surface from the service in C8(a) — the production consequence is a 500 with no identity,
+§4A.1); use
 `live_seconds.get(step.client_id, 0)` instead of strict indexing and confirm **no** test in
-this file observes it — record it as the known blind spot the strict index exists for.
+this file observes it — record it as the known blind spot the strict index exists for. The
+two probes that touch `budget_signal.py` are reverted, declared phase-1-file probes, not
+perimeter changes. For MUT-06's hypothetical general-path call, use `Decimal("3.7500")` as
+the deliberately arbitrary rate; C3(a)'s red is `actual_worked_seconds`, not money.
 
 ## 7. Notes
 
@@ -198,3 +212,63 @@ this file observes it — record it as the known blind spot the strict index exi
 ## 8. Review log
 
 *(append-only)*
+
+- **Projection r0 consumed (2026-08-24).** `20260824_plan_2_projection_round_0.md` returned
+  `AMENDMENTS_REQUIRED`. The owner approved the M6/§9 perimeter clarification; the coordinator
+  then folded PROJ-01–10 and PROJ-12–15 without changing product semantics: criterion-local
+  fresh task fixtures, parameterised evaluations, fixed-clock historical evidence, teardown,
+  ORM refresh, sited mutations/probes plus MUT-18, the service envelope assertion, a constructible
+  context, and the corrected cleanup citation. Explicit delegations: fresh task IDs must not
+  collide with sibling helpers' scalar IDs `1`, `2`, or historical `100+`; MUT-06 may use
+  `Decimal("3.7500")`. The owner then explicitly waived re-projection r1: one projection round
+  is sufficient for this bounded phase, so the folded plan proceeds to implementation.
+- **Implementation round 1 blocked at close (2026-08-24, Codex).** Added the batched service,
+  additive ten-key serializer pair, and one criterion-local integration test for each of
+  C1(a)–C8(d). Task 0 reproduced the plan-1 probe and the unequal-typical allocation, and
+  confirmed that a single user's single open record contributes exactly 60 seconds after a
+  60-second `ctx.now` advance. The honest red baseline was 28 import failures before the
+  service existed. Final focused evidence: L1 **28 passed** and L2 **639 passed**. The one
+  closing L4 stamp was **22 failed / 2785 passed / 1 skipped**: the durable 21 IDs remained,
+  but `test_production_time_contract.py::test_c19_division_has_one_allocator_and_services_only_consume_it`
+  was added because that inherited source scan hard-codes the two pre-phase-2 consumers. All
+  18 named mutations reddened and were md5-restored; the
+  Decimal money-operand probe surfaced `TypeError`, while the declared strict-index blind-spot
+  probe stayed green at 28 passed and was restored. No new product judgment was taken. The
+  complete trace, mutation, contract, perimeter, blocker, and graph records are in
+  `handoffs/implementer/20260824_plan_2_implementation_round_1.md`.
+- **Owner decision consumed (2026-08-25).** The owner approved the inherited C19 contract-test
+  perimeter amendment. The allowed file is added to §4 and the master-plan §6.1 registry solely
+  to add `get_task_budget_signals` to C19's allocator-consumer set. A bounded continuation must
+  also restore unrelated formatting-only changes in `division_serializers.py`, re-stamp the
+  resulting tree, checkpoint it, and then enter review.
+- **Maintenance r1 consumed (2026-08-25).** `20260825_full_suite_fixture_order_stabilization_round_1.md`
+  repaired the unrelated order-dependent clock-code fixtures and C10's nondeterministic SQL-order
+  assertion. Both serial file orders passed, and its one L4 stamp returned exactly the durable
+  baseline: **21 failed / 2786 passed / 1 skipped**, with an empty failing-ID delta. Its executable
+  tree retains the Plan-2 service, serializer, integration-test, and C19 hashes from implementation
+  round 2, so the evidence unblocks the Plan-2 checkpoint without a redundant full-suite run.
+- **Implementation round 2 blocked at close (2026-08-25, Codex).** The bounded continuation changed
+  only C19's closed consumer set and restored the serializer's pre-round-1 formatting outside
+  the two additive budget-signal functions and two `__all__` entries. The service and Plan-2
+  integration test retained their round-1 SHA-256 identities, so the 18/18 named mutation
+  ledger and two exception-probe records remain valid without re-execution. Honest continuation
+  red: C19 failed with `get_task_budget_signals` as the sole extra member; after the authorized
+  amendment C19 was **1 passed**, the Plan-2 integration file **28 passed**, L2 **639 passed**,
+  but the closing stamp could not establish the required empty failing-ID delta. Run 1 was
+  **22 failed / 2785 passed / 1 skipped** with one unrelated C10 ordering addition; C10 passed
+  immediately at L1. The charter-authorized anomaly recovery was **24 failed / 2783 passed /
+  1 skipped** with three different `clock_in_code` fixture additions; those three fail alone
+  because they require two workspaces seeded by other files. One additive graph batch recorded
+  the task-budget-signals projection plus its six proven containment/read/implementation edges;
+  no endpoint or review item was changed. No checkpoint was made. Complete cycle evidence,
+  perimeter, and owner card: `handoffs/implementer/20260825_plan_2_implementation_round_2.md`.
+- **Checkpoint closeout (2026-08-25, Codex).** No executable or test file changed in this
+  closeout. The Plan-2 service, serializer, integration test, and C19 hashes still match
+  implementation round 2; the two maintenance test hashes still match maintenance round 1.
+  The maintenance L4 stamp is therefore the handed-over executable-tree stamp: **21 failed /
+  2786 passed / 1 skipped**, with additions `∅` and removals `∅` against the durable baseline.
+  L4 budget was 0 and no test was rerun. The tracker moved to `IMPLEMENTED`; the checkpoint
+  stages the authorized Plan-2 and maintenance artifacts plus only the already-recorded
+  task-budget-signals graph projection and its six relationships. The unrelated bootstrap
+  graph node/edges and the waived re-projection queue prompt remain unstaged. Checkpoint subject:
+  `CHECKPOINT (not approved): task budget signal phase 2`.
