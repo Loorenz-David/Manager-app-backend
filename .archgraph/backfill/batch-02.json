@@ -1,0 +1,257 @@
+{
+  "operations": [
+    {
+      "itemId": "node:table-task-step-dependency",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/tasks/task_step_dependency.py",
+          "symbol": "TaskStepDependency"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-task-step-acknowledgment",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/tasks/task_step_acknowledgment.py",
+          "symbol": "TaskStepAcknowledgment"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-task-step-assignment-record",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/tasks/task_step_assignment_record.py",
+          "symbol": "TaskStepAssignmentRecord"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-pause-reason",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/pause_reasons/pause_reason.py",
+          "symbol": "PauseReason"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-item-issue",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/items/item_issue.py",
+          "symbol": "ItemIssue"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-user-daily-work-stats",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/analytics/user_daily_work_stats.py",
+          "symbol": "UserDailyWorkStats"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-user-lifetime-stats",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/analytics/user_lifetime_stats.py",
+          "symbol": "UserLifetimeStats"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-user-section-daily-work-stats",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/analytics/user_section_daily_work_stats.py",
+          "symbol": "UserSectionDailyWorkStats"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-working-section-daily-work-stats",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/analytics/working_section_daily_work_stats.py",
+          "symbol": "WorkingSectionDailyWorkStats"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-execution-task",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/execution/execution_task.py",
+          "symbol": "ExecutionTask"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-execution-payload",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/execution/execution_payload.py",
+          "symbol": "ExecutionPayload"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-delayed-scheduler",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/schedulers/delayed_scheduler.py",
+          "symbol": "DelayedScheduler"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-user-shift-state-record",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/users/user_shift_state_record.py",
+          "symbol": "UserShiftStateRecord"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-user-work-profile",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/users/user_work_profile.py",
+          "symbol": "UserWorkProfile"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-transition-step-state",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/transition_step_state.py",
+          "symbol": "transition_step_state"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-transition-step-state-batch",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/transition_step_state_batch.py",
+          "symbol": "transition_step_state_batch"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:helper-apply-step-transition",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/_step_transition_core.py",
+          "symbol": "_apply_step_transition"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:helper-cascade-step-completion",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/_cascade_completion.py",
+          "symbol": "cascade_step_completion"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:helper-fetch-open-user-working-record",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/_user_working_record.py",
+          "symbol": "fetch_open_user_working_record"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-mark-step-time-inaccurate",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/mark_step_time_inaccurate.py",
+          "symbol": "_apply_inaccurate_time_flag"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-cancel-pending-step-completion",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/cancel_pending_step_completion.py",
+          "symbol": "cancel_pending_step_completion"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 2/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

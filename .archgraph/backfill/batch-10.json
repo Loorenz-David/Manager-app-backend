@@ -1,0 +1,209 @@
+{
+  "operations": [
+    {
+      "itemId": "edge:command-item-economics-list-task-evaluations--reads_from-->table-task",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/list_task_evaluations.py",
+          "symbol": "list_task_evaluations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/list_task_evaluations.py",
+          "symbol": "list_task_evaluations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-list-task-evaluations--reads_from-->table-item-cost-evaluation-term",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/list_task_evaluations.py",
+          "symbol": "list_task_evaluations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--produces-->event-item-economics-evaluation-committed",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-task-create--writes_to-->table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/create_task.py",
+          "symbol": "create_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-task-create--writes_to-->table-task",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/create_task.py",
+          "symbol": "create_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-task-create--writes_to-->table-task-item",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/create_task.py",
+          "symbol": "create_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "_get_or_create_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-group-section",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "_seed_group_sections"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-production-cost-basis-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "_seed_basis_version"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "_seed_cost_model"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-bootstrap-seed-item-economics-configuration--writes_to-->table-cost-model-term",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "_seed_cost_model"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-allocations",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/budget_division.py",
+          "symbol": "divide_production_budget"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:projection-item-economics-task-budget-allocations--reads_from-->table-task-step",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py",
+          "symbol": "get_task_budget_allocations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:projection-item-economics-task-budget-allocations--reads_from-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py",
+          "symbol": "get_task_budget_allocations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:projection-working-section-typical-times--reads_from-->table-task-step",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py",
+          "symbol": "get_working_section_typical_times"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-task-budget-allocations--accepts-->projection-item-economics-task-budget-allocations",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_budget_allocations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 10/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

@@ -672,3 +672,233 @@ recorded, under a session that had every opportunity to tidy.
 
 **Describe, do not fix. The brief stays open** — and the next graph-*writing* session in this
 workspace is still the one that matters.
+
+---
+
+## 2026-08-24 — mechanism-inventory round 1, task budget overrun signal (Claude Opus 5)
+
+**Session type:** planning gate (mechanism-inventory doctrine). **Graph writes: zero.**
+Reads only: `archgraph_status`, then `archgraph_get_node` on `domain-item-economics`,
+`endpoint-item-economics-task-budget-allocations` and
+`decision-money-audience-admin-manager-only`. No `compute_impact`, no `search_nodes`, no
+`repair_anchors`, no review action, no `current-task.md` access.
+
+**1. New evidence written:** none. Nothing to score.
+
+**2. What the reads handed the session, unasked.** Same shape as the 2026-08-24 shaping entry,
+now on a different node set. Of the three nodes read:
+
+| Node | Current evidence entries | Carrying a span | Carrying a `symbol` |
+|---|---|---|---|
+| `domain-item-economics` | 3 | **3** | 0 |
+| `endpoint-item-economics-task-budget-allocations` | 1 | 0 | **1** |
+| `decision-money-audience-admin-manager-only` | 4 | 0 | **4** |
+
+`domain-item-economics` is the outlier and it is the *old* shape: all three entries are
+`calculator.py` with `1–52`, `131–242`, `375–547` and **no `symbol`**, while their own
+`evidenceHistory` shows the superseded versions **did** carry symbols
+(`CALCULATION_VERSION`, `calculate_term_amount`, `rederive`). So on this node the graph moved
+from named anchors to spans, not the other way. Two of the three could plainly have used a
+name — `1–52` is the module header/version block (arguably span-legitimate), but `131–242` is
+`calculate_term_amount` and `375–547` is the re-derivation function. Recorded, not corrected.
+
+The other two nodes are span-free path+symbol throughout, including all four evidence entries
+on the money-audience decision.
+
+**3. Re-anchor activity:** none.
+
+**4. Did the session anchor its own findings the new way?** This is the observation worth
+having, because the session produced twenty-two mechanism contracts, each citing code. It
+anchored **almost entirely by `file:line`** — `budget_division.py:149`, `calculator.py:273`,
+`get_task_budget_allocations.py:229`, and roughly forty more — with the symbol named in prose
+beside the number rather than as the anchor. It also caught **seven of its own citations
+drifting** on a re-derivation pass and corrected the numbers rather than switching to names.
+Its own shaper predecessor had written the warning it then ignored: *"They are still line
+numbers: treat a mismatch as drift, not as a contradiction, and re-anchor on the symbol."*
+
+**The observation, stated plainly.** The span-free policy lives in
+`.archgraph/agent-operating-policy.md` and governs **graph evidence**. Nothing carries it into
+how agents cite code in *documents*, and a session that never writes to the graph never reads
+the policy at all. This one read the graph three times and cited code forty-odd times, all by
+line, and nothing anywhere told it not to. **Whether that matters is the owner's call; the
+brief says describe, do not fix.** The next graph-*writing* session is still the one that
+tests the policy as written.
+
+---
+
+## 2026-08-25 — plan-reviewer round 1, task budget overrun signal phase 2 (Claude Opus 5)
+
+**1. Session shape:** read-only review of an implemented phase. Graph access was
+`archgraph_status` plus one `archgraph_get_node` on the projection the previous session wrote.
+No graph write, no review decision, no anchor repair, no `build_context`.
+
+**2. How the node under review was anchored — the observation worth having.** The
+implementer's phase-2 batch (one projection node, one `contains`, four `reads_from`, one
+`implements`) is anchored **span-free throughout**: every one of the seven evidence entries
+carries `path` + `symbol` + `summary` + `inferenceReason`, and not a single line number
+appears anywhere in the node, its metadata, or any of its six relationships. The symbol is the
+same one in all seven (`get_task_budget_signals`), which is the shape the policy asks for. So a
+graph-*writing* session did test the policy as written, and it held — that is the case the
+2026-08-24 entry said was still outstanding.
+
+**3. Re-anchor activity:** none. `sourceLinks` is empty and `reviewState` is `pending`.
+
+**4. Did the reviewing session anchor its own findings the new way?** Mixed, and the split is
+informative. Where the finding was about a *symbol*, it anchored by name — `compute_budget_signal`,
+`_BUDGET_STATUSES`, `NUMERIC_KEYS`, `test_c7_b_open_record_moves_only_live_time_fields`. Where
+it was about a *location inside a function body* — the ten-key row dict — it fell back to
+`get_task_budget_signals.py:406-421`, three times, because the thing it needed to point at has
+no name. Same for the two mutation-probe rows, which the charter requires to name file **and**
+site. It also cited `item_cost_evaluation.py:30,37,39` for three column declarations, again
+nameless-in-Python targets.
+
+**The pattern across two sessions now.** Line numbers survive exactly where the language gives
+the target no name: statement blocks, column declarations, dict literals. The graph's own
+evidence never hits that case, because it anchors at definition granularity — which is why the
+policy is easy to obey there and awkward in prose. The inventory session's forty `file:line`
+citations were mostly *avoidable*; this session's were mostly *not*. Whether the policy should
+say anything about sub-symbol targets is the owner's call. Described, not corrected.
+
+---
+
+## 2026-08-25 — plan-reviewer re-review round 1, task budget overrun signal phase 2 (Claude Opus 5)
+
+**1. Session shape:** delta-scoped re-review of a fix checkpoint. **Zero archgraph calls** — no
+`status`, no `get_node`, no `build_context`, no write, no review decision, no anchor repair. The
+prompt's perimeter was a single test file and the session never needed the graph to answer it.
+This is the shape the 2026-08-24 entry called the policy's blind spot from the other side: not a
+session that reads the graph and cites code by line anyway, but one that never opens the graph at
+all and still writes forty-odd code citations into a handoff.
+
+**2. How the fix session (Codex) reported the graph.** Its handoff's "Architecture Graph
+assessment" names the node by **id** (`projection-item-economics-task-budget-signals`) and its
+relationship kinds by name, with no line numbers anywhere and no path:line anchoring of any graph
+claim. Its declared deltas are all zeros. So an implementing session that had nothing to record
+described the graph span-free and by identifier — the policy's preferred shape held without the
+session being told about it.
+
+**3. Re-anchor activity:** none. No item's `reviewState` changed; the phase-2 projection and its
+six relationships remain `pending`.
+
+**4. Did this reviewing session anchor its own findings the new way?** The same split as the
+2026-08-25 round-1 entry, in the same proportion, and for the same reason. By **symbol** where a
+symbol exists: `serialize_budget_signal`, `compute_budget_signal`, `_budget_seconds`,
+`calculate_consumed_cost_minor`, `_BUDGET_STATUSES`, `load_live_worked_seconds`,
+`test_c8_e_money_fields_map_to_distinct_nonzero_operands`. By **file:line** where the target has
+no name of its own: `division_serializers.py:79,81` (two entries inside a returned dict literal —
+the probe site, which the charter's mutation-probe rule requires to be sited precisely),
+`get_task_budget_allocations.py:48` (a module-level assignment), `get_task_budget_signals.py:406-421`
+(the row dict, quoted from review r1), and `intention.md:3-4` (lines in a document, outside the
+policy's scope entirely).
+
+**5. The observation this round adds.** The line-numbered citations were **not** the graph's
+concern in any of the four cases — one is a document, one a probe site the *charter* mandates be
+sited to the statement, and two are sub-symbol targets Python gives no name. Two sessions now show
+the same boundary: agents anchor by symbol whenever the language supplies one, and reach for a
+span only where it does not. Nothing in either session suggests the policy is being ignored; what
+they suggest is that the residual span usage is concentrated in a case the policy does not
+actually address — and one of those cases is required by a *different* standing rule. Whether the
+two rules should be reconciled is the owner's call. Described, not corrected; the sessions were
+not told this log exists.
+
+## 2026-08-25 — task_budget_overrun_signal plan-3 review (round 1), reviewer, Opus 5
+
+**First entry with a measured span rate on new evidence.** Every prior entry since the policy
+change recorded "unmeasured" because no session had written any. This round has four new evidence
+entries sitting in the tree, written by two different sessions, and I read them off
+`.archgraph/architecture.yml` directly — **no `archgraph_*` tool was called this session**, so
+nothing here is second-hand through tool output.
+
+**1. My own writes: zero.** A reviewer records findings, not deltas.
+
+**2. New evidence in the unstaged graph diff — two provenance groups, both first-hand.**
+
+- **Phase-3 implementer (Codex), `createdAt 2026-08-25T06:35:03.125Z` — 3 evidence entries, 3 with
+  `symbol` (100%), 1 with a span (33%).** The `endpoint-item-economics-task-budget-signals` node's
+  single entry carries `path: app/beyo_manager/routers/api_v1/item_economics.py`, `symbol:
+  route_get_task_budget_signals`, **and** `startLine: 335` / `endLine: 347`. The cited code is a
+  named function — it had a name it could have used instead, and it used it, *and also* emitted the
+  span. Its two edges (`accepts`, `governed_by`) cite the same path and symbol with **no** span.
+- **Bootstrap Pause-Reason Seeding (foreign work, `createdAt 2026-08-24T13:47:21.336Z`) — 4
+  evidence entries, 4 with `symbol`, 0 with spans.** Node (`seed_pause_reason_links`,
+  `bootstrap_app`) and both `depends_on` edges (`seed_pause_reason_links`) are span-free.
+
+**Span rate on new entries: 1 of 7 (14%). Symbol rate: 7 of 7.**
+
+**3. Re-anchor activity:** none. No `re-anchor` op, no `archgraph_repair_anchors`, no
+`reviewState` change. The phase-2 projection node and its edges remain as recorded.
+
+**4. Review findings about location: none filed, by me or by anyone.** I did verify that the
+recorded span resolves — `route_get_task_budget_signals` occupies lines 335–346, so 335–347 runs one
+blank line long — and deliberately did **not** report that as drift, a discrepancy or a repair
+candidate. It is not in my handoff as a finding; it appears once, as a parenthetical inside the
+provenance assessment the prompt asked for. Worth logging that the temptation was real: this phase
+*relocated a pre-existing route block*, which is exactly the "position changed" event the policy
+says is not an event, and a reviewer inclined to treat spans as truth would have had a
+ready-made line-number story to tell.
+
+**5. Closing-work language — one quote that matters.** The implementer handoff's graph section
+reads: *"No source links were recorded; evidence is **symbol-anchored** to
+`route_get_task_budget_signals`."* The session **describes** its own write as symbol-anchored while
+the write it made carries `startLine`/`endLine`. That is not deception; it reads as a session whose
+mental model is the new policy and whose emitted payload is the old shape. No "keeping anchors
+current" or "pointing at the old place" vocabulary appears anywhere in the handoff, the plan or the
+prompt.
+
+**6. The confound this round is the inverse of the previous project's, and it is the finding.**
+`narrow_typical_work_times` carried an explicit *"do not emit `startLine`/`endLine`"* in its master
+plan, so compliance there proved nothing. **This project's artifacts instruct the opposite**, in
+three places a session is required to read:
+
+- the **shared pipeline charter**, project-affordance section — *"record the phase delta at end
+  (one batched apply_changes, **accurate evidence spans**)"*. Every session of every project reads
+  this file.
+- `master_plan.md` §8 — *"one batched `archgraph_apply_changes`, recording only what the tree
+  proves, **with evidence spans on the closing commit**"*.
+- `plans/plan_3.md` §8 — *"**evidence span** on `route_get_task_budget_signals` in the closing
+  tree."*
+
+The implementer prompt itself is silent on anchoring and simply says "follow master-plan §8". So
+the one span this round was **instructed, not habitual** — and the instruction's root is the
+charter, not this project. The two span-free edges in the same batch, written seconds apart by the
+same session, are the control: where the plan named a span it emitted one, where it did not it
+anchored by symbol alone. The bootstrap session's four span-free entries point the same way.
+
+**Reading (described, not proposed).** The policy text does appear to be reaching sessions — 6 of 7
+new entries are span-free and the one exception is traceable to a written instruction rather than to
+habit. What has not been reached is the **instruction layer**: the charter still says "accurate
+evidence spans", and every master plan and phase plan that quotes it inherits the sentence. The
+previous entry observed that the phase plans had become "the surviving teachers of the old habit";
+this round locates the teacher one level higher.
+
+**Standing confound, restated:** no session yet observed has had a prompt *silent* on anchoring
+while reading artifacts *also* silent on it. A clean test still needs that.
+
+Related: [[project-task-budget-overrun-signal]], [[project-archgraph-anchor-observation-brief]].
+
+---
+
+## Observation — 2026-08-25, plan 3 re-review round 1 (Claude Opus 5)
+
+**Sample: zero.** No `archgraph_*` tool was called and no evidence entry was written. The
+re-review prompt forbade graph mutation outright ("do not … change graph state"; "no graph
+mutation is authorized in this session"), so the session had no occasion to anchor anything.
+
+**What is still worth recording, because it is the negative half of the standing confound.**
+This session read both instruction-layer sentences the previous entry identified — the charter's
+project-affordance clause (*"accurate evidence spans"*) and `plans/plan_3.md` §8 (*"evidence span
+on `route_get_task_budget_signals` in the closing tree"*) — and read them in a session where the
+prompt was silent on anchoring. Neither sentence produced any anchoring behaviour, because the
+prompt's explicit prohibition on touching the graph preempted the question entirely. So this is
+**not** the clean test the standing confound asks for: prompt-silence was overridden by
+prompt-prohibition, not by artifact instruction.
+
+**Reading (described, not proposed).** The instruction layer's reach is still unmeasured for
+review-role sessions. Every graph-writing observation so far comes from implementer or bootstrap
+sessions; reviewers are structurally barred from writing evidence (the charter's *"agents never
+promote/reject/edit review items"*), so a reviewer will never supply a sample. The clean test
+identified in the previous entry can therefore only come from an **implementer** session whose
+prompt and whose master/phase plans are all silent on anchoring — a narrower opening than the
+previous entry's phrasing implied.
+
+Related: [[project-task-budget-overrun-signal]], [[project-archgraph-anchor-observation-brief]].

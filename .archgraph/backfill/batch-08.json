@@ -1,0 +1,209 @@
+{
+  "operations": [
+    {
+      "itemId": "edge:endpoint-item-economics-create-projection--accepts-->command-item-economics-create-item-cost-projection",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_create_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-delete-projection--accepts-->command-item-economics-delete-item-cost-projection",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_delete_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-promote-projection--accepts-->command-item-economics-promote-item-cost-projection",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_promote_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-commit-evaluation--returns-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_commit_item_cost_evaluation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-create-projection--returns-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_create_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-delete-projection--returns-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_delete_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-promote-projection--returns-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_promote_item_cost_projection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-list-evaluations--returns-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_list_task_evaluations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-task-item",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-production-cost-basis-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--reads_from-->table-cost-model-term",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-commit-item-cost-evaluation--writes_to-->table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/commit_item_cost_evaluation.py",
+          "symbol": "_commit_item_cost_evaluation_in_session"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 8/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

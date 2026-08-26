@@ -1,0 +1,245 @@
+{
+  "operations": [
+    {
+      "itemId": "node:table-production-cost-group-section",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/production_cost_group_section.py",
+          "symbol": "ProductionCostGroupSection"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-production-cost-basis-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/production_cost_basis_version.py",
+          "symbol": "ProductionCostBasisVersion"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-cost-model-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/cost_model_version.py",
+          "symbol": "CostModelVersion"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-cost-model-term",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/cost_model_term.py",
+          "symbol": "CostModelTerm"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/item_cost_evaluation.py",
+          "symbol": "ItemCostEvaluation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-item-cost-evaluation-term",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/item_cost_evaluation_term.py",
+          "symbol": "ItemCostEvaluationTerm"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-item-cost-result",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/item_cost_result.py",
+          "symbol": "ItemCostResult"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/item_valuation.py",
+          "symbol": "ItemValuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-create-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/create_production_cost_group.py",
+          "symbol": "create_production_cost_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-update-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/update_production_cost_group.py",
+          "symbol": "update_production_cost_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-delete-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/delete_production_cost_group.py",
+          "symbol": "delete_production_cost_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-add-section-to-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/add_section_to_cost_group.py",
+          "symbol": "add_section_to_cost_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-remove-section-from-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/remove_section_from_cost_group.py",
+          "symbol": "remove_section_from_cost_group"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-create-production-cost-basis-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/create_production_cost_basis_version.py",
+          "symbol": "create_production_cost_basis_version"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-delete-production-cost-basis-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/delete_production_cost_basis_version.py",
+          "symbol": "delete_production_cost_basis_version"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-create-cost-model-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/create_cost_model_version.py",
+          "symbol": "create_cost_model_version"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-delete-cost-model-version",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/delete_cost_model_version.py",
+          "symbol": "delete_cost_model_version"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-set-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/set_item_valuation.py",
+          "symbol": "set_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-item-economics-delete-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/delete_item_valuation.py",
+          "symbol": "delete_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:endpoint-item-economics-put-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_set_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 4/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

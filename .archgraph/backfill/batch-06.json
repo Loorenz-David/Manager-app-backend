@@ -1,0 +1,225 @@
+{
+  "operations": [
+    {
+      "itemId": "node:projection-item-economics-task-budget-status-worker",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_budget_status_worker.py",
+          "symbol": "get_task_budget_status_worker"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-task-create",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/create_task.py",
+          "symbol": "create_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:decision-money-audience-admin-manager-only",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/tasks/serializers.py",
+          "symbol": "include_monetary_step_fields"
+        },
+        {
+          "index": 1,
+          "path": "app/beyo_manager/domain/tasks/serializers.py",
+          "symbol": "serialize_step"
+        },
+        {
+          "index": 2,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "_run_budget_status"
+        },
+        {
+          "index": 3,
+          "path": "app/beyo_manager/domain/item_economics/serializers.py",
+          "symbol": "_serialize_result"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-bootstrap-seed-item-economics-configuration",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/bootstrap/phases/seed_item_economics_configuration.py",
+          "symbol": "seed_item_economics_configuration"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/integration/services/commands/bootstrap/test_seed_item_economics_configuration.py",
+          "symbol": "test_human_successors_permanently_freeze_bootstrap_basis_and_model"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:source-file-item-economics-budget-division",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/budget_division.py",
+          "symbol": "divide_production_budget"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:projection-working-section-typical-times",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py",
+          "symbol": "get_working_section_typical_times"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:projection-item-economics-task-budget-allocations",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py",
+          "symbol": "get_task_budget_allocations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:endpoint-working-section-typical-times",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/working_sections.py",
+          "symbol": "get_working_section_typical_times_route"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:endpoint-item-economics-task-budget-allocations",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_budget_allocations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:projection-item-economics-task-production-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_production_time.py",
+          "symbol": "get_task_production_time"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/integration/services/queries/item_economics/test_production_time_query.py",
+          "symbol": "test_c11_c12_c20_c24_e2_and_e3_agree_and_keep_e2_shape"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:endpoint-item-economics-task-production-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_production_time"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/unit/routers/api_v1/test_production_time_routes.py",
+          "symbol": "test_production_time_route_is_available_to_all_roles"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:endpoint-item-economics-task-price-scenario",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_price_scenario"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/unit/routers/api_v1/test_item_economics_router.py",
+          "symbol": "test_price_scenario_route_mounts_the_price_scenario_service"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:projection-item-economics-task-price-scenario",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py",
+          "symbol": "get_task_price_scenario"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/integration/services/queries/item_economics/test_price_scenario_query.py",
+          "symbol": "test_c1_status_matrix_has_twelve_exact_rows"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:domain-purchase-api-sek-price-normalization",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 1,
+          "path": "app/beyo_manager/services/queries/items/lookup/purchase_api.py",
+          "symbol": "PurchaseApiLookupHandler.lookup"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:projection-live-worked-seconds",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/live_worked_seconds.py",
+          "symbol": "load_live_worked_seconds"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 6/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

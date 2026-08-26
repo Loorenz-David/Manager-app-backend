@@ -1,0 +1,137 @@
+{
+  "operations": [
+    {
+      "itemId": "edge:endpoint-working-section-typical-times--accepts-->projection-working-section-typical-times",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/working_sections.py",
+          "symbol": "get_working_section_typical_times_route"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-production-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/budget_division.py",
+          "symbol": "divide_production_budget"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-task-production-time--accepts-->projection-item-economics-task-production-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_production_time"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-task-create--reads_from-->table-item",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/create_task.py",
+          "symbol": "create_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-task-price-scenario--accepts-->projection-item-economics-task-price-scenario",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_get_task_price_scenario"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:projection-live-worked-seconds--reads_from-->table-step-state-record",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/live_worked_seconds.py",
+          "symbol": "load_live_worked_seconds"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:projection-live-worked-seconds--calls-->src-compute-record-contributions",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/live_worked_seconds.py",
+          "symbol": "load_live_worked_seconds"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:domain-item-economics--governed_by-->decision-item-economics-production-budget-cap-v1",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/calculator.py",
+          "symbol": "calculate_production_budget"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:infrastructure-test-database-isolation--contains-->infrastructure-template-copy-contention-lock",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation.start"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:infrastructure-test-database-isolation--configured_by-->test-database-isolation-contract",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation._ensure_template"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:test-item-economics-domain-purity-guards--verifies-->domain-item-economics-typical-filters",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/unit/domain/item_economics/test_domain_purity.py",
+          "symbol": "test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 11/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

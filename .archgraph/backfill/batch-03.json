@@ -1,0 +1,255 @@
+{
+  "operations": [
+    {
+      "itemId": "node:command-assign-worker-to-step",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/assign_worker_to_step.py",
+          "symbol": "assign_worker_to_step"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:helper-task-state-transitions",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/tasks/_task_state_transitions.py",
+          "symbol": "maybe_evaluate_task_ready"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-mark-step-obligations-acknowledged",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_step_acknowledgments/mark_step_obligations_acknowledged.py",
+          "symbol": "mark_step_obligations_acknowledged"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:task-finalize-pending-step-completion",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py",
+          "symbol": "handle_finalize_pending_step_completion"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-pause-task-working-steps-for-case",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/cases/_case_created_step_pause.py",
+          "symbol": "pause_task_working_steps_for_case"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:contract-step-transition-payload",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/execution/payloads/step_transition.py",
+          "symbol": "StepTransitionPayload"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:src-create-instant-task",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/infra/execution/task_factory.py",
+          "symbol": "create_instant_task"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:infra-task-router",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/infra/execution/task_router.py",
+          "symbol": "run_task_router"
+        },
+        {
+          "index": 1,
+          "path": "app/beyo_manager/services/infra/execution/task_router.py",
+          "symbol": "QUEUE_MAP"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:infra-worker-base",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/infra/execution/worker_base.py",
+          "symbol": "run_worker"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:analytics-process-step-transition",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/tasks/analytics/process_step_transition.py",
+          "symbol": "handle_process_step_transition"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:analytics-recompute-step-time-totals",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/tasks/analytics/process_step_transition.py",
+          "symbol": "_recompute_step_time_totals"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:analytics-reconcile-user-day-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/analytics/reconcile_user_time.py",
+          "symbol": "reconcile_user_day_time"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:analytics-apply-reconcile-deltas",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/analytics/reconcile_user_time.py",
+          "symbol": "apply_reconcile_deltas"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:src-compute-record-contributions",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/analytics/averaged_time.py",
+          "symbol": "compute_record_contributions"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:command-reconcile-worker-shift-state",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/users/reconcile_worker_shift_state.py",
+          "symbol": "reconcile_worker_shift_state"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:domain-analytics-insights-engine",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/analytics/insights/engine.py",
+          "symbol": "evaluate"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:script-backfill-averaged-time",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/scripts/backfill/backfill_averaged_time.py",
+          "symbol": "_run"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:concept-attribution-split",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/task_steps/transition_step_state.py",
+          "symbol": "transition_step_state"
+        },
+        {
+          "index": 1,
+          "path": "app/beyo_manager/services/tasks/analytics/process_step_transition.py",
+          "symbol": "_recompute_step_time_totals"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:rule-issue-counting-ignores-marked-wrong",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 1,
+          "path": "app/beyo_manager/domain/analytics/concurrency.py",
+          "symbol": "wasted_seconds_by_record"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:table-production-cost-group",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/models/tables/item_economics/production_cost_group.py",
+          "symbol": "ProductionCostGroup"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 3/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

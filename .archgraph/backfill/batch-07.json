@@ -1,0 +1,240 @@
+{
+  "operations": [
+    {
+      "itemId": "node:decision-item-economics-production-budget-cap-v1",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/calculator.py",
+          "symbol": "PRODUCTION_BUDGET_CAP_PERCENT"
+        },
+        {
+          "index": 1,
+          "path": "app/beyo_manager/domain/item_economics/calculator.py",
+          "symbol": "calculate_production_budget"
+        },
+        {
+          "index": 2,
+          "path": "app/beyo_manager/domain/item_economics/price_scenario.py",
+          "symbol": "PriceModel"
+        },
+        {
+          "index": 3,
+          "path": "app/beyo_manager/domain/item_economics/price_scenario.py",
+          "symbol": "budget_minor"
+        },
+        {
+          "index": 4,
+          "path": "app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py",
+          "symbol": "get_task_price_scenario"
+        },
+        {
+          "index": 5,
+          "path": "app/beyo_manager/domain/item_economics/serializers.py",
+          "symbol": "serialize_task_price_scenario"
+        },
+        {
+          "index": 6,
+          "path": "app/tests/unit/domain/item_economics/test_price_scenario.py",
+          "symbol": "test_c22_piecewise_budget_matches_the_capped_calculator_across_crossing"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:infrastructure-test-database-isolation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation.start"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation._drop_database_if_exists"
+        },
+        {
+          "index": 2,
+          "path": "app/tests/conftest.py",
+          "symbol": "isolated_database"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:test-database-isolation-contract",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "resolve_worker_database_name"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation._migrate_and_assert"
+        },
+        {
+          "index": 2,
+          "path": "app/tests/integration/infrastructure/test_database_isolation.py",
+          "symbol": "test_dev_database_counts_are_untouched"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:infrastructure-template-copy-contention-lock",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/database_isolation.py",
+          "symbol": "DatabaseIsolation._template_operation_lock"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:configuration-shipped-pytest-parallel-default",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 1,
+          "path": "app/tests/integration/infrastructure/test_database_isolation.py",
+          "symbol": "test_shipped_default_reaches_an_xdist_worker"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:domain-item-economics-typical-filters",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/domain/item_economics/typical_filters.py",
+          "symbol": "TypicalFilterSpec"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:test-item-economics-domain-purity-guards",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/tests/unit/domain/item_economics/test_domain_purity.py",
+          "symbol": "test_item_economics_domain_has_no_spec_identity_hashing"
+        },
+        {
+          "index": 1,
+          "path": "app/tests/unit/domain/item_economics/test_domain_purity.py",
+          "symbol": "test_item_economics_domain_has_no_sqlalchemy_or_model_table_imports"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "node:source-file-working-section-typical-item-filter",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/working_sections/_typical_item_filter.py",
+          "symbol": "build_item_match"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-put-valuation--accepts-->command-item-economics-set-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_set_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-delete-valuation--accepts-->command-item-economics-delete-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_delete_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:command-item-economics-set-item-valuation--writes_to-->table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/commands/item_economics/set_item_valuation.py",
+          "symbol": "set_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-put-valuation--returns-->table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_set_item_valuation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-get-valuations--returns-->table-item-valuation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/services/queries/item_economics/get_item_valuation_history.py",
+          "symbol": "get_item_valuation_history"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-commit-evaluation--accepts-->command-item-economics-commit-item-cost-evaluation",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_commit_item_cost_evaluation"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    },
+    {
+      "itemId": "edge:endpoint-item-economics-list-evaluations--accepts-->command-item-economics-list-task-evaluations",
+      "kind": "re-anchor",
+      "anchors": [
+        {
+          "index": 0,
+          "path": "app/beyo_manager/routers/api_v1/item_economics.py",
+          "symbol": "route_list_task_evaluations"
+        }
+      ],
+      "rationale": "Backfill: drop line range, keep path + symbol."
+    }
+  ],
+  "humanInstruction": "Evidence span backfill 7/11: drop line ranges where a symbol exists (scripts/backfill-evidence-spans.py)."
+}

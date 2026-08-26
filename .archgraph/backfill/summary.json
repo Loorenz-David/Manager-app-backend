@@ -1,0 +1,25 @@
+{
+  "workspace": "/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend",
+  "batches": 11,
+  "ops_per_batch": [
+    21,
+    21,
+    20,
+    20,
+    20,
+    15,
+    15,
+    17,
+    16,
+    17,
+    11
+  ],
+  "already_clean": 39,
+  "anchors": 220,
+  "evidence": 546,
+  "missing_symbol": 5,
+  "operations": 193,
+  "pending_review_anchors": 2,
+  "pending_review_items": 1,
+  "span_only": 280
+}
