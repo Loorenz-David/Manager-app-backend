@@ -1,0 +1,90 @@
+changeId: 2026-08-26T19-24-05-970Z--d9263b
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: edit
+    before:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item category-narrowed typical-time
+        evidence, ordered section grouping, and deterministic per-step time
+        allowances. For each task it derives the typical filter from the active
+        PRIMARY item's category and reconciles participating sections through
+        uniform_basis_v1: usable narrowed evidence must be available for every
+        participating section to select one item-narrowed basis, otherwise the
+        participating task falls back together to section-wide, while excluded
+        sections resolve independently. The same SelectedTypical values feed
+        both the displayed typicals and the division weights, and the response
+        carries a typical_resolution block with the task basis, applied filter,
+        participating-section counts by basis, reconciliation method, and
+        comparability profile, plus per-section typical_basis,
+        narrowed_sample_count, and section_sample_count and allocation_method
+        static_proportional_section_v2. Each non-deleted step's worked-seconds
+        input remains its settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live-worked-seconds loader and persisted nowhere. It
+        preserves the tenant boundary and time-only shape, including ordered
+        section rows and a flat final snapshot, and does not expose monetary
+        fields, persist derived results, or change the underlying
+        working-sections typical-times projection."
+    after:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item category-narrowed typical-time
+        evidence, ordered section grouping, and deterministic per-step time
+        allowances. For each task it derives the typical filter from the active
+        PRIMARY item's category and reconciles participating sections through
+        uniform_basis_v1: usable narrowed evidence must be available for every
+        participating section to select one item-narrowed basis, otherwise the
+        participating task falls back together to section-wide, while excluded
+        sections resolve independently. The same SelectedTypical values feed
+        both the displayed typicals and the division weights, and the response
+        carries a typical_resolution block with the task basis, applied filter,
+        participating-section counts by basis, reconciliation method, and
+        comparability profile, plus per-section typical_basis,
+        narrowed_sample_count, and section_sample_count and allocation_method
+        static_proportional_section_v2. Each non-deleted step's worked-seconds
+        input remains its settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live-worked-seconds loader and persisted nowhere. It
+        preserves the tenant boundary, ordered section rows, and a flat final
+        snapshot. Monetary exposure is role-gated through the shared
+        include_monetary_step_fields rule: ADMIN and MANAGER budget blocks
+        additionally carry production_budget_minor, consumed_cost_minor, and
+        variance_cost_minor (the same values the budget-status view serves,
+        forwarded not recomputed), while WORKER and SELLER responses remain
+        byte-identical time-only; section rows and the final snapshot stay
+        money-free for every role. It does not persist derived results or change
+        the underlying working-sections typical-times projection."
+    rationale: The production-time read now forwards the evaluation money triple on
+      the budget block for monetary roles (role-gated via
+      include_monetary_step_fields); the former blanket 'does not expose
+      monetary fields' boundary no longer holds and would misdirect future work.
+  - itemId: node:endpoint-item-economics-task-production-time
+    kind: edit
+    before:
+      description: All-role task production-time endpoint returning a time-only
+        section and step projection for one workspace-scoped task. It delegates
+        through the shared service runner, preserves the standard response
+        envelope and not-found behavior, and is mounted as a parameterized task
+        route.
+    after:
+      description: All-role task production-time endpoint returning a section and step
+        projection for one workspace-scoped task. The section rows and final
+        block are time-only for every role; the budget block is role-gated —
+        ADMIN and MANAGER additionally receive production_budget_minor,
+        consumed_cost_minor, and variance_cost_minor, while WORKER and SELLER
+        receive the time-only shape unchanged. It delegates through the shared
+        service runner, preserves the standard response envelope and not-found
+        behavior, and is mounted as a parameterized task route.
+    rationale: The endpoint's budget block now serves the money triple to
+      ADMIN/MANAGER (worker/seller unchanged); the settled 'time-only
+      projection' description contradicts the shipped contract.
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-26T19:24:05.970Z
+graphRevisionBefore: 844585c2e975a19667f6fa4bded84c5721bec984ee057a004dcc7b9894165f3e
+graphRevisionAfter: 4ebd85c954987a2a0a85bebfdcd1e4983fa228a036eafdc0eb4816c8eb33cea9
+humanInstruction: User asked to keep the archgraph up to date with the
+  production-time money-triple change made this session.
+changeTokenCorrelation: 3021faa32bd4

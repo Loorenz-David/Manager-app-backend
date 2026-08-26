@@ -5624,10 +5624,15 @@ nodes:
       input remains its settled working seconds plus the concurrency-averaged
       share of any open WORKING interval, resolved once per request through the
       shared live-worked-seconds loader and persisted nowhere. It preserves the
-      tenant boundary and time-only shape, including ordered section rows and a
-      flat final snapshot, and does not expose monetary fields, persist derived
-      results, or change the underlying working-sections typical-times
-      projection."
+      tenant boundary, ordered section rows, and a flat final snapshot. Monetary
+      exposure is role-gated through the shared include_monetary_step_fields
+      rule: ADMIN and MANAGER budget blocks additionally carry
+      production_budget_minor, consumed_cost_minor, and variance_cost_minor (the
+      same values the budget-status view serves, forwarded not recomputed),
+      while WORKER and SELLER responses remain byte-identical time-only; section
+      rows and the final snapshot stay money-free for every role. It does not
+      persist derived results or change the underlying working-sections
+      typical-times projection."
     tags:
       - item-economics
       - production-time
@@ -5692,7 +5697,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-24T07:41:29.734Z
+    updatedAt: 2026-08-26T19:24:05.938Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -5719,11 +5724,14 @@ nodes:
   - id: endpoint-item-economics-task-production-time
     type: endpoint
     name: GET /api/v1/item-economics/tasks/{task_client_id}/production-time
-    description: All-role task production-time endpoint returning a time-only
-      section and step projection for one workspace-scoped task. It delegates
-      through the shared service runner, preserves the standard response
-      envelope and not-found behavior, and is mounted as a parameterized task
-      route.
+    description: All-role task production-time endpoint returning a section and step
+      projection for one workspace-scoped task. The section rows and final block
+      are time-only for every role; the budget block is role-gated — ADMIN and
+      MANAGER additionally receive production_budget_minor, consumed_cost_minor,
+      and variance_cost_minor, while WORKER and SELLER receive the time-only
+      shape unchanged. It delegates through the shared service runner, preserves
+      the standard response envelope and not-found behavior, and is mounted as a
+      parameterized task route.
     tags:
       - item-economics
       - production-time
@@ -5782,7 +5790,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-23T10:58:20.332Z
+    updatedAt: 2026-08-26T19:24:05.938Z
   - id: source-file-item-economics-price-scenario
     type: source_file
     name: app/beyo_manager/domain/item_economics/price_scenario.py
