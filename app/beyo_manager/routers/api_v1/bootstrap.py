@@ -8,12 +8,7 @@ curl -X POST 'http://localhost:8000/api/v1/bootstrap' \
     -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
 
 
-Wipe DB data:
-curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
-    
-    curl -X DELETE 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap/wipe-db' \
-    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+
 """
 
 from fastapi import APIRouter, Header, HTTPException
@@ -103,3 +98,13 @@ async def wipe_db_route(
         )
     finally:
         await session_iter.aclose()
+
+
+"""
+Wipe DB data:
+curl -X DELETE 'http://localhost:8000/api/v1/bootstrap/wipe-db' \
+    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+    
+    curl -X DELETE 'https://api-manager.beyoworkaroundtheclock.com/api/v1/bootstrap/wipe-db' \
+    -H 'X-Bootstrap-Secret: local-bootstrap-secret-dev'
+"""
