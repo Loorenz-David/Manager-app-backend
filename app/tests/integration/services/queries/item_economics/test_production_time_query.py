@@ -252,10 +252,10 @@ async def test_c14_c16_flat_time_only_degradation_and_tenant_boundary(db_session
     db_session.add(frozen)
     await db_session.flush()
     try:
-        bodies = []
+        bodies = {}
         for role in ("admin", "manager", "worker", "seller"):
             body = await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id, role))
-            bodies.append(json.dumps(body, sort_keys=True, separators=(",", ":")))
+            bodies[role] = json.dumps(body, sort_keys=True, separators=(",", ":"))
             keys = set()
             def walk(value):
                 if isinstance(value, dict):
@@ -266,10 +266,16 @@ async def test_c14_c16_flat_time_only_degradation_and_tenant_boundary(db_session
                     for item in value:
                         walk(item)
             walk(body)
-            assert not any(token in key.lower() for key in keys for token in ("_minor", "cost", "price", "currency", "money", "valuation"))
-        assert len({hashlib.sha256(body.encode()).hexdigest() for body in bodies}) == 1
+            money_keys = {"production_budget_minor", "consumed_cost_minor", "variance_cost_minor"}
+            if role in ("worker", "seller"):
+                assert not any(token in key.lower() for key in keys for token in ("_minor", "cost", "price", "currency", "money", "valuation"))
+            else:
+                assert money_keys <= set(body["budget"])
+                assert money_keys == {key for key in keys if any(token in key.lower() for token in ("_minor", "cost", "price", "currency", "money", "valuation"))}
+        assert hashlib.sha256(bodies["worker"].encode()).hexdigest() == hashlib.sha256(bodies["seller"].encode()).hexdigest()
+        assert hashlib.sha256(bodies["admin"].encode()).hexdigest() == hashlib.sha256(bodies["manager"].encode()).hexdigest()
         degraded = await get_task_production_time(_ctx(db_session, workspace.client_id, unevaluated_task.client_id))
-        assert degraded["budget"] == {"allowed_worker_minutes": None, "actual_worker_seconds": None, "actual_worker_minutes": None, "remaining_worker_minutes": None, "percent_consumed": None}
+        assert degraded["budget"] == {"allowed_worker_minutes": None, "actual_worker_seconds": None, "actual_worker_minutes": None, "remaining_worker_minutes": None, "percent_consumed": None, "production_budget_minor": None, "consumed_cost_minor": None, "variance_cost_minor": None}
         assert all(section["share_state"] == "no_budget" for section in degraded["sections"])
         with pytest.raises(Exception, match="Task not found"):
             await get_task_production_time(_ctx(db_session, workspace.client_id, foreign_task.client_id))

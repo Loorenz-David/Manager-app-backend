@@ -203,7 +203,7 @@ def serialize_production_time_section(row: dict, typical: dict | None = None) ->
     }
 
 
-def serialize_task_production_time(row: dict) -> dict:
+def serialize_task_production_time(row: dict, *, include_monetary: bool = False) -> dict:
     status = row["status"]
     percent_consumed = row.get("percent_consumed")
     result = row.get("result")
@@ -216,6 +216,21 @@ def serialize_task_production_time(row: dict) -> dict:
             result.actual_worker_minutes + result.variance_worker_minutes,
             result.actual_worker_minutes,
         )
+    budget = {
+        "allowed_worker_minutes": _decimal(row.get("allowed_worker_minutes")),
+        "actual_worker_seconds": row.get("actual_worker_seconds"),
+        "actual_worker_minutes": _decimal(row.get("actual_worker_minutes")),
+        "remaining_worker_minutes": _decimal(row.get("remaining_worker_minutes")),
+        "percent_consumed": _decimal(percent_consumed),
+    }
+    if include_monetary:
+        budget.update(
+            {
+                "production_budget_minor": row.get("production_budget_minor"),
+                "consumed_cost_minor": row.get("consumed_cost_minor"),
+                "variance_cost_minor": row.get("variance_cost_minor"),
+            }
+        )
     return {
         "task_id": row["task_id"],
         "status": _enum_value(status),
@@ -224,13 +239,7 @@ def serialize_task_production_time(row: dict) -> dict:
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
-        "budget": {
-            "allowed_worker_minutes": _decimal(row.get("allowed_worker_minutes")),
-            "actual_worker_seconds": row.get("actual_worker_seconds"),
-            "actual_worker_minutes": _decimal(row.get("actual_worker_minutes")),
-            "remaining_worker_minutes": _decimal(row.get("remaining_worker_minutes")),
-            "percent_consumed": _decimal(percent_consumed),
-        },
+        "budget": budget,
         "final": (
             _serialize_production_time_final(result, frozen_percent_consumed)
             if result is not None

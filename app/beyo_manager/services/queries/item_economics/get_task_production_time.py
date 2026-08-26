@@ -25,6 +25,7 @@ from beyo_manager.domain.item_economics.typical_filters import (
     reconcile_task_typicals,
 )
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
+from beyo_manager.domain.tasks.serializers import include_monetary_step_fields
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
@@ -172,13 +173,17 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "actual_worker_minutes": status.actual_worker_minutes,
             "remaining_worker_minutes": status.remaining_worker_minutes,
             "percent_consumed": status.percent_consumed,
+            "production_budget_minor": status.production_budget_minor,
+            "consumed_cost_minor": status.consumed_cost_minor,
+            "variance_cost_minor": status.variance_cost_minor,
             "result": status.result,
             "division": division,
             "pressure_ratio": pressure.pressure_ratio,
             "pressure_method": PRESSURE_METHOD,
             "typicals": typical_details,
             "typical_resolution": selection,
-        }
+        },
+        include_monetary=include_monetary_step_fields(ctx.role_name),
     )
 
 
