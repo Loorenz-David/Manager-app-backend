@@ -16,11 +16,13 @@ from beyo_manager.domain.item_economics.typical_constants import TYPICAL_MIN_SAM
 
 
 COMPARABILITY_PROFILE = "primary_item_category_v1"
+COMPARABILITY_PROFILE_PROPERTIES = "primary_item_category_properties_v1"
 RECONCILIATION_METHOD = "uniform_basis_v1"
 
 
 class _PrimaryItem(Protocol):
     item_category_id: str | None
+    properties_signature: str | None
 
 
 @dataclass(frozen=True)
@@ -38,12 +40,19 @@ class TypicalFilterSpec:
     depth_cm: tuple[int | None, int | None] | None = None
     can_have_upholstery: bool | None = None
     designers: frozenset[str] | None = None
+    # Refines an already-narrowing spec into its most specific comparability
+    # tier (same category AND same properties profile). It is deliberately not
+    # a narrowing dimension on its own: a spec carrying only a signature stays
+    # non-narrowing and the signature is inert.
+    properties_signature: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("item_category_ids", "major_categories", "designers"):
             value = getattr(self, field_name)
             if value is not None and not value:
                 object.__setattr__(self, field_name, None)
+        if self.properties_signature is not None and not self.properties_signature:
+            object.__setattr__(self, "properties_signature", None)
 
         for field_name in ("width_cm", "height_cm", "depth_cm"):
             value = getattr(self, field_name)
@@ -72,7 +81,10 @@ def derive_spec_from_primary_item(item: _PrimaryItem | None) -> TypicalFilterSpe
     category_id = getattr(item, "item_category_id", None)
     if category_id is None:
         return TypicalFilterSpec()
-    return TypicalFilterSpec(item_category_ids=frozenset({category_id}))
+    return TypicalFilterSpec(
+        item_category_ids=frozenset({category_id}),
+        properties_signature=getattr(item, "properties_signature", None),
+    )
 
 
 def _optional_values(params: Mapping[str, object], key: str) -> frozenset[str] | None:
@@ -146,6 +158,11 @@ class SectionTypicalEvidence:
     # under the same sample gates and never influence basis selection.
     narrowed_typical_unit_worker_seconds: Fraction | None = None
     section_typical_unit_worker_seconds: Fraction | None = None
+    # The most specific tier: same category AND same properties signature.
+    # Populated only when the spec carried a signature; zero/None otherwise.
+    properties_typical_worker_seconds: int | None = None
+    properties_sample_count: int = 0
+    properties_typical_unit_worker_seconds: Fraction | None = None
 
     @property
     def has_narrowed(self) -> bool:
@@ -161,6 +178,18 @@ class SectionTypicalEvidence:
             self.has_narrowed
             and self.narrowed_typical_worker_seconds is not None
             and self.narrowed_typical_worker_seconds > 0
+        )
+
+    @property
+    def has_properties(self) -> bool:
+        return self.properties_sample_count >= TYPICAL_MIN_SAMPLE_SIZE
+
+    @property
+    def has_usable_properties(self) -> bool:
+        return (
+            self.has_properties
+            and self.properties_typical_worker_seconds is not None
+            and self.properties_typical_worker_seconds > 0
         )
 
 
@@ -209,6 +238,16 @@ def resolve_section_typical(
         )
 
     if policy is TypicalResolutionPolicy.BROADEN_TO_SECTION:
+        if spec.properties_signature is not None and evidence.has_usable_properties:
+            return SelectedTypical(
+                evidence.working_section_id,
+                evidence.properties_typical_worker_seconds,
+                "item_properties_narrowed",
+                evidence,
+                False,
+                evidence.properties_sample_count,
+                evidence.properties_typical_unit_worker_seconds,
+            )
         if evidence.has_usable_narrowed:
             return SelectedTypical(
                 evidence.working_section_id,
@@ -239,6 +278,25 @@ def resolve_section_typical(
         )
 
     if policy is TypicalResolutionPolicy.ANSWER_AS_ASKED:
+        if spec.properties_signature is not None:
+            if evidence.has_properties:
+                return SelectedTypical(
+                    evidence.working_section_id,
+                    evidence.properties_typical_worker_seconds,
+                    "item_properties_narrowed",
+                    evidence,
+                    False,
+                    evidence.properties_sample_count,
+                    evidence.properties_typical_unit_worker_seconds,
+                )
+            return SelectedTypical(
+                evidence.working_section_id,
+                None,
+                "insufficient_sample",
+                evidence,
+                False,
+                evidence.properties_sample_count,
+            )
         if evidence.has_narrowed:
             return SelectedTypical(
                 evidence.working_section_id,
@@ -286,18 +344,40 @@ def reconcile_task_typicals(
         section_id: evidence_by_section.get(section_id, _zero_evidence(section_id))
         for section_id in section_ids
     }
-    narrowed_uniform = (
+    properties_uniform = (
         effective_spec.is_narrowing
+        and effective_spec.properties_signature is not None
+        and bool(participating_section_ids)
+        and all(evidence[section_id].has_usable_properties for section_id in participating_section_ids)
+    )
+    narrowed_uniform = (
+        not properties_uniform
+        and effective_spec.is_narrowing
         and bool(participating_section_ids)
         and all(evidence[section_id].has_usable_narrowed for section_id in participating_section_ids)
     )
-    task_basis = "item_narrowed_uniform" if narrowed_uniform else "section_wide_uniform"
+    if properties_uniform:
+        task_basis = "item_properties_narrowed_uniform"
+    elif narrowed_uniform:
+        task_basis = "item_narrowed_uniform"
+    else:
+        task_basis = "section_wide_uniform"
     selected: dict[str, SelectedTypical] = {}
 
     for section_id in section_ids:
         section_evidence = evidence[section_id]
         if section_id in participating_section_ids:
-            if narrowed_uniform:
+            if properties_uniform:
+                selected[section_id] = SelectedTypical(
+                    section_id,
+                    section_evidence.properties_typical_worker_seconds,
+                    "item_properties_narrowed",
+                    section_evidence,
+                    True,
+                    section_evidence.properties_sample_count,
+                    section_evidence.properties_typical_unit_worker_seconds,
+                )
+            elif narrowed_uniform:
                 selected[section_id] = SelectedTypical(
                     section_id,
                     section_evidence.narrowed_typical_worker_seconds,
@@ -335,10 +415,15 @@ def reconcile_task_typicals(
                 participates=False,
             )
 
+    comparability_profile = (
+        COMPARABILITY_PROFILE_PROPERTIES
+        if effective_spec.is_narrowing and effective_spec.properties_signature is not None
+        else COMPARABILITY_PROFILE
+    )
     return TaskTypicalSelection(
         task_basis,
         RECONCILIATION_METHOD,
-        COMPARABILITY_PROFILE,
+        comparability_profile,
         effective_spec if effective_spec.is_narrowing else None,
         participating_section_ids,
         selected,

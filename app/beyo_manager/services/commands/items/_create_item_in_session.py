@@ -9,6 +9,9 @@ from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ConflictError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.services.commands.items._properties_snapshot import (
+    apply_properties_snapshot,
+)
 from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
     enqueue_item_zone_location_push,
 )
@@ -42,6 +45,7 @@ async def create_item_in_session(
     external_source: str | None = None,
     external_order_id: str | None = None,
     can_have_upholstery: bool = True,
+    properties: dict | None = None,
     needs_fixing: bool | None = None,
 ) -> tuple[Item, list]:
     """Build, add, and flush a new Item row. Always creates — this never looks up an existing
@@ -122,6 +126,12 @@ async def create_item_in_session(
         item_major_category_snapshot=item_major_category_snapshot,
         created_by_id=user_id,
     )
+    # After construction rather than as constructor kwargs: the signature and the
+    # snapshot timestamp are derived from the blob, never passed in, so the three
+    # columns only ever get written together through the one helper. An empty or
+    # absent payload leaves all three NULL.
+    apply_properties_snapshot(item, properties)
+
     session.add(item)
     await session.flush()
 

@@ -115,6 +115,7 @@ class _TaskItemInputBody(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool = True
+    properties: dict | None = None
 
 
 class _TaskItemIssueBody(BaseModel):

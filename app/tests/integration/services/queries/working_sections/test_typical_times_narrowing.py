@@ -89,6 +89,7 @@ async def _item(
     depth: int | None = 70,
     upholstery: bool = True,
     deleted: bool = False,
+    properties_signature: str | None = None,
 ) -> Item:
     item = Item(
         client_id=f"itm_{seed.workspace.client_id}_{suffix}",
@@ -101,6 +102,7 @@ async def _item(
         depth_in_cm=depth,
         can_have_upholstery=upholstery,
         is_deleted=deleted,
+        properties_signature=properties_signature,
         created_by_id=seed.user.client_id,
     )
     db_session.add(item)
@@ -232,6 +234,8 @@ async def test_k_shape_is_keyed_by_spec_count_and_non_narrowing_k1_is_seven_colu
         "narrowed_typical_unit_worker_seconds",
         "section_sample_count", "section_typical_worker_seconds",
         "section_typical_unit_worker_seconds",
+        "properties_sample_count", "properties_typical_worker_seconds",
+        "properties_typical_unit_worker_seconds",
     )
     assert narrowing[0]._fields == empty_spec[0]._fields
     assert (empty_spec[0].narrowed_sample_count, empty_spec[0].section_sample_count) == (5, 5)
@@ -612,6 +616,79 @@ async def test_unit_medians_normalize_by_primary_quantity_and_clamp_legacy_zero(
     no_spec_row = next(r for r in no_spec_rows if r.client_id == seed.section.client_id)
     assert no_spec_row.typical_worker_seconds == 3000
     assert float(no_spec_row.typical_unit_worker_seconds) == 1000.0
+
+
+@pytest.mark.integration
+async def test_properties_tier_narrows_within_the_category_and_gates_on_its_own_count(db_session):
+    """Same category, two signature cohorts: the properties median must discriminate.
+
+    Signature "sig-oak" history is (100, 200, 300, 400, 500); signature "sig-teak"
+    history is (1000, 1100, 1200, 1300, 1400); one legacy NULL-signature task at
+    9000. The category tier pools all eleven; the properties tier for a
+    "sig-oak" spec must answer 300 from exactly five samples — proving the
+    NULL-signature and other-signature rows are outside the tier.
+    """
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "props", ItemMajorCategoryEnum.SEAT)
+    for index, seconds in enumerate([100, 200, 300, 400, 500]):
+        item = await _item(db_session, seed, f"props-oak-{index}", category=category, properties_signature="sig-oak")
+        await _task(db_session, seed, f"props-oak-{index}", primary=item, seconds=seconds)
+    for index, seconds in enumerate([1000, 1100, 1200, 1300, 1400]):
+        item = await _item(db_session, seed, f"props-teak-{index}", category=category, properties_signature="sig-teak")
+        await _task(db_session, seed, f"props-teak-{index}", primary=item, seconds=seconds)
+    legacy = await _item(db_session, seed, "props-legacy", category=category, properties_signature=None)
+    await _task(db_session, seed, "props-legacy", primary=legacy, seconds=9000)
+
+    specs = (
+        TypicalFilterSpec(item_category_ids=frozenset({category.client_id}), properties_signature="sig-oak"),
+        TypicalFilterSpec(item_category_ids=frozenset({category.client_id})),
+    )
+    rows = {
+        row.spec_index: row
+        for row in (await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=specs, now=NOW)
+        )).all()
+        if row.client_id == seed.section.client_id
+    }
+
+    oak = rows[0]
+    assert oak.properties_sample_count == 5
+    assert oak.properties_typical_worker_seconds == 300
+    assert float(oak.properties_typical_unit_worker_seconds) == 300.0
+    # The category tier on the same row still pools all eleven samples
+    # (sorted middle of 100..500, 1000..1400, 9000 is 1000).
+    assert oak.narrowed_sample_count == 11
+    assert oak.narrowed_typical_worker_seconds == 1000
+
+    # A signature-less spec has no properties tier at all.
+    bare = rows[1]
+    assert bare.properties_sample_count == 0
+    assert bare.properties_typical_worker_seconds is None
+    assert bare.properties_typical_unit_worker_seconds is None
+
+
+@pytest.mark.integration
+async def test_properties_tier_below_gate_yields_null_but_keeps_its_count(db_session):
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "props-gate", ItemMajorCategoryEnum.SEAT)
+    for index in range(TYPICAL_MIN_SAMPLE_SIZE - 1):
+        item = await _item(db_session, seed, f"props-gate-{index}", category=category, properties_signature="sig-few")
+        await _task(db_session, seed, f"props-gate-{index}", primary=item, seconds=100 + index)
+    filler = await _item(db_session, seed, "props-gate-filler", category=category)
+    await _task(db_session, seed, "props-gate-filler", primary=filler, seconds=999)
+
+    spec = TypicalFilterSpec(item_category_ids=frozenset({category.client_id}), properties_signature="sig-few")
+    row = next(
+        r
+        for r in (await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=(spec,), now=NOW)
+        )).all()
+        if r.client_id == seed.section.client_id
+    )
+    assert row.properties_sample_count == TYPICAL_MIN_SAMPLE_SIZE - 1
+    assert row.properties_typical_worker_seconds is None
+    assert row.narrowed_sample_count == TYPICAL_MIN_SAMPLE_SIZE
+    assert row.narrowed_typical_worker_seconds is not None
 
 
 @pytest.mark.integration

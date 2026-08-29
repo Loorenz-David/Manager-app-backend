@@ -7,7 +7,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Sequence
 
-from sqlalchemy import Float, Integer, and_, case, cast, column, func, select, true, values
+from sqlalchemy import Float, Integer, and_, case, cast, column, false, func, select, true, values
 
 from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_METHOD,
@@ -27,7 +27,10 @@ from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.queries.working_sections._typical_item_filter import build_item_match
+from beyo_manager.services.queries.working_sections._typical_item_filter import (
+    build_item_match,
+    build_item_properties_match,
+)
 
 
 def typical_times_statement(
@@ -89,10 +92,13 @@ def typical_times_statement(
     )
     needs_category_join = False
     predicates = []
+    properties_predicates = []
     for spec in specs:
         needs_join, predicate = build_item_match(spec)
         needs_category_join = needs_category_join or needs_join
         predicates.append(predicate if predicate is not None else true())
+        properties_predicate = build_item_properties_match(spec)
+        properties_predicates.append(properties_predicate if properties_predicate is not None else false())
     if needs_category_join:
         from_clause = from_clause.outerjoin(ItemCategory, ItemCategory.client_id == Item.item_category_id)
 
@@ -117,6 +123,9 @@ def typical_times_statement(
     narrowed_counts = []
     narrowed_typicals = []
     narrowed_unit_typicals = []
+    properties_counts = []
+    properties_typicals = []
+    properties_unit_typicals = []
     for index, predicate in enumerate(predicates):
         narrowed_qualifying = and_(qualifying, spec_index.c.spec_index == index, predicate)
         narrowed_count = func.count(grouped_steps.c.task_id).filter(narrowed_qualifying)
@@ -139,8 +148,39 @@ def typical_times_statement(
                 else_=None,
             )
         )
+        properties_qualifying = and_(
+            qualifying, spec_index.c.spec_index == index, properties_predicates[index]
+        )
+        properties_count = func.count(grouped_steps.c.task_id).filter(properties_qualifying)
+        properties_percentile = func.percentile_cont(0.5).within_group(grouped_steps.c.group_seconds).filter(
+            properties_qualifying
+        )
+        properties_unit_percentile = func.percentile_cont(0.5).within_group(unit_seconds).filter(
+            properties_qualifying
+        )
+        properties_counts.append(properties_count)
+        properties_typicals.append(
+            case(
+                (properties_count >= TYPICAL_MIN_SAMPLE_SIZE, cast(func.round(properties_percentile), Integer)),
+                else_=None,
+            )
+        )
+        properties_unit_typicals.append(
+            case(
+                (properties_count >= TYPICAL_MIN_SAMPLE_SIZE, properties_unit_percentile),
+                else_=None,
+            )
+        )
 
     index = spec_index.c.spec_index
+
+    def _per_spec(expressions, label):
+        if len(expressions) == 1:
+            return expressions[0].label(label)
+        return func.coalesce(
+            *[case((index == position, expression), else_=None) for position, expression in enumerate(expressions)]
+        ).label(label)
+
     return (
         select(
             WorkingSection.client_id,
@@ -167,6 +207,9 @@ def typical_times_statement(
             section_count.label("section_sample_count"),
             section_typical.label("section_typical_worker_seconds"),
             section_unit_typical.label("section_typical_unit_worker_seconds"),
+            _per_spec(properties_counts, "properties_sample_count"),
+            _per_spec(properties_typicals, "properties_typical_worker_seconds"),
+            _per_spec(properties_unit_typicals, "properties_typical_unit_worker_seconds"),
         )
         .select_from(from_clause)
         .where(
@@ -261,7 +304,7 @@ def _unit_fraction(value: object) -> Fraction | None:
 
 
 def narrowed_evidence_from_row(row) -> SectionTypicalEvidence:
-    """Evidence for one section from a spec-statement row, narrowed and section-wide."""
+    """Evidence for one section from a spec-statement row, on all three tiers."""
     return SectionTypicalEvidence(
         row.client_id,
         int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
@@ -270,6 +313,9 @@ def narrowed_evidence_from_row(row) -> SectionTypicalEvidence:
         int(row.section_sample_count or 0),
         _unit_fraction(row.narrowed_typical_unit_worker_seconds),
         _unit_fraction(row.section_typical_unit_worker_seconds),
+        int(row.properties_typical_worker_seconds) if row.properties_typical_worker_seconds is not None else None,
+        int(row.properties_sample_count or 0),
+        _unit_fraction(row.properties_typical_unit_worker_seconds),
     )
 
 

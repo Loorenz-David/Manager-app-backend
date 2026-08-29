@@ -75,6 +75,7 @@ class _CreateItemBody(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool = True
+    properties: dict | None = None
     item_issues: list[_ItemIssueBody] | None = None
     item_upholstery: _ItemUpholsteryBody | None = None
 
@@ -120,6 +121,7 @@ class _FindOrCreateItemBody(BaseModel):
     external_source: str | None = None
     external_order_id: str | None = None
     can_have_upholstery: bool = True
+    properties: dict | None = None
 
 
 class _BatchCreateIssuesBody(BaseModel):

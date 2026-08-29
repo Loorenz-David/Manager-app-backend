@@ -49,4 +49,18 @@ def build_item_match(spec: TypicalFilterSpec) -> tuple[bool, ColumnElement[bool]
     return spec.major_categories is not None, predicate
 
 
-__all__ = ["build_item_match"]
+def build_item_properties_match(spec: TypicalFilterSpec) -> ColumnElement[bool] | None:
+    """NULL-safe predicate for the most specific tier: the spec's item match AND the same signature.
+
+    Mirrors the domain rule that a signature only refines an already-narrowing
+    spec — a signature without narrowing dimensions yields no predicate.
+    """
+    if not spec.is_narrowing or spec.properties_signature is None:
+        return None
+    _, predicate = build_item_match(spec)
+    return func.coalesce(
+        and_(predicate, Item.properties_signature == spec.properties_signature), false()
+    )
+
+
+__all__ = ["build_item_match", "build_item_properties_match"]

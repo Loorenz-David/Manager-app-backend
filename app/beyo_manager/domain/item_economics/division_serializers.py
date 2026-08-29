@@ -120,7 +120,7 @@ def serialize_filter_spec(spec: TypicalFilterSpec | None) -> dict | None:
     payload = {}
     for name in (
         "item_category_ids", "major_categories", "width_cm", "height_cm",
-        "depth_cm", "can_have_upholstery", "designers",
+        "depth_cm", "can_have_upholstery", "designers", "properties_signature",
     ):
         value = getattr(spec, name)
         if value is None:
@@ -135,7 +135,12 @@ def serialize_filter_spec(spec: TypicalFilterSpec | None) -> dict | None:
 
 
 def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict:
-    counts = {"item_narrowed": 0, "section_wide": 0, "insufficient_sample": 0}
+    counts = {
+        "item_properties_narrowed": 0,
+        "item_narrowed": 0,
+        "section_wide": 0,
+        "insufficient_sample": 0,
+    }
     if selection is not None:
         for section_id in selection.participating_section_ids:
             basis = selection.selected.get(section_id)

@@ -47,6 +47,10 @@ class FindOrCreateItemInput(BaseModel):
 	external_source: str | None = None
 	external_order_id: str | None = None
 	can_have_upholstery: bool = True
+	# Externally-owned snapshot. Absent, null and {} all mean "no snapshot
+	# supplied" and leave an existing profile standing; a non-empty object is
+	# snapshotted and its signature derived from it (never sent by the caller).
+	properties: dict | None = None
 
 	@model_validator(mode="after")
 	def reject_legacy_money(self):

@@ -126,7 +126,9 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
     from beyo_manager.domain.item_economics.division_serializers import serialize_typical_resolution
 
     resolution = serialize_typical_resolution(selection)
-    assert resolution["sections_by_basis"] == {"item_narrowed": 0, "section_wide": 2, "insufficient_sample": 1}
+    assert resolution["sections_by_basis"] == {
+        "item_properties_narrowed": 0, "item_narrowed": 0, "section_wide": 2, "insufficient_sample": 1
+    }
     assert resolution["participating_section_count"] == 3
     assert sum(resolution["sections_by_basis"].values()) == resolution["participating_section_count"]
     assert serialize_budget_step({**row, "typical_worker_seconds": 0, "typical_basis": "section_wide"})["typical_worker_seconds"] == 0
@@ -309,7 +311,7 @@ async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session
         assert result["typical_resolution"]["applied_filter"] == {"item_category_ids": [category_id]}
         assert result["typical_resolution"]["participating_section_count"] == 2
         assert set(result["typical_resolution"]["sections_by_basis"]) == {
-            "item_narrowed", "section_wide", "insufficient_sample",
+            "item_properties_narrowed", "item_narrowed", "section_wide", "insufficient_sample",
         }
         assert {row["working_section_id"] for row in result["sections"]} == set(section_ids)
         assert all(row["allowance_seconds"] is None for row in result["sections"])
@@ -698,5 +700,174 @@ async def test_quantity_scales_projection_on_all_surfaces_but_never_the_division
         assert reread_row["allowance_seconds"] == allowance_at_three
         assert reread_row["typical"]["typical_worker_seconds"] == 600
         assert reread_row["typical"]["projected_typical_worker_seconds"] == 140
+    finally:
+        await cleanup_divergent_category_fixture(db_session, fixture)
+
+
+@pytest.mark.integration
+async def test_properties_signature_selects_the_most_specific_tier_on_all_surfaces(db_session):
+    """Two cohorts inside one category must resolve to the properties tier everywhere.
+
+    The fixture's five chair histories (500, 550, 600, 650, 700) get the current
+    item's signature; two extra signature-less chair histories at 5000 and 6000
+    move the category median to 650 while the properties median stays 600. A
+    signed current item must read 600 with basis item_properties_narrowed on
+    production-time, budget-allocations, and the price block; clearing the
+    signature must fall back to 650 with basis item_narrowed — proving the tier
+    is driven by the current item's snapshot, not by history alone.
+    """
+    from beyo_manager.domain.items.enums import ItemStateEnum
+    from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
+    from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
+    from beyo_manager.models.tables.tasks.task import Task
+    from beyo_manager.models.tables.tasks.task_item import TaskItem
+    from tests.integration.services.queries.item_economics._narrowing_fixture import (
+        DIVERGENT_BOUNDARY_CLOSED_AT,
+    )
+
+    fixture = await seed_divergent_category_task(db_session)
+    workspace = fixture["workspace"]
+    section = fixture["section"]
+    narrowed_task = fixture["narrowed_task"]
+    item = fixture["base_values"][5]
+    user = fixture["user"]
+    now = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
+    signature = "sig-props-cross-surface"
+
+    def production_context():
+        return ServiceContext(
+            identity={
+                "workspace_id": workspace.client_id,
+                "user_id": "usr",
+                "role_name": "manager",
+            },
+            incoming_data={"task_client_id": narrowed_task.client_id},
+            query_params={},
+            session=db_session,
+            now=now,
+        )
+
+    try:
+        history_items = (
+            (
+                await db_session.execute(
+                    select(Item)
+                    .where(
+                        Item.workspace_id == workspace.client_id,
+                        Item.item_category_id == fixture["category_id"],
+                        Item.client_id != item.client_id,
+                    )
+                    .order_by(Item.client_id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(history_items) == 5
+        for history_item in history_items:
+            history_item.properties_signature = signature
+        item.properties_signature = signature
+        for extra_index, seconds in enumerate((5000, 6000)):
+            extra_task = Task(
+                client_id=f"tsk_props_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_scalar_id=9500 + extra_index,
+                task_type=TaskTypeEnum.INTERNAL,
+                state=TaskStateEnum.ASSIGNED,
+                created_by_id=user.client_id,
+            )
+            extra_item = Item(
+                client_id=f"itm_props_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                item_category_id=fixture["category_id"],
+                state=ItemStateEnum.READY,
+                created_by_id=user.client_id,
+            )
+            extra_task_item = TaskItem(
+                client_id=f"tim_props_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_id=extra_task.client_id,
+                item_id=extra_item.client_id,
+                role=TaskItemRoleEnum.PRIMARY,
+                created_by_id=user.client_id,
+            )
+            extra_step = TaskStep(
+                client_id=f"tsp_props_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_id=extra_task.client_id,
+                working_section_id=section.client_id,
+                state=TaskStepStateEnum.COMPLETED,
+                readiness_status=TaskStepReadinessStatusEnum.READY,
+                total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=seconds,
+                closed_at=DIVERGENT_BOUNDARY_CLOSED_AT,
+                created_by_id=user.client_id,
+            )
+            db_session.add_all([extra_task, extra_item, extra_task_item, extra_step])
+        await db_session.flush()
+
+        production = await get_task_production_time(production_context())
+        section_row = next(
+            row for row in production["sections"] if row["working_section_id"] == section.client_id
+        )
+        assert section_row["typical"]["typical_basis"] == "item_properties_narrowed"
+        assert section_row["typical"]["typical_worker_seconds"] == 600
+        assert section_row["typical"]["sample_count"] == 5
+        assert section_row["typical"]["typical_unit_worker_seconds"] == "600"
+        assert section_row["typical"]["projected_typical_worker_seconds"] == 600
+        resolution = production["typical_resolution"]
+        assert resolution["task_typical_basis"] == "item_properties_narrowed_uniform"
+        assert resolution["comparability_profile"] == "primary_item_category_properties_v1"
+        assert resolution["applied_filter"] == {
+            "item_category_ids": [fixture["category_id"]],
+            "properties_signature": signature,
+        }
+        assert resolution["sections_by_basis"]["item_properties_narrowed"] == 1
+
+        allocations = await get_task_budget_allocations(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace.client_id,
+                    "user_id": "usr",
+                    "role_name": "worker",
+                },
+                incoming_data={},
+                query_params={"task_ids": [narrowed_task.client_id]},
+                session=db_session,
+                now=now,
+            )
+        )
+        allocation_row = allocations["budget_allocations"][0]
+        step_row = next(
+            row for row in allocation_row["steps"] if row["working_section_id"] == section.client_id
+        )
+        assert step_row["typical_basis"] == "item_properties_narrowed"
+        assert step_row["typical_worker_seconds"] == 600
+        assert allocation_row["typical_resolution"]["task_typical_basis"] == "item_properties_narrowed_uniform"
+
+        price = await price_scenario_module._typical_block(
+            production_context(),
+            narrowed_task.client_id,
+            derive_spec_from_primary_item(item),
+            1,
+        )
+        assert price["total_unit_seconds"] == 600
+        assert price["total_seconds"] == 600
+
+        item.properties_signature = None
+        await db_session.flush()
+        fallback = await get_task_production_time(production_context())
+        fallback_row = next(
+            row for row in fallback["sections"] if row["working_section_id"] == section.client_id
+        )
+        assert fallback_row["typical"]["typical_basis"] == "item_narrowed"
+        assert fallback_row["typical"]["typical_worker_seconds"] == 650
+        assert fallback_row["typical"]["sample_count"] == 7
+        assert fallback["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
+        assert fallback["typical_resolution"]["comparability_profile"] == "primary_item_category_v1"
+        assert fallback["typical_resolution"]["applied_filter"] == {
+            "item_category_ids": [fixture["category_id"]],
+        }
     finally:
         await cleanup_divergent_category_fixture(db_session, fixture)

@@ -13,6 +13,9 @@ from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push import (
     enqueue_item_zone_location_push,
 )
+from beyo_manager.services.commands.items._properties_snapshot import (
+    apply_properties_snapshot,
+)
 from beyo_manager.services.commands.items.requests import parse_find_or_create_item_request
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -115,6 +118,19 @@ async def find_or_create_item(
                     existing.item_category_snapshot = category.name
                     existing.item_major_category_snapshot = category.major_category.value
 
+            # Deliberately not in _DIRECT_FIELDS: the blob cannot be copied across on
+            # its own, because the signature and the snapshot timestamp are derived
+            # from it and have to move with it. Unconditional because the helper
+            # already treats an absent, null or empty payload as "no snapshot
+            # supplied" and leaves the item's existing profile standing — a frontend
+            # that always serializes the whole item must not wipe a profile by
+            # defaulting the field. An unchanged signature writes nothing, so
+            # properties_snapshot_at keeps meaning "when this profile was
+            # established" rather than "when ingestion last spoke". A genuinely new
+            # signature regroups this item's historical typical samples, which is
+            # the intended effect of a re-snapshot.
+            apply_properties_snapshot(existing, request.properties)
+
             existing.updated_at = datetime.now(timezone.utc)
             existing.updated_by_id = ctx.user_id
 
@@ -171,6 +187,8 @@ async def find_or_create_item(
             item_major_category_snapshot=item_major_category_snapshot,
             created_by_id=ctx.user_id,
         )
+        apply_properties_snapshot(item, request.properties)
+
         ctx.session.add(item)
         await ctx.session.flush()
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from beyo_manager.domain.items.enums import ItemStateEnum
@@ -44,6 +45,15 @@ class Item(IdentityMixin, Base):
     external_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     item_category_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     item_major_category_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Canonical snapshot of the externally-owned item properties. NULL means no
+    # snapshot received yet, and an empty payload never establishes one: the write
+    # path (apply_properties_snapshot) treats null and {} alike as "ingestion had
+    # nothing to say" and leaves any existing snapshot standing. The signature is
+    # always derived from the blob, never hand-set, and a snapshot update
+    # deliberately regroups the item's historical typical samples.
+    properties: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    properties_signature: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    properties_snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -83,5 +93,18 @@ class Item(IdentityMixin, Base):
             "sku",
             unique=True,
             postgresql_where=text("sku IS NOT NULL AND is_deleted = false"),
+        ),
+        Index(
+            "ix_items_workspace_properties_signature",
+            "workspace_id",
+            "properties_signature",
+            postgresql_where=text("properties_signature IS NOT NULL AND is_deleted = false"),
+        ),
+        Index(
+            "ix_items_properties_gin",
+            "properties",
+            postgresql_using="gin",
+            postgresql_ops={"properties": "jsonb_path_ops"},
+            postgresql_where=text("properties IS NOT NULL"),
         ),
     )

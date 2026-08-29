@@ -73,6 +73,7 @@ async def create_item(ctx: ServiceContext) -> dict:
             external_source=request.external_source,
             external_order_id=request.external_order_id,
             can_have_upholstery=request.can_have_upholstery,
+            properties=request.properties,
         )
 
         if request.item_issues:

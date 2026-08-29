@@ -4586,7 +4586,14 @@ nodes:
       lifecycle fields. Carries NO money columns — phase 6 (migration
       `be9dfe42a035`) dropped the legacy item_value_minor / item_cost_minor /
       item_currency; item money lives exclusively in item_valuations (R1-3,
-      §10.2)."
+      §10.2). Also carries the externally-owned properties snapshot: properties
+      JSONB (NULL = no snapshot yet, {} = snapshotted propertyless, GIN
+      jsonb_path_ops indexed), properties_signature String(64) derived from the
+      canonical blob (partial btree with workspace_id), and
+      properties_snapshot_at. The signature is the item-complexity narrowing key
+      for typical-time comparability; there is deliberately no property
+      versioning - a snapshot update corrects the item's innate characteristics
+      and regroups its historical samples on the next read."
     metadata:
       evidence:
         - path: app/beyo_manager/models/tables/items/item.py
@@ -4601,7 +4608,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-14T14:36:42.726Z
-    updatedAt: 2026-08-14T18:09:38.020Z
+    updatedAt: 2026-08-29T09:13:19.990Z
   - id: command-item-economics-commit-item-cost-evaluation
     type: command
     name: commit_item_cost_evaluation
@@ -5471,8 +5478,14 @@ nodes:
       quantity, clamped to at least one, with missing items counting as one -
       under the same window and sample gates; the twins feed the item-economics
       quantity projections and never alter the raw medians or this endpoint's
-      published rows. The grouping and window admission must remain aligned so
-      reassignment totals are not reduced to a recent rework fragment.
+      published rows. For a narrowing spec that carries a properties_signature
+      the spec branch also computes a third, most-specific column set -
+      properties-narrowed raw and per-unit medians with their own sample count,
+      gated at the same minimum, restricted to history whose PRIMARY item
+      matches both the spec and the signature; signature-less specs read empty
+      properties columns and this endpoint's no-spec rows are untouched. The
+      grouping and window admission must remain aligned so reassignment totals
+      are not reduced to a recent rework fragment.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
@@ -5496,34 +5509,39 @@ nodes:
     origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-29T07:12:07.309Z
+    updatedAt: 2026-08-29T09:13:19.990Z
   - id: projection-item-economics-task-budget-allocations
     type: projection
     name: Task budget allocations
     description: The batched, read-only task view combines current committed
-      evaluation budgets, non-deleted live steps, item-category-narrowed
+      evaluation budgets, non-deleted live steps, item-comparability
       typical-time evidence, and item-economics readiness into per-step
-      allowances. It derives one filter spec per task, deduplicates equal specs
-      into an ordered sequence, issues one typical-times statement for the
+      allowances. It derives one filter spec per task from the PRIMARY item's
+      category plus, when present, its properties_signature, deduplicates equal
+      specs into an ordered sequence, issues one typical-times statement for the
       batch, and maps each task to its spec position; a non-narrowing task uses
       spec_index None and resolves against the spec-independent section-wide
       columns. Participating sections are reconciled through uniform_basis_v1
-      and excluded sections resolve independently, so one task-wide basis
-      governs the selected typicals used both for displayed step values and for
-      division weights; the response exposes typical_resolution, per-step
-      typical_basis and sample_count, and allocation_method
+      down a most-specific-first ladder - item_properties_narrowed (same
+      category AND signature) only when every participating section has usable
+      properties evidence, else item-narrowed on the same rule, else
+      section-wide - and excluded sections broaden down the ladder
+      independently, so one task-wide basis governs the selected typicals used
+      both for displayed step values and for division weights; the response
+      exposes typical_resolution (its profile names whether properties applied),
+      per-step typical_basis and sample_count, and allocation_method
       static_proportional_section_v2. Each step row additionally discloses
       typical_unit_worker_seconds and projected_typical_worker_seconds - the
       selected basis's per-unit median scaled by that task's current
       PRIMARY-item quantity, clamped to at least one - and each task row carries
       projection_quantity; division weights keep reading the raw typicals. Each
-      step's worked-seconds input remains its settled working seconds plus the
-      concurrency-averaged share of any open WORKING interval, taken from one
-      shared live-worked-seconds map loaded once per request and persisted
-      nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
-      excluded steps, and degrades evaluation-less tasks to explicit no-budget
-      states without persisting derived values; its time-only fields reconcile
-      with the same non-deleted step set used by budget status.
+      step's worked seconds remain its settled seconds plus the
+      concurrency-averaged share of any open WORKING interval, from one shared
+      live map loaded once per request and persisted nowhere. It omits unknown
+      or cross-workspace tasks, charges non-deleted excluded steps, and degrades
+      evaluation-less tasks to explicit no-budget states without persisting
+      derived values; its time-only fields reconcile with the same non-deleted
+      step set used by budget status.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
@@ -5547,7 +5565,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-29T07:12:07.309Z
+    updatedAt: 2026-08-29T09:12:53.913Z
     sourceLinks:
       - path: app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py
         symbol: test_c13_one_participating_sections_patch_moves_both_consumers
@@ -5616,34 +5634,34 @@ nodes:
     type: projection
     name: Task production time
     description: "The task-scoped, read-only production-time view composes manager
-      budget status with active PRIMARY-item category-narrowed typical-time
-      evidence, ordered section grouping, and deterministic per-step time
-      allowances. For each task it derives the typical filter from the active
-      PRIMARY item's category and reconciles participating sections through
-      uniform_basis_v1: usable narrowed evidence must be available for every
-      participating section to select one item-narrowed basis, otherwise the
-      participating task falls back together to section-wide, while excluded
-      sections resolve independently. The same SelectedTypical values feed both
-      the displayed typicals and the division weights, and the response carries
-      a typical_resolution block plus per-section typical_basis,
-      narrowed_sample_count, and section_sample_count and allocation_method
+      budget status with active PRIMARY-item comparability evidence, ordered
+      section grouping, and deterministic per-step time allowances. It derives
+      the typical filter from the PRIMARY item's category plus, when present,
+      its properties_signature, and reconciles participating sections through
+      uniform_basis_v1 down a most-specific-first ladder:
+      item_properties_narrowed (same category AND signature) only when every
+      participating section has usable properties evidence, else item-narrowed
+      on the same all-or-nothing rule, else section-wide together; excluded
+      sections broaden down the ladder independently. The same SelectedTypical
+      values feed both the displayed typicals and the division weights, and the
+      response carries a typical_resolution block (task basis, a comparability
+      profile naming whether properties applied, the applied filter) plus
+      per-section typical_basis and sample counts and allocation_method
       static_proportional_section_v2. Each section's typical block also
-      discloses typical_unit_worker_seconds (the basis's per-unit median, each
-      history task's total divided by its PRIMARY-item quantity clamped to at
-      least one) and projected_typical_worker_seconds (per-unit times the
-      current quantity, half-even rounded), plus top-level projection_quantity;
-      division weights keep reading raw typicals, so quantity never moves an
-      allowance. Each non-deleted step's worked-seconds input remains its
-      settled working seconds plus the concurrency-averaged share of any open
-      WORKING interval, resolved once per request through the shared
-      live-worked-seconds loader and persisted nowhere. It preserves the tenant
-      boundary, ordered section rows, and a flat final snapshot. Monetary
-      exposure is role-gated through the shared include_monetary_step_fields
-      rule: ADMIN and MANAGER budget blocks additionally carry
-      production_budget_minor, consumed_cost_minor, and variance_cost_minor
-      (forwarded not recomputed), while WORKER and SELLER responses remain
-      byte-identical time-only; section rows and the final snapshot stay
-      money-free for every role. It persists nothing."
+      discloses typical_unit_worker_seconds (the basis's per-unit median,
+      quantity clamped to at least one) and projected_typical_worker_seconds
+      (per-unit times current quantity, half-even), plus top-level
+      projection_quantity; division weights keep reading the selected raw
+      typicals, so quantity never moves an allowance. Each non-deleted step's
+      worked seconds remain its settled seconds plus the concurrency-averaged
+      share of any open WORKING interval, resolved once per request through the
+      shared live-worked-seconds loader and persisted nowhere. It preserves the
+      tenant boundary, ordered section rows, and a flat final snapshot. Money is
+      role-gated via include_monetary_step_fields: ADMIN/MANAGER budget blocks
+      add production_budget_minor, consumed_cost_minor, variance_cost_minor
+      (forwarded not recomputed); WORKER/SELLER stay byte-identical time-only,
+      and section rows and the final snapshot stay money-free for every role. It
+      persists nothing."
     tags:
       - item-economics
       - production-time
@@ -5708,7 +5726,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-29T07:12:07.309Z
+    updatedAt: 2026-08-29T09:12:53.913Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -5933,17 +5951,21 @@ nodes:
     description: "Manager-only, task-scoped read model that composes
       workspace-scoped task/item binding, the saved valuation and byline, live
       item-economics configuration, an item-aware task typical time - drawn from
-      the same-category slice of each participating section's history through
-      the shared typical-times engine, resolved by the shared reconciliation
-      with a zero-duration price terminal, and windowed by the injected request
-      clock so two reads of one task agree - and the pure price-scenario model
-      into break-even anchors and a slider domain. Its published typical total
-      is quantity-projected: the business fallback runs in per-unit space and
-      each participating section's per-unit typical is scaled by the current
-      item's quantity (clamped to at least one) before the shared per-section
-      half-even rounding, with total_unit_seconds and quantity_applied disclosed
-      beside total_seconds, so break-even and the slider domain price the whole
-      order. Non-bound bindings govern the payload by nulling
+      each participating section's comparable history through the shared
+      typical-times engine, resolved by the shared reconciliation with a
+      zero-duration price terminal, and windowed by the injected request clock
+      so two reads of one task agree - and the pure price-scenario model into
+      break-even anchors and a slider domain. The derived spec carries the
+      PRIMARY item's properties_signature when present, so the typical can
+      resolve on the most specific item_properties_narrowed tier (same category
+      AND same signature) before falling back to category-narrowed then
+      section-wide under the same shared ladder. Its published typical total is
+      quantity-projected: the business fallback runs in per-unit space and each
+      participating section's per-unit typical is scaled by the current item's
+      quantity (clamped to at least one) before the shared per-section half-even
+      rounding, with total_unit_seconds and quantity_applied disclosed beside
+      total_seconds, so break-even and the slider domain price the whole order.
+      Non-bound bindings govern the payload by nulling
       valuation/model/anchor/domain structure while keeping the step-derived
       typical; the projection performs no writes. It composes task budget status
       and so inherits that read's worked-time dependency transitively; it
@@ -6029,7 +6051,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-29T07:12:07.309Z
+    updatedAt: 2026-08-29T09:13:19.990Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: _typical_block

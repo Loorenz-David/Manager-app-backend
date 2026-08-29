@@ -422,3 +422,188 @@ def test_median_preserves_even_odd_and_sorting_rules():
     assert median([Fraction(600), Fraction(900)]) == Fraction(750)
     assert median([Fraction(300), Fraction(600), Fraction(900)]) == Fraction(600)
     assert median([Fraction(900), Fraction(300), Fraction(600)]) == Fraction(600)
+
+
+# --- properties (item complexity) tier ---------------------------------------
+
+
+def properties_evidence(
+    section="section",
+    properties_count=7,
+    properties_value=300,
+    narrowed_count=7,
+    narrowed=600,
+    section_count=61,
+    section_value=900,
+    properties_unit=None,
+):
+    return SectionTypicalEvidence(
+        section,
+        narrowed,
+        narrowed_count,
+        section_value,
+        section_count,
+        properties_typical_worker_seconds=properties_value,
+        properties_sample_count=properties_count,
+        properties_typical_unit_worker_seconds=properties_unit,
+    )
+
+
+def test_properties_signature_alone_is_inert_and_empty_string_is_none():
+    bare = TypicalFilterSpec(properties_signature="sig-a")
+    assert bare.is_narrowing is False
+    assert TypicalFilterSpec(properties_signature="") == TypicalFilterSpec()
+    assert hash(TypicalFilterSpec(properties_signature="")) == hash(TypicalFilterSpec())
+    with_category = TypicalFilterSpec(
+        item_category_ids=frozenset({"cat"}), properties_signature="sig-a"
+    )
+    assert with_category.is_narrowing is True
+    assert with_category != TypicalFilterSpec(item_category_ids=frozenset({"cat"}))
+
+
+def test_derive_spec_carries_signature_only_beside_a_category():
+    signed = Item(client_id="itm_signed", item_category_id="cat_a", properties_signature="sig-a")
+    unsigned = Item(client_id="itm_unsigned", item_category_id="cat_a", properties_signature=None)
+    orphan_signature = Item(client_id="itm_orphan", item_category_id=None, properties_signature="sig-a")
+    assert derive_spec_from_primary_item(signed) == TypicalFilterSpec(
+        item_category_ids=frozenset({"cat_a"}), properties_signature="sig-a"
+    )
+    assert derive_spec_from_primary_item(unsigned) == TypicalFilterSpec(
+        item_category_ids=frozenset({"cat_a"})
+    )
+    assert derive_spec_from_primary_item(orphan_signature) == TypicalFilterSpec()
+
+
+def test_properties_evidence_predicates_cover_floor_zero_and_none():
+    floor = TYPICAL_MIN_SAMPLE_SIZE
+    rows = [
+        (properties_evidence("a", floor - 1, 300), False, False),
+        (properties_evidence("b", floor, 300), True, True),
+        (properties_evidence("c", floor, 0), True, False),
+        (properties_evidence("d", floor, None), True, False),
+    ]
+    for row, has_properties, usable in rows:
+        assert row.has_properties is has_properties
+        assert row.has_usable_properties is usable
+
+
+SIGNED_SPEC = TypicalFilterSpec(item_category_ids=frozenset({"cat"}), properties_signature="sig-a")
+
+
+@pytest.mark.parametrize(
+    ("properties", "narrowed", "section", "policy", "expected"),
+    [
+        # BROADEN ladder: properties -> narrowed -> section -> insufficient.
+        ((7, 300), (9, 600), (61, 900), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_properties_narrowed", 300, 7)),
+        ((4, None), (9, 600), (61, 900), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 600, 9)),
+        ((7, 0), (9, 600), (61, 900), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("item_narrowed", 600, 9)),
+        ((4, None), (9, 0), (61, 900), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("section_wide", 900, 61)),
+        ((4, None), (3, None), (3, None), TypicalResolutionPolicy.BROADEN_TO_SECTION, ("insufficient_sample", None, 3)),
+        # ANSWER_AS_ASKED answers at the asked (most specific) tier only.
+        ((7, 300), (9, 600), (61, 900), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_properties_narrowed", 300, 7)),
+        ((7, 0), (9, 600), (61, 900), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("item_properties_narrowed", 0, 7)),
+        ((4, None), (9, 600), (61, 900), TypicalResolutionPolicy.ANSWER_AS_ASKED, ("insufficient_sample", None, 4)),
+    ],
+)
+def test_properties_resolution_ladder(properties, narrowed, section, policy, expected):
+    source = SectionTypicalEvidence(
+        "section",
+        narrowed[1],
+        narrowed[0],
+        section[1],
+        section[0],
+        properties_typical_worker_seconds=properties[1],
+        properties_sample_count=properties[0],
+    )
+    result = resolve_section_typical(source, SIGNED_SPEC, policy)
+    assert (result.typical_basis, result.typical_worker_seconds, result.sample_count) == expected
+
+
+def test_properties_tier_never_fires_without_a_signature_even_with_evidence():
+    source = properties_evidence("section", 9, 300, 9, 600, 61, 900)
+    spec = TypicalFilterSpec(item_category_ids=frozenset({"cat"}))
+    for policy in (TypicalResolutionPolicy.BROADEN_TO_SECTION, TypicalResolutionPolicy.ANSWER_AS_ASKED):
+        result = resolve_section_typical(source, spec, policy)
+        assert result.typical_basis == "item_narrowed"
+        assert result.typical_worker_seconds == 600
+
+
+def test_properties_selection_carries_its_unit_twin():
+    source = properties_evidence("section", 7, 300, properties_unit=Fraction(150))
+    result = resolve_section_typical(
+        source, SIGNED_SPEC, TypicalResolutionPolicy.BROADEN_TO_SECTION
+    )
+    assert result.typical_basis == "item_properties_narrowed"
+    assert result.typical_unit_worker_seconds == Fraction(150)
+
+
+def test_reconciliation_properties_uniform_needs_every_participant_and_discloses_profile():
+    from beyo_manager.domain.item_economics.typical_filters import COMPARABILITY_PROFILE_PROPERTIES
+
+    uniform = reconcile_task_typicals(
+        {
+            "a": properties_evidence("a", 7, 300, properties_unit=Fraction(100)),
+            "b": properties_evidence("b", 6, 450, section_value=1200),
+        },
+        SIGNED_SPEC,
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert uniform.task_typical_basis == "item_properties_narrowed_uniform"
+    assert uniform.comparability_profile == COMPARABILITY_PROFILE_PROPERTIES
+    assert (
+        uniform.selected["a"].typical_basis,
+        uniform.selected["a"].typical_worker_seconds,
+        uniform.selected["a"].sample_count,
+        uniform.selected["a"].typical_unit_worker_seconds,
+        uniform.selected["a"].participates,
+    ) == ("item_properties_narrowed", 300, 7, Fraction(100), True)
+
+    # One participant below the properties gate: whole task falls to the
+    # category tier (all have usable narrowed), profile still discloses that
+    # properties comparability was applied.
+    fallback = reconcile_task_typicals(
+        {
+            "a": properties_evidence("a", 7, 300),
+            "b": properties_evidence("b", 3, None),
+        },
+        SIGNED_SPEC,
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert fallback.task_typical_basis == "item_narrowed_uniform"
+    assert fallback.comparability_profile == COMPARABILITY_PROFILE_PROPERTIES
+    assert fallback.selected["a"].typical_basis == "item_narrowed"
+    assert fallback.selected["a"].typical_worker_seconds == 600
+
+    # Without a signature nothing changes, including the disclosed profile.
+    unsigned = reconcile_task_typicals(
+        {
+            "a": evidence("a"),
+            "b": evidence("b"),
+        },
+        TypicalFilterSpec(item_category_ids=frozenset({"cat"})),
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert unsigned.task_typical_basis == "item_narrowed_uniform"
+    assert unsigned.comparability_profile == COMPARABILITY_PROFILE
+
+
+def test_reconciliation_excluded_section_broadens_down_the_full_ladder():
+    result = reconcile_task_typicals(
+        {
+            "participant": properties_evidence("participant", 7, 300),
+            "excluded_props": properties_evidence("excluded_props", 8, 500),
+            "excluded_thin": properties_evidence("excluded_thin", 2, None),
+        },
+        SIGNED_SPEC,
+        frozenset({"participant"}),
+        frozenset({"participant", "excluded_props", "excluded_thin"}),
+    )
+    assert result.task_typical_basis == "item_properties_narrowed_uniform"
+    assert result.selected["excluded_props"].typical_basis == "item_properties_narrowed"
+    assert result.selected["excluded_props"].typical_worker_seconds == 500
+    assert result.selected["excluded_props"].participates is False
+    assert result.selected["excluded_thin"].typical_basis == "item_narrowed"
+    assert result.selected["excluded_thin"].typical_worker_seconds == 600

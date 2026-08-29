@@ -54,8 +54,12 @@ def _spec_row(
     section_count=12,
     narrowed_unit=None,
     section_unit=None,
+    properties=None,
+    properties_count=0,
+    properties_unit=None,
 ):
-    # Unit twins default to the raw medians (a quantity-one history).
+    # Unit twins default to the raw medians (a quantity-one history); the
+    # properties tier defaults to absent (a signature-less spec).
     return SimpleNamespace(
         client_id=section_id,
         spec_index=0,
@@ -65,6 +69,9 @@ def _spec_row(
         section_sample_count=section_count,
         narrowed_typical_unit_worker_seconds=narrowed if narrowed_unit is None else narrowed_unit,
         section_typical_unit_worker_seconds=section if section_unit is None else section_unit,
+        properties_typical_worker_seconds=properties,
+        properties_sample_count=properties_count,
+        properties_typical_unit_worker_seconds=properties if properties_unit is None else properties_unit,
     )
 
 
