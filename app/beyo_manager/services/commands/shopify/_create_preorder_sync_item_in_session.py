@@ -37,10 +37,14 @@ async def _create_preorder_sync_item_in_session(
     # A seller who didn't type a product title still needs *something* Shopify will accept —
     # title is required on the Shopify side regardless of sku. Falls back to the resolved sku
     # (above), not the raw item_sku, so an explicit `product.sku` override is honoured here too.
-    # If neither resolves, title stays absent and the request-layer validation on
+    # A pre-existing item that was found (not created) may have no sku at all — the sku backfill
+    # deliberately never assigns one to a pre-existing item — so fall back further to the item's
+    # article_number. If neither resolves, title stays absent and the request-layer validation on
     # ProcessShopifyProductItemRequest.title raises a clear error instead of a downstream one.
-    if not product.get("title") and product.get("sku"):
-        product["title"] = product["sku"]
+    if not product.get("title"):
+        fallback_title = product.get("sku") or item_article_number
+        if fallback_title:
+            product["title"] = fallback_title
     # Shopify's productType defaults to the task item's category name, so a seller who has already
     # categorised the item does not have to restate it. An explicit `product_category` on the
     # pre-order section wins — unlike the quantity metafield, this is a product attribute a seller
