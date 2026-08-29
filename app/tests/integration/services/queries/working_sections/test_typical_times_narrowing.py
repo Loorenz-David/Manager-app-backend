@@ -223,15 +223,24 @@ async def test_k_shape_is_keyed_by_spec_count_and_non_narrowing_k1_is_seven_colu
         )).all()
     )
 
-    assert no_specs[0]._fields == ("client_id", "name", "sample_count", "typical_worker_seconds")
+    assert no_specs[0]._fields == (
+        "client_id", "name", "sample_count", "typical_worker_seconds",
+        "typical_unit_worker_seconds",
+    )
     assert empty_spec[0]._fields == (
         "client_id", "name", "spec_index", "narrowed_sample_count", "narrowed_typical_worker_seconds",
+        "narrowed_typical_unit_worker_seconds",
         "section_sample_count", "section_typical_worker_seconds",
+        "section_typical_unit_worker_seconds",
     )
     assert narrowing[0]._fields == empty_spec[0]._fields
     assert (empty_spec[0].narrowed_sample_count, empty_spec[0].section_sample_count) == (5, 5)
     assert empty_spec[0].narrowed_typical_worker_seconds == 30
     assert empty_spec[0].section_typical_worker_seconds == 30
+    # Quantity-one seeds: the per-unit twins agree with the raw medians.
+    assert float(empty_spec[0].narrowed_typical_unit_worker_seconds) == 30.0
+    assert float(empty_spec[0].section_typical_unit_worker_seconds) == 30.0
+    assert float(no_specs[0].typical_unit_worker_seconds) == 30.0
 
 
 @pytest.mark.integration
@@ -563,6 +572,46 @@ async def test_service_no_spec_payload_is_explicitly_unchanged(db_session):
             }
         ]
     }
+
+
+@pytest.mark.integration
+async def test_unit_medians_normalize_by_primary_quantity_and_clamp_legacy_zero(db_session):
+    """Mixed historical quantities discriminate the per-unit twins from the raw medians.
+
+    Five same-category tasks: seconds (1000, 2000, 3000, 4000, 5000) at quantities
+    (1, 2, 1, 4, 0). Raw median stays 3000. Per-unit samples are
+    (1000, 1000, 3000, 1000, 5000) — the zero quantity clamps to one — so the unit
+    median is 1000, not 3000 and not 3000/q for any q.
+    """
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "unitq", ItemMajorCategoryEnum.SEAT)
+    for index, (seconds, quantity) in enumerate(
+        [(1000, 1), (2000, 2), (3000, 1), (4000, 4), (5000, 0)]
+    ):
+        item = await _item(db_session, seed, f"unitq-{index}", category=category)
+        item.quantity = quantity
+        await _task(db_session, seed, f"unitq-{index}", primary=item, seconds=seconds)
+    await db_session.flush()
+
+    spec = TypicalFilterSpec(item_category_ids=frozenset({category.client_id}))
+    spec_rows = (
+        await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=(spec,), now=NOW)
+        )
+    ).all()
+    row = next(r for r in spec_rows if r.client_id == seed.section.client_id)
+    assert row.narrowed_sample_count == 5
+    assert row.narrowed_typical_worker_seconds == 3000
+    assert row.section_typical_worker_seconds == 3000
+    assert float(row.narrowed_typical_unit_worker_seconds) == 1000.0
+    assert float(row.section_typical_unit_worker_seconds) == 1000.0
+
+    no_spec_rows = (
+        await db_session.execute(typical_times_statement(seed.workspace.client_id, now=NOW))
+    ).all()
+    no_spec_row = next(r for r in no_spec_rows if r.client_id == seed.section.client_id)
+    assert no_spec_row.typical_worker_seconds == 3000
+    assert float(no_spec_row.typical_unit_worker_seconds) == 1000.0
 
 
 @pytest.mark.integration

@@ -141,6 +141,11 @@ class SectionTypicalEvidence:
     narrowed_sample_count: int
     section_typical_worker_seconds: int | None
     section_sample_count: int
+    # Per-unit twins of the two medians above: the same populations normalized by
+    # each historical task's PRIMARY-item quantity (clamped to >= 1). They qualify
+    # under the same sample gates and never influence basis selection.
+    narrowed_typical_unit_worker_seconds: Fraction | None = None
+    section_typical_unit_worker_seconds: Fraction | None = None
 
     @property
     def has_narrowed(self) -> bool:
@@ -172,6 +177,10 @@ class SelectedTypical:
     evidence: SectionTypicalEvidence
     participates: bool
     sample_count: int
+    # The per-unit value of the same basis the raw typical was selected from.
+    # Consumers scale it by the current task's quantity for absolute projections;
+    # division weights keep reading typical_worker_seconds.
+    typical_unit_worker_seconds: Fraction | None = None
 
 
 def resolve_section_typical(
@@ -188,6 +197,7 @@ def resolve_section_typical(
                 evidence,
                 False,
                 evidence.section_sample_count,
+                evidence.section_typical_unit_worker_seconds,
             )
         return SelectedTypical(
             evidence.working_section_id,
@@ -207,6 +217,7 @@ def resolve_section_typical(
                 evidence,
                 False,
                 evidence.narrowed_sample_count,
+                evidence.narrowed_typical_unit_worker_seconds,
             )
         if evidence.has_section:
             return SelectedTypical(
@@ -216,6 +227,7 @@ def resolve_section_typical(
                 evidence,
                 False,
                 evidence.section_sample_count,
+                evidence.section_typical_unit_worker_seconds,
             )
         return SelectedTypical(
             evidence.working_section_id,
@@ -235,6 +247,7 @@ def resolve_section_typical(
                 evidence,
                 False,
                 evidence.narrowed_sample_count,
+                evidence.narrowed_typical_unit_worker_seconds,
             )
         return SelectedTypical(
             evidence.working_section_id,
@@ -292,6 +305,7 @@ def reconcile_task_typicals(
                     section_evidence,
                     True,
                     section_evidence.narrowed_sample_count,
+                    section_evidence.narrowed_typical_unit_worker_seconds,
                 )
             else:
                 selected[section_id] = SelectedTypical(
@@ -305,6 +319,11 @@ def reconcile_task_typicals(
                     section_evidence,
                     True,
                     section_evidence.section_sample_count,
+                    (
+                        section_evidence.section_typical_unit_worker_seconds
+                        if section_evidence.has_section
+                        else None
+                    ),
                 )
         else:
             selected[section_id] = replace(
@@ -326,8 +345,22 @@ def reconcile_task_typicals(
     )
 
 
+def applied_projection_quantity(quantity: int | None) -> int:
+    """Clamp a current-task quantity to the >= 1 divisor convention (legacy zero rows)."""
+    return max(1, quantity if quantity is not None else 1)
+
+
+def project_typical_seconds(
+    unit_seconds: Fraction | None, quantity: int | None
+) -> int | None:
+    """Scale one per-unit typical to the current quantity, half-even to integer seconds."""
+    if unit_seconds is None:
+        return None
+    return round(unit_seconds * applied_projection_quantity(quantity))
+
+
 def apply_business_fallback(
-    selected_values: Sequence[int | None], *, terminal: Fraction
+    selected_values: Sequence[int | Fraction | None], *, terminal: Fraction
 ) -> list[Fraction]:
     if not isinstance(terminal, Fraction):
         raise TypeError("terminal must be a Fraction")

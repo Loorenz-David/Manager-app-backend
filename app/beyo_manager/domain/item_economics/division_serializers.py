@@ -59,6 +59,8 @@ def serialize_budget_step(row: dict) -> dict:
         "typical_worker_seconds": row["typical_worker_seconds"],
         "typical_basis": row.get("typical_basis", "insufficient_sample"),
         "sample_count": row.get("sample_count", 0),
+        "typical_unit_worker_seconds": _fraction_decimal(row.get("typical_unit_worker_seconds")),
+        "projected_typical_worker_seconds": row.get("projected_typical_worker_seconds"),
         "allowance_seconds": row["allowance_seconds"],
         "worked_seconds": row["worked_seconds"],
         "left_seconds": row["left_seconds"],
@@ -78,6 +80,7 @@ def serialize_budget_allocation(row: dict) -> dict:
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
+        "projection_quantity": row.get("projection_quantity"),
         "steps": [serialize_budget_step(step) for step in row["steps"]],
     }
 
@@ -196,6 +199,10 @@ def serialize_production_time_section(row: dict, typical: dict | None = None) ->
             "typical_basis": typical.get("typical_basis", "insufficient_sample"),
             "narrowed_sample_count": typical.get("narrowed_sample_count", 0),
             "section_sample_count": typical.get("section_sample_count", 0),
+            "typical_unit_worker_seconds": _fraction_decimal(
+                typical.get("typical_unit_worker_seconds")
+            ),
+            "projected_typical_worker_seconds": typical.get("projected_typical_worker_seconds"),
             "method": typical.get("method", TYPICAL_METHOD),
             "window_days": typical.get("window_days", TYPICAL_WINDOW_DAYS),
             "min_sample_size": typical.get("min_sample_size", TYPICAL_MIN_SAMPLE_SIZE),
@@ -239,6 +246,7 @@ def serialize_task_production_time(row: dict, *, include_monetary: bool = False)
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
+        "projection_quantity": row.get("projection_quantity"),
         "budget": budget,
         "final": (
             _serialize_production_time_final(result, frozen_percent_consumed)

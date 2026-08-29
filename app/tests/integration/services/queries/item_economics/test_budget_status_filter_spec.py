@@ -146,12 +146,16 @@ def test_C1_task_budget_status_appends_defaulted_spec_after_result():
         "item_id",
         "result",
         "typical_filter_spec",
+        "primary_item_quantity",
     ]
     task_budget_fields = fields(manager_module.TaskBudgetStatus)
     assert task_budget_fields[13].name == "result"  # zero-based index
     assert task_budget_fields[14].name == "typical_filter_spec"  # zero-based index
     assert task_budget_fields[14].default is None
+    assert task_budget_fields[15].name == "primary_item_quantity"  # zero-based index
+    assert task_budget_fields[15].default is None
     assert _status().typical_filter_spec is None
+    assert _status().primary_item_quantity is None
 
 
 def test_C2_manager_budget_status_payload_has_the_existing_exact_key_set():

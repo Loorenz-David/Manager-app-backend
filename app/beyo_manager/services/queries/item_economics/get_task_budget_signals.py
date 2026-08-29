@@ -64,7 +64,10 @@ from beyo_manager.services.queries.item_economics.live_worked_seconds import (
     load_live_worked_seconds,
 )
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
+    narrowed_evidence_from_row,
+    section_evidence_from_row,
     typical_times_statement,
+    unfiltered_evidence_from_row,
 )
 
 
@@ -333,14 +336,8 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
                         section_id, None, 0, None, 0
                     )
                 else:
-                    evidence_by_section[section_id] = SectionTypicalEvidence(
-                        section_id,
-                        None,
-                        0,
-                        int(row.section_typical_worker_seconds)
-                        if row.section_typical_worker_seconds is not None
-                        else None,
-                        int(row.section_sample_count or 0),
+                    evidence_by_section[section_id] = section_evidence_from_row(
+                        section_id, row
                     )
                 continue
             row = typical_rows.get((section_id, task_spec_index if specs else None))
@@ -349,27 +346,9 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
                     section_id, None, 0, None, 0
                 )
             elif specs:
-                evidence_by_section[section_id] = SectionTypicalEvidence(
-                    section_id,
-                    int(row.narrowed_typical_worker_seconds)
-                    if row.narrowed_typical_worker_seconds is not None
-                    else None,
-                    int(row.narrowed_sample_count or 0),
-                    int(row.section_typical_worker_seconds)
-                    if row.section_typical_worker_seconds is not None
-                    else None,
-                    int(row.section_sample_count or 0),
-                )
+                evidence_by_section[section_id] = narrowed_evidence_from_row(row)
             else:
-                evidence_by_section[section_id] = SectionTypicalEvidence(
-                    section_id,
-                    None,
-                    0,
-                    int(row.typical_worker_seconds)
-                    if row.typical_worker_seconds is not None
-                    else None,
-                    int(row.sample_count or 0),
-                )
+                evidence_by_section[section_id] = unfiltered_evidence_from_row(row)
         selection = reconcile_task_typicals(
             evidence_by_section,
             spec_by_task[task.client_id]

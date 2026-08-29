@@ -107,11 +107,14 @@ def _step(section_id, *, state=TaskStepStateEnum.PENDING, deleted=False):
     )
 
 
-def _typical_row(section_id, value, *, sample_count=5):
+def _typical_row(section_id, value, *, sample_count=5, unit_value=None):
+    # The unit twin defaults to the raw value: a quantity-one history where
+    # per-unit and per-task medians coincide, keeping legacy totals unchanged.
     return SimpleNamespace(
         client_id=section_id,
         typical_worker_seconds=value,
         sample_count=sample_count,
+        typical_unit_worker_seconds=value if unit_value is None else unit_value,
     )
 
 
@@ -125,7 +128,7 @@ async def test_c3_zero_typical_is_not_usable_and_uses_the_median() -> None:
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None, None)
 
     assert result["total_seconds"] == 200
     assert result["sections_without_sample"] == 1
@@ -144,7 +147,7 @@ async def test_c4_even_median_is_quantised_once_per_substituted_section() -> Non
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None, None)
 
     assert result["total_seconds"] == 41
     assert result["sections_without_sample"] == 2
@@ -161,7 +164,7 @@ async def test_phase3_c3_half_even_median_differs_from_truncation() -> None:
         ],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None, None)
 
     assert result["total_seconds"] == 35
     assert result["sections_without_sample"] == 1
@@ -182,7 +185,7 @@ async def test_c5_each_excluded_state_removes_its_section(state) -> None:
         [_typical_row("wsec_live", 100)],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None, None)
 
     assert result["sections_total"] == 1
     assert result["total_seconds"] == 100
@@ -195,7 +198,7 @@ async def test_c5_deleted_steps_do_not_create_a_participating_section() -> None:
         [_typical_row("wsec_live", 100)],
     )
 
-    result = await module._typical_block(_ctx(session), "tsk_scenario", None)
+    result = await module._typical_block(_ctx(session), "tsk_scenario", None, None)
 
     assert result["sections_total"] == 1
     assert result["total_seconds"] == 100
@@ -206,6 +209,7 @@ async def test_c6_nonempty_no_evidence_is_estimated_zero() -> None:
     result = await module._typical_block(
         _ctx(_TypicalSession([_step("wsec_missing")], [])),
         "tsk_scenario",
+        None,
         None,
     )
 
@@ -220,6 +224,7 @@ async def test_c6_empty_participating_set_is_estimated_zero() -> None:
         _ctx(_TypicalSession([], [])),
         "tsk_scenario",
         None,
+        None,
     )
 
     assert result["total_seconds"] == 0
@@ -232,6 +237,7 @@ async def test_c19_missing_typical_statement_row_uses_defensive_lookup() -> None
     result = await module._typical_block(
         _ctx(_TypicalSession([_step("wsec_deleted_row")], [])),
         "tsk_scenario",
+        None,
         None,
     )
 
@@ -349,6 +355,7 @@ async def test_phase5_c3_typical_counts_only_the_requested_tasks_steps(
                 session=db_session,
             ),
             requested_task.client_id,
+            None,
             None,
         )
 
@@ -574,7 +581,7 @@ async def _run_scenario(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id, _spec):
+    async def fake_typical(_ctx, _task_id, _spec, _quantity):
         return typical
 
     monkeypatch.setattr(module, "get_task_budget_status", fake_status)
@@ -971,7 +978,7 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id, _spec):
+    async def fake_typical(_ctx, _task_id, _spec, _quantity):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,
@@ -1114,7 +1121,7 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id, _spec):
+    async def fake_typical(_ctx, _task_id, _spec, _quantity):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,
@@ -1274,7 +1281,7 @@ async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
     async def fake_preview(_ctx, _item):
         return objects.selection, objects.terms
 
-    async def fake_typical(_ctx, _task_id, _spec):
+    async def fake_typical(_ctx, _task_id, _spec, _quantity):
         return {
             "total_seconds": 12_300,
             "is_estimated": False,

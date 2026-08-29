@@ -27,8 +27,11 @@ from beyo_manager.domain.item_economics.typical_filters import (
     SelectedTypical,
     TaskTypicalSelection,
     TypicalFilterSpec,
+    derive_spec_from_primary_item,
     reconcile_task_typicals,
 )
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.services.queries.item_economics import get_task_price_scenario as price_scenario_module
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.get_task_budget_allocations import get_task_budget_allocations
 from beyo_manager.services.queries.item_economics.get_task_production_time import get_task_production_time
@@ -39,6 +42,8 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from tests.integration.services.queries.item_economics._narrowing_fixture import (
     cleanup_batch_dedupe_fixture,
     cleanup_categorized_fixture,
+    cleanup_divergent_category_fixture,
+    seed_divergent_category_task,
     seed_layer2_visibility_fixture,
     seed_batch_dedupe_fixture,
     seed_categorized_two_section_task,
@@ -105,7 +110,8 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
     }
     assert set(serialize_budget_step(row)) == {
         "step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
-        "typical_basis", "sample_count", "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
+        "typical_basis", "sample_count", "typical_unit_worker_seconds", "projected_typical_worker_seconds",
+        "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
     }
     selection = TaskTypicalSelection(
         "section_wide_uniform", "uniform_basis_v1", "primary_item_category_v1", None,
@@ -214,6 +220,7 @@ def test_c12_defaults_are_always_present_on_the_production_section():
     assert payload["typical"] == {
         "typical_worker_seconds": None, "sample_count": 0, "typical_basis": "insufficient_sample",
         "narrowed_sample_count": 0, "section_sample_count": 0,
+        "typical_unit_worker_seconds": None, "projected_typical_worker_seconds": None,
         "method": "median_completed_section_totals", "window_days": 90, "min_sample_size": 5,
     }
 
@@ -309,7 +316,8 @@ async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session
         assert all(row["share_state"] == "no_budget" for row in result["sections"])
         assert all(set(row["typical"]) == {
             "typical_worker_seconds", "typical_basis", "sample_count", "narrowed_sample_count",
-            "section_sample_count", "method", "window_days", "min_sample_size",
+            "section_sample_count", "typical_unit_worker_seconds", "projected_typical_worker_seconds",
+            "method", "window_days", "min_sample_size",
         } for row in result["sections"])
     finally:
         await cleanup_categorized_fixture(db_session, fixture)
@@ -569,3 +577,126 @@ def test_c13c_excluded_state_logic_has_one_shared_production_owner():
             if len(names) >= 2:
                 violating_files.append((path, names))
     assert not violating_files, violating_files
+
+
+@pytest.mark.integration
+async def test_quantity_scales_projection_on_all_surfaces_but_never_the_division(db_session):
+    """Mixed historical quantities + current quantity 3, across all three surfaces.
+
+    Chair history seconds are (500, 550, 600, 650, 700); quantities (1, 1, 5, 5, 5)
+    make the per-unit samples (500, 550, 120, 130, 140), so the raw narrowed median
+    stays 600 while the unit median is 140. With current quantity 3 the projection is
+    420 everywhere, and re-reading at quantity 1 moves only the projection — the
+    division allowance and raw typical are byte-identical in both reads.
+    """
+    fixture = await seed_divergent_category_task(db_session)
+    workspace = fixture["workspace"]
+    section = fixture["section"]
+    narrowed_task = fixture["narrowed_task"]
+    item = fixture["base_values"][5]
+    now = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
+
+    def production_context():
+        return ServiceContext(
+            identity={
+                "workspace_id": workspace.client_id,
+                "user_id": "usr",
+                "role_name": "manager",
+            },
+            incoming_data={"task_client_id": narrowed_task.client_id},
+            query_params={},
+            session=db_session,
+            now=now,
+        )
+
+    try:
+        history_items = (
+            (
+                await db_session.execute(
+                    select(Item)
+                    .where(
+                        Item.workspace_id == workspace.client_id,
+                        Item.item_category_id == fixture["category_id"],
+                        Item.client_id != item.client_id,
+                    )
+                    .order_by(Item.client_id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(history_items) == 5
+        for history_item, quantity in zip(history_items, (1, 1, 5, 5, 5)):
+            history_item.quantity = quantity
+        item.quantity = 3
+        await db_session.flush()
+
+        production = await get_task_production_time(production_context())
+        section_row = next(
+            row
+            for row in production["sections"]
+            if row["working_section_id"] == section.client_id
+        )
+        assert production["projection_quantity"] == 3
+        assert section_row["typical"]["typical_worker_seconds"] == 600
+        assert section_row["typical"]["typical_basis"] == "item_narrowed"
+        assert section_row["typical"]["typical_unit_worker_seconds"] == "140"
+        assert section_row["typical"]["projected_typical_worker_seconds"] == 420
+        allowance_at_three = section_row["allowance_seconds"]
+        assert allowance_at_three == 6000
+
+        allocations = await get_task_budget_allocations(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace.client_id,
+                    "user_id": "usr",
+                    "role_name": "worker",
+                },
+                incoming_data={},
+                query_params={"task_ids": [narrowed_task.client_id]},
+                session=db_session,
+                now=now,
+            )
+        )
+        allocation_row = allocations["budget_allocations"][0]
+        step_row = next(
+            row
+            for row in allocation_row["steps"]
+            if row["working_section_id"] == section.client_id
+        )
+        assert allocation_row["projection_quantity"] == 3
+        assert step_row["typical_worker_seconds"] == 600
+        assert step_row["typical_unit_worker_seconds"] == "140"
+        assert step_row["projected_typical_worker_seconds"] == 420
+        excluded_step_row = next(
+            row
+            for row in allocation_row["steps"]
+            if row["working_section_id"] == fixture["excluded_section"].client_id
+        )
+        assert excluded_step_row["typical_unit_worker_seconds"] is None
+        assert excluded_step_row["projected_typical_worker_seconds"] is None
+
+        price = await price_scenario_module._typical_block(
+            production_context(),
+            narrowed_task.client_id,
+            derive_spec_from_primary_item(item),
+            item.quantity,
+        )
+        assert price["quantity_applied"] == 3
+        assert price["total_unit_seconds"] == 140
+        assert price["total_seconds"] == 420
+
+        item.quantity = 1
+        await db_session.flush()
+        reread = await get_task_production_time(production_context())
+        reread_row = next(
+            row
+            for row in reread["sections"]
+            if row["working_section_id"] == section.client_id
+        )
+        assert reread["projection_quantity"] == 1
+        assert reread_row["allowance_seconds"] == allowance_at_three
+        assert reread_row["typical"]["typical_worker_seconds"] == 600
+        assert reread_row["typical"]["projected_typical_worker_seconds"] == 140
+    finally:
+        await cleanup_divergent_category_fixture(db_session, fixture)

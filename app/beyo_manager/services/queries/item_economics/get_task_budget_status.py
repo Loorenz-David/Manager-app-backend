@@ -54,6 +54,8 @@ class TaskBudgetStatus:
     item_id: str | None
     result: ItemCostResult | None
     typical_filter_spec: TypicalFilterSpec | None = None
+    # Current PRIMARY item's quantity (unclamped), for per-unit typical projections.
+    primary_item_quantity: int | None = None
 
 
 async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
@@ -92,6 +94,7 @@ def _empty_status(
     binding: str,
     item_id: str | None,
     typical_filter_spec: TypicalFilterSpec | None,
+    primary_item_quantity: int | None = None,
 ) -> TaskBudgetStatus:
     return TaskBudgetStatus(
         status=status,
@@ -109,6 +112,7 @@ def _empty_status(
         item_id=item_id,
         result=None,
         typical_filter_spec=typical_filter_spec,
+        primary_item_quantity=primary_item_quantity,
     )
 
 
@@ -119,6 +123,7 @@ async def get_task_budget_status(
 ) -> TaskBudgetStatus:
     task, item = await _load_task_and_item(ctx)
     typical_filter_spec = None if item is None else derive_spec_from_primary_item(item)
+    primary_item_quantity = None if item is None else item.quantity
     evaluation = await ctx.session.scalar(
         select(ItemCostEvaluation).where(
             ItemCostEvaluation.workspace_id == ctx.workspace_id,
@@ -136,6 +141,7 @@ async def get_task_budget_status(
                 binding=binding,
                 item_id=None,
                 typical_filter_spec=typical_filter_spec,
+                primary_item_quantity=primary_item_quantity,
             )
         selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
@@ -152,6 +158,7 @@ async def get_task_budget_status(
             binding=binding,
             item_id=item.client_id,
             typical_filter_spec=typical_filter_spec,
+            primary_item_quantity=primary_item_quantity,
         )
 
     return await _build_evaluated_status(
@@ -223,4 +230,5 @@ async def _build_evaluated_status(
         item_id=evaluation.item_id,
         result=result,
         typical_filter_spec=typical_filter_spec,
+        primary_item_quantity=None if item is None else item.quantity,
     )

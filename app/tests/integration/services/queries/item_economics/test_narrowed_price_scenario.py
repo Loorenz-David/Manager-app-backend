@@ -45,7 +45,17 @@ from tests.integration.services.queries.item_economics._narrowing_fixture import
 FROZEN = DIVERGENT_BOUNDARY_CLOSED_AT + timedelta(days=TYPICAL_WINDOW_DAYS)
 
 
-def _spec_row(section_id: str, narrowed: int | None, section: int | None, *, narrowed_count=5, section_count=12):
+def _spec_row(
+    section_id: str,
+    narrowed: int | None,
+    section: int | None,
+    *,
+    narrowed_count=5,
+    section_count=12,
+    narrowed_unit=None,
+    section_unit=None,
+):
+    # Unit twins default to the raw medians (a quantity-one history).
     return SimpleNamespace(
         client_id=section_id,
         spec_index=0,
@@ -53,6 +63,8 @@ def _spec_row(section_id: str, narrowed: int | None, section: int | None, *, nar
         narrowed_sample_count=narrowed_count,
         section_typical_worker_seconds=section,
         section_sample_count=section_count,
+        narrowed_typical_unit_worker_seconds=narrowed if narrowed_unit is None else narrowed_unit,
+        section_typical_unit_worker_seconds=section if section_unit is None else section_unit,
     )
 
 
@@ -91,7 +103,7 @@ async def test_c1a_typical_block_passes_the_request_clock_to_the_statement(monke
 
     monkeypatch.setattr(module, "typical_times_statement", spy)
     context = _ctx(_TypicalSession([_step("section_a")], [_typical_row("section_a", 600)]))
-    await module._typical_block(context, "tsk_scenario", None)
+    await module._typical_block(context, "tsk_scenario", None, None)
 
     assert captured["now"] == context.now
     assert captured["specs"] == ()
@@ -204,7 +216,7 @@ async def test_c1d_spec_branch_uses_the_injected_clock_at_the_statement_level(db
 @pytest.mark.integration
 async def test_c2_is_estimated_tracks_empty_none_and_zero_selected_typicals(steps, rows, expected):
     result = await module._typical_block(
-        _ctx(_TypicalSession(steps, rows)), "tsk_scenario", None
+        _ctx(_TypicalSession(steps, rows)), "tsk_scenario", None, None
     )
     assert (
         result["total_seconds"],
@@ -224,6 +236,7 @@ async def test_c2d_section_wide_uniform_does_not_make_is_estimated_true():
         ),
         "tsk_scenario",
         TypicalFilterSpec(item_category_ids=frozenset({"icat_chair"})),
+        None,
     )
     assert result["is_estimated"] is False
     assert result["sections_without_sample"] == 0
@@ -249,6 +262,7 @@ async def test_c3_counts_only_participating_selected_typicals():
         ),
         "tsk_scenario",
         None,
+        None,
     )
     assert result["sections_total"] == 3
     assert result["sections_without_sample"] == 2
@@ -267,7 +281,7 @@ async def test_c4_price_terminal_and_median_are_duration_values(
 ):
     steps = [_step(section) for section in ("a", "b", "c")[: len(rows) or 3]]
     result = await module._typical_block(
-        _ctx(_TypicalSession(steps, rows)), "tsk_scenario", None
+        _ctx(_TypicalSession(steps, rows)), "tsk_scenario", None, None
     )
     assert result["total_seconds"] == expected_total
     assert result["is_estimated"] is expected_estimated
@@ -297,6 +311,7 @@ async def test_c5_three_surfaces_use_the_same_published_literal(db_session):
             price_context,
             narrowed_task.client_id,
             derive_spec_from_primary_item(item),
+            item.quantity,
         )
         production = await get_task_production_time(production_context)
         allocations = await get_task_budget_allocations(allocations_context)
@@ -388,6 +403,7 @@ async def test_c7_typical_block_delegates_statistics_and_has_no_private_terms(mo
     result = await module._typical_block(
         _ctx(_TypicalSession([_step("section_a")], [_typical_row("section_a", 600)])),
         "tsk_scenario",
+        None,
         None,
     )
     source = inspect.getsource(module._typical_block)

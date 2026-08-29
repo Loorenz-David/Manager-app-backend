@@ -27,7 +27,9 @@ from beyo_manager.domain.item_economics.remaining_production_pressure import (
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum, ItemCostEvaluationKindEnum
 from beyo_manager.domain.item_economics.typical_filters import (
     SectionTypicalEvidence,
+    applied_projection_quantity,
     derive_spec_from_primary_item,
+    project_typical_seconds,
     reconcile_task_typicals,
 )
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum
@@ -44,7 +46,12 @@ from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
-from beyo_manager.services.queries.working_sections.get_working_section_typical_times import typical_times_statement
+from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
+    narrowed_evidence_from_row,
+    section_evidence_from_row,
+    typical_times_statement,
+    unfiltered_evidence_from_row,
+)
 from beyo_manager.domain.item_economics.calculator import calculate_actual_worker_minutes, calculate_remaining_worker_minutes
 
 
@@ -260,31 +267,15 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 if row is None:
                     evidence_by_section[section_id] = SectionTypicalEvidence(section_id, None, 0, None, 0)
                 else:
-                    evidence_by_section[section_id] = SectionTypicalEvidence(
-                        section_id,
-                        None,
-                        0,
-                        int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
-                        int(row.section_sample_count or 0),
-                    )
+                    evidence_by_section[section_id] = section_evidence_from_row(section_id, row)
                 continue
             row = typical_rows.get((section_id, task_spec_index if specs else None))
             if row is None:
                 evidence_by_section[section_id] = SectionTypicalEvidence(section_id, None, 0, None, 0)
             elif specs:
-                evidence_by_section[section_id] = SectionTypicalEvidence(
-                    section_id,
-                    int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
-                    int(row.narrowed_sample_count or 0),
-                    int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
-                    int(row.section_sample_count or 0),
-                )
+                evidence_by_section[section_id] = narrowed_evidence_from_row(row)
             else:
-                evidence_by_section[section_id] = SectionTypicalEvidence(
-                    section_id, None, 0,
-                    int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
-                    int(row.sample_count or 0),
-                )
+                evidence_by_section[section_id] = unfiltered_evidence_from_row(row)
         selection = reconcile_task_typicals(
             evidence_by_section,
             spec_by_task[task.client_id] if spec_by_task[task.client_id].is_narrowing else None,
@@ -294,10 +285,18 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         allowed = evaluation.allowed_worker_minutes if evaluation is not None and status in _BUDGET_STATUSES else None
         division = divide_production_budget(allowed, division_steps, selection.selected)
         pressure = compute_remaining_pressure(division)
+        item_quantity = item.quantity if item is not None else None
+        projection_quantity = applied_projection_quantity(item_quantity)
         for step in division["steps"]:
             step["pressure_share_seconds"] = pressure.pressure_share_seconds_by_step_id[
                 str(step["step_id"])
             ]
+            selected = selection.selected.get(str(step["working_section_id"]))
+            unit_seconds = selected.typical_unit_worker_seconds if selected is not None else None
+            step["typical_unit_worker_seconds"] = unit_seconds
+            step["projected_typical_worker_seconds"] = project_typical_seconds(
+                unit_seconds, item_quantity
+            )
         actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
         if status in _BUDGET_STATUSES and allowed is not None:
             actual_minutes = calculate_actual_worker_minutes(actual_seconds)
@@ -319,6 +318,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "pressure_ratio": pressure.pressure_ratio,
                 "pressure_method": PRESSURE_METHOD,
                 "typical_resolution": selection,
+                "projection_quantity": projection_quantity,
                 "steps": division["steps"],
             }
         )

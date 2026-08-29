@@ -9,7 +9,7 @@
 - Last updated at (UTC): `2026-07-31T00:00:00Z`
 - Related issue/ticket: `n/a`
 - Intention plan: `backend/docs/architecture/under_construction/intention/making_endpoint_for_getting_reasign_tasks.md`
-
+- sdfs
 ## Goal and intent
 
 - Goal: expose two read-only endpoints that let a logged-in worker see every task step

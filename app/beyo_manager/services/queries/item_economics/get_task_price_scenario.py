@@ -36,6 +36,7 @@ from beyo_manager.domain.item_economics.serializers import (
 from beyo_manager.domain.item_economics.typical_filters import (
     SectionTypicalEvidence,
     TypicalFilterSpec,
+    applied_projection_quantity,
     apply_business_fallback,
     reconcile_task_typicals,
 )
@@ -53,7 +54,9 @@ from beyo_manager.services.queries.item_economics.get_task_budget_status import 
     get_task_budget_status,
 )
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
+    narrowed_evidence_from_row,
     typical_times_statement,
+    unfiltered_evidence_from_row,
 )
 
 
@@ -106,6 +109,7 @@ async def _typical_block(
     ctx: ServiceContext,
     task_id: str,
     spec: TypicalFilterSpec | None,
+    quantity: int | None,
 ) -> dict:
     steps = (
         (
@@ -156,27 +160,9 @@ async def _typical_block(
             if specs:
                 if int(row.spec_index) != 0:
                     continue
-                evidence_by_section[row.client_id] = SectionTypicalEvidence(
-                    row.client_id,
-                    int(row.narrowed_typical_worker_seconds)
-                    if row.narrowed_typical_worker_seconds is not None
-                    else None,
-                    int(row.narrowed_sample_count or 0),
-                    int(row.section_typical_worker_seconds)
-                    if row.section_typical_worker_seconds is not None
-                    else None,
-                    int(row.section_sample_count or 0),
-                )
+                evidence_by_section[row.client_id] = narrowed_evidence_from_row(row)
             else:
-                evidence_by_section[row.client_id] = SectionTypicalEvidence(
-                    row.client_id,
-                    None,
-                    0,
-                    int(row.typical_worker_seconds)
-                    if row.typical_worker_seconds is not None
-                    else None,
-                    int(row.sample_count or 0),
-                )
+                evidence_by_section[row.client_id] = unfiltered_evidence_from_row(row)
 
     selection = reconcile_task_typicals(
         evidence_by_section,
@@ -189,16 +175,25 @@ async def _typical_block(
         for group in groups
         if group["working_section_id"] in participating_ids
     ]
-    selected_values = [
-        selection.selected[section_id].typical_worker_seconds
+    # Absolute projection: fallback runs in per-unit space, then every section's
+    # per-unit value is scaled by the current task's quantity before the same
+    # per-section half-even rounding and sum the raw path used.
+    selected_unit_values = [
+        selection.selected[section_id].typical_unit_worker_seconds
         for section_id in ordered_participating_ids
     ]
-    resolved_values = apply_business_fallback(
-        selected_values,
+    resolved_unit_values = apply_business_fallback(
+        selected_unit_values,
         terminal=Fraction(0, 1),
     )
+    quantity_applied = applied_projection_quantity(quantity)
+    total_unit_seconds = sum(
+        round_half_even(value.numerator, value.denominator)
+        for value in resolved_unit_values
+    )
     total_seconds = sum(
-        round_half_even(value.numerator, value.denominator) for value in resolved_values
+        round_half_even(scaled.numerator, scaled.denominator)
+        for scaled in (value * quantity_applied for value in resolved_unit_values)
     )
     sections_without_sample = sum(
         selection.selected[section_id].typical_worker_seconds is None
@@ -208,6 +203,8 @@ async def _typical_block(
     sections_total = len(participating_ids)
     return {
         "total_seconds": total_seconds,
+        "total_unit_seconds": total_unit_seconds,
+        "quantity_applied": quantity_applied,
         "is_estimated": sections_total == 0 or sections_without_sample > 0,
         "sections_without_sample": sections_without_sample,
         "sections_total": sections_total,
@@ -235,6 +232,7 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
         ctx,
         task.client_id,
         budget_status.typical_filter_spec,
+        item.quantity if item is not None else None,
     )
 
     valuation = None

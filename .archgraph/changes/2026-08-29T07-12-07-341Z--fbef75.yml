@@ -1,0 +1,191 @@
+changeId: 2026-08-29T07-12-07-341Z--fbef75
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: edit
+    before:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item category-narrowed typical-time
+        evidence, ordered section grouping, and deterministic per-step time
+        allowances. For each task it derives the typical filter from the active
+        PRIMARY item's category and reconciles participating sections through
+        uniform_basis_v1: usable narrowed evidence must be available for every
+        participating section to select one item-narrowed basis, otherwise the
+        participating task falls back together to section-wide, while excluded
+        sections resolve independently. The same SelectedTypical values feed
+        both the displayed typicals and the division weights, and the response
+        carries a typical_resolution block with the task basis, applied filter,
+        participating-section counts by basis, reconciliation method, and
+        comparability profile, plus per-section typical_basis,
+        narrowed_sample_count, and section_sample_count and allocation_method
+        static_proportional_section_v2. Each non-deleted step's worked-seconds
+        input remains its settled working seconds plus the concurrency-averaged
+        share of any open WORKING interval, resolved once per request through
+        the shared live-worked-seconds loader and persisted nowhere. It
+        preserves the tenant boundary, ordered section rows, and a flat final
+        snapshot. Monetary exposure is role-gated through the shared
+        include_monetary_step_fields rule: ADMIN and MANAGER budget blocks
+        additionally carry production_budget_minor, consumed_cost_minor, and
+        variance_cost_minor (the same values the budget-status view serves,
+        forwarded not recomputed), while WORKER and SELLER responses remain
+        byte-identical time-only; section rows and the final snapshot stay
+        money-free for every role. It does not persist derived results or change
+        the underlying working-sections typical-times projection."
+    after:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item category-narrowed typical-time
+        evidence, ordered section grouping, and deterministic per-step time
+        allowances. For each task it derives the typical filter from the active
+        PRIMARY item's category and reconciles participating sections through
+        uniform_basis_v1: usable narrowed evidence must be available for every
+        participating section to select one item-narrowed basis, otherwise the
+        participating task falls back together to section-wide, while excluded
+        sections resolve independently. The same SelectedTypical values feed
+        both the displayed typicals and the division weights, and the response
+        carries a typical_resolution block plus per-section typical_basis,
+        narrowed_sample_count, and section_sample_count and allocation_method
+        static_proportional_section_v2. Each section's typical block also
+        discloses typical_unit_worker_seconds (the basis's per-unit median, each
+        history task's total divided by its PRIMARY-item quantity clamped to at
+        least one) and projected_typical_worker_seconds (per-unit times the
+        current quantity, half-even rounded), plus top-level
+        projection_quantity; division weights keep reading raw typicals, so
+        quantity never moves an allowance. Each non-deleted step's
+        worked-seconds input remains its settled working seconds plus the
+        concurrency-averaged share of any open WORKING interval, resolved once
+        per request through the shared live-worked-seconds loader and persisted
+        nowhere. It preserves the tenant boundary, ordered section rows, and a
+        flat final snapshot. Monetary exposure is role-gated through the shared
+        include_monetary_step_fields rule: ADMIN and MANAGER budget blocks
+        additionally carry production_budget_minor, consumed_cost_minor, and
+        variance_cost_minor (forwarded not recomputed), while WORKER and SELLER
+        responses remain byte-identical time-only; section rows and the final
+        snapshot stay money-free for every role. It persists nothing."
+    rationale: "Quantity normalization shipped: typical blocks gained per-unit and
+      projected fields plus projection_quantity; division weights unchanged."
+  - itemId: node:projection-working-section-typical-times
+    kind: edit
+    before:
+      description: The read model of live working sections and their median completed
+        section-total durations over the fixed 90-day window. It groups
+        contributing completed steps by task and section, excludes deleted or
+        marked-wrong records, and retains sections with insufficient samples as
+        explicit null rows. The grouping and window admission must remain
+        aligned so reassignment totals are not reduced to a recent rework
+        fragment.
+    after:
+      description: The read model of live working sections and their median completed
+        section-total durations over the fixed 90-day window. It groups
+        contributing completed steps by task and section, excludes deleted or
+        marked-wrong records, and retains sections with insufficient samples as
+        explicit null rows. The shared statement additionally computes per-unit
+        twin medians - each group total divided by its task's PRIMARY-item
+        quantity, clamped to at least one, with missing items counting as one -
+        under the same window and sample gates; the twins feed the
+        item-economics quantity projections and never alter the raw medians or
+        this endpoint's published rows. The grouping and window admission must
+        remain aligned so reassignment totals are not reduced to a recent rework
+        fragment.
+    rationale: The shared typical-times statement now computes additive per-unit
+      twin medians; the endpoint's own rows are unchanged.
+  - itemId: node:projection-item-economics-task-budget-allocations
+    kind: edit
+    before:
+      description: The batched, read-only task view combines current committed
+        evaluation budgets, non-deleted live steps, item-category-narrowed
+        typical-time evidence, and item-economics readiness into per-step
+        allowances. It derives one filter spec per task, deduplicates equal
+        specs into an ordered sequence, issues one typical-times statement for
+        the batch, and maps each task to its spec position; a non-narrowing task
+        uses spec_index None and resolves against the spec-independent
+        section-wide columns. Participating sections are reconciled through
+        uniform_basis_v1 and excluded sections resolve independently, so one
+        task-wide basis governs the selected typicals used both for displayed
+        step values and for division weights; the response exposes
+        typical_resolution, per-step typical_basis and sample_count, and
+        allocation_method static_proportional_section_v2. Each step's
+        worked-seconds input remains its settled working seconds plus the
+        concurrency-averaged share of any open WORKING interval, taken from one
+        shared live-worked-seconds map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values; its time-only fields reconcile
+        with the same non-deleted step set used by budget status.
+    after:
+      description: The batched, read-only task view combines current committed
+        evaluation budgets, non-deleted live steps, item-category-narrowed
+        typical-time evidence, and item-economics readiness into per-step
+        allowances. It derives one filter spec per task, deduplicates equal
+        specs into an ordered sequence, issues one typical-times statement for
+        the batch, and maps each task to its spec position; a non-narrowing task
+        uses spec_index None and resolves against the spec-independent
+        section-wide columns. Participating sections are reconciled through
+        uniform_basis_v1 and excluded sections resolve independently, so one
+        task-wide basis governs the selected typicals used both for displayed
+        step values and for division weights; the response exposes
+        typical_resolution, per-step typical_basis and sample_count, and
+        allocation_method static_proportional_section_v2. Each step row
+        additionally discloses typical_unit_worker_seconds and
+        projected_typical_worker_seconds - the selected basis's per-unit median
+        scaled by that task's current PRIMARY-item quantity, clamped to at least
+        one - and each task row carries projection_quantity; division weights
+        keep reading the raw typicals. Each step's worked-seconds input remains
+        its settled working seconds plus the concurrency-averaged share of any
+        open WORKING interval, taken from one shared live-worked-seconds map
+        loaded once per request and persisted nowhere. It omits unknown or
+        cross-workspace tasks, charges non-deleted excluded steps, and degrades
+        evaluation-less tasks to explicit no-budget states without persisting
+        derived values; its time-only fields reconcile with the same non-deleted
+        step set used by budget status.
+    rationale: Step rows gained per-unit and projected typical fields; task rows
+      gained projection_quantity; weights unchanged.
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: edit
+    before:
+      description: Manager-only, task-scoped read model that composes workspace-scoped
+        task/item binding, the saved valuation and byline, live item-economics
+        configuration, an item-aware task typical time — drawn from the
+        same-category slice of each participating section's history through the
+        shared typical-times engine, resolved by the shared reconciliation with
+        a zero-duration price terminal, and windowed by the injected request
+        clock so two reads of one task agree — and the pure price-scenario model
+        into break-even anchors and a slider domain. Non-bound bindings govern
+        the payload by nulling valuation/model/anchor/domain structure while
+        keeping the step-derived typical; the projection performs no writes. It
+        composes task budget status and so inherits that read's worked-time
+        dependency transitively; it publishes no live worked-time field of its
+        own and reads no open interval record directly.
+    after:
+      description: "Manager-only, task-scoped read model that composes
+        workspace-scoped task/item binding, the saved valuation and byline, live
+        item-economics configuration, an item-aware task typical time - drawn
+        from the same-category slice of each participating section's history
+        through the shared typical-times engine, resolved by the shared
+        reconciliation with a zero-duration price terminal, and windowed by the
+        injected request clock so two reads of one task agree - and the pure
+        price-scenario model into break-even anchors and a slider domain. Its
+        published typical total is quantity-projected: the business fallback
+        runs in per-unit space and each participating section's per-unit typical
+        is scaled by the current item's quantity (clamped to at least one)
+        before the shared per-section half-even rounding, with
+        total_unit_seconds and quantity_applied disclosed beside total_seconds,
+        so break-even and the slider domain price the whole order. Non-bound
+        bindings govern the payload by nulling valuation/model/anchor/domain
+        structure while keeping the step-derived typical; the projection
+        performs no writes. It composes task budget status and so inherits that
+        read's worked-time dependency transitively; it publishes no live
+        worked-time field of its own and reads no open interval record
+        directly."
+    rationale: The typical total is now quantity-projected (per-unit fallback,
+      scaled by current item quantity), changing break-even and slider inputs.
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-29T07:12:07.341Z
+graphRevisionBefore: 4ebd85c954987a2a0a85bebfdcd1e4983fa228a036eafdc0eb4816c8eb33cea9
+graphRevisionAfter: 078e0d45fad3867587a341c0de6b08e24eb1b531d3fbc592dc1befc48e01b1bd
+humanInstruction: User asked this session to implement quantity normalization
+  for typical projections and update the archgraph accordingly; edits refresh
+  the four projection descriptions to the shipped contract.
+changeTokenCorrelation: 7826c71cd8d0

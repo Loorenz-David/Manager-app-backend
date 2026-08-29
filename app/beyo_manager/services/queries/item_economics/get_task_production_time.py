@@ -22,6 +22,8 @@ from beyo_manager.domain.item_economics.remaining_production_pressure import (
 from beyo_manager.domain.item_economics.enums import EconomicsStatusEnum
 from beyo_manager.domain.item_economics.typical_filters import (
     SectionTypicalEvidence,
+    applied_projection_quantity,
+    project_typical_seconds,
     reconcile_task_typicals,
 )
 from beyo_manager.domain.task_steps.constants import TERMINAL_STEP_STATES
@@ -31,7 +33,11 @@ from beyo_manager.models.tables.working_sections.working_section import WorkingS
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
 from beyo_manager.services.queries.item_economics.get_task_budget_status import get_task_budget_status
-from beyo_manager.services.queries.working_sections.get_working_section_typical_times import typical_times_statement
+from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
+    narrowed_evidence_from_row,
+    typical_times_statement,
+    unfiltered_evidence_from_row,
+)
 
 
 async def get_task_production_time(ctx: ServiceContext) -> dict:
@@ -99,21 +105,9 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
                 # on the statement's column order; K2-a deliberately differs.
                 if int(row.spec_index) != 0:
                     continue
-                evidence_by_section[row.client_id] = SectionTypicalEvidence(
-                    row.client_id,
-                    int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
-                    int(row.narrowed_sample_count or 0),
-                    int(row.section_typical_worker_seconds) if row.section_typical_worker_seconds is not None else None,
-                    int(row.section_sample_count or 0),
-                )
+                evidence_by_section[row.client_id] = narrowed_evidence_from_row(row)
             else:
-                evidence_by_section[row.client_id] = SectionTypicalEvidence(
-                    row.client_id,
-                    None,
-                    0,
-                    int(row.typical_worker_seconds) if row.typical_worker_seconds is not None else None,
-                    int(row.sample_count or 0),
-                )
+                evidence_by_section[row.client_id] = unfiltered_evidence_from_row(row)
     section_ids = frozenset(section_ids)
     selection = reconcile_task_typicals(
         evidence_by_section,
@@ -122,6 +116,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
         section_ids,
     )
     typicals_by_section = selection.selected
+    projection_quantity = applied_projection_quantity(status.primary_item_quantity)
     typical_details = {
         section_id: {
             "typical_worker_seconds": selected.typical_worker_seconds,
@@ -129,6 +124,11 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "sample_count": selected.sample_count,
             "narrowed_sample_count": selected.evidence.narrowed_sample_count,
             "section_sample_count": selected.evidence.section_sample_count,
+            "typical_unit_worker_seconds": selected.typical_unit_worker_seconds,
+            "projected_typical_worker_seconds": project_typical_seconds(
+                selected.typical_unit_worker_seconds,
+                status.primary_item_quantity,
+            ),
             "method": TYPICAL_METHOD,
             "window_days": TYPICAL_WINDOW_DAYS,
             "min_sample_size": TYPICAL_MIN_SAMPLE_SIZE,
@@ -182,6 +182,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "pressure_method": PRESSURE_METHOD,
             "typicals": typical_details,
             "typical_resolution": selection,
+            "projection_quantity": projection_quantity,
         },
         include_monetary=include_monetary_step_fields(ctx.role_name),
     )
