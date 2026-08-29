@@ -961,6 +961,7 @@ def test_c6_router_body_declares_inline_trio_fields():
         "external_source": None,
         "external_order_id": None,
         "can_have_upholstery": True,
+        "properties": None,
     }
 
 

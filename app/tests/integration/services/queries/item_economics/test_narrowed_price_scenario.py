@@ -339,7 +339,7 @@ async def test_c5_three_surfaces_use_the_same_published_literal(db_session):
         await cleanup_divergent_category_fixture(db_session, fixture)
 
 
-def test_c6_price_and_production_resolution_have_the_exact_six_key_shape():
+def test_c6_price_and_production_resolution_have_the_exact_seven_key_shape():
     selection = _selection(section_count=2)
     typical = {
         "total_seconds": 1200,
@@ -384,6 +384,7 @@ def test_c6_price_and_production_resolution_have_the_exact_six_key_shape():
             "reconciliation_method",
             "comparability_profile",
             "applied_filter",
+            "facet",
             "participating_section_count",
             "sections_by_basis",
         }

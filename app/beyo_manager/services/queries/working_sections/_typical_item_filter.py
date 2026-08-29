@@ -63,4 +63,21 @@ def build_item_properties_match(spec: TypicalFilterSpec) -> ColumnElement[bool] 
     )
 
 
-__all__ = ["build_item_match", "build_item_properties_match"]
+def build_item_facet_matches(spec: TypicalFilterSpec) -> list[ColumnElement[bool]]:
+    """NULL-safe predicates for the spec's facet rungs, in ladder priority order.
+
+    Each rung is the spec's item match AND JSONB containment of the facet's
+    key/value pairs, so a history item qualifies whenever its snapshot carries
+    those pairs — whatever else it carries. Facets ride only beside a
+    signature (the spec enforces that), so a signature-less spec yields [].
+    """
+    if not spec.is_narrowing or not spec.properties_facets:
+        return []
+    _, predicate = build_item_match(spec)
+    return [
+        func.coalesce(and_(predicate, Item.properties.contains(facet.match_values())), false())
+        for facet in spec.properties_facets
+    ]
+
+
+__all__ = ["build_item_facet_matches", "build_item_match", "build_item_properties_match"]

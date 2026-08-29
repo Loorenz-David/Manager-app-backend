@@ -1,0 +1,146 @@
+changeId: 2026-08-29T12-12-55-110Z--3027ff
+operations:
+  - itemId: node:projection-item-economics-task-production-time
+    kind: edit
+    before:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item comparability evidence, ordered
+        section grouping, and deterministic per-step time allowances. It derives
+        the typical filter from the PRIMARY item's category plus, when present,
+        its properties_signature, and reconciles participating sections through
+        uniform_basis_v1 down a most-specific-first ladder:
+        item_properties_narrowed (same category AND signature) only when every
+        participating section has usable properties evidence, else item-narrowed
+        on the same all-or-nothing rule, else section-wide together; excluded
+        sections broaden down the ladder independently. The same SelectedTypical
+        values feed both the displayed typicals and the division weights, and
+        the response carries a typical_resolution block (task basis, a
+        comparability profile naming whether properties applied, the applied
+        filter) plus per-section typical_basis and sample counts and
+        allocation_method static_proportional_section_v2. Each section's typical
+        block also discloses typical_unit_worker_seconds (the basis's per-unit
+        median, quantity clamped to at least one) and
+        projected_typical_worker_seconds (per-unit times current quantity,
+        half-even), plus top-level projection_quantity; division weights keep
+        reading the selected raw typicals, so quantity never moves an allowance.
+        Each non-deleted step's worked seconds remain its settled seconds plus
+        the concurrency-averaged share of any open WORKING interval, resolved
+        once per request through the shared live-worked-seconds loader and
+        persisted nowhere. It preserves the tenant boundary, ordered section
+        rows, and a flat final snapshot. Money is role-gated via
+        include_monetary_step_fields: ADMIN/MANAGER budget blocks add
+        production_budget_minor, consumed_cost_minor, variance_cost_minor
+        (forwarded not recomputed); WORKER/SELLER stay byte-identical time-only,
+        and section rows and the final snapshot stay money-free for every role.
+        It persists nothing."
+    after:
+      description: "The task-scoped, read-only production-time view composes manager
+        budget status with active PRIMARY-item comparability evidence, ordered
+        section grouping, and deterministic per-step time allowances. It derives
+        the typical filter from the PRIMARY item's category plus, when present,
+        its properties_signature and facets, and reconciles participating
+        sections through uniform_basis_v1 down a most-specific-first ladder:
+        item_properties_narrowed (same category AND signature), then
+        owner-declared facet rungs (item_facet_narrowed — JSONB-containment
+        partial matches, upholstery first, named in typical_resolution.facet),
+        then item-narrowed, then section-wide — each rung all-or-nothing across
+        participating sections; excluded sections broaden down the ladder
+        independently. The same SelectedTypical values feed both the displayed
+        typicals and the division weights, and the response carries a
+        typical_resolution block (task basis, profile, applied filter, facet)
+        plus per-section typical_basis and sample counts and allocation_method
+        static_proportional_section_v2. Each section's typical block also
+        discloses typical_unit_worker_seconds (the basis's per-unit median) and
+        projected_typical_worker_seconds (per-unit times current quantity,
+        half-even), plus top-level projection_quantity; division weights keep
+        reading the selected raw typicals, so quantity never moves an allowance.
+        Each non-deleted step's worked seconds remain its settled seconds plus
+        the concurrency-averaged share of any open WORKING interval, resolved
+        once per request via the shared live-worked-seconds loader, persisted
+        nowhere. It preserves the tenant boundary, ordered section rows, and a
+        flat final snapshot. Money is role-gated via
+        include_monetary_step_fields: ADMIN/MANAGER budget blocks add
+        production_budget_minor, consumed_cost_minor, variance_cost_minor
+        (forwarded not recomputed); WORKER/SELLER stay byte-identical time-only,
+        and section rows and the final snapshot stay money-free for every role.
+        It persists nothing."
+    rationale: "Owner-ratified facet ladder shipped: owner-declared
+      item_facet_narrowed rungs (upholstery first) between the full-profile and
+      category tiers; profile bumped to primary_item_category_properties_v2;
+      typical_resolution gained facet."
+  - itemId: node:projection-item-economics-task-budget-allocations
+    kind: edit
+    before:
+      description: The batched, read-only task view combines current committed
+        evaluation budgets, non-deleted live steps, item-comparability
+        typical-time evidence, and item-economics readiness into per-step
+        allowances. It derives one filter spec per task from the PRIMARY item's
+        category plus, when present, its properties_signature, deduplicates
+        equal specs into an ordered sequence, issues one typical-times statement
+        for the batch, and maps each task to its spec position; a non-narrowing
+        task uses spec_index None and resolves against the spec-independent
+        section-wide columns. Participating sections are reconciled through
+        uniform_basis_v1 down a most-specific-first ladder -
+        item_properties_narrowed (same category AND signature) only when every
+        participating section has usable properties evidence, else item-narrowed
+        on the same rule, else section-wide - and excluded sections broaden down
+        the ladder independently, so one task-wide basis governs the selected
+        typicals used both for displayed step values and for division weights;
+        the response exposes typical_resolution (its profile names whether
+        properties applied), per-step typical_basis and sample_count, and
+        allocation_method static_proportional_section_v2. Each step row
+        additionally discloses typical_unit_worker_seconds and
+        projected_typical_worker_seconds - the selected basis's per-unit median
+        scaled by that task's current PRIMARY-item quantity, clamped to at least
+        one - and each task row carries projection_quantity; division weights
+        keep reading the raw typicals. Each step's worked seconds remain its
+        settled seconds plus the concurrency-averaged share of any open WORKING
+        interval, from one shared live map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values; its time-only fields reconcile
+        with the same non-deleted step set used by budget status.
+    after:
+      description: The batched, read-only task view combines current committed
+        evaluation budgets, non-deleted live steps, item-comparability
+        typical-time evidence, and item-economics readiness into per-step
+        allowances. It derives one filter spec per task from the PRIMARY item's
+        category plus, when present, its properties_signature and facet rungs,
+        deduplicates equal specs into an ordered sequence, issues one
+        typical-times statement for the batch, and maps each task to its spec
+        position; a non-narrowing task uses spec_index None and resolves against
+        the spec-independent section-wide columns. Participating sections are
+        reconciled through uniform_basis_v1 down a most-specific-first ladder —
+        item_properties_narrowed (same category AND signature), then
+        owner-declared facet rungs (item_facet_narrowed, JSONB-containment
+        partial matches, upholstery first), then item-narrowed, then
+        section-wide — each rung all-or-nothing across participants, excluded
+        sections broadening independently, so one task-wide basis governs the
+        selected typicals used both for displayed step values and for division
+        weights; the response exposes typical_resolution, per-step typical_basis
+        and sample_count, and allocation_method static_proportional_section_v2.
+        Each step row additionally discloses typical_unit_worker_seconds and
+        projected_typical_worker_seconds — the selected basis's per-unit median
+        scaled by that task's current PRIMARY-item quantity, clamped to at least
+        one — and each task row carries projection_quantity; division weights
+        keep reading the raw typicals. Each step's worked seconds remain its
+        settled seconds plus the concurrency-averaged share of any open WORKING
+        interval, from one shared live map loaded once per request and persisted
+        nowhere. It omits unknown or cross-workspace tasks, charges non-deleted
+        excluded steps, and degrades evaluation-less tasks to explicit no-budget
+        states without persisting derived values; its time-only fields reconcile
+        with the same non-deleted step set used by budget status.
+    rationale: "Owner-ratified facet ladder shipped: facet rungs join the per-task
+      spec and dedup key; typical_resolution gained facet; profile v2."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-29T12:12:55.110Z
+graphRevisionBefore: 252df4bbc54048c283e5eab9974369900044affad97409bae35501c3357f1730
+graphRevisionAfter: bfd8ab49a6245da2c5c4e70bc059402b27ca57c3f367ae43ccf02c7cd2cf5092
+humanInstruction: "Owner-ratified upholstery facet ladder: update
+  production-time and budget-allocations projection descriptions for the facet
+  rung, profile v2, and typical_resolution.facet disclosure."
+changeTokenCorrelation: 56eb6c65d975

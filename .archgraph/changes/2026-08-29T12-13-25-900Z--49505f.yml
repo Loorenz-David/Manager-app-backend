@@ -1,0 +1,111 @@
+changeId: 2026-08-29T12-13-25-900Z--49505f
+operations:
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: edit
+    before:
+      description: "Manager-only, task-scoped read model that composes
+        workspace-scoped task/item binding, the saved valuation and byline, live
+        item-economics configuration, an item-aware task typical time - drawn
+        from each participating section's comparable history through the shared
+        typical-times engine, resolved by the shared reconciliation with a
+        zero-duration price terminal, and windowed by the injected request clock
+        so two reads of one task agree - and the pure price-scenario model into
+        break-even anchors and a slider domain. The derived spec carries the
+        PRIMARY item's properties_signature when present, so the typical can
+        resolve on the most specific item_properties_narrowed tier (same
+        category AND same signature) before falling back to category-narrowed
+        then section-wide under the same shared ladder. Its published typical
+        total is quantity-projected: the business fallback runs in per-unit
+        space and each participating section's per-unit typical is scaled by the
+        current item's quantity (clamped to at least one) before the shared
+        per-section half-even rounding, with total_unit_seconds and
+        quantity_applied disclosed beside total_seconds, so break-even and the
+        slider domain price the whole order. Non-bound bindings govern the
+        payload by nulling valuation/model/anchor/domain structure while keeping
+        the step-derived typical; the projection performs no writes. It composes
+        task budget status and so inherits that read's worked-time dependency
+        transitively; it publishes no live worked-time field of its own and
+        reads no open interval record directly."
+    after:
+      description: "Manager-only, task-scoped read model that composes
+        workspace-scoped task/item binding, the saved valuation and byline, live
+        item-economics configuration, an item-aware task typical time - drawn
+        from each participating section's comparable history through the shared
+        typical-times engine, resolved by the shared reconciliation with a
+        zero-duration price terminal, and windowed by the injected request clock
+        so two reads of one task agree - and the pure price-scenario model into
+        break-even anchors and a slider domain. The derived spec carries the
+        PRIMARY item's properties_signature and facet rungs when present, so the
+        typical resolves down the shared ladder: the most specific
+        item_properties_narrowed tier (same category AND same signature), then
+        owner-declared facet rungs (partial property matches, upholstery first),
+        then category-narrowed, then section-wide. Its published typical total
+        is quantity-projected: the business fallback runs in per-unit space and
+        each participating section's per-unit typical is scaled by the current
+        item's quantity (clamped to at least one) before the shared per-section
+        half-even rounding, with total_unit_seconds and quantity_applied
+        disclosed beside total_seconds, so break-even and the slider domain
+        price the whole order. Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes. It composes task budget
+        status and so inherits that read's worked-time dependency transitively;
+        it publishes no live worked-time field of its own and reads no open
+        interval record directly."
+    rationale: "Owner-ratified facet ladder shipped: price-scenario spec inherits
+      facet rungs and resolves down the shared ladder."
+  - itemId: node:projection-working-section-typical-times
+    kind: edit
+    before:
+      description: The read model of live working sections and their median completed
+        section-total durations over the fixed 90-day window. It groups
+        contributing completed steps by task and section, excludes deleted or
+        marked-wrong records, and retains sections with insufficient samples as
+        explicit null rows. The shared statement additionally computes per-unit
+        twin medians - each group total divided by its task's PRIMARY-item
+        quantity, clamped to at least one, with missing items counting as one -
+        under the same window and sample gates; the twins feed the
+        item-economics quantity projections and never alter the raw medians or
+        this endpoint's published rows. For a narrowing spec that carries a
+        properties_signature the spec branch also computes a third,
+        most-specific column set - properties-narrowed raw and per-unit medians
+        with their own sample count, gated at the same minimum, restricted to
+        history whose PRIMARY item matches both the spec and the signature;
+        signature-less specs read empty properties columns and this endpoint's
+        no-spec rows are untouched. The grouping and window admission must
+        remain aligned so reassignment totals are not reduced to a recent rework
+        fragment.
+    after:
+      description: The read model of live working sections and their median completed
+        section-total durations over the fixed 90-day window. It groups
+        contributing completed steps by task and section, excludes deleted or
+        marked-wrong records, and retains sections with insufficient samples as
+        explicit null rows. The shared statement additionally computes per-unit
+        twin medians - each group total divided by its task's PRIMARY-item
+        quantity, clamped to at least one, with missing items counting as one -
+        under the same window and sample gates; the twins feed the
+        item-economics quantity projections and never alter the raw medians or
+        this endpoint's published rows. For a narrowing spec that carries a
+        properties_signature the spec branch also computes a third,
+        most-specific column set - properties-narrowed raw and per-unit medians
+        with their own sample count, gated at the same minimum, restricted to
+        history whose PRIMARY item matches both the spec and the signature -
+        plus one facet{i} column set per owner-declared facet rung carried by
+        the batch (JSONB-containment partial property matches, e.g. upholstery),
+        same gates, with facet-less specs reading empty rungs; signature-less
+        specs read empty properties columns and this endpoint's no-spec rows are
+        untouched. The grouping and window admission must remain aligned so
+        reassignment totals are not reduced to a recent rework fragment.
+    rationale: "Owner-ratified facet ladder shipped: dynamic facet{i} column sets
+      per batch rung count via JSONB containment; no-spec branch untouched (HC-4
+      held again)."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.226
+timestamp: 2026-08-29T12:13:25.900Z
+graphRevisionBefore: bfd8ab49a6245da2c5c4e70bc059402b27ca57c3f367ae43ccf02c7cd2cf5092
+graphRevisionAfter: e3f758673d6921b09f43ee039ca64dfcf6065ca301dfae404f02d9cd85ea974e
+humanInstruction: "Owner-ratified upholstery facet ladder: update price-scenario
+  and typical-times projection descriptions for the facet rungs."
+changeTokenCorrelation: 7f7842580a15

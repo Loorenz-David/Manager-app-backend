@@ -607,3 +607,242 @@ def test_reconciliation_excluded_section_broadens_down_the_full_ladder():
     assert result.selected["excluded_props"].participates is False
     assert result.selected["excluded_thin"].typical_basis == "item_narrowed"
     assert result.selected["excluded_thin"].typical_worker_seconds == 600
+
+
+# --- facet ladder (owner-declared partial-property fallbacks) -----------------
+
+
+from beyo_manager.domain.item_economics.typical_filters import (  # noqa: E402
+    FacetEvidence,
+    PROPERTY_FACET_LADDER,
+    PropertiesFacet,
+    derive_property_facets,
+)
+
+
+UPHOLSTERY_FACET = PropertiesFacet(("upholstery",), '{"upholstery":"Up & Down"}')
+FACETED_SPEC = TypicalFilterSpec(
+    item_category_ids=frozenset({"cat"}),
+    properties_signature="sig-a",
+    properties_facets=(UPHOLSTERY_FACET,),
+)
+
+
+def test_ladder_declares_upholstery_then_extension_and_facets_derive_only_when_keys_exist():
+    assert PROPERTY_FACET_LADDER == (("upholstery",), ("extension_type",))
+    chair = {"wood_type": "Mahogany", "upholstery": "Up & Down"}
+    facets = derive_property_facets(chair)
+    assert facets == (UPHOLSTERY_FACET,)
+    assert facets[0].name == "upholstery"
+    assert facets[0].match_values() == {"upholstery": "Up & Down"}
+    # A plain table has neither facet key: no rungs exist for it.
+    assert derive_property_facets({"shape": "Oval", "wood_type": "Walnut"}) == ()
+    assert derive_property_facets(None) == ()
+    assert derive_property_facets("not-a-dict") == ()
+    # An extension table gets exactly the extension rung.
+    table = {"shape": "Oval", "wood_type": "Walnut", "extension_type": "Insert"}
+    table_facets = derive_property_facets(table)
+    assert table_facets == (PropertiesFacet(("extension_type",), '{"extension_type":"Insert"}'),)
+    assert table_facets[0].name == "extension_type"
+    # An item carrying both keys gets both rungs, upholstery first.
+    hybrid = derive_property_facets({"upholstery": "Up & Down", "extension_type": "Insert"})
+    assert [facet.name for facet in hybrid] == ["upholstery", "extension_type"]
+
+
+def test_reconciliation_prefers_the_earlier_rung_and_falls_to_the_later_one():
+    both_facets_spec = TypicalFilterSpec(
+        item_category_ids=frozenset({"cat"}),
+        properties_signature="sig-a",
+        properties_facets=(
+            UPHOLSTERY_FACET,
+            PropertiesFacet(("extension_type",), '{"extension_type":"Insert"}'),
+        ),
+    )
+
+    def two_rung_row(section, first, second):
+        return SectionTypicalEvidence(
+            section, 600, 9, 900, 61,
+            properties_typical_worker_seconds=None,
+            properties_sample_count=2,
+            facet_evidence=(
+                FacetEvidence(first[1], first[0]),
+                FacetEvidence(second[1], second[0]),
+            ),
+        )
+
+    first_wins = reconcile_task_typicals(
+        {"a": two_rung_row("a", (7, 450), (8, 520))},
+        both_facets_spec, frozenset({"a"}), frozenset({"a"}),
+    )
+    assert first_wins.facet == "upholstery"
+    assert first_wins.selected["a"].typical_worker_seconds == 450
+
+    second_wins = reconcile_task_typicals(
+        {"a": two_rung_row("a", (3, None), (8, 520))},
+        both_facets_spec, frozenset({"a"}), frozenset({"a"}),
+    )
+    assert second_wins.task_typical_basis == "item_facet_narrowed_uniform"
+    assert second_wins.facet == "extension_type"
+    assert second_wins.selected["a"].typical_worker_seconds == 520
+
+    neither = reconcile_task_typicals(
+        {"a": two_rung_row("a", (3, None), (2, None))},
+        both_facets_spec, frozenset({"a"}), frozenset({"a"}),
+    )
+    assert neither.task_typical_basis == "item_narrowed_uniform"
+    assert neither.facet is None
+
+
+def test_spec_clears_facets_without_a_signature_and_dedupes_on_facet_values():
+    orphan = TypicalFilterSpec(
+        item_category_ids=frozenset({"cat"}), properties_facets=(UPHOLSTERY_FACET,)
+    )
+    assert orphan.properties_facets == ()
+    other_values = TypicalFilterSpec(
+        item_category_ids=frozenset({"cat"}),
+        properties_signature="sig-a",
+        properties_facets=(PropertiesFacet(("upholstery",), '{"upholstery":"None"}'),),
+    )
+    assert FACETED_SPEC != other_values
+    assert len({FACETED_SPEC, FACETED_SPEC}) == 1
+
+
+def test_derive_spec_builds_facets_from_the_item_blob_only_beside_a_signature():
+    signed = Item(
+        client_id="itm_facet",
+        item_category_id="cat_a",
+        properties_signature="sig-a",
+        properties={"wood_type": "Mahogany", "upholstery": "Up & Down"},
+    )
+    spec = derive_spec_from_primary_item(signed)
+    assert spec.properties_facets == (UPHOLSTERY_FACET,)
+    unsigned = Item(
+        client_id="itm_facet_unsigned",
+        item_category_id="cat_a",
+        properties_signature=None,
+        properties={"upholstery": "Up & Down"},
+    )
+    assert derive_spec_from_primary_item(unsigned).properties_facets == ()
+    keyless = Item(
+        client_id="itm_facet_keyless",
+        item_category_id="cat_a",
+        properties_signature="sig-t",
+        properties={"shape": "Oval"},
+    )
+    assert derive_spec_from_primary_item(keyless).properties_facets == ()
+
+
+def facet_row(
+    properties=(2, None),
+    facet=(7, 450),
+    narrowed=(9, 600),
+    section=(61, 900),
+    facet_unit=None,
+):
+    return SectionTypicalEvidence(
+        "section",
+        narrowed[1],
+        narrowed[0],
+        section[1],
+        section[0],
+        properties_typical_worker_seconds=properties[1],
+        properties_sample_count=properties[0],
+        facet_evidence=(FacetEvidence(facet[1], facet[0], facet_unit),),
+    )
+
+
+@pytest.mark.parametrize(
+    ("properties", "facet", "expected"),
+    [
+        # Full profile wins over the facet when usable.
+        ((7, 300), (8, 450), ("item_properties_narrowed", 300, 7)),
+        # Properties below gate, facet usable: the new rung.
+        ((2, None), (7, 450), ("item_facet_narrowed", 450, 7)),
+        # Facet below gate or zero: falls to the category tier.
+        ((2, None), (4, 450), ("item_narrowed", 600, 9)),
+        ((2, None), (7, 0), ("item_narrowed", 600, 9)),
+    ],
+)
+def test_broaden_ladder_inserts_the_facet_rung_between_properties_and_category(properties, facet, expected):
+    result = resolve_section_typical(
+        facet_row(properties=properties, facet=facet), FACETED_SPEC,
+        TypicalResolutionPolicy.BROADEN_TO_SECTION,
+    )
+    assert (result.typical_basis, result.typical_worker_seconds, result.sample_count) == expected
+
+
+def test_facet_rung_never_fires_without_spec_facets_even_with_evidence():
+    result = resolve_section_typical(
+        facet_row(properties=(2, None), facet=(9, 450)), SIGNED_SPEC,
+        TypicalResolutionPolicy.BROADEN_TO_SECTION,
+    )
+    assert result.typical_basis == "item_narrowed"
+
+
+def test_facet_selection_carries_its_unit_twin():
+    result = resolve_section_typical(
+        facet_row(facet=(7, 450), facet_unit=Fraction(90)), FACETED_SPEC,
+        TypicalResolutionPolicy.BROADEN_TO_SECTION,
+    )
+    assert result.typical_basis == "item_facet_narrowed"
+    assert result.typical_unit_worker_seconds == Fraction(90)
+
+
+def test_reconciliation_facet_uniform_names_the_facet_and_requires_every_participant():
+    uniform = reconcile_task_typicals(
+        {
+            "a": facet_row(properties=(2, None), facet=(7, 450), facet_unit=Fraction(90)),
+            "b": facet_row(properties=(9, 300), facet=(6, 500)),
+        },
+        FACETED_SPEC,
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert uniform.task_typical_basis == "item_facet_narrowed_uniform"
+    assert uniform.facet == "upholstery"
+    assert (
+        uniform.selected["a"].typical_basis,
+        uniform.selected["a"].typical_worker_seconds,
+        uniform.selected["a"].sample_count,
+        uniform.selected["a"].typical_unit_worker_seconds,
+    ) == ("item_facet_narrowed", 450, 7, Fraction(90))
+
+    fallback = reconcile_task_typicals(
+        {
+            "a": facet_row(properties=(2, None), facet=(7, 450)),
+            "b": facet_row(properties=(2, None), facet=(3, None)),
+        },
+        FACETED_SPEC,
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert fallback.task_typical_basis == "item_narrowed_uniform"
+    assert fallback.facet is None
+
+    full_profile = reconcile_task_typicals(
+        {
+            "a": facet_row(properties=(7, 300), facet=(9, 450)),
+            "b": facet_row(properties=(6, 350), facet=(9, 500)),
+        },
+        FACETED_SPEC,
+        frozenset({"a", "b"}),
+        frozenset({"a", "b"}),
+    )
+    assert full_profile.task_typical_basis == "item_properties_narrowed_uniform"
+    assert full_profile.facet is None
+
+
+def test_reconciliation_excluded_sections_broaden_through_the_facet_rung():
+    result = reconcile_task_typicals(
+        {
+            "participant": facet_row(properties=(2, None), facet=(7, 450)),
+            "excluded": facet_row(properties=(2, None), facet=(8, 520)),
+            "excluded_thin": facet_row(properties=(2, None), facet=(2, None)),
+        },
+        FACETED_SPEC,
+        frozenset({"participant"}),
+        frozenset({"participant", "excluded", "excluded_thin"}),
+    )
+    assert result.selected["excluded"].typical_basis == "item_facet_narrowed"
+    assert result.selected["excluded"].typical_worker_seconds == 520
+    assert result.selected["excluded_thin"].typical_basis == "item_narrowed"

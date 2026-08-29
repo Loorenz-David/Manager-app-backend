@@ -90,6 +90,7 @@ async def _item(
     upholstery: bool = True,
     deleted: bool = False,
     properties_signature: str | None = None,
+    properties: dict | None = None,
 ) -> Item:
     item = Item(
         client_id=f"itm_{seed.workspace.client_id}_{suffix}",
@@ -103,6 +104,7 @@ async def _item(
         can_have_upholstery=upholstery,
         is_deleted=deleted,
         properties_signature=properties_signature,
+        properties=properties,
         created_by_id=seed.user.client_id,
     )
     db_session.add(item)
@@ -689,6 +691,201 @@ async def test_properties_tier_below_gate_yields_null_but_keeps_its_count(db_ses
     assert row.properties_typical_worker_seconds is None
     assert row.narrowed_sample_count == TYPICAL_MIN_SAMPLE_SIZE
     assert row.narrowed_typical_worker_seconds is not None
+
+
+@pytest.mark.integration
+async def test_facet_columns_pool_by_containment_across_signatures_and_gate_on_their_own_count(db_session):
+    """The upholstery facet rung pools every same-category snapshot containing the pair.
+
+    Cohorts inside one category: mahogany Up & Down (2 samples: 100, 200 — below
+    every gate), walnut Up & Down (5 samples: 300..700), oak None (5 samples:
+    5000..5400). A mahogany Up & Down spec must read properties_n=2 (NULL),
+    facet0_n=7 pooling both Up & Down cohorts (median 400), while the category
+    tier pools all 12. A facet-less spec must not even carry facet columns.
+    """
+    from beyo_manager.domain.item_economics.typical_filters import derive_property_facets
+
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "facet", ItemMajorCategoryEnum.SEAT)
+    cohorts = (
+        ("mahogany", {"wood_type": "Mahogany", "upholstery": "Up & Down"}, "sig-mah-ud", (100, 200)),
+        ("walnut", {"wood_type": "Walnut", "upholstery": "Up & Down"}, "sig-wal-ud", (300, 400, 500, 600, 700)),
+        ("oak", {"wood_type": "Oak", "upholstery": "None"}, "sig-oak-none", (5000, 5100, 5200, 5300, 5400)),
+    )
+    for cohort, properties, signature, seconds_list in cohorts:
+        for index, seconds in enumerate(seconds_list):
+            item = await _item(
+                db_session, seed, f"facet-{cohort}-{index}", category=category,
+                properties_signature=signature, properties=properties,
+            )
+            await _task(db_session, seed, f"facet-{cohort}-{index}", primary=item, seconds=seconds)
+
+    faceted_spec = TypicalFilterSpec(
+        item_category_ids=frozenset({category.client_id}),
+        properties_signature="sig-mah-ud",
+        properties_facets=derive_property_facets({"wood_type": "Mahogany", "upholstery": "Up & Down"}),
+    )
+    bare_spec = TypicalFilterSpec(item_category_ids=frozenset({category.client_id}))
+
+    faceted_rows = (
+        await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=(faceted_spec,), now=NOW)
+        )
+    ).all()
+    row = next(r for r in faceted_rows if r.client_id == seed.section.client_id)
+    assert row._fields[-3:] == (
+        "facet0_sample_count", "facet0_typical_worker_seconds", "facet0_typical_unit_worker_seconds",
+    )
+    assert row.properties_sample_count == 2
+    assert row.properties_typical_worker_seconds is None
+    assert row.facet0_sample_count == 7
+    assert row.facet0_typical_worker_seconds == 400
+    assert float(row.facet0_typical_unit_worker_seconds) == 400.0
+    assert row.narrowed_sample_count == 12
+
+    bare_rows = (
+        await db_session.execute(
+            typical_times_statement(seed.workspace.client_id, specs=(bare_spec,), now=NOW)
+        )
+    ).all()
+    assert not any(field.startswith("facet") for field in bare_rows[0]._fields)
+
+
+@pytest.mark.integration
+async def test_facet_below_gate_yields_null_and_mixed_batch_pads_missing_rungs(db_session):
+    """A batch mixing faceted and facet-less specs keeps one uniform column shape.
+
+    The facet-less spec's facet columns must read empty (count 0, NULL medians),
+    never the other spec's values; and a facet population of 4 stays NULL.
+    """
+    from beyo_manager.domain.item_economics.typical_filters import derive_property_facets
+
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "facet-gate", ItemMajorCategoryEnum.SEAT)
+    for index in range(TYPICAL_MIN_SAMPLE_SIZE - 1):
+        item = await _item(
+            db_session, seed, f"facet-gate-{index}", category=category,
+            properties_signature="sig-few-ud", properties={"upholstery": "Up & Down"},
+        )
+        await _task(db_session, seed, f"facet-gate-{index}", primary=item, seconds=100 + index)
+    filler = await _item(db_session, seed, "facet-gate-filler", category=category)
+    await _task(db_session, seed, "facet-gate-filler", primary=filler, seconds=999)
+
+    specs = (
+        TypicalFilterSpec(
+            item_category_ids=frozenset({category.client_id}),
+            properties_signature="sig-few-ud",
+            properties_facets=derive_property_facets({"upholstery": "Up & Down"}),
+        ),
+        TypicalFilterSpec(item_category_ids=frozenset({category.client_id})),
+    )
+    rows = {
+        row.spec_index: row
+        for row in (
+            await db_session.execute(
+                typical_times_statement(seed.workspace.client_id, specs=specs, now=NOW)
+            )
+        ).all()
+        if row.client_id == seed.section.client_id
+    }
+    assert rows[0].facet0_sample_count == TYPICAL_MIN_SAMPLE_SIZE - 1
+    assert rows[0].facet0_typical_worker_seconds is None
+    assert rows[1].facet0_sample_count == 0
+    assert rows[1].facet0_typical_worker_seconds is None
+    assert rows[1].facet0_typical_unit_worker_seconds is None
+
+
+@pytest.mark.integration
+async def test_extension_type_facet_pools_tables_across_shapes_and_woods(db_session):
+    """The second declared rung discriminates for tables exactly as upholstery does for chairs.
+
+    Cohorts inside one table category: oval walnut Insert (2 samples: 100, 200 —
+    full profile below gate), round oak Insert (5 samples: 300..700), rectangular
+    teak None-extension (5 samples: 5000..5400). An oval-walnut-Insert spec has
+    no upholstery key, so its facet0 IS the extension rung: n=7 pooling both
+    Insert cohorts (median 400), while the category tier pools all 12.
+    """
+    from beyo_manager.domain.item_economics.typical_filters import derive_property_facets
+
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "ext", ItemMajorCategoryEnum.WOOD)
+    cohorts = (
+        ("oval-walnut", {"shape": "Oval", "wood_type": "Walnut", "extension_type": "Insert"}, "sig-ow-ins", (100, 200)),
+        ("round-oak", {"shape": "Round", "wood_type": "Oak", "extension_type": "Insert"}, "sig-ro-ins", (300, 400, 500, 600, 700)),
+        ("rect-teak", {"shape": "Rectangular", "wood_type": "Teak", "extension_type": "None"}, "sig-rt-none", (5000, 5100, 5200, 5300, 5400)),
+    )
+    for cohort, properties, signature, seconds_list in cohorts:
+        for index, seconds in enumerate(seconds_list):
+            item = await _item(
+                db_session, seed, f"ext-{cohort}-{index}", category=category,
+                properties_signature=signature, properties=properties,
+            )
+            await _task(db_session, seed, f"ext-{cohort}-{index}", primary=item, seconds=seconds)
+
+    current_blob = {"shape": "Oval", "wood_type": "Walnut", "extension_type": "Insert"}
+    facets = derive_property_facets(current_blob)
+    assert [facet.name for facet in facets] == ["extension_type"]
+    spec = TypicalFilterSpec(
+        item_category_ids=frozenset({category.client_id}),
+        properties_signature="sig-ow-ins",
+        properties_facets=facets,
+    )
+    row = next(
+        r
+        for r in (
+            await db_session.execute(
+                typical_times_statement(seed.workspace.client_id, specs=(spec,), now=NOW)
+            )
+        ).all()
+        if r.client_id == seed.section.client_id
+    )
+    assert row.properties_sample_count == 2
+    assert row.properties_typical_worker_seconds is None
+    assert row.facet0_sample_count == 7
+    assert row.facet0_typical_worker_seconds == 400
+    assert row.narrowed_sample_count == 12
+
+
+@pytest.mark.integration
+async def test_two_rung_batch_carries_both_facet_column_sets_in_ladder_order(db_session):
+    """An item with both facet keys produces facet0=upholstery and facet1=extension columns."""
+    from beyo_manager.domain.item_economics.typical_filters import derive_property_facets
+
+    seed, _ = await _seed_base(db_session)
+    category = await _category(db_session, seed, "two-rung", ItemMajorCategoryEnum.SEAT)
+    blob = {"upholstery": "Up & Down", "extension_type": "Insert"}
+    for index in range(5):
+        item = await _item(
+            db_session, seed, f"two-rung-uph-{index}", category=category,
+            properties_signature="sig-other-ud", properties={"upholstery": "Up & Down"},
+        )
+        await _task(db_session, seed, f"two-rung-uph-{index}", primary=item, seconds=100 + index)
+    facets = derive_property_facets(blob)
+    assert [facet.name for facet in facets] == ["upholstery", "extension_type"]
+    spec = TypicalFilterSpec(
+        item_category_ids=frozenset({category.client_id}),
+        properties_signature="sig-hybrid",
+        properties_facets=facets,
+    )
+    row = next(
+        r
+        for r in (
+            await db_session.execute(
+                typical_times_statement(seed.workspace.client_id, specs=(spec,), now=NOW)
+            )
+        ).all()
+        if r.client_id == seed.section.client_id
+    )
+    assert row._fields[-6:] == (
+        "facet0_sample_count", "facet0_typical_worker_seconds", "facet0_typical_unit_worker_seconds",
+        "facet1_sample_count", "facet1_typical_worker_seconds", "facet1_typical_unit_worker_seconds",
+    )
+    # Upholstery rung pools the five same-upholstery histories; the extension
+    # rung finds nothing because no history snapshot carries the pair.
+    assert row.facet0_sample_count == 5
+    assert row.facet0_typical_worker_seconds == 102
+    assert row.facet1_sample_count == 0
+    assert row.facet1_typical_worker_seconds is None
 
 
 @pytest.mark.integration

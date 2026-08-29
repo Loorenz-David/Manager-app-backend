@@ -5489,10 +5489,13 @@ nodes:
       the spec branch also computes a third, most-specific column set -
       properties-narrowed raw and per-unit medians with their own sample count,
       gated at the same minimum, restricted to history whose PRIMARY item
-      matches both the spec and the signature; signature-less specs read empty
-      properties columns and this endpoint's no-spec rows are untouched. The
-      grouping and window admission must remain aligned so reassignment totals
-      are not reduced to a recent rework fragment.
+      matches both the spec and the signature - plus one facet{i} column set per
+      owner-declared facet rung carried by the batch (JSONB-containment partial
+      property matches, e.g. upholstery), same gates, with facet-less specs
+      reading empty rungs; signature-less specs read empty properties columns
+      and this endpoint's no-spec rows are untouched. The grouping and window
+      admission must remain aligned so reassignment totals are not reduced to a
+      recent rework fragment.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/working_sections/get_working_section_typical_times.py
@@ -5516,7 +5519,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.92
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-29T09:13:19.990Z
+    updatedAt: 2026-08-29T12:13:25.872Z
   - id: projection-item-economics-task-budget-allocations
     type: projection
     name: Task budget allocations
@@ -5524,31 +5527,31 @@ nodes:
       evaluation budgets, non-deleted live steps, item-comparability
       typical-time evidence, and item-economics readiness into per-step
       allowances. It derives one filter spec per task from the PRIMARY item's
-      category plus, when present, its properties_signature, deduplicates equal
-      specs into an ordered sequence, issues one typical-times statement for the
-      batch, and maps each task to its spec position; a non-narrowing task uses
-      spec_index None and resolves against the spec-independent section-wide
-      columns. Participating sections are reconciled through uniform_basis_v1
-      down a most-specific-first ladder - item_properties_narrowed (same
-      category AND signature) only when every participating section has usable
-      properties evidence, else item-narrowed on the same rule, else
-      section-wide - and excluded sections broaden down the ladder
+      category plus, when present, its properties_signature and facet rungs,
+      deduplicates equal specs into an ordered sequence, issues one
+      typical-times statement for the batch, and maps each task to its spec
+      position; a non-narrowing task uses spec_index None and resolves against
+      the spec-independent section-wide columns. Participating sections are
+      reconciled through uniform_basis_v1 down a most-specific-first ladder —
+      item_properties_narrowed (same category AND signature), then
+      owner-declared facet rungs (item_facet_narrowed, JSONB-containment partial
+      matches, upholstery first), then item-narrowed, then section-wide — each
+      rung all-or-nothing across participants, excluded sections broadening
       independently, so one task-wide basis governs the selected typicals used
       both for displayed step values and for division weights; the response
-      exposes typical_resolution (its profile names whether properties applied),
-      per-step typical_basis and sample_count, and allocation_method
-      static_proportional_section_v2. Each step row additionally discloses
-      typical_unit_worker_seconds and projected_typical_worker_seconds - the
-      selected basis's per-unit median scaled by that task's current
-      PRIMARY-item quantity, clamped to at least one - and each task row carries
-      projection_quantity; division weights keep reading the raw typicals. Each
-      step's worked seconds remain its settled seconds plus the
-      concurrency-averaged share of any open WORKING interval, from one shared
-      live map loaded once per request and persisted nowhere. It omits unknown
-      or cross-workspace tasks, charges non-deleted excluded steps, and degrades
-      evaluation-less tasks to explicit no-budget states without persisting
-      derived values; its time-only fields reconcile with the same non-deleted
-      step set used by budget status.
+      exposes typical_resolution, per-step typical_basis and sample_count, and
+      allocation_method static_proportional_section_v2. Each step row
+      additionally discloses typical_unit_worker_seconds and
+      projected_typical_worker_seconds — the selected basis's per-unit median
+      scaled by that task's current PRIMARY-item quantity, clamped to at least
+      one — and each task row carries projection_quantity; division weights keep
+      reading the raw typicals. Each step's worked seconds remain its settled
+      seconds plus the concurrency-averaged share of any open WORKING interval,
+      from one shared live map loaded once per request and persisted nowhere. It
+      omits unknown or cross-workspace tasks, charges non-deleted excluded
+      steps, and degrades evaluation-less tasks to explicit no-budget states
+      without persisting derived values; its time-only fields reconcile with the
+      same non-deleted step set used by budget status.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
@@ -5572,7 +5575,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-29T09:12:53.913Z
+    updatedAt: 2026-08-29T12:12:55.080Z
     sourceLinks:
       - path: app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py
         symbol: test_c13_one_participating_sections_patch_moves_both_consumers
@@ -5644,31 +5647,31 @@ nodes:
       budget status with active PRIMARY-item comparability evidence, ordered
       section grouping, and deterministic per-step time allowances. It derives
       the typical filter from the PRIMARY item's category plus, when present,
-      its properties_signature, and reconciles participating sections through
-      uniform_basis_v1 down a most-specific-first ladder:
-      item_properties_narrowed (same category AND signature) only when every
-      participating section has usable properties evidence, else item-narrowed
-      on the same all-or-nothing rule, else section-wide together; excluded
-      sections broaden down the ladder independently. The same SelectedTypical
-      values feed both the displayed typicals and the division weights, and the
-      response carries a typical_resolution block (task basis, a comparability
-      profile naming whether properties applied, the applied filter) plus
+      its properties_signature and facets, and reconciles participating sections
+      through uniform_basis_v1 down a most-specific-first ladder:
+      item_properties_narrowed (same category AND signature), then
+      owner-declared facet rungs (item_facet_narrowed — JSONB-containment
+      partial matches, upholstery first, named in typical_resolution.facet),
+      then item-narrowed, then section-wide — each rung all-or-nothing across
+      participating sections; excluded sections broaden down the ladder
+      independently. The same SelectedTypical values feed both the displayed
+      typicals and the division weights, and the response carries a
+      typical_resolution block (task basis, profile, applied filter, facet) plus
       per-section typical_basis and sample counts and allocation_method
       static_proportional_section_v2. Each section's typical block also
-      discloses typical_unit_worker_seconds (the basis's per-unit median,
-      quantity clamped to at least one) and projected_typical_worker_seconds
-      (per-unit times current quantity, half-even), plus top-level
-      projection_quantity; division weights keep reading the selected raw
-      typicals, so quantity never moves an allowance. Each non-deleted step's
-      worked seconds remain its settled seconds plus the concurrency-averaged
-      share of any open WORKING interval, resolved once per request through the
-      shared live-worked-seconds loader and persisted nowhere. It preserves the
-      tenant boundary, ordered section rows, and a flat final snapshot. Money is
-      role-gated via include_monetary_step_fields: ADMIN/MANAGER budget blocks
-      add production_budget_minor, consumed_cost_minor, variance_cost_minor
-      (forwarded not recomputed); WORKER/SELLER stay byte-identical time-only,
-      and section rows and the final snapshot stay money-free for every role. It
-      persists nothing."
+      discloses typical_unit_worker_seconds (the basis's per-unit median) and
+      projected_typical_worker_seconds (per-unit times current quantity,
+      half-even), plus top-level projection_quantity; division weights keep
+      reading the selected raw typicals, so quantity never moves an allowance.
+      Each non-deleted step's worked seconds remain its settled seconds plus the
+      concurrency-averaged share of any open WORKING interval, resolved once per
+      request via the shared live-worked-seconds loader, persisted nowhere. It
+      preserves the tenant boundary, ordered section rows, and a flat final
+      snapshot. Money is role-gated via include_monetary_step_fields:
+      ADMIN/MANAGER budget blocks add production_budget_minor,
+      consumed_cost_minor, variance_cost_minor (forwarded not recomputed);
+      WORKER/SELLER stay byte-identical time-only, and section rows and the
+      final snapshot stay money-free for every role. It persists nothing."
     tags:
       - item-economics
       - production-time
@@ -5733,7 +5736,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-29T09:12:53.913Z
+    updatedAt: 2026-08-29T12:12:55.080Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -5963,10 +5966,11 @@ nodes:
       zero-duration price terminal, and windowed by the injected request clock
       so two reads of one task agree - and the pure price-scenario model into
       break-even anchors and a slider domain. The derived spec carries the
-      PRIMARY item's properties_signature when present, so the typical can
-      resolve on the most specific item_properties_narrowed tier (same category
-      AND same signature) before falling back to category-narrowed then
-      section-wide under the same shared ladder. Its published typical total is
+      PRIMARY item's properties_signature and facet rungs when present, so the
+      typical resolves down the shared ladder: the most specific
+      item_properties_narrowed tier (same category AND same signature), then
+      owner-declared facet rungs (partial property matches, upholstery first),
+      then category-narrowed, then section-wide. Its published typical total is
       quantity-projected: the business fallback runs in per-unit space and each
       participating section's per-unit typical is scaled by the current item's
       quantity (clamped to at least one) before the shared per-section half-even
@@ -6058,7 +6062,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-29T09:13:19.990Z
+    updatedAt: 2026-08-29T12:13:25.872Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: _typical_block

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
@@ -16,13 +17,57 @@ from beyo_manager.domain.item_economics.typical_constants import TYPICAL_MIN_SAM
 
 
 COMPARABILITY_PROFILE = "primary_item_category_v1"
-COMPARABILITY_PROFILE_PROPERTIES = "primary_item_category_properties_v1"
+# v2: the properties comparability ladder gained owner-declared facet rungs
+# between the full profile and the category tier.
+COMPARABILITY_PROFILE_PROPERTIES = "primary_item_category_properties_v2"
 RECONCILIATION_METHOD = "uniform_basis_v1"
+
+# The owner-declared partial-match fallbacks, most important first. Each entry
+# is a set of property keys that carries predictive weight on its own; a rung
+# exists for an item only when its snapshot has every key of the facet. Order
+# in this tuple IS the priority order between the full profile and the
+# category tier. Never derived from data — extending it is an owner decision.
+PROPERTY_FACET_LADDER: tuple[tuple[str, ...], ...] = (("upholstery",), ("extension_type",))
 
 
 class _PrimaryItem(Protocol):
     item_category_id: str | None
     properties_signature: str | None
+    properties: dict | None
+
+
+@dataclass(frozen=True)
+class PropertiesFacet:
+    """One ladder rung: the facet's keys and the current item's values for them.
+
+    ``match_json`` is the canonical JSON object of exactly those key/value
+    pairs — hashable for spec dedup and directly usable as a JSONB containment
+    operand, so the rung means "history whose snapshot contains these pairs".
+    """
+
+    keys: tuple[str, ...]
+    match_json: str
+
+    @property
+    def name(self) -> str:
+        return "+".join(self.keys)
+
+    def match_values(self) -> dict:
+        return json.loads(self.match_json)
+
+
+def derive_property_facets(properties: object) -> tuple[PropertiesFacet, ...]:
+    """Build the item's available ladder rungs, in declared priority order."""
+    if not isinstance(properties, dict):
+        return ()
+    facets = []
+    for keys in PROPERTY_FACET_LADDER:
+        if all(key in properties for key in keys):
+            match = {key: properties[key] for key in keys}
+            facets.append(
+                PropertiesFacet(keys, json.dumps(match, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+            )
+    return tuple(facets)
 
 
 @dataclass(frozen=True)
@@ -45,6 +90,10 @@ class TypicalFilterSpec:
     # a narrowing dimension on its own: a spec carrying only a signature stays
     # non-narrowing and the signature is inert.
     properties_signature: str | None = None
+    # The item's available partial-match rungs, in ladder priority order. Only
+    # ever carried beside a signature; cleared otherwise so facets can never
+    # outlive the profile they fall back from.
+    properties_facets: tuple[PropertiesFacet, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in ("item_category_ids", "major_categories", "designers"):
@@ -53,6 +102,8 @@ class TypicalFilterSpec:
                 object.__setattr__(self, field_name, None)
         if self.properties_signature is not None and not self.properties_signature:
             object.__setattr__(self, "properties_signature", None)
+        if self.properties_facets and self.properties_signature is None:
+            object.__setattr__(self, "properties_facets", ())
 
         for field_name in ("width_cm", "height_cm", "depth_cm"):
             value = getattr(self, field_name)
@@ -81,9 +132,13 @@ def derive_spec_from_primary_item(item: _PrimaryItem | None) -> TypicalFilterSpe
     category_id = getattr(item, "item_category_id", None)
     if category_id is None:
         return TypicalFilterSpec()
+    signature = getattr(item, "properties_signature", None)
     return TypicalFilterSpec(
         item_category_ids=frozenset({category_id}),
-        properties_signature=getattr(item, "properties_signature", None),
+        properties_signature=signature,
+        properties_facets=(
+            derive_property_facets(getattr(item, "properties", None)) if signature is not None else ()
+        ),
     )
 
 
@@ -147,6 +202,27 @@ def parse_spec_from_query_params(params: Mapping[str, object]) -> TypicalFilterS
 
 
 @dataclass(frozen=True)
+class FacetEvidence:
+    """One facet rung's medians for one section, aligned by index with the spec's facets."""
+
+    typical_worker_seconds: int | None
+    sample_count: int
+    typical_unit_worker_seconds: Fraction | None = None
+
+    @property
+    def has_samples(self) -> bool:
+        return self.sample_count >= TYPICAL_MIN_SAMPLE_SIZE
+
+    @property
+    def has_usable(self) -> bool:
+        return (
+            self.has_samples
+            and self.typical_worker_seconds is not None
+            and self.typical_worker_seconds > 0
+        )
+
+
+@dataclass(frozen=True)
 class SectionTypicalEvidence:
     working_section_id: str
     narrowed_typical_worker_seconds: int | None
@@ -163,6 +239,9 @@ class SectionTypicalEvidence:
     properties_typical_worker_seconds: int | None = None
     properties_sample_count: int = 0
     properties_typical_unit_worker_seconds: Fraction | None = None
+    # Facet rungs between the full profile and the category tier, aligned by
+    # index with the spec's properties_facets; empty when the spec had none.
+    facet_evidence: tuple[FacetEvidence, ...] = ()
 
     @property
     def has_narrowed(self) -> bool:
@@ -248,6 +327,22 @@ def resolve_section_typical(
                 evidence.properties_sample_count,
                 evidence.properties_typical_unit_worker_seconds,
             )
+        for facet_index in range(len(spec.properties_facets)):
+            facet = (
+                evidence.facet_evidence[facet_index]
+                if facet_index < len(evidence.facet_evidence)
+                else None
+            )
+            if facet is not None and facet.has_usable:
+                return SelectedTypical(
+                    evidence.working_section_id,
+                    facet.typical_worker_seconds,
+                    "item_facet_narrowed",
+                    evidence,
+                    False,
+                    facet.sample_count,
+                    facet.typical_unit_worker_seconds,
+                )
         if evidence.has_usable_narrowed:
             return SelectedTypical(
                 evidence.working_section_id,
@@ -327,6 +422,9 @@ class TaskTypicalSelection:
     applied_filter: TypicalFilterSpec | None
     participating_section_ids: frozenset[str]
     selected: Mapping[str, SelectedTypical]
+    # The facet name (e.g. "upholstery") when the participating basis is a
+    # facet rung; None on every other basis.
+    facet: str | None = None
 
 
 def _zero_evidence(section_id: str) -> SectionTypicalEvidence:
@@ -350,14 +448,28 @@ def reconcile_task_typicals(
         and bool(participating_section_ids)
         and all(evidence[section_id].has_usable_properties for section_id in participating_section_ids)
     )
+
+    def _facet_usable(section_id: str, facet_index: int) -> bool:
+        facets = evidence[section_id].facet_evidence
+        return facet_index < len(facets) and facets[facet_index].has_usable
+
+    facet_uniform_index: int | None = None
+    if not properties_uniform and effective_spec.is_narrowing and participating_section_ids:
+        for index in range(len(effective_spec.properties_facets)):
+            if all(_facet_usable(section_id, index) for section_id in participating_section_ids):
+                facet_uniform_index = index
+                break
     narrowed_uniform = (
         not properties_uniform
+        and facet_uniform_index is None
         and effective_spec.is_narrowing
         and bool(participating_section_ids)
         and all(evidence[section_id].has_usable_narrowed for section_id in participating_section_ids)
     )
     if properties_uniform:
         task_basis = "item_properties_narrowed_uniform"
+    elif facet_uniform_index is not None:
+        task_basis = "item_facet_narrowed_uniform"
     elif narrowed_uniform:
         task_basis = "item_narrowed_uniform"
     else:
@@ -376,6 +488,17 @@ def reconcile_task_typicals(
                     True,
                     section_evidence.properties_sample_count,
                     section_evidence.properties_typical_unit_worker_seconds,
+                )
+            elif facet_uniform_index is not None:
+                facet = section_evidence.facet_evidence[facet_uniform_index]
+                selected[section_id] = SelectedTypical(
+                    section_id,
+                    facet.typical_worker_seconds,
+                    "item_facet_narrowed",
+                    section_evidence,
+                    True,
+                    facet.sample_count,
+                    facet.typical_unit_worker_seconds,
                 )
             elif narrowed_uniform:
                 selected[section_id] = SelectedTypical(
@@ -427,6 +550,11 @@ def reconcile_task_typicals(
         effective_spec if effective_spec.is_narrowing else None,
         participating_section_ids,
         selected,
+        (
+            effective_spec.properties_facets[facet_uniform_index].name
+            if facet_uniform_index is not None
+            else None
+        ),
     )
 
 

@@ -131,12 +131,15 @@ def serialize_filter_spec(spec: TypicalFilterSpec | None) -> dict | None:
             payload[name] = list(value)
         else:
             payload[name] = value
+    if spec.properties_facets:
+        payload["properties_facets"] = [facet.match_values() for facet in spec.properties_facets]
     return payload
 
 
 def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict:
     counts = {
         "item_properties_narrowed": 0,
+        "item_facet_narrowed": 0,
         "item_narrowed": 0,
         "section_wide": 0,
         "insufficient_sample": 0,
@@ -151,6 +154,7 @@ def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict
             "reconciliation_method": selection.reconciliation_method,
             "comparability_profile": selection.comparability_profile,
             "applied_filter": serialize_filter_spec(selection.applied_filter),
+            "facet": selection.facet,
             "participating_section_count": len(selection.participating_section_ids),
             "sections_by_basis": counts,
         }
@@ -159,6 +163,7 @@ def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict
         "reconciliation_method": RECONCILIATION_METHOD,
         "comparability_profile": COMPARABILITY_PROFILE,
         "applied_filter": None,
+        "facet": None,
         "participating_section_count": 0,
         "sections_by_basis": counts,
     }

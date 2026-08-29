@@ -15,6 +15,7 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_WINDOW_DAYS,
 )
 from beyo_manager.domain.item_economics.typical_filters import (
+    FacetEvidence,
     SectionTypicalEvidence,
     TypicalFilterSpec,
 )
@@ -28,6 +29,7 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.working_sections.working_section import WorkingSection
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.queries.working_sections._typical_item_filter import (
+    build_item_facet_matches,
     build_item_match,
     build_item_properties_match,
 )
@@ -93,12 +95,17 @@ def typical_times_statement(
     needs_category_join = False
     predicates = []
     properties_predicates = []
+    facet_predicate_lists = []
     for spec in specs:
         needs_join, predicate = build_item_match(spec)
         needs_category_join = needs_category_join or needs_join
         predicates.append(predicate if predicate is not None else true())
         properties_predicate = build_item_properties_match(spec)
         properties_predicates.append(properties_predicate if properties_predicate is not None else false())
+        facet_predicate_lists.append(build_item_facet_matches(spec))
+    # One facet column set per ladder position present in the batch; a spec
+    # with fewer rungs reads constant empty columns for the missing positions.
+    facet_rung_count = max((len(facets) for facets in facet_predicate_lists), default=0)
     if needs_category_join:
         from_clause = from_clause.outerjoin(ItemCategory, ItemCategory.client_id == Item.item_category_id)
 
@@ -172,6 +179,35 @@ def typical_times_statement(
             )
         )
 
+    facet_counts = [[] for _ in range(facet_rung_count)]
+    facet_typicals = [[] for _ in range(facet_rung_count)]
+    facet_unit_typicals = [[] for _ in range(facet_rung_count)]
+    for index in range(len(predicates)):
+        spec_facets = facet_predicate_lists[index]
+        for rung in range(facet_rung_count):
+            facet_predicate = spec_facets[rung] if rung < len(spec_facets) else false()
+            facet_qualifying = and_(qualifying, spec_index.c.spec_index == index, facet_predicate)
+            facet_count = func.count(grouped_steps.c.task_id).filter(facet_qualifying)
+            facet_percentile = func.percentile_cont(0.5).within_group(grouped_steps.c.group_seconds).filter(
+                facet_qualifying
+            )
+            facet_unit_percentile = func.percentile_cont(0.5).within_group(unit_seconds).filter(
+                facet_qualifying
+            )
+            facet_counts[rung].append(facet_count)
+            facet_typicals[rung].append(
+                case(
+                    (facet_count >= TYPICAL_MIN_SAMPLE_SIZE, cast(func.round(facet_percentile), Integer)),
+                    else_=None,
+                )
+            )
+            facet_unit_typicals[rung].append(
+                case(
+                    (facet_count >= TYPICAL_MIN_SAMPLE_SIZE, facet_unit_percentile),
+                    else_=None,
+                )
+            )
+
     index = spec_index.c.spec_index
 
     def _per_spec(expressions, label):
@@ -210,6 +246,15 @@ def typical_times_statement(
             _per_spec(properties_counts, "properties_sample_count"),
             _per_spec(properties_typicals, "properties_typical_worker_seconds"),
             _per_spec(properties_unit_typicals, "properties_typical_unit_worker_seconds"),
+            *[
+                column_expression
+                for rung in range(facet_rung_count)
+                for column_expression in (
+                    _per_spec(facet_counts[rung], f"facet{rung}_sample_count"),
+                    _per_spec(facet_typicals[rung], f"facet{rung}_typical_worker_seconds"),
+                    _per_spec(facet_unit_typicals[rung], f"facet{rung}_typical_unit_worker_seconds"),
+                )
+            ],
         )
         .select_from(from_clause)
         .where(
@@ -303,8 +348,25 @@ def _unit_fraction(value: object) -> Fraction | None:
     return Fraction(Decimal(str(value)))
 
 
+def _facet_evidence_from_row(row) -> tuple[FacetEvidence, ...]:
+    """Read however many facet rung column sets this statement carried."""
+    facets = []
+    rung = 0
+    while hasattr(row, f"facet{rung}_sample_count"):
+        typical = getattr(row, f"facet{rung}_typical_worker_seconds")
+        facets.append(
+            FacetEvidence(
+                int(typical) if typical is not None else None,
+                int(getattr(row, f"facet{rung}_sample_count") or 0),
+                _unit_fraction(getattr(row, f"facet{rung}_typical_unit_worker_seconds")),
+            )
+        )
+        rung += 1
+    return tuple(facets)
+
+
 def narrowed_evidence_from_row(row) -> SectionTypicalEvidence:
-    """Evidence for one section from a spec-statement row, on all three tiers."""
+    """Evidence for one section from a spec-statement row, on every tier the row carries."""
     return SectionTypicalEvidence(
         row.client_id,
         int(row.narrowed_typical_worker_seconds) if row.narrowed_typical_worker_seconds is not None else None,
@@ -316,6 +378,7 @@ def narrowed_evidence_from_row(row) -> SectionTypicalEvidence:
         int(row.properties_typical_worker_seconds) if row.properties_typical_worker_seconds is not None else None,
         int(row.properties_sample_count or 0),
         _unit_fraction(row.properties_typical_unit_worker_seconds),
+        _facet_evidence_from_row(row),
     )
 
 

@@ -127,7 +127,8 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
 
     resolution = serialize_typical_resolution(selection)
     assert resolution["sections_by_basis"] == {
-        "item_properties_narrowed": 0, "item_narrowed": 0, "section_wide": 2, "insufficient_sample": 1
+        "item_properties_narrowed": 0, "item_facet_narrowed": 0, "item_narrowed": 0,
+        "section_wide": 2, "insufficient_sample": 1,
     }
     assert resolution["participating_section_count"] == 3
     assert sum(resolution["sections_by_basis"].values()) == resolution["participating_section_count"]
@@ -305,13 +306,13 @@ async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session
         assert result["status"] not in {"ok", "infeasible"}
         assert set(result["typical_resolution"]) == {
             "task_typical_basis", "reconciliation_method", "comparability_profile", "applied_filter",
-            "participating_section_count", "sections_by_basis",
+            "facet", "participating_section_count", "sections_by_basis",
         }
         assert result["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
         assert result["typical_resolution"]["applied_filter"] == {"item_category_ids": [category_id]}
         assert result["typical_resolution"]["participating_section_count"] == 2
         assert set(result["typical_resolution"]["sections_by_basis"]) == {
-            "item_properties_narrowed", "item_narrowed", "section_wide", "insufficient_sample",
+            "item_properties_narrowed", "item_facet_narrowed", "item_narrowed", "section_wide", "insufficient_sample",
         }
         assert {row["working_section_id"] for row in result["sections"]} == set(section_ids)
         assert all(row["allowance_seconds"] is None for row in result["sections"])
@@ -818,7 +819,7 @@ async def test_properties_signature_selects_the_most_specific_tier_on_all_surfac
         assert section_row["typical"]["projected_typical_worker_seconds"] == 600
         resolution = production["typical_resolution"]
         assert resolution["task_typical_basis"] == "item_properties_narrowed_uniform"
-        assert resolution["comparability_profile"] == "primary_item_category_properties_v1"
+        assert resolution["comparability_profile"] == "primary_item_category_properties_v2"
         assert resolution["applied_filter"] == {
             "item_category_ids": [fixture["category_id"]],
             "properties_signature": signature,
@@ -869,5 +870,176 @@ async def test_properties_signature_selects_the_most_specific_tier_on_all_surfac
         assert fallback["typical_resolution"]["applied_filter"] == {
             "item_category_ids": [fixture["category_id"]],
         }
+    finally:
+        await cleanup_divergent_category_fixture(db_session, fixture)
+
+
+@pytest.mark.integration
+async def test_upholstery_facet_rescues_a_new_wood_profile_on_all_surfaces(db_session):
+    """A new full profile with rich same-upholstery history resolves on the facet rung.
+
+    The fixture's five chair histories (500..700) become walnut Up & Down
+    snapshots; two extra chairs with upholstery None at 5000 and 6000 shift the
+    category median to 650. The current item is mahogany Up & Down — a
+    signature with zero history — so the full-profile tier fails, but the
+    upholstery facet pools the five Up & Down chairs: both surfaces must read
+    600 on basis item_facet_narrowed with the facet disclosed, and stripping
+    the blob (no facet) must fall back to the 650 category tier.
+    """
+    from beyo_manager.domain.items.enums import ItemStateEnum
+    from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
+    from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
+    from beyo_manager.models.tables.tasks.task import Task
+    from beyo_manager.models.tables.tasks.task_item import TaskItem
+    from tests.integration.services.queries.item_economics._narrowing_fixture import (
+        DIVERGENT_BOUNDARY_CLOSED_AT,
+    )
+
+    fixture = await seed_divergent_category_task(db_session)
+    workspace = fixture["workspace"]
+    section = fixture["section"]
+    narrowed_task = fixture["narrowed_task"]
+    item = fixture["base_values"][5]
+    user = fixture["user"]
+    now = datetime(2026, 8, 24, 12, tzinfo=timezone.utc)
+
+    def production_context():
+        return ServiceContext(
+            identity={
+                "workspace_id": workspace.client_id,
+                "user_id": "usr",
+                "role_name": "manager",
+            },
+            incoming_data={"task_client_id": narrowed_task.client_id},
+            query_params={},
+            session=db_session,
+            now=now,
+        )
+
+    try:
+        history_items = (
+            (
+                await db_session.execute(
+                    select(Item)
+                    .where(
+                        Item.workspace_id == workspace.client_id,
+                        Item.item_category_id == fixture["category_id"],
+                        Item.client_id != item.client_id,
+                    )
+                    .order_by(Item.client_id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(history_items) == 5
+        for history_item in history_items:
+            history_item.properties = {"wood_type": "Walnut", "upholstery": "Up & Down"}
+            history_item.properties_signature = "sig-walnut-ud"
+        item.properties = {"wood_type": "Mahogany", "upholstery": "Up & Down"}
+        item.properties_signature = "sig-mahogany-ud"
+        for extra_index, seconds in enumerate((5000, 6000)):
+            extra_task = Task(
+                client_id=f"tsk_facet_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_scalar_id=9600 + extra_index,
+                task_type=TaskTypeEnum.INTERNAL,
+                state=TaskStateEnum.ASSIGNED,
+                created_by_id=user.client_id,
+            )
+            extra_item = Item(
+                client_id=f"itm_facet_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                item_category_id=fixture["category_id"],
+                state=ItemStateEnum.READY,
+                properties={"wood_type": "Walnut", "upholstery": "None"},
+                properties_signature="sig-walnut-none",
+                created_by_id=user.client_id,
+            )
+            extra_task_item = TaskItem(
+                client_id=f"tim_facet_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_id=extra_task.client_id,
+                item_id=extra_item.client_id,
+                role=TaskItemRoleEnum.PRIMARY,
+                created_by_id=user.client_id,
+            )
+            extra_step = TaskStep(
+                client_id=f"tsp_facet_extra_{extra_index}",
+                workspace_id=workspace.client_id,
+                task_id=extra_task.client_id,
+                working_section_id=section.client_id,
+                state=TaskStepStateEnum.COMPLETED,
+                readiness_status=TaskStepReadinessStatusEnum.READY,
+                total_dependencies=0,
+                completed_dependencies=0,
+                total_working_seconds=seconds,
+                closed_at=DIVERGENT_BOUNDARY_CLOSED_AT,
+                created_by_id=user.client_id,
+            )
+            db_session.add_all([extra_task, extra_item, extra_task_item, extra_step])
+        await db_session.flush()
+
+        production = await get_task_production_time(production_context())
+        section_row = next(
+            row for row in production["sections"] if row["working_section_id"] == section.client_id
+        )
+        assert section_row["typical"]["typical_basis"] == "item_facet_narrowed"
+        assert section_row["typical"]["typical_worker_seconds"] == 600
+        assert section_row["typical"]["sample_count"] == 5
+        resolution = production["typical_resolution"]
+        assert resolution["task_typical_basis"] == "item_facet_narrowed_uniform"
+        assert resolution["facet"] == "upholstery"
+        assert resolution["comparability_profile"] == "primary_item_category_properties_v2"
+        assert resolution["applied_filter"] == {
+            "item_category_ids": [fixture["category_id"]],
+            "properties_signature": "sig-mahogany-ud",
+            "properties_facets": [{"upholstery": "Up & Down"}],
+        }
+        assert resolution["sections_by_basis"]["item_facet_narrowed"] == 1
+        assert resolution["sections_by_basis"]["item_properties_narrowed"] == 0
+
+        allocations = await get_task_budget_allocations(
+            ServiceContext(
+                identity={
+                    "workspace_id": workspace.client_id,
+                    "user_id": "usr",
+                    "role_name": "worker",
+                },
+                incoming_data={},
+                query_params={"task_ids": [narrowed_task.client_id]},
+                session=db_session,
+                now=now,
+            )
+        )
+        allocation_row = allocations["budget_allocations"][0]
+        step_row = next(
+            row for row in allocation_row["steps"] if row["working_section_id"] == section.client_id
+        )
+        assert step_row["typical_basis"] == "item_facet_narrowed"
+        assert step_row["typical_worker_seconds"] == 600
+        assert allocation_row["typical_resolution"]["task_typical_basis"] == "item_facet_narrowed_uniform"
+        assert allocation_row["typical_resolution"]["facet"] == "upholstery"
+
+        price = await price_scenario_module._typical_block(
+            production_context(),
+            narrowed_task.client_id,
+            derive_spec_from_primary_item(item),
+            1,
+        )
+        assert price["total_unit_seconds"] == 600
+        assert price["total_seconds"] == 600
+
+        item.properties = None
+        item.properties_signature = None
+        await db_session.flush()
+        fallback = await get_task_production_time(production_context())
+        fallback_row = next(
+            row for row in fallback["sections"] if row["working_section_id"] == section.client_id
+        )
+        assert fallback_row["typical"]["typical_basis"] == "item_narrowed"
+        assert fallback_row["typical"]["typical_worker_seconds"] == 650
+        assert fallback["typical_resolution"]["facet"] is None
+        assert fallback["typical_resolution"]["comparability_profile"] == "primary_item_category_v1"
     finally:
         await cleanup_divergent_category_fixture(db_session, fixture)
