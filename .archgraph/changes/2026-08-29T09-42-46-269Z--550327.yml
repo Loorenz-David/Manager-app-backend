@@ -1,0 +1,57 @@
+changeId: 2026-08-29T09-42-46-269Z--550327
+operations:
+  - itemId: node:table-item
+    kind: edit
+    before:
+      description: "The item row: identity, category snapshots
+        (item_major_category_snapshot String(64) nullable at :46), position and
+        lifecycle fields. Carries NO money columns — phase 6 (migration
+        `be9dfe42a035`) dropped the legacy item_value_minor / item_cost_minor /
+        item_currency; item money lives exclusively in item_valuations (R1-3,
+        §10.2). Also carries the externally-owned properties snapshot:
+        properties JSONB (NULL = no snapshot yet, {} = snapshotted propertyless,
+        GIN jsonb_path_ops indexed), properties_signature String(64) derived
+        from the canonical blob (partial btree with workspace_id), and
+        properties_snapshot_at. The signature is the item-complexity narrowing
+        key for typical-time comparability; there is deliberately no property
+        versioning - a snapshot update corrects the item's innate
+        characteristics and regroups its historical samples on the next read."
+    after:
+      description: "The item row: identity, category snapshots
+        (item_major_category_snapshot String(64) nullable), position and
+        lifecycle fields. Carries NO money columns — phase 6 (migration
+        `be9dfe42a035`) dropped the legacy item_value_minor / item_cost_minor /
+        item_currency; item money lives exclusively in item_valuations (R1-3,
+        §10.2). Also carries the externally-owned properties snapshot:
+        properties JSONB (NULL = no snapshot ever received; GIN jsonb_path_ops
+        indexed), properties_signature String(64) derived from the canonical
+        blob (partial btree with workspace_id), and properties_snapshot_at
+        recording when that profile was established. The three snapshot columns
+        are written only together, by one helper, which derives the signature
+        from the blob rather than accepting it — a stored signature that does
+        not describe its blob would silently mis-group the item's history. An
+        empty payload is never a snapshot: absent, null and {} are all
+        \"ingestion had nothing to say\", so none is persisted (no item holds
+        {}) and none clears an existing profile; there is deliberately no
+        un-snapshot path through the creation endpoints. The signature is the
+        item-complexity narrowing key for typical-time comparability; there is
+        deliberately no property versioning — a snapshot update corrects the
+        item's innate characteristics and regroups its historical samples on the
+        next read."
+    rationale: 'The description asserted "{} = snapshotted propertyless", which the
+      write path shipped later the same day made false:
+      apply_properties_snapshot treats null and {} alike as "nothing supplied"
+      and persists neither, so no item can hold {}. Correcting the falsified
+      clause and stating the invariant that now governs the three columns.'
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.251
+timestamp: 2026-08-29T09:42:46.269Z
+graphRevisionBefore: c79e87077c153113ed8f32e2824b68ad3da2f40921a66d77774821d1dd401aaa
+graphRevisionAfter: 252df4bbc54048c283e5eab9974369900044affad97409bae35501c3357f1730
+humanInstruction: 'User selected "Only correct table-item" when asked how to
+  handle the graph after the item-properties ingestion change: correct the
+  falsified `{}` clause on table-item and record no new nodes.'
+changeTokenCorrelation: 870c482bc972

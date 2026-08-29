@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from decimal import ROUND_HALF_UP, Decimal
 from urllib.parse import quote
@@ -43,6 +44,80 @@ def _normalize_purchase_price_to_sek_minor(
 
     normalized_minor = Decimal(str(purchase_price)) * rate * 100
     return int(normalized_minor.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def has_attributes_payload(raw: object) -> bool:
+    """Did the purchase API send something under `attributes` that should yield properties?
+
+    Lets a caller tell "this item has no attributes" apart from "this item has
+    attributes we could not read" — the parser collapses both to an empty
+    snapshot, but only the second is worth a human's attention.
+    """
+    if isinstance(raw, str):
+        return raw.strip() not in ("", "[]")
+    if isinstance(raw, list):
+        return bool(raw)
+    return raw is not None
+
+
+def parse_purchase_api_attributes(raw: object) -> dict:
+    r"""Project the purchase app's `attributes` payload into a canonical properties snapshot.
+
+    The purchase API sends the attribute list JSON-encoded inside a string::
+
+        "[{\"key\":\"wood_type\",\"label\":\"Type of Wood\",\"value\":\"Teak\"}]"
+
+    which becomes ``{"wood_type": "Teak"}`` — an object keyed by attribute key,
+    the shape `apply_properties_snapshot` stores and the creation endpoints
+    accept. `label` is deliberately dropped: it is display text owned by the
+    purchase app, and folding it into the blob would make a rename upstream
+    change the item's signature and silently re-group its typical samples.
+
+    Every failure degrades to an empty snapshot with a warning rather than
+    raising. A malformed attributes blob must not cost the caller the rest of the
+    lookup — price, images and category are still perfectly good — and an empty
+    snapshot is inert on the write path, so it can never clear a stored profile.
+
+    Entries are deduplicated by key keeping the first occurrence, and an entry
+    with a blank key or no value is dropped: a blank value carries no profile
+    information but would still change the signature.
+    """
+    if not has_attributes_payload(raw):
+        return {}
+
+    decoded = raw
+    if isinstance(raw, str):
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("Purchase API sent attributes that are not valid JSON: %r", raw)
+            return {}
+
+    if not isinstance(decoded, list):
+        logger.warning("Purchase API sent attributes that are not a list: %r", decoded)
+        return {}
+
+    properties: dict = {}
+    for entry in decoded:
+        if not isinstance(entry, dict):
+            logger.warning("Skipping a non-object attributes entry: %r", entry)
+            continue
+
+        key = str(entry.get("key") or "").strip()
+        if not key:
+            logger.warning("Skipping an attributes entry with no key: %r", entry)
+            continue
+        if key in properties:
+            logger.warning("Skipping a duplicate attributes key %r; keeping the first value", key)
+            continue
+
+        value = entry.get("value")
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+
+        properties[key] = value.strip() if isinstance(value, str) else value
+
+    return properties
 
 
 async def _find_category_id_by_name(
@@ -131,6 +206,7 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             data.get("purchase_price"),
             data.get("currency"),
         )
+        properties = parse_purchase_api_attributes(data.get("attributes"))
 
         return ItemLookupResult(
             article_number=data.get("article_number", article_number),
@@ -141,4 +217,5 @@ class PurchaseApiLookupHandler(ItemLookupHandler):
             external_source=_EXTERNAL_SOURCE_NAME,
             images=images,
             purchase_price_minor=purchase_price_minor,
+            properties=properties or None,
         )

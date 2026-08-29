@@ -77,4 +77,5 @@ class InternalDbLookupHandler(ItemLookupHandler):
             external_source=None,
             images=images,
             purchase_price_minor=purchase_price_minor,
+            properties=item.properties,
         )

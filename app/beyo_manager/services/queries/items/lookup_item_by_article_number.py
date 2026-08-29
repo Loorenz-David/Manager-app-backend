@@ -29,6 +29,7 @@ def _serialize_result(result: ItemLookupResult) -> dict:
         "external_source": result.external_source,
         "images": result.images,
         "purchase_price_minor": result.purchase_price_minor,
+        "properties": result.properties,
     }
 
 

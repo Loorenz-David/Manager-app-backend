@@ -16,6 +16,12 @@ class ItemLookupResult:
     external_source: str | None
     images: list = field(default_factory=list)
     purchase_price_minor: int | None = None
+    # The canonical properties snapshot shape: an object keyed by property key,
+    # identical to what the creation endpoints accept, so a client can feed a
+    # lookup result straight back in without reshaping it. None means this source
+    # has nothing to say about properties — which the write path treats the same
+    # as {}, so neither value can wipe an existing profile.
+    properties: dict | None = None
 
 
 class ItemLookupHandler(ABC):
