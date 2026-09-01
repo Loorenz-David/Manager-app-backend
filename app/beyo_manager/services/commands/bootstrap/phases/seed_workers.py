@@ -160,7 +160,7 @@ _WORKER_SECTION_OVERRIDES: dict[str, tuple[str, ...]] = {
         "padding",
         "assembly",
     ),
-    "Feruza": ("cleaning wood",),
+    "Feruza": ("cleaning wood", "sewing"),
 }
 
 
