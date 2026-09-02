@@ -392,10 +392,44 @@ def test_c6_price_and_production_resolution_have_the_exact_seven_key_shape():
     assert frozenset(price["typical"]["typical_resolution"]) == expected_keys
     assert frozenset(production["typical_resolution"]) == expected_keys
     assert price["typical"]["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
+    # No names were supplied here, so the entry keeps its id and carries a null
+    # name: the filter still says how many categories it narrowed on, and a
+    # since-deleted category never costs the surface its provenance.
     assert price["typical"]["typical_resolution"]["applied_filter"] == {
-        "item_category_ids": ["icat_chair"]
+        "item_category_ids": ["icat_chair"],
+        "item_categories": [{"client_id": "icat_chair", "name": None}],
     }
     assert price["typical"]["typical_resolution"]["participating_section_count"] == 2
+
+
+@pytest.mark.integration
+async def test_applied_filter_names_the_categories_when_names_are_served():
+    """The names ride beside the ids on both surfaces, never replacing them."""
+
+    selection = TaskTypicalSelection(
+        "item_narrowed_uniform",
+        "uniform_basis_v1",
+        "primary_item_category_v1",
+        TypicalFilterSpec(item_category_ids=frozenset({"icat_chair"})),
+        frozenset(),
+        {},
+    )
+    production = serialize_task_production_time(
+        {
+            "task_id": "task",
+            "status": "not_evaluated",
+            "item_binding": "bound",
+            "division": {"sections": []},
+            "typicals": {},
+            "typical_resolution": selection,
+            "item_category_names": {"icat_chair": "Chairs"},
+        }
+    )
+
+    assert production["typical_resolution"]["applied_filter"] == {
+        "item_category_ids": ["icat_chair"],
+        "item_categories": [{"client_id": "icat_chair", "name": "Chairs"}],
+    }
 
 
 @pytest.mark.integration

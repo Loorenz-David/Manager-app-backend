@@ -41,6 +41,7 @@ from beyo_manager.models.tables.item_economics.item_valuation import ItemValuati
 from beyo_manager.models.tables.item_economics.production_cost_basis_version import ProductionCostBasisVersion
 from beyo_manager.models.tables.item_economics.production_cost_group import ProductionCostGroup
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -142,6 +143,26 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         )
         for task in tasks
     }
+    # One statement for every task in the page: the specs are per task but the
+    # categories behind them repeat heavily, and the names exist only so the
+    # served `applied_filter` can say what the typicals were measured against.
+    category_ids = {
+        category_id
+        for spec in spec_by_task.values()
+        for category_id in (spec.item_category_ids or ())
+    }
+    category_names: dict[str, str] = {}
+    if category_ids:
+        category_names = {
+            client_id: name
+            for client_id, name in await ctx.session.execute(
+                select(ItemCategory.client_id, ItemCategory.name).where(
+                    ItemCategory.workspace_id == ctx.workspace_id,
+                    ItemCategory.client_id.in_(category_ids),
+                )
+            )
+        }
+
     narrowing_specs = []
     spec_index_by_task: dict[str, int | None] = {}
     for task in tasks:
@@ -318,6 +339,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "pressure_ratio": pressure.pressure_ratio,
                 "pressure_method": PRESSURE_METHOD,
                 "typical_resolution": selection,
+                "item_category_names": category_names,
                 "projection_quantity": projection_quantity,
                 "steps": division["steps"],
             }

@@ -234,6 +234,9 @@ async def get_task_price_scenario(ctx: ServiceContext) -> dict:
         budget_status.typical_filter_spec,
         item.quantity if item is not None else None,
     )
+    # Provenance for the served `applied_filter`, not an input to the typicals:
+    # attached here so `_typical_block` keeps its single job.
+    typical["item_category_names"] = budget_status.item_category_names
 
     valuation = None
     created_by = None

@@ -294,7 +294,7 @@ async def test_c9_no_category_snapshot_and_empty_spec_converge(db_session):
 @pytest.mark.integration
 async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session):
     fixture = await seed_categorized_two_section_task(db_session, budgeted=False)
-    base_values, section_ids, category_id = fixture
+    base_values, section_ids, category_id, category_name = fixture
     workspace, _user, _section, _task, unevaluated_task, *_ = base_values
     context = ServiceContext(
         identity={"workspace_id": workspace.client_id, "user_id": "usr", "role_name": "manager"},
@@ -309,7 +309,10 @@ async def test_c8_no_budget_branch_reconciles_before_the_early_return(db_session
             "facet", "participating_section_count", "sections_by_basis",
         }
         assert result["typical_resolution"]["task_typical_basis"] == "item_narrowed_uniform"
-        assert result["typical_resolution"]["applied_filter"] == {"item_category_ids": [category_id]}
+        assert result["typical_resolution"]["applied_filter"] == {
+            "item_category_ids": [category_id],
+            "item_categories": [{"client_id": category_id, "name": category_name}],
+        }
         assert result["typical_resolution"]["participating_section_count"] == 2
         assert set(result["typical_resolution"]["sections_by_basis"]) == {
             "item_properties_narrowed", "item_facet_narrowed", "item_narrowed", "section_wide", "insufficient_sample",
@@ -370,7 +373,7 @@ async def test_c10_batch_dedupes_specs_once_and_preserves_category_index(monkeyp
 @pytest.mark.integration
 async def test_c11_both_consumers_publish_the_same_literal_typical_triples(db_session):
     fixture = await seed_categorized_two_section_task(db_session, budgeted=True)
-    base_values, section_ids, _category_id = fixture
+    base_values, section_ids, _category_id, _category_name = fixture
     workspace, _user, _section, task, *_ = base_values
     now = datetime(2026, 8, 23, 12, tzinfo=timezone.utc)
     production_context = ServiceContext(
@@ -823,6 +826,9 @@ async def test_properties_signature_selects_the_most_specific_tier_on_all_surfac
         assert resolution["applied_filter"] == {
             "item_category_ids": [fixture["category_id"]],
             "properties_signature": signature,
+            "item_categories": [
+                {"client_id": fixture["category_id"], "name": fixture["category"].name}
+            ],
         }
         assert resolution["sections_by_basis"]["item_properties_narrowed"] == 1
 
@@ -869,6 +875,9 @@ async def test_properties_signature_selects_the_most_specific_tier_on_all_surfac
         assert fallback["typical_resolution"]["comparability_profile"] == "primary_item_category_v1"
         assert fallback["typical_resolution"]["applied_filter"] == {
             "item_category_ids": [fixture["category_id"]],
+            "item_categories": [
+                {"client_id": fixture["category_id"], "name": fixture["category"].name}
+            ],
         }
     finally:
         await cleanup_divergent_category_fixture(db_session, fixture)
@@ -995,6 +1004,9 @@ async def test_upholstery_facet_rescues_a_new_wood_profile_on_all_surfaces(db_se
             "item_category_ids": [fixture["category_id"]],
             "properties_signature": "sig-mahogany-ud",
             "properties_facets": [{"upholstery": "Up & Down"}],
+            "item_categories": [
+                {"client_id": fixture["category_id"], "name": fixture["category"].name}
+            ],
         }
         assert resolution["sections_by_basis"]["item_facet_narrowed"] == 1
         assert resolution["sections_by_basis"]["item_properties_narrowed"] == 0

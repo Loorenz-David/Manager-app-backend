@@ -122,7 +122,7 @@ async def seed_categorized_two_section_task(db_session, *, budgeted: bool):
             )
             db_session.add_all([history_task, history_item, history_task_item, history_step])
     await db_session.flush()
-    return values, (section.client_id, second_section.client_id), category.client_id
+    return values, (section.client_id, second_section.client_id), category.client_id, category.name
 
 
 async def seed_batch_dedupe_fixture(db_session):
@@ -412,7 +412,7 @@ async def cleanup_batch_dedupe_fixture(db_session, fixture):
 
 
 async def cleanup_categorized_fixture(db_session, values):
-    base_values, _section_ids, category_id = values
+    base_values, _section_ids, category_id, _category_name = values
     workspace_id = base_values[0].client_id
     await db_session.execute(delete(TaskStep).where(TaskStep.workspace_id == workspace_id))
     await db_session.execute(delete(ItemCostEvaluation).where(ItemCostEvaluation.workspace_id == workspace_id))

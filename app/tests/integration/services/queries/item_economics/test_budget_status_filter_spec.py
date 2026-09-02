@@ -60,6 +60,11 @@ class _ExecuteResult:
     def all(self):
         return list(self.rows)
 
+    # The real Result is iterable, and the category-name lookup consumes it
+    # that way rather than through .scalars().
+    def __iter__(self):
+        return iter(self.rows)
+
 
 def _ctx(session, task_id: str = "tsk_filter_spec") -> ServiceContext:
     return ServiceContext(
@@ -147,6 +152,7 @@ def test_C1_task_budget_status_appends_defaulted_spec_after_result():
         "result",
         "typical_filter_spec",
         "primary_item_quantity",
+        "item_category_names",
     ]
     task_budget_fields = fields(manager_module.TaskBudgetStatus)
     assert task_budget_fields[13].name == "result"  # zero-based index
@@ -154,8 +160,11 @@ def test_C1_task_budget_status_appends_defaulted_spec_after_result():
     assert task_budget_fields[14].default is None
     assert task_budget_fields[15].name == "primary_item_quantity"  # zero-based index
     assert task_budget_fields[15].default is None
+    assert task_budget_fields[16].name == "item_category_names"  # zero-based index
     assert _status().typical_filter_spec is None
     assert _status().primary_item_quantity is None
+    # Defaults to empty, never None: every reader treats it as a mapping.
+    assert _status().item_category_names == {}
 
 
 def test_C2_manager_budget_status_payload_has_the_existing_exact_key_set():

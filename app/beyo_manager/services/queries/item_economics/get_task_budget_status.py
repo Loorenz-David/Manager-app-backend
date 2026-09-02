@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from collections.abc import Mapping
@@ -29,6 +29,7 @@ from beyo_manager.models.tables.item_economics.item_cost_evaluation import ItemC
 from beyo_manager.models.tables.item_economics.item_cost_result import ItemCostResult
 from beyo_manager.models.tables.item_economics.item_valuation import ItemValuation
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -56,6 +57,11 @@ class TaskBudgetStatus:
     typical_filter_spec: TypicalFilterSpec | None = None
     # Current PRIMARY item's quantity (unclamped), for per-unit typical projections.
     primary_item_quantity: int | None = None
+    # Display names for the spec's category ids, so the served `applied_filter`
+    # can name the population instead of publishing bare ids no reader can
+    # resolve. Empty whenever the spec narrows on nothing, and a deleted
+    # category simply yields no entry rather than failing the read.
+    item_category_names: Mapping[str, str] = field(default_factory=dict)
 
 
 async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
@@ -88,6 +94,27 @@ async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
     return task, item
 
 
+async def _load_item_category_names(
+    ctx: ServiceContext, spec: TypicalFilterSpec | None
+) -> dict[str, str]:
+    """Resolve the spec's category ids to their display names.
+
+    One statement, and none at all for a spec that does not narrow on category.
+    Missing ids (a since-deleted category) are simply absent from the result:
+    the filter is provenance, and a name that can no longer be looked up must
+    not cost the caller its typicals.
+    """
+    if spec is None or not spec.item_category_ids:
+        return {}
+    rows = await ctx.session.execute(
+        select(ItemCategory.client_id, ItemCategory.name).where(
+            ItemCategory.workspace_id == ctx.workspace_id,
+            ItemCategory.client_id.in_(spec.item_category_ids),
+        )
+    )
+    return {client_id: name for client_id, name in rows}
+
+
 def _empty_status(
     status: EconomicsStatusEnum,
     *,
@@ -95,6 +122,7 @@ def _empty_status(
     item_id: str | None,
     typical_filter_spec: TypicalFilterSpec | None,
     primary_item_quantity: int | None = None,
+    item_category_names: Mapping[str, str] | None = None,
 ) -> TaskBudgetStatus:
     return TaskBudgetStatus(
         status=status,
@@ -113,6 +141,7 @@ def _empty_status(
         result=None,
         typical_filter_spec=typical_filter_spec,
         primary_item_quantity=primary_item_quantity,
+        item_category_names=dict(item_category_names or {}),
     )
 
 
@@ -124,6 +153,7 @@ async def get_task_budget_status(
     task, item = await _load_task_and_item(ctx)
     typical_filter_spec = None if item is None else derive_spec_from_primary_item(item)
     primary_item_quantity = None if item is None else item.quantity
+    item_category_names = await _load_item_category_names(ctx, typical_filter_spec)
     evaluation = await ctx.session.scalar(
         select(ItemCostEvaluation).where(
             ItemCostEvaluation.workspace_id == ctx.workspace_id,
@@ -142,6 +172,7 @@ async def get_task_budget_status(
                 item_id=None,
                 typical_filter_spec=typical_filter_spec,
                 primary_item_quantity=primary_item_quantity,
+                item_category_names=item_category_names,
             )
         selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
@@ -159,6 +190,7 @@ async def get_task_budget_status(
             item_id=item.client_id,
             typical_filter_spec=typical_filter_spec,
             primary_item_quantity=primary_item_quantity,
+            item_category_names=item_category_names,
         )
 
     return await _build_evaluated_status(
@@ -168,6 +200,7 @@ async def get_task_budget_status(
         evaluation,
         binding,
         typical_filter_spec=typical_filter_spec,
+        item_category_names=item_category_names,
         live_seconds=live_seconds,
     )
 
@@ -180,6 +213,7 @@ async def _build_evaluated_status(
     binding: str,
     *,
     typical_filter_spec: TypicalFilterSpec | None,
+    item_category_names: Mapping[str, str] | None = None,
     live_seconds: Mapping[str, int] | None = None,
 ) -> TaskBudgetStatus:
     """Build the shared evaluated read model after a caller's own filter."""
@@ -231,4 +265,5 @@ async def _build_evaluated_status(
         result=result,
         typical_filter_spec=typical_filter_spec,
         primary_item_quantity=None if item is None else item.quantity,
+        item_category_names=dict(item_category_names or {}),
     )

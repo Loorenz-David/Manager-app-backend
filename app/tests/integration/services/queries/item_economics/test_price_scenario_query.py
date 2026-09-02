@@ -569,7 +569,10 @@ async def _run_scenario(
 
     async def fake_status(_ctx):
         return SimpleNamespace(
-            status=status, item_binding=binding, typical_filter_spec=None
+            status=status,
+            item_binding=binding,
+            typical_filter_spec=None,
+            item_category_names={},
         )
 
     async def fake_task_and_item(_ctx):
@@ -970,6 +973,7 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
             typical_filter_spec=None,
+            item_category_names={},
         )
 
     async def fake_task_and_item(_ctx):
@@ -1113,6 +1117,7 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
             typical_filter_spec=None,
+            item_category_names={},
         )
 
     async def fake_task_and_item(_ctx):
@@ -1273,6 +1278,7 @@ async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
             status=EconomicsStatusEnum.NOT_EVALUATED,
             item_binding="bound",
             typical_filter_spec=None,
+            item_category_names={},
         )
 
     async def fake_task_and_item(_ctx):

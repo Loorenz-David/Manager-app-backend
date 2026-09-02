@@ -305,8 +305,10 @@ def serialize_task_price_scenario(scenario: dict) -> dict:
     domain = scenario["domain"]
     typical = dict(scenario["typical"])
     typical["typical_resolution"] = serialize_typical_resolution(
-        typical.get("typical_resolution")
+        typical.get("typical_resolution"), typical.get("item_category_names")
     )
+    # Carried only to name the filter; it is not part of the served typical.
+    typical.pop("item_category_names", None)
     if saved is not None:
         valuation = saved["valuation"]
         created_by = saved["created_by"]

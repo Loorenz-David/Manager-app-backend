@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from decimal import Decimal, localcontext
 from fractions import Fraction
 
@@ -79,7 +79,9 @@ def serialize_budget_allocation(row: dict) -> dict:
         "allocation_method": row.get("allocation_method", ALLOCATION_METHOD),
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
-        "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
+        "typical_resolution": serialize_typical_resolution(
+            row.get("typical_resolution"), row.get("item_category_names")
+        ),
         "projection_quantity": row.get("projection_quantity"),
         "steps": [serialize_budget_step(step) for step in row["steps"]],
     }
@@ -114,7 +116,18 @@ def _enum_value(value: object) -> object:
     return getattr(value, "value", value)
 
 
-def serialize_filter_spec(spec: TypicalFilterSpec | None) -> dict | None:
+def serialize_filter_spec(
+    spec: TypicalFilterSpec | None,
+    category_names: Mapping[str, str] | None = None,
+) -> dict | None:
+    """Publish the population the typicals were measured over.
+
+    ``item_categories`` is additive beside ``item_category_ids``: the ids stay
+    the machine-readable key, and the names exist so a reader can be told what
+    the figures were compared against rather than shown an opaque id. A
+    category whose name could not be resolved keeps its id and carries a null
+    name, so the entry count always matches the id list.
+    """
     if spec is None:
         return None
     payload = {}
@@ -133,10 +146,19 @@ def serialize_filter_spec(spec: TypicalFilterSpec | None) -> dict | None:
             payload[name] = value
     if spec.properties_facets:
         payload["properties_facets"] = [facet.match_values() for facet in spec.properties_facets]
+    if spec.item_category_ids:
+        names = category_names or {}
+        payload["item_categories"] = [
+            {"client_id": category_id, "name": names.get(category_id)}
+            for category_id in payload["item_category_ids"]
+        ]
     return payload
 
 
-def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict:
+def serialize_typical_resolution(
+    selection: TaskTypicalSelection | None,
+    category_names: Mapping[str, str] | None = None,
+) -> dict:
     counts = {
         "item_properties_narrowed": 0,
         "item_facet_narrowed": 0,
@@ -153,7 +175,7 @@ def serialize_typical_resolution(selection: TaskTypicalSelection | None) -> dict
             "task_typical_basis": selection.task_typical_basis,
             "reconciliation_method": selection.reconciliation_method,
             "comparability_profile": selection.comparability_profile,
-            "applied_filter": serialize_filter_spec(selection.applied_filter),
+            "applied_filter": serialize_filter_spec(selection.applied_filter, category_names),
             "facet": selection.facet,
             "participating_section_count": len(selection.participating_section_ids),
             "sections_by_basis": counts,
@@ -255,7 +277,9 @@ def serialize_task_production_time(row: dict, *, include_monetary: bool = False)
         "allocation_method": ALLOCATION_METHOD,
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
-        "typical_resolution": serialize_typical_resolution(row.get("typical_resolution")),
+        "typical_resolution": serialize_typical_resolution(
+            row.get("typical_resolution"), row.get("item_category_names")
+        ),
         "projection_quantity": row.get("projection_quantity"),
         "budget": budget,
         "final": (
