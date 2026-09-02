@@ -4948,7 +4948,16 @@ nodes:
       worked-seconds basis is each non-deleted task step's settled working
       seconds plus the concurrency-averaged share of any open WORKING interval,
       resolved once per request through the shared live worked-seconds loader
-      and persisted nowhere; the worker serializer omits monetary fields.
+      and persisted nowhere; the worker serializer omits monetary fields. It
+      also resolves the derived typical filter spec's category ids to
+      workspace-scoped display names and carries them on the read model as
+      provenance for the surfaces that compose it, issuing one statement when
+      the spec narrows on category and none at all when it does not. An id that
+      no longer resolves is simply absent from that map rather than raising —
+      the filter is provenance, and a lookup failure must not cost the caller
+      its typicals — so the served filter keeps every id in order and publishes
+      a null name for the one it could not resolve. The names are carried, never
+      persisted.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_status.py
@@ -4982,7 +4991,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-14T20:19:54.506Z
-    updatedAt: 2026-08-23T10:58:17.223Z
+    updatedAt: 2026-09-02T18:19:10.808Z
   - id: projection-item-economics-lifetime
     type: projection
     name: Item Lifetime Economics Projection
@@ -5525,33 +5534,34 @@ nodes:
     name: Task budget allocations
     description: The batched, read-only task view combines current committed
       evaluation budgets, non-deleted live steps, item-comparability
-      typical-time evidence, and item-economics readiness into per-step
+      typical-time evidence and item-economics readiness into per-step
       allowances. It derives one filter spec per task from the PRIMARY item's
       category plus, when present, its properties_signature and facet rungs,
-      deduplicates equal specs into an ordered sequence, issues one
-      typical-times statement for the batch, and maps each task to its spec
-      position; a non-narrowing task uses spec_index None and resolves against
-      the spec-independent section-wide columns. Participating sections are
-      reconciled through uniform_basis_v1 down a most-specific-first ladder —
-      item_properties_narrowed (same category AND signature), then
-      owner-declared facet rungs (item_facet_narrowed, JSONB-containment partial
-      matches, upholstery first), then item-narrowed, then section-wide — each
-      rung all-or-nothing across participants, excluded sections broadening
-      independently, so one task-wide basis governs the selected typicals used
-      both for displayed step values and for division weights; the response
-      exposes typical_resolution, per-step typical_basis and sample_count, and
-      allocation_method static_proportional_section_v2. Each step row
-      additionally discloses typical_unit_worker_seconds and
-      projected_typical_worker_seconds — the selected basis's per-unit median
-      scaled by that task's current PRIMARY-item quantity, clamped to at least
-      one — and each task row carries projection_quantity; division weights keep
+      dedupes equal specs into an ordered sequence, issues one typical-times
+      statement for the batch, mapping each task to its spec position; a
+      non-narrowing task uses spec_index None and resolves against the
+      spec-independent section-wide columns. Sections are reconciled through
+      uniform_basis_v1 down a most-specific-first ladder —
+      item_properties_narrowed (category AND signature), then owner-declared
+      facet rungs (item_facet_narrowed, JSONB-containment partial matches,
+      upholstery first), then item-narrowed, then section-wide — each rung
+      all-or-nothing across participants, excluded sections broadening
+      independently, so one task-wide basis governs the typicals used for both
+      displayed step values and division weights; the response exposes
+      typical_resolution, per-step typical_basis and sample_count, and
+      allocation_method static_proportional_section_v2; its applied filter also
+      names those categories, resolved here in one statement per page. Each step
+      row discloses typical_unit_worker_seconds and
+      projected_typical_worker_seconds (the selected basis's per-unit median
+      scaled by the task's current PRIMARY-item quantity, clamped to at least
+      one), and each task row carries projection_quantity; division weights keep
       reading the raw typicals. Each step's worked seconds remain its settled
       seconds plus the concurrency-averaged share of any open WORKING interval,
-      from one shared live map loaded once per request and persisted nowhere. It
-      omits unknown or cross-workspace tasks, charges non-deleted excluded
-      steps, and degrades evaluation-less tasks to explicit no-budget states
-      without persisting derived values; its time-only fields reconcile with the
-      same non-deleted step set used by budget status.
+      from one shared live map loaded once per request. It omits unknown or
+      cross-workspace tasks, charges non-deleted excluded steps and degrades
+      evaluation-less tasks to explicit no-budget states, persisting no derived
+      value; its time-only fields reconcile with the non-deleted step set used
+      by budget status.
     metadata:
       evidence:
         - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
@@ -5575,7 +5585,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-16T16:56:13.724Z
-    updatedAt: 2026-08-29T12:12:55.080Z
+    updatedAt: 2026-09-02T18:19:50.846Z
     sourceLinks:
       - path: app/tests/integration/services/queries/item_economics/test_narrowed_task_economics.py
         symbol: test_c13_one_participating_sections_patch_moves_both_consumers
@@ -5653,25 +5663,25 @@ nodes:
       owner-declared facet rungs (item_facet_narrowed — JSONB-containment
       partial matches, upholstery first, named in typical_resolution.facet),
       then item-narrowed, then section-wide — each rung all-or-nothing across
-      participating sections; excluded sections broaden down the ladder
-      independently. The same SelectedTypical values feed both the displayed
-      typicals and the division weights, and the response carries a
-      typical_resolution block (task basis, profile, applied filter, facet) plus
-      per-section typical_basis and sample counts and allocation_method
-      static_proportional_section_v2. Each section's typical block also
-      discloses typical_unit_worker_seconds (the basis's per-unit median) and
-      projected_typical_worker_seconds (per-unit times current quantity,
-      half-even), plus top-level projection_quantity; division weights keep
-      reading the selected raw typicals, so quantity never moves an allowance.
-      Each non-deleted step's worked seconds remain its settled seconds plus the
+      participants; excluded sections broaden independently. The same
+      SelectedTypical values feed both displayed typicals and division weights,
+      and the response carries a typical_resolution block (task basis, profile,
+      applied filter, facet) plus per-section typical_basis, sample counts and
+      allocation_method static_proportional_section_v2; the applied filter also
+      names those categories, from the composed budget status. Each section's
+      typical block discloses typical_unit_worker_seconds (the basis's per-unit
+      median) and projected_typical_worker_seconds (per-unit times current
+      quantity, half-even), plus top-level projection_quantity; division weights
+      keep reading the raw typicals, so quantity never moves an allowance. Each
+      non-deleted step's worked seconds remain its settled seconds plus the
       concurrency-averaged share of any open WORKING interval, resolved once per
-      request via the shared live-worked-seconds loader, persisted nowhere. It
-      preserves the tenant boundary, ordered section rows, and a flat final
-      snapshot. Money is role-gated via include_monetary_step_fields:
-      ADMIN/MANAGER budget blocks add production_budget_minor,
-      consumed_cost_minor, variance_cost_minor (forwarded not recomputed);
-      WORKER/SELLER stay byte-identical time-only, and section rows and the
-      final snapshot stay money-free for every role. It persists nothing."
+      request via the shared live-worked-seconds loader. It preserves the tenant
+      boundary and a flat final snapshot. Money is role-gated via
+      include_monetary_step_fields: ADMIN/MANAGER budget blocks add
+      production_budget_minor, consumed_cost_minor, variance_cost_minor
+      (forwarded not recomputed); WORKER/SELLER stay byte-identical time-only,
+      and section rows and the final snapshot stay money-free for every role. It
+      persists nothing."
     tags:
       - item-economics
       - production-time
@@ -5736,7 +5746,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.9
     createdAt: 2026-08-17T17:12:48.742Z
-    updatedAt: 2026-08-29T12:12:55.080Z
+    updatedAt: 2026-09-02T18:19:50.846Z
     sourceLinks:
       - path: app/beyo_manager/domain/item_economics/budget_division.py
         symbol: _governing_step
@@ -5970,7 +5980,12 @@ nodes:
       typical resolves down the shared ladder: the most specific
       item_properties_narrowed tier (same category AND same signature), then
       owner-declared facet rungs (partial property matches, upholstery first),
-      then category-narrowed, then section-wide. Its published typical total is
+      then category-narrowed, then section-wide. The served applied_filter also
+      names the categories it narrowed on, ids kept and name null for one since
+      deleted; those names arrive from the composed budget status and are
+      attached beside the typical block rather than threaded through the typical
+      computation, so the typical's own boundary is unchanged and the name map
+      is dropped before serving. Its published typical total is
       quantity-projected: the business fallback runs in per-unit space and each
       participating section's per-unit typical is scaled by the current item's
       quantity (clamped to at least one) before the shared per-section half-even
@@ -6062,7 +6077,7 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-19T17:34:47.483Z
-    updatedAt: 2026-08-29T12:13:25.872Z
+    updatedAt: 2026-09-02T18:19:10.808Z
     sourceLinks:
       - path: app/beyo_manager/services/queries/item_economics/get_task_price_scenario.py
         symbol: _typical_block
@@ -7067,10 +7082,10 @@ nodes:
           summary: Runs pause-reason link reconciliation after worker seeding has produced
             the worker-name-to-user-ID map.
           inferenceReason: The bootstrap orchestrator establishes the required phase ordering.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-24T13:47:21.336Z
-    updatedAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - id: projection-item-economics-task-budget-signals
     type: projection
     name: Task budget signals
@@ -7094,10 +7109,10 @@ nodes:
             and returns flat serialized rows.
           inferenceReason: This named service is the implementation boundary for an
             independently consumable task-budget-signal read projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - id: endpoint-item-economics-task-budget-signals
     type: endpoint
     name: GET /api/v1/item-economics/tasks/budget-signals
@@ -7121,10 +7136,10 @@ nodes:
             directly after the fixed budget-allocations route.
           inferenceReason: This named handler is the external HTTP boundary for the
             manager-only task budget-signals projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-25T06:35:03.125Z
-    updatedAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - id: projection-item-economics-remaining-production-pressure
     type: projection
     name: Remaining production pressure
@@ -7150,10 +7165,10 @@ nodes:
           inferenceReason: This symbol implements the independently named
             remaining-production-pressure projection and its non-countdown
             allocation invariant.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-25T09:24:40.005Z
-    updatedAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-09-02T18:26:14.307Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -12979,10 +12994,10 @@ edges:
             reasons.
           inferenceReason: The bootstrap phase directly persists its worker eligibility
             through this table.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-24T13:47:21.336Z
-    updatedAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: command-bootstrap-pause-reason-seeding
     relationshipType: depends_on
     targetNodeId: table-pause-reason-working-section-link
@@ -12997,10 +13012,10 @@ edges:
             reasons.
           inferenceReason: The bootstrap phase maintains the invariant that these newly
             seeded reasons are not section-constrained.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-24T13:47:21.336Z
-    updatedAt: 2026-08-24T13:47:21.336Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: domain-item-economics
     relationshipType: contains
     targetNodeId: projection-item-economics-task-budget-signals
@@ -13013,10 +13028,10 @@ edges:
             serializer boundaries.
           inferenceReason: The projection is an item-economics read boundary contained by
             the existing Item Economics domain.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-budget-signals
     relationshipType: reads_from
     targetNodeId: table-task-step
@@ -13028,10 +13043,10 @@ edges:
             requested tasks and uses them to construct allocator rows and actual
             worked totals.
           inferenceReason: Task-step rows are a direct input to every budget signal.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-budget-signals
     relationshipType: reads_from
     targetNodeId: table-item-cost-evaluation
@@ -13043,10 +13058,10 @@ edges:
             their allowed minutes, currency, and snapshot rate.
           inferenceReason: The current committed evaluation supplies the budget-bearing
             and monetary operands of the signal.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-budget-signals
     relationshipType: reads_from
     targetNodeId: projection-live-worked-seconds
@@ -13058,10 +13073,10 @@ edges:
             using ctx.now and uses it in the allocator and actual-worked total.
           inferenceReason: Present-tense worked time is derived through the shared
             live-worked-seconds projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.98
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-budget-signals
     relationshipType: reads_from
     targetNodeId: table-step-state-record
@@ -13077,10 +13092,10 @@ edges:
             clock.
           inferenceReason: That loader's open-interval population makes step-state records
             an architectural source dependency of the signal projection.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.93
     createdAt: 2026-08-25T04:17:27.720Z
-    updatedAt: 2026-08-25T04:17:27.720Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: source-file-item-economics-budget-division
     relationshipType: implements
     targetNodeId: projection-item-economics-task-budget-signals
@@ -13109,10 +13124,10 @@ edges:
           summary: The handler passes get_task_budget_signals to the shared _run service
             boundary.
           inferenceReason: The route's delegated service is the projection it accepts.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.97
     createdAt: 2026-08-25T06:35:03.125Z
-    updatedAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: endpoint-item-economics-task-budget-signals
     relationshipType: governed_by
     targetNodeId: decision-money-audience-admin-manager-only
@@ -13125,10 +13140,10 @@ edges:
             SELLER are not admitted.
           inferenceReason: The handler is an HTTP enforcement point for the existing
             money-audience decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.96
     createdAt: 2026-08-25T06:35:03.125Z
-    updatedAt: 2026-08-25T06:35:03.125Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-budget-allocations
     relationshipType: depends_on
     targetNodeId: projection-item-economics-remaining-production-pressure
@@ -13141,10 +13156,10 @@ edges:
             serialization.
           inferenceReason: The budget-allocation projection depends on the shared pressure
             projection for its additive pressure fields.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.98
     createdAt: 2026-08-25T09:24:40.005Z
-    updatedAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-09-02T18:26:14.307Z
   - sourceNodeId: projection-item-economics-task-production-time
     relationshipType: depends_on
     targetNodeId: projection-item-economics-remaining-production-pressure
@@ -13157,7 +13172,7 @@ edges:
             section before serialization.
           inferenceReason: The production-time projection depends on the shared pressure
             projection for its additive task ratio and section shares.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.98
     createdAt: 2026-08-25T09:24:40.005Z
-    updatedAt: 2026-08-25T09:24:40.005Z
+    updatedAt: 2026-09-02T18:26:14.307Z

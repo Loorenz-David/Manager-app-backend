@@ -902,3 +902,115 @@ prompt and whose master/phase plans are all silent on anchoring — a narrower o
 previous entry's phrasing implied.
 
 Related: [[project-task-budget-overrun-signal]], [[project-archgraph-anchor-observation-brief]].
+
+## 2026-09-02 — typical filter category names, graph recording session (Opus 5), four maintenance `edit`s
+
+**No new evidence entry was written this session**, so span rate on new entries stays
+**unmeasured — now six sessions since the policy change.** The whole delta was four description
+`edit`s across two `archgraph_apply_maintenance_changes` batches; `edit` touches no anchor, so
+this session produced no anchoring datapoint from my own hands.
+
+**Re-anchor activity: none.** No `re-anchor` op, no `archgraph_repair_anchors` call. Nothing
+triggered one: every symbol on every node I read still resolves in its file.
+
+**What the reads showed — the hash tier is now uniformly stale on this branch.** All four
+projection nodes' `sourceLinks` came back `"stale": true`:
+
+- `projection-item-economics-task-production-time` — 4 links, all stale. Two still carry legacy
+  spans (`budget_division.py:_governing_step` 188–208, `get_task_production_time.py:get_task_production_time` 26–121);
+  two are span-free (`test_narrowed_task_economics.py`, and `test_production_time_query.py` still spanned 108–160).
+- `projection-item-economics-task-budget-allocations` — 1 link, span-free, stale.
+- `projection-item-economics-task-price-scenario` — 5 links, all span-free, all stale.
+- `projection-item-economics-task-budget-status` — no source links at all.
+
+This is the **hash** tier going stale because the files changed, not the address tier going
+wrong: every path and symbol resolves. Per the policy that is not a repair candidate and I did
+not treat it as one — but it is worth logging that a reader of these four nodes now sees
+`stale: true` on **ten of ten** source links, which carries no signal at all once it is
+universal. The span-free links and the span-bearing ones are indistinguishable in that state.
+
+**Closing-work language: none used by me.** I reported the staleness as an observation and
+explicitly did not act on it, and did not describe the session as "keeping anchors current."
+
+**Second-hand observation — the implementing agent's brief.** The handoff
+`docs/handoff/ARCHGRAPH_RECORD_typical_filter_category_names_20260902.md` was written by a
+session with no MCP connection, and it is **dense with line citations in prose**: "line ~119",
+"line ~151", "line 64", "line 97", "lines ~149–160", "lines ~149–160" again in the evidence
+table. Every one of them was approximately right and none of them was necessary — each cited a
+named function I could have found by symbol, and the brief names the symbol too in most cases.
+Same habit as the previous entry's finding: **line numbers still travel freely in prose, where
+no policy reaches**, even from a session that never touched the graph. Here they cost nothing
+because they were checkable and the symbols were given alongside; the failure mode logged on
+2026-08-24 (a wrong `file:line` changing a conclusion) did not recur.
+
+*(Non-anchoring aside, routed here only because it will recur: two of these four descriptions
+were at **1996 and 1997 characters against the 2000-character `description` cap**, so a
+three-sentence amendment could not be added without compressing existing prose. And the
+four-operation batch was refused at preview for exceeding the **16384-byte audit-record limit**
+— 18910 bytes — forcing a split into two previews and two authorizations. These item-economics
+projection descriptions have accreted one clause per shipped change since 2026-08-16 and have
+now run out of room; the next change to this branch cannot be recorded additively. That is the
+owner's to adjudicate, not mine.)*
+
+Related: [[project-item-properties-complexity]], [[project-archgraph-anchor-observation-brief]].
+
+### Same session, second half — owner authorized human-confirming the graph (15 promotes, 1 investigate)
+
+Directly relevant to this brief, because promotion is the moment an anchor stops being
+provisional. **Still zero new evidence entries written** (review promotes existing ones), so
+span rate on new entries remains unmeasured. But the queue itself is now measurable:
+
+**Span rate on the 16 pending items' evidence: 1 of 17 entries carried a span.** Only
+`node:endpoint-item-economics-task-budget-signals` (created 2026-08-25) had
+`startLine 335 / endLine 347` *alongside* a resolving `symbol`. Every other entry across all
+four clusters — bootstrap pause-reason seeding (2 entries), budget signals (7), the endpoint's
+other two, remaining production pressure (3) — was **path + symbol, span-free**. That is the
+first real measurement since the policy change and it is a good one, though the standing
+confound still applies: these were written by sessions under the same project prompts.
+
+I **promoted that span-bearing entry without stripping the span**. The policy permits dropping
+it via `anchors` on the promote, and it would have cost nothing — the span is currently
+accurate (the route is 335-346). I left it because the owner authorized confirming the graph,
+not anchor surgery, and because this brief says record rather than correct. So the graph now
+carries one **human_confirmed** span, which is a stronger form of the same debt: it reads as
+settled, and 335-347 will rot the next time anything is inserted above it in
+`routers/api_v1/item_economics.py` — a file that has already moved these routes twice
+(`evidenceHistory` on the sibling endpoints shows 370-381 → 371-382 and 385-396).
+
+**A location finding that blocked a promotion — the is/calls trap, caught in the wild.**
+`edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-signals`
+carries a **true claim on caller-anchored evidence**: path `get_task_budget_signals.py`, symbol
+`get_task_budget_signals`, summary *"The service **calls** divide_production_budget with allowed
+minutes, loaded DivisionStep rows, and the reconciled selected typicals before computing each
+signal."* An `implements` edge whose source is `source-file-item-economics-budget-division`
+should cite the module that implements, not the service that calls it. The tell is the one the
+policy names verbatim, sitting in the summary.
+
+What makes it decisive rather than a judgement call: **both human_confirmed siblings of this
+exact relationship anchor the other way** — allocations and production-time each cite
+`budget_division.py`, symbol `divide_production_budget`, summary in the *supplies* voice
+("The pure division function supplies each task allocation projection with..."). So the
+divergence is measurable against settled precedent in the same graph, not against my taste.
+
+The server had **no contradiction to offer** on the substance — it flagged only two benign
+`conflicting-canonical-relationship` notices (that `budget_division` already implements two
+other projections, which is simply what one-to-many looks like) and suggested `investigate` for
+that structural reason alone. **The real defect was invisible to it**, exactly as the policy's
+"why step 4 carries the weight" paragraph predicts: fileExists true, symbol resolves, no drift,
+and a caller-anchored claim sails through. Only re-reading the source caught it.
+
+I recorded `investigate`, which leaves it pending and `ai_inferred`. `anchors` alone cannot
+repair it — repointing to `budget_division.py` would leave a summary describing the caller
+attached to the callee, and anchors may not touch a summary. That is the boundary between
+"address is wrong" and "claim is written from the wrong place", and this one is the latter.
+
+**Signal-to-noise observation on the detector.** Across the 16 items, **12 contradiction
+notices fired and all 12 were benign** — every one was `conflicting-canonical-relationship`
+on a relationship type that is legitimately one-to-many (`contains` from a domain fired six
+times, `reads_from` from one projection three times, `implements` twice, `depends_on` once).
+The three items with the *most* notices were all correct; the one genuinely defective item drew
+two notices indistinguishable from the benign ten. A reviewer triaging by notice count would
+have inverted the answer.
+
+Related: [[project-remaining-production-pressure]], [[project-task-budget-overrun-signal]],
+[[project-archgraph-anchor-observation-brief]].

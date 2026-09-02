@@ -1,0 +1,182 @@
+reviewId: 2026-09-02T18-26-14-337Z--3d4227
+reviewedItemIds:
+  - node:command-bootstrap-pause-reason-seeding
+  - edge:command-bootstrap-pause-reason-seeding--depends_on-->table-pause-reason-user-link
+  - edge:command-bootstrap-pause-reason-seeding--depends_on-->table-pause-reason-working-section-link
+  - node:projection-item-economics-task-budget-signals
+  - edge:domain-item-economics--contains-->projection-item-economics-task-budget-signals
+  - edge:projection-item-economics-task-budget-signals--reads_from-->table-item-cost-evaluation
+  - edge:projection-item-economics-task-budget-signals--reads_from-->table-task-step
+  - edge:projection-item-economics-task-budget-signals--reads_from-->projection-live-worked-seconds
+  - edge:projection-item-economics-task-budget-signals--reads_from-->table-step-state-record
+  - node:endpoint-item-economics-task-budget-signals
+  - edge:endpoint-item-economics-task-budget-signals--accepts-->projection-item-economics-task-budget-signals
+  - edge:endpoint-item-economics-task-budget-signals--governed_by-->decision-money-audience-admin-manager-only
+  - node:projection-item-economics-remaining-production-pressure
+  - edge:projection-item-economics-task-production-time--depends_on-->projection-item-economics-remaining-production-pressure
+  - edge:projection-item-economics-task-budget-allocations--depends_on-->projection-item-economics-remaining-production-pressure
+  - edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-signals
+decisions:
+  - itemId: node:command-bootstrap-pause-reason-seeding
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-derived from source. seed_pause_reasons.py:seed_pause_reason_links
+      validates the named bootstrap workers and raises ValidationError on any
+      missing (l.148-161), deletes PauseReasonUserLink for the managed reason
+      ids (l.166) and clears PauseReasonWorkingSectionLink (l.172) before
+      recreating the user links. bootstrap_app.py:bootstrap_app calls it at
+      l.65, after seed_workers at l.58, so the stated phase ordering holds. Both
+      evidence entries anchor on the symbols that are the thing, not on callers.
+  - itemId: edge:command-bootstrap-pause-reason-seeding--depends_on-->table-pause-reason-user-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at seed_pause_reasons.py:166 (delete) and l.179 (recreate)
+      inside seed_pause_reason_links. Source-anchored on the phase that is the
+      dependent.
+  - itemId: edge:command-bootstrap-pause-reason-seeding--depends_on-->table-pause-reason-working-section-link
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Confirmed at seed_pause_reasons.py:172-175 - the delete clears
+      section links for the managed reasons and nothing recreates them, which is
+      the stated not-section-constrained invariant. The flagged contradiction is
+      benign: depends_on is legitimately one-to-many and the detector flags
+      every sibling target."
+  - itemId: node:projection-item-economics-task-budget-signals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-derived from get_task_budget_signals.py. Caps raw task ids at 50
+      with an explicit ValidationError (l.76-80), batch-loads visible tasks,
+      primary items, current COMMITTED evaluations (l.135) and non-deleted steps
+      (l.152), derives live seconds (l.166) and reconciled typicals (l.194),
+      invokes divide_production_budget (l.365) and compute_budget_signal
+      (l.372), and returns serialize_budget_signals (l.401). Every clause of the
+      evidence summary holds.
+  - itemId: edge:domain-item-economics--contains-->projection-item-economics-task-budget-signals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: The service lives in the item-economics query package and imports its
+      allocation, configuration, signal and serializer boundaries from
+      domain/item_economics (l.11-37). Anchored on the projection's own
+      implementation file. The six flagged contradictions are benign - contains
+      is one-to-many by nature.
+  - itemId: edge:projection-item-economics-task-budget-signals--reads_from-->table-item-cost-evaluation
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at get_task_budget_signals.py:135-140 - selects
+      ItemCostEvaluation filtered to workspace, visible tasks, kind COMMITTED,
+      superseded_at NULL, not deleted. Identical shape to the already
+      human_confirmed edge on budget-status and allocations.
+  - itemId: edge:projection-item-economics-task-budget-signals--reads_from-->table-task-step
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at get_task_budget_signals.py:152-155 - selects non-deleted
+      TaskStep for the visible task set, grouped per task at l.162.
+  - itemId: edge:projection-item-economics-task-budget-signals--reads_from-->projection-live-worked-seconds
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at get_task_budget_signals.py:166 -
+      load_live_worked_seconds is called once for the visible step set. Same
+      relation already human_confirmed on budget-status, production-time and
+      allocations.
+  - itemId: edge:projection-item-economics-task-budget-signals--reads_from-->table-step-state-record
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Transitive through the shared loader, which is the established
+      pattern here: live_worked_seconds.py:43-48 selects StepStateRecord with
+      exited_at NULL and state WORKING, and the identical
+      projection-to-step-state-record edge is already human_confirmed on
+      budget-status, production-time and allocations with the same reasoning.
+      The three flagged contradictions are benign - reads_from is one-to-many."
+  - itemId: node:endpoint-item-economics-task-budget-signals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Verified against routers/api_v1/item_economics.py:335-346. GET
+      /tasks/budget-signals, require_roles([ADMIN, MANAGER]), repeatable
+      task_ids via Query(...), delegates through _run to
+      get_task_budget_signals, and is declared immediately after the fixed
+      budget-allocations route which ends at l.331. Every clause holds. Noting
+      that this evidence entry carries startLine/endLine alongside its symbol;
+      the span is currently accurate and I have not stripped it.
+  - itemId: edge:endpoint-item-economics-task-budget-signals--accepts-->projection-item-economics-task-budget-signals
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at item_economics.py:341-346. Anchored on the route
+      handler, which is the edge's source, not on the service it calls - the
+      correct shape for an accepts edge and the same as every promoted sibling.
+  - itemId: edge:endpoint-item-economics-task-budget-signals--governed_by-->decision-money-audience-admin-manager-only
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Confirmed at item_economics.py:337 - require_roles([ADMIN,
+      MANAGER]); WORKER and SELLER are not admitted. The payload genuinely
+      carries money: serialize_budget_signal publishes
+      projected_over_cost_minor, currency and
+      cost_per_worker_minute_ten_thousandths (division_serializers.py:95-108),
+      so the money-audience decision does govern this route. The route is itself
+      the enforcement point, so the anchor is the thing."
+  - itemId: node:projection-item-economics-remaining-production-pressure
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Re-derived from
+      domain/item_economics/remaining_production_pressure.py.
+      compute_remaining_pressure (l.46) classifies rows through
+      _is_excluded/_is_open/_is_consuming (l.30-38) and allocates shares via the
+      allocator's _largest_remainder, imported from budget_division at l.11.
+      Pure function over a division mapping, no I/O. Evidence holds.
+  - itemId: edge:projection-item-economics-task-production-time--depends_on-->projection-item-economics-remaining-production-pressure
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at get_task_production_time.py:20 (import) and l.147 -
+      compute_remaining_pressure is called once on the single division result.
+      Anchored on the depending projection, which is the edge's source.
+  - itemId: edge:projection-item-economics-task-budget-allocations--depends_on-->projection-item-economics-remaining-production-pressure
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: Confirmed at get_task_budget_allocations.py:25 (import) and l.308 -
+      compute_remaining_pressure called per task on that task's division result.
+      Anchored on the depending projection.
+  - itemId: edge:source-file-item-economics-budget-division--implements-->projection-item-economics-task-budget-signals
+    decision: investigate
+    rationale: "The CLAIM is true (confirmed at get_task_budget_signals.py:365) but
+      the EVIDENCE is anchored on the caller: path get_task_budget_signals.py,
+      symbol get_task_budget_signals, summary 'The service CALLS
+      divide_production_budget...'. That is the is/calls confusion the policy
+      names, and it deviates from both human_confirmed siblings of this
+      relationship, which anchor on budget_division.py:divide_production_budget
+      in the 'supplies' voice. Not promoting a mis-anchored item - impact,
+      context and staleness would compute from the consumer file. Anchors cannot
+      fix it alone since the summary is caller-shaped. Remedy: reject and
+      re-record on budget_division.py:divide_production_budget."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.258
+timestamp: 2026-09-02T18:26:14.337Z
+graphRevisionBefore: cda1ba794dccb5e233493ec62f42318b8db1d700bd334238b413d2fe26a7c668
+graphRevisionAfter: 09e1eada9084248629ac639a3db225eb4792406501c7f29a4eb4b426fa37efdb
+evidenceSummary: 17 evidence entries across 7 files; no drift detected
+humanInstruction: "Owner authorized human-confirming the graph. 15 pending items
+  promoted after re-deriving each claim from source: bootstrap pause-reason
+  seeding (3), task budget signals projection and its edges (6), the
+  budget-signals endpoint with its accepts and money-audience governed_by (3),
+  and remaining production pressure with its two consumer depends_on edges (3).
+  One item held at investigate: the budget-division implements budget-signals
+  edge carries a true claim on caller-anchored evidence, deviating from its two
+  human_confirmed siblings; it needs reject-and-re-record on
+  budget_division.py:divide_production_budget rather than promotion."
+reviewTokenCorrelation: 60b5d55562f8

@@ -1,0 +1,108 @@
+changeId: 2026-09-02T18-19-10-836Z--286d56
+operations:
+  - itemId: node:projection-item-economics-task-budget-status
+    kind: edit
+    before:
+      description: Current task budget read model. It resolves the current committed
+        evaluation, item binding/status, and the durable result boundary. Its
+        worked-seconds basis is each non-deleted task step's settled working
+        seconds plus the concurrency-averaged share of any open WORKING
+        interval, resolved once per request through the shared live
+        worked-seconds loader and persisted nowhere; the worker serializer omits
+        monetary fields.
+    after:
+      description: Current task budget read model. It resolves the current committed
+        evaluation, item binding/status, and the durable result boundary. Its
+        worked-seconds basis is each non-deleted task step's settled working
+        seconds plus the concurrency-averaged share of any open WORKING
+        interval, resolved once per request through the shared live
+        worked-seconds loader and persisted nowhere; the worker serializer omits
+        monetary fields. It also resolves the derived typical filter spec's
+        category ids to workspace-scoped display names and carries them on the
+        read model as provenance for the surfaces that compose it, issuing one
+        statement when the spec narrows on category and none at all when it does
+        not. An id that no longer resolves is simply absent from that map rather
+        than raising — the filter is provenance, and a lookup failure must not
+        cost the caller its typicals — so the served filter keeps every id in
+        order and publishes a null name for the one it could not resolve. The
+        names are carried, never persisted.
+    rationale: "Record the typical filter category-name resolution shipped
+      2026-09-02: this read model resolves the derived filter spec's category
+      ids to workspace-scoped display names in one conditional statement, omits
+      unresolvable ids, and carries the names on the read model as provenance."
+  - itemId: node:projection-item-economics-task-price-scenario
+    kind: edit
+    before:
+      description: "Manager-only, task-scoped read model that composes
+        workspace-scoped task/item binding, the saved valuation and byline, live
+        item-economics configuration, an item-aware task typical time - drawn
+        from each participating section's comparable history through the shared
+        typical-times engine, resolved by the shared reconciliation with a
+        zero-duration price terminal, and windowed by the injected request clock
+        so two reads of one task agree - and the pure price-scenario model into
+        break-even anchors and a slider domain. The derived spec carries the
+        PRIMARY item's properties_signature and facet rungs when present, so the
+        typical resolves down the shared ladder: the most specific
+        item_properties_narrowed tier (same category AND same signature), then
+        owner-declared facet rungs (partial property matches, upholstery first),
+        then category-narrowed, then section-wide. Its published typical total
+        is quantity-projected: the business fallback runs in per-unit space and
+        each participating section's per-unit typical is scaled by the current
+        item's quantity (clamped to at least one) before the shared per-section
+        half-even rounding, with total_unit_seconds and quantity_applied
+        disclosed beside total_seconds, so break-even and the slider domain
+        price the whole order. Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes. It composes task budget
+        status and so inherits that read's worked-time dependency transitively;
+        it publishes no live worked-time field of its own and reads no open
+        interval record directly."
+    after:
+      description: "Manager-only, task-scoped read model that composes
+        workspace-scoped task/item binding, the saved valuation and byline, live
+        item-economics configuration, an item-aware task typical time - drawn
+        from each participating section's comparable history through the shared
+        typical-times engine, resolved by the shared reconciliation with a
+        zero-duration price terminal, and windowed by the injected request clock
+        so two reads of one task agree - and the pure price-scenario model into
+        break-even anchors and a slider domain. The derived spec carries the
+        PRIMARY item's properties_signature and facet rungs when present, so the
+        typical resolves down the shared ladder: the most specific
+        item_properties_narrowed tier (same category AND same signature), then
+        owner-declared facet rungs (partial property matches, upholstery first),
+        then category-narrowed, then section-wide. The served applied_filter
+        also names the categories it narrowed on, ids kept and name null for one
+        since deleted; those names arrive from the composed budget status and
+        are attached beside the typical block rather than threaded through the
+        typical computation, so the typical's own boundary is unchanged and the
+        name map is dropped before serving. Its published typical total is
+        quantity-projected: the business fallback runs in per-unit space and
+        each participating section's per-unit typical is scaled by the current
+        item's quantity (clamped to at least one) before the shared per-section
+        half-even rounding, with total_unit_seconds and quantity_applied
+        disclosed beside total_seconds, so break-even and the slider domain
+        price the whole order. Non-bound bindings govern the payload by nulling
+        valuation/model/anchor/domain structure while keeping the step-derived
+        typical; the projection performs no writes. It composes task budget
+        status and so inherits that read's worked-time dependency transitively;
+        it publishes no live worked-time field of its own and reads no open
+        interval record directly."
+    rationale: "Amend the typical disclosure: the served applied_filter now names
+      its narrowed categories, with the names arriving from the composed budget
+      status and attached beside the typical block rather than threaded through
+      the typical computation, so _typical_block's boundary is unchanged."
+retiredItemIds: []
+authorizerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.258
+timestamp: 2026-09-02T18:19:10.836Z
+graphRevisionBefore: e3f758673d6921b09f43ee039ca64dfcf6065ca301dfae404f02d9cd85ea974e
+graphRevisionAfter: b901946536a91d3a9067a8e3cfccaaa21fdeca0bef93079ddb5f0cfdf153906e
+humanInstruction: "Typical filter category names shipped 2026-09-02:
+  `applied_filter` now names the categories it narrowed on (`item_categories`,
+  ids retained, name nullable for a deleted category) on production-time,
+  budget-allocations and price-scenario; task budget status resolves those names
+  in one conditional workspace-scoped statement and carries them on the read
+  model. Recording the delta on the four projection nodes it touched."
+changeTokenCorrelation: 63cdeb45db28
