@@ -80,7 +80,9 @@ def serialize_budget_allocation(row: dict) -> dict:
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(
-            row.get("typical_resolution"), row.get("item_category_names")
+            row.get("typical_resolution"),
+            row.get("item_category_names"),
+            row.get("item_properties"),
         ),
         "projection_quantity": row.get("projection_quantity"),
         "steps": [serialize_budget_step(step) for step in row["steps"]],
@@ -119,6 +121,7 @@ def _enum_value(value: object) -> object:
 def serialize_filter_spec(
     spec: TypicalFilterSpec | None,
     category_names: Mapping[str, str] | None = None,
+    item_properties: Mapping[str, object] | None = None,
 ) -> dict | None:
     """Publish the population the typicals were measured over.
 
@@ -127,6 +130,13 @@ def serialize_filter_spec(
     the figures were compared against rather than shown an opaque id. A
     category whose name could not be resolved keeps its id and carries a null
     name, so the entry count always matches the id list.
+
+    ``properties`` is the same idea applied to ``properties_signature``. The
+    signature is an opaque hash, so a surface could say the full specification
+    matched but never which specification — an item narrowed on wood type and
+    upholstery looked identical to one narrowed on upholstery alone. It rides
+    only beside the signature it explains: without one, no properties took part
+    in the match and publishing them would imply they had.
     """
     if spec is None:
         return None
@@ -146,6 +156,8 @@ def serialize_filter_spec(
             payload[name] = value
     if spec.properties_facets:
         payload["properties_facets"] = [facet.match_values() for facet in spec.properties_facets]
+    if spec.properties_signature is not None and item_properties:
+        payload["properties"] = dict(item_properties)
     if spec.item_category_ids:
         names = category_names or {}
         payload["item_categories"] = [
@@ -158,6 +170,7 @@ def serialize_filter_spec(
 def serialize_typical_resolution(
     selection: TaskTypicalSelection | None,
     category_names: Mapping[str, str] | None = None,
+    item_properties: Mapping[str, object] | None = None,
 ) -> dict:
     counts = {
         "item_properties_narrowed": 0,
@@ -175,7 +188,9 @@ def serialize_typical_resolution(
             "task_typical_basis": selection.task_typical_basis,
             "reconciliation_method": selection.reconciliation_method,
             "comparability_profile": selection.comparability_profile,
-            "applied_filter": serialize_filter_spec(selection.applied_filter, category_names),
+            "applied_filter": serialize_filter_spec(
+                selection.applied_filter, category_names, item_properties
+            ),
             "facet": selection.facet,
             "participating_section_count": len(selection.participating_section_ids),
             "sections_by_basis": counts,
@@ -278,7 +293,9 @@ def serialize_task_production_time(row: dict, *, include_monetary: bool = False)
         "pressure_ratio": _fraction_decimal(row.get("pressure_ratio")),
         "pressure_method": row.get("pressure_method", PRESSURE_METHOD),
         "typical_resolution": serialize_typical_resolution(
-            row.get("typical_resolution"), row.get("item_category_names")
+            row.get("typical_resolution"),
+            row.get("item_category_names"),
+            row.get("item_properties"),
         ),
         "projection_quantity": row.get("projection_quantity"),
         "budget": budget,

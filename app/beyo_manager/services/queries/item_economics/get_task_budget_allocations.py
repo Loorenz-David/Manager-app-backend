@@ -143,6 +143,20 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
         )
         for task in tasks
     }
+    # The properties snapshot behind each spec's signature, so the served
+    # filter can say WHICH specification matched. Read off the items already
+    # loaded for this page — no statement at all, unlike the category names.
+    # Gated on the signature: without one, no properties took part in the match.
+    properties_by_task: dict[str, dict] = {}
+    for task in tasks:
+        spec = spec_by_task[task.client_id]
+        if spec.properties_signature is None or task.client_id not in primary_by_task:
+            continue
+        item = item_by_id.get(primary_by_task[task.client_id].item_id)
+        properties = getattr(item, "properties", None)
+        if isinstance(properties, dict):
+            properties_by_task[task.client_id] = dict(properties)
+
     # One statement for every task in the page: the specs are per task but the
     # categories behind them repeat heavily, and the names exist only so the
     # served `applied_filter` can say what the typicals were measured against.
@@ -340,6 +354,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 "pressure_method": PRESSURE_METHOD,
                 "typical_resolution": selection,
                 "item_category_names": category_names,
+                "item_properties": properties_by_task.get(task.client_id),
                 "projection_quantity": projection_quantity,
                 "steps": division["steps"],
             }

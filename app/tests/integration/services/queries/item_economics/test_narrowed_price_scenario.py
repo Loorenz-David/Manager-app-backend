@@ -432,6 +432,89 @@ async def test_applied_filter_names_the_categories_when_names_are_served():
     }
 
 
+def _filter_with(spec, item_properties):
+    return serialize_task_production_time(
+        {
+            "task_id": "task",
+            "status": "not_evaluated",
+            "item_binding": "bound",
+            "division": {"sections": []},
+            "typicals": {},
+            "typical_resolution": TaskTypicalSelection(
+                "item_properties_narrowed_uniform",
+                "uniform_basis_v1",
+                "primary_item_category_properties_v2",
+                spec,
+                frozenset(),
+                {},
+            ),
+            "item_properties": item_properties,
+        }
+    )["typical_resolution"]["applied_filter"]
+
+
+@pytest.mark.integration
+async def test_applied_filter_names_the_specification_it_matched_on():
+    """The signature says a full profile matched; the properties say which one.
+
+    Without this a surface can only report the rungs on the facet ladder, so an
+    item narrowed on wood type AND upholstery is indistinguishable from one
+    narrowed on upholstery alone — the reader never learns that wood type is
+    doing most of the narrowing.
+    """
+
+    applied = _filter_with(
+        TypicalFilterSpec(
+            item_category_ids=frozenset({"icat_chair"}),
+            properties_signature="sig-walnut-ud",
+        ),
+        {"wood_type": "Walnut", "upholstery": "Up & Down"},
+    )
+
+    assert applied["properties"] == {
+        "wood_type": "Walnut",
+        "upholstery": "Up & Down",
+    }
+    # Additive: the signature stays the machine-readable key.
+    assert applied["properties_signature"] == "sig-walnut-ud"
+
+
+@pytest.mark.integration
+async def test_properties_ride_only_beside_the_signature_that_explains_them():
+    """A spec with no signature publishes no properties.
+
+    Without a signature the properties never entered the match, so serving them
+    beside the filter would invite a reader to believe they had.
+    """
+
+    applied = _filter_with(
+        TypicalFilterSpec(item_category_ids=frozenset({"icat_chair"})),
+        {"wood_type": "Walnut"},
+    )
+
+    assert "properties" not in applied
+
+
+@pytest.mark.integration
+async def test_a_signature_without_a_served_snapshot_omits_the_key():
+    """No properties supplied is an absent key, never an empty object.
+
+    An empty object would read as "matched on nothing in particular", which is
+    a different claim from "this surface was not told".
+    """
+
+    applied = _filter_with(
+        TypicalFilterSpec(
+            item_category_ids=frozenset({"icat_chair"}),
+            properties_signature="sig-walnut-ud",
+        ),
+        None,
+    )
+
+    assert "properties" not in applied
+    assert applied["properties_signature"] == "sig-walnut-ud"
+
+
 @pytest.mark.integration
 async def test_c7_typical_block_delegates_statistics_and_has_no_private_terms(monkeypatch):
     calls = []

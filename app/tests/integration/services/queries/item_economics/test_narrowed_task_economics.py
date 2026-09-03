@@ -1003,6 +1003,10 @@ async def test_upholstery_facet_rescues_a_new_wood_profile_on_all_surfaces(db_se
         assert resolution["applied_filter"] == {
             "item_category_ids": [fixture["category_id"]],
             "properties_signature": "sig-mahogany-ud",
+            # The signature names WHICH specification, not merely that one
+            # matched: wood type took part in the match and a reader who is
+            # shown only the upholstery facet cannot see that.
+            "properties": {"upholstery": "Up & Down", "wood_type": "Mahogany"},
             "properties_facets": [{"upholstery": "Up & Down"}],
             "item_categories": [
                 {"client_id": fixture["category_id"], "name": fixture["category"].name}

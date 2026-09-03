@@ -183,6 +183,7 @@ async def get_task_production_time(ctx: ServiceContext) -> dict:
             "typicals": typical_details,
             "typical_resolution": selection,
             "item_category_names": status.item_category_names,
+            "item_properties": status.item_properties,
             "projection_quantity": projection_quantity,
         },
         include_monetary=include_monetary_step_fields(ctx.role_name),

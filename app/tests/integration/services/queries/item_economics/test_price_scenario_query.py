@@ -573,6 +573,7 @@ async def _run_scenario(
             item_binding=binding,
             typical_filter_spec=None,
             item_category_names={},
+            item_properties=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -974,6 +975,7 @@ async def test_phase3_c1_saved_uses_current_valuation_in_a_supersession_chain(
             item_binding="bound",
             typical_filter_spec=None,
             item_category_names={},
+            item_properties=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -1118,6 +1120,7 @@ async def test_phase3_g2_soft_deleted_valuation_is_hidden_from_the_price_screen(
             item_binding="bound",
             typical_filter_spec=None,
             item_category_names={},
+            item_properties=None,
         )
 
     async def fake_task_and_item(_ctx):
@@ -1279,6 +1282,7 @@ async def test_phase5_c2_saved_uses_the_requested_items_own_valuation(
             item_binding="bound",
             typical_filter_spec=None,
             item_category_names={},
+            item_properties=None,
         )
 
     async def fake_task_and_item(_ctx):

@@ -62,6 +62,12 @@ class TaskBudgetStatus:
     # resolve. Empty whenever the spec narrows on nothing, and a deleted
     # category simply yields no entry rather than failing the read.
     item_category_names: Mapping[str, str] = field(default_factory=dict)
+    # The exact properties snapshot the spec's signature hashes, so a reader
+    # can be told WHICH specification was matched rather than that one was.
+    # Read off the primary item already loaded here — no extra statement. None
+    # whenever the spec carries no signature, because then no properties took
+    # part in the match and publishing them would imply they had.
+    item_properties: Mapping[str, object] | None = None
 
 
 async def _load_task_and_item(ctx: ServiceContext) -> tuple[Task, Item | None]:
@@ -115,6 +121,21 @@ async def _load_item_category_names(
     return {client_id: name for client_id, name in rows}
 
 
+def _item_properties_for(
+    spec: TypicalFilterSpec | None, item: Item | None
+) -> dict[str, object] | None:
+    """The properties snapshot behind the spec's signature, or None.
+
+    Gated on the signature rather than on the item having properties: without
+    a signature the properties never entered the match, and serving them would
+    invite a reader to think they had.
+    """
+    if spec is None or spec.properties_signature is None or item is None:
+        return None
+    properties = getattr(item, "properties", None)
+    return dict(properties) if isinstance(properties, dict) else None
+
+
 def _empty_status(
     status: EconomicsStatusEnum,
     *,
@@ -123,6 +144,7 @@ def _empty_status(
     typical_filter_spec: TypicalFilterSpec | None,
     primary_item_quantity: int | None = None,
     item_category_names: Mapping[str, str] | None = None,
+    item_properties: Mapping[str, object] | None = None,
 ) -> TaskBudgetStatus:
     return TaskBudgetStatus(
         status=status,
@@ -142,6 +164,7 @@ def _empty_status(
         typical_filter_spec=typical_filter_spec,
         primary_item_quantity=primary_item_quantity,
         item_category_names=dict(item_category_names or {}),
+        item_properties=item_properties,
     )
 
 
@@ -154,6 +177,7 @@ async def get_task_budget_status(
     typical_filter_spec = None if item is None else derive_spec_from_primary_item(item)
     primary_item_quantity = None if item is None else item.quantity
     item_category_names = await _load_item_category_names(ctx, typical_filter_spec)
+    item_properties = _item_properties_for(typical_filter_spec, item)
     evaluation = await ctx.session.scalar(
         select(ItemCostEvaluation).where(
             ItemCostEvaluation.workspace_id == ctx.workspace_id,
@@ -173,6 +197,7 @@ async def get_task_budget_status(
                 typical_filter_spec=typical_filter_spec,
                 primary_item_quantity=primary_item_quantity,
                 item_category_names=item_category_names,
+                item_properties=item_properties,
             )
         selection, terms = await _load_preview_inputs(ctx, item, now=ctx.now)
         valuation = await ctx.session.scalar(
@@ -191,6 +216,7 @@ async def get_task_budget_status(
             typical_filter_spec=typical_filter_spec,
             primary_item_quantity=primary_item_quantity,
             item_category_names=item_category_names,
+            item_properties=item_properties,
         )
 
     return await _build_evaluated_status(
@@ -201,6 +227,7 @@ async def get_task_budget_status(
         binding,
         typical_filter_spec=typical_filter_spec,
         item_category_names=item_category_names,
+        item_properties=item_properties,
         live_seconds=live_seconds,
     )
 
@@ -214,6 +241,7 @@ async def _build_evaluated_status(
     *,
     typical_filter_spec: TypicalFilterSpec | None,
     item_category_names: Mapping[str, str] | None = None,
+    item_properties: Mapping[str, object] | None = None,
     live_seconds: Mapping[str, int] | None = None,
 ) -> TaskBudgetStatus:
     """Build the shared evaluated read model after a caller's own filter."""
@@ -266,4 +294,5 @@ async def _build_evaluated_status(
         typical_filter_spec=typical_filter_spec,
         primary_item_quantity=None if item is None else item.quantity,
         item_category_names=dict(item_category_names or {}),
+        item_properties=item_properties,
     )
