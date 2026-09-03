@@ -13,6 +13,9 @@ from beyo_manager.models.tables.working_sections.working_section_supported_issue
     WorkingSectionSupportedIssueType,
 )
 from beyo_manager.services.commands.working_sections._check_dependency_cycle import check_for_dependency_cycle
+from beyo_manager.services.commands.working_sections._sync_step_batch_flag import (
+    sync_step_batch_flag_for_section_in_session,
+)
 from beyo_manager.services.commands.working_sections._sync_step_dependencies import (
     _sync_step_dependencies_for_section_in_session,
 )
@@ -62,6 +65,15 @@ async def edit_working_section(ctx: ServiceContext) -> dict:
 
         if "allows_batch_working" in request.model_fields_set:
             section.allows_batch_working = request.allows_batch_working
+            # The section column only seeds new steps; the backend enforces the
+            # per-step snapshot. Without this the section and its open steps
+            # disagree for good — see `_sync_step_batch_flag`.
+            await sync_step_batch_flag_for_section_in_session(
+                session=ctx.session,
+                workspace_id=ctx.workspace_id,
+                section_id=request.client_id,
+                allows_batch_working=section.allows_batch_working,
+            )
 
         if "allows_shopify_product_modifications" in request.model_fields_set:
             section.allows_shopify_product_modifications = request.allows_shopify_product_modifications

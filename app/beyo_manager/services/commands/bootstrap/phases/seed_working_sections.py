@@ -10,6 +10,9 @@ from beyo_manager.models.tables.working_sections.working_section_membership impo
 from beyo_manager.models.tables.working_sections.working_section_supported_issue_type import (
     WorkingSectionSupportedIssueType,
 )
+from beyo_manager.services.commands.working_sections._sync_step_batch_flag import (
+    sync_step_batch_flag_for_section_in_session,
+)
 
 # Toggle creation per working section.
 # Set any section to False to skip creating it during bootstrap.
@@ -230,6 +233,16 @@ async def seed_working_sections(session: AsyncSession, workspace_id: str) -> dic
             existing.deleted_at = None
             existing.deleted_by_id = None
             await session.flush()
+            # `_SECTION_BATCH_MAP` is the toggle in practice, so this is the path that
+            # strands steps: flipping a name here rewrites the section while its already
+            # created steps keep the old snapshot, and the snapshot is what the backend
+            # enforces. Re-stamping the open ones keeps the re-seed self-healing.
+            await sync_step_batch_flag_for_section_in_session(
+                session=session,
+                workspace_id=workspace_id,
+                section_id=existing.client_id,
+                allows_batch_working=existing.allows_batch_working,
+            )
             section_ids[name] = existing.client_id
             continue
 
