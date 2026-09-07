@@ -82,11 +82,14 @@ _PAUSE_REASONS = (
     ("pause_moving_furniture", "Moving furniture", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/moving-furniture.webp"),
     ("pause_searching_upholstery", "Searching upholstery", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/searching-upholstery.webp"),
     ("pause_workspace_cleaning", "Workspace cleaning", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/workspace-cleaning.webp"),
+    ("pause_material_tools_search", "Material/tools search", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/material-tools-search.webp"),
+    ("pause_in_out_store", "In/out store", PauseTypeEnum.PERSONAL, False, "https://test-bootstrap-local.s3.eu-north-1.amazonaws.com/images/ws_workspace_test/pause_reasons/in-out-store.webp"),
 )
 
 # These associations are bootstrap-managed along with the rows above. An empty tuple means the
 # seeded reason is unrestricted by worker, so ``pause_workspace_cleaning`` is available to everyone.
 # ``pause_moving_furniture`` intentionally has two workers and remains one shared reason.
+# ``pause_material_tools_search`` and ``pause_in_out_store`` are personal to Nazar.
 _PAUSE_REASON_WORKER_LINKS: dict[str, tuple[str, ...]] = {
     "pause_price_tags": ("Vitalii",),
     "pause_descriptions": ("Vitalii",),
@@ -94,6 +97,8 @@ _PAUSE_REASON_WORKER_LINKS: dict[str, tuple[str, ...]] = {
     "pause_moving_furniture": ("Vitalii", "Nazar"),
     "pause_searching_upholstery": ("Roman",),
     "pause_workspace_cleaning": (),
+    "pause_material_tools_search": ("Nazar",),
+    "pause_in_out_store": ("Nazar",),
 }
 
 
