@@ -9,24 +9,32 @@ from beyo_manager.services.infra.nevotex.constants import (
 logger = logging.getLogger(__name__)
 
 
+def _decode_if_encoded_path(raw: str) -> str:
+    # Nevotex serves image paths percent-encoded whole ("%2fFiles%2f..."), which must be
+    # decoded. A value that is already a usable URL must not be: decoding it would corrupt
+    # legitimately encoded query values such as getimage.ashx?image=%2FFiles%2F...
+    if raw.startswith(("http://", "https://", "/")):
+        return raw
+    return unquote(raw)
+
+
+def _absolutize(raw: str) -> str:
+    value = _decode_if_encoded_path(raw.strip())
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    if value.startswith("/"):
+        return f"{_NEVOTEX_BASE_URL}{value}"
+    return f"{_NEVOTEX_BASE_URL}/{value}"
+
+
 def _absolutize_image(raw_image: str) -> str:
-    decoded = unquote(raw_image.strip())
-    if decoded.startswith("http://") or decoded.startswith("https://"):
-        return decoded
-    if decoded.startswith("/"):
-        return f"{_NEVOTEX_BASE_URL}{decoded}"
-    return f"{_NEVOTEX_BASE_URL}/{decoded}"
+    return _absolutize(raw_image)
 
 
 def _absolutize_external_url(raw_url: str) -> str:
-    decoded = unquote(raw_url.strip())
-    if not decoded:
+    if not raw_url.strip():
         return ""
-    if decoded.startswith("http://") or decoded.startswith("https://"):
-        return decoded
-    if decoded.startswith("/"):
-        return f"{_NEVOTEX_BASE_URL}{decoded}"
-    return f"{_NEVOTEX_BASE_URL}/{decoded}"
+    return _absolutize(raw_url)
 
 
 def _resolve_external_url(raw: dict) -> str | None:

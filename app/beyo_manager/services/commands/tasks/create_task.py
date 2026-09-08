@@ -265,12 +265,18 @@ async def create_task(ctx: ServiceContext) -> dict:
                 if resolved_item is None:
                     raise NotFound("Item not found.")
 
-                # Only backfill a SKU for an item find_or_create_item just created, and only
-                # when the caller didn't supply one — never touch the sku of a pre-existing
-                # item matched by article_number/sku. A task type with no configured template
-                # (e.g. anything but PRE_ORDER today) silently leaves sku as None, same as
-                # before this existed — this is an automatic helper, not a required field.
-                if item_result["was_created"] and resolved_item.sku is None:
+                # Backfill a SKU whenever the item ends up without one — whether
+                # find_or_create_item just created it or matched a pre-existing item by
+                # article_number/sku that never got a sku of its own. An item matched by
+                # article_number is exactly the case the pre-order flow hits: the caller has
+                # the supplier's article number but no internal sku, and the Shopify variant
+                # still needs one. A sku the caller supplied, or one the matched item already
+                # carries, is never overwritten — find_or_create_item has already copied the
+                # request's sku onto the matched row by the time we look, so `sku is None`
+                # here means nobody has claimed an identity for this item yet. A task type
+                # with no configured template (e.g. anything but PRE_ORDER today) silently
+                # leaves sku as None — this is an automatic helper, not a required field.
+                if resolved_item.sku is None:
                     try:
                         resolved_sku, sku_template_id, reserved_scalar = await allocate_sku_scalar_in_session(
                             ctx.session,

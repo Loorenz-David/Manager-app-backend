@@ -5,13 +5,14 @@ import httpx
 
 from beyo_manager.errors.external_service import ExternalServiceError
 from beyo_manager.services.infra.nevotex.constants import NEVOTEX_SEARCH_URL
+from beyo_manager.services.infra.nevotex.parser import parse_nevotex_search_results
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_SECONDS = 10.0
 
 _HEADERS = {
-    "Accept": "application/json, text/plain, */*",
+    "Accept": "text/html, */*",
     "Accept-Language": "sv-SE,sv;q=0.9,en;q=0.8",
     "Referer": "https://nevotex.se/produkter/bekladnadsmaterial/mobeltyger/alla-mobeltyger",
     "User-Agent": (
@@ -23,15 +24,10 @@ _HEADERS = {
 
 async def fetch_nevotex_raw_products(q: str, limit: int) -> list[dict[str, Any]]:
     params = {
-        "ID": "9403",
-        "instasearch": "1",
-        "feed": "true",
-        "pagesize": str(limit),
-        "Search": q,
-        "feedType": "productsOnly",
+        "defaultpdpId": "null",
+        "IsVariant": "false",
         "redirect": "false",
-        "DoNotShowVariantsAsSingleProducts": "False",
-        "Template": "SearchProductsTemplate",
+        "eq": q,
     }
 
     try:
@@ -50,23 +46,11 @@ async def fetch_nevotex_raw_products(q: str, limit: int) -> list[dict[str, Any]]
             f"Nevotex search returned unexpected status {response.status_code}."
         )
 
-    try:
-        containers = response.json()
-    except ValueError as exc:
-        logger.warning("Nevotex returned invalid JSON for q=%r", q)
-        raise ExternalServiceError("Nevotex search returned a non-JSON response.") from exc
-
-    if not isinstance(containers, list):
-        logger.warning("Nevotex response is not a list for q=%r", q)
+    html = response.text
+    # A search with no hits still renders the results fragment, so "no product rows"
+    # is a valid empty result. Only a response that is not markup at all is a defect.
+    if "<" not in html:
+        logger.warning("Nevotex returned a non-HTML response for q=%r", q)
         raise ExternalServiceError("Nevotex search returned an unexpected response shape.")
 
-    raw_products: list[dict[str, Any]] = []
-    for container in containers:
-        if not isinstance(container, dict):
-            continue
-        products = container.get("Product")
-        if not isinstance(products, list):
-            continue
-        raw_products.extend(product for product in products if isinstance(product, dict))
-
-    return raw_products
+    return parse_nevotex_search_results(html, limit=limit)

@@ -88,6 +88,53 @@ def test_normalize_nevotex_candidates_empty_list() -> None:
 
 
 @pytest.mark.unit
+def test_normalize_nevotex_candidate_from_swift_search_row() -> None:
+    raw = {
+        "productId": "1008301",
+        "variantId": "VARGRP249_1008336",
+        "number": "1008336",
+        "name": "Tyg Eros 36 Light brown",
+        "image": (
+            "/admin/public/getimage.ashx"
+            "?image=%2FFiles%2FImages%2Fproduktbilder%2F1008336.jpg"
+            "&width=45&height=36&format=webp&Crop=5&fillcanvas=true&Compression=75"
+        ),
+        "url": "/produkter/bekladnadsmaterial/mobeltyger/alla-mobeltyger/eros/1008336",
+    }
+
+    result = normalize_nevotex_candidate(raw)
+
+    assert result is not None
+    assert result["name"] == "Tyg Eros 36 Light brown"
+    assert result["code"] == "1008336"
+    assert result["image_url"] == (
+        "https://nevotex.se/admin/public/getimage.ashx"
+        "?image=%2FFiles%2FImages%2Fproduktbilder%2F1008336.jpg"
+        "&width=45&height=36&format=webp&Crop=5&fillcanvas=true&Compression=75"
+    )
+    assert result["external_url"] == (
+        "https://nevotex.se/produkter/bekladnadsmaterial/mobeltyger/alla-mobeltyger/eros/1008336"
+    )
+    assert result["origin"] == "nevotex"
+
+
+@pytest.mark.unit
+def test_normalize_nevotex_candidate_keeps_encoded_image_query_intact() -> None:
+    result = normalize_nevotex_candidate(
+        {
+            "name": "Tyg X",
+            "number": "12345",
+            "image": "/admin/public/getimage.ashx?image=%2FFiles%2F12345.jpg&width=45",
+        }
+    )
+
+    assert result is not None
+    assert result["image_url"] == (
+        "https://nevotex.se/admin/public/getimage.ashx?image=%2FFiles%2F12345.jpg&width=45"
+    )
+
+
+@pytest.mark.unit
 def test_normalize_nevotex_candidate_skips_non_string_required_fields() -> None:
     assert normalize_nevotex_candidate({"name": 123, "number": "1000402", "image": "%2f1.jpg"}) is None
     assert normalize_nevotex_candidate({"name": "Tyg X", "number": 456, "image": "%2f1.jpg"}) is None

@@ -240,3 +240,96 @@ async def test_create_task_errors_when_no_identifier_and_no_template(db_session,
         select(func.count()).select_from(Item).where(Item.workspace_id == workspace.client_id)
     )
     assert item_count == 0
+
+
+@pytest.mark.integration
+async def test_create_task_backfills_sku_on_existing_item_match_without_sku(db_session, monkeypatch):
+    """A pre-order whose article_number matches an item that never got a sku still gets one.
+
+    The item is reused — not duplicated — and the template's counter advances exactly once,
+    which is what separates this from the create path.
+    """
+    workspace, user = await _seed_workspace_and_user(db_session)
+    await _disable_event_dispatch(monkeypatch)
+    await create_sku_template(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={"task_type": "pre_order", "prefix": "PRE"},
+        )
+    )
+    existing_item = Item(
+        workspace_id=workspace.client_id,
+        article_number="ART-NO-SKU",
+        sku=None,
+        created_by_id=user.client_id,
+    )
+    db_session.add(existing_item)
+    await db_session.flush()
+
+    result = await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "pre_order",
+                "title": "Pre-order re-using a sku-less item",
+                "item": {"article_number": "ART-NO-SKU"},
+            },
+        )
+    )
+
+    assert result["item_id"] == existing_item.client_id
+    assert result["item_sku"] == "PRE-1"
+    item = await db_session.get(Item, existing_item.client_id)
+    assert item.sku == "PRE-1"
+    assert item.article_number == "ART-NO-SKU"
+    item_count = await db_session.scalar(
+        select(func.count()).select_from(Item).where(Item.workspace_id == workspace.client_id)
+    )
+    assert item_count == 1
+    template = await db_session.scalar(
+        select(SkuTemplate).where(SkuTemplate.workspace_id == workspace.client_id)
+    )
+    assert template.last_scalar == 1
+
+
+@pytest.mark.integration
+async def test_create_task_leaves_matched_sku_less_item_alone_without_a_template(db_session, monkeypatch):
+    """The backfill for a matched item is still template-driven: no template, no sku.
+
+    Without this the rule above could be reading as "any matched item gets a sku".
+    """
+    workspace, user = await _seed_workspace_and_user(db_session)
+    await _disable_event_dispatch(monkeypatch)
+    existing_item = Item(
+        workspace_id=workspace.client_id,
+        article_number="ART-NO-SKU-NO-TEMPLATE",
+        sku=None,
+        created_by_id=user.client_id,
+    )
+    db_session.add(existing_item)
+    await db_session.flush()
+
+    result = await create_task(
+        _ctx(
+            db_session,
+            workspace_id=workspace.client_id,
+            user_id=user.client_id,
+            role_name="manager",
+            incoming_data={
+                "task_type": "internal",
+                "title": "Internal task re-using a sku-less item",
+                "item": {"article_number": "ART-NO-SKU-NO-TEMPLATE"},
+            },
+        )
+    )
+
+    assert result["item_id"] == existing_item.client_id
+    assert result["item_sku"] is None
+    item = await db_session.get(Item, existing_item.client_id)
+    assert item.sku is None
