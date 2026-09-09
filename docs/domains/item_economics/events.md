@@ -73,8 +73,9 @@ Not an emission, but the other half of the picture: the result row is produced b
 **execution task**, not by a socket event.
 
 `TaskType.PROCESS_ITEM_COST_RESULT` is enqueued with `create_instant_task` inside the
-existing side-effect block of the transitions that end or advance an episode, routed to
-`queue:analytics`, and handled by
+existing side-effect block of the transitions that end or advance an episode — and inside
+the commit procedure, which moves the allowance the episode is measured against — routed
+to `queue:analytics`, and handled by
 `services/tasks/analytics/process_item_cost_result.py::handle_process_item_cost_result`.
 
 **Payload:** `{ "workspace_id": "ws_…", "task_id": "tsk_…" }` — a frozen dataclass, and

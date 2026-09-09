@@ -21,6 +21,7 @@ from beyo_manager.domain.item_economics.calculator import (
     calculate_term_amounts,
     calculate_variance_cost_minor,
     calculate_variance_worker_minutes,
+    reconstruct_allowed_worker_minutes,
     rederive,
     validate_currency_equality,
 )
@@ -237,6 +238,42 @@ def test_variance_triple_keeps_minutes_and_money_independent() -> None:
     assert calculate_variance_worker_minutes(allowed, actual) == Decimal("792.00")
     assert calculate_variance_cost_minor(100_000, consumed) == 79_597
     assert Decimal("792.00") * Decimal("100.5000") == Decimal("79596.000000")
+
+
+@pytest.mark.parametrize(
+    ("allowed", "actual"),
+    [
+        (Decimal("995.02"), Decimal("203.02")),
+        (Decimal("242.96"), Decimal("449.78")),  # the over-budget shape: variance < 0
+        (Decimal("403.20"), Decimal("449.78")),
+        (Decimal("0.00"), Decimal("0.00")),
+        (Decimal("100000.00"), Decimal("0.33")),
+    ],
+)
+def test_reconstruct_allowed_worker_minutes_inverts_the_variance_exactly(
+    allowed: Decimal, actual: Decimal
+) -> None:
+    variance = calculate_variance_worker_minutes(allowed, actual)
+    assert reconstruct_allowed_worker_minutes(actual, variance) == allowed
+
+
+def test_reconstruct_allowed_worker_minutes_recovers_the_observed_frozen_baseline() -> None:
+    """The stored row that drifted: 449.78 worked, -206.82 variance."""
+    assert reconstruct_allowed_worker_minutes(
+        Decimal("449.78"), Decimal("-206.82")
+    ) == Decimal("242.96")
+    assert calculate_percent_consumed(
+        reconstruct_allowed_worker_minutes(Decimal("449.78"), Decimal("-206.82")),
+        Decimal("449.78"),
+    ) == Decimal("185.13")
+
+
+@pytest.mark.parametrize("value", [1.0, 1, True, "1", None])
+def test_reconstruct_allowed_worker_minutes_rejects_non_decimal_operands(value: object) -> None:
+    with pytest.raises(TypeError):
+        reconstruct_allowed_worker_minutes(value, Decimal("1.00"))
+    with pytest.raises(TypeError):
+        reconstruct_allowed_worker_minutes(Decimal("1.00"), value)
 
 
 @pytest.mark.parametrize(
@@ -631,6 +668,7 @@ def test_public_surface_is_exactly_the_registered_calculator_api() -> None:
         "calculate_percent_consumed",
         "calculate_variance_worker_minutes",
         "calculate_variance_cost_minor",
+        "reconstruct_allowed_worker_minutes",
         "validate_currency_equality",
         "rederive",
     }
@@ -647,6 +685,7 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
         calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
         calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
         calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00")),
+        reconstruct_allowed_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
     )
     with localcontext() as ambient:
         ambient.rounding = ROUND_CEILING
@@ -660,5 +699,6 @@ def test_all_quantization_sites_ignore_ambient_rounding_and_precision() -> None:
             calculate_remaining_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
             calculate_variance_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
             calculate_percent_consumed(Decimal("0.01"), Decimal("100000.00")),
+            reconstruct_allowed_worker_minutes(Decimal("100000.00"), Decimal("0.33")),
         ) == baseline
     assert (getcontext().rounding, getcontext().prec) == original_context

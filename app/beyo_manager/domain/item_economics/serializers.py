@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
+from beyo_manager.domain.item_economics.calculator import (
+    calculate_percent_consumed,
+    reconstruct_allowed_worker_minutes,
+)
 from beyo_manager.domain.item_economics.division_serializers import serialize_typical_resolution
 
 
@@ -197,6 +200,13 @@ def _serialize_result(
     include_monetary: bool,
     percent_consumed: object | None = None,
 ) -> dict:
+    # NOTE: this block's `variance_worker_minutes` was taken against the allowance
+    # frozen in the result row, while the sibling `allowed_worker_minutes` is read
+    # live from the CURRENT committed evaluation — they are only equal until the
+    # evaluation is re-committed. The production-time surface publishes the frozen
+    # baseline as `final.allowed_worker_minutes_snapshot`; adding the same key here
+    # would restate the published budget-status handoff, so it is deliberately
+    # deferred to a handoff addendum rather than shipped silently.
     if not include_monetary:
         # This is deliberately an enumerated worker surface. Do not add a
         # monetary field here as a convenience; the worker contract is minutes
@@ -240,7 +250,10 @@ def serialize_task_budget_status(
         # The production-time serializer names this feed site: both freeze the
         # percentage from the stored result so the worker result block never ticks.
         frozen_percent_consumed = calculate_percent_consumed(
-            status.result.actual_worker_minutes + status.result.variance_worker_minutes,
+            reconstruct_allowed_worker_minutes(
+                status.result.actual_worker_minutes,
+                status.result.variance_worker_minutes,
+            ),
             status.result.actual_worker_minutes,
         )
     payload = {

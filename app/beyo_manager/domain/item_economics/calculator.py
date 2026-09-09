@@ -48,6 +48,7 @@ __all__ = [
     "calculate_percent_consumed",
     "calculate_variance_worker_minutes",
     "calculate_variance_cost_minor",
+    "reconstruct_allowed_worker_minutes",
     "validate_currency_equality",
     "rederive",
 ]
@@ -385,6 +386,26 @@ def calculate_variance_cost_minor(
     budget = _require_money(production_budget_minor, "production_budget_minor")
     consumed = _require_money(consumed_cost_minor, "consumed_cost_minor")
     return budget - consumed
+
+
+def reconstruct_allowed_worker_minutes(
+    actual_worker_minutes: Decimal,
+    variance_worker_minutes: Decimal,
+) -> Decimal:
+    """Recover the allowance a stored result was computed against.
+
+    ``calculate_variance_worker_minutes`` is ``allowed - actual`` over two
+    already-quantized operands, so this inverse is exact and no stored allowance
+    column is needed. Both frozen-percent feed sites run it, and production-time
+    additionally serves its output as ``final.allowed_worker_minutes_snapshot``,
+    so the baseline a reader is shown and the baseline the percentage was taken
+    against can never be two different numbers.
+    """
+    actual = _require_rate(actual_worker_minutes, "actual_worker_minutes")
+    variance = _require_rate(variance_worker_minutes, "variance_worker_minutes")
+    with localcontext() as context:
+        context.prec = 50
+        return actual + variance
 
 
 def validate_currency_equality(

@@ -130,10 +130,22 @@ worker handles.
 | 2 | Every reopen back to WORKING | `maybe_reopen_task_to_working` |
 | 3 | The three terminal transitions | `resolve_task`, `fail_task`, `cancel_task` |
 | 4 | Time that settles after a boundary | `handle_process_step_transition`, after the time rollup, **iff** the step's task is READY or terminal |
+| 5 | Every committed evaluation | `_commit_item_cost_evaluation_in_session`, **iff** the task is WORKING or READY — so the commit endpoint, the promotion endpoint and `create_task`'s auto-commit all inherit it |
 
-Point 4 is what keeps the row honest: a worker who closes a straggling step after the task
-was resolved changes the task's working seconds, and without a re-emit the stored result
-would disagree with a live recompute forever, silently.
+Point 4 is what keeps the row honest on the *actuals* side: a worker who closes a
+straggling step after the task was resolved changes the task's working seconds, and
+without a re-emit the stored result would disagree with a live recompute forever,
+silently.
+
+Point 5 is the same guarantee on the *allowance* side. A commit supersedes the evaluation
+every stored figure was computed against, so `variance_worker_minutes` — which is
+`allowed - actual` — is stale the moment it lands. A READY task need never reach another
+transition, so without this emit the drift is permanent. Its state gate is the
+intersection of the states a commit is admitted in (below, and in
+`commit_item_cost_evaluation._ADMITTED_STATES`) with the states the handler writes in: the
+other three commit-admitted states — PENDING, ASSIGNED, STALLED — are exactly the ones the
+handler refuses, so emitting there could only queue a guaranteed no-op. Projections emit
+nothing; they supersede nothing and no operational surface reads them.
 
 Redundant emissions are free — the handler recomputes and SETs, so running it twice with
 no change in between is a no-op on every compared column.
@@ -157,6 +169,36 @@ operator-re-emitted event cannot fabricate a result for an episode that never st
 The handler also returns without writing when the task is soft-deleted, or when there is
 **no current committed evaluation** — it writes and deletes nothing in that case, rather
 than storing zeros.
+
+### Which baseline is authoritative
+
+Two blocks on the read surfaces describe the same worked time: the live one
+(`budget` on production-time, the top level on budget-status) and the frozen one
+(`final`, or `result`). They answer different questions and neither supersedes the other.
+
+- **The live block is authoritative for the allowance.** It reads the current committed
+  evaluation at request time, so it is the only block that reflects a re-price.
+- **The frozen block is authoritative for what the episode's economics were at its last
+  boundary** — the actuals, and the allowance they were measured against. It is the
+  analytics record, and it is the only block that does not move under the reader.
+
+For a **terminal** task the two cannot disagree: commits are refused once a task is
+terminal (`ITEM_COST_TASK_TERMINAL`), and no further time accrues, so the last boundary's
+recompute is the final word. Display either; they are the same numbers.
+
+For a **non-terminal** task (`READY` above all) they can differ transiently, between a
+commit and its emitted recompute. A reader must never mix them — pairing the live
+`allowed_worker_minutes` with the frozen `variance_worker_minutes` produces an
+arithmetically impossible card. The production-time surface therefore serves
+`final.allowed_worker_minutes_snapshot`, the allowance that block's own variance and
+percentage were taken against, so the frozen trio is self-consistent without inverting
+anything.
+
+`budget-status` still leaves that baseline implicit in its `result` block. Its envelope is
+a published frontend handoff whose keys are transcribed into
+`tests/unit/docs/test_item_economics_handoff_accuracy.py`, so the same key is owed there
+through a handoff addendum rather than added silently. Until then, invert it the way the
+serializer does: `actual_worker_minutes + variance_worker_minutes`.
 
 ### Idempotency and replay
 

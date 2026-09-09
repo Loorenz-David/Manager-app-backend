@@ -12,7 +12,10 @@ from beyo_manager.domain.item_economics.budget_division import (
     TYPICAL_MIN_SAMPLE_SIZE,
     TYPICAL_WINDOW_DAYS,
 )
-from beyo_manager.domain.item_economics.calculator import calculate_percent_consumed
+from beyo_manager.domain.item_economics.calculator import (
+    calculate_percent_consumed,
+    reconstruct_allowed_worker_minutes,
+)
 from beyo_manager.domain.item_economics.remaining_production_pressure import PRESSURE_METHOD
 from beyo_manager.domain.item_economics.typical_filters import (
     COMPARABILITY_PROFILE,
@@ -206,11 +209,22 @@ def serialize_typical_resolution(
     }
 
 
-def _serialize_production_time_final(result: object, percent_consumed: object | None) -> dict:
-    """Serialize the frozen result with its frozen percentage and no money."""
+def _serialize_production_time_final(
+    result: object,
+    percent_consumed: object | None,
+    allowed_worker_minutes_snapshot: object | None,
+) -> dict:
+    """Serialize the frozen result with its frozen baseline, percentage, no money.
+
+    ``allowed_worker_minutes_snapshot`` is the allowance THIS block's variance and
+    percentage were taken against. It is served rather than left to be inverted
+    out of the variance, because the sibling ``budget.allowed_worker_minutes`` is
+    live and the two are only equal until the evaluation is re-committed.
+    """
 
     return {
         "actual_worker_minutes": _decimal(result.actual_worker_minutes),
+        "allowed_worker_minutes_snapshot": _decimal(allowed_worker_minutes_snapshot),
         "variance_worker_minutes": _decimal(result.variance_worker_minutes),
         "percent_consumed": _decimal(percent_consumed),
         "task_state_snapshot": _enum_value(result.task_state_snapshot),
@@ -263,11 +277,16 @@ def serialize_task_production_time(row: dict, *, include_monetary: bool = False)
     result = row.get("result")
     division = row["division"]
     frozen_percent_consumed = None
+    frozen_allowed_worker_minutes = None
     if result is not None:
         # The budget-status serializer names this feed site: both freeze the
         # percentage from the stored result so the final block never ticks.
+        frozen_allowed_worker_minutes = reconstruct_allowed_worker_minutes(
+            result.actual_worker_minutes,
+            result.variance_worker_minutes,
+        )
         frozen_percent_consumed = calculate_percent_consumed(
-            result.actual_worker_minutes + result.variance_worker_minutes,
+            frozen_allowed_worker_minutes,
             result.actual_worker_minutes,
         )
     budget = {
@@ -300,7 +319,9 @@ def serialize_task_production_time(row: dict, *, include_monetary: bool = False)
         "projection_quantity": row.get("projection_quantity"),
         "budget": budget,
         "final": (
-            _serialize_production_time_final(result, frozen_percent_consumed)
+            _serialize_production_time_final(
+                result, frozen_percent_consumed, frozen_allowed_worker_minutes
+            )
             if result is not None
             else None
         ),

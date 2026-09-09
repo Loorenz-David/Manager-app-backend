@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
+from beyo_manager.domain.execution.enums import TaskType
+from beyo_manager.domain.execution.payloads.item_cost_result import ItemCostResultPayload
 from beyo_manager.domain.item_economics.calculator import (
     CALCULATION_VERSION,
     calculate_allowed_worker_minutes,
@@ -53,6 +56,7 @@ from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
+from beyo_manager.services.infra.execution.task_factory import create_instant_task
 
 
 logger = logging.getLogger(__name__)
@@ -66,6 +70,17 @@ _ADMITTED_STATES = frozenset(
         TaskStateEnum.READY,
     }
 )
+
+# A commit moves the allowance every stored `item_cost_results` figure was
+# computed against, so it is a result boundary in exactly the sense states.md
+# means: without an emit here the stored result disagrees with a live recompute
+# forever, and for a READY task no later transition need ever come to reconcile
+# it. The gate is the intersection of the states a commit is admitted in with
+# the states `handle_process_item_cost_result` writes in — the other three
+# (PENDING, ASSIGNED, STALLED) are precisely the ones the handler refuses, so
+# emitting there would only queue rows that are guaranteed to no-op. The handler
+# stays the sole arbiter: it re-reads the state at handler time and refuses again.
+_RESULT_BOUNDARY_STATES = frozenset({TaskStateEnum.WORKING, TaskStateEnum.READY})
 
 
 def _figures(row: ItemCostEvaluation | None) -> dict | None:
@@ -376,6 +391,17 @@ async def _commit_item_cost_evaluation_in_session(
             from_value=from_value,
             to_value=_figures(evaluation),
             created_by_id=user_id,
+        )
+    if kind is ItemCostEvaluationKindEnum.COMMITTED and task.state in _RESULT_BOUNDARY_STATES:
+        # Atomic with the supersede+insert above: the boundary cannot be recorded
+        # without the recompute being queued. Projections are excluded because
+        # they supersede nothing and are read by no operational surface.
+        await create_instant_task(
+            session=session,
+            task_type=TaskType.PROCESS_ITEM_COST_RESULT,
+            payload=asdict(
+                ItemCostResultPayload(workspace_id=workspace_id, task_id=task.client_id)
+            ),
         )
     await audit(
         ServiceContext(identity={"workspace_id": workspace_id, "user_id": user_id}, incoming_data={}, session=session),

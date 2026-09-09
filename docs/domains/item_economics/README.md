@@ -229,8 +229,11 @@ One row per task (`unique (task_id)` is the idempotency key). Carries
 `variance_worker_minutes`, `variance_cost_minor`, the `task_state_snapshot` and
 `task_closed_at` the row was computed at, `calculation_version` and `computed_at`.
 
-The row is **recomputed and SET at every episode boundary**, not written once. See
-[states.md](states.md).
+The row is **recomputed and SET at every episode boundary**, not written once — and
+committing an evaluation is one of those boundaries, because it moves the allowance the
+stored variance was taken against. The production-time surface republishes that frozen
+allowance as `final.allowed_worker_minutes_snapshot` so the frozen figures never have to
+be paired with the live ones. See [states.md](states.md).
 
 ---
 
