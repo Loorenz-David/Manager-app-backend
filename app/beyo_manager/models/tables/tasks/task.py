@@ -94,6 +94,11 @@ class Task(IdentityMixin, Base):
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The task's *current* completion: stamped when it enters READY or RESOLVED, cleared when a
+    # reopen sends it back to WORKING. Distinct from ``closed_at``, which also covers
+    # FAILED/CANCELLED and means "left the board". ``updated_at`` cannot serve this role — it
+    # carries an ``onupdate=`` and every later write to the row clobbers it.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     latest_event_id: Mapped[str | None] = mapped_column(
         String(64),
         ForeignKey(
@@ -128,6 +133,7 @@ class Task(IdentityMixin, Base):
     __table_args__ = (
         UniqueConstraint("workspace_id", "task_scalar_id", name="uq_tasks_workspace_scalar_id"),
         Index("ix_tasks_workspace_state_scheduled_start", "workspace_id", "state", "scheduled_start_at"),
+        Index("ix_tasks_workspace_state_completed_at", "workspace_id", "state", "completed_at"),
         CheckConstraint(
             "scheduled_end_at IS NULL OR scheduled_start_at IS NULL OR scheduled_end_at >= scheduled_start_at",
             name="ck_tasks_scheduled_end_after_start",

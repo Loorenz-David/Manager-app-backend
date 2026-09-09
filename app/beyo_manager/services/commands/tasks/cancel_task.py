@@ -54,6 +54,8 @@ async def cancel_task(ctx: ServiceContext) -> dict:
         original_state = task.state.value
         now = datetime.now(timezone.utc)
         task.state = TaskStateEnum.CANCELLED
+        # ``completed_at`` is deliberately neither stamped nor cleared here: terminal is not
+        # completed, and ``closed_at`` already carries "left the board".
         task.closed_at = now
         task.updated_at = now
         task.updated_by_id = ctx.user_id

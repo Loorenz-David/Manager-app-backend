@@ -213,7 +213,9 @@ async def list_seat_tasks_pending_upholstery(ctx: ServiceContext) -> dict:
         )
         stmt = stmt.where(Task.client_id.in_(q_subq))
 
-    stmt = stmt.order_by(*_build_order_by(ctx.query_params.get("order_by")))
+    stmt = stmt.order_by(
+        *_build_order_by(ctx.query_params.get("order_by"), workspace_id=ctx.workspace_id)
+    )
     stmt = stmt.offset(offset).limit(limit + 1)
 
     result = await ctx.session.execute(stmt)

@@ -54,6 +54,7 @@ def serialize_task(
         "created_at": task.created_at.isoformat() if task.created_at else None,
         "updated_at": task.updated_at.isoformat() if task.updated_at else None,
         "closed_at": task.closed_at.isoformat() if task.closed_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "is_deleted": task.is_deleted,
         "deleted_at": task.deleted_at.isoformat() if task.deleted_at else None,
         "post_handling": (

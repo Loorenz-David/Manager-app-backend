@@ -5,7 +5,7 @@ from beyo_manager.domain.cases.enums import CaseLinkEntityTypeEnum
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
 from beyo_manager.domain.images.serializers import serialize_image, serialize_image_light
 from beyo_manager.domain.task_steps.state_filters import parse_step_state_filter
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPriorityEnum
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskPriorityEnum, TaskStateEnum
 from beyo_manager.domain.tasks.serializers import (
     include_monetary_step_fields,
     serialize_item,
@@ -31,6 +31,10 @@ from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_post_handling import TaskPostHandling
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.utils.task_interaction import (
+    build_last_interacted_at_column,
+    load_last_interacted_at_map,
+)
 from beyo_manager.services.queries.utils.task_search import build_task_q_subquery
 from beyo_manager.services.queries.utils.upholstery_grouping import (
     build_primary_item_upholstery_group_columns,
@@ -39,6 +43,7 @@ from beyo_manager.services.queries.utils.upholstery_grouping import (
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
+_COMPLETED_TASK_STATE_VALUES = frozenset({TaskStateEnum.READY.value, TaskStateEnum.RESOLVED.value})
 
 
 def _split_csv(value: str | None) -> list[str]:
@@ -47,7 +52,13 @@ def _split_csv(value: str | None) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
-def _build_order_by(order_by: str | None):
+def _build_order_by(
+    order_by: str | None,
+    *,
+    workspace_id: str,
+    working_section_ids: list[str] | None = None,
+    task_states: list[str] | None = None,
+):
     priority_rank = case(
         (Task.priority == TaskPriorityEnum.URGENT, 4),
         (Task.priority == TaskPriorityEnum.HIGH, 3),
@@ -64,26 +75,74 @@ def _build_order_by(order_by: str | None):
         "priority": priority_rank,
     }
 
+    # Offset pagination over a non-unique sort is unstable: rows that tie can swap between two
+    # page fetches, duplicating one task and dropping another. Ties are the norm for the derived
+    # keys below (a batch transition stamps one identical `now` across many rows), so ending
+    # every ordering on the primary key is what makes them usable.
+    tiebreaker = Task.client_id.asc()
+    default_clauses = [
+        Task.ready_by_at.asc().nulls_last(),
+        priority_rank.desc(),
+        Task.created_at.asc(),
+        tiebreaker,
+    ]
+
     if not order_by:
-        return [Task.ready_by_at.asc().nulls_last(), priority_rank.desc(), Task.created_at.asc()]
+        return default_clauses
+
+    filtered_states = {state.strip().lower() for state in (task_states or [])}
+
+    def _derived_column(field: str):
+        """Keys computed from other tables rather than stored on `tasks`.
+
+        Returns None when the key is not usable for this particular request, so the caller
+        treats it exactly like an unknown field name and falls back to the default ordering.
+        """
+        if field == "recently_completed":
+            # Outside a ready/resolved cohort every row's completed_at is NULL and the sort
+            # degenerates, so without that filter the key is not answerable.
+            if not (filtered_states & _COMPLETED_TASK_STATE_VALUES):
+                return None
+            return Task.completed_at
+        if field == "last_interacted":
+            return build_last_interacted_at_column(
+                workspace_id,
+                Task.client_id,
+                working_section_ids=working_section_ids,
+            )
+        return None
 
     order_clauses = []
     for part in [p.strip() for p in order_by.split(",") if p.strip()]:
         if ":" in part:
             field, direction = part.split(":", 1)
         else:
-            field, direction = part, "asc"
-        column = field_map.get(field)
-        if column is None:
-            continue
-        if direction.lower() == "desc":
-            order_clauses.append(column.desc())
-        elif field == "ready_by_at":
-            order_clauses.append(column.asc().nulls_last())
-        else:
-            order_clauses.append(column.asc())
+            field, direction = part, ""
+        direction = direction.strip().lower()
 
-    return order_clauses or [Task.ready_by_at.asc().nulls_last(), priority_rank.desc(), Task.created_at.asc()]
+        column = field_map.get(field)
+        if column is not None:
+            if direction == "desc":
+                order_clauses.append(column.desc())
+            elif field == "ready_by_at":
+                order_clauses.append(column.asc().nulls_last())
+            else:
+                order_clauses.append(column.asc())
+            continue
+
+        derived = _derived_column(field)
+        if derived is None:
+            continue
+        # These keys name an order rather than a field — "recently" and "last" already mean
+        # newest first — so DESC is the default and only an explicit `:asc` flips it. NULLS LAST
+        # on both sides: a task with no completion or interaction is never the answer to "most
+        # recent", and Postgres would otherwise put those rows first under DESC.
+        if direction == "asc":
+            order_clauses.append(derived.asc().nulls_last())
+        else:
+            order_clauses.append(derived.desc().nulls_last())
+
+    return order_clauses + [tiebreaker] if order_clauses else default_clauses
 
 
 async def list_tasks(ctx: ServiceContext) -> dict:
@@ -255,8 +314,17 @@ async def list_tasks(ctx: ServiceContext) -> dict:
             upholstery_group_upholstery_id.label("upholstery_group_upholstery_id"),
         )
 
-    order_by_clauses = _build_order_by(ctx.query_params.get("order_by"))
+    order_by_clauses = _build_order_by(
+        ctx.query_params.get("order_by"),
+        workspace_id=ctx.workspace_id,
+        working_section_ids=working_section_ids,
+        task_states=task_states,
+    )
     if upholstery_group_key is not None:
+        # Grouping outranks sorting by design: group_by_upholstery buckets the page and order_by
+        # orders rows inside each bucket. That holds for recently_completed and last_interacted
+        # too — grouped + last_interacted means "groups A-Z, newest first within each group",
+        # which is the intended answer, not a lost sort.
         order_by_clauses = [upholstery_group_key.asc().nulls_last(), *order_by_clauses]
 
     stmt = stmt.order_by(*order_by_clauses)
@@ -295,6 +363,16 @@ async def list_tasks(ctx: ServiceContext) -> dict:
     )
     tasks = tasks_result.scalars().all()
     task_map = {task.client_id: task for task in tasks}
+
+    # Loaded for the page rather than selected as a sort column so the positional row reads
+    # above stay put, and computed under every ordering so the key never appears and disappears
+    # with order_by.
+    last_interacted_map = await load_last_interacted_at_map(
+        ctx.session,
+        ctx.workspace_id,
+        page_ids,
+        working_section_ids=working_section_ids,
+    )
 
     group_inventory_by_uph_id = await load_upholstery_group_inventories(
         ctx.session,
@@ -392,6 +470,11 @@ async def list_tasks(ctx: ServiceContext) -> dict:
                 "upholstery_group_upholstery_id": group_uph_id_by_task_id.get(task_id),
                 "upholstery_group_inventory": group_inventory_by_uph_id.get(
                     group_uph_id_by_task_id.get(task_id)
+                ),
+                "last_interacted_at": (
+                    last_interacted_map[task_id].isoformat()
+                    if last_interacted_map.get(task_id) is not None
+                    else None
                 ),
             }
         )

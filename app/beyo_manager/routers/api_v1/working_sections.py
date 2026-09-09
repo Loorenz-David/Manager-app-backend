@@ -80,10 +80,11 @@ async def list_working_sections_route(
 	session: AsyncSession = Depends(get_db),
 	limit: int = Query(50, le=200),
 	offset: int = Query(0, ge=0),
+	compact: bool = Query(False),
 ):
 	ctx = ServiceContext(
 		incoming_data={},
-		query_params={"limit": limit, "offset": offset},
+		query_params={"limit": limit, "offset": offset, "compact": str(compact)},
 		identity=claims,
 		session=session,
 	)

@@ -66,6 +66,7 @@ def test_serialize_task_includes_customer_name_snapshot():
         created_at=None,
         updated_at=None,
         closed_at=None,
+        completed_at=None,
         is_deleted=False,
         deleted_at=None,
     )

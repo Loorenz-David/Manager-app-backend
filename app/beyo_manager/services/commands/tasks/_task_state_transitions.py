@@ -52,6 +52,11 @@ async def maybe_reopen_task_to_working(
     task.state = TaskStateEnum.WORKING
     task.updated_at = now
     task.updated_by_id = updated_by_id
+    # The task is being worked again, so it is no longer completed: clearing keeps
+    # ``completed_at`` describing the completion the task is currently sitting in, and keeps a
+    # reopened task out of the ``recently_completed`` list. This is the only exit from READY
+    # back into work, so it is the only place the value has to be cleared.
+    task.completed_at = None
     await create_instant_task(
         session=session,
         task_type=TaskType.PROCESS_ITEM_COST_RESULT,
@@ -103,6 +108,9 @@ async def maybe_evaluate_task_ready(
 
     task.state = TaskStateEnum.READY
     task.updated_at = now
+    # Stamped here rather than at the call sites because this is the sole sanctioned entry into
+    # READY — the organic "every step is terminal" route and ``force_task_ready`` both land here.
+    task.completed_at = now
     task.updated_by_id = updated_by_id
     await reconcile_task_side_effects(
         session,

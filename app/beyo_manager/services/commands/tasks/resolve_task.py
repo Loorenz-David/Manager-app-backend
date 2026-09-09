@@ -55,6 +55,7 @@ async def resolve_task(ctx: ServiceContext) -> dict:
         now = datetime.now(timezone.utc)
         task.state = TaskStateEnum.RESOLVED
         task.closed_at = now
+        task.completed_at = now
         task.updated_at = now
         task.updated_by_id = ctx.user_id
 

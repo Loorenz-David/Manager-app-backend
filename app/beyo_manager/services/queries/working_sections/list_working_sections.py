@@ -2,7 +2,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
 from beyo_manager.domain.users.serializers import serialize_user_working_section_member
-from beyo_manager.domain.working_sections.serializers import serialize_working_section_full
+from beyo_manager.domain.working_sections.serializers import (
+    serialize_working_section_compact,
+    serialize_working_section_full,
+)
 from beyo_manager.models.tables.issue_types.issue_type import IssueType
 from beyo_manager.models.tables.items.item_category import ItemCategory
 from beyo_manager.models.tables.users.user import User
@@ -22,6 +25,7 @@ _DEFAULT_LIMIT = 50
 async def list_working_sections(ctx: ServiceContext) -> dict:
     limit = min(int(ctx.query_params.get("limit", _DEFAULT_LIMIT)), _MAX_LIMIT)
     offset = int(ctx.query_params.get("offset", 0))
+    compact = str(ctx.query_params.get("compact", "false")).lower() == "true"
 
     result = await ctx.session.execute(
         select(WorkingSection)
@@ -41,6 +45,22 @@ async def list_working_sections(ctx: ServiceContext) -> dict:
         return {
             "working_sections": [],
             "working_sections_pagination": {"has_more": False, "limit": limit, "offset": offset},
+        }
+
+    if compact:
+        return {
+            "working_sections": [
+                serialize_working_section_compact(
+                    section.client_id,
+                    section.name,
+                    section.image,
+                    section.order_list,
+                    section.allows_batch_working,
+                    section.allows_shopify_product_modifications,
+                )
+                for section in sections
+            ],
+            "working_sections_pagination": {"has_more": has_more, "limit": limit, "offset": offset},
         }
 
     section_ids = [section.client_id for section in sections]
