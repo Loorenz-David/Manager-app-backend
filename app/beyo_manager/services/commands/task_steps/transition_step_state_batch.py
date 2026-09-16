@@ -198,6 +198,9 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
                     # True only when completing this step finished the whole task
                     # (last open step closed → task went READY). Not from sequence_order.
                     "was_final_step": _completed_the_whole_task(applied.task_became_ready, new_state),
+                    # Settled working seconds as of this commit — mirrors the single-step
+                    # response so both surfaces can seed a cache at onSuccess.
+                    "total_working_seconds": int(step.total_working_seconds or 0),
                 }
             )
 

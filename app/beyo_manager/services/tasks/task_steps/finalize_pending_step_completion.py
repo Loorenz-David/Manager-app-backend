@@ -15,6 +15,7 @@ from beyo_manager.domain.task_steps.readiness import recalculate_readiness
 from beyo_manager.domain.tasks.enums import TaskStateEnum
 from beyo_manager.models.database import get_db_session
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+from beyo_manager.services.commands.task_steps._settle_step_time import settle_closed_step_time
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
@@ -130,6 +131,18 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
             step.closed_at = completion_requested_at
             step.updated_at = now
             step.updated_by_id = performed_by
+
+            # Mirrors the two sibling drivers: settle the step's own time totals in the
+            # transaction that closed the record, so the budget surfaces never read a closed
+            # record without its contribution. See `_settle_step_time`.
+            await settle_closed_step_time(
+                session,
+                workspace_id=workspace_id,
+                step_id=step.client_id,
+                closing_state=closing_state,
+                credited_user_id=credited_user_id,
+                now=completion_requested_at,
+            )
 
             dependent_edges_result = await session.execute(
                 select(TaskStepDependency).where(

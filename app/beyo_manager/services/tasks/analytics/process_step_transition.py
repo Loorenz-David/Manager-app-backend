@@ -2,9 +2,7 @@
 
 import logging
 from dataclasses import asdict
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,22 +18,28 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.users.user import User
-from beyo_manager.models.tables.users.user_work_profile import UserWorkProfile
 from beyo_manager.services.infra.execution.db import task_db_session
 from beyo_manager.services.infra.execution.task_factory import create_instant_task
-from beyo_manager.services.queries.analytics.averaged_time import compute_record_contributions
 from beyo_manager.services.queries.analytics.reconcile_user_time import (
     apply_completion_reconcile_deltas,
     apply_reconcile_deltas,
     reconcile_user_day_completions,
     reconcile_user_day_time,
 )
+from beyo_manager.services.commands.task_steps._settle_step_time import settle_step_time_totals
 from beyo_manager.services.commands.users.reconcile_worker_shift_state import (
     reconcile_worker_shift_state,
 )
 from beyo_manager.services.infra.events.worker_shift_realtime import emit_worker_shift_state
 
 logger = logging.getLogger(__name__)
+
+# The step-grain time recompute now lives with the transition write path, which calls it in
+# the same transaction that closes a record (see `_settle_step_time` for why). The worker
+# still runs it: it is recompute-and-SET, so the second run is a no-op that also covers the
+# paths the request could not settle. Re-exported under its historical name because the
+# averaged-time backfill script and four integration modules import it from here.
+_recompute_step_time_totals = settle_step_time_totals
 
 
 async def handle_process_step_transition(raw: dict, task_id: str) -> None:
@@ -155,107 +159,6 @@ async def handle_process_step_transition(raw: dict, task_id: str) -> None:
                 payload.workspace_id,
                 payload.credited_user_id,
             )
-
-
-_STEP_TIME_FIELDS = {
-    "working": ("total_working_seconds", "total_working_count"),
-    "paused": ("total_pause_seconds", "total_pause_count"),
-    "ended_shift": ("total_ended_shift_seconds", "total_ended_shift_count"),
-}
-
-_STEP_INACCURATE_TIME_FIELDS = {
-    "working": "inaccurate_working_seconds",
-    "paused": "inaccurate_pause_seconds",
-    "ended_shift": "inaccurate_ended_shift_seconds",
-}
-
-
-async def _rate(session: AsyncSession, user_id: str, workspace_id: str) -> Decimal | None:
-    profile = (
-        await session.execute(
-            select(UserWorkProfile).where(
-                UserWorkProfile.user_id == user_id,
-                UserWorkProfile.workspace_id == workspace_id,
-            )
-        )
-    ).scalar_one_or_none()
-    return profile.salary_per_hour_before_tax if profile else None
-
-
-async def _recompute_step_time_totals(
-    session: AsyncSession, workspace_id: str, step_id: str, now: datetime
-) -> None:
-    """Recompute a step's TaskStep.total_*_seconds/counts from its records (averaged).
-
-    Each record's averaged share is computed in its credited user's concurrency context;
-    settled (closed) records only, matching the daily totals.
-    """
-    step = await _fetch_task_step(session, step_id, workspace_id)
-    if step is None:
-        return
-
-    records = (
-        await session.execute(
-            select(
-                StepStateRecord.credited_user_id,
-                StepStateRecord.created_by_id,
-                StepStateRecord.entered_at,
-                StepStateRecord.exited_at,
-            ).where(
-                StepStateRecord.workspace_id == workspace_id,
-                StepStateRecord.step_id == step_id,
-                StepStateRecord.is_deleted.is_(False),
-                StepStateRecord.state.in_(TIME_BEARING_STATES),
-            )
-        )
-    ).all()
-
-    windows: dict[str, list[datetime | None]] = defaultdict(lambda: [None, None])
-    for r in records:
-        uid = r.credited_user_id or r.created_by_id
-        if uid is None:
-            continue
-        end = r.exited_at or now
-        span = windows[uid]
-        span[0] = r.entered_at if span[0] is None else min(span[0], r.entered_at)
-        span[1] = end if span[1] is None else max(span[1], end)
-
-    totals: dict[str, list[float | int]] = {
-        "working": [0.0, 0],
-        "paused": [0.0, 0],
-        "ended_shift": [0.0, 0],
-    }
-    inaccurate_totals = {"working": 0.0, "paused": 0.0, "ended_shift": 0.0}
-    costed_seconds_by_user: dict[str, float] = defaultdict(float)  # working + pause, for cost
-    buffer = timedelta(days=1)
-    for uid, (start, end) in windows.items():
-        contributions = await compute_record_contributions(
-            session, workspace_id, uid, start - buffer, end + buffer, now
-        )
-        for c in contributions:
-            if c.step_id != step_id or c.is_open or c.state not in totals:
-                continue
-            inaccurate_totals[c.state] += c.wasted_seconds
-            if not c.marked_wrong:
-                totals[c.state][0] += c.seconds
-                totals[c.state][1] += 1
-            if c.state in ("working", "paused"):
-                costed_seconds_by_user[uid] += c.seconds
-
-    for state, (sec_field, cnt_field) in _STEP_TIME_FIELDS.items():
-        setattr(step, sec_field, int(round(totals[state][0])))
-        setattr(step, cnt_field, totals[state][1])
-        setattr(step, _STEP_INACCURATE_TIME_FIELDS[state], int(round(inaccurate_totals[state])))
-
-    cost_minor = 0
-    for uid, seconds in costed_seconds_by_user.items():
-        rate = await _rate(session, uid, workspace_id)
-        if rate is not None:
-            cost_minor += int(
-                ((Decimal(int(round(seconds))) / Decimal(3600)) * rate * Decimal(100)).to_integral_value()
-            )
-    step.total_cost_minor = cost_minor
-    step.updated_at = now
 
 
 async def _recompute_step_completion_totals(

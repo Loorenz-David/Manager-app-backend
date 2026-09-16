@@ -12,9 +12,9 @@ copies of the same body — `transition_step_state.transition_step_state` (the
 single-step endpoint, which does NOT call this core) and
 `finalize_pending_step_completion` (the deferred-completion worker, currently
 dormant). Three copies in total. Any change to the state-machine handling, record
-close/open, metrics accrual, terminal handling, task side-effects, or the
-PROCESS_STEP_TRANSITION outbox in one MUST be evaluated for the other two — they are
-intentionally kept in sync by convention
+close/open, metrics accrual, the synchronous time settlement, terminal handling, task
+side-effects, or the PROCESS_STEP_TRANSITION outbox in one MUST be evaluated for the
+other two — they are intentionally kept in sync by convention
 (see docs/architecture/.../PLAN_batch_step_transition_20260623, Option B).
 
 TRANSITION RULES: `_ALLOWED_TRANSITIONS` is single-sourced from `transition_step_state`
@@ -51,6 +51,7 @@ from beyo_manager.services.commands.task_steps._cascade_completion import cascad
 from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
     apply_upholstery_installation_side_effect,
 )
+from beyo_manager.services.commands.task_steps._settle_step_time import settle_closed_step_time
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import _apply_inaccurate_time_flag
 from beyo_manager.services.commands.tasks._task_state_transitions import (
@@ -157,7 +158,17 @@ async def _apply_step_transition(
             conflicting_step.updated_at = now
             conflicting_step.updated_by_id = ctx.user_id
 
-            # Time totals recomputed async by the analytics worker (see process_step_transition).
+            # Settle the auto-paused step's own totals here, not only in the worker: the
+            # conflicting step's WORKING run has just been closed, and the budget surfaces
+            # read it the moment this commits.
+            await settle_closed_step_time(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                step_id=conflicting_step.client_id,
+                closing_state=TaskStepStateEnum.WORKING,
+                credited_user_id=ctx.user_id,
+                now=now,
+            )
 
             await create_instant_task(
                 session=ctx.session,
@@ -222,8 +233,19 @@ async def _apply_step_transition(
     step.updated_at = now
     step.updated_by_id = ctx.user_id
 
-    # Step time totals (TaskStep.total_*_seconds) are recomputed concurrency-averaged
-    # by the analytics worker (PROCESS_STEP_TRANSITION) — see process_step_transition.
+    # Settle this step's own time totals inside the transaction that closed the record, so no
+    # read can observe the closed record without its contribution. Runs last among the record
+    # mutations: it must see `closing_record.exited_at` AND any inaccurate-time flag, because a
+    # flagged step disowns every one of its records. The analytics worker runs the same
+    # recompute afterwards and lands on the same values.
+    await settle_closed_step_time(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        step_id=step.client_id,
+        closing_state=closing_state,
+        credited_user_id=credited_user_id,
+        now=now,
+    )
 
     if new_state in TERMINAL_STEP_STATES:
         step.closed_at = now

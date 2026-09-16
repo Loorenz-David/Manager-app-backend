@@ -2522,7 +2522,12 @@ nodes:
     origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-08-11T08:43:31.692Z
-    updatedAt: 2026-08-23T10:58:11.658Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+    sourceLinks:
+      - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+        symbol: settle_step_time_totals
+        contentHash: e22c19e2ae12222204bbc78ddca5f4b296b8fbe4c065620781bb867a1ab1eaf7
+        linkedAt: 2026-09-16T04:58:48.670Z
   - id: analytics-apply-step-completed
     type: command
     name: _apply_step_completed
@@ -7169,6 +7174,111 @@ nodes:
     confidence: 0.96
     createdAt: 2026-08-25T09:24:40.005Z
     updatedAt: 2026-09-02T18:26:14.307Z
+  - id: helper-settle-closed-step-time
+    type: command
+    name: settle_closed_step_time (synchronous step-time settlement)
+    description: "The write-path gate that settles ONE step's own time totals in the
+      transaction that just closed one of its time-bearing records. Its
+      condition mirrors the analytics worker's exactly — a credited user AND a
+      closing state in TIME_BEARING_STATES — so a PENDING or terminal close pays
+      nothing and the value the request publishes is the value the worker will
+      later recompute. It flushes the caller's pending mutations first (the
+      sweep re-reads the records, so exited_at and any inaccurate-time flag must
+      be visible) and then delegates to the shared recompute. It deliberately
+      does not swallow exceptions: settlement is part of the transition's
+      transaction, so a failure rolls the transition back rather than committing
+      a state that reintroduces the unsettled window. Lives beside the
+      transition commands in _settle_step_time.py, which also now hosts the
+      recompute itself; the analytics worker imports the recompute back from
+      there."
+    tags:
+      - task-steps
+      - analytics
+      - live-clock
+      - settlement
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+          symbol: settle_closed_step_time
+          summary: Returns early unless credited_user_id is set and closing_state is in
+            TIME_BEARING_STATES, then flushes the session and calls
+            settle_step_time_totals.
+          inferenceReason: This symbol is the implemented boundary that makes a closed
+            record's contribution visible to readers at commit time.
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+          summary: Calls settle_closed_step_time for the transitioning step after the
+            record close and the inaccurate-time flag, and again for the
+            auto-paused conflicting step.
+          inferenceReason: The single-step transition command is the primary driver of the
+            new settlement boundary.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+    sourceLinks:
+      - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+        symbol: settle_closed_step_time
+        contentHash: e22c19e2ae12222204bbc78ddca5f4b296b8fbe4c065620781bb867a1ab1eaf7
+        linkedAt: 2026-09-16T04:58:48.670Z
+  - id: decision-settle-step-time-in-transition
+    type: decision
+    name: Step time totals settle inside the transition transaction
+    description: "The four item-economics surfaces read settled
+      TaskStep.total_working_seconds plus the share of any still-open record.
+      Between the transaction that set exited_at and the analytics worker's
+      recompute, a just-closed run belonged to neither source, so those surfaces
+      served a total missing the run that had just ended — measured at 100-300
+      ms, and observed by the workers app as a timer jumping backwards
+      (evidence: the same endpoint returned 1488 and 1430 for one paused step 53
+      ms apart). The step-grain recompute is now called synchronously by every
+      transition driver that closes a time-bearing record. It is
+      recompute-and-SET, so the worker running it again is a no-op and the queue
+      stays at-least-once safe; the rest of the worker's job (per-user daily
+      rollups, completion and issue counters, cost re-emit, shift derivation) is
+      unchanged, and the concurrency averaging is untouched. Cost measured
+      before adopting it: the sweep adds ~3 ms at 10 records to ~49 ms at 5000
+      records of one worker's history, ~16-20 ms for the busiest worker in the
+      current database (1635 records/3 months). The alternative considered and
+      rejected was a records_settled_through marker letting the read path
+      include closed-but-unsettled records, which would have moved the same scan
+      onto the far more frequent read path and required a schema change.
+      SUPERSEDES the client-side 'settlement window' decrease mode published in
+      HANDOFF_TO_FRONTEND_live_working_time_clock_20260822 §5.3; §5.1 (rounding)
+      and §5.2 (disowning) are unaffected."
+    tags:
+      - decision
+      - analytics
+      - live-clock
+      - item-economics
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+          summary: The module docstring records why the write path calls the recompute,
+            that the gate must stay identical to the worker's, and that the
+            function is recompute-and-SET rather than increment.
+          inferenceReason: The decision and its reasoning are written into the module that
+            implements it.
+        - path: app/tests/integration/services/commands/task_steps/test_step_time_settlement_integration.py
+          summary: Eleven integration tests assert the settled run is visible with the
+            analytics worker stopped, that the worker and its replay then change
+            nothing, and that the value stays concurrency-averaged.
+          inferenceReason: The tests encode the decision's acceptance criteria, including
+            the worked 1430+58=1488 example from the originating handoff.
+        - path: app/tests/integration/services/queries/item_economics/test_phase2_live_surfaces.py
+          symbol: test_c9_closing_a_record_publishes_its_time_with_no_settlement_dip
+          summary: The test that previously asserted the served figure dipped to 1440
+            until the worker caught up now asserts it stays at 2040.
+          inferenceReason: The retired behaviour was codified in a test, and inverting it
+            is the record that the settlement window no longer exists.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+    sourceLinks:
+      - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+        contentHash: e22c19e2ae12222204bbc78ddca5f4b296b8fbe4c065620781bb867a1ab1eaf7
+        linkedAt: 2026-09-16T04:58:48.670Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -13176,3 +13286,79 @@ edges:
     confidence: 0.98
     createdAt: 2026-08-25T09:24:40.005Z
     updatedAt: 2026-09-02T18:26:14.307Z
+  - sourceNodeId: command-transition-step-state
+    relationshipType: calls
+    targetNodeId: helper-settle-closed-step-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/transition_step_state.py
+          symbol: transition_step_state
+          summary: "Two call sites: the auto-paused conflicting step, and the
+            transitioning step after its record close and inaccurate-time flag."
+          inferenceReason: The single-step command settles both steps whose records it closes.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+  - sourceNodeId: helper-apply-step-transition
+    relationshipType: calls
+    targetNodeId: helper-settle-closed-step-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/_step_transition_core.py
+          symbol: _apply_step_transition
+          summary: The shared core settles the auto-paused conflicting step and the
+            transitioning step, so all five of its drivers inherit the
+            guarantee.
+          inferenceReason: Settling in the core is what extends the property to batch
+            transitions, clock-out, declared states, case pause and force-ready.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+  - sourceNodeId: task-finalize-pending-step-completion
+    relationshipType: calls
+    targetNodeId: helper-settle-closed-step-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/tasks/task_steps/finalize_pending_step_completion.py
+          symbol: handle_finalize_pending_step_completion
+          summary: The dormant third copy of the transition body settles after updating
+            the step, keeping it in sync with the two live copies per the DRIFT
+            NOTE convention.
+          inferenceReason: The three hand-maintained copies are kept in sync by
+            convention, so the dormant one carries the settlement too.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+  - sourceNodeId: helper-settle-closed-step-time
+    relationshipType: calls
+    targetNodeId: analytics-recompute-step-time-totals
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+          symbol: settle_closed_step_time
+          summary: Delegates to settle_step_time_totals, which is the recompute moved into
+            this module from process_step_transition and re-exported there under
+            its historical name.
+          inferenceReason: The write path and the worker share one implementation, which
+            is what makes the two runs agree.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z
+  - sourceNodeId: helper-settle-closed-step-time
+    relationshipType: depends_on
+    targetNodeId: projection-live-worked-seconds
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
+          summary: The module docstring names load_live_worked_seconds' settled-plus-open
+            basis as the reason the write path settles at all.
+          inferenceReason: The settlement exists to satisfy the loader's invariant that a
+            closed record is never absent from both of its two sources.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-16T04:58:48.670Z
+    updatedAt: 2026-09-16T04:58:48.670Z

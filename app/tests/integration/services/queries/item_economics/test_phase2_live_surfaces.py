@@ -1306,7 +1306,14 @@ async def test_c8_three_task_batch_runs_one_sweep_per_active_worker(db_session, 
 
 
 @pytest.mark.integration
-async def test_c9_settlement_window_drop_is_visible_until_recompute(db_session):
+async def test_c9_closing_a_record_publishes_its_time_with_no_settlement_dip(db_session):
+    """The settlement window is gone: closing the record settles it in the same transaction.
+
+    This test previously asserted the opposite — that the served figure dipped to 1440 until
+    the analytics worker caught up. That was the defect reported in
+    HANDOFF_TO_BACKEND_step_time_settlement_window_20260916; the dip is now unobservable, and
+    the client rule that covered it (live-clock handoff §5.3) is retired.
+    """
     values, now = await _make_live_fixture(db_session)
     workspace, user, _section, task, *_ = values
     before = await get_task_production_time(
@@ -1336,8 +1343,12 @@ async def test_c9_settlement_window_drop_is_visible_until_recompute(db_session):
     after_close = await get_task_production_time(
         _ctx(db_session, workspace.client_id, task.client_id, close_at, user_id=user.client_id)
     )
-    assert after_close["sections"][0]["worked_seconds"] == 1440
     assert before["sections"][0]["worked_seconds"] == 2040
+    # 1440 is the pre-settlement value — the live 600 s run absent from the settled column.
+    assert after_close["sections"][0]["worked_seconds"] == 2040, (
+        "closing the record must publish its time at once; 1440 is the retired dip"
+    )
+    # The analytics worker's own recompute then agrees, changing nothing.
     await _recompute_step_time_totals(db_session, workspace.client_id, live.client_id, close_at)
     await db_session.flush()
     after_recompute = await get_task_production_time(

@@ -37,6 +37,7 @@ from beyo_manager.services.commands.task_steps._cascade_completion import cascad
 from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
     apply_upholstery_installation_side_effect,
 )
+from beyo_manager.services.commands.task_steps._settle_step_time import settle_closed_step_time
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
     _apply_inaccurate_time_flag,
@@ -121,9 +122,10 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     `_step_transition_core._apply_step_transition` (copy #2, the shared core — see its
     docstring for the canonical driver list) and by `finalize_pending_step_completion`
     (copy #3, deferred completion, currently dormant). This command does NOT call the
-    core. Any change here to the state machine, record close/open, metrics, terminal
-    handling, task side-effects, or the PROCESS_STEP_TRANSITION outbox MUST be evaluated
-    for the other two — they are intentionally kept in sync by convention (Option B).
+    core. Any change here to the state machine, record close/open, metrics, the synchronous
+    time settlement, terminal handling, task side-effects, or the PROCESS_STEP_TRANSITION
+    outbox MUST be evaluated for the other two — they are intentionally kept in sync by
+    convention (Option B).
     `_ALLOWED_TRANSITIONS` is defined here and imported by the batch command, so those
     two cannot drift; other drivers of the core may use their own legality map.
     """
@@ -303,7 +305,17 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
 
                 auto_paused_step = conflicting_step
 
-                # Time totals recomputed async by the analytics worker (see process_step_transition).
+                # Settle the auto-paused step's own totals here, not only in the worker: the
+                # conflicting step's WORKING run has just been closed, and the budget surfaces
+                # read it the moment this commits.
+                await settle_closed_step_time(
+                    ctx.session,
+                    workspace_id=ctx.workspace_id,
+                    step_id=conflicting_step.client_id,
+                    closing_state=TaskStepStateEnum.WORKING,
+                    credited_user_id=ctx.user_id,
+                    now=now,
+                )
 
                 await create_instant_task(
                     session=ctx.session,
@@ -374,8 +386,19 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         step.updated_at = now
         step.updated_by_id = ctx.user_id
 
-        # Step time totals recomputed concurrency-averaged by the analytics worker
-        # (PROCESS_STEP_TRANSITION) — see process_step_transition.
+        # Settle this step's own time totals inside the transaction that closed the record, so
+        # no read can observe the closed record without its contribution. Runs last among the
+        # record mutations: it must see `closing_record.exited_at` AND any inaccurate-time flag,
+        # because a flagged step disowns every one of its records. The analytics worker runs the
+        # same recompute afterwards and lands on the same values.
+        await settle_closed_step_time(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            step_id=step.client_id,
+            closing_state=closing_state,
+            credited_user_id=credited_user_id,
+            now=now,
+        )
 
         # If entering a terminal state, set closed_at
         if request.new_state in TERMINAL_STEP_STATES:
@@ -540,4 +563,8 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
         # True only when completing this step was what finished the whole task
         # (last open step closed → task went READY). Not derived from sequence_order.
         "was_final_step": _completed_the_whole_task(task_became_ready, request.new_state),
+        # The step's settled working seconds as of this commit, so a client can seed its
+        # cache at onSuccess instead of waiting for a refetch. This is the settled column
+        # only — it excludes any newly opened run, which accrues live on the client.
+        "total_working_seconds": int(step.total_working_seconds or 0),
     }
