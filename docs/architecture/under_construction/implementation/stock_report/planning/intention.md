@@ -380,6 +380,35 @@ malformed input — see §8.1.
 - An item with no article number (E6) cannot be resolved by this webhook; it stays `awaiting`
   until its assignment is deleted by a user.
 
+### 8A. Endpoint names and wire envelope (added 2026-09-18 so the Scanner sender can be built in parallel — naming only, no semantic change)
+
+Both are `POST`, JSON body = the array of §8.1 / §8.2, header `x-api-key`. The router is mounted
+beside the existing user-facing one, following the `…/<integration>/webhooks/<topic>` shape of
+`/api/v1/connecteam/webhooks/time-activity` (`bm/routers/api_v1/__init__.py`):
+
+| Webhook | Path |
+|---|---|
+| Demand (§8.1) | `POST /api/v1/location-tracker/webhooks/stock-demand` |
+| Processed (§8.2) | `POST /api/v1/location-tracker/webhooks/items-processed` |
+
+Envelope is the backend's standard one (`bm/routers/http/response.py`): success
+`{"data": …, "ok": true, "warnings": []}`; failure `{"error": "<message>", "ok": false}` with the
+HTTP status carrying the class — **401** bad/missing key or unconfigured receiver, **422**
+malformed body or duplicate identity, **5xx** receiver fault. The error is a human-readable
+string, not a structure. Success `data`:
+- demand: `{"results": [{"itemCategory", "properties", "outcome": "applied" | "category_not_found"}]}`, one per entry, request order;
+- processed: `{"results": [{"article_number", "outcome": "resolved" | "ignored", "reason": <string|null>}]}`, one per entry, request order.
+
+Two small things the v1 handoff states and this document had not (mine; mechanism-inventory
+confirms or routes them): an **empty array is malformed** (422) on both webhooks, and **the same
+article number twice in one processed request is not an error** — the second occurrence is simply
+`ignored`, which is what replay-safety already implies.
+
+The published copy for the Scanner team is
+`docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v1_20260918.md`. Mechanism-inventory may tighten
+the `reason` vocabulary and the 4xx split; any change to a published field ships as a **v2
+handoff file**, never as an edit to v1.
+
 ---
 
 ## 9. Local Manager API (`bm/routers/api_v1/stock_report.py`)
@@ -825,6 +854,15 @@ None.
 - Card 8 → **A**, folded as B6. Ledger unchanged (M1–M9); M4 covers B1, M8 covers B6.
 - Status → **RATIFIED**. Next gate: mechanism-inventory
   (`prompts/reviewer/2026-09-18_inventory_mechanism_inventory.md`).
+
+**Naming addition — 2026-09-18 (shaper, at the owner's request for a Scanner handoff; no semantic change, gate not reopened).**
+- §8A added: the two webhook paths, the standard envelope, the per-entry result shapes. Grounded on
+  the existing router mounting and `build_ok` / `build_err`.
+- Noted for mechanism-inventory (prompt MI-9 updated): absolute demand values are only
+  self-correcting if a **stale delivery cannot land after a fresh one**; Scanner's existing
+  outbound worker retries a job with the payload frozen at enqueue time. The v1 handoff asks
+  Scanner to build the payload at send time and to re-push the full set periodically; whether
+  Manager should additionally defend itself (a sent-at stamp) is an open mechanism question.
 
 ---
 
