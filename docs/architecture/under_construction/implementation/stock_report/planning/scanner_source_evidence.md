@@ -71,3 +71,77 @@ That key is outbound-only; it is not the inbound key the intention introduces.
 
 `LC-STOCK-REPORT.md`: 3 of 116 live LC items have no barcode (article number) on file. Such an
 item cannot be named by an `article_number`-only webhook.
+
+## E7 — How Scanner decides that an item satisfies a rule
+
+`src/modules/stock/domain/property-criteria.ts` `matchesCriteria`, fed by
+`deriveItemProperties` (`src/modules/stock/domain/best-match.ts:99-117`):
+
+- Item properties are a flat bag `Record<string, string>`; a rule's criteria are
+  `Record<string, string[] | null>`.
+- Empty criteria match every item. An item with no properties matches only empty criteria.
+- **Every** criteria key must be satisfied. For a key: the item must carry that key with a
+  non-empty string value; the value is tokenized; the key is satisfied when the accepted list is
+  `null` (wildcard — "has any value") or **any** accepted value is among the item's tokens.
+- Tokenizer (`orderedPropertyTokens`): split on `,` and `/` only — **never on `&`**
+  (`"Up & Down"` is one value) — trim, drop empties, lowercase.
+  `"Teak, Beech"` → `["teak", "beech"]`.
+
+## E8 — The derived keys: exactly two
+
+No item stores these; the matcher computes them before matching. Both are excluded from the
+stored bag on both ingestion paths (`item-properties.ts`, `shopify-metafield-properties.ts:62-72`).
+
+| Derived key | From | Rule | Source |
+|---|---|---|---|
+| `wood_group` | the **first** token of `wood_type` only | `Dark`: Mahogany, Santos Rosewood, Dark Oak, Dark Teak, Walnut · `Teak`: Teak, Cherry · `Light`: Oak, Beech, Pine, Birch, Elm · any other wood → no group, matches no `wood_group` criterion (wildcard included) | `shared/item-properties/wood-groups.ts` — marked **PROVISIONAL** in its own header |
+| `drawers_range` | `drawers_qty` (whole non-negative number) | `1-2`, `3-5`, `6+`; `0`, blank or non-numeric → no range | `shared/item-properties/drawer-ranges.ts` |
+
+A rule uses `wood_type` **or** `wood_group`, never both.
+
+## E9 — The criteria keys a rule can use today
+
+`shared/item-properties/item-property-options.ts`: `wood_type`, `wood_group`, `years`,
+`weight_definition`, `country` (all categories); `shape`, `extension_type`,
+`extension_quantity` (table categories); `upholstery`, **`quantity`** (chair categories);
+`drawers_range` (storage categories).
+
+**`quantity` is a properties key in Scanner** — the set size resolved from Shopify; the purchase
+API's attribute of the same name is deliberately dropped (`item-properties.ts`). In Manager the
+set size is the column `Item.quantity`, not a properties key.
+
+## E10 — The two applications do not fill an item's properties from the same sources
+
+Scanner: Shopify product metafields **∪** purchase-API attributes, Shopify winning collisions
+(`item-properties.ts` header). Manager: purchase-API attributes only
+(`app/beyo_manager/services/queries/items/lookup/purchase_api.py` `parse_purchase_api_attributes`)
+or whatever the creating client sends. Same parsing rules for the purchase half (first key wins,
+blank dropped, `label` ignored). **A key that Scanner gets only from Shopify can be absent on the
+Manager item**, which reads as a mismatch even though the physical item is right. Not measured
+here: which keys that affects in live data.
+
+---
+
+# Contract notes for the Scanner-side sender (decided with the owner, 2026-09-18)
+
+For whoever builds the Scanner services that call Manager. The authoritative contract is the
+Manager intention (`intention.md`, §8); these are the points that constrain Scanner.
+
+1. **Demand is summed across locations.** Manager's board is location-free. Scanner sends **one
+   entry per (itemCategory, properties)** whose `quantityRequested` is the total across every
+   location carrying that rule. Two entries with the same identity in one request are rejected.
+2. **Units, not items.** `quantityRequested` counts units (a set of 8 chairs is 8), the same
+   currency as `LocationStock.quantity`.
+3. **Absolute, not delta.** Send the resulting number. Re-sending is harmless.
+4. **Absent means untouched.** A rule missing from a request is not a zero; send `0` explicitly.
+5. **Malformed input rejects the whole request** (wrong shape or type, duplicate identity): nothing
+   is written and the error names the offenders. **An unknown category name does not**: that entry
+   is skipped, the rest is applied, and the response lists every entry as `applied` or
+   `category_not_found` with its category name and properties echoed. Scanner must read the
+   response — a 200 no longer means every rule was taken (corrected by the owner, round 3).
+6. **Header `x-api-key`**, the same header the outbound-webhook worker already sends.
+7. **Processed webhook** sends `article_number` only. Items with no article number cannot be
+   reported. Reporting an item Manager never assigned is harmless (ignored, not an error).
+8. **The derived-key tables are mirrored in Manager** (E8). Editing `WOOD_GROUPS` or
+   `DRAWER_RANGES` in Scanner without the same edit in Manager makes Manager's assignment warning
+   disagree with Scanner's counting.
