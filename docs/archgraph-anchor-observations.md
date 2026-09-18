@@ -1014,3 +1014,12 @@ have inverted the answer.
 
 Related: [[project-remaining-production-pressure]], [[project-task-budget-overrun-signal]],
 [[project-archgraph-anchor-observation-brief]].
+
+---
+
+## 2026-09-18 — intention-shaper, stock_report round 0
+
+1. Session type: intention shaping (no implementation, no review).
+2. New evidence written: **0** `archgraph_apply_changes` calls; graph used read-only (`archgraph_status`, three `archgraph_search_nodes`). No spans, no symbols — nothing to classify.
+3. Re-anchor activity: none. Status reported 8 stale nodes and 14 pending reviews; the session neither touched nor commented on them.
+4. Review findings about location: none.
