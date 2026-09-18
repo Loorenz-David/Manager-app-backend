@@ -1689,7 +1689,7 @@ None
 | data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
 | data.budget_allocations[].steps[].left_seconds | integer | No |  |
 | data.budget_allocations[].steps[].share_state | string | Yes |  |
-| data.budget_allocations[].steps[].live_accrual_rate | string | No | Seconds credited to this step per wall-clock second right now; null when the step is not accruing or sits outside the budget. |
+| data.budget_allocations[].steps[].live_accrual_rate | string | No | Seconds credited to this step per wall-clock second right now; null when the step is not accruing or is `excluded`. Present on `no_budget` rows too. |
 | data.budget_allocations[].steps[].live_concurrency | integer | No | How many of the worker's records this step's share is divided across; null whenever live_accrual_rate is null. |
 | warnings[] | string | Yes |  |
 - **422**: Validation Error

@@ -22,8 +22,8 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 
 
 ALLOCATION_METHOD = "static_proportional_section_v2"
-# Share states whose steps never publish a live rate. See `attach_live_accrual`.
-_NO_ACCRUAL_SHARE_STATES = frozenset({"excluded", "no_budget"})
+# Share states whose step rows never publish a live rate. See `attach_live_accrual`.
+_NO_ACCRUAL_SHARE_STATES = frozenset({"excluded"})
 
 EXCLUDED_STEP_STATES = frozenset(
     {
@@ -267,10 +267,16 @@ def attach_live_accrual(
     Mutates in place, like the pressure and typical overlays the allocations service
     applies beside it. Every row gets both keys so the payload shape is uniform.
 
-    A step outside the budget reports None for both, whatever the loader says. `excluded`
-    steps are terminal and so never accruing anyway, but `no_budget` is load-bearing: the
-    no-budget signal publishes a frozen `actual_worked_seconds` of 0, and a rate beside a
-    figure that cannot grow would tell a client to tick something that never moves.
+    An `excluded` step reports None for both, whatever the loader says. That is defensive
+    rather than reachable — excluded states are terminal, so such a step holds no open
+    record — but it states the contract instead of relying on the coincidence.
+
+    A `no_budget` step reports its TRUE rate. An unpriced task's step rows still carry a
+    live `worked_seconds`, and a worker's timer displays it; a null rate there would make
+    the client count real time, so three batched steps would each run 3x fast and snap back
+    on pause — the very defect the rate exists to fix. The task-level null on budget-signals
+    is a different rule for a different figure: that row's `actual_worked_seconds` is a
+    frozen 0, so a rate beside it would describe nothing. See `get_task_budget_signals`.
     """
     for row in step_rows:
         step_id = str(row.get("step_id"))

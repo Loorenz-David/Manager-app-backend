@@ -35,9 +35,9 @@ class LiveWorkedTime:
 
     `seconds` has an entry for every input step. `accrual_rate` and `concurrency` have
     entries only for steps that are actually accruing — absence means "not accruing", which
-    the serializers publish as null. There is deliberately no zero sentinel: a step earning
-    nothing and a step outside the budget are both simply absent, and a concurrency of 0 is
-    not a real divisor.
+    the serializers publish as null. There is deliberately no zero sentinel: a concurrency
+    of 0 is not a real divisor. This loader knows nothing about budgets; whether a surface
+    publishes the rate for a given step or task is that surface's rule, not this one's.
 
     A step holds at most one open record (unique partial index
     `uix_step_state_records_active`), so `concurrency` is single-valued and the invariant

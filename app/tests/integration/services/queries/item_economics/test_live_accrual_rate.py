@@ -333,15 +333,14 @@ async def test_seconds_wrapper_matches_the_full_loader(db_session):
     assert wrapper == full.seconds
 
 
-@pytest.mark.parametrize("share_state", ["excluded", "no_budget"])
-def test_ac8_steps_outside_the_budget_report_no_rate(share_state):
-    """Even with a live rate in hand, a step outside the budget publishes null.
+def test_ac8_excluded_step_rows_report_no_rate():
+    """An `excluded` step row publishes null even with a live rate in hand.
 
     The fixture deliberately supplies a rate for the step so the assertion cannot pass
     merely because nothing was accruing.
     """
     rows = [
-        {"step_id": "tsp_a", "share_state": share_state},
+        {"step_id": "tsp_a", "share_state": "excluded"},
         {"step_id": "tsp_b", "share_state": "on_track"},
     ]
     attach_live_accrual(
@@ -355,8 +354,126 @@ def test_ac8_steps_outside_the_budget_report_no_rate(share_state):
     assert rows[1]["live_concurrency"] == 3
 
 
+def test_ac8_no_budget_step_rows_report_their_true_rate():
+    """INVERTED 2026-09-18. This leg previously asserted null for `no_budget` step rows.
+
+    That left an unpriced task's timers counting real time: three batched steps each ran 3x
+    fast and snapped back on pause — the defect the rate exists to fix, surviving only on
+    unpriced tasks. Step rows now carry the true rate on `no_budget` exactly as on priced
+    rows; only the budget-signals *task* row stays null there (its actual_worked_seconds is
+    a frozen 0). See HANDOFF_TO_FRONTEND_live_accrual_rate_no_budget_steps_20260918.
+    """
+    rows = [{"step_id": "tsp_a", "share_state": "no_budget"}]
+    attach_live_accrual(rows, {"tsp_a": Fraction(1, 3)}, {"tsp_a": 3})
+    assert rows[0]["live_accrual_rate"] == Fraction(1, 3), "null here is the retired rule"
+    assert rows[0]["live_concurrency"] == 3
+
+
 def test_attach_live_accrual_sets_both_keys_on_every_row():
     rows = [{"step_id": "tsp_idle", "share_state": "on_track"}]
     attach_live_accrual(rows, {}, {})
     assert rows[0]["live_accrual_rate"] is None
     assert rows[0]["live_concurrency"] is None
+
+
+# ------------------------------------------- unpriced tasks, end to end through both surfaces
+
+
+async def test_unpriced_batch_steps_carry_the_true_rate_while_the_task_signal_stays_null(
+    db_session,
+):
+    """Three batched steps on an unpriced task: each step row reads "0.3333" / 3, the
+    task's budget-signals row reads null.
+
+    The two rules differ on purpose. The step rows carry a live `worked_seconds` that a
+    worker's timer displays, so they need the rate; the signals row publishes a frozen
+    `actual_worked_seconds` of 0, so a rate there would describe nothing.
+    """
+    from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum
+    from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
+    from beyo_manager.models.tables.tasks.task_step import TaskStep
+    from beyo_manager.services.context import ServiceContext
+    from beyo_manager.services.queries.item_economics.get_task_budget_allocations import (
+        get_task_budget_allocations,
+    )
+    from beyo_manager.services.queries.item_economics.get_task_budget_signals import (
+        get_task_budget_signals,
+    )
+    from tests.integration.services.queries.item_economics.test_budget_allocations_query import (
+        _seed,
+    )
+
+    values = await _seed(db_session)
+    workspace, user, section, unpriced = values[0], values[1], values[2], values[4]
+    now = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
+
+    step_ids = []
+    for i in range(3):
+        step = TaskStep(
+            client_id=f"tsp_unpriced_batch_{workspace.client_id}_{i}",
+            workspace_id=workspace.client_id,
+            task_id=unpriced.client_id,
+            working_section_id=section.client_id,
+            state=TaskStepStateEnum.WORKING,
+            readiness_status=TaskStepReadinessStatusEnum.READY,
+            total_dependencies=0,
+            completed_dependencies=0,
+            total_working_seconds=0,
+            # The fixture trap: without this every step is non-batchable, reports 1.0,
+            # and the "0.3333" assertion below could never have been reached honestly.
+            allows_batch_working=True,
+            created_by_id=user.client_id,
+        )
+        db_session.add(step)
+        await db_session.flush()
+        db_session.add(
+            StepStateRecord(
+                client_id=f"ssr_unpriced_batch_{workspace.client_id}_{i}",
+                workspace_id=workspace.client_id,
+                step_id=step.client_id,
+                state=TaskStepStateEnum.WORKING,
+                entered_at=now - timedelta(seconds=6),
+                exited_at=None,
+                created_by_id=user.client_id,
+                credited_user_id=user.client_id,
+            )
+        )
+        await db_session.flush()
+        step_ids.append(step.client_id)
+
+    allocations = await get_task_budget_allocations(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id,
+                      "role_name": "worker"},
+            incoming_data={},
+            query_params={"task_ids": [unpriced.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    (task_row,) = allocations["budget_allocations"]
+    rows = {row["step_id"]: row for row in task_row["steps"] if row["step_id"] in step_ids}
+    assert set(rows) == set(step_ids)
+    for step_id in step_ids:
+        row = rows[step_id]
+        # Pin the path under test: without this the test could pass on a priced task.
+        assert row["share_state"] == "no_budget"
+        assert row["live_accrual_rate"] == "0.3333", "null here is the retired rule"
+        assert row["live_concurrency"] == 3
+        # Six wall-clock seconds shared three ways.
+        assert row["worked_seconds"] == 2
+
+    signals = await get_task_budget_signals(
+        ServiceContext(
+            identity={"workspace_id": workspace.client_id, "user_id": user.client_id,
+                      "role_name": "manager"},
+            incoming_data={},
+            query_params={"task_ids": [unpriced.client_id]},
+            session=db_session,
+            now=now,
+        )
+    )
+    (signal_row,) = signals["budget_signals"]
+    assert signal_row["budget_state"] == "no_budget"
+    assert signal_row["actual_worked_seconds"] == 0
+    assert signal_row["live_accrual_rate"] is None
