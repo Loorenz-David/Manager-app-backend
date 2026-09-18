@@ -7279,6 +7279,99 @@ nodes:
       - path: app/beyo_manager/services/commands/task_steps/_settle_step_time.py
         contentHash: e22c19e2ae12222204bbc78ddca5f4b296b8fbe4c065620781bb867a1ab1eaf7
         linkedAt: 2026-09-16T04:58:48.670Z
+  - id: domain-live-accrual-rate
+    type: domain
+    name: Live accrual rate (forward concurrency share)
+    description: "The forward twin of the concurrency sweep: how fast an OPEN record
+      is being credited right now, rather than how much it has accrued. Same
+      rules as `averaged_seconds_by_record` — group by state, a batchable
+      interval takes 1/k of the k concurrently-open batchable intervals in that
+      state, a non-batch interval takes the full 1 and stays out of everyone's
+      divisor — evaluated at `now` instead of integrated. Three deliberate
+      divergences: only open intervals count (so a record whose share was halved
+      by a peer that has since CLOSED is now accruing at the full rate, which is
+      why the rate cannot be read off the sweep's last segment); the `duration
+      <= 0` skip is not applied (a just-started record has a rate before it has
+      earned a second); and `marked_wrong` intervals neither accrue nor dilute.
+      Grouping by state first is what keeps a PAUSED or `ended_shift` record
+      from diluting a WORKING one. Returns (rate, concurrency) per record, so
+      `rate == 1/concurrency` always holds."
+    tags:
+      - analytics
+      - live-clock
+      - batch-working
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/analytics/concurrency.py
+          symbol: accrual_rate_by_record
+          summary: Filters to open, non-marked-wrong intervals entered at or before now,
+            groups them by state, counts the batchable ones as the divisor, and
+            returns Fraction(1, k) with k for each.
+          inferenceReason: This symbol is the single definition of the forward rate,
+            deliberately sited beside the retrospective sweep so the two cannot
+            drift.
+        - path: app/tests/unit/domain/analytics/test_concurrency.py
+          summary: Twelve pure tests pin the divisor rules, including that a closed peer
+            leaves the survivor at 1.0 and that paused/ended_shift records form
+            separate populations.
+          inferenceReason: The tests encode the divergences that distinguish the forward
+            rate from the average.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z
+    sourceLinks:
+      - path: app/beyo_manager/domain/analytics/concurrency.py
+        symbol: accrual_rate_by_record
+        contentHash: 720c0159ce4368ac91f1e799d46666cdb65105241e7d1156cde9992bf5882d4d
+        linkedAt: 2026-09-16T06:40:26.948Z
+  - id: projection-live-worked-time
+    type: projection
+    name: LiveWorkedTime loader
+    description: "The widened face of the live worked-seconds read: one query
+      yielding settled+live seconds per step AND the forward accrual rate each
+      step is earning at, plus the divisor that rate came from. The rate is read
+      off the same contribution objects that produce the seconds, so the
+      published rate is by construction the rate those seconds are growing at —
+      the guarantee the consuming clients asked for. `seconds` carries every
+      input step; `accrual_rate` and `concurrency` carry only accruing steps,
+      and absence is published as null rather than a zero sentinel. A step holds
+      at most one open record (unique partial index
+      `uix_step_state_records_active`), so the divisor is single-valued and
+      `accrual_rate == Fraction(1, concurrency)` holds for every entry.
+      `task_rate()` sums exact fractions across a task's steps before any
+      rounding, so three batched steps report exactly 1 rather than 0.9999; it
+      returns None, never 0, when nothing accrues. `load_live_worked_seconds`
+      remains as the narrow face returning `.seconds`, which is what keeps
+      task-production-time and task-budget-status untouched by this change."
+    tags:
+      - item-economics
+      - live-clock
+      - ai-inferred
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_time
+          summary: Probes open WORKING records for the requested steps, runs one
+            user-scoped sweep per credited worker, and accumulates seconds,
+            accrual_rate and concurrency from the same contribution objects.
+          inferenceReason: This symbol owns the widened live read and its one-sweep guarantee.
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: LiveWorkedTime
+          summary: Frozen dataclass carrying the three maps plus task_rate(), which sums
+            exact Fractions and returns None when nothing accrues.
+          inferenceReason: Keeping the task rollup on the dataclass is what keeps rate
+            arithmetic out of the three query services bound by the no-Fraction
+            contract test.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z
+    sourceLinks:
+      - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+        symbol: load_live_worked_time
+        contentHash: 2228a752fa0817602ab66336e5c36ff422482fb63310197492ec31c34940fc45
+        linkedAt: 2026-09-16T06:40:26.948Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -13362,3 +13455,64 @@ edges:
     confidence: 0.9
     createdAt: 2026-09-16T04:58:48.670Z
     updatedAt: 2026-09-16T04:58:48.670Z
+  - sourceNodeId: projection-live-worked-time
+    relationshipType: calls
+    targetNodeId: src-compute-record-contributions
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/live_worked_seconds.py
+          symbol: load_live_worked_time
+          summary: One compute_record_contributions call per credited worker with an open
+            WORKING record, unchanged from the seconds-only loader.
+          inferenceReason: "The rate adds no query: it is a third reduction over rows the
+            sweep already returns."
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z
+  - sourceNodeId: projection-live-worked-time
+    relationshipType: depends_on
+    targetNodeId: domain-live-accrual-rate
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/analytics/averaged_time.py
+          summary: compute_record_contributions runs accrual_rate_by_record beside the two
+            existing sweeps over the same interval list and carries the result
+            on RecordContribution.
+          inferenceReason: The loader inherits the domain rate rule through the shared
+            analytics primitive rather than reimplementing it.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z
+  - sourceNodeId: projection-item-economics-task-budget-allocations
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_allocations.py
+          symbol: get_task_budget_allocations
+          summary: Loads one LiveWorkedTime for all visible steps and overlays
+            live_accrual_rate / live_concurrency onto the divided step rows via
+            attach_live_accrual.
+          inferenceReason: The allocations surface is one of the two consumers of the
+            widened read.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z
+  - sourceNodeId: projection-item-economics-task-budget-signals
+    relationshipType: reads_from
+    targetNodeId: projection-live-worked-time
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/item_economics/get_task_budget_signals.py
+          symbol: get_task_budget_signals
+          summary: Calls live.task_rate() for each task's steps and publishes it, forcing
+            None on the no-budget branch whose actual_worked_seconds is a frozen
+            zero.
+          inferenceReason: The signals surface publishes the task-level rollup of the same rate.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-16T06:40:26.948Z
+    updatedAt: 2026-09-16T06:40:26.948Z

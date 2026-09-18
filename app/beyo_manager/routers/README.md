@@ -1689,6 +1689,8 @@ None
 | data.budget_allocations[].steps[].worked_seconds | integer | Yes |  |
 | data.budget_allocations[].steps[].left_seconds | integer | No |  |
 | data.budget_allocations[].steps[].share_state | string | Yes |  |
+| data.budget_allocations[].steps[].live_accrual_rate | string | No | Seconds credited to this step per wall-clock second right now; null when the step is not accruing or sits outside the budget. |
+| data.budget_allocations[].steps[].live_concurrency | integer | No | How many of the worker's records this step's share is divided across; null whenever live_accrual_rate is null. |
 | warnings[] | string | Yes |  |
 - **422**: Validation Error
   - Content-Type: application/json
@@ -1729,6 +1731,7 @@ None
 | data.budget_signals[].allowed_seconds | integer | Yes |  |
 | data.budget_signals[].actual_worked_seconds | integer | Yes |  |
 | data.budget_signals[].cost_per_worker_minute_ten_thousandths | integer | Yes |  |
+| data.budget_signals[].live_accrual_rate | string | No | Seconds credited to this task per wall-clock second right now, summed over its open records; null when nothing is running or the task has no budget. |
 | warnings[] | string | Yes |  |
 - **422**: Validation Error
   - Content-Type: application/json

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from fractions import Fraction
 
 from beyo_manager.domain.analytics.concurrency import (
     TimeInterval,
+    accrual_rate_by_record,
     averaged_seconds_by_record,
     wasted_seconds_by_record,
 )
@@ -137,3 +139,90 @@ def test_wasted_batch_is_swept_independently_from_trusted_intervals():
 def test_wasted_lone_interval_keeps_full_duration():
     out = wasted_seconds_by_record([_iv("wrong", end=60, wrong=True)], NOW)
     assert _approx(out["wrong"], 3600)
+
+
+# --------------------------------------------------------------- forward accrual rate
+# `end=None` means still open. Only open intervals accrue, so every fixture here uses it.
+
+
+def test_rate_lone_open_batchable_gets_the_whole_second():
+    out = accrual_rate_by_record([_iv("a", end=None)], NOW)
+    assert out == {"a": (Fraction(1), 1)}
+
+
+def test_rate_n_open_batchable_split_evenly_and_sum_to_one():
+    ivs = [_iv(f"r{i}", end=None) for i in range(3)]
+    out = accrual_rate_by_record(ivs, NOW)
+    for i in range(3):
+        assert out[f"r{i}"] == (Fraction(1, 3), 3)
+    assert sum(rate for rate, _ in out.values()) == 1
+
+
+def test_rate_non_batchable_takes_a_full_second_and_stays_out_of_the_divisor():
+    # The reachable mixed case: starting a batchable step never pauses a running
+    # non-batch one, so these coexist. Each rate is right; the sum exceeds 1 by design.
+    ivs = [_iv("solo", end=None, batch=False), _iv("b1", end=None), _iv("b2", end=None)]
+    out = accrual_rate_by_record(ivs, NOW)
+    assert out["solo"] == (Fraction(1), 1)
+    assert out["b1"] == (Fraction(1, 2), 2)     # divisor is 2, not 3 — "solo" is excluded
+    assert out["b2"] == (Fraction(1, 2), 2)
+    assert sum(rate for rate, _ in out.values()) == 2
+
+
+def test_rate_closed_records_are_excluded_from_the_divisor():
+    # The regression this exists for: "b" earned a halved share while "closed" overlapped
+    # it, but that peer has since exited, so "b" is now accruing at the FULL rate.
+    # Reading the rate off the sweep's last segment would wrongly return 1/2.
+    ivs = [_iv("closed", start=0, end=30), _iv("b", start=0, end=None)]
+    out = accrual_rate_by_record(ivs, NOW)
+    assert out == {"b": (Fraction(1), 1)}
+
+
+def test_rate_paused_and_ended_shift_do_not_dilute_a_working_record():
+    ivs = [
+        _iv("w", state="working", end=None),
+        _iv("p1", state="paused", end=None),
+        _iv("p2", state="ended_shift", end=None),
+    ]
+    out = accrual_rate_by_record(ivs, NOW)
+    assert out["w"] == (Fraction(1), 1)          # not 1/3 — states are separate populations
+    assert out["p1"] == (Fraction(1), 1)
+    assert out["p2"] == (Fraction(1), 1)
+
+
+def test_rate_marked_wrong_neither_accrues_nor_dilutes():
+    ivs = [_iv("wrong", end=None, wrong=True), _iv("ok", end=None)]
+    out = accrual_rate_by_record(ivs, NOW)
+    assert "wrong" not in out
+    assert out["ok"] == (Fraction(1), 1)         # divisor of 1, not 2
+
+
+def test_rate_just_opened_record_reports_its_forward_rate():
+    # Zero elapsed time, but it is accruing — `_sweep`'s duration<=0 skip must not apply.
+    ivs = [_iv("fresh", start=60, end=None), _iv("older", start=0, end=None)]
+    out = accrual_rate_by_record(ivs, _min(60))
+    assert out["fresh"] == (Fraction(1, 2), 2)
+    assert out["older"] == (Fraction(1, 2), 2)
+
+
+def test_rate_future_record_does_not_accrue_yet():
+    out = accrual_rate_by_record([_iv("future", start=120, end=None)], _min(60))
+    assert out == {}
+
+
+def test_rate_invariant_rate_is_one_over_concurrency():
+    ivs = [_iv(f"r{i}", end=None) for i in range(4)] + [_iv("solo", end=None, batch=False)]
+    out = accrual_rate_by_record(ivs, NOW)
+    assert out
+    for rate, concurrency in out.values():
+        assert rate == Fraction(1, concurrency)
+
+
+def test_rate_all_closed_returns_empty():
+    assert accrual_rate_by_record([_iv("a", end=60), _iv("b", end=60)], NOW) == {}
+
+
+def test_rate_is_order_independent():
+    ivs = [_iv("a", end=None), _iv("b", end=None), _iv("c", end=None, batch=False)]
+    baseline = accrual_rate_by_record(ivs, NOW)
+    assert accrual_rate_by_record(list(reversed(ivs)), NOW) == baseline

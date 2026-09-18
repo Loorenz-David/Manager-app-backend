@@ -11,6 +11,7 @@ from beyo_manager.domain.item_economics import budget_division
 from beyo_manager.domain.item_economics.budget_division import (
     ALLOCATION_METHOD,
     DivisionStep,
+    attach_live_accrual,
     divide_production_budget,
     _loaded_latest_state_record,
 )
@@ -46,7 +47,7 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.context import ServiceContext
-from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_seconds
+from beyo_manager.services.queries.item_economics.live_worked_seconds import load_live_worked_time
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
     narrowed_evidence_from_row,
     section_evidence_from_row,
@@ -127,7 +128,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
     for step in steps:
         steps_by_task[step.task_id].append(step)
 
-    live_seconds = await load_live_worked_seconds(
+    live = await load_live_worked_time(
         ctx.session,
         ctx.workspace_id,
         steps,
@@ -284,7 +285,7 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
                 state=step.state,
                 working_section_id=step.working_section_id,
                 # Strict indexing is deliberate and fail-loud: a fallback would silently restore settled values and mask C3's population row.
-                total_working_seconds=live_seconds[step.client_id],
+                total_working_seconds=live.seconds[step.client_id],
                 sequence_order=step.sequence_order,
                 working_section_name_snapshot=step.working_section_name_snapshot,
                 is_deleted=step.is_deleted,
@@ -332,7 +333,8 @@ async def get_task_budget_allocations(ctx: ServiceContext) -> dict:
             step["projected_typical_worker_seconds"] = project_typical_seconds(
                 unit_seconds, item_quantity
             )
-        actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
+        attach_live_accrual(division["steps"], live.accrual_rate, live.concurrency)
+        actual_seconds = sum(live.seconds[step.client_id] for step in task_steps)
         if status in _BUDGET_STATUSES and allowed is not None:
             actual_minutes = calculate_actual_worker_minutes(actual_seconds)
             remaining_minutes = calculate_remaining_worker_minutes(Decimal(allowed), actual_minutes)

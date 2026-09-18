@@ -9,6 +9,10 @@ and never count toward anyone's divisor).
 This is the single source of truth for batch averaging: the analytics worker, the
 worker-stats endpoints, and the backfill all compute time through this function,
 so the aggregates are a deterministic, idempotent projection of the raw records.
+
+It also owns the *forward* twin of that rule — `accrual_rate_by_record` — which
+answers "how fast is this record accruing right now" rather than "how much has it
+accrued". Both live here so the rate can never disagree with the seconds it predicts.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from fractions import Fraction
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,56 @@ def averaged_seconds_by_record(
     Returns ``{record_id: seconds}`` (float) for every accruing record.
     """
     return _sweep((interval for interval in intervals if not interval.marked_wrong), now)
+
+
+def accrual_rate_by_record(
+    intervals: Iterable[TimeInterval], now: datetime
+) -> dict[str, tuple[Fraction, int]]:
+    """Forward accrual rate per **open** interval: seconds credited per wall-clock second.
+
+    Returns ``{record_id: (rate, concurrency)}`` for accruing records only; a record absent
+    from the mapping is not accruing. ``concurrency`` is the divisor the rate came from, so
+    ``rate == Fraction(1, concurrency)`` always holds.
+
+    Same rule as ``averaged_seconds_by_record``, evaluated at ``now`` instead of integrated
+    over an interval: group by state, then a batchable interval takes ``1/k`` where ``k`` is
+    the number of concurrently-open batchable intervals in that state, while a non-batch
+    interval takes the full ``1`` and stays out of everyone's divisor.
+
+    THREE DELIBERATE DIVERGENCES FROM ``_sweep`` — each one is load-bearing:
+
+    1. **Only open intervals count.** A closed record earns nothing going forward, so it must
+       not sit in the divisor. This is what makes "pause one of three, the other two go to
+       1/2" fall out, and it is why the rate CANNOT be read off ``_sweep``'s last segment: a
+       record whose share was halved by a peer that has since closed is now accruing at the
+       full ``1``, not at ``1/2``.
+    2. **No ``duration <= 0`` skip.** A record opened this very instant has accrued nothing
+       but does have a forward rate, and reporting ``None`` for it would stall a just-started
+       timer for one poll.
+    3. **``marked_wrong`` intervals are dropped**, exactly as ``averaged_seconds_by_record``
+       drops them — they neither accrue nor dilute.
+
+    Grouping by state first is also what keeps a PAUSED or ``ended_shift`` record from
+    diluting a WORKING one: they are simply different populations.
+    """
+    eligible_by_state: dict[str, list[TimeInterval]] = defaultdict(list)
+    for interval in intervals:
+        if interval.exited_at is not None or interval.marked_wrong:
+            continue
+        if interval.entered_at > now:
+            continue
+        eligible_by_state[interval.state].append(interval)
+
+    rates: dict[str, tuple[Fraction, int]] = {}
+    for state_intervals in eligible_by_state.values():
+        divisor = sum(1 for interval in state_intervals if interval.is_batchable)
+        for interval in state_intervals:
+            if interval.is_batchable:
+                # divisor >= 1 here: this interval is itself batchable and was counted.
+                rates[interval.record_id] = (Fraction(1, divisor), divisor)
+            else:
+                rates[interval.record_id] = (Fraction(1), 1)
+    return rates
 
 
 def wasted_seconds_by_record(

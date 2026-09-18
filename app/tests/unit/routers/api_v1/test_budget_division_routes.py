@@ -160,6 +160,7 @@ def test_time_payload_serializers_have_exact_money_free_key_sets():
         "step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds", "typical_basis", "sample_count",
         "typical_unit_worker_seconds", "projected_typical_worker_seconds",
         "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
+        "live_accrual_rate", "live_concurrency",
     }
     payload = serialize_budget_allocation(task)
     assert not any("money" in key or "minor" in key for key in payload)

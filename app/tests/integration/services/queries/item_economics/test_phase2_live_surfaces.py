@@ -821,15 +821,22 @@ async def test_c4_each_surface_uses_one_loader_call_and_c5_does_not_persist_live
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
     original = production_module.load_live_worked_seconds
+    original_time = allocations_module.load_live_worked_time
 
     async def counted(*args, **kwargs):
         counted.calls += 1
         return await original(*args, **kwargs)
 
+    # Allocations reads the wider face of the same single sweep; both count as one load,
+    # which is what this test exists to pin.
+    async def counted_time(*args, **kwargs):
+        counted.calls += 1
+        return await original_time(*args, **kwargs)
+
     counted.calls = 0
     monkeypatch.setattr(production_module, "load_live_worked_seconds", counted)
     monkeypatch.setattr(status_module, "load_live_worked_seconds", counted)
-    monkeypatch.setattr(allocations_module, "load_live_worked_seconds", counted)
+    monkeypatch.setattr(allocations_module, "load_live_worked_time", counted_time)
     await get_task_production_time(_ctx(db_session, workspace.client_id, task.client_id, now))
     assert counted.calls == 1
 
@@ -877,15 +884,22 @@ async def test_c4_frozen_open_record_payloads_are_byte_identical(db_session, mon
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
     original = production_module.load_live_worked_seconds
+    original_time = allocations_module.load_live_worked_time
 
     async def counted(*args, **kwargs):
         counted.calls += 1
         return await original(*args, **kwargs)
 
+    # Allocations reads the wider face of the same single sweep; both count as one load,
+    # which is what this test exists to pin.
+    async def counted_time(*args, **kwargs):
+        counted.calls += 1
+        return await original_time(*args, **kwargs)
+
     counted.calls = 0
     monkeypatch.setattr(production_module, "load_live_worked_seconds", counted)
     monkeypatch.setattr(status_module, "load_live_worked_seconds", counted)
-    monkeypatch.setattr(allocations_module, "load_live_worked_seconds", counted)
+    monkeypatch.setattr(allocations_module, "load_live_worked_time", counted_time)
 
     def payload_bytes(payload):
         return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -942,14 +956,14 @@ async def test_c4_frozen_open_record_payloads_are_byte_identical(db_session, mon
 async def test_c8_allocations_batch_has_one_open_record_probe(db_session, monkeypatch):
     values, now = await _make_live_fixture(db_session)
     workspace, _user, _section, task, *_ = values
-    original = allocations_module.load_live_worked_seconds
+    original = allocations_module.load_live_worked_time
 
     async def counted(*args, **kwargs):
         counted.calls += 1
         return await original(*args, **kwargs)
 
     counted.calls = 0
-    monkeypatch.setattr(allocations_module, "load_live_worked_seconds", counted)
+    monkeypatch.setattr(allocations_module, "load_live_worked_time", counted)
     from beyo_manager.models import database
 
     statements: list[str] = []

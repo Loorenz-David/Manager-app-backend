@@ -11,12 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from fractions import Fraction
 
 from sqlalchemy import String, and_, case, cast, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from beyo_manager.domain.analytics.concurrency import (
     TimeInterval,
+    accrual_rate_by_record,
     averaged_seconds_by_record,
     wasted_seconds_by_record,
 )
@@ -27,6 +29,10 @@ from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 
 _TIME_STATES = (TaskStepStateEnum.WORKING, TaskStepStateEnum.PAUSED)
+
+# What a record that is not accruing reports: no rate, no divisor. Never (0, 0) — a zero
+# divisor is not a real concurrency, and callers publish absence as null.
+_NOT_ACCRUING: tuple[Fraction | None, int | None] = (None, None)
 
 # The emitted bucket key — the SQL twin of `domain.analytics.time_buckets.bucket_for`.
 #
@@ -64,6 +70,12 @@ class RecordContribution:
     marked_wrong: bool
     seconds: float             # concurrency-averaged share
     wasted_seconds: float      # flagged-only concurrency-averaged share
+    is_batchable: bool         # TaskStep.allows_batch_working — drives the divisor
+    # Forward rate: seconds credited per wall-clock second right now, and the divisor it
+    # came from. Both None unless the record is open and accruing. See
+    # `domain.analytics.concurrency.accrual_rate_by_record`.
+    accrual_rate: Fraction | None
+    concurrency: int | None
 
 
 async def compute_record_contributions(
@@ -124,6 +136,8 @@ async def compute_record_contributions(
     ]
     seconds_by_record = averaged_seconds_by_record(intervals, now)
     wasted_by_record = wasted_seconds_by_record(intervals, now)
+    # Third reduction over the same in-memory population — no extra query.
+    rates_by_record = accrual_rate_by_record(intervals, now)
 
     return [
         RecordContribution(
@@ -139,6 +153,9 @@ async def compute_record_contributions(
             marked_wrong=bool(row.marked_wrong or row.step_marked_wrong),
             seconds=seconds_by_record.get(row.record_id, 0.0),
             wasted_seconds=wasted_by_record.get(row.record_id, 0.0),
+            is_batchable=bool(row.is_batchable),
+            accrual_rate=rates_by_record.get(row.record_id, _NOT_ACCRUING)[0],
+            concurrency=rates_by_record.get(row.record_id, _NOT_ACCRUING)[1],
         )
         for row in rows
     ]

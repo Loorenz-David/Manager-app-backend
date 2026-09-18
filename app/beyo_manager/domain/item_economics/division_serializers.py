@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from decimal import Decimal, localcontext
+from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 from fractions import Fraction
 
 from beyo_manager.domain.item_economics.budget_division import ALLOCATION_METHOD
@@ -27,6 +27,28 @@ from beyo_manager.domain.item_economics.typical_filters import (
 
 def _decimal(value: object) -> str | None:
     return str(value) if value is not None else None
+
+
+_RATE_SCALE = Decimal("0.0001")
+
+
+def _rate_decimal(value: Fraction | None) -> str | None:
+    """Serialize a live accrual rate at a fixed four decimal places.
+
+    Deliberately not `_fraction_decimal`, which runs at 50 digits of precision and would
+    publish 1/3 as a fifty-digit string. Four places is what the consuming clients asked
+    for and matches the cost-rate rounding in `calculator`.
+
+    The rounding is visible: three steps sharing a worker each serve "0.3333", so the step
+    rates sum to 0.9999 while the task rate — summed as exact fractions before rounding —
+    serves "1.0000". Both are correct; the per-step tolerance is one unit in the last place.
+    """
+    if value is None:
+        return None
+    with localcontext() as context:
+        context.prec = 50
+        exact = Decimal(value.numerator) / Decimal(value.denominator)
+    return str(exact.quantize(_RATE_SCALE, rounding=ROUND_HALF_EVEN))
 
 
 def _fraction_decimal(value: Fraction | None) -> str | None:
@@ -69,6 +91,11 @@ def serialize_budget_step(row: dict) -> dict:
         "left_seconds": row["left_seconds"],
         "share_state": row["share_state"],
         "pressure_share_seconds": row.get("pressure_share_seconds"),
+        # Seconds credited to this step per wall-clock second right now, and the divisor
+        # that rate came from. Null when the step is not accruing. `.get` is required: a
+        # minimal row without these keys is a legitimate caller.
+        "live_accrual_rate": _rate_decimal(row.get("live_accrual_rate")),
+        "live_concurrency": row.get("live_concurrency"),
     }
 
 
@@ -110,6 +137,10 @@ def serialize_budget_signal(row: dict) -> dict:
         "cost_per_worker_minute_ten_thousandths": row[
             "cost_per_worker_minute_ten_thousandths"
         ],
+        # Seconds credited to this whole task per wall-clock second, summed over its open
+        # records. Null when nothing is running, and null on a no-budget task whose
+        # actual_worked_seconds is a frozen zero.
+        "live_accrual_rate": _rate_decimal(row.get("live_accrual_rate")),
     }
 
 

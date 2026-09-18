@@ -22,6 +22,9 @@ from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
 
 
 ALLOCATION_METHOD = "static_proportional_section_v2"
+# Share states whose steps never publish a live rate. See `attach_live_accrual`.
+_NO_ACCRUAL_SHARE_STATES = frozenset({"excluded", "no_budget"})
+
 EXCLUDED_STEP_STATES = frozenset(
     {
         TaskStepStateEnum.SKIPPED,
@@ -254,6 +257,31 @@ def _section_step_allowances(group: Mapping[str, Any], section_allowance: int) -
     return allowances
 
 
+def attach_live_accrual(
+    step_rows: Sequence[dict[str, Any]],
+    accrual_rate: Mapping[str, Any],
+    concurrency: Mapping[str, Any],
+) -> None:
+    """Overlay the live accrual rate and its divisor onto already-divided step rows.
+
+    Mutates in place, like the pressure and typical overlays the allocations service
+    applies beside it. Every row gets both keys so the payload shape is uniform.
+
+    A step outside the budget reports None for both, whatever the loader says. `excluded`
+    steps are terminal and so never accruing anyway, but `no_budget` is load-bearing: the
+    no-budget signal publishes a frozen `actual_worked_seconds` of 0, and a rate beside a
+    figure that cannot grow would tell a client to tick something that never moves.
+    """
+    for row in step_rows:
+        step_id = str(row.get("step_id"))
+        if row.get("share_state") in _NO_ACCRUAL_SHARE_STATES:
+            row["live_accrual_rate"] = None
+            row["live_concurrency"] = None
+            continue
+        row["live_accrual_rate"] = accrual_rate.get(step_id)
+        row["live_concurrency"] = concurrency.get(step_id)
+
+
 def _step_result(
     step: Any,
     allowance: int | None,
@@ -413,6 +441,7 @@ __all__ = [
     "TYPICAL_MIN_SAMPLE_SIZE",
     "TYPICAL_WINDOW_DAYS",
     "DivisionStep",
+    "attach_live_accrual",
     "divide_production_budget",
     "group_steps_by_section",
     "participating_sections",

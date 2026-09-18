@@ -61,7 +61,7 @@ from beyo_manager.services.queries.item_economics.get_task_budget_allocations im
     _BUDGET_STATUSES,
 )
 from beyo_manager.services.queries.item_economics.live_worked_seconds import (
-    load_live_worked_seconds,
+    load_live_worked_time,
 )
 from beyo_manager.services.queries.working_sections.get_working_section_typical_times import (
     narrowed_evidence_from_row,
@@ -163,7 +163,7 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
     for step in steps:
         steps_by_task[step.task_id].append(step)
 
-    live_seconds = await load_live_worked_seconds(
+    live = await load_live_worked_time(
         ctx.session,
         ctx.workspace_id,
         steps,
@@ -316,7 +316,7 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
                 client_id=step.client_id,
                 state=step.state,
                 working_section_id=step.working_section_id,
-                total_working_seconds=live_seconds[step.client_id],
+                total_working_seconds=live.seconds[step.client_id],
                 sequence_order=step.sequence_order,
                 working_section_name_snapshot=step.working_section_name_snapshot,
                 is_deleted=step.is_deleted,
@@ -367,7 +367,8 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
             division_steps,
             selection.selected,
         )
-        actual_seconds = sum(live_seconds[step.client_id] for step in task_steps)
+        actual_seconds = sum(live.seconds[step.client_id] for step in task_steps)
+        live_rate = live.task_rate([step.client_id for step in task_steps])
         if status in _BUDGET_STATUSES and evaluation is not None:
             signal = compute_budget_signal(
                 sections=division["sections"],
@@ -381,6 +382,10 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
         else:
             signal = NO_BUDGET_SIGNAL
             currency = NO_CURRENCY
+            # The no-budget signal freezes actual_worked_seconds at zero, so there is no
+            # figure here for a rate to describe. Publishing one would ask the client to
+            # tick a number that never moves.
+            live_rate = None
 
         output.append(
             {
@@ -396,6 +401,7 @@ async def get_task_budget_signals(ctx: ServiceContext) -> dict:
                 "cost_per_worker_minute_ten_thousandths": (
                     signal.cost_per_worker_minute_ten_thousandths
                 ),
+                "live_accrual_rate": live_rate,
             }
         )
     return serialize_budget_signals(output)

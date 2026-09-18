@@ -70,6 +70,7 @@ ROW_KEYS = {
     "allowed_seconds",
     "actual_worked_seconds",
     "cost_per_worker_minute_ten_thousandths",
+    "live_accrual_rate",
 }
 
 
@@ -569,6 +570,9 @@ async def test_c3_a_no_budget_row_is_constructed_with_all_zeroes(db_session):
             "allowed_seconds": 0,
             "actual_worked_seconds": 0,
             "cost_per_worker_minute_ten_thousandths": 0,
+            # No budget means actual_worked_seconds is a frozen zero, so there is no
+            # growing figure for a live rate to describe — even though the step is WORKING.
+            "live_accrual_rate": None,
         }
 
 
@@ -596,7 +600,7 @@ async def test_c3_c_evaluated_currency_is_the_enum_value_string(db_session):
 
 
 @pytest.mark.integration
-async def test_c4_a_every_row_has_exactly_the_ten_contract_keys(db_session):
+async def test_c4_a_every_row_has_exactly_the_eleven_contract_keys(db_session):
     async with _case(db_session) as data:
         evaluated, _ = await _evaluated_task(data, "c4a_eval")
         unevaluated = await data.task("c4a_none")

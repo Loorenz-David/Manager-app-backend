@@ -112,6 +112,7 @@ def test_c5_c6_serializers_disclose_basis_and_count_only_for_participating_secti
         "step_id", "state", "working_section_id", "section_name_snapshot", "typical_worker_seconds",
         "typical_basis", "sample_count", "typical_unit_worker_seconds", "projected_typical_worker_seconds",
         "allowance_seconds", "worked_seconds", "left_seconds", "share_state", "pressure_share_seconds",
+        "live_accrual_rate", "live_concurrency",
     }
     selection = TaskTypicalSelection(
         "section_wide_uniform", "uniform_basis_v1", "primary_item_category_v1", None,
