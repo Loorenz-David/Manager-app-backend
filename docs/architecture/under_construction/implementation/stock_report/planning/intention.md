@@ -1,12 +1,12 @@
 # Intention: Stock Report — Scanner demand turned into Manager work
 
 ```
-status: RATIFIED — by the owner (David), 2026-09-18; see §18 "Ratification"
+status: RATIFIED — by the owner (David), 2026-09-18; re-ratified the same day including amendment §14B; see §18
 role: intention (pipeline root artifact)
-shaped_from: raw_intention.md (this folder; its content and the owner's answers are preserved in Appendix A)
+shaped_from: raw_intention.md (deleted by the owner after ratification; its section map and the owner's verbatim answers are preserved in Appendix A)
 source_evidence: scanner_source_evidence.md (this folder) — cited below as E1…E10
 date: 2026-09-18
-round: 4 (ratified as of this round)
+round: 5 (re-ratified as of this round)
 ```
 
 Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
@@ -14,6 +14,9 @@ Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
 ---
 
 ## ⚠ OWNER DECISIONS REQUIRED (0)
+
+**Read §14B with the rest:** it is a ratified amendment and wins wherever it and an earlier
+section disagree (row identity, no-op actions, item deletion, category guard, concurrent writers).
 
 None open. All seven round-0 cards and both round-1 confirmations are answered (§17), and the
 owner ratified the document on 2026-09-18 (§18). Everything else in this document is either the owner's own
@@ -482,10 +485,13 @@ A role outside its row is refused before anything is read or written.
 | Derived, persisted | the three counters; `properties_signature`; `priority_order`; `Task.is_stock_assignment`; the goal record's `quantity_awaiting` |
 | Derived, never stored | major category of a StockReportItem |
 
-Every persisted derived value has a stated recomputation: counters = count of non-deleted
-assignments by state; the flag = existence of a non-deleted assignment; the signature = the
-function of `properties`. Missing data is never inferred: an unknown category is rejected, never
-guessed.
+Every persisted derived value has a stated recomputation: counters = **sum of the stored
+`quantity`** of non-deleted assignments by state (HC-2a); the flag = existence of a non-deleted
+assignment; the signature = the function of `properties`; a goal record's total = the stored
+quantities of the assignments currently crediting it plus those Scanner resolved while credited
+to it. Missing data is never inferred: an unknown category is skipped and reported (§8.1), never
+guessed. The assignment's `quantity` is a **copied fact** (the item's quantity at creation), not a
+derived value — it is deliberately never recomputed.
 
 ---
 
@@ -567,6 +573,84 @@ merge.)
 8. **Event emission** — after-commit only, none on rollback or no-op, pending-events hand-up from
    subordinate operations into the task-state commands. Criteria for §9B trace here.
 
+### 14A. Seeds for mechanism-inventory (added after ratification, 2026-09-18 — questions, not decisions)
+
+A post-ratification read found these unstated. None changes what was ratified; each is a place
+where two implementers could diverge, so each must leave mechanism-inventory as a contract or as
+an owner card — never be decided in code.
+
+1. **Shape of `properties` on the demand webhook.** Scanner's criteria are `key → list of strings
+   | null` (E3). §8.1 only says "a JSON object". Does Manager reject any other value shape? And
+   does it trust Scanner's normalization (lowercased, sorted lists) for identity, or normalize
+   again itself? A list sent in a different order is a different signature today (§2.2).
+2. **No-op user actions.** Setting the priority an item already has, or moving it to the position
+   it already holds: no history record, no authorship stamp, no event — presumably, by the same
+   reasoning as the Scanner no-op in §9B. Not yet written.
+3. **`Task.is_stock_assignment` visibility.** Stored for later task filtering. Whether any
+   existing task response exposes it in this project is unstated; the default reading is no.
+4. **An assigned item that changes underneath the assignment** — soft-deleted, moved to another
+   category, or its article number edited while `awaiting`. §9A checks only at creation; the
+   processed webhook looks the item up live.
+5. **Races between the two writers of one assignment** — Scanner resolving while the task reopens
+   in the same instant. §5 says who may do what; it does not say who wins.
+
+### 14B. Amendment — the owner's answers to the 14A seeds (2026-09-18, round 5)
+
+Where this section and an earlier one disagree, **this section wins**. It amends §4.1, §8.1, §9A,
+§5 and §2.2 without renumbering them.
+
+**B1 — Row identity ignores order, including inside lists (owner: "order shouldn't matter when
+comparing"; the payload is one dictionary).** Amends §4.1 / §8.1. The existing signature function
+sorts keys but treats list order as significant (§2.2), so Manager **normalizes the criteria
+before signing and stores the normalized form**, mirroring Scanner's own `normalizeCriteria` (E3):
+- a value that is a string becomes a one-element list;
+- a list of strings is trimmed, lowercased, de-duplicated and sorted;
+- `null` stays `null` (wildcard);
+- then `compute_properties_signature` is applied, unchanged, to the normalized object.
+So `{"wood_group": ["Teak","Dark"]}` and `{"wood_group": ["dark","teak"]}` are one row.
+*Mine (P30):* any other value shape (number, nested object, mixed list) is stored verbatim, signed
+with key-sorting only, and is never a reason to reject Scanner's request; at assignment time such
+a criterion cannot be evaluated and counts as a property mismatch with reason
+`criterion not understood` — overridable like any other. `properties` itself not being an object
+still rejects the request (§8).
+
+**B2 — A user action that changes nothing does nothing (owner).** Setting the priority a row
+already has, or moving it to the position it already holds, returns early: no write, no history
+record, no authorship stamp, no event. Same rule as the Scanner no-op in §9B.
+
+**B3 — `Task.is_stock_assignment` is not surfaced (owner).** It is stored and maintained; no
+existing or new task response exposes it in this project.
+
+**B4 — An assigned item that changes afterwards.** Grounding, because the owner's picture and the
+backend differ: the backend **does** have `DELETE /items/{id}` (`bm/services/commands/items/
+delete_item.py` — soft-deletes the item and touches no task), and `update_item.py` **does** allow
+`item_category_id` and `article_number` to change. The frontend simply never calls them that way.
+- **Item deleted** (owner: "the assignment follows"): deleting an item removes its non-deleted
+  assignment through the assignment delete operation, in the same transaction. Whether deleting
+  an item should also delete its task is existing behaviour outside this project — not changed.
+- **Article number edited:** nothing to do. The processed webhook looks the item up live, so the
+  new number is the one that resolves.
+- **Category changed while assigned:** card 8 below.
+
+**B5 — Two writers at the same instant.** There is no queue: a Scanner call and a task change are
+two independent requests, each in its own database transaction. The rule is therefore:
+**the two are serialized on the assignment, and the second is evaluated against what the first
+left.** Scanner first → the assignment is `resolved`, which is final, so the reopening task leaves
+it alone (§5 rule 1). Task reopen first → the assignment is `in_progress`, so Scanner's report is
+ignored as "not awaiting" (§8.2) and **is not remembered**: the item finishes again, waits in
+`awaiting`, and stays there until Scanner reports it again or a user removes the assignment. How
+the serialization is achieved (row lock vs atomic conditional update) is mechanism-inventory's
+contract; that it happens, and what each order yields, is decided here.
+
+**B6 — Category guard (owner, card 8 → A).** `update_item` refuses a change of `item_category_id`
+while the item has an **active** assignment, with a conflict error telling the caller to unassign
+first. A terminal (`resolved`/`failed`) or deleted assignment does not block. This is the one
+change this project makes to an existing item command besides B4's deletion hook; it is what keeps
+§9A rule 2 true after creation. Scope ladder: must ship, with §12 item 4.
+
+*Card 8 as presented, for the record:* refuse (A) / allow and leave the assignment (B) / allow and
+auto-remove (C); recommendation A; owner chose **A**.
+
 ---
 
 ## 15. Pre-implementation protocol
@@ -613,6 +697,9 @@ Ratifying the document ratifies these.
 | P27 | Malformed entries and duplicate identities still reject the whole request; only "category not found" is per-entry | the owner's atomic answer stands for sender bugs; the round-3 correction was specifically about unknown categories |
 | P28 | The realtime event names and payloads of §9B; a no-op emits nothing | existing naming convention; an event for nothing would make the board flicker on every Scanner retry |
 | P29 | Authorship semantics of §4.5: null = Scanner/system; a row's `updated_by` tracks user-owned fields only; shifted neighbours are not stamped; an assignment's `updated_by` is the user whose action moved it | the owner asked for created_by/updated_by; these are the readings that keep "who did this" truthful |
+| P30 | Criteria values Manager cannot normalize are stored verbatim and become an overridable mismatch, never a rejected Scanner request | the raw draft allowed nested JSON; rejecting would let one odd rule block all demand |
+| P31 | Deleting an item removes its assignment; it does not start deleting tasks | the owner's "the assignment follows", kept inside this project's perimeter |
+| P32 | Concurrent Scanner/task writers are serialized on the assignment; a Scanner report that arrives while the item is back in progress is ignored and not remembered | follows from §5 rule 1 and §8.2 as ratified; stated so nobody builds a queue or a replay buffer |
 | P21 | `is_stock_assignment` is true while any non-deleted assignment exists, including terminal ones | raw §31 sets it on create and clears it on delete only |
 
 ---
@@ -710,6 +797,34 @@ None.
   role matrix and authorship rules (round 4); unresolved decisions: none.
 - Status → **RATIFIED**. Any later material semantic change re-opens the gate (status back to
   COLLABORATING until re-ratified); amendments use lettered sections and never renumber.
+
+**Post-ratification consistency pass — 2026-09-18 (shaper; no semantic change, gate not reopened).**
+- §10 still described counters as a *count* of assignments and an unknown category as *rejected* —
+  both superseded by ratified rounds 1 and 3. Corrected to match HC-2a and §8.1.
+- Header `shaped_from` updated: the owner deleted the raw draft after ratification.
+- §14A added (lettered, nothing renumbered): five unstated points routed to mechanism-inventory
+  as questions. None is decided here.
+
+**Round 5 — 2026-09-18 — amendment §14B; gate RE-OPENED (owner: David).**
+- The owner answered the five §14A seeds. B1 changes what makes two rows the same row — a material
+  semantic change — so per the charter the status returns to COLLABORATING until re-ratified.
+- B1 identity normalization; B2 no-op early return; B3 flag not surfaced; B4 item deletion removes
+  the assignment, category change routed as card 8; B5 serialization semantics (the owner assumed
+  a queue; there is none — corrected in the text).
+- Grounding correction recorded in B4: item deletion and category change **are** possible through
+  the backend today, contrary to the owner's picture of the app.
+- M4 and M8 are unchanged in wording and now also cover B1 and card 8 respectively.
+
+**Re-ratification — 2026-09-18 — owner: David.**
+- Owner's words: "perfect, about the card 1: A is corrrect . after you finished making this
+  modifications you can make the prompt for the mechanism inventory" — the single open card was
+  card 8; the instruction to proceed to the next gate is the approval of amendment §14B.
+- Surface presented: the five §14B answers as folded (B1 identity normalization, B2 no-op early
+  return, B3 flag hidden, B4 item deletion / article number, B5 concurrent writers with the
+  no-queue correction), the three proposals marked mine (P30–P32), and card 8.
+- Card 8 → **A**, folded as B6. Ledger unchanged (M1–M9); M4 covers B1, M8 covers B6.
+- Status → **RATIFIED**. Next gate: mechanism-inventory
+  (`prompts/reviewer/2026-09-18_inventory_mechanism_inventory.md`).
 
 ---
 
