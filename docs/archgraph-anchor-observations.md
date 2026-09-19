@@ -1053,3 +1053,19 @@ Related: [[project-remaining-production-pressure]], [[project-task-budget-overru
   `file:line` (e.g. `create_task.py:253-256`, `outbound-webhook-worker.ts:12`) alongside
   `file:symbol`. That is the prose habit logged on 2026-08-24, not a graph behaviour.
 - Nothing else to report.
+
+## 2026-09-19 — implementation-planner, stock_report planning-0 (Fable, orchestrated)
+
+1. Session type: planning — master plan + 14 phase plans; no implementation, no review.
+2. New evidence written: **0** `archgraph_apply_changes` calls (its prompt: orient read-only, record nothing). Nothing to classify.
+3. Re-anchor activity: none.
+4. Review findings about location: none. The plans cite production code as `file:line` throughout (e.g. `resolve_task.py:56`, `delete_task.py:71-92`, `create_task.py:250-262`) and state they were read at `f575488`; this is prose in plan files, not graph anchors — the same prose habit logged 2026-08-24. The master plan's tool protocol (§8) tells later sessions to orient via `archgraph_status` / `archgraph_search_nodes` to record each phase delta as one batched `apply_changes` "with evidence anchored on symbols", and to route discrepancies through `archgraph-discrepancies`. That matches the span-free policy; the planner wrote it unprompted (its prompt said nothing about anchoring).
+5. Closing-work language: none about anchors.
+
+## 2026-09-19 — implementation-planner, stock_report planning-1 delta (rounds 8–9, Fable, orchestrated)
+
+1. Session type: planning delta — 11 phase plans edited, one new (13A), master plan updated; no implementation, no review.
+2. New evidence written: **0** `archgraph_apply_changes` calls (prompt: read-only orientation, record nothing). Nothing to classify.
+3. Re-anchor activity: none.
+4. Review findings about location: none. New plan text again cites code and docs as `file:line` in prose (e.g. PostgreSQL §13.2.1 for the re-evaluation argument); not graph anchors. The master plan's §8 "evidence anchored on symbols" line was left as planning-0 wrote it.
+5. Closing-work language: none about anchors.

@@ -1,0 +1,621 @@
+# Master plan — stock_report
+
+```
+state: PLANNED — plan set written 2026-09-19 (planner, planning-0) against the round-7 intention,
+       then folded (planner, planning-1, same day) to the intention as **RATIFIED at round 9,
+       committed c231dfb**: round 8 (§14E, the Scanner delete-row webhook → new phase 13A) and
+       round 9 (§14F, the terminal state `resolved_early` → phases 1, 3, 4, 5, 8, 9, 10, 11, 13, 14).
+       The gate is closed; the plan set awaits the owner's review, then the coordinator dispatches
+       phase 1's projection.
+date: 2026-09-19
+tree: c231dfb (clean except this untracked plan set and the orchestrator's observation log)
+phases: 15 planned (1–13, 13A, 14) — see §4 and §7. The owner's non-binding suggestion was 6; the
+        departure and its reasons are in §7.1.
+intention: planning/intention.md — RATIFIED round 9 at c231dfb (what this plan set cites; later
+           amendments win in the order §14C states, §14F last and strongest);
+           mechanism-inventory PASS at round 7 (handoffs/reviewer/2026-09-19_inventory_mechanism_inventory_recheck_handoff.md);
+           the owner waived the inventory re-check of §14E — its six questions are plan 13A §7
+```
+
+Paths are relative to `backend/` unless they start with `app/`. `app/beyo_manager/` is abbreviated
+`bm/`. `SR/` is this folder, `docs/architecture/under_construction/implementation/stock_report/`.
+
+## 1. Goal
+
+Scanner tells Manager how much stock is missing (demand), which rules no longer exist (delete, round
+8) and which repaired items it has processed; Manager turns demand into rows on a board, removes a
+row with everything on it when Scanner deletes the rule, lets users assign existing task+item pairs
+to a row, keeps three unit counters on each row as a cached projection of the assignments' states,
+follows every task-state change onto the assignment, closes an assignment early when Scanner
+processes the item before the task is ready (`resolved_early`, round 9), keeps the goal's history,
+and self-heals a wrong counter before it can block anyone. Semantics live **only** in
+`planning/intention.md` (read its Status section, then §14B–§14F: later amendments win in the
+order §14C states, **§14F last and strongest**). The twenty mechanism contracts MC-1…MC-20 are the
+lettered sections registered in intention §13A, as amended by §14E–§14F; every criterion row in
+`plans/` traces to one of them, to an amendment row (`§14E En`, `§14F Fn`) or to a ledger entry
+M1–M9. This document never restates semantics.
+
+## 2. Sources of truth
+
+| Content | Artifact |
+|---|---|
+| Product semantics, invariants, the measurement ledger M1–M9, mechanism contracts MC-1…MC-20, supersession ledger | `planning/intention.md` (RATIFIED; only the owner writes its status) |
+| Scanner-side facts (the sender, its worker, its matcher, its tables) | `planning/scanner_source_evidence.md` (E1–E10 + sender notes) |
+| The published wire contract Scanner builds against (read-only; v2 is complete on its own and supersedes the handed-over v1; a further change is a v3 file) | `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` |
+| Inventory findings, U1–U21, the matcher hand-walk H1–H16, the write-site audit | `handoffs/reviewer/2026-09-18_inventory_mechanism_inventory_handoff.md` §3–§6 |
+| Re-check findings, X1–X3, the carried instrument list | `handoffs/reviewer/2026-09-19_inventory_mechanism_inventory_recheck_handoff.md` |
+| Shared skeleton: naming registry, contract resolution, environment, standing rules, tracker | this file |
+| Phase-local goal, files, tasks, criteria, Review log | `plans/plan_<n>.md` |
+| Session framing | `prompts/<role>/`, generated just-in-time, never reused |
+| Repo contracts (how to write code) | `architecture/*.md`, resolved in §5 |
+
+**Fold-back rule.** A semantic change amends the intention (lettered section, never renumbered;
+a material change re-opens the intention gate). A skeleton change (a name, a path, an
+environment fact, a standing rule) amends this file. A criterion change amends the phase plan
+**and** is checked against this file's registry. Nothing is patched into a downstream artifact
+to make it agree with an upstream one.
+
+## 3. Roles and session workflow
+
+Orchestrated mode (owner-set, 2026-09-19): the **coordinator** (`pipeline-coordinator`) compiles
+prompts and runs the tracker; the **implementer is Codex** in a fresh `codex exec` session per
+round, working only from the phase file's Read-first list and the compiled prompt (complex phases
+run on the larger Codex model — the `complex:` line in each plan's Notes and in §4 is the switch);
+**projection** (`plan-projection`, reviewer role, round 0) and **review** (`plan-reviewer`) run as
+pinned Opus agents. The owner is not in the loop except at the stops the coordinator doctrine
+names (after this plan set, on every APPROVED phase, on any second fix round, on any card).
+
+State machine per phase (charter): `NOT_STARTED → PROJECTED → PROMPT_READY → IMPLEMENTING →
+IMPLEMENTED → REVIEWING → CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. A phase starts
+implementation only when every phase it depends on (§7.2) is APPROVED. Every `IMPLEMENTED` is a
+`CHECKPOINT (not approved):` commit; the approval gate commits again; nothing is squashed or
+pushed by a role session. Re-reviews are delta-scoped with a verified perimeter (charter "Review
+protocol"). Test evidence follows the charter's L1–L4 scopes; §10 names the exact commands.
+
+**Projection is mandatory** for every phase marked `projection: mandatory` in §7.2 (silent-failure
+mechanisms, and every phase whose fixtures are externally derived under charter rule 17); it is
+waivable with a recorded one-line reason for the others. The self-retiring rule does not apply to
+the rule-17 phases (2, 6, 7, 9, 13A).
+
+## 4. Progress tracker
+
+One row per phase, newest state first; earlier states are appended below as *superseded* rows.
+Only the actor named for a transition writes its row.
+
+| Phase | Scope (one line) | State | Date | Actor | Note |
+|---|---|---|---|---|---|
+| 1 | Schema, migration, reset phases, enums (six assignment states), state map, criteria normalization, settings, test kit | NOT_STARTED | 2026-09-19 | planner | rows 53, criteria 7; complex: no (round 9: +5 rows, +1 criterion) |
+| 2 | Matcher mirror: Scanner tables, bag builder, evaluation, hand-walk fixtures | NOT_STARTED | 2026-09-19 | planner | rows 75, criteria 7; complex: no; projection mandatory (rule 17) |
+| 3 | Consistency check, manual repair, repair records, task-flag writer, their two endpoints | NOT_STARTED | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (advisory lock, renumber, multi-kind recomputation) (round 9: +1 row) |
+| 4 | Transition operation: moves over six states, unit counters, inline self-heal, removal, stamps, payloads | NOT_STARTED | 2026-09-19 | planner | rows 62, criteria 7; complex: yes (guarded statement, lock order) (round 9: +13 rows) |
+| 5 | Goal credit: the MC-5 table incl. `resolved_early`, goal self-heal, the worked sequence | NOT_STARTED | 2026-09-19 | planner | rows 22, criteria 3; complex: no (round 9: +5 rows) |
+| 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | NOT_STARTED | 2026-09-19 | planner | rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
+| 7 | Demand endpoint: key auth, body validation, duplicates, identity invariant over real bytes, envelope | NOT_STARTED | 2026-09-19 | planner | rows 52, criteria 7; complex: no |
+| 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | NOT_STARTED | 2026-09-19 | planner | rows 65, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows) |
+| 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | NOT_STARTED | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows) |
+| 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | NOT_STARTED | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
+| 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | NOT_STARTED | 2026-09-19 | planner | rows 27, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row) |
+| 12 | Priority, dense ordering, history records for user actions, the list endpoint | NOT_STARTED | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
+| 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | NOT_STARTED | 2026-09-19 | planner | rows 18, criteria 5; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten) |
+| 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | NOT_STARTED | 2026-09-19 | planner | rows 36, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable |
+| 14 | Frontend handoff and domain docs (thin; refine at prompt time) | NOT_STARTED | 2026-09-19 | planner | rows 5, criteria 2; complex: no (rounds 8–9: +1 row; depends on 13A) |
+
+Totals (derived from the plan files by the planner's count script, 2026-09-19, after the round-8/9
+delta): **615 criterion rows in 98 criteria across 15 phases** (planning-0: 532 / 90 / 14). No phase
+exceeds eight criteria (3, 6, 8, 9 sit at eight).
+
+**Trace coverage (derived by the same script from the trace cells).** Ledger: M1 → 1, 3, 4, 8, 10,
+13, 13A · M2 → 9, 10, 11, 13A · M3 → 6, 9, 13A · M4 → 1, 6, 7, 8, 9, 12, 13, 13A · M5 → 5, 9, 12 ·
+M6 → 3, 12, 13A · M7 → 7, 9, 13A · M8 → 2, 8, 11 · M9 → 3, 14. Every contract MC-1…MC-20 appears
+in at least one trace cell (MC-10 only in 9; MC-11 in 10 and 13A; MC-20 in 3 and 13A). Amendment
+rows are cited as `§14E En` / `§14F Fn` beside the contract they amend.
+
+## 5. Contract resolution
+
+The repo has an architecture contract system (`architecture/*.md`; `_local.md` files extend the
+canonical ones and win). Implementing sessions re-emit this list before coding and read
+implementation files only to learn *what exists* (relational reads), never to learn *how to
+write* (pattern reads).
+
+**Selected (binding for every phase):**
+
+| Contract | Why |
+|---|---|
+| `01_architecture.md`, `21_naming_conventions.md` | layer map; file/function/table/route naming (boolean `is_`/`has_`, `ix_`/`uq_`/`ck_` prefixes, kebab-case URLs) |
+| `03_models.md` | `IdentityMixin`, FK `String(64)` + `index=True`, enum columns via `configure_sa_enum_values`, `updated_at` — **overridden for the four new tables**: no `onupdate=` anywhere (intention MC-17, MC-15) |
+| `06_commands.md` + `06_commands_local.md` | one `maybe_begin` per command, subordinates never commit/dispatch, events after the block |
+| `07_queries.md` + `07_queries_local.md` | workspace filter first, `is_deleted` filter, dict results — **overridden for `GET /stock-report/items`**: unpaginated by ratified owner answer (intention §9, §12 "pagination deferred"); the `_pagination` key is not emitted |
+| `05_errors.md` + `05_errors_local.md` | `DomainError.http_status`; identities as the leading message token — **two ratified exceptions**: the two assignment errors carry `code` + `details` (intention MC-13, C25), and the category-guard 409 keeps its ratified sentence verbatim with no identity token (intention MC-14) |
+| `09_routers.md`, `10_auth.md`, `28_roles_permissions.md` | thin routers, `Depends(require_roles([...]))` from `bm/routers/utils/roles.py`, `run_service`, `build_ok`/`build_err` |
+| `11_infra_events.md` | `build_workspace_event`, `<entity>:<verb>` names, dispatch after commit only |
+| `24_multi_tenancy.md`, `25_soft_delete.md` | `workspace_id` on every table; soft-delete trio; explicit cascade decisions (intention MC-16) |
+| `30_migrations.md` | autogenerate, descriptive message, never edit an applied revision; one revision for this project (P1) |
+| `32_concurrency.md` | `FOR UPDATE`, column-referencing updates, no read-then-assign — made exact by intention MC-1's lock order |
+| `46_serialization.md` + `46_serialization_local.md` | serialize inside the query service (the local reality for read layers); envelope shape |
+| `15_testing.md`, `50_testing_strategy.md` | markers (`unit`, `integration`), file mirroring, module-local `_ctx`, `SUPPRESS_EVENT_BUS` |
+| `19_integrations.md`, `18_security.md` | inbound webhook secret in env, constant-time compare (bytes, MC-8), fail closed |
+| `23_documentation.md` | `docs/domains/stock_report/api.md` + `states.md` (phase 14) |
+
+**Read for grounding only (not binding here):** `53_operational_cli.md` — the consistency report
+and repair are endpoints by ratified proposal P35, not CLI commands; `52_replayability.md`,
+`51_worker_runtime.md` — no Manager-side worker or queue exists for these webhooks (§14D D6).
+
+**Excluded:** `57_shopify_integration.md`, `47_notifications*`, `44_case*`, `43_image*` (only
+`serialize_image_light` is reused, by import), `35_gdpr_erasure.md`, `36_audit_log.md` (the new
+events are not audited: `get_audited_events()` is not extended by this project).
+
+## 6. Shared skeleton and naming registry
+
+Fixed before any code exists. A session that needs a name not listed here adds it to this
+section in the same round and says so in its handoff; a second name for a registered thing is a
+review finding.
+
+### 6.1 Domain package `bm/domain/stock_report/`
+
+| Module | Public names |
+|---|---|
+| `enums.py` | `StockTaskAssignmentStateEnum` (`in_queue`, `in_progress`, `awaiting`, `resolved`, `failed`, `resolved_early` — six members, intention §14F F1); `ACTIVE_ASSIGNMENT_STATES = {in_queue, in_progress, awaiting}`, `TERMINAL_ASSIGNMENT_STATES = {resolved, failed, resolved_early}` (frozensets; a partition of the enum — §9 rule 16); `StockReportPriorityEnum` (`high`, `medium`, `low`); `StockReportHistoryRecordTypeEnum` (`quantity_requested_change`, `priority_change`, `priority_order_change`); `StockReportRepairTargetKindEnum` (`stock_report_item`, `history_record`, `task`, `group`); `StockCriteriaMismatchReasonEnum` (`missing_on_item`, `value_not_accepted`, `no_group_for_value`, `criterion_not_understood`); `StockDemandOutcomeEnum` (`applied`, `category_not_found`); `StockDemandDeletedOutcomeEnum` (`deleted`, `not_found`, `category_not_found` — §14E E7); `ItemsProcessedOutcomeEnum` (`resolved`, `ignored`); `ItemsProcessedReasonEnum` (`item_not_found`, `no_open_assignment`, `early` — §14F F5/P43; the response's `reason` is JSON `null` for a resolution from `awaiting`); `REPAIR_TRIGGER_MANUAL = "manual"`; `INLINE_REPAIR_TRIGGERS` = frozenset of `inline:` + {`create_assignments`, `task_sync`, `delete_assignments`, `delete_task`, `remove_item_from_task`, `delete_item`, `items_processed`, `delete_stock_report_item`, `stock_demand_deleted`} (all shipped by phase 1; 13A adds no enum) |
+| `state_map.py` | `ASSIGNMENT_STATE_BY_TASK_STATE: dict[TaskStateEnum, StockTaskAssignmentStateEnum]` (intention §5, total over the 8 members) |
+| `criteria_normalization.py` | `normalize_stock_criteria(raw: dict) -> dict`; `compute_stock_criteria_signature(raw: dict) -> str` (= `compute_properties_signature(normalize_stock_criteria(raw))`, the existing function imported unchanged from `bm/domain/items/properties_signature.py`); `CRITERIA_NORMALIZATION_VERSION = 1` |
+| `scanner_property_tables.py` | `WOOD_GROUPS`, `DRAWER_RANGES`, `WOOD_TYPE_KEY`, `WOOD_GROUP_KEY`, `DRAWERS_QTY_KEY`, `DRAWERS_RANGE_KEY`, `EXCLUDED_ITEM_PROPERTY_KEYS` (`qty_extensions`, `quantity`, `wood_group`, `drawers_range`), `SCANNER_SOURCE_COMMIT = "0d80bf2"`, `SCANNER_SOURCE_READ_ON = "2026-09-18"`, `validate_wood_groups(groups) -> None`, `validate_drawer_ranges(ranges) -> None` (both called at import), `wood_group_of_token(token) -> str \| None`, `drawer_range_of(stored: str) -> str \| None` |
+| `criteria_matcher.py` | `CriterionFailure` (frozen dataclass: `key: str`, `reason: StockCriteriaMismatchReasonEnum`); `build_item_property_bag(item) -> dict[str, str]`; `tokenize_property_value(value: str) -> list[str]`; `evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]` (sorted by key); `matches_stock_criteria(item, criteria) -> bool` |
+| `serializers.py` | `serialize_stock_report_item(row, *, category) -> dict`; `serialize_stock_task_assignment(assignment, *, item, task, images) -> dict`; `serialize_item_compact(item, *, images) -> dict`; `serialize_task_compact(task) -> dict` |
+
+### 6.2 Models `bm/models/tables/stock_report/` (registered in `bm/models/__init__.py`; prefixes added to `bm/models/tables/client_id_prefix_map.md`)
+
+| Class / file | Prefix | Table | Columns beyond `client_id`, `workspace_id` |
+|---|---|---|---|
+| `StockReportItem` / `stock_report_item.py` | `sri` | `stock_report_items` | `item_category_id` FK; `properties` JSONB not null; `properties_signature` String(64) not null; `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting` Integer not null default 0 server_default `0`; `priority` enum nullable; `priority_order` Integer nullable; `created_at`, `created_by_id`, `updated_at` (**no `onupdate`**), `updated_by_id`, `is_deleted`, `deleted_at`, `deleted_by_id` |
+| `StockTaskAssignment` / `stock_task_assignment.py` | `sta` | `stock_task_assignments` | `stock_report_item_id` FK; `task_id` FK; `item_id` FK; `credited_history_record_id` FK nullable; `quantity` Integer not null; `property_mismatch_overridden` Boolean not null default false; `state` enum not null; authorship + soft-delete trio as above (no `onupdate`) |
+| `StockReportHistoryRecord` / `stock_report_history_record.py` | `srh` | `stock_report_history_records` | `stock_report_item_id` FK; `type` enum; `quantity_requested`, `quantity_awaiting` Integer not null; `priority` enum nullable; `priority_order` nullable; `created_at`, `created_by_id`; soft-delete trio; **no `updated_*`** |
+| `StockReportRepairRecord` / `stock_report_repair_record.py` | `srr` | `stock_report_repair_records` | `target_kind` enum; `target_client_id` String(64) **no FK**; `field` String(64); `stored_value` Text nullable; `recomputed_value` Text nullable; `trigger` String(64); `created_by_id` FK nullable; `created_at`; **no soft-delete trio, no `updated_*`** |
+| `Task.is_stock_assignment` (edit to `bm/models/tables/tasks/task.py`) | — | `tasks` | Boolean not null, default `False`, **`server_default=sa.false()`** so raw inserts elsewhere keep working |
+
+Every FK column has `index=True` (03_models). Postgres enum type names: `stock_task_assignment_state_enum`,
+`stock_report_priority_enum`, `stock_report_history_record_type_enum`,
+`stock_report_repair_target_kind_enum`. Named indexes and constraints:
+
+| Name | Definition |
+|---|---|
+| `uix_stock_report_items_identity_active` | unique `(workspace_id, item_category_id, properties_signature)` `WHERE is_deleted = false` |
+| `ix_stock_report_items_workspace_priority_order` | `(workspace_id, priority, priority_order)` |
+| `ck_stock_report_items_quantity_requested_nonneg`, `…_quantity_in_queue_nonneg`, `…_quantity_in_progress_nonneg`, `…_quantity_awaiting_nonneg` | `>= 0` |
+| `uix_stock_task_assignments_item_active` | unique `(workspace_id, item_id)` `WHERE is_deleted = false AND state IN ('in_queue','in_progress','awaiting')` |
+| `uix_stock_task_assignments_task_active` | unique `(workspace_id, task_id)`, same predicate |
+| `ix_stock_task_assignments_row_state` | `(stock_report_item_id, state)` |
+| `ck_stock_task_assignments_quantity_positive` | `quantity >= 1` |
+| `ix_stock_report_history_records_row_type_created` | `(stock_report_item_id, type, created_at)` |
+| `ck_stock_report_history_records_quantity_awaiting_nonneg` | `>= 0` |
+| `ix_stock_report_repair_records_target_client_id` | `(target_client_id)` |
+
+Migration: **one** autogenerated revision, message `create_stock_report_tables`, `down_revision =
+"ce99896e6f49"`, written in phase 1 and never edited afterwards. Every later phase works on the
+schema as phase 1 ships it; a later schema need is a new revision plus a Review-log entry, never
+an edit.
+
+### 6.3 Settings (`bm/config.py`, `Settings`)
+
+| Field | Alias | Type / default |
+|---|---|---|
+| `manager_api_key_to_location_tracker_app` | `MANAGER_API_KEY_TO_LOCATION_TRACKER_APP` | `str \| None = None` |
+| `location_tracker_webhook_workspace_id` | `LOCATION_TRACKER_WEBHOOK_WORKSPACE_ID` | `str \| None = None` |
+| `stock_demand_webhook_timeout_ms` | `STOCK_DEMAND_WEBHOOK_TIMEOUT_MS` | `int = 5000` |
+
+Unset or blank key/workspace → every webhook request answers 401 (fail closed). The timeout setting
+governs both Scanner stock messages — demand (7) and delete (13A; §14E E9) — and not the processed
+webhook. Tests read the default from `Settings.model_fields["stock_demand_webhook_timeout_ms"].default`,
+never as a typed literal (charter rule 13).
+
+### 6.4 Errors (`bm/errors/stock_report.py`, new file)
+
+| Class | Base | `http_status` | Message / extras |
+|---|---|---|---|
+| `LocationTrackerWebhookAuthError` | `DomainError` | 401 | message exactly `Unauthorized.` for every cause; the cause is logged |
+| `StockDemandDeadlineExceeded` | `DomainError` | 503 | `Stock demand request exceeded its time limit.` — raised by the demand **and** the delete webhook (§14E E9; both are Scanner "stock messages") |
+| `StockAssignmentRefused` | `ValidationError` | 422 | `code = "stock_assignment_refused"`, `details: list[{"index", "reason"}]`; message `Stock assignment refused.` **Closed reason vocabulary, in MC-13's order** (§14F F9 inserted): `duplicate_item_in_batch`, `duplicate_task_in_batch` (phase 1 of the check), then `stock_report_item_not_found`, `task_not_found`, `item_not_found`, `item_not_task_primary`, `already_processed_by_scanner`, `task_failed_or_cancelled`, `item_already_assigned`, `item_has_no_category`, `category_mismatch` |
+| `StockAssignmentPropertyMismatch` | `ConflictError` | 409 | `code = "stock_assignment_property_mismatch"`, `details: list[{"index", "stock_report_item_id", "task_id", "item_id", "failures": [{"key", "reason"}]}]`; message `Stock assignment property mismatch.` |
+| `IllegalAssignmentMove` (lives in `_move_assignment.py`) | `RuntimeError` | (500 via `run_service`) | a programming error, never a domain error (MC-1 ✗ cells) |
+
+Registered message identities (05_errors_local leading-token form): `STOCK_REPORT_TARGET_OUT_OF_RANGE`
+(422, MC-7 `target_out_of_range`), `STOCK_REPORT_ROW_HAS_NO_PRIORITY` (422, MC-7
+`row_has_no_priority`), `STOCK_REPORT_UNKNOWN_PRIORITY_FILTER` (422, §7A unknown token). The
+category guard raises `ConflictError("Unassign this item from the stock report before changing its
+category.")` — ratified sentence, no token. Webhook 422 messages start `Malformed request: ` and
+name every offending entry by zero-based index (MC-8); Scanner does not parse them.
+
+### 6.5 Services
+
+`bm/services/commands/stock_report/` (subordinate operations are private modules; commands take
+`ctx`):
+
+| Module | Public names / signature |
+|---|---|
+| `_move_assignment.py` | `ASSIGNMENT_DELETE` (sentinel); `move_assignment(session, assignment, target, *, workspace_id, actor_user_id, now, trigger, is_creation=False) -> list[WorkspaceEvent]` (the allowed-move table is plan 4 task 1's six-state table — MC-1 as amended by §14F F2); `IllegalAssignmentMove`; phase 9 adds `resolve_processed_group(session, assignments, *, row, workspace_id, now, trigger) -> list[WorkspaceEvent]` — `move_assignment` in grouped form for the processed webhook: each assignment's target is `resolved` from `awaiting` and `resolved_early` from `in_queue`/`in_progress` (§14F F5), one guarded statement per row whose delta vector is the per-column sum (`−Σq` on each *from* column), the goal step per assignment (F4), sharing the same statement builder and repair routine |
+| `_remove_assignment.py` | `remove_assignment(session, assignment, *, workspace_id, actor_user_id, now, trigger) -> list[WorkspaceEvent]` = `move_assignment(…, ASSIGNMENT_DELETE)` then `recompute_task_stock_flag` |
+| `_goal_credit.py` (phase 5) | `current_goal_record_id(session, stock_report_item_id) -> str \| None`; `apply_goal_effect(session, assignment, *, from_state, to_state, trigger, now) -> None` (called inside `move_assignment` after the counter statement) |
+| `_repair_records.py` | `write_repair_record(session, *, workspace_id, target_kind, target_client_id, field, stored_value, recomputed_value, trigger, created_by_id, now) -> StockReportRepairRecord` + one `logger.warning` per record (fields: row, field, stored, recomputed, delta, trigger) |
+| `_task_flag.py` | `set_task_stock_flag(session, task_id, value: bool) -> None` (the MC-15 Core UPDATE with `updated_at = tasks.updated_at`); `recompute_task_stock_flag(session, task_id) -> bool` |
+| `_locks.py` | `acquire_stock_report_order_lock(session, workspace_id)` (`pg_advisory_xact_lock(hashtext('stock_report_order:' \|\| :ws))`); `lock_stock_report_items(session, workspace_id, client_ids) -> dict[str, StockReportItem]`; `lock_stock_task_assignments(session, workspace_id, client_ids) -> dict[str, StockTaskAssignment]`; `lock_items(session, workspace_id, client_ids) -> dict[str, Item]`; `lock_tasks(session, workspace_id, client_ids) -> dict[str, Task]` — each one `SELECT … FOR UPDATE ORDER BY client_id` with `populate_existing` |
+| `_events.py` | `build_stock_report_item_updated_event(*, client_id, workspace_id, values) -> WorkspaceEvent`; `build_stock_task_assignment_event(kind, *, client_id, workspace_id, stock_report_item_id, task_id, state) -> WorkspaceEvent` (`kind` ∈ `created`, `state-changed`, `deleted`); `coalesce_stock_report_events(events, *, initial_row_values) -> list[WorkspaceEvent]` (phase 8; MC-19 net-change per entity per request; a row that is `:created` **or `:deleted`** in the request gets no `:updated`) |
+| `_ordering.py` (phase 12) | `close_priority_gap(session, *, workspace_id, priority, removed_order) -> list[RowValues]`; `append_to_priority_group(session, *, workspace_id, priority) -> int`; `shift_within_group(session, *, workspace_id, priority, from_order, to_order) -> list[RowValues]` — each shift one column-referencing statement with `RETURNING` |
+| `_category_guard.py` (phase 11) | `assert_item_category_change_allowed(session, *, workspace_id, item_id, current_category_id, incoming_category_id) -> None` |
+| `repair_stock_report.py` | `repair_stock_report(ctx) -> dict` → `{"repaired": [...], "not_repaired": [...]}` |
+| `create_stock_task_assignments.py` | `create_stock_task_assignments(ctx) -> dict` → `{"stock_task_assignments": [...]}` |
+| `delete_stock_task_assignments.py` | `delete_stock_task_assignments(ctx) -> dict` → `{"deleted_client_ids": [...]}` |
+| `_delete_stock_report_item_cascade.py` (phase 13) | `cascade_delete_stock_report_item(session, row, *, workspace_id, actor_user_id, now, trigger) -> list[WorkspaceEvent]` — the MC-16 cascade as a subordinate operation (caller holds the advisory lock and the tasks → row+group → assignments locks); `actor_user_id=None` stamps NULL (MC-17). One owner in the tree; **two callers**: `delete_stock_report_item` (13, `trigger="delete_stock_report_item"`) and `process_stock_demand_deleted` (13A, `actor_user_id=None`, `trigger="stock_demand_deleted"`) |
+| `delete_stock_report_item.py` | `delete_stock_report_item(ctx) -> dict` → `{"client_id": …}` (locks, then calls the cascade with `trigger="delete_stock_report_item"`) |
+| `set_stock_report_item_priority.py` / `set_stock_report_item_priority_order.py` | `…(ctx) -> dict` → `{"stock_report_item": {...}}` |
+| `sync_task_stock_assignments.py` | `sync_task_stock_assignments(session, changed: list[tuple[Task, TaskStateEnum]], *, workspace_id, actor_user_id, now) -> list[WorkspaceEvent]` |
+| `stock_demand_entries.py` | `DemandEntry` (frozen: `index`, `item_category_raw`, `item_category_key`, `properties_raw`, `properties_normalized`, `properties_signature`, `quantity_requested`); `DemandOutcome`; `StockDemandResult(outcomes, events)`; phase 13A adds `DemandDeleteEntry` (`DemandEntry` without `quantity_requested`) and `DemandDeleteOutcome(index, item_category_raw, properties_raw, outcome)` |
+| `_demand_lookup.py` (phase 6) | `resolve_categories_for_entries(session, *, workspace_id, entries) -> dict[str, str \| None]` (MC-8 category resolution over the request's key set, one `SELECT`; key → category `client_id` or `None`); `discover_live_rows_by_identity(session, *, workspace_id, identities) -> dict[tuple[str, str], str]` (the unlocked identity discovery, one `SELECT`, `is_deleted = false`). The one lookup engine both stock webhooks use (§14E E4) |
+| `stock_demand_request.py` (phase 7) | `parse_stock_demand_body(raw: bytes) -> list[DemandEntry]` (MC-8 steps 5–7, raises `ValidationError`) |
+| `stock_demand_deleted_request.py` (phase 13A) | `parse_stock_demand_deleted_body(raw: bytes) -> list[DemandDeleteEntry]` (the demand rules for `itemCategory` and `properties`, `quantityRequested` ignored as an unknown key, duplicates → 422) |
+| `apply_stock_demand.py` | `apply_stock_demand(session, *, workspace_id, entries, now, deadline, timeout_ms) -> StockDemandResult` (the D6 statement plan inside one owner-mode `maybe_begin`; after its sorted lock it asserts every identity was locked — a row soft-deleted between discovery and lock → `RuntimeError`, 500, Scanner retries; plan 6 task 2 step 6) |
+| `receive_stock_demand_webhook.py` (phase 7) | `receive_stock_demand_webhook(ctx) -> dict` → `{"results": [...]}` |
+| `items_processed_request.py` / `process_items_processed.py` (phase 9) | `parse_items_processed_body(raw: bytes) -> list[str]`; `process_items_processed(ctx) -> dict` → `{"results": [...]}` |
+| `process_stock_demand_deleted.py` (phase 13A) | `process_stock_demand_deleted(ctx) -> dict` → `{"results": [...]}`; the owning command of the third webhook: deadline → verify → parse → one owner-mode transaction (`set_config`, workspace, **advisory lock before discovery**, the two `_demand_lookup` statements, id discovery, sorted locks tasks → rows+groups → assignments, then `cascade_delete_stock_report_item(…, actor_user_id=None, trigger="stock_demand_deleted")` per candidate row ascending, deadline check) → coalesced events |
+| `requests/__init__.py` | `CreateStockTaskAssignmentsRequest` (`entries: list[StockTaskAssignmentEntry]`, `model_config = ConfigDict(extra="forbid")`, ≥ 1 entry), `StockTaskAssignmentEntry` (`stock_report_item_id`, `task_id`, `item_id`, `override_property_mismatch: bool = False`), `DeleteStockTaskAssignmentsRequest` (`client_ids: list[str]`, ≥ 1), `SetStockReportItemPriorityRequest` (`client_id`, `priority: StockReportPriorityEnum \| None`), `SetStockReportItemPriorityOrderRequest` (`client_id`, `priority_order: int`), `DeleteStockReportItemRequest` (`client_id`) and their `parse_*_request` functions |
+
+`bm/services/infra/location_tracker/webhook_verifier.py` (new): `verify_location_tracker_webhook(headers: Mapping[str, str]) -> str`
+— MC-8 steps 2–3, returns the configured workspace id, raises `LocationTrackerWebhookAuthError`.
+
+`bm/services/queries/stock_report/`:
+
+| Module | Public names |
+|---|---|
+| `consistency.py` | `compute_stock_report_divergences(session, workspace_id) -> list[Divergence]` (sorted by `(kind, client_id, field)`); `recompute_row_counters(session, stock_report_item_id) -> dict[str, int]`; `recompute_goal_total(session, history_record_id) -> int`; `expected_task_flag(session, task_id) -> bool`; `Divergence` TypedDict `{"kind", "client_id", "field", "stored", "expected"}` |
+| `get_stock_report_consistency.py` | `get_stock_report_consistency(ctx) -> dict` → `{"workspace_id", "checked_at", "divergences"}` |
+| `list_stock_report_items.py` | `list_stock_report_items(ctx) -> dict` → `{"stock_report_items": [...]}` (unpaginated, §5) |
+| `list_stock_task_assignments.py` | `list_stock_task_assignments(ctx) -> dict` → `{"stock_task_assignments": [...]}` |
+
+Divergence conventions (fixing what MC-20 leaves to the planner): `order_density` emits one
+divergence **per row** whose order differs from the dense renumbering of its group (`client_id` =
+the row, `field` = `priority_order`, `stored` = current, `expected` = dense value);
+`priority_order_nullness` emits one per offending row (`field` = `priority_order`; priority set and
+order null → `expected` = `max(group) + 1`; priority null and order set → `expected` = `NULL`);
+`task_flag` `field` = `is_stock_assignment`, values as `"true"`/`"false"`; `signature` `field` =
+`properties_signature`, `stored` = the column, `expected` = `compute_stock_criteria_signature(properties)`.
+
+Reset phases (`bm/services/commands/reset/phases/`): `delete_stock_report_repair_records.py`,
+`delete_stock_task_assignments.py`, `delete_stock_report_history_records.py`,
+`delete_stock_report_items.py`, called **in that order as the first four phases** of `reset_app`,
+before `delete_task_events`.
+
+### 6.6 Routers
+
+`bm/routers/api_v1/stock_report.py`, mounted at prefix `/api/v1/stock-report`, tag `stock-report`;
+`bm/routers/api_v1/location_tracker_webhooks.py`, mounted at prefix `/api/v1/location-tracker`,
+tag `location-tracker-webhooks` (the existing `location_tracker.router` keeps its own mount).
+
+| Method + path | Service | Roles (`require_roles`) | Phase |
+|---|---|---|---|
+| `GET /api/v1/stock-report/consistency` | `get_stock_report_consistency` | ADMIN, MANAGER | 3 |
+| `POST /api/v1/stock-report/repair` | `repair_stock_report` | ADMIN, MANAGER | 3 |
+| `POST /api/v1/location-tracker/webhooks/stock-demand` | `receive_stock_demand_webhook` | key (`x-api-key`) | 7 |
+| `POST /api/v1/stock-report/assignments` | `create_stock_task_assignments` | ADMIN, MANAGER, WORKER | 8 |
+| `POST /api/v1/stock-report/assignments/delete` | `delete_stock_task_assignments` | ADMIN, MANAGER, WORKER | 8 |
+| `POST /api/v1/location-tracker/webhooks/items-processed` | `process_items_processed` | key | 9 |
+| `POST /api/v1/location-tracker/webhooks/stock-demand-deleted` | `process_stock_demand_deleted` | key | 13A |
+| `GET /api/v1/stock-report/items?priority=high,medium,low` | `list_stock_report_items` | ADMIN, MANAGER, WORKER, SELLER | 12 |
+| `PATCH /api/v1/stock-report/items/{client_id}/priority` | `set_stock_report_item_priority` | ADMIN, MANAGER, SELLER | 12 |
+| `PATCH /api/v1/stock-report/items/{client_id}/priority-order` | `set_stock_report_item_priority_order` | ADMIN, MANAGER, SELLER | 12 |
+| `DELETE /api/v1/stock-report/items/{client_id}` | `delete_stock_report_item` | ADMIN, MANAGER | 13 |
+| `GET /api/v1/stock-report/items/{client_id}/assignments` | `list_stock_task_assignments` | ADMIN, MANAGER, WORKER, SELLER | 13 |
+
+The three webhook routes take `Request`, read `await request.body()`, and build
+`ServiceContext(identity={}, incoming_data={"raw_body": raw, "headers": dict(request.headers)}, session=session)`
+exactly as `bm/routers/api_v1/connecteam_webhooks.py` does. The two structured assignment errors
+are rendered explicitly in the router as `{"error", "ok": false, "code", "details"}` (the
+`routers/api_v1/auth.py:125` precedent); everything else goes through `build_err`.
+
+### 6.7 Events (intention §9B/MC-19)
+
+`stock_report_item:created` (`extra` `{}`), `stock_report_item:updated` (`extra` = the six fields
+`quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting`,
+`priority`, `priority_order`, from `RETURNING`/refreshed values), `stock_report_item:deleted`
+(`{}`), `stock_task_assignment:created` / `:state-changed` / `:deleted` (`extra`
+`{"stock_report_item_id", "task_id", "state"}`). `workspace_id` on every event comes from the
+entity's row, never from `ctx`.
+
+### 6.8 Tests
+
+| Location | Content |
+|---|---|
+| `app/tests/helpers/stock_report.py` (phase 1, extended in phase 3) | `SeededWorkspace` dataclass; `seed_stock_report_workspace(session, *, suffix=None) -> SeededWorkspace` (workspace, manager user, worker user, two categories "Dining Chairs"/"Coffee Tables", item `quantity=4` with `article_number = f"SR-{suffix}"`, task `pending` with the PRIMARY `TaskItem`; flushed, not committed); `purge_stock_report_workspace(session, workspace_id)` (raw `DELETE`s in FK order over every table the phases write, then the workspace and its users); `make_ctx(session, seeded, *, role_name="manager", user=None, incoming_data=None, query_params=None) -> ServiceContext`; `capture_dispatch(monkeypatch, import_site: str) -> list` (monkeypatches `event_bus.dispatch` at the named consumer module); phase 3 adds `assert_stock_report_clean(session, workspace_id)` (check `== []` **and** zero repair records for that workspace — one helper, never split) |
+| `app/tests/helpers/statement_listener.py` (phase 3) | `record_statements()` async context manager attaching `before_cursor_execute` on the engine's `sync_engine`, yielding the list; `count_writes(statements, tables: set[str]) -> int` (INSERT/UPDATE/DELETE whose target table is in the set) — precedent `app/tests/integration/services/queries/item_economics/test_budget_signals_query.py:470-487` |
+| `app/tests/unit/domain/stock_report/` | pure-function tests (phases 1, 2), incl. `test_assignment_state_enum.py` (the active/terminal partition) |
+| `app/tests/unit/services/commands/stock_report/test_stock_demand_deleted_request.py`, `app/tests/integration/services/commands/stock_report/test_process_stock_demand_deleted.py`, `test_process_stock_demand_deleted_locks.py` | phase 13A |
+| `app/tests/integration/models/stock_report/` | schema and migration parity (phase 1) |
+| `app/tests/integration/services/commands/stock_report/`, `app/tests/integration/services/queries/stock_report/` | command/query tests, one file per subject named in each plan |
+| `app/tests/unit/routers/api_v1/test_stock_report_router.py`, `test_location_tracker_webhooks_router.py` | role cells and router wiring (`TestClient` + `dependency_overrides[get_jwt_claims]` + faked `run_service`, precedent `app/tests/unit/routers/api_v1/test_item_economics_router.py:60-115`) |
+| `app/tests/unit/services/commands/stock_report/test_task_state_write_sites_are_registered.py` + `task_state_write_site_registry.py` (phase 10) | the MC-2 AST guard and its checked-in registry |
+
+Standard fixture shorthand used in every plan's criteria tables, **F0**: `seed_stock_report_workspace`
+→ workspace **W**, manager **U**, category **K** (Dining Chairs, `seat`), item **I** (`quantity 4`,
+`properties {"wood_type": "Teak", "upholstery": "Down"}`), task **T** (`pending`, PRIMARY = I), row **R**
+(identity K + `{"wood_group": ["teak"]}`, `quantity_requested 10`) with goal record **G** (awaiting 0),
+assignment **A** on (R, T, I) in the stated state. Before phase 8, A and R are inserted as ORM
+instances (charter rule 3: production types); from phase 8 on, through `create_stock_task_assignments`.
+Every row also seeds a **foreign workspace** with the same shapes and asserts it is untouched.
+
+### 6.9 Documents (phase 14)
+
+`docs/domains/stock_report/api.md`, `docs/domains/stock_report/states.md` (cascade strategy per
+25_soft_delete; the six-state machine), `docs/handoff/to_frontend/STOCK_REPORT_API_v1_<YYYYMMDD>.md`.
+The Scanner v1 and v2 files are not edited; nothing is owed to Scanner at closeout (intention §18, the
+2026-09-19 entries — the v2 file already carries §4A and the `early` reason).
+
+## 7. Sequencing and gates
+
+### 7.1 Departure from the owner's suggested phasing (6 → 14), with reasons
+
+The owner's six phases were split by contract so that no phase exceeds the charter's target of
+eight criteria and every phase can close green on its own:
+
+| Owner's phase | Planned phases | Reason for the split |
+|---|---|---|
+| 1 Foundation | **1** schema/normalization, **2** matcher | The matcher alone carries 75 externally-derived rows (rule 17, projection mandatory); the schema phase is DB-bound. Mixing them would put a pure-function projection on the critical path of the migration |
+| 2 Core engine | **3** check + repair, **4** transition operation, **5** goal credit | The self-heal inside `move_assignment` *calls* the recomputation, so the recomputation and the shared clean helper must exist first (3). MC-1 and MC-5 are two contracts with 49 and 17 rows; the goal step is an additive extension of the move (4 ships moves with no goal record present; 5 adds the goal statement after the counter statement) |
+| 3 Demand webhook | **6** service, **7** endpoint | 35 + 52 rows; the service (set-based statements, two-session rows, the 5 s budget) is complex and the endpoint (validation tables) is not — different Codex model, different projection depth |
+| 4 Assignments + processed | **8** assignments, **9** processed | Two surfaces, 58 + 33 rows; 9 also reuses 7's verifier |
+| 5 Sync + hooks + guards | **10** sync, **11** hooks + guards | The owner allowed this split; it is taken because the rows came out at 30 + 26, and MC-11 (two writers) needs the processed webhook (9) before the sync |
+| 6 Ordering + row delete + endpoints | **12** ordering + list, **13** row deletion + assignment reads, **13A** Scanner delete webhook (round 8), **14** docs | 45 + 19 rows; the consistency/repair endpoints moved **up** to 3 because the tests of every later phase use the repair command, and role cells ship with their operation's phase (owner's own rule). The GET endpoints, absent from the suggestion, are placed with the ordering (rows) and the row cascade (assignments). 13A is the cascade's second caller (§14E E5) and lands directly after 13, where §14E suggested |
+
+### 7.2 Dependency graph, projection requirement, default order
+
+| Phase | Depends on (APPROVED) | Projection | Why the dependency |
+|---|---|---|---|
+| 1 | — | mandatory (schema predicates are silent-failure) | — |
+| 2 | 1 | **mandatory, not waivable** (rule 17) | package and enums from 1 |
+| 3 | 1 | mandatory | tables |
+| 4 | 3 | mandatory | recomputation, repair records, flag writer, clean helper |
+| 5 | 4 | mandatory | `move_assignment` |
+| 6 | 3 | **mandatory, not waivable** (rule 17: asyncpg/SQLAlchemy shapes) | clean helper, tables, normalization; does **not** need 4 or 5 |
+| 7 | 6 | **mandatory, not waivable** (rule 17: Starlette/JSON shapes) | the service |
+| 8 | 2, 5 | mandatory | matcher; moves with goal credit |
+| 9 | 7, 8 | **mandatory, not waivable** (rule 17) | verifier from 7; assignments created through 8 |
+| 10 | 9 | mandatory | MC-11 needs the processed webhook |
+| 11 | 8 | mandatory | assignments through the command |
+| 12 | 5 | mandatory | counters unaffected; needs rows and the repair renumber semantics from 3 |
+| 13 | 12, 8 | mandatory | gap closing from 12; assignments from 8 |
+| 13A | 13, 9 | **mandatory, not waivable** (the owner waived the §14E inventory re-check — the six carried questions are checked at projection; rule 17: Postgres lock re-evaluation and deadlock shapes) | the cascade from 13; the verifier and parser shape from 7 and the owning-transaction shape from 9 (9 brings 7 and 8); `_demand_lookup.py` from 6 |
+| 14 | 13A, 11, 10 | waivable | every route, state and event exists (13A implies 13, 9, 7) |
+
+Default linear order is the numbering, with 13A between 13 and 14. Parallel branches exist (6–7
+beside 8; 12 beside 10–11) but in orchestrated mode one implementer runs at a time; the
+coordinator may reorder inside the graph and records the reason in the tracker. Plans 11 and 13
+reach `resolved_early` in fixtures with `PR` (phase 9) when 9 is APPROVED before them (the default
+order) and with phase 4's `move_assignment` otherwise; each plan says so.
+
+### 7.3 Gates
+
+- **Intention gate:** every session's gate check reads `status: RATIFIED` in
+  `planning/intention.md` and stops on anything else.
+- **Projection (round 0):** per §7.2; the implementer prompt compiles only after the projection
+  ledger is fully routed.
+- **Review:** first review full checklist; re-review delta-scoped with verified perimeter; the
+  owner has ruled (2026-09-19) that a second fix round on one phase is not automatic — the
+  coordinator stops and relays each finding for a ruling.
+- **Approval:** L4 stamp on the handed-over tree with the failure-ID set diffed against §10's
+  baseline; the tracker row and the gate commit; closeout ritual moves the phase's rows to
+  `archive/plan_<n>/`.
+
+### 7.4 The round-8/9 planning delta (2026-09-19) — record
+
+The plan set was written (planning-0) against the round-7 intention; while it was written the
+owner added §14E (round 8) and §14F (round 9) and re-ratified both the same day (`c231dfb`). The
+gate that this section previously recorded as re-opened is **closed**; the planning delta
+(planning-1) folded both rounds without a rewrite:
+
+1. **Round 8 → phase 13A** (`plans/plan_13A.md`), after 13 and depending on 13 and 9, the cascade's
+   second caller. The owner waived the mechanism-inventory re-check of §14E; the six carried
+   questions are answered as stated rules with rows in plan 13A §7 (Q1 also in plan 6 C5(c)), and
+   13A's projection is mandatory and not waivable.
+2. **Round 9 → the sixth state `resolved_early`**: phases 1 (enum, partition), 4 (six-state
+   table), 5 (goal credit F4), 8 (refusal F9), 9 (F5 order, `early` reason, per-column grouped
+   delta), 10 (sync skip F3, MC-11 rows F6) — the owner's list — plus 3 (the check never counts
+   it), 11 (the category guard reads the active frozenset), 13 (cascade fixture, assignment read),
+   14 (docs), found by searching the set.
+3. Skeleton consequences recorded in §6: `_demand_lookup.py` (one lookup engine for both stock
+   webhooks, E4), the demand path's locked-set assertion (a row soft-deleted between discovery and
+   lock — a gap the round-7 set did not cover for the user delete either), the coalescer's
+   `:deleted` clause, `resolve_processed_group` (renamed from the round-7 `resolve_awaiting_group`
+   because it now resolves from three states), and §9 rule 16.
+4. Untouched by the delta, by the delta prompt's instruction: card 1 and §10.1–§10.2; plan 3 C2(a),
+   plan 6 C7(a), plan 9 C7(a)'s statement-count clause, plan 13 C4(c), plan 10's registry guard.
+5. **Owner rulings after the delta (2026-09-19, orchestrator fold):** card 1 → **A** (fix none of the
+   21; baseline stays 21). Outcomes, not internals: plan 13 C4(c) **removed** (615 rows); plan 9
+   C7(a) and C7(d) lose the "exactly one `UPDATE`" clause (outcomes and new mutations kept); plan 3
+   C2(a) asserts the data unchanged instead of counting writes; plan 6 C7(a) and plan 10's registry
+   guard **kept** as written. The demand locked-set 500 (plan 6 C5(c)) stays a plan-level mechanism;
+   the intention is not amended.
+
+## 8. Tool protocols
+
+- **Architecture graph** (`.archgraph/`, archgraph MCP): every session orients at start
+  (`archgraph_status`, `archgraph_search_nodes("stock report")` — 0 nodes at planning time,
+  revision `fa1c510e…`) and the implementer records the phase delta at end as **one batched
+  `apply_changes`** with evidence anchored on symbols, never counts in summaries (evidence
+  summaries are immutable). Nobody promotes, rejects or edits review items; the owner adjudicates.
+  Node naming for this capability: `capability-stock-report`, one `command-*`/`query-*`/`model-*`
+  node per registered module in §6, edges `calls`/`writes`/`reads`. Discrepancies found in existing
+  nodes (`helper-task-state-transitions` already has two known ones, inventory handoff §9) are filed
+  through `archgraph-discrepancies`, not fixed in passing.
+- **Git:** checkpoint commit at every `IMPLEMENTED`; approval commit at every `APPROVED`; no push,
+  no squash, no history rewrite by any role session.
+- **Owner's standing anchor-observation brief:** not a session obligation; the owner maintains it.
+
+## 9. Standing rules
+
+Charter rules 1–17 apply in full. Project-specific rules, each binding on every phase:
+
+1. **Every test is workspace-scoped.** Each test seeds its own workspace through the phase-1 kit,
+   scopes every query and assertion to it, asserts no global total, and holds with foreign rows
+   present (measured 2026-09-19: 819 rows in 37 tables leak within a run from 23 files, incl.
+   `item_categories`, `items`, `execution_tasks`, task/step tables). Tests that commit purge in a
+   `try/finally` via `purge_stock_report_workspace` (charter rule 11½).
+2. **Every scenario that plants no drift ends with `assert_stock_report_clean`** (from phase 3 on):
+   check `[]` **and** zero repair records for the workspace, one helper. A scenario that passes
+   only because it self-healed is a failure (intention §12A (e)).
+3. **Counters, flags and goal totals are written by Core statements only** — column-referencing
+   `UPDATE … RETURNING`; never an ORM attribute assignment. An ORM instance is stale after any
+   Core UPDATE of the same row in the same transaction; event payloads and `stored_before` come
+   from `RETURNING` or a fresh `SELECT` (MC-1). Planting an ORM write is a named mutation in
+   phases 3, 4 and 13.
+4. **Lock order is MC-1's, everywhere**: advisory (ordering ops only) → items → tasks →
+   `stock_report_items` → `stock_task_assignments` → history; ascending `client_id` within a
+   class; re-read `state`/`is_deleted` after the lock and decide on that. An unlocked read only
+   discovers ids.
+5. **`ctx.workspace_id` is never read on a webhook path** (it is `""`); the workspace is the
+   configured setting, passed explicitly to every subordinate. Webhook tests build
+   `ServiceContext(identity={})` exactly as the router does.
+6. **Events**: built after the transaction block exits normally, from committed values;
+   dispatched once per request by the owning command; subordinate operations return them. Tests
+   capture them with `capture_dispatch` at the consumer's import site and assert the list — never
+   an internal call.
+7. **Statement counting is reserved for the ratified bounds** (MC-9 zero-write replay, D6 counts,
+   MC-20 read-only, the image batch bound) and always through `record_statements`. It is never
+   used to assert query text or internal structure.
+8. **Named mutations name file and definition-vs-call-site; the row is run whole-file, never
+   `-k`;** a mutation's observed-red set is recorded across the suite when the symbol is
+   asserted in more than one file (earned three pipelines running).
+9. **Two-session rows** open the second session with `beyo_manager.models.database.get_db_session()`,
+   synchronise with `asyncio.Event`/`asyncio.Barrier`, bound every wait with `asyncio.wait_for`,
+   and always release and purge (precedent
+   `app/tests/integration/services/commands/item_economics/test_phase7_concurrency.py`). A row
+   whose interleaving cannot be forced says so in its plan cell and names the structural check the
+   reviewer performs instead of pretending the row bites.
+10. **Exactly one test in the whole project sleeps past the 5 s default** (MC-9 instrument (ii),
+    phase 6). Every other timing row uses the patched clock or a held lock with a bounded wait.
+11. **Before writing under `docs/handoff/` or `docs/domains/`, run `pytest tests/unit/docs/`**
+    (1.3 s) — those guards have roots wider than any phase perimeter.
+12. **Schema is fixed in phase 1.** No later phase edits the revision; a later schema need is a
+    follow-up revision and a Review-log entry.
+13. **No new `onupdate=`** on any table this project creates (MC-17); the flag flip on `tasks`
+    uses the self-assigning form (MC-15).
+14. **Scanner-owned shapes are cited, not invented** (rule 17): every matcher fixture cites the
+    `file:symbol` in intention MC-12 or the hand-walk row in the inventory handoff §3; every
+    asyncpg/SQLAlchemy shape cites the re-check handoff §2 measurements.
+15. **The frontend contract is written from the shipped router and serializers**, never from the
+    intention's examples; nullability gets its own row (earned `simple_valuation_editor` phase 4).
+16. **Active and terminal are the two frozensets, never a spelled list.** Every query predicate,
+    branch and recomputation that asks "is this assignment active / terminal" reads
+    `ACTIVE_ASSIGNMENT_STATES` / `TERMINAL_ASSIGNMENT_STATES` (§6.1); a literal `state IN ('resolved',
+    'failed')` or `NOT IN (...)` is a review finding. Earned 2026-09-19: round 9 added a sixth
+    member after ten phases were planned, and every hand-typed terminal list would have counted
+    `resolved_early` as active. Plans 3, 9, 11, 13 carry a row whose named mutation is exactly that
+    list. (The DB partial indexes are the one place a literal list stands — as an *inclusion* list of
+    the three active states, fixed in the phase-1 migration.)
+
+## 10. Environment topology (verified 2026-09-19 by the planner; if reality disagrees, update here)
+
+- **Working directory** `backend/app/`; virtualenv `app/.venv` (activate, or prefix commands with
+  `.venv/bin/`). Installed: SQLAlchemy 2.0.40, asyncpg 0.30.0 (the re-check's timeout shapes were
+  measured on exactly these).
+- **Infra:** Postgres 18.6 at `localhost:5433`, Redis at `localhost:6380` (from `app/.env`; the
+  compose file maps `${POSTGRES_PORT:-5432}` / `${REDIS_PORT:-6379}`, the owner's env sets 5433/6380).
+  `DATABASE_URL` and `REDIS_URL` in `app/.env`; the dev database is `beyo_manager` and is **never**
+  a test target.
+- **Tests:** `PYTHONPATH=. pytest -m 'not e2e'` from `app/` (= `make test`). `pytest.ini` adds
+  `-n 6 --dist loadfile --strict-markers`. Each xdist worker gets `beyo_test_main_gwN`, cloned from
+  `beyo_test_main_template` (built at the Alembic head by `tests/database_isolation.py`) and dropped
+  at the end; the dev DB's row counts are asserted unchanged across the run. Markers: `unit`,
+  `integration`, `e2e`.
+  - **L1:** `PYTHONPATH=. pytest <file>` (whole file, never `-k`). **L2:** the phase's test folders
+    plus the folders of every production module the phase edits (`tests/integration/services/commands/tasks`,
+    `…/task_steps`, `…/items` for phases 10–11). **L3:** `tests/integration`. **L4:** the full command
+    above; ~2–3 minutes; exactly one per cycle close plus gates.
+- **Alembic head:** `ce99896e6f49` (`app/migrations/versions/ce99896e6f49_add_completed_at_to_tasks.py`),
+  single head as `ScriptDirectory.get_heads()` reports it. Phase 1 adds the one revision of this
+  project on top of it. Autogenerate: `cd app && alembic revision --autogenerate -m "create_stock_report_tables"`,
+  then review the file against §6.2 (partial-index `postgresql_where`, `server_default`, enum names,
+  checks) — autogenerate does not always emit partial-index predicates or CHECK constraints; add them
+  by hand inside the generated file if missing, and say so in the handoff.
+- **Baseline: 21 failed / 3103 passed / 1 skipped, collection 3125, at `cce4b1b`** (unchanged at
+  `f575488`, which touched only docs). The failing set is exactly the published 21-ID set in
+  `docs/architecture/archives/test_isolation_and_xdist/archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md` §3.
+  Every L4 run diffs its failure IDs against that set in both directions. One inherited drifter is
+  known from earlier pipelines (`test_c3_real_concurrent_open_insert_translates_the_loser[model]`,
+  load-dependent; capture the ID set before repeating an anomalous run).
+- **Known hazards for these phases:** (a) `tasks` gains a NOT NULL column — the revision must carry
+  `server_default`, or every raw-SQL task insert in the suite and in `app/scripts/` breaks; (b) nine
+  task commands gain a flush and one indexed query in phase 10 — any existing statement-count test
+  wrapping one of them moves by a fixed amount (none found by grep on 2026-09-19: the
+  `before_cursor_execute` users are worker-stats, item-economics, users, acknowledgments and
+  presentations tests); (c) two existing guard suites read documents — `tests/unit/docs/` (phase 14);
+  (d) `TestClient` router tests fake `get_db` and `run_service`; DB-backed webhook tests call the
+  command with `raw_body` bytes, not the HTTP layer.
+
+### 10.1 The 21 baseline failures against the phases (owner table 1)
+
+Column meaning: *module* = the production module the test exercises; *overlaps* = a phase edits that
+module or a direct caller of it; *adjacent* = no phase edits it, but a phase changes a model or a
+callee its fixtures or routes depend on; *unrelated* = neither. **No phase fixes any of them.**
+
+| # | Failing test ID (file::test) | Module exercised | Phase | Verdict |
+|---|---|---|---|---|
+| 1 | `bootstrap/test_seed_item_economics_configuration.py::test_seed_item_economics_creates_requested_configuration_and_updates_owned_values` | `commands/bootstrap/phases/seed_item_economics` | — | unrelated |
+| 2 | `bootstrap/test_seed_working_sections_integration.py::test_seed_working_sections_syncs_managed_relations_without_touching_custom_sections` | `commands/bootstrap/phases/seed_working_sections` (fixtures build `Task`, `Item`) | 1 (`tasks` column) | adjacent |
+| 3 | `items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_updates_all_items_creates_history_and_dispatches_events` | `commands/items/batch_update_item_positions` | — | unrelated |
+| 4 | `items/test_batch_update_item_positions_integration.py::test_batch_update_item_positions_rolls_back_when_any_item_is_missing` | same | — | unrelated |
+| 5 | `upholstery/test_set_current_stored_amount_inventory_integration.py::test_set_current_stored_amount_inventory_promotes_expected_candidates` | `commands/upholstery/set_current_stored_amount_inventory` | — | unrelated |
+| 6 | `…::test_set_current_stored_amount_inventory_demotes_low_priority_available_first` | same | — | unrelated |
+| 7 | `…::test_set_current_stored_amount_inventory_noop_emits_no_events` | same | — | unrelated |
+| 8 | `working_sections/test_batch_working_section_integration.py::test_batch_flag_round_trips_and_new_step_snapshots_follow_section_value` | `commands/working_sections/*` (fixtures build `Task`, `TaskStep`) | 1 (`tasks` column) | adjacent |
+| 9 | `…::test_worker_working_sections_excludes_counts_for_deleted_parent_tasks` | same | 1 | adjacent |
+| 10 | `working_sections/test_working_section_ordering_integration.py::test_reorder_rewrites_sort_order_and_worker_view_follows_it` | `set_user_working_sections_order` + `_membership_ordering` (read as precedent by phase 12, not edited) | — | unrelated |
+| 11 | `…::test_reorder_rejects_payload_not_matching_active_set` | same | — | unrelated |
+| 12 | `tests/integration/test_audit_log.py::test_write_audit_from_event_inserts_row` | `infra/audit/write_audit` | — | unrelated |
+| 13 | `…::test_detail_defaults_to_empty_dict` | same | — | unrelated |
+| 14 | `unit/domain/shopify/test_dimension_migration.py::test_legacy_seat_height_without_height_maps_without_zero_values` | `domain/shopify/dimension_migration` | — | unrelated |
+| 15 | `…::test_legacy_multiline_rerun_is_idempotent_and_protects_existing_values` | same | — | unrelated |
+| 16 | `unit/services/commands/auth/test_sign_in_user.py::test_sign_in_user_preserves_custom_workspace_role_name` | `commands/auth/sign_in_user` | — | unrelated |
+| 17 | `unit/services/queries/worker_stats/test_endpoint_split.py::test_split_services_return_disjoint_worker_shapes` | `queries/worker_stats/*` | — | unrelated |
+| 18 | `unit/test_case_type_serializers.py::test_serialize_case_type_entry_returns_contract_fields` | `domain/cases/serializers` | — | unrelated |
+| 19 | `unit/test_items_router.py::test_route_list_item_issues_forwards_client_id` | `routers/api_v1/items.py` (a direct caller of `find_or_create_item`, whose behaviour phase 11 changes; the failing routes are the issue routes) | 11 | adjacent |
+| 20 | `unit/test_items_router.py::test_route_delete_item_issues_forwards_ids` | same | 11 | adjacent |
+| 21 | `unit/test_upholstery_inventories_router.py::test_route_list_upholstery_inventories_passes_filter_query_params` | `routers/api_v1/upholstery_inventories.py` | — | unrelated |
+
+Result: **0 overlaps, 5 adjacent, 16 unrelated.** Card 1 answered **A** by the owner (2026-09-19):
+fix none; every phase diffs against the published 21-ID baseline; the five adjacent tests are
+revisited at closeout.
+
+### 10.2 Leaking test files against the phases (owner table 2)
+
+**No Stock Report code reads across workspaces.** The consistency check and the manual repair take
+`(session, workspace_id)` and filter every table by it (MC-20); the webhooks resolve their
+workspace from the setting and filter categories, rows and items by it (MC-8, MC-10); the sync and
+hooks act on the ids the command already holds; the AST guard reads no database. So rows left by
+other files in `item_categories`, `items`, `execution_tasks`, `tasks` and step tables are
+invisible to every phase's production code, and the only remaining exposure is a **global-count
+assertion**, which §9 rule 1 forbids in every criterion.
+
+The precise 23-file list was measured in the owner's 2026-09-19 audit session with a scratch
+plugin that is not in the repo; it was **not re-measured here** (the prompt forbids building a
+probe). A cheap approximation — test files that construct `ItemCategory(`, `Item(`, `Task(` or
+`ExecutionTask(` and also commit (`.commit()` or `session.begin()`) — returns 22 files; the ones
+the audit named by count are marked **★**:
+
+`integration/models/shopify/test_shopify_foundation_constraints.py`,
+`integration/models/shopify/test_shopify_metafield_preference_constraints.py` ★ (item_categories),
+`integration/services/commands/cases/test_case_created_step_pause.py` ★ (128 rows),
+`integration/services/commands/item_economics/test_phase4_fix_coverage.py`,
+`…/item_economics/test_phase7_concurrency.py`, `…/item_economics/test_phase7_evaluations.py`,
+`…/item_economics/test_phase8_reviewer_r1_probe.py`, `…/item_economics/test_phase8_status_results.py`,
+`…/item_economics/test_phase8b_inline_task_prices.py`, `…/item_economics/test_valuation_surface.py`,
+`integration/services/commands/shopify/test_create_shopify_metafield_preferences.py` ★,
+`…/shopify/test_delete_shopify_metafield_preferences.py` ★,
+`…/shopify/test_update_shopify_metafield_preference_sequence_order.py` ★,
+`integration/services/commands/task_steps/test_step_time_settlement_integration.py` ★ (execution_tasks),
+`integration/services/commands/tasks/test_delete_task_upholstery_requirements_integration.py`,
+`integration/services/commands/users/test_reconcile_worker_shift_state.py`,
+`…/users/test_worker_shift_commands.py`,
+`integration/services/queries/item_economics/test_price_scenario_query.py`,
+`integration/services/queries/shopify/test_get_shopify_metafield_preferences.py`,
+`integration/services/tasks/analytics/test_process_step_transition_shift_hook.py`,
+`integration/services/tasks/shopify/test_shopify_worker_handlers_integration.py`,
+`integration/services/tasks/task_steps/test_finalize_pending_step_completion_integration.py`.
+
+None of them would be seen by any phase's cross-workspace code, because there is none. The phases
+that exercise existing task commands (10, 11) share worker databases with these files under
+`--dist loadfile`, which is why §9 rule 1 is a rule and not advice.
