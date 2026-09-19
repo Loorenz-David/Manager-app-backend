@@ -3,19 +3,21 @@
 ```
 from:      Manager backend (ManagerBeyo-app/backend) — Stock Report project
 to:        Scanner backend (Item-Scanner-Shopify/apps/backend)
-version:   v1 — drafted 2026-09-18, revised 2026-09-19 before handover (mechanism-inventory results)
+version:   v1 — drafted 2026-09-18, revised 2026-09-19 before handover (mechanism-inventory results;
+           the delete webhook, §4A; early resolution, §4.2)
 status:    PUBLISHED on handover. From the moment it is handed over this file is never edited; a
            change to anything below ships as a new file, STOCK_REPORT_WEBHOOKS_v2_<date>.md, which
            lists what changed.
-authority: Manager intention, §8, §8A, §8B (MC-8, MC-9, MC-10), §14B, §14D
+authority: Manager intention, §8, §8A, §8B (MC-8, MC-9, MC-10), §14B, §14D, §14E, §14F
            (docs/architecture/under_construction/implementation/stock_report/planning/intention.md)
-receiver:  NOT BUILT YET. Manager implements these two endpoints in parallel with you.
+receiver:  NOT BUILT YET. Manager implements these three endpoints in parallel with you.
            Build against this document; there is nothing to call today.
 ```
 
-Scanner tells Manager two things: **how much stock is missing** (demand), and **which repaired
-items Scanner has now processed** (processed). Manager turns the first into a work board and uses
-the second to clear finished work off it. Manager never calls Scanner for either.
+Scanner tells Manager three things: **how much stock is missing** (demand), **which rules no
+longer exist** (delete), and **which repaired items Scanner has now processed** (processed).
+Manager turns the first into a work board, removes rows with the second, and uses the third to
+clear finished work off it. Manager never calls Scanner for any of them.
 
 ---
 
@@ -23,10 +25,10 @@ the second to clear finished work off it. Manager never calls Scanner for either
 
 | Stable — build on it | May tighten before Manager ships (a v2 file will say so) |
 |---|---|
-| Both paths, method, header name | The exact text inside `error` strings |
+| All three paths, method, header name | The exact text inside `error` strings |
 | Request body shapes and field names | |
 | Units, summed across locations, absolute values | |
-| `outcome` values: `applied`, `category_not_found`, `resolved`, `ignored` | |
+| `outcome` values: `applied`, `category_not_found`, `deleted`, `not_found`, `resolved`, `ignored` | |
 | The processed `reason` codes (§4.3) | |
 | Status code classes: 2xx / 401 / 422 / 5xx | |
 | Replays are harmless | |
@@ -102,8 +104,9 @@ exist in Manager** and will come back `category_not_found` until someone creates
    never 1 (`instanceCount` is the wrong column).
 3. **Absolute, not a change.** Send the number that is true now. Manager overwrites; it never adds.
 4. **Absent means untouched.** A rule you leave out keeps its last value in Manager forever. When a
-   rule is satisfied, **send it with `0`**. When a rule is deleted in Scanner, send a final `0`
-   for it — Manager keeps the row (with its history) at zero; it has no "delete" webhook.
+   rule is satisfied, **send it with `0`** — the row stays, at zero. When a rule's criteria
+   change, or the rule is removed, **delete it through §4A** — never by leaving it out, and not
+   with a `0`.
 
 How "missing" is computed from thresholds and current quantity is Scanner's decision entirely.
 
@@ -199,15 +202,17 @@ Manager's users clear those by hand. Unknown fields in an entry are ignored.
 
 ### 4.2 What Manager does
 
-Finds its item by that article number, then that item's open board assignment. If the assignment
-is **waiting for Scanner** (Manager's work is finished), it is closed. **Everything else is
-ignored, never an error**: an article number Manager does not know, an item that was never put on
-the board, one still being worked on, one already closed. You may therefore report **every**
-placement (e.g. reuse `item_placed`) without filtering for "was this a Manager item".
+Finds its item by that article number, then that item's open board assignment, and **closes it**:
+- if Manager's work is finished (the assignment is waiting for Scanner), it is closed normally;
+- if Manager's work is **not** finished yet — typically a worker forgot to complete a step and the
+  item went on through the pipeline anyway — it is closed **early**. Manager keeps it marked as
+  such so its users can see which items reached you before their task was completed. You never
+  need to report the item again.
 
-One consequence to know: if you report an item while Manager still has it in progress, the report
-is ignored and **not remembered**. If that item is finished later and you do not report it again,
-it waits on Manager's board until a user removes it.
+**Everything else is ignored, never an error**: an article number Manager does not know, an item
+that was never put on the board, one already closed. You may therefore report **every** placement
+(e.g. reuse `item_placed`) without filtering for "was this a Manager item". Report each item
+**once**: once closed, Manager will not put the same task and item back on the board.
 
 ### 4.3 Responses
 
@@ -216,6 +221,7 @@ it waits on Manager's board until a user removes it.
   "data": {
     "results": [
       { "article_number": "0000612",       "outcome": "resolved", "reason": null },
+      { "article_number": "0000613",       "outcome": "resolved", "reason": "early" },
       { "article_number": "04 2 001 0034", "outcome": "ignored",  "reason": "no_open_assignment" }
     ]
   },
@@ -231,8 +237,8 @@ applies, in this order):
 |---|---|---|
 | `ignored` | `item_not_found` | No Manager item has that article number. |
 | `ignored` | `no_open_assignment` | The item exists but is not on the board (never assigned, or already closed — this is what a replay reads). |
-| `ignored` | `not_awaiting` | The item is on the board but Manager's work on it is not finished yet. Not remembered (4.2): report it again after the work is done. |
-| `resolved` | `null` | Manager closed the item's board assignment. |
+| `resolved` | `null` | Manager closed the item's board assignment; Manager's work was finished. |
+| `resolved` | `early` | Manager closed the item's board assignment although Manager's task was not finished yet (4.2). Nothing more is needed from you; the reason is for your logs. |
 
 The same article number twice in one request is not an error: the second is evaluated after the
 first has taken effect, so it reads `no_open_assignment`. Status codes and retry rules are the
@@ -240,9 +246,80 @@ table in 3.4 (without 503 and `category_not_found`, which are demand-only).
 
 ---
 
+## 4A. Delete — a rule's criteria changed, or the rule was removed
+
+```
+POST {MANAGER_BASE_URL}/api/v1/location-tracker/webhooks/stock-demand-deleted
+```
+
+Send this when a Scanner user **changes a rule's criteria** (delete the old rule here, then send
+the new one through demand, §3) or **removes a rule**. It is **destructive** on Manager's side:
+Manager finds the board row for that rule and deletes it together with every work assignment on
+it, whatever their state. Manager's tasks themselves keep running; Manager's users re-add the
+assignments to the new row by hand. It is expected to be rare — mostly while the rules are first
+being set up.
+
+### 4A.1 Request body — a JSON array, at least one entry
+
+```json
+[ { "itemCategory": "Dining Chairs", "properties": { "wood_group": ["teak"] } } ]
+```
+
+The demand entry without `quantityRequested` (sent anyway, it is ignored). Manager finds the row
+**exactly as demand does**: same category matching (3.1.1), same identity (3.3). Two entries with
+the same identity in one request → **422**, nothing deleted. Empty array → 422.
+
+### 4A.2 Two rules only the sender can keep
+
+1. **Only when no location still holds it.** Manager's row is the **sum across all your
+   locations** for one (`itemCategory`, `properties`) (3.2 rule 1). If a user changes the rule at
+   one location while another location still tracks the old (`itemCategory`, `properties`), do
+   **not** send a delete — that would wipe the other location's live demand and its assignments.
+   Send the new, lower sum through demand instead. Send the delete only when **no** location holds
+   the old pair any more.
+2. **Order, and a check at send time.** A delete and the demand for the new rule can otherwise
+   arrive in the wrong order. The case that hurts: a user changes Teak → Light and back to Teak;
+   a retried "delete Teak" landing after the new "create Teak" would erase the rule the user
+   wants. So:
+   - per shop, send **stock messages (demand and delete) one at a time**, in the order you
+     produced them; the next waits until the previous has a final answer (2xx, 4xx, or retries
+     exhausted);
+   - **re-check a delete just before sending it**: if any location holds the old pair again,
+     **skip** the delete.
+
+   Manager does not defend against a wrong order itself (beyond its 5 s limit, 3.5).
+
+### 4A.3 Responses
+
+```json
+{
+  "data": {
+    "results": [
+      { "itemCategory": "Dining Chairs", "properties": { "wood_group": ["teak"] }, "outcome": "deleted" }
+    ]
+  },
+  "ok": true,
+  "warnings": []
+}
+```
+
+One result per entry, in request order, echoing what you sent:
+
+| `outcome` | Meaning |
+|---|---|
+| `deleted` | the row and all its assignments are gone from the board |
+| `not_found` | no live row has that identity — never created, or already deleted (this is what a replay reads) |
+| `category_not_found` | Manager has no such category (3.1.1) |
+
+None of these is an error; the other entries are still applied. Status codes, the 5 s limit and
+retry rules are demand's (3.4, 3.5): 401 / 422 not retried; 5xx and timeouts retried — a replay is
+harmless.
+
+---
+
 ## 5. Replays, retries, batching
 
-- **Both webhooks are idempotent.** Sending the same request twice leaves Manager exactly as
+- **All three webhooks are idempotent.** Sending the same request twice leaves Manager exactly as
   sending it once. Retry freely on 5xx, timeouts and connection errors.
 - **Do not retry 401 or 422** — nothing will change until a human does.
 - No batch-size limit is defined. Keep requests reasonable (hundreds of entries, not tens of
@@ -277,11 +354,13 @@ owner decided against it), so both of these are **required**:
    absolute and replays are harmless, a full push heals any entry that ever went stale or was
    lost. This is the cheapest correctness you can buy.
 
-Avoid running two demand pushes for the same shop concurrently (a per-shop job id or concurrency 1
-for this event type). Manager's side of the same hazard is its 5 s limit (3.5).
+Send **one stock message at a time per shop** — demand and delete in the same lane, in order
+(a per-shop job id or concurrency 1 for these event types); deletes also need the send-time check
+of 4A.2. Manager's side of the same hazard is its 5 s limit (3.5).
 
 ### 6.4 New event types
-`OutboundEventType` has only `item_placed`. Demand needs a new type (e.g. `stock_demand`);
+`OutboundEventType` has only `item_placed`. Demand needs a new type (e.g. `stock_demand`), and so
+does delete (e.g. `stock_demand_deleted`), in the same per-shop lane;
 processed can be a new type or a reuse of `item_placed` with the payload reshaped to
 `[{ "article_number": … }]` — the current `item_placed` payload shape is **not** what Manager
 accepts. `OutboundWebhookTarget.secret` holds the shared key; `targetUrl` holds the full path.
@@ -333,7 +412,10 @@ completed.
 
 - [ ] One shared secret configured on both sides; sent as `x-api-key`.
 - [ ] Demand aggregated per (`itemCategory`, `properties`) across all locations, in units.
-- [ ] Zero sent explicitly for satisfied and for deleted rules.
+- [ ] Zero sent explicitly for satisfied rules.
+- [ ] Changed or removed rules deleted through §4A — only when no location still holds the old
+      pair; re-checked at send time and skipped if it exists again.
+- [ ] Demand and delete sent one at a time per shop, in order.
 - [ ] Demand payload built at send time (**required**); full re-push on a schedule and after reconcile.
 - [ ] Demand response body read; `category_not_found` surfaced to a human.
 - [ ] 401 alarms; 422 treated as a bug, not retried; 5xx/timeouts retried.
@@ -341,6 +423,6 @@ completed.
       non-answering target.
 - [ ] Stock-demand client timeout stays above Manager's 5 s limit (8 s today).
 - [ ] Processed webhook sends `article_number` verbatim; items without one are skipped knowingly.
-- [ ] If the processed `reason` is used, it is matched against the four codes of 4.3; a
-      `not_awaiting` item is reported again once Manager's work is done.
+- [ ] If the processed `reason` is used, it is matched against the codes of 4.3; each item is
+      reported once.
 - [ ] A change to `WOOD_GROUPS` / `DRAWER_RANGES` is communicated to Manager.

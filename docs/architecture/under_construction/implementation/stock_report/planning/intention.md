@@ -1,32 +1,33 @@
 # Intention: Stock Report — Scanner demand turned into Manager work
 
 ```
-status: RATIFIED — by the owner (David): ratified 2026-09-18, re-ratified the same day incl. §14B, and re-ratified 2026-09-19 incl. round 7 (§14D, P33–P36, the inventory gate's U1–U21); see §18
+status: RATIFIED — by the owner (David): ratified 2026-09-18, re-ratified 2026-09-18 incl. §14B, and 2026-09-19 incl. round 7 (§14D), round 8 (§14E) and round 9 (§14F, card 14, P42–P45); see §18
 role: intention (pipeline root artifact)
 shaped_from: raw_intention.md (deleted by the owner after ratification; its section map and the owner's verbatim answers are preserved in Appendix A)
 source_evidence: scanner_source_evidence.md (this folder) — cited below as E1…E10
 date: 2026-09-18
-round: 7 (owner answers to mechanism-inventory cards folded — §14D; re-ratified 2026-09-19; 0 cards open; next: inventory re-check)
+round: 9 (early Scanner resolution into the terminal state `resolved_early` — §14F; card 14 answered; re-ratified 2026-09-19; 0 cards open)
 ```
 
 Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
 
 ---
 
-## Status — RATIFIED (round 7, 2026-09-19); no owner decision open
+## Status — RATIFIED (round 9, 2026-09-19); no owner decision open
 
-Re-ratified by the owner after the round-7 fold of the mechanism-inventory answers. The one
-material change since the first ratification: **self-healing repair and the repair tool are
-must-ship** (§14D D1–D2, §12 item 11, §12A). The approval also covers the shaper proposals
-P33–P36 (§16) and the inventory gate's unilateral resolutions U1–U21
-(`handoffs/reviewer/2026-09-18_inventory_mechanism_inventory_handoff.md` §4).
+Re-ratified by the owner after two additions made while the implementation-planner was running:
+- **Round 8 (§14E):** a third Scanner webhook deletes a board row when a Scanner rule's criteria
+  change or the rule is removed. The owner waived a mechanism-inventory re-check; its questions are
+  planner obligations (§14E "Carried to the planner").
+- **Round 9 (§14F):** Scanner's processed report on an assignment whose task is not yet `ready`
+  moves it to the new terminal state **`resolved_early`** — units leave the counters, the task is
+  untouched, the units are credited to the current goal (card 14 → A), and the state stays as the
+  trace of a forgotten step.
 
-**Read §14B, §14C and §14D with the rest:** later amendments win over earlier sections, in the
-order stated in §14C, with §14D last and strongest.
+**Read §14B–§14F with the rest:** later amendments win over earlier sections, in the order stated
+in §14C, with §14F last and strongest.
 
-**Next gate:** the mechanism-inventory re-check of the contracts round 7 touched
-(`prompts/reviewer/2026-09-19_inventory_mechanism_inventory_recheck.md`); on `PASS`, the
-implementation-planner.
+**Next:** the orchestrator hands the implementation-planner the §14E and §14F deltas.
 
 ---
 
@@ -1692,8 +1693,8 @@ be reset cannot be re-measured). Scope ladder: with §12 item 1.
 | ID | Observable outcome — measured true means this shipped | Defect family it guards |
 |---|---|---|
 | **M1** | After every committed operation, each StockReportItem's three counters equal the **sums of stored assignment quantities** recomputed from its non-deleted assignments by state, and every `Task.is_stock_assignment` equals "has a non-deleted assignment" — including under concurrent transitions on the same item. **Round 7:** when stored values were already wrong, an operation that would write a negative value repairs that row first and succeeds, leaving exactly one repair record per corrected field; the manual repair brings a drifted workspace back to a clean consistency report. A correct system writes no repair record. | counter drift, lost updates, arithmetic applied outside the transition operation |
-| **M2** | After a task's state changes by **any** path in §2.3, its active assignment equals the §5 mapping of the task's resulting state; terminal assignments are unchanged; a deleted task or an item removed from its task leaves no assignment behind. | a missed integration site; assuming intermediate states; terminal assignments revived; orphaned assignments counted forever |
-| **M3** | Replaying any Scanner request leaves the database identical to one delivery; `quantity_requested` equals the last value Scanner sent; a rejected batch leaves no trace; an entry with an unknown category writes nothing, is reported back as not found, and does not stop the other entries. | double-applied transitions, delta-instead-of-absolute, partial batches |
+| **M2** | After a task's state changes by **any** path in §2.3, its active assignment equals the §5 mapping of the task's resulting state; terminal assignments are unchanged; a deleted task or an item removed from its task leaves no assignment behind. **Round 9:** an assignment that Scanner resolved early stays `resolved_early` whatever the task does afterwards. | a missed integration site; assuming intermediate states; terminal assignments revived; orphaned assignments counted forever |
+| **M3** | Replaying any Scanner request leaves the database identical to one delivery; `quantity_requested` equals the last value Scanner sent; a rejected batch leaves no trace; an entry with an unknown category writes nothing, is reported back as not found, and does not stop the other entries. **Round 8:** a Scanner deletion removes the named row with every assignment on it, whatever their state, leaves every task untouched, and a replay of it changes nothing. | double-applied transitions, delta-instead-of-absolute, partial batches |
 | **M4** | Payloads differing only in JSON key order resolve to one StockReportItem; there is never more than one live row per identity, nor more than one active assignment per item — including under concurrent requests. | duplicate identities, signature instability, double-booking an item |
 | **M5** | Goal records appear only on increases; a goal record's awaiting total never decreases when Scanner resolves, and decreases by exactly the assignment's units — on the record that was credited — when completed work is undone; a priority change yields exactly one record; shifted neighbours yield none. | history that misstates the goal; double counting a re-finished item; subtracting from the wrong goal; duplicate or noisy records |
 | **M6** | In every priority group, orders are exactly `1..n`; `priority` is null exactly when `priority_order` is null; the list endpoint returns the §7 order and, with no filter, only untriaged items. | gaps/duplicates after move, delete or priority change; wrong default listing |
@@ -1895,6 +1896,11 @@ at round 6; all were answered in round 7 and the rows below carry the answers (C
 | C37 | v1 handoff §6.3 (sender-side ordering mitigation only) | cards 11 → **A**, 11a → **A** (owner, round 7; §14D D4–D5) | v1 stands, no stamp; Manager adds a 5 s demand time limit below Scanner's 8 s client timeout | B: a v2 handoff, a column and a `stale` outcome for a case the sender already prevents |
 | C38 | §12 "a repair mode for the consistency check" deferred (owner, round 3) | owner, round 7 (card 9 → C, 9b → A) | **must-ship** (§12 item 11, §12A) | a self-heal with no tool behind it; upward drift unfixable without a developer |
 | C39 | §5A MC-16 "The row's three counters are asserted to be 0 before its soft-delete" | §5A MC-1 second trigger (P36) | a non-zero counter is set to 0 with a repair record; the deletion proceeds | a row that cannot be deleted because its numbers drifted |
+| C46 | §8.1 / v1 handoff §3.2 rule 4 "When a rule is deleted in Scanner, send a final `0` … it has no 'delete' webhook"; §11 "the two webhook contracts" | §14E E1–E2 (owner, round 8, card 12 → A) | a removed or changed rule is deleted through `…/webhooks/stock-demand-deleted`; a satisfied rule is still demand `0`; three Scanner webhooks | retired rules kept at 0 forever, and a changed rule leaving its old row on the board |
+| C47 | §5 rule 2 "`awaiting → resolved` is performed only by the Scanner processed webhook, and only from `awaiting`"; MC-1 table `in_queue`/`in_progress` → `resolved` ✗ | §14F F1–F2 (owner, round 9) | the Scanner webhook also moves `in_queue`/`in_progress` → `resolved_early` (terminal); `awaiting → resolved` unchanged | a forgotten step leaving the assignment stuck in `awaiting` forever |
+| C48 | MC-10 step 2 `not_awaiting` (ignored, no write); MC-8 success-body `reason` enum; v1 handoff §4.2 "not remembered" | §14F F5, P43 | `resolved` with reason `early`; `not_awaiting` retired | Scanner's report silently dropped |
+| C49 | MC-11 "Task reopen first" row (Scanner `ignored`, `not_awaiting`) | §14F F6 | Scanner re-reads `in_progress` → `resolved_early` | — |
+| C50 | P32 "ignored and not remembered" | §14F | superseded (P32 struck in part) | — |
 | C40 | §6.2 and P26 "floored at 0" | MC-5 (round 7) | no floor; self-heal | see C10 |
 | C41 | MC-17 "Any counter move … `updated_*` unchanged" | §12A manual repair, stamps (re-check, round 7) | the **manual** repair stamps every `stock_report_items` row it changes with the caller; inline repair and every move stamp nothing | a manual repair that leaves no author on the rows it rewrote, or an inline repair stamping a worker as editor |
 | C42 | MC-4 "one multi-row INSERT … over every identity in the request" | MC-9 zero-statement replay; §8B D6 statement plan (re-check, round 7) | discover unlocked, INSERT only the absent identities (omitted when none), then one sorted `FOR UPDATE` | every replay issuing an INSERT, so the MC-9 instrument reddens on a correct system, or is weakened to count rows |
@@ -1921,6 +1927,95 @@ contracts and §1–§13 wherever they disagree.
 **Not a product change, stated so it is not lost:** the three false absence claims of §2.3 (C5–C7)
 and the missing callers (C8) are corrected by §14C and MC-2; §2.3's own sentences are left as
 ratified.
+
+### 14E. Amendment — Scanner deletes a board row (owner, 2026-09-19, round 8)
+
+**Owner's words (verbatim):** "the scanner app should be capable of deleting a stock instance,
+that is because the user in the scanner app might cahnge the criteria for a stock track instance
+and the scanner app should send the delete request of the old one and then the new creation of
+the new one. this process of deletion should use the same find query engine the find or create
+uses, but it is find and delete process, this is destructive process even for the current
+assignments the stock instance is tracking in the manager app. few seconds after or in parallel
+the new stock instance will be received by the manager app from the scanner app and then the user
+must manually add the assignments again if they match criteria, this is a rare process but it must
+exist specially in the beginning process of setting up the criterias."
+
+**Grounding.** The destructive part already exists and is ratified: the user-facing row deletion
+(§9 "delete StockReportItem", §5A MC-16 cascade order, MC-1 second self-heal trigger, §9D MC-19
+row-deletion events). The lookup already exists: the demand webhook's category match (MC-8, U6)
+and identity (MC-3 normalization + signature, MC-4 predicates). This amendment adds a **third
+Scanner webhook** that joins the two, and nothing else.
+
+| # | What ships | Status |
+|---|---|---|
+| E1 | **Scope of the delete.** Sent when a Scanner rule's criteria change (owner) **and when a rule is removed outright** (owner, card 12 → A): a rule that no longer exists in Scanner no longer exists on the board. This replaces v1/§8.1's "when a rule is deleted in Scanner, send a final 0" (§14C C46). A *satisfied* rule is still sent as demand `0` and its row stays; "absent from a demand request means untouched" also stays | owner, card 12 → A |
+| E2 | **Endpoint.** `POST /api/v1/location-tracker/webhooks/stock-demand-deleted`, header `x-api-key`, same key, same workspace setting, same validation order as demand (MC-8 steps 1–6: config → key → workspace → decode → shape → duplicates). Body: a JSON array, at least one entry, of `{"itemCategory": str, "properties": object}` — the demand entry without `quantityRequested` (a `quantityRequested` field, if sent, is ignored like any unknown field, U7). Empty array → 422; two entries resolving to one identity → 422, whole request rejected | proposal P37 |
+| E3 | **Ordering between delete-old and create-new — the sender guarantees it** (owner, card 13 → A). (a) Per Scanner shop, stock messages (demand and delete) are sent **one at a time**, in the order Scanner produced them; the next is not sent until the previous has a final answer (2xx, 4xx, or retries exhausted). (b) A delete is **re-validated at send time**: just before sending, Scanner checks that no location holds the old (category, properties) any more; if one does again (the rule flipped back, or P41's other-location case), the delete is **skipped**, not sent. Manager adds no ordering defence of its own beyond the deadline (E9) | owner, card 13 → A |
+| E4 | **Lookup — the same engine as find-or-create** (owner): category by MC-8's rule (exact, then case-insensitive only if unique), properties normalized and signed by MC-3, row found by MC-4's live-identity predicate (`is_deleted = false`, same workspace, same `(item_category_id, properties_signature)`). Nothing is created | owner |
+| E5 | **Effect — the existing row-deletion cascade, unchanged** (MC-16 order, MC-1 second self-heal trigger): every non-deleted assignment of the row, **any state** (in_queue, in_progress, awaiting, resolved, failed), through `move_assignment(DELETE)`; each task's `is_stock_assignment` recomputed; the row's gap closed in its priority group (MC-7); the row and its history soft-deleted. **Tasks, task steps and items are never touched** — a task keeps running, it is simply no longer on the board | owner ("destructive … even for the current assignments") |
+| E6 | **Authorship.** `deleted_by_id` and `updated_by_id` NULL on everything it writes (Scanner is not a user, MC-17) | follows from §4.5 |
+| E7 | **Response.** `{"data": {"results": [{"itemCategory", "properties", "outcome": "deleted" | "not_found" | "category_not_found"}]}, "ok": true, "warnings": []}`, one per entry in request order, echoing as received. `not_found` = no live row with that identity (never created, or already deleted — what a replay reads). Neither `not_found` nor `category_not_found` is an error; other entries are still applied | proposal P38 |
+| E8 | **Idempotency (M3).** A replay reads `not_found` for every entry and issues zero INSERT/UPDATE/DELETE and no event (MC-9's definition and instrument) | follows from HC-5 |
+| E9 | **Time limit.** The 5 s request deadline and `set_config` limits of MC-9 D5 apply unchanged. A delete that Scanner gave up on must not commit after a later demand for the same identity has recreated the row — the same argument as card 11a | proposal P39 |
+| E10 | **What the new row starts with.** A later demand for the same or the new identity creates a **fresh** row: new `client_id`, no priority (untriaged, §7), no assignments, goal history from 0 (§6.1). Nothing is carried over from the deleted row. Users re-add assignments by hand (owner); the category and property checks of §9A apply as always | owner + proposal P40 |
+| E11 | **The location trap (from E1 of the evidence doc).** Manager's row is the **sum across Scanner locations** of one (category, properties). If the changed rule was at one location and another location still has the old (category, properties), deleting Manager's row would destroy live demand and its assignments; the next demand push would recreate the row with no assignments. So the **sender rule** is: send the delete **only when no location in Scanner still holds the old (category, properties)**; otherwise send the new, lower sum through the demand webhook | proposal P41 (sender rule, goes into the Scanner handoff) |
+| E12 | **Events.** Exactly MC-19's "Row deletion" row: `stock_report_item:deleted` for the row, `stock_task_assignment:deleted` per assignment, `stock_report_item:updated` per shifted neighbour in its priority group | follows from MC-19 |
+| E13 | **Roles.** None — key-authenticated like the other webhooks. The user-facing row delete stays ADMIN/MANAGER (MC-18 unchanged) | follows from MC-18 |
+
+**Ledger.** M3 gains one sentence (below, marked round 8). No ID added or moved.
+
+**Carried to the planner — the owner waived a mechanism-inventory re-check of §14E
+(2026-09-19: "I will not launc a mechanism inventory after this ratification").** The plan must
+answer each of these with a stated rule and a criterion that can fail (questions, not decisions): (1) lock order of the
+cascade (advisory lock → tasks → row → assignments → history) against a concurrent demand request
+naming the same identity (demand locks rows, never tasks or the advisory key) and against the
+processed webhook (row → assignment) — any cycle? (2) the find step of the cascade for **several
+rows in one request**: sorted ascending, one advisory lock, and whether a request deleting two
+rows of the same priority group closes both gaps correctly; (3) whether the D6 statement bound
+applies (it need not: deletes are rare; state a bound or say why none); (4) the replay instrument
+for a row whose cascade self-healed; (5) the MC-20 check after a Scanner deletion; (6) the
+workspace reset is unaffected (no new table).
+
+**Where it lands in the plan (for the orchestrator):** it depends on the row-deletion cascade
+(plan phase 13) and the demand endpoint's verifier/validation (plan phase 7). The natural home is
+phase 13 (cascade + its second caller), or a phase directly after it. The planner decides.
+
+### 14F. Amendment — Scanner resolves an assignment before the task is ready (owner, 2026-09-19, round 9)
+
+**The owner's words (verbatim):** "option A sounds really good, so your proposition is to perhaps
+add a new state so that for those cases the assignment gains a state near to resolved which takes
+it out of the quantity counts already, but when the task transitions to ready it doesn't need to
+wait to resolved as that special state has already moved the quantities outside the counts and it
+also keeps that state for tracabitlity to undertand the "forgoten" items the wokerker forgot to
+mark as ready and reached the scanner app domain". The case, in the owner's earlier words: "this
+can happen given the worker forgot to complete one step and the item continued through the
+pipeline."
+
+| # | What ships | Status |
+|---|---|---|
+| F1 | **New state `resolved_early`** in `StockTaskAssignmentStateEnum`: *Scanner processed the item while Manager's task had not reached `ready`*. **Terminal**, like `resolved` and `failed`: nothing moves an assignment out of it except deletion. Not active: it holds no counter and does not block a new assignment under the one-active-per-item / per-task indexes (MC-4) | owner (name: P42) |
+| F2 | **Transitions.** Added to MC-1's table: `in_queue → resolved_early` and `in_progress → resolved_early`, requester **Scanner only** (the processed webhook). `awaiting → resolved` is unchanged; `awaiting → resolved_early` never happens. `resolved_early → DELETE` by every delete path, like `resolved`. Counter effect by §5 rule 5: `−q` on the *from* counter, nothing added | owner |
+| F3 | **The task is never touched.** Its state, steps and flag stay as they are (`is_stock_assignment` stays true while the non-deleted assignment exists, P21). When the worker later finishes the step and the task reaches `ready`, the sync skips the assignment because it is terminal (§5 rule 1) — no wait, no second resolution. If the task instead fails, is cancelled or reopens, the assignment also stays `resolved_early` | owner |
+| F4 | **Goal credit on entering `resolved_early`** (owner, card 14 → A): exactly as on entering `awaiting` — the row's current goal record `G` gets `G.quantity_awaiting += q` and the assignment remembers `G` (`credited_history_record_id`); with no goal record, nothing is credited. Because the state is terminal, the credit is **never removed**, except by the row-deletion cascade's history soft-delete (like `resolved`). MC-5 gains two rows: *enters `resolved_early` from `in_queue`/`in_progress`, `G` exists → `G += q`, memory `G`*; *…, no goal record → none, memory NULL*; and `resolved_early → DELETE` behaves as `resolved → DELETE` (no subtraction, memory kept) | owner, card 14 → A |
+| F5 | **Processed webhook (MC-10) decision order becomes:** `item_not_found` → `no_open_assignment` → `awaiting` → **`resolved`** (reason `null`) → `in_queue` / `in_progress` → **`resolved`** with reason **`early`** (P43). The reason `not_awaiting` is **retired**: no active state is ignored any more. Lock, re-read after the lock, decide on what the re-read says (unchanged) | owner + P43 |
+| F6 | **Two writers (MC-11)** — the "Task reopen first" row is replaced: the sync commits `awaiting → in_progress`, then Scanner re-reads `in_progress` → `resolved_early` (`in_progress −q`; goal per card 14; the earlier credit was already removed by the reopen). New row: *Scanner first while `in_progress`* → `resolved_early`; the sync then sees a terminal state and skips. Both orders end with no assignment in an active state and counters equal to the recomputation | follows |
+| F7 | **Replay.** A second report finds `resolved_early` → `ignored` / `no_open_assignment`, zero statements (MC-9) | follows |
+| F8 | **Events.** `stock_task_assignment:state-changed` with `"state": "resolved_early"`, plus `stock_report_item:updated` for the row (MC-19 "Processed, resolved" row) | follows |
+| F9 | **Re-adding the same pair.** Creating an assignment for a `(task_id, item_id)` pair that already has a non-deleted `resolved` or `resolved_early` assignment is **refused**, reason `already_processed_by_scanner` (a hard 422 failure in MC-13's order, after `item_not_task_primary`). Scanner reports an item once; a re-added pair would wait in `awaiting` forever. A **new** task for the same item (it came back for repair) is not affected | proposal P44 |
+| F10 | **Traceability surface.** The state is visible wherever assignments are: the row's assignment list (GET, all states), realtime events, and the consistency check's recomputations (terminal, so never counted). No new endpoint now; a workspace-wide "forgotten items" view is deferred | proposal P45 |
+| F11 | **Consistency and repair (MC-20).** Unchanged definitions: counters sum active states only; a goal total sums all assignments credited to it, `resolved_early` included (card 14 → A) | follows |
+
+**Ledger.** M2 gains one sentence (below, marked round 9). M5 is read with card 14's answer.
+
+**Superseded (§14C C47–C50):** §5 rule 2 ("`… → resolved` only from `awaiting`"), MC-1's table row
+for `in_queue` / `in_progress` → resolved (✗), MC-10's `not_awaiting`, MC-11's "Task reopen first"
+row, P32's "a Scanner report that arrives while the item is back in progress is ignored and not
+remembered", and the v1 handoff §4.2 "not remembered" paragraph.
+
+**Where it lands in the plan (for the orchestrator):** phase 1 (enum member, terminal set),
+phase 4 (transition table), phase 5 (goal credit per card 14), phase 8 (creation refusal F9),
+phase 9 (processed decision order F5, MC-11 rows F6), phase 10 (sync skip — already covered by
+"terminal", one test row).
 
 ---
 
@@ -1970,11 +2065,20 @@ Ratifying the document ratifies these.
 | P29 | Authorship semantics of §4.5: null = Scanner/system; a row's `updated_by` tracks user-owned fields only; shifted neighbours are not stamped; an assignment's `updated_by` is the user whose action moved it | the owner asked for created_by/updated_by; these are the readings that keep "who did this" truthful |
 | P30 | Criteria values Manager cannot normalize are stored verbatim and become an overridable mismatch, never a rejected Scanner request | the raw draft allowed nested JSON; rejecting would let one odd rule block all demand |
 | P31 | Deleting an item removes its assignment; it does not start deleting tasks | the owner's "the assignment follows", kept inside this project's perimeter |
-| P32 | Concurrent Scanner/task writers are serialized on the assignment; a Scanner report that arrives while the item is back in progress is ignored and not remembered | follows from §5 rule 1 and §8.2 as ratified; stated so nobody builds a queue or a replay buffer |
+| P32 | Concurrent Scanner/task writers are serialized on the assignment; ~~a Scanner report that arrives while the item is back in progress is ignored and not remembered~~ (**superseded round 9, §14F**: it resolves the assignment early) | follows from §5 rule 1 and §8.2 as ratified; stated so nobody builds a queue or a replay buffer |
 | P33 | Repair records carry no FK to the thing they corrected, are never edited or soft-deleted, survive the deletion of their target, and are removed only by the workspace reset | an audit trail that disappears with the row it explains is no trail; round 7 fold |
 | P34 | An inline repair writes a record only for the columns that were actually wrong (`stored + delta ≠ recomputed`), not for all three counters | the owner asked for a trace of defects (9a), not a log of every recomputation |
 | P35 | The consistency report is an endpoint for ADMIN and MANAGER (`GET …/stock-report/consistency`), beside the repair command | card 9b's own story: "a manager sees it in the consistency report and presses repair"; the round-6 contract left the exposure to the planner |
 | P36 | Deleting a board row whose counters are not 0 after its assignments are removed sets them to 0 with a repair record instead of failing | the same self-heal rule (D1) applied to the one other place a drifted number could block a user |
+| P37 | The delete webhook is its own endpoint, `…/webhooks/stock-demand-deleted`, body `[{itemCategory, properties}]`, with demand's validation order, 422 rules and key (depends on card 13 → A; under B it is an entry kind of the demand request instead) | the owner described "a delete request … then the new creation"; mirrors the two existing webhooks |
+| P38 | Delete outcomes are `deleted`, `not_found`, `category_not_found`; a missing row or category is never an error | the same skip-and-report rule the owner chose for unknown categories in round 3; makes replays harmless |
+| P39 | The demand webhook's 5 s deadline applies to the delete webhook too | a late-committing delete could erase a row a later demand recreated — card 11a's own argument |
+| P40 | A recreated row carries nothing over from the deleted one (no priority, no history, no assignments) | there is no link between the two identities; the owner already expects assignments to be re-added by hand |
+| P41 | Scanner sends a delete only when no location still holds the old (category, properties); otherwise it sends the new sum as demand | Manager's row is location-free (round 1, card 1); deleting it for one location's edit destroys another location's live demand |
+| P42 | The new state is named `resolved_early` | short, sorts next to `resolved`, and says what happened; rename freely |
+| P43 | Scanner's response for an early resolution is `outcome: "resolved"`, `reason: "early"`; `not_awaiting` is retired | Scanner's job is done either way, so the outcome is the same; the reason tells Scanner's logs that Manager's task was unfinished |
+| P44 | Creating an assignment for a `(task, item)` pair already resolved or resolved early by Scanner is refused (`already_processed_by_scanner`) | Scanner will not report that item again, so a re-added pair would sit in `awaiting` forever — the exact gap round 9 closes |
+| P45 | No new endpoint for forgotten items now; the state shows in the existing assignment list and events | keeps the round small; a workspace-wide view is a frontend-driven follow-up |
 | P21 | `is_stock_assignment` is true while any non-deleted assignment exists, including terminal ones | raw §31 sets it on create and clears it on delete only |
 
 ---
@@ -1984,6 +2088,19 @@ Ratifying the document ratifies these.
 ### Open
 
 None.
+
+### Closed (round 9)
+
+| Card | Owner answer | Folded into |
+|---|---|---|
+| 14 early-resolved units and the goal | A — credited to the current goal record, never removed (terminal) | §14F F4, F11; §6A MC-5 (two rows added via F4) |
+
+### Closed (round 8)
+
+| Card | Owner answer | Folded into |
+|---|---|---|
+| 12 rule removed outright in Scanner | A — the board row is deleted too, through the same webhook | §14E E1, C46, v1 handoff §3.2 rule 4 + §4A |
+| 13 ordering of delete-old / create-new | A — the sender guarantees it: one stock message at a time per shop; a delete re-validated at send time and skipped if the old pair exists again | §14E E3, v1 handoff §4A, §6.3 |
 
 ### Closed (round 7 — mechanism-inventory cards)
 
@@ -2214,6 +2331,49 @@ conflicts with round-6 text are ledgered as §14C C41–C45.
 - Closeout therefore no longer owes the C26 v2 file or the MC-9 sender notes. §14C C26's "ships as
   a v2 handoff file at closeout" and MC-9's "for the closeout handoff" are satisfied by this
   revision.
+
+**Round 8 — 2026-09-19 — owner requirement: Scanner deletes a board row (shaper).**
+- Added while the implementation-planner was running on the round-7 ratification. New third
+  Scanner webhook, recorded as **§14E** (E1–E13) with the owner's words; it reuses the ratified
+  lookup (MC-3, MC-4, MC-8) and the ratified row-deletion cascade (MC-16) and adds no table.
+- **Material:** a new external contract, and it reverses v1/§8.1's "no delete webhook". Status
+  `RATIFIED → COLLABORATING`; cards 12 and 13 open; proposals P37–P41; M3 gained one sentence.
+- Found while grounding: Manager's row is the sum across Scanner locations (round 1), so a delete
+  for one location's edit can destroy another location's live demand — P41 makes that a sender rule.
+- Next: owner answers 12–13 → fold → owner ratifies → mechanism-inventory re-check of §14E only →
+  the orchestrator hands the planner the delta. The Scanner handoff (v1, not yet handed over) is
+  revised in place after ratification.
+
+**Round 8 fold and re-ratification — 2026-09-19 (owner, David).** Owner's words: "about the card
+12: A . card 13: A . and i agree with you P37-P41 . I will not launc a mechanism inventory after
+this ratification".
+- E1 (card 12 → A) and E3 (card 13 → A) rewritten to the chosen branches; §14C C46; §17 closed.
+- P37–P41 accepted, none struck. Status → **RATIFIED**.
+- **The owner waived the mechanism-inventory re-check for §14E.** Its six questions are now
+  planner obligations (§14E "Carried to the planner"), to be checked by the phase's round-0
+  projection. This is a deliberate departure from the pipeline order, recorded here so no later
+  gate reads the absence of an inventory handoff for §14E as an omission.
+- The Scanner handoff v1 (not yet handed over) was revised in place: new §4A, §1, §3.2 rule 4,
+  §6.3, §7.
+
+**Round 9 — 2026-09-19 — owner requirement: early Scanner resolution (shaper).**
+- The owner asked what happens when Scanner reports an item while the task is not `ready` (a
+  forgotten step). Answer under rounds 0–8: ignored, not remembered, later stuck in `awaiting`.
+  The owner chose a new terminal state that takes the units out of the counters at once and stays
+  as the trace: recorded as **§14F** (F1–F11) with the owner's words.
+- **Material:** it allows a transition MC-1 forbade, retires a response code in the Scanner
+  contract and strikes part of P32. Status `RATIFIED → COLLABORATING`; card 14 (goal credit) open;
+  proposals P42–P45; M2 gained one sentence; §14C C47–C50.
+- The task is never touched by Scanner; this keeps HC-4's direction (task → assignment) and adds
+  one Scanner-only exit from the active states.
+- Next: card 14 → fold → owner ratifies → the orchestrator hands the planner the delta; the v1
+  Scanner handoff (not yet handed over) is revised in place (§4.2, §4.3).
+
+**Round 9 fold and re-ratification — 2026-09-19 (owner, David).** Owner's words: "about card 14 :
+"A" is correct . now after that answer you can rattified the intention again, commit it again".
+- F4 written to card 14 → A (credit to the current goal, never removed); §17 closed.
+- P42–P45 accepted, none struck. Status → **RATIFIED**.
+- Scanner handoff v1 (not yet handed over) revised in place: §1, §4.2, §4.3, §7.
 
 ---
 
