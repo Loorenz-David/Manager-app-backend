@@ -1,27 +1,32 @@
 # Intention: Stock Report — Scanner demand turned into Manager work
 
 ```
-status: RATIFIED — by the owner (David), 2026-09-18; re-ratified the same day including amendment §14B; see §18
+status: RATIFIED — by the owner (David): ratified 2026-09-18, re-ratified the same day incl. §14B, and re-ratified 2026-09-19 incl. round 7 (§14D, P33–P36, the inventory gate's U1–U21); see §18
 role: intention (pipeline root artifact)
 shaped_from: raw_intention.md (deleted by the owner after ratification; its section map and the owner's verbatim answers are preserved in Appendix A)
 source_evidence: scanner_source_evidence.md (this folder) — cited below as E1…E10
 date: 2026-09-18
-round: 5 (re-ratified as of this round)
+round: 7 (owner answers to mechanism-inventory cards folded — §14D; re-ratified 2026-09-19; 0 cards open; next: inventory re-check)
 ```
 
 Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
 
 ---
 
-## ⚠ OWNER DECISIONS REQUIRED (0)
+## Status — RATIFIED (round 7, 2026-09-19); no owner decision open
 
-**Read §14B with the rest:** it is a ratified amendment and wins wherever it and an earlier
-section disagree (row identity, no-op actions, item deletion, category guard, concurrent writers).
+Re-ratified by the owner after the round-7 fold of the mechanism-inventory answers. The one
+material change since the first ratification: **self-healing repair and the repair tool are
+must-ship** (§14D D1–D2, §12 item 11, §12A). The approval also covers the shaper proposals
+P33–P36 (§16) and the inventory gate's unilateral resolutions U1–U21
+(`handoffs/reviewer/2026-09-18_inventory_mechanism_inventory_handoff.md` §4).
 
-None open. All seven round-0 cards and both round-1 confirmations are answered (§17), and the
-owner ratified the document on 2026-09-18 (§18). Everything else in this document is either the owner's own
-statement (raw intention + answers), a fact read from the repository, or a **proposal of mine**
-— every proposal is listed once, in §16, so it can be struck without reading the whole document.
+**Read §14B, §14C and §14D with the rest:** later amendments win over earlier sections, in the
+order stated in §14C, with §14D last and strongest.
+
+**Next gate:** the mechanism-inventory re-check of the contracts round 7 touched
+(`prompts/reviewer/2026-09-19_inventory_mechanism_inventory_recheck.md`); on `PASS`, the
+implementation-planner.
 
 ---
 
@@ -247,6 +252,133 @@ invented for Scanner.
 | `StockTaskAssignment` | the user who assigned it | the user whose action moved its state (the worker whose step transition moved the task, the manager who failed the task); null when Scanner resolved it |
 | `StockReportHistoryRecord` | the user for a priority or order record; null for a goal record (Scanner caused it) | none — records are append-only (the goal total in §6.2 is system arithmetic) |
 
+### 4A. Row identity — contracts MC-3, MC-4 (mechanism-inventory, round 6)
+
+**MC-3 — criteria normalization and the row signature** (serves M4; supersedes §2.2 "list order is
+significant" and §4.1 "stored verbatim" for the reasons in §14C).
+
+A pure function `normalize_stock_criteria(raw: dict) -> dict` in `bm/domain/stock_report/`
+(module name is the planner's). **Input:** the `properties` value of one demand entry exactly as
+`json.loads` returns it from the raw request bytes. The webhook reads raw bytes (§8B), so no
+Pydantic coercion touches this field. Keys are always `str`. A key repeated inside one JSON object
+has already been resolved by the decoder (last occurrence wins) before this function sees it.
+Scanner cannot produce a repeated key (`JSON.stringify`).
+
+| Decoded value `v` of one key | Understood? | Stored and signed as |
+|---|---|---|
+| `None` | yes (wildcard) | `None` |
+| `str`, and `v.strip().lower() != ""` | yes | `[v.strip().lower()]` |
+| `str`, blank after `strip()` (`""`, `"  "`) | **no** | `v` unchanged |
+| `list` whose every element is `str`, at least one non-blank after `strip()` | yes | `sorted({e.strip().lower() for e in v if e.strip().lower() != ""})` |
+| `list` whose every element is `str`, none non-blank (includes `[]`) | **no** | `v` unchanged |
+| `list` holding any non-`str` element (`int`, `float`, `bool`, `None`, `list`, `dict`) | **no** | `v` unchanged |
+| `int`, `float`, `bool`, `dict` | **no** | `v` unchanged |
+
+- Operation order per string element: `str.strip()` (no argument: Unicode whitespace per
+  `str.isspace`), then `str.lower()` (full Unicode lowercase), then de-duplicate by equality, then
+  `sorted()` (code-point order). This mirrors Scanner's `normalizeCriteria`
+  (`apps/backend/src/modules/stock/domain/property-criteria.ts:29-55`: trim → toLowerCase →
+  Set → sort). Two differences have no effect on identity: JS sorts UTF-16 code units, and JS
+  `trim` also removes U+FEFF. Manager signs its own normalized form, and only the resulting *set*
+  must agree.
+- **Keys are never normalized.** Case, whitespace and spelling are kept byte for byte:
+  `"Wood_Type"` and `"wood_type"` are two keys, so they make two rows. Scanner's keys come from a
+  closed option list (`stock.contract.ts:validateStockCriteria` against
+  `item-property-options.ts:ITEM_PROPERTY_OPTIONS`), so this never splits a Scanner rule.
+- **"Unchanged" means the decoded Python value as it is.** So `1` ≠ `1.0` (`json.dumps` gives `1` /
+  `1.0`), `true` ≠ `1`, list order inside a not-understood list is significant, and key order
+  inside a nested `dict` is not (the signature sorts keys recursively).
+- **Idempotence:** `normalize(normalize(x)) == normalize(x)` for every `x`. This makes Scanner's
+  already-normalized payload (E3) and a hand-reordered one the same row.
+- **Signature:** `properties_signature = compute_properties_signature(normalize_stock_criteria(raw))`.
+  The existing function (`bm/domain/items/properties_signature.py:compute_properties_signature`)
+  is used unchanged. **Stored `properties` is the normalized dict, the value that was signed.**
+  The GET endpoints return the stored (normalized) value. The demand webhook echoes `properties`
+  **as received**, so Scanner can match the echo to its own rule (v1 handoff §3.4).
+- **Relationship to Scanner:** identical on every value Scanner accepts (`str`, `list[str]` with
+  one or more non-blank, `null`). Scanner *throws* on everything else (empty or blank list,
+  non-string element, non-list value). Manager accepts it, stores it as received (P30), and the
+  matcher reports it as `criterion_not_understood` (MC-12).
+- **Version:** no stored version column. The module declares
+  `CRITERIA_NORMALIZATION_VERSION = 1`, and a golden-vector test pins the signature of a fixed set
+  of payloads. Any change to the algorithm ships with a data migration that re-signs every
+  non-deleted row and merges rows that collide. Changing the function without that migration
+  silently forks identities, and the golden vectors are what redden.
+- **Invariant (M4), proven through the webhook endpoint with real JSON bytes:** entries differing
+  only in (a) key order, (b) list element order, (c) list element case or outer whitespace,
+  (d) duplicate list elements, or (e) a bare string vs a one-element list resolve to **one** row.
+  Entries differing in key case or whitespace, or in any not-understood value, resolve to **two**.
+  Each of (a)–(e) is its own row, and so is each "two rows" case.
+
+**MC-4 — find-or-create, and the uniqueness predicates** (serves M4).
+
+- `uix_stock_report_items_identity_active`: unique on `(workspace_id, item_category_id,
+  properties_signature)` `WHERE is_deleted = false`. A soft-deleted row is outside the predicate, so
+  the next delivery creates a fresh row with empty history (§4.1).
+- **Find-or-create:** `INSERT … ON CONFLICT (workspace_id, item_category_id, properties_signature)
+  WHERE is_deleted = false DO NOTHING RETURNING client_id`. If nothing is returned, the existing
+  row is `SELECT`ed by the same three columns plus `is_deleted = false`. There is no
+  IntegrityError path. The row is then locked in the MC-1 order. The form is set-based: one multi-row
+  INSERT whose VALUES are sorted by `(item_category_id, properties_signature)`, then one
+  `SELECT … FOR UPDATE ORDER BY client_id` over every identity in the request, never a statement
+  per entry. Sorting the VALUES means two concurrent batches with overlapping new identities wait
+  on each other instead of deadlocking.
+- **Invariant:** two concurrent first deliveries of one new identity leave exactly one non-deleted
+  row. Both requests return 200, both entries are `applied`, and `stock_report_item:created` is
+  emitted exactly once, by the request whose INSERT returned the row. Proven with two sessions
+  released by a barrier, counting rows and events.
+- `uix_stock_task_assignments_item_active`: unique on `(workspace_id, item_id)` `WHERE
+  is_deleted = false AND state IN ('in_queue','in_progress','awaiting')`. `resolved`, `failed` and
+  deleted rows are outside it (§4.2 "a terminal assignment never blocks a new one").
+- `uix_stock_task_assignments_task_active` *(new, mechanism only)*: the same predicate on
+  `(workspace_id, task_id)`. §4.2 derives "a task has at most one active assignment" from the
+  PRIMARY rule; this index makes the derivation a DB fact. The task sync (MC-2) can then read with
+  `scalar_one_or_none()` and never has to choose among several.
+- **Error contract on the race path (charter rule 2):** creation takes the Item lock before its
+  checks (MC-13), so a concurrent second creation for the same item waits. It then sees the
+  first's committed row in the pre-check and fails with reason `item_already_assigned`. An
+  `IntegrityError` naming either assignment index is mapped to the same reason (a backstop for a
+  path that skips the lock). The test runs two concurrent creations of the same item on two
+  different rows. It asserts exactly one active assignment **and** the reason code on the losing
+  request, not only the row count.
+
+### 4B. Stored system fields — contracts MC-15, MC-17 (round 6)
+
+**MC-15 — `Task.is_stock_assignment`** (serves M1).
+- **Truth:** `EXISTS (non-deleted stock_task_assignments row with this task_id)`, in any state.
+- **Writers:** (i) assignment creation sets `true`; (ii) the assignment delete operation, after
+  soft-deleting, re-evaluates `EXISTS` with a fresh query in the same transaction and writes
+  `false` when none remain. Nothing else writes it. Terminal moves do not change it (P21).
+- **Write form:** `UPDATE tasks SET is_stock_assignment = :v, updated_at = tasks.updated_at WHERE
+  client_id = :id AND is_stock_assignment IS DISTINCT FROM :v`. The explicit self-assignment of
+  `updated_at` is what stops the column's `onupdate=` (`bm/models/tables/tasks/task.py:90-92`)
+  from firing. The flag is a system field, so flipping it never moves the task's `updated_at` or
+  `updated_by_id`, and never reorders a task list. An ORM attribute write would fire `onupdate`.
+- **Readers:** filtering only. The task sync does **not** read it (MC-2 step 3). It is never
+  serialized (§14B B3).
+- **Invariant (M1):** after every committed operation, flag == `EXISTS(…)` for every task touched.
+  A flip leaves `tasks.updated_at` and `updated_by_id` byte-identical. Planted defect: write the
+  flag as an ORM attribute, so `updated_at` moves and the row turns red.
+
+**MC-17 — authorship, as (operation × table × column)** (serves M9; §4.5 made total).
+A new table never declares `onupdate=`. Every stamp below is an explicit assignment, and a cell
+not listed stays unchanged. The *actor* is the command's `ctx.user_id`, with `""` stored as NULL.
+For the dormant deferred-completion worker it is the payload's `performed_by_user_id`.
+
+| Operation | `stock_report_items` | `stock_task_assignments` | `stock_report_history_records` |
+|---|---|---|---|
+| Demand creates a row | `created_by_id` NULL; `updated_*` NULL | — | goal record `created_by_id` NULL |
+| Demand changes `quantity_requested` | `updated_*` unchanged | — | goal record (if any) `created_by_id` NULL |
+| Any counter move (sync, Scanner, create, delete) | `updated_*` unchanged | — | goal total: no stamp |
+| User changes priority | moved row: `updated_by_id` = actor, `updated_at` = now; shifted neighbours unchanged | — | `created_by_id` = actor |
+| User moves order | same as priority | — | `created_by_id` = actor |
+| User deletes a row | `deleted_*` and `updated_*` = actor, now | via the delete op (below) | every record: `deleted_*` = actor, now |
+| User creates assignments | — | `created_by_id` = actor; `updated_*` NULL (creation is not a move) | — |
+| Task sync moves an assignment | — | `updated_by_id` = actor of the task command (**the performer, `ctx.user_id`, not `credited_user_id`**: a manager acting for a worker is recorded), `updated_at` = the command's `now` | — |
+| Scanner resolves | — | `updated_by_id` = NULL, `updated_at` = now | — |
+| Assignment deleted (user unassign, task deleted, PRIMARY item unlinked, item deleted, row deleted) | — | `deleted_by_id` = actor, `deleted_at` = now; `updated_*` unchanged | — |
+| Flag flip on `tasks` | — | — | (`tasks.updated_*` unchanged, MC-15) |
+
 ---
 
 ## 5. Assignment state — the complete mapping
@@ -285,6 +417,243 @@ Rules:
    is a removal followed by an add) removes that item's assignment — both through the assignment
    delete operation, exactly as if a user had unassigned it.
 
+### 5A. The transition operation — contracts MC-1, MC-11, MC-16 (mechanism-inventory, round 6)
+
+**MC-1 — one operation moves an assignment and its counters** (serves M1; HC-2, HC-2a, HC-3).
+
+`move_assignment(session, assignment, target, *, workspace_id, actor_user_id, now) -> list[event]`.
+`target` is a `StockTaskAssignmentStateEnum` member, or `DELETE`. Creation first inserts the row
+with no counted state and then calls this with the mapped state ("nothing → B"). It never opens,
+commits or dispatches. It takes `workspace_id` as an argument and **never reads `ctx`**, because
+its callers include webhook paths where `ctx.workspace_id == ""` and a worker with no `ctx` (MC-2).
+
+**Allowed moves — total table.** Rows are *from*, columns are *to*. ✓ = allowed, with the only
+requester that may ask for it. ✗ = never requested; reaching one raises a programming error, which
+is not a domain error. `=` = same state: no write, no event, not a move.
+
+| from \ to | in_queue | in_progress | awaiting | resolved | failed | DELETE |
+|---|---|---|---|---|---|---|
+| ∅ (creation) | ✓ create | ✓ create | ✓ create | ✗ | ✗ (creation is refused for failed/cancelled, §5 r3) | ✗ |
+| in_queue | = | ✓ sync | ✓ sync (e.g. force-ready of a pending task) | ✗ | ✓ sync | ✓ delete op |
+| in_progress | ✓ sync (working → pending when every step is removed, §14C) | = | ✓ sync | ✗ | ✓ sync | ✓ delete op |
+| awaiting | ✓ sync (ready/resolved → pending, §14C) | ✓ sync (reopen) | = | ✓ **Scanner only** | ✓ sync | ✓ delete op |
+| resolved | — sync skips (§5 r1) | — | — | = | — | ✓ delete op |
+| failed | — sync skips | — | — | — | = | ✓ delete op |
+
+**Counter effect** (§5 rule 5): `q` = the assignment's stored `quantity`. `−q` on *from*'s counter
+if *from* is active, `+q` on *to*'s if *to* is active. One statement per move:
+`UPDATE stock_report_items SET quantity_in_queue = quantity_in_queue + :dq, quantity_in_progress =
+quantity_in_progress + :dp, quantity_awaiting = quantity_awaiting + :da WHERE client_id = :id
+RETURNING quantity_requested, quantity_in_queue, quantity_in_progress, quantity_awaiting,
+priority, priority_order`. This is column-referencing, so there is never a read-then-assign (§2.4,
+`32_concurrency.md`). The RETURNING values are the only source for event payloads, because an ORM
+instance loaded earlier is stale after a Core UPDATE.
+
+**When a move would drive a counter below 0 — self-heal** (owner, card 9 → C, round 7; §14D D1).
+Only drift can cause this: with correct counters `col ≥ q` always holds for the *from* counter.
+- *Guarded statement.* The UPDATE above carries `AND quantity_in_queue + :dq >= 0 AND
+  quantity_in_progress + :dp >= 0 AND quantity_awaiting + :da >= 0`. The row is already locked
+  (lock order step 4) and exists, so **0 rows returned means exactly "a counter would go
+  negative"**. There is no clamp (`greatest`) anywhere in this operation.
+- *Inline repair, same transaction, same lock.* On 0 rows: the moving assignment's new `state`
+  (or its soft-delete) is written and flushed **first**; then one statement sets all three
+  counters to their recomputed absolute values — Σ `quantity` of the row's non-deleted assignments
+  in that state (the MC-20 `counter_*` definition, the one definition of "correct") — with the
+  same RETURNING list. The absolute values replace the delta; the delta is not applied on top.
+  The move then proceeds normally (goal effect, flag, events from the RETURNING values).
+- *Trace* (card 9a → A): one repair record (§12A) per counter column where
+  `stored_before + delta ≠ recomputed`, trigger `inline:<operation>`, `created_by_id` NULL, plus
+  one `logger.warning` per record naming the row, field, stored and recomputed values. At least
+  the column that would have gone negative always qualifies.
+- *Second trigger — row deletion* (P36): MC-16's "counters are asserted to be 0 before the row's
+  soft-delete" becomes: after every assignment is moved out, any counter ≠ 0 is set to 0 (its
+  recomputed value, since no non-deleted assignment remains) with a repair record,
+  `inline:delete_stock_report_item`. The deletion is not blocked.
+- The DB checks `ck_stock_report_items_*_nonneg` (`>= 0`) **stay**. They are now reachable only by
+  a defect in the repair itself, and then abort the transaction (500, nothing commits).
+- Inline repair fires only on the *downward* case. A counter that drifted **upward** never
+  triggers it; only the consistency check finds it and only the manual repair command fixes it
+  (§12A), which is why that command is must-ship.
+- *Instrument:* plant drift by raw SQL (`quantity_in_queue = 0` while a q = 4 assignment is
+  queued), run the move, assert: the move succeeded, all three counters equal the recomputation,
+  exactly one repair record with `stored = 0`, `recomputed = 0` for `in_queue` and none for the
+  columns that were right, and MC-20 returns `[]`. Planted defect: drop the `>= 0` guard from the
+  WHERE → the DB check aborts and the row reddens.
+
+**Goal effect:** §6A (MC-5), applied in the same call after the counter UPDATE.
+
+**Global lock order** (every Stock Report path, and every task command once it syncs). Always
+acquire in this order, never backwards, and within each class in ascending `client_id`:
+
+1. `pg_advisory_xact_lock(hashtext('stock_report_order:' || workspace_id))` (ordering operations
+   only, MC-7);
+2. `items` rows: `SELECT … FOR UPDATE` (assignment creation, `delete_item`, the category guard);
+3. `tasks` rows: `SELECT … FOR UPDATE`, or the task command's own `UPDATE` of `tasks.state`,
+   flushed before step 4 (MC-2);
+4. `stock_report_items` rows: `SELECT … FOR UPDATE` with `populate_existing`;
+5. `stock_task_assignments` rows: `SELECT … FOR UPDATE` with `populate_existing`, then **re-read
+   `state` and `is_deleted` after the lock** and decide on those values;
+6. `stock_report_history_records`: row UPDATE (goal totals) and INSERT.
+
+An unlocked read is allowed only to discover ids to lock (assignment → its `stock_report_item_id`
+and `task_id`, both immutable). The existing precedent orders Items → Tasks
+(`bm/services/commands/items/cancel_upholstery_requirements.py:lock_and_filter_items_without_active_tasks`,
+used by `delete_task`), which is consistent with this order.
+
+**MC-11 — two writers on one assignment** (serves M1, M2; §14B B5 made mechanical). The Scanner
+resolve and the task sync both lock the row (step 4) and then the assignment (step 5), and both
+re-read the state after the lock. Under Postgres' default READ COMMITTED, a `SELECT … FOR UPDATE`
+that waited returns the latest committed version, and `populate_existing` makes the ORM instance
+take it. So the second writer always decides on what the first committed:
+
+| Order | First commits | Second then sees | Final assignment | Counters (net) | Goal record G it was credited to |
+|---|---|---|---|---|---|
+| Scanner first | awaiting → resolved; `awaiting −q` | `resolved` → sync skips (§5 r1), no write, no event | resolved | awaiting −q | unchanged; credit kept |
+| Task reopen first | awaiting → in_progress; `awaiting −q`, `in_progress +q` | `in_progress` → Scanner entry `ignored`, reason `not_awaiting`, no write | in_progress | awaiting −q, in_progress +q | `G −q`, credit cleared |
+
+Proven with two sessions released by a barrier after each has done its unlocked id discovery.
+Each order is forced by which session takes the row lock first. Each row asserts assignment state,
+all three counters, G's total, the credit memory, and the events of both requests.
+
+**MC-16 — soft-delete interplay: every predicate, and the delete cascade** (serves M1, M4, M6).
+
+| Rule | Deleted-row predicate |
+|---|---|
+| Row identity (MC-4) | `stock_report_items.is_deleted = false` |
+| One active assignment per item / per task | `is_deleted = false AND state IN active` |
+| Counters (M1 recomputation) | Σ `quantity` over `is_deleted = false` assignments by state. A deleted assignment contributes 0, because the delete op moved its units out before soft-deleting it |
+| `Task.is_stock_assignment` | `EXISTS is_deleted = false` assignment |
+| Ordering groups (MC-7) | `stock_report_items.is_deleted = false` |
+| "Current goal record" (MC-5) | most recent `is_deleted = false` goal record of the row |
+| Goal total recomputation (MC-5) | **includes** soft-deleted assignments (a resolved assignment keeps its credit when deleted) |
+| Category lookup (demand, creation) | `item_categories.is_deleted = false` |
+| Item lookup (processed, creation, guard) | `items.is_deleted = false` |
+| Task lookup (creation) | `tasks.is_deleted = false` |
+
+A row, assignment or history record, once soft-deleted, is never written again. The one exception
+is a goal record's total, which may still be *decremented* by an assignment credited to it while
+that assignment is deleted inside the **same** row-deletion transaction, before the record's own
+soft-delete (order below). No command soft-deletes an `ItemCategory` today (only the workspace
+reset hard-deletes, §12A), so a row whose category is later deleted keeps working and serializes
+the deleted category's name.
+
+**Row-deletion cascade order** (§9 "delete StockReportItem"), inside one transaction: advisory lock
+→ lock the Tasks of the row's non-deleted assignments (ascending) → lock the row and its priority
+group (ascending) → lock the assignments (ascending). Then, for each assignment in ascending
+`client_id`: `move_assignment(…, DELETE)` (units out, goal subtraction if awaiting), soft-delete
+it, recompute its task's flag. Then close the row's gap in its group (MC-7), soft-delete the row
+(`deleted_*` plus `updated_*`, MC-17), and soft-delete its history records. The row's three
+counters are asserted to be 0 before its soft-delete (round 7: a non-zero counter is repaired to
+0 with a repair record and the deletion proceeds — MC-1 second trigger, §14C C39). The row is never soft-deleted before its
+assignments.
+
+### 5B. Task-state sync and task-side removals — contracts MC-2, MC-14 (round 6)
+
+**MC-2 — the sync** (serves M2; HC-4; §5 rule 4).
+
+`sync_task_stock_assignments(session, changed: list[tuple[Task, TaskStateEnum]], *, workspace_id,
+actor_user_id, now) -> list[event]`. `changed` holds each task with the state the command captured
+when it loaded it. It takes no `ctx`, because the deferred-completion worker has none.
+
+1. **Where it is called:** once per command, inside the command's transaction, after the
+   command's **last** write to `Task.state`, with every task whose `state` differs from the
+   captured one. Every dispatching command already captures the loaded state (`old_task_state`,
+   `old_task_states`, or `original_state` in resolve/fail/cancel/force-ready) for its own event or
+   history record. A task whose state did not **net**
+   change is not passed. So `remove_task_step`'s `ready → pending → ready` inside one transaction
+   moves nothing, which is what HC-4 requires ("never from an assumed path").
+2. **First statement: `await session.flush()`**, so this transaction holds the task rows' locks
+   (its own UPDATE) before any read.
+3. **Per task, ascending `client_id`:** a fresh query for the non-deleted active assignment of
+   that `task_id` (at most one, MC-4). None → skip. This query **is** the "cheap skip" of §4.4.
+   The ORM `task.is_stock_assignment` is not read, because it was loaded before the lock and may
+   predate a creation that committed in between. (Creation locks the Task row, MC-13, so no
+   creation can commit *after* step 2.)
+4. `target = MAP[task.state]`, where `task.state` is the value this transaction wrote. `MAP` is §5
+   over all eight `TaskStateEnum` members (`bm/domain/tasks/enums.py:TaskStateEnum`). A test
+   asserts `set(MAP) == set(TaskStateEnum)`, so a ninth member fails loudly rather than defaulting.
+5. Lock the row, then the assignment (MC-1). Re-read. If it is now terminal or deleted → skip. If
+   `state == target` → skip. Otherwise `move_assignment` with `actor_user_id` and `now`.
+6. Return the events. The command appends them to its own pending list and dispatches after
+   commit (`architecture/06_commands_local.md` "Event emission rule").
+
+*Why command level and not inside the three helpers:* the helpers set intermediate states within
+one transaction. `remove_task_step` writes `→ pending` and then `maybe_evaluate_task_ready` may
+write `→ ready`. A helper-level sync would move the assignment awaiting → in_queue → awaiting: it
+would un-credit and re-credit the goal, possibly onto a *different* goal record, and emit two
+spurious events. `maybe_advance_task_to_working` is a plain `def` with no session, which does not
+matter at command level.
+
+**Write-site audit: the complete list of sync call sites.** Search, 2026-09-18: scope is
+`app/beyo_manager/**/*.py` and `app/scripts/**/*.py`, excluding `app/tests/**` and `app/migrations/**`.
+Terms: `\.state\s*=[^=]` (every attribute write named `state`), `setattr\(`, `update\(\s*Task`,
+`(^|[^A-Za-z_])Task\(` with a `state=` keyword, `text\(` containing `tasks`, and callers of the
+three helpers and of `_apply_step_transition`. Result: 8 `Task.state` assignments + 1 constructor
+(the §2.3 table is complete for *writes*). Every other `.state =` hit is an execution task,
+scheduler, case, step or requirement. Every `setattr` loop names a constant field set that
+excludes `state` (`update_task.py:_DIRECT_FIELDS`, `update_task_post_handling.py:_DIRECT_FIELDS`).
+§2.3's list of *callers* is incomplete: it omits three drivers of the core.
+
+| # | Sync call site (function) | Writes reached | Session / transaction owner | Actor | Event path |
+|---|---|---|---|---|---|
+| S1 | `task_steps/transition_step_state.py:transition_step_state` | advance, evaluate-ready | `ctx.session`, own `maybe_begin` | `ctx.user_id` | appended to `pending_events` |
+| S2 | `task_steps/transition_step_state_batch.py:transition_step_state_batch` (all `changed_tasks`, one call) | advance, evaluate-ready via core | same | `ctx.user_id` | appended to `pending_events` |
+| S3 | `tasks/force_task_ready.py:force_task_ready` | evaluate-ready (core + direct) | same | `ctx.user_id` (manager) | appended to `pending_events` |
+| S4 | `tasks/resolve_task.py:resolve_task` | `→ resolved` | same | `ctx.user_id` | its dispatch list |
+| S5 | `tasks/fail_task.py:fail_task` | `→ failed` | same | `ctx.user_id` | its dispatch list |
+| S6 | `tasks/cancel_task.py:cancel_task` | `→ cancelled` | same | `ctx.user_id` | its dispatch list |
+| S7 | `task_steps/add_task_steps.py:add_task_steps` | `pending → assigned`, reopen `ready → working` | same | `ctx.user_id` | appended to `pending_events` |
+| S8 | `task_steps/remove_task_step.py:_remove_task_steps_in_session` (serves `remove_task_step` and `remove_task_steps`) | `→ pending`, evaluate-ready | caller's `maybe_begin` | `ctx.user_id` | returned in its tuple → `_dispatch_remove_step_events` |
+| S9 | `services/tasks/task_steps/finalize_pending_step_completion.py:handle_finalize_pending_step_completion` (dormant worker) | evaluate-ready | own `get_db_session()` + `session.begin()` | payload `performed_by_user_id` | its `pending_events` |
+
+Registered as **no sync**, with the reason the guard checks:
+- `tasks/create_task.py:create_task` — `Task(state=…)`: no assignment can reference a task that
+  does not exist yet.
+- Core drivers that pass the literal `new_state=TaskStepStateEnum.PAUSED`, so neither helper can
+  fire: `users/declare_worker_state.py:declare_worker_state`,
+  `users/_clock_worker_shift.py:clock_out_shift_for_user`,
+  `cases/_case_created_step_pause.py:pause_task_working_steps_for_case`.
+
+**The guard (§5 rule 4; charter rule 15)**, `test_task_state_write_sites_are_registered`, an AST
+test over the scope above:
+- It collects (a) every assignment whose target is an attribute named `state`; (b) every
+  `setattr(…)` call; (c) every `update(Task)` / `insert(Task)`; (d) every `Task(…)` call with a
+  `state=` keyword; (e) every call to `maybe_advance_task_to_working`,
+  `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` and `_apply_step_transition`.
+- A checked-in registry classifies every collected site as `task_write → sync site` (S1–S9),
+  `no_sync: <reason>`, `paused_driver`, or `not_task: <model>`. The test fails on any unregistered
+  site and on any stale registry entry. For each `task_write`, it asserts the named sync function
+  contains a call to `sync_task_stock_assignments`. For each `paused_driver`, it asserts the
+  `new_state=` argument is literally `TaskStepStateEnum.PAUSED`.
+- **Required probe rows**, each planted, observed red and reverted, one per sub-check (charter
+  rule 12):
+  - P-a: add `task.state = TaskStateEnum.STALLED` inside `tasks/update_task.py:update_task`;
+  - P-b: add `setattr(task, "state", TaskStateEnum.READY)` in the same function;
+  - P-c: add `await session.execute(update(Task).values(state=TaskStateEnum.READY))` in the same
+    function;
+  - P-d: add a call to `maybe_evaluate_task_ready(...)` in the same function;
+  - P-e: delete the `sync_task_stock_assignments` call from `tasks/resolve_task.py:resolve_task`
+    (the call site, not the definition);
+  - P-f: change `users/_clock_worker_shift.py:clock_out_shift_for_user`'s `new_state=` to
+    `TaskStepStateEnum.COMPLETED`.
+- The guard proves registration. **M2 behaviour** is proven separately: one production-path row
+  per sync site S1–S8 (S9 while it is dormant: one row that drives the handler directly), each
+  asserting the assignment's state against `MAP[resulting state]`.
+
+**MC-14 — task-side and item-side removals** (serves M2, M8; §5 rule 6, §14B B4/B6).
+
+| Hook | Where, exactly | Lock order | What it does |
+|---|---|---|---|
+| Task deleted | `tasks/delete_task.py:delete_task`, after the existing task `FOR UPDATE` and before `task.is_deleted = True` | Items → Task (existing) → rows → assignments | every non-deleted assignment of the task, **any state**, through `move_assignment(DELETE)`; flag recompute; events appended to its `events` list |
+| PRIMARY item unlinked | `tasks/remove_item_from_task.py:remove_item_from_task` (it loads no Task today) | **new:** Task `FOR UPDATE` → rows → assignments | only when the removed `TaskItem.role == PRIMARY`: every non-deleted assignment with that `(task_id, item_id)`, any state. Removing a RELATED item does nothing (no assignment can exist on one). A swap is removal then add; `add_item_to_task` needs no hook |
+| Item deleted | `items/delete_item.py:delete_item` (it loads the Item without a lock today) | **new:** Item `FOR UPDATE` → Tasks → rows → assignments | every non-deleted assignment of the item, any state (B4 "the assignment follows"); the item's tasks are untouched (P31) |
+| Category change refused (B6) | `items/update_item.py:_update_item_in_session`, which covers both `update_item` and `task_post_handling/complete_task_post_handling.py`'s call | Item `FOR UPDATE` | when `item_category_id` is in `model_fields_set` **and** differs from the stored value (None-aware): lock, re-compare, then if a non-deleted assignment in `in_queue/in_progress/awaiting` exists for the item → `ConflictError` (409), message "Unassign this item from the stock report before changing its category." Setting the same value is not a change and is not refused |
+| Category change through find-or-create | `items/find_or_create_item.py:find_or_create_item`, existing-item branch (also reached from `tasks/create_task.py:create_task`) | Item `FOR UPDATE` | **owner, cards 10 and 10a → A (round 7; §14D D3):** the same refusal as the row above — when the incoming category differs from the stored one (None-aware) and the item has a non-deleted assignment in `in_queue/in_progress/awaiting`: lock, re-compare, `ConflictError` (409) with the same message. Raised inside `create_task`'s transaction, so **the whole task creation fails and nothing is written** (no task, no step, no item change). The same category, or an item with no active assignment, behaves as today |
+
+Deleting a *terminal* assignment moves no counter and touches no goal total (MC-5); it removes the
+row from the board and clears the task flag if it was the last one. "Leaves no assignment behind"
+(M2) is read as *no non-deleted assignment*, whatever its state.
+
 ---
 
 ## 6. History semantics
@@ -318,6 +687,77 @@ The **current goal record** of an item is its most recent `quantity_requested_ch
 - Net meaning of the field: *units whose work was completed during this goal and has not been
   undone.* Priority records are never touched after they are written.
 
+### 6A. History arithmetic — contracts MC-5, MC-6 (mechanism-inventory, round 6)
+
+**MC-6 — when a record is written, and what it snapshots** (serves M5).
+
+- **Comparison base:** the row's **stored** `quantity_requested`, read after the row lock (MC-1
+  step 4) in the demand transaction. For a newly inserted row it is `0`. A goal record is written
+  iff `new > stored`. Examples, each a test row: `0→5` record; `5→5` none (and no write at all,
+  MC-9); `5→3` none; then `3→4` **record** (4 > the stored 3, even though the goal was 5 two
+  deliveries ago; "greater than the previous one" is taken literally); `4→0` none; `0→0` on a new
+  row: row created, no record.
+- **Priority change** `X→Y` with `X ≠ Y` (null included): exactly one `priority_change` record,
+  carrying the new `priority` and new `priority_order` (null when `Y` is null). `X == Y` is a
+  no-op: no record, no write, no stamp, no event (§14B B2).
+- **Order move** to target `t ≠ current`: exactly one `priority_order_change` record, for the
+  moved row only. Shifted neighbours get none. `t == current` is a no-op.
+- **Timing and values:** each record is inserted **after** all row mutations of its operation (its
+  own row and any shifted neighbours), inside the same transaction, with `created_at` = the
+  operation's `now` (never a DB default, so records of one operation share one instant). It
+  snapshots the row's values as they stand at that moment: `quantity_requested`, `priority`,
+  `priority_order`, and `quantity_awaiting` = the row's live counter. The one exception is a goal
+  record, whose `quantity_awaiting` starts at **0** (§6.1).
+- A skipped demand entry (`category_not_found`) and a rejected request write no record.
+
+**MC-5 — the goal record's running total, as a total event table** (serves M5; §6.2 made
+exact).
+
+*Current goal record* of a row = its non-deleted `quantity_requested_change` record with the
+greatest `(created_at, client_id)`. It is read **after** the row lock (MC-1 step 4). The demand
+webhook inserts goal records under the same lock, so a credit and a new goal serialize and the
+credit always lands on whatever is current once the lock is held.
+
+| Event on an assignment (quantity `q`) | Credit memory before | Effect on history | Credit memory after |
+|---|---|---|---|
+| Enters `awaiting` (from creation, `in_queue` or `in_progress`), a current goal record `G` exists | NULL | `G.quantity_awaiting += q` | `G` |
+| Enters `awaiting`, the row has no goal record | NULL | none | NULL |
+| `awaiting → resolved` (Scanner) | `R` or NULL | none: the record keeps the units (§6.2) | **unchanged** (kept) |
+| `awaiting → in_queue / in_progress / failed` (sync) | `R` | `R.quantity_awaiting −= q`, even if `R` is no longer current | NULL |
+| `awaiting → DELETE` (any delete path) | `R` | `R.quantity_awaiting −= q` | NULL (row soft-deleted) |
+| Any of the three rows above | NULL (it entered awaiting before any goal existed) | none | NULL |
+| `resolved → DELETE` | `R` or NULL | none: resolved work stays counted; deleting the board entry does not un-complete it | unchanged |
+| `in_queue / in_progress / failed` → anything | NULL (by construction) | none | NULL |
+| `R` soft-deleted, `−= q` due | — | happens only inside the row-deletion transaction, before `R`'s own soft-delete (MC-16 order); the arithmetic runs on `R` regardless | — |
+
+- The write form is `UPDATE stock_report_history_records SET quantity_awaiting = quantity_awaiting
+  ± :q WHERE client_id = :r` (column-referencing, same transaction as the move).
+- **Floor.** With this table the total is exactly Σ `q` of the assignments whose memory points at
+  it, so a correct system never needs a floor, and a floor can only fire on drift. §6.2's "floored
+  at 0" is **replaced by self-heal** (owner, card 9 → C, round 7; §14D D1): there is no
+  `greatest(…, 0)`. The subtraction is `… SET quantity_awaiting = quantity_awaiting − :q WHERE
+  client_id = :r AND quantity_awaiting − :q >= 0`. 0 rows (the record is locked and exists) means
+  the total would go negative: the assignment's credit memory is cleared and flushed first, then
+  `R.quantity_awaiting` is set to the recomputation below, one repair record is written (target
+  kind `history_record`, field `quantity_awaiting`, trigger `inline:<operation>`) with a warning,
+  and the move proceeds. A DB check `ck_stock_report_history_records_quantity_awaiting_nonneg`
+  (`>= 0`) stays as the backstop for a defect in the repair itself. Upward drift of a goal total
+  is found by MC-20 and fixed only by the manual repair command (§12A).
+- **Recomputation (§10 made exact):** `R.quantity_awaiting = Σ quantity` over **all**
+  `stock_task_assignments` with `credited_history_record_id = R`, **including soft-deleted ones**.
+  This is §10's "currently crediting it plus those Scanner resolved while credited to it": the
+  memory is cleared on every un-credit and kept on resolve, so the two phrasings are the same
+  set. There is no contradiction with §6.2 once "kept on resolve" and "deleted rows included" are
+  stated.
+- **Worked sequence (a test row, exact values):** row at 10, goal `G1` (awaiting 0).
+  (1) assignment `A` (q = 4) enters awaiting → `G1 = 4`, `A→G1`.
+  (2) demand 10→12 → `G2` created, awaiting 0.
+  (3) the task reopens → `A` in_progress → `G1 = 0`, `A→NULL`.
+  (4) the task is ready again → `A` awaiting → credits the current goal → `G2 = 4`, `A→G2`.
+  (5) Scanner resolves `A` → `G2 = 4`, `A→G2` kept.
+  (6) the row is deleted → `A` (resolved) deleted: no counter move, `G2` stays 4; history soft-deleted.
+  Recompute: `G1 = Σ{} = 0` ✓, `G2 = Σ{A} = 4` ✓. The floor never engages in this sequence.
+
 ---
 
 ## 7. Priority and ordering
@@ -334,6 +774,52 @@ The **current goal record** of an item is its most recent `quantity_requested_ch
 - Deleting an item closes the gap in its group.
 - Complete read order: `high`, then `medium`, then `low`, each by `priority_order` ascending.
   Null-priority items are ordered by `created_at` ascending, then `client_id`.
+
+### 7A. Dense ordering — contract MC-7 (mechanism-inventory, round 6)
+
+Serves M6. A *group* is `(workspace_id, priority)` over non-deleted rows, with `priority ∈ {high,
+medium, low}`. Rows with null priority have null order and form no group. Orders are 1-based.
+There is no unique constraint (§2.4). Every shift is **one** column-referencing statement
+(`priority_order = priority_order ± 1 WHERE <group> AND priority_order BETWEEN …
+RETURNING client_id, <six event fields>`), and each returned row gets one `:updated` event (MC-19).
+
+**Before/after tables** (group `high` = A1 B2 C3 D4; group `low` = X1 Y2):
+
+| Operation | Rule | After |
+|---|---|---|
+| Move C to 1 | `t < p`: rows with order in `[t, p−1]` +1; mover → `t` | A2 B3 C1 D4 |
+| Move A to 3 | `t > p`: rows in `[p+1, t]` −1; mover → `t` | B1 C2 A3 D4 |
+| Move B to 2 | `t == p`: no-op (B2) | unchanged, no record, no event |
+| Move to 0 or 5 | `t ∉ 1..n` (n = group size read after the locks) | 422, reason `target_out_of_range` |
+| Move a null-priority row | — | 422, reason `row_has_no_priority` |
+| B: high → low | source: rows with order > p −1; mover: priority = low, order = max(low)+1 (1 if empty), computed without the mover | high A1 C2 D3; low X1 Y2 B3 |
+| B: high → null | source closes its gap; mover order = null | high A1 C2 D3; B null/null |
+| row N (null) → high | appended at max+1 | high … D4 N5 |
+| B: high → high, or null → null | no-op (B2) | unchanged |
+| Delete C | source closes its gap; the deleted row keeps its own priority/order values (it is outside every group) | high A1 B2 D3 |
+
+The accepted request values are `priority ∈ {"high","medium","low", null}` and an integer `t`.
+Anything else → 422.
+
+**Serialization.** Every ordering operation (priority change, move, row delete) first takes
+`pg_advisory_xact_lock(hashtext('stock_report_order:' || workspace_id))`. That serializes ordering
+operations workspace-wide and removes the phantom case: another operation moving a row *into* a
+group after this one read the group. It then `SELECT … FOR UPDATE`s every non-deleted row of the
+source and destination groups (plus the target row) in one statement ordered by `client_id`, and
+only then reads positions and `n`. Other paths never take the advisory lock, and they take row
+locks in ascending order (MC-1), so the two cannot form a cycle.
+
+| Race in one group | What serializes it | Outcome |
+|---|---|---|
+| Two moves | advisory lock | the second computes on the first's committed orders; both land; still 1..n |
+| Move vs priority change | advisory lock | same; the priority change's append reads `max` after the move |
+| Delete vs move | advisory lock | the move that runs second sees `n−1`; a target that became `n` is out of range → 422 |
+| Ordering op vs counter move on the same row | the row lock (step 4) | independent columns; both commit |
+
+**Read order** (GET): `CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3
+END, priority_order ASC`, and for the null-priority listing `created_at ASC, client_id ASC`. The
+`priority` query parameter is a comma list of `high|medium|low`. Omitted or empty → `priority IS
+NULL` only (owner answer). An unknown token → 422.
 
 ---
 
@@ -408,6 +894,136 @@ The published copy for the Scanner team is
 `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v1_20260918.md`. Mechanism-inventory may tighten
 the `reason` vocabulary and the 4xx split; any change to a published field ships as a **v2
 handoff file**, never as an edit to v1.
+
+### 8B. Webhook boundary — contracts MC-8, MC-9, MC-10 (mechanism-inventory, round 6)
+
+These contracts fit **inside** the published v1 handoff (`docs/handoff/to_scanner/
+STOCK_REPORT_WEBHOOKS_v1_20260918.md`). Where one tightens a field v1 marks "may tighten" (the
+processed `reason` values), the closeout Scanner handoff must ship it as a **v2 file** (§14C C36).
+Nothing here edits v1.
+
+**MC-8 — validation order, one table per failure** (serves M7, M3).
+
+| Step | Check | Failure → status, body | Reads / writes before this step |
+|---|---|---|---|
+| 1 | The route takes `Request` and reads raw bytes. **No typed body parameter**: FastAPI would parse and 422 a body before step 2 runs | — | none |
+| 2 | Configuration: `MANAGER_API_KEY_TO_LOCATION_TRACKER_APP` and the workspace setting (proposed alias `LOCATION_TRACKER_WEBHOOK_WORKSPACE_ID`; the planner registers the name) are each non-`None` and non-blank after `strip()` | 401 | none |
+| 3 | Header `x-api-key` present (Starlette headers are case-insensitive) and equal: `hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))` | 401 | none |
+| 4 | The configured workspace id names an existing `workspaces` row | 401 | this one `SELECT` |
+| 5 | Body decodes as UTF-8 JSON | 422 | none further |
+| 6 | Top level is an array with ≥ 1 entry; every entry has a valid shape (tables below) | 422 | none |
+| 7 | Duplicates: demand, two entries with the same `(lower(strip(itemCategory)), properties_signature)` → 422. Processed: duplicates are **not** an error (v1 §4.3) | 422 (demand) | none |
+| 8 | References: demand category per entry (skip = `category_not_found`); processed item → assignment per entry (MC-10) | per-entry outcome in a 200 | lookups |
+| 9 | Writes, one transaction; events after commit | 200 / 5xx | — |
+
+- **All 401 bodies are identical**: `{"error": "Unauthorized.", "ok": false}`. The cause (which
+  setting is missing, header absent, mismatch, unknown workspace) is logged, never returned.
+- **Bytes, not `str`, in `compare_digest`:** the `str` form raises `TypeError` on a non-ASCII
+  header value, which surfaces as a 500 instead of a 401. The precedent
+  (`bm/services/infra/connecteam/webhook_verifier.py:23`) compares `str` and has that defect. It is
+  not copied (§14C C24).
+- **Workspace to commands:** steps 8–9 run in a service that receives `workspace_id` as an
+  argument resolved at step 4, and it passes it explicitly to every subordinate (find-or-create,
+  `move_assignment`, history, events). `ctx.workspace_id` (which is `""` here, §2.5) is never read.
+  Guard: the webhook tests build `ServiceContext(identity={})` exactly as the router does, and
+  assert that rows carry the configured workspace id. Planted defect: read `ctx.workspace_id` in
+  the demand service → the FK to `workspaces` fails and the test reddens.
+- **422 body:** v1's `{"error": "<message>", "ok": false}`. The message names **every** offending
+  entry by zero-based index and the defect (§8 "the error names every offending entry"), for
+  example `"Malformed request: entry 0: quantityRequested must be an integer >= 0; entries 2 and 5
+  resolve to the same identity."` Scanner is told not to parse it (v1 §3.4).
+
+**Demand entry defects: a total table.** An entry is a JSON object. **Unknown keys are ignored**,
+because v1 does not forbid them, and forbidding them would break a sender that adds a field.
+
+| Field | Accepted | Defect → whole request 422 |
+|---|---|---|
+| `itemCategory` | `str` with non-blank `strip()` | missing, non-string, blank |
+| `properties` | JSON object (`dict`), `{}` allowed, any value shapes inside (MC-3) | missing, `null`, array, string, number, boolean |
+| `quantityRequested` | `type(v) is int` (so `true` / `false` and `5.0` are defects), `0 ≤ v ≤ 2147483647` | missing, non-integer, negative, too large |
+| whole entry | object | array, string, number, `null` |
+| two entries | — | same identity key (step 7) |
+| unknown category | — | **not a defect**: `category_not_found`, entry skipped (P27) |
+
+**Processed entry defects:** an entry is an object with `article_number` a `str`, non-blank after
+`strip()`. Missing, non-string or blank → 422. Unknown keys are ignored.
+
+**Category resolution (demand step 8):** among non-deleted categories of the workspace, first an
+**exact** name match on `strip(itemCategory)`. Failing that, a case-insensitive match
+(`func.lower(ItemCategory.name) == func.lower(:name)`, with Postgres `lower` on both sides so
+Python and Postgres casing cannot diverge). Exactly one → that category. Zero, **or more than
+one** → `category_not_found`, with the ambiguity logged. Case-variant names can coexist because
+`uq_item_categories_workspace_name` is case-sensitive (`bm/models/tables/items/item_category.py`),
+and the precedent `purchase_api.py:_find_category_id_by_name` picks one arbitrarily with
+`.limit(1)`. That is not copied. v1 has no third outcome. Scanner's names equal Manager's seeded
+names exactly (`bootstrap/phases/seed_item_categories.py`), except `Serving Trolleys`, which
+Manager lacks and which will read `category_not_found`.
+
+**Success bodies (v1 §3.4 / §4.3, unchanged):** demand `results[i] = {"itemCategory": <as
+received>, "properties": <as received>, "outcome": "applied" | "category_not_found"}`. Processed
+`results[i] = {"article_number": <as received>, "outcome": "resolved" | "ignored", "reason":
+null | "item_not_found" | "no_open_assignment" | "not_awaiting"}`, in request order.
+
+**MC-9 — what "a replay changes nothing" means** (serves M3; HC-5).
+
+*Changes nothing* = the second delivery issues **no INSERT, UPDATE or DELETE** against
+`stock_report_items`, `stock_task_assignments`, `stock_report_history_records` or `tasks`, and
+dispatches **no event**. This is stronger than "rows compare equal". It is the only definition an
+instrument can hold: none of the new tables uses `onupdate=` (MC-17), so an UPDATE writing equal
+values would leave every row identical and still be a write.
+- Demand: under the row lock, `new == stored` → **no statement is issued** (never an ORM
+  assignment of an equal value). A new row is only inserted when its identity is absent. A second
+  delivery of the same body therefore issues none.
+- Processed: the second delivery finds the assignment `resolved` → `ignored`/`no_open_assignment`,
+  and nothing is issued.
+- **Instrument:** a SQLAlchemy `before_cursor_execute` listener counting INSERT/UPDATE/DELETE
+  statements on those four tables during the second delivery, expecting 0, plus the captured event
+  list, expecting empty. Planted defect: remove the equality short-circuit in the demand path →
+  the listener counts 1 and the row reddens. A row-snapshot comparison alone could not see this
+  defect.
+- The response of a replay may differ from the first (processed: `resolved` then `ignored`). HC-5
+  is about the database.
+- **Arrival order ≠ send order** (the v1 handoff §6.3 hazard). An older demand request that lands
+  after a newer one is not a replay: it writes the older numbers, and can write a **goal record
+  that never existed** (newer 3, then older 5 → 5 > 3). The next full push heals the number; the
+  phantom goal record stays. **Owner, card 11 → A (round 7; §14D D4):** no send-time stamp, no
+  `x-sent-at`, no new column, no `stale` outcome; the v1 handoff stands. The protection is the
+  sender's: the payload is built at send time (v1 §6.3), so a retry never carries old numbers.
+- **The one residual case, closed on Manager's side** (owner, card 11a → A; §14D D5): a first
+  call that is still running inside Manager after Scanner gave up on it (Scanner's client timeout
+  is 8 s — `outbound-webhook-worker.ts:DISPATCH_TIMEOUT_MS`) could commit after the fresher retry.
+  So the demand webhook's transaction opens with `SET LOCAL statement_timeout` and `SET LOCAL
+  lock_timeout`, both from one new named setting with default **5 s**
+  (`STOCK_DEMAND_WEBHOOK_TIMEOUT_MS = 5000`; the planner registers the final name). An abort
+  rolls the whole request back and answers **5xx**, which Scanner retries with fresh numbers (v1
+  §3.4) — no contract change. `SET LOCAL` ends with the transaction, so no other request inherits
+  it. The limit bounds each statement and each lock wait, not the sum; with the set-based,
+  fixed-statement-count demand path the request stays under Scanner's 8 s. *Instrument (charter
+  rule 10 — the shipped default is proven applied):* inside the webhook's transaction, `SHOW
+  statement_timeout` and `SHOW lock_timeout` equal the default with the setting unset; and a
+  second session holding a row lock makes the webhook answer 5xx within the budget with nothing
+  written. Sender note for the closeout handoff (additive, no v2): a Scanner sender using another
+  client timeout must keep Manager's setting below it.
+
+**MC-10 — processed resolution** (serves M3).
+
+1. `number = article_number.strip()`, then an **exact, case-sensitive** equality with
+   `items.article_number` among non-deleted items of the workspace. Inner spaces, slashes and
+   leading zeros are significant: `"04 2 001 0034"` matches only an item stored as exactly that. No
+   inner folding: Manager's write path only strips outer whitespace
+   (`bm/services/commands/items/requests/__init__.py` `strip_or_none`), and folding could make two
+   stored numbers equal and break the uniqueness the lookup relies on. Items whose
+   `article_number` is NULL can never match (§8.2, E6).
+2. The outcome is decided in this order (closed enum; each is a test row):
+   `item_not_found` (no non-deleted item) → `no_open_assignment` (the item has no non-deleted
+   assignment in `in_queue/in_progress/awaiting`; covers never-assigned and terminal-only) →
+   `not_awaiting` (the open one is `in_queue` or `in_progress`) → `resolved` (it was `awaiting`: lock
+   the row, then the assignment, re-read, and still `awaiting` → move to `resolved`; if it changed
+   under the lock, report what the re-read says).
+3. A duplicate number later in the same request is evaluated after the earlier one's effect (same
+   transaction), so it reads `no_open_assignment`.
+4. Whether Manager's stored numbers are spelled like Scanner's barcodes is **not measured**
+   (§14C, open evidence N1). The live report shows `04 2 001 0034` and `87392074 / 17733559`.
 
 ---
 
@@ -502,6 +1118,177 @@ closed_at, completed_at). They are used only by this capability.
 
 A role outside its row is refused before anything is read or written.
 
+### 9C. Assignment creation and the matcher mirror — contracts MC-12, MC-13 (mechanism-inventory, round 6)
+
+**MC-12 — the matcher, made equal to Scanner's by construction** (serves M8; §9A made exact).
+
+*"Manager's verdict equals Scanner's matcher"* (M8) means the following. For a Manager `Item`
+(the ORM instance, as the production path holds it) and a stored criteria dict `c`, Manager's
+verdict equals Scanner's
+`matchesCriteria(deriveItemProperties(bag(item)), c)`
+(`apps/backend/src/modules/stock/domain/property-criteria.ts:68-101`,
+`best-match.ts:99-117`), for every `c` Scanner itself accepts. Here `bag(item)` is the string bag
+Scanner would hold had it ingested this item's Manager properties through its purchase-API path.
+Scanner commit `0d80bf2`, read 2026-09-18.
+
+**Step 1: build the bag** from `Item.properties` (JSONB as asyncpg decodes it: `dict | None`,
+values `str | int | float | bool | None | list | dict`) and `Item.quantity` (non-null `int`):
+1. `properties is None` → start from `{}`.
+2. Coerce every value exactly as Scanner's `toPropertyValue`
+   (`shared/item-properties/purchase-api.integration.ts:47-66`) does:
+
+   | Python value | Becomes |
+   |---|---|
+   | `str` | itself |
+   | `bool` | `"true"` / `"false"` |
+   | `int` | `str(v)` |
+   | `float`, integral | `str(int(v))` (JS `String(3.0)` is `"3"`) |
+   | `float`, non-integral | `repr(v)` |
+   | `None` | key dropped |
+   | `list` / `dict` | `json.dumps(v, separators=(",", ":"), ensure_ascii=False)` |
+
+   Known divergence: exponent-form floats (`1e-07` in Python vs `1e-7` in JS), which occur in no
+   property.
+3. Trim key and value with `str.strip()`, and drop the pair if either is empty. This mirrors
+   Scanner's `normalizeStoredProperties` (`repositories/location-stock.repository.ts:43-68`). A
+   key collision after trimming (Scanner cannot meet one; its keys are trimmed at ingestion) is
+   resolved by iterating keys in `sorted()` order, later wins.
+4. Drop `qty_extensions`, `quantity`, `wood_group`, `drawers_range`. This is Scanner's
+   `EXCLUDED_PURCHASE_ATTRIBUTE_KEYS` (`shared/item-properties/item-properties.ts:21-34`): the
+   derived keys are never trusted from storage, and neither is set size.
+5. **Relocated key:** `bag["quantity"] = str(item.quantity)`. It is added **even when
+   `properties` is NULL**, because set size is a column fact in Manager (E9). Comparison is
+   token equality on decimal strings: criterion `["4"]` matches `Item.quantity == 4`, and `"04"`
+   cannot arise (Scanner's option values are `"1"`…`"10"`, `"12"`, `item-property-options.ts:55-58`).
+6. **Derived keys** (E8). `wood_group`: if `wood_type` is in the bag, take its **first** token
+   (tokenizer below), look it up in `WOOD_GROUPS` with members normalized by `strip().lower()`, and
+   on a hit set `bag["wood_group"]` to the group name (`"Dark" | "Teak" | "Light"`)
+   (`wood-groups.ts:27-31, 82-83`). `drawers_range`: if `drawers_qty` is in the bag,
+   `s = value.strip()`, and it must fully match `[0-9]+`. That is ASCII-only on purpose: Python's
+   `\d` also matches non-ASCII digits and JS's does not. Then take the first `DRAWER_RANGES` entry
+   with `min ≤ int(s) ≤ max` (`1-2`, `3-5`, `6+`; `0` → none) (`drawer-ranges.ts:28-32, 77-90`). No
+   hit → the key is absent.
+
+**Step 2: evaluate every criteria key** (no short-circuit, so every failure is reported). The
+tokenizer is `re.split(r"[,/]", s)` → `strip()` → drop empty → `lower()`. It never splits on `&`
+(`property-criteria.ts:19-24`). Per key `k` with stored value `a`:
+
+| Condition, checked in this order | Result |
+|---|---|
+| `a` is neither `None` nor a non-empty `list[str]` (a not-understood value, MC-3) | `criterion_not_understood` |
+| `k == "wood_group"`: `wood_type` absent from the bag or yields no tokens | `missing_on_item` |
+| `k == "wood_group"`: the source is present but derived no group (e.g. `Other`) | `no_group_for_value` (a wildcard `null` fails here too) |
+| `k == "drawers_range"`: `drawers_qty` absent or blank | `missing_on_item` |
+| `k == "drawers_range"`: present but in no range (`0`, `abc`, `-1`) | `no_group_for_value` |
+| any other `k`: absent from the bag, or its value yields no tokens | `missing_on_item` |
+| `a is None` | pass |
+| any element of `a` is among the value's tokens | pass |
+| otherwise | `value_not_accepted` |
+
+The verdict is *match* iff no key failed. `{}` always matches. The reason vocabulary is **closed**:
+`missing_on_item`, `value_not_accepted`, `no_group_for_value`, `criterion_not_understood`.
+
+**Tables and drift:** `WOOD_GROUPS` and `DRAWER_RANGES` live in one module in
+`bm/domain/stock_report/`, with the Scanner file paths, commit `0d80bf2` and the date beside them.
+Like Scanner, the module validates at import: no member in two groups, no `,` or `/` in a name,
+ranges ordered and disjoint (`wood-groups.ts:49-73`, `drawer-ranges.ts:49-71`).
+
+**Fixture rule (charter rule 17):** every Scanner-owned shape in a criterion's fixture cites one
+of the `file:symbol`s above. The criteria come from the real rules in `LC-STOCK-REPORT.md`,
+normalized as `normalizeCriteria` does. The Manager item bags come from
+`bm/services/queries/items/lookup/purchase_api.py:parse_purchase_api_attributes` output (string
+values stripped; non-string values kept as they are, which is why step 2 exists). The hand-walk in
+the round-6 handoff is the starting fixture set.
+
+**MC-13 — creation checks, their order, and the override retry** (serves M8, M1, M4).
+
+Request: `{"entries": [{"stock_report_item_id": str, "task_id": str, "item_id": str,
+"override_property_mismatch": bool = false}, …]}`, with ≥ 1 entry. Unknown fields → 422 (a local
+API, so strict).
+
+| Phase | What | On failure |
+|---|---|---|
+| 0 | shape (Pydantic) | 422 |
+| 1 | batch duplicates: the same `item_id` in two entries → `duplicate_item_in_batch`; the same `task_id` in two entries → `duplicate_task_in_batch` (every index involved is listed) | collected into phase 3's error |
+| 2 | locks: Items (asc) → Tasks (asc) → rows (asc), existing ones only (MC-1) | — |
+| 3 | per entry, in this order, the **first** failing reason: `stock_report_item_not_found` (absent, deleted or other workspace) · `task_not_found` · `item_not_found` · `item_not_task_primary` (no `TaskItem` with that `task_id`, `item_id`, `role = primary`, `removed_at IS NULL`) · `task_failed_or_cancelled` · `item_already_assigned` (any non-deleted active assignment of the item, on any row) · `item_has_no_category` · `category_mismatch` | **any** phase 1 or 3 failure → 422 `stock_assignment_refused`, listing `{index, reason}` for every failing entry; nothing written; property results not reported |
+| 4 | the matcher (MC-12) on every entry | entries that fail with `override_property_mismatch = false` → 409 `stock_assignment_property_mismatch`, listing for **every** such entry `{index, stock_report_item_id, task_id, item_id, failures: [{key, reason}] sorted by key}`; nothing written |
+| 5 | writes, per entry in ascending `item_id`: insert the assignment (`quantity = max(item.quantity, 1)`, `property_mismatch_overridden` = the entry failed phase 4 and was overridden), `move_assignment(∅ → MAP[task.state])`, flag `true` | — |
+
+- Precedence: a batch with any hard failure answers 422 even if other entries also mismatch, so the
+  frontend never offers an override for a batch that would fail anyway.
+- The flag on an entry that matches is ignored, and `false` is stored (§9A).
+- **Error envelope (local API only; not a Scanner surface):** these two errors carry structure, so
+  the router renders them explicitly, following `routers/api_v1/auth.py`'s `code` precedent:
+  `{"error": <message>, "ok": false, "code": "stock_assignment_refused" |
+  "stock_assignment_property_mismatch", "details": [...]}`. Every other error uses `build_err`.
+- **Frontend retry contract** (for the frontend handoff): on 409, show the listed failures and, on
+  confirmation, resend the **whole batch** with `override_property_mismatch: true` on the listed
+  entries. The retry is evaluated from scratch. Anything may have changed in between, so a
+  now-hard-failing entry answers 422 and the retry does not "remember" the first response.
+- Resolved tasks may be assigned (their assignment is born `awaiting` and credits the current goal,
+  MC-5). Only `failed` and `cancelled` are refused (§5 r3).
+
+### 9D. Realtime events — contract MC-19 (mechanism-inventory, round 6)
+
+Registered as mechanism contract **MC-19**. It is not a ledger entry (§13A). Built on
+`build_workspace_event` / `WorkspaceEvent` (`client_id`, `workspace_id`, `extra`)
+(`bm/services/infra/events/build_event.py`).
+
+**Net-change rule.** Per request, each touched row and each touched assignment is snapshotted at
+its first lock, and its values after the last write are compared to that snapshot. **At most one
+event per entity per request**, and only on a net difference: for a row, any of `quantity_requested`,
+the three counters, `priority`, `priority_order`; for an assignment, `state`. A no-op, a replay, a
+rolled-back request, or a move that returns to its start inside one transaction emits nothing.
+Events are built only after the transaction block exits normally, and dispatched then.
+
+| Operation | Events |
+|---|---|
+| Demand, new row | `stock_report_item:created` only (no `:updated` for the same row in the same request) |
+| Demand, existing row, quantity changed | `stock_report_item:updated` |
+| Demand, unchanged or skipped entry | none |
+| Processed, resolved | `stock_task_assignment:state-changed` + one `stock_report_item:updated` per touched row |
+| Assignment creation | `stock_task_assignment:created` per entry + one `:updated` per touched row (always a net change: `q ≥ 1` lands in an active counter) |
+| Assignment deletion (any path) | `stock_task_assignment:deleted` per assignment + `:updated` per row whose counters net-changed (deleting a terminal assignment moves no counter, so no `:updated`) |
+| Task sync | `stock_task_assignment:state-changed` per moved assignment + `:updated` per touched row |
+| Priority change / move | `:updated` for the moved row + one per shifted neighbour |
+| Row deletion | `stock_report_item:deleted` for the row, `stock_task_assignment:deleted` per assignment, `:updated` per shifted neighbour; no `:updated` for the deleted row |
+
+**Payloads (`extra`):**
+- `stock_report_item:updated`: `{"quantity_requested": int, "quantity_in_queue": int,
+  "quantity_in_progress": int, "quantity_awaiting": int, "priority": "high"|"medium"|"low"|null,
+  "priority_order": int|null}`, taken from committed values (`RETURNING` or a refreshed instance,
+  never a pre-UPDATE ORM attribute).
+- `stock_report_item:created` and `:deleted`: `{}`.
+- The three assignment events: `{"stock_report_item_id": str, "task_id": str, "state": str}`, with
+  the state after the move (for `:deleted`, the state at deletion).
+
+`workspace_id` comes from the entity's row, never from `ctx` (§2.5). Event hand-up from task
+commands: the MC-2 site table.
+
+### 9E. Roles — contract MC-18 (mechanism-inventory, round 6)
+
+Serves M9. Refusal happens in the router, through the existing dependency
+`Depends(require_roles([...]))` (`bm/routers/utils/jwt_dep.py:require_roles`). It answers **403
+"Insufficient role permissions."** before the service runs, so nothing is read or written. The 36
+cells (28 from round 6, plus 8 for the consistency report and repair, round 7), each a test row (✓ = the request reaches the service; ✗ = 403):
+
+| Operation (endpoint) | ADMIN | MANAGER | WORKER | SELLER |
+|---|---|---|---|---|
+| GET rows | ✓ | ✓ | ✓ | ✓ |
+| GET assignments of a row | ✓ | ✓ | ✓ | ✓ |
+| create assignments | ✓ | ✓ | ✓ | ✗ |
+| delete assignments | ✓ | ✓ | ✓ | ✗ |
+| change priority | ✓ | ✓ | ✗ | ✓ |
+| change priority order | ✓ | ✓ | ✗ | ✓ |
+| delete a row | ✓ | ✓ | ✗ | ✗ |
+| read the consistency report (§12A; P35) | ✓ | ✓ | ✗ | ✗ |
+| run the manual repair (§12A; owner, card 9b) | ✓ | ✓ | ✗ | ✗ |
+
+The webhooks carry no role: they are key-authenticated (MC-8). A role-cell test sends a **valid**
+body, because FastAPI decodes JSON before it runs dependencies, so an undecodable body would
+answer 422 before the role check. The cell asserts the role refusal, not body handling.
+
 ---
 
 ## 10. Facts vs derived values
@@ -549,15 +1336,114 @@ yet and is not built by this project. This project publishes one handoff for the
 9. The two handoff documents.
 10. **Realtime events** (owner, round 3 — moved up from "only if cheap"; the event infrastructure
     exists, this adds new event names on it). §9B.
+11. **Self-healing repair** (owner, round 7, cards 9/9a/9b — moved up from "deferred"): inline
+    repair inside the transition operation, the repair-record table, and the ADMIN/MANAGER manual
+    repair command with its consistency-report endpoint. §5A MC-1, §6A MC-5, §12A. The tests use it.
 
 **Only if cheap** — nothing.
 
 **Explicitly deferred / non-goals** — any frontend; the Scanner-side sender; migrating existing
 task list endpoints to the compact serializers; taking over Scanner's stock rules, locations or
-thresholds; **a repair mode for the consistency check** (owner, round 3: after the whole
-implementation, the owner has a place in mind for it); automatic assignment of tasks to requirements; restore of deleted rows; pagination;
+thresholds; ~~a repair mode for the consistency check~~ (**reversed by the owner in round 7** —
+now must-ship item 11); repairing a row's `properties_signature` (reported only, §12A); automatic assignment of tasks to requirements; restore of deleted rows; pagination;
 a local endpoint for creating StockReportItems by hand (the service supports it; nothing calls it);
 bringing Shopify-sourced properties onto Manager items (E10).
+
+### 12A. Consistency check and workspace reset — contract MC-20, plus one must-ship addition (mechanism-inventory, round 6)
+
+**MC-20 — the read-only consistency check** (serves M1; P20; §12 item 8). It is a query function
+in `bm/services/queries/stock_report/`, taking `(session, workspace_id)`. How it is exposed (CLI
+under `architecture/53_operational_cli.md`, or an ADMIN endpoint) is the planner's choice and does
+not change the contract. It recomputes and compares:
+
+| `kind` | Stored | Expected |
+|---|---|---|
+| `counter_in_queue` / `counter_in_progress` / `counter_awaiting` | the row's column | Σ `quantity` of the row's non-deleted assignments in that state |
+| `task_flag` | `tasks.is_stock_assignment` | `EXISTS` non-deleted assignment for the task, over every task of the workspace that has either |
+| `order_density` | the orders of a group | exactly `1..n` with no gaps or duplicates |
+| `priority_order_nullness` | `(priority, priority_order)` | both null or both non-null, on non-deleted rows |
+| `goal_total` | `quantity_awaiting` of each goal record | Σ `quantity` of **all** assignments credited to it, deleted included (MC-5) |
+| `signature` | `properties_signature` | `compute_properties_signature(properties)`, and `properties == normalize_stock_criteria(properties)` (MC-3 idempotence) |
+
+Output: `{"workspace_id", "checked_at", "divergences": [{"kind", "client_id", "field", "stored",
+"expected"}]}`, sorted by `(kind, client_id, field)`. An empty list means consistent.
+**Read-only:** it issues no INSERT, UPDATE or DELETE. The same statement-counting listener as MC-9
+asserts 0. **Proof it can observe (charter rule 15):** one planted drift per `kind`, each written
+by raw SQL after a clean setup (e.g. `UPDATE stock_report_items SET quantity_in_queue =
+quantity_in_queue + 1`). Each must produce exactly one divergence of that kind, with the exact
+stored and expected values. That makes eight probe rows. The M1 tests end every scenario by
+asserting the check returns `[]`.
+
+**Repair — the write mode of the same recomputation** (owner, round 7: cards 9 → C, 9a → A,
+9b → A; §14D D1–D2; serves M1, M5, M6). The check above stays read-only. Repair is a **separate
+command** that calls the same recomputation functions, so "correct" has one definition.
+
+*Two callers.* (1) **Inline**, from `move_assignment` and the row-deletion cascade, for one row or
+one goal record, when a value would go negative (§5A MC-1, §6A MC-5). (2) **Manual**, a command
+for a whole workspace, ADMIN/MANAGER only (§9E):
+`POST /api/v1/stock-report/repair`, with the report at `GET /api/v1/stock-report/consistency`
+(same two roles, P35). The planner may register other paths; the role cells do not move.
+
+*What the manual command fixes* — per `kind`:
+
+| `kind` | Repaired? | How |
+|---|---|---|
+| `counter_*` | yes | set to the recomputed Σ |
+| `goal_total` | yes | set to the recomputed Σ (deleted assignments included, MC-5) |
+| `task_flag` | yes | the MC-15 Core UPDATE (never moves `tasks.updated_at`) |
+| `order_density` | yes | renumber the group `1..n`, keeping the current relative order; ties broken by ascending `client_id` |
+| `priority_order_nullness` | yes | `priority` null → `priority_order` set null; `priority` set with a null order → appended at the end of its group (`max + 1`), before the density renumber |
+| `signature` | **no — reported only** | re-signing a row can make it collide with another live row (MC-4); merging two rows is not a repair. The response lists these under `not_repaired` |
+
+*Mechanics.* One transaction. Locks in MC-1 order: the workspace advisory lock first (it renumbers
+groups), then the tasks whose flag diverges, then every non-deleted row, then assignments, then
+history records — each class ascending. It runs the check under those locks, repairs, and re-runs
+the check; the response is `{"repaired": [<divergence>…], "not_repaired": [<divergence>…]}` where
+`not_repaired` holds only `signature` kinds. A clean workspace issues **zero** INSERT/UPDATE/DELETE
+(the MC-9 listener) and emits no event. Rows it changes get `updated_at`/`updated_by_id` = the
+caller (MC-17); inline repairs stamp nothing beyond what the move itself stamps. Events follow
+the MC-19 net-change rule: one `stock_report_item:updated` per row whose event fields net-changed.
+No history record is written by a repair (a renumber is not a user move).
+
+*The trace — table `stock_report_repair_records`* (owner, card 9a → A; the planner registers the
+final name and prefix). Append-only, `IdentityMixin`, `workspace_id` (FK, RESTRICT), and:
+
+| Column | Meaning |
+|---|---|
+| `target_kind` | enum: `stock_report_item`, `history_record`, `task`, `group` |
+| `target_client_id` | the corrected entity's `client_id` (for `group`: the row whose order changed). **No FK** — the record outlives its target (P33) |
+| `field` | the corrected column, e.g. `quantity_in_queue`, `quantity_awaiting`, `is_stock_assignment`, `priority_order` |
+| `stored_value` | the value **before** the operation, as text |
+| `recomputed_value` | the value written, as text |
+| `trigger` | `inline:<operation>` (e.g. `inline:task_sync`, `inline:delete_assignments`, `inline:items_processed`, `inline:delete_stock_report_item`) or `manual` |
+| `created_by_id` | the caller for `manual`; **NULL for inline** (the actor of the move is not the author of the repair) |
+| `created_at` | the operation's `now` |
+
+Exactly **one record per corrected field**, and one `logger.warning` per record. No soft-delete
+trio and no `updated_*`: a record is never edited or removed, except by the workspace reset. It is
+not served by any endpoint in this project (the planner may add a read; none is required).
+`order_density` repairs write one record per row whose `priority_order` changed.
+
+*Instruments.* (a) For each of the eight planted-drift probes above except `signature`: run the
+manual repair → the check returns `[]` for that kind, exactly one repair record with the planted
+stored value and the expected recomputed value, trigger `manual`, author = caller. (b) `signature`
+probe: still reported after repair, listed in `not_repaired`, no record. (c) Upward drift
+(`quantity_in_queue + 1`): no inline repair fires through any move (the counter never goes
+negative) — only the manual command clears it; this is the row that proves the command is needed.
+(d) Clean workspace: zero statements, zero records, zero events. (e) Every M1/M5/M6 scenario
+still ends by asserting the check returns `[]` **and** the repair-record table is empty — a
+scenario that only passes because it self-healed is a failure (the defect families of M1 must not
+hide behind the repair).
+
+**Must-ship addition — workspace reset** (grounding: `bm/services/commands/reset/reset_app.py`
+hard-deletes tasks, items, item categories and users). With `ondelete="RESTRICT"` foreign keys
+from the three new tables, the reset would fail on the first workspace holding a stock row. New
+reset phases hard-delete, in this order: `stock_report_repair_records` (round 7), then
+`stock_task_assignments`, then
+`stock_report_history_records`, then `stock_report_items`. They run before `delete_tasks`,
+`delete_items`, `delete_item_categories` and `delete_users`. Invariant: a reset of a workspace
+holding one row of each of the four new tables succeeds and leaves none. It traces to M1 (a board that cannot
+be reset cannot be re-measured). Scope ladder: with §12 item 1.
 
 ---
 
@@ -565,7 +1451,7 @@ bringing Shopify-sourced properties onto Manager items (E10).
 
 | ID | Observable outcome — measured true means this shipped | Defect family it guards |
 |---|---|---|
-| **M1** | After every committed operation, each StockReportItem's three counters equal the **sums of stored assignment quantities** recomputed from its non-deleted assignments by state, and every `Task.is_stock_assignment` equals "has a non-deleted assignment" — including under concurrent transitions on the same item. | counter drift, lost updates, arithmetic applied outside the transition operation |
+| **M1** | After every committed operation, each StockReportItem's three counters equal the **sums of stored assignment quantities** recomputed from its non-deleted assignments by state, and every `Task.is_stock_assignment` equals "has a non-deleted assignment" — including under concurrent transitions on the same item. **Round 7:** when stored values were already wrong, an operation that would write a negative value repairs that row first and succeeds, leaving exactly one repair record per corrected field; the manual repair brings a drifted workspace back to a clean consistency report. A correct system writes no repair record. | counter drift, lost updates, arithmetic applied outside the transition operation |
 | **M2** | After a task's state changes by **any** path in §2.3, its active assignment equals the §5 mapping of the task's resulting state; terminal assignments are unchanged; a deleted task or an item removed from its task leaves no assignment behind. | a missed integration site; assuming intermediate states; terminal assignments revived; orphaned assignments counted forever |
 | **M3** | Replaying any Scanner request leaves the database identical to one delivery; `quantity_requested` equals the last value Scanner sent; a rejected batch leaves no trace; an entry with an unknown category writes nothing, is reported back as not found, and does not stop the other entries. | double-applied transitions, delta-instead-of-absolute, partial batches |
 | **M4** | Payloads differing only in JSON key order resolve to one StockReportItem; there is never more than one live row per identity, nor more than one active assignment per item — including under concurrent requests. | duplicate identities, signature instability, double-booking an item |
@@ -580,6 +1466,45 @@ boundary; M9 protects who may act and who is recorded; M8, M5, M6 protect meanin
 (M8 and M9 were added in rounds 1 and 4 and keep their numbers so no earlier ID moves. Nine
 entries against a 3–7 guideline: kept because each guards a distinct failure; the owner may
 merge.)
+
+### 13A. Mechanism-contract register — trace targets for planner criteria (mechanism-inventory, round 6)
+
+The ledger above is unchanged. It still holds nine entries against the 3–7 guideline, by the
+owner's acceptance, and none is merged or renumbered. Each contract below is a trace target in
+its own right. A criterion cites `MC-n` and, through it, the ledger entry it serves.
+
+| Contract | Mechanism | Lives in | Serves |
+|---|---|---|---|
+| MC-1 | transition operation, counter arithmetic, inline self-heal, global lock order | §5A | M1 |
+| MC-2 | task-state sync, its site registry and guard | §5B | M2 |
+| MC-3 | criteria normalization and signature | §4A | M4 |
+| MC-4 | find-or-create; uniqueness predicates; race error | §4A | M4 |
+| MC-5 | goal-record running total; self-heal of a negative total | §6A | M5 |
+| MC-6 | history write rules and snapshots | §6A | M5 |
+| MC-7 | dense ordering and its serialization | §7A | M6 |
+| MC-8 | webhook validation order, auth, entry-defect tables | §8B | M7, M3 |
+| MC-9 | replay = zero statements, zero events; arrival order; the demand time limit (cards 11, 11a) | §8B | M3 |
+| MC-10 | processed resolution and its outcome vocabulary | §8B | M3 |
+| MC-11 | two writers on one assignment | §5A | M1, M2 |
+| MC-12 | matcher mirror, bag construction, reason vocabulary | §9C | M8 |
+| MC-13 | creation checks, order, override retry | §9C | M8, M1, M4 |
+| MC-14 | task-side and item-side removals; category guard on both writers (`update_item`, `find_or_create_item`) | §5B | M2, M8 |
+| MC-15 | `Task.is_stock_assignment` truth and write form | §4B | M1 |
+| MC-16 | soft-delete predicates; deletion cascade order | §5A | M1, M4, M6 |
+| MC-17 | authorship table | §4B | M9 |
+| MC-18 | role cells | §9E | M9 |
+| MC-19 | realtime events | §9D | **mechanism contract only**: criteria trace to `MC-19` itself (§14 item 8) |
+| MC-20 | consistency check; repair (inline + manual) and the repair-record table; workspace reset | §12A | M1, M5, M6 |
+
+**Ledger entries that are too weak as trace targets without their contract** (findings; the
+wording of the entries is unchanged):
+- **M2**: "any path in §2.3" is not a checkable set, because §2.3 omits three drivers. The
+  checkable set is the MC-2 registry. M2 criteria trace through MC-2.
+- **M3**: "identical to one delivery" is only observable as MC-9's zero-statement definition.
+- **M8**: "equals Scanner's matcher" is only decidable through MC-12's composition (the bag plus
+  Scanner's functions).
+- **M1**: "including under concurrent transitions" needs MC-11's two-session instrument. A
+  sequential test cannot fail on a lost update.
 
 ---
 
@@ -680,6 +1605,78 @@ change this project makes to an existing item command besides B4's deletion hook
 *Card 8 as presented, for the record:* refuse (A) / allow and leave the assignment (B) / allow and
 auto-remove (C); recommendation A; owner chose **A**.
 
+### 14C. Supersession ledger — which sentence ships (mechanism-inventory, round 6)
+
+§14B was appended, not woven in, and the same is true of this round's contracts. Where an earlier
+sentence and a later section disagree, **the later section wins**, in this order: §14B, then the
+lettered contracts §4A–§13A, then §1–§13. Earlier text is left as ratified, so citations stay
+true. This table is the authority on each conflict. *Unilateral* = decided by this gate as a
+consequence of ratified text, listed for owner ratification in the round-6 handoff. *Card* = open
+at round 6; all were answered in round 7 and the rows below carry the answers (C38–C40 added).
+
+| # | Earlier sentence | Later / source | Ships | What the other side would have shipped |
+|---|---|---|---|---|
+| C1 | §2.2 "list order is significant … reusable as is" | §14B B1, MC-3 | normalize, then the unchanged function | two rows for one Scanner rule re-sent in another order |
+| C2 | §4.1 `properties` "stored verbatim" | §14B B1, MC-3 | stored normalized; webhook echo as received | a GET showing Scanner's spelling, signature ≠ f(stored) |
+| C3 | §8.1 "`properties` must be a JSON object" | P30, MC-8 | stands for the object itself; value shapes inside never reject | — (no conflict once scoped) |
+| C4 | §9A "the check happens once, at creation" | §14B B6 | stands for **properties**; the category is held by refusal after creation | — (scoped: item 3 vs item 2) |
+| C5 | §2.3 "`stalled` is never written by any command today" | source | **false**: `create_task.py:create_task` accepts any `TaskStateEnum` in `request.state` for non-sellers without steps (`:109-113`); the §5 map already covers it | a map missing `stalled` would crash on a real row |
+| C6 | §2.3 "Terminal tasks never reopen" | source | **false**: `remove_task_step.py:_remove_task_steps_in_session` sets `task.state = PENDING` when no steps remain, with no terminal or deleted guard (`:224-227`). MC-1 allows `awaiting → in_queue`; §5 r1 keeps `failed` assignments final | a transition table refusing `awaiting → in_queue` would 500 a user's step removal |
+| C7 | §2.3 "`* → ready` (the only sanctioned entry to `ready`)" | source | **false** for creation: `create_task` can create a task already `ready`/`resolved`. No Stock Report effect (no assignment exists at creation) | — (reported upstream, handoff) |
+| C8 | §2.3 "The three helpers are reached from …" (six callers) | MC-2 | incomplete: `declare_worker_state`, `_clock_worker_shift.clock_out_shift_for_user`, `_case_created_step_pause.pause_task_working_steps_for_case` also drive the core (PAUSED only; registered and guarded) | a registry missing three call sites the guard must police |
+| C9 | §4.4 "a cheap skip for task sync" (via the flag) | MC-2 step 3 (*unilateral*) | the skip is an indexed assignment query; the flag is not read by the sync | a stale-flag skip leaving an assignment `in_queue` behind a `working` task |
+| C10 | §6.2 "floored at 0" and §2.4 house style `greatest(…, 0)` vs §4.1 "DB check `>= 0`" and HC-2 "always reconstructable" | card 9 → **C** (owner, round 7; §14D D1) | **neither**: no floor and no plain failure — a guarded UPDATE, and on a would-be negative the row (or goal record) is recomputed from assignments in the same transaction, a repair record is written, and the move proceeds; the `>= 0` checks stay as backstop | A: a worker blocked until a developer repairs the row. B: drift hidden behind a clamp |
+| C11 | §3 diagram "awaiting → resolved; quantity_awaiting − 1" | HC-2a | `− q` (units) | a set of 8 leaving 7 units "awaiting" forever |
+| C12 | §8 "Either setting absent … every request refused" (no status) | M7, MC-8 | 401, identical body | — |
+| C13 | §8 "a duplicate identity rejects the whole request" (both webhooks by its wording) | §8A, v1 handoff §4.3 | demand only; processed duplicates are evaluated in order (MC-10) | a Scanner batch lost to a 4xx its worker never retries |
+| C14 | §8.1 "matched case-insensitively" | MC-8 (*unilateral*) | exact first, then case-insensitive only if unique, else `category_not_found` | an arbitrary pick between case-variant categories (`.limit(1)` precedent) |
+| C15 | §9A reasons "missing on item / value not accepted / no group for value" and P30 "criterion not understood" | MC-12 | one closed enum of four snake_case codes | two vocabularies |
+| C16 | §9A "An item with no properties matches only empty criteria" | §9A relocated `quantity` key, MC-12 step 1.5 (*unilateral*) | a set-size-only rule can match an item whose properties are NULL | refusal (`missing_on_item`) on set size for every property-less item |
+| C17 | §10 goal total "currently crediting it plus those Scanner resolved while credited" | MC-5 | same set, stated as Σ over all credited assignments, **deleted included** | a recompute that drops user-deleted resolved work and reports false drift |
+| C18 | §12 item 8 "recomputes counters and flags" | MC-20 (*unilateral*) | also order density, null⇔null, goal totals, signatures | drift in M5/M6/M4 fields with no instrument |
+| C19 | §14 item 5 "auth → shape → references → writes" | MC-8 | config → key → workspace → decode → shape → duplicates → references → writes | — |
+| C20 | §15 item 3 and Appendix A "M1–M7" | §13 | M1–M9 plus MC-19 | orphaned M8/M9 criteria |
+| C21 | §4.2 "`quantity` … floor 1" | MC-13 | `max(item.quantity, 1)`; `Item.quantity` is non-null with default 1 and validated `>= 1` on update | — |
+| C22 | §4.3 "Append-only" | §9, MC-16 | append-only for content; the soft-delete trio is set when the row is deleted; goal totals move per MC-5 | — |
+| C23 | §5 r6 / M2 "leaves no assignment behind" | MC-14 (*unilateral*) | every non-deleted assignment of the pair, **any state** (terminal ones too); the same for item deletion | resolved rows of a deleted task still listed on the board |
+| C24 | §2.5 "static-secret precedent … `hmac.compare_digest`" | MC-8 | compare **bytes** | a 500 on a non-ASCII header |
+| C25 | §8A "The error is a human-readable string, not a structure" | MC-13 | stands for the webhooks; the local API's two assignment errors carry `code` + `details` | an override the frontend cannot drive by machine |
+| C26 | §8A processed `reason: <string|null>` (free text in v1) | MC-10 | closed codes `item_not_found`, `no_open_assignment`, `not_awaiting`; ships to Scanner as a **v2 handoff file** at closeout | Scanner parsing prose that changes |
+| C27 | §9 "delete StockReportItem … atomically" | MC-16 | the cascade order in §5A | a row soft-deleted before its assignments' units are moved out |
+| C28 | §4.5 "the worker whose step transition moved the task" | MC-17 (*unilateral*) | the performer (`ctx.user_id`), which is the manager when a manager acts for a worker | a credited worker recorded for an action they did not take |
+| C29 | §4.5 assignment `updated_by` table (creation, deletion unstated) | MC-17 (*unilateral*) | NULL at creation; deletion stamps only `deleted_*` | — |
+| C30 | §14B B6 "the one change this project makes to an existing item command besides B4" | source: `items/find_or_create_item.py:find_or_create_item` also rewrites `item_category_id` on an existing item (reached from `create_task`) | cards 10, 10a → **A** (owner, round 7; §14D D3): both writers are guarded; `create_task` fails as a whole with the same 409 | a board row holding an item of another category, entered through task creation |
+| C31 | §14B B4 "`delete_item` soft-deletes the item and touches no task" | source | true; the hook adds an Item lock (MC-14) | — |
+| C32 | (absent) workspace reset | `reset/reset_app.py` | new reset phases (§12A) | a reset that fails on the first stock row |
+| C33 | (absent) `remove_item_from_task` / `delete_item` locking | MC-14 (*unilateral*) | new Task / Item row locks | a creation racing an unlink, leaving an assignment on an item no longer on the task |
+| C34 | §4.2 "at most one active assignment" per task (derived) | MC-4 (*unilateral*) | also a DB partial unique index | the derivation holds only while every hook fires |
+| C35 | §9B "`:created` … carries the row's `client_id`" + "`:updated` whatever caused it" | MC-19 (*unilateral*) | a created row emits `:created` only | two events for one new row |
+| C36 | §8A "an **empty array is malformed**" and "the same article number twice … not an error" (marked "mine" by the shaper) | MC-8, MC-10 | **confirmed** as written | — |
+| C37 | v1 handoff §6.3 (sender-side ordering mitigation only) | cards 11 → **A**, 11a → **A** (owner, round 7; §14D D4–D5) | v1 stands, no stamp; Manager adds a 5 s demand time limit below Scanner's 8 s client timeout | B: a v2 handoff, a column and a `stale` outcome for a case the sender already prevents |
+| C38 | §12 "a repair mode for the consistency check" deferred (owner, round 3) | owner, round 7 (card 9 → C, 9b → A) | **must-ship** (§12 item 11, §12A) | a self-heal with no tool behind it; upward drift unfixable without a developer |
+| C39 | §5A MC-16 "The row's three counters are asserted to be 0 before its soft-delete" | §5A MC-1 second trigger (P36) | a non-zero counter is set to 0 with a repair record; the deletion proceeds | a row that cannot be deleted because its numbers drifted |
+| C40 | §6.2 and P26 "floored at 0" | MC-5 (round 7) | no floor; self-heal | see C10 |
+
+### 14D. Amendment — the owner's answers to the mechanism-inventory cards (2026-09-18, round 7)
+
+Source: the "Final owner answers" table of
+`handoffs/reviewer/2026-09-18_inventory_mechanism_inventory_handoff.md`. The owner's words are
+quoted; the contract text that implements each is named. §14D wins over §14B, the lettered
+contracts and §1–§13 wherever they disagree.
+
+| # | Card | Owner's words | What ships | Lives in |
+|---|---|---|---|---|
+| D1 | 9 → C | "I will actually prefere for the repair tool to be build and in those cases where negative values are trying to be recorded the repair tool runs first to then allow the transaction. so the repair tool is improtant to have it working in this implemtnation already ( which will be used already for tests technically )" | Self-heal: a would-be negative counter or goal total triggers a recomputation of that row / record inside the same transaction and lock; the action then succeeds. No clamp, no blocked worker. **Material — reverses the round-3 "repair deferred".** | §5A MC-1, §6A MC-5, §12 item 11, §12A |
+| D2 | 9a → A, 9b → A | "9a A , 9b A" | Every repair leaves one record per corrected field plus a warning; ADMIN/MANAGER get a manual whole-workspace repair that fixes counters, goal totals, the task flag, order gaps and order nullness; signatures are reported only | §12A, §9E |
+| D3 | 10, 10a → A | "yes that is correct that category re-assignment should not happen also on that task creation situation." / "10a A" | `find_or_create_item`'s existing-item branch refuses a category change for an item with an active assignment; `create_task` fails as a whole, 409 | §5B MC-14 |
+| D4 | 11 → A | "i have already resolve this type of situations on the scanner handoff, the scanner will read the current requested values so it will not have stall payloads that can fabricate those types of issues. the transaction thus continues to be indepotent." | No send-time stamp; the v1 Scanner handoff is unchanged | §8B MC-9 |
+| D5 | 11a → A | "11a A" | The demand webhook runs under a 5 s statement and lock timeout (a named setting), below Scanner's 8 s client timeout; an abort is a 5xx that Scanner retries | §8B MC-9 |
+| D6 | — (owner, shaper session, 2026-09-18) | "i belive we can make it sql efficient" | Both webhooks are handled inside the request (no Manager background worker). The demand webhook is **set-based**: a fixed number of SQL statements per request whatever the number of entries (categories by name set; existing rows by `(item_category_id, properties_signature)` set, locked; one bulk insert with conflict handling; one bulk update of changed rows only; one bulk history insert). §8.1 "per entry" states the rule per rule, not a query loop. A criterion bounds the statement count with the MC-9 listener (same count for 3 and for 300 entries). The processed webhook likewise groups its counter updates per row | §8.1, §8B |
+
+**Not a product change, stated so it is not lost:** the three false absence claims of §2.3 (C5–C7)
+and the missing callers (C8) are corrected by §14C and MC-2; §2.3's own sentences are left as
+ratified.
+
 ---
 
 ## 15. Pre-implementation protocol
@@ -729,6 +1726,10 @@ Ratifying the document ratifies these.
 | P30 | Criteria values Manager cannot normalize are stored verbatim and become an overridable mismatch, never a rejected Scanner request | the raw draft allowed nested JSON; rejecting would let one odd rule block all demand |
 | P31 | Deleting an item removes its assignment; it does not start deleting tasks | the owner's "the assignment follows", kept inside this project's perimeter |
 | P32 | Concurrent Scanner/task writers are serialized on the assignment; a Scanner report that arrives while the item is back in progress is ignored and not remembered | follows from §5 rule 1 and §8.2 as ratified; stated so nobody builds a queue or a replay buffer |
+| P33 | Repair records carry no FK to the thing they corrected, are never edited or soft-deleted, survive the deletion of their target, and are removed only by the workspace reset | an audit trail that disappears with the row it explains is no trail; round 7 fold |
+| P34 | An inline repair writes a record only for the columns that were actually wrong (`stored + delta ≠ recomputed`), not for all three counters | the owner asked for a trace of defects (9a), not a log of every recomputation |
+| P35 | The consistency report is an endpoint for ADMIN and MANAGER (`GET …/stock-report/consistency`), beside the repair command | card 9b's own story: "a manager sees it in the consistency report and presses repair"; the round-6 contract left the exposure to the planner |
+| P36 | Deleting a board row whose counters are not 0 after its assignments are removed sets them to 0 with a repair record instead of failing | the same self-heal rule (D1) applied to the one other place a drifted number could block a user |
 | P21 | `is_stock_assignment` is true while any non-deleted assignment exists, including terminal ones | raw §31 sets it on create and clears it on delete only |
 
 ---
@@ -738,6 +1739,17 @@ Ratifying the document ratifies these.
 ### Open
 
 None.
+
+### Closed (round 7 — mechanism-inventory cards)
+
+| Card | Owner answer | Folded into |
+|---|---|---|
+| 9 counts already wrong when a task moves | **C** (the owner's own branch): repair first, then let the action through; the repair tool ships now | §14D D1, §5A MC-1, §6A MC-5, §12 item 11, §12A, C10, C38 |
+| 9a does an automatic repair leave a trace | A — a permanent record and a warning | §14D D2, §12A |
+| 9b manual repair and who runs it | A — ADMIN/MANAGER command; signatures reported only | §14D D2, §12A, §9E |
+| 10 / 10a category change through a new task | A / A — the task creation is refused | §14D D3, §5B MC-14, C30 |
+| 11 old demand message arriving late | A — no stamp; v1 handoff stands | §14D D4, §8B MC-9, C37 |
+| 11a slow first call | A — Manager time limit 5 s | §14D D5, §8B MC-9 |
 
 ### Closed (rounds 1–2)
 
@@ -863,6 +1875,54 @@ None.
   outbound worker retries a job with the payload frozen at enqueue time. The v1 handoff asks
   Scanner to build the payload at send time and to re-push the full set periodically; whether
   Manager should additionally defend itself (a sent-at stamp) is an open mechanism question.
+
+**Round 6 — 2026-09-18 — mechanism-inventory gate (reviewer role; intention at `2ee6f5b`).**
+- **Twenty mechanism contracts** written as lettered sections: §4A (MC-3, MC-4), §4B (MC-15,
+  MC-17), §5A (MC-1, MC-11, MC-16), §5B (MC-2, MC-14), §6A (MC-5, MC-6), §7A (MC-7), §8B (MC-8,
+  MC-9, MC-10), §9C (MC-12, MC-13), §9D (MC-19), §9E (MC-18), §12A (MC-20 plus the workspace-reset
+  addition). §13A registers every contract against M1–M9, with MC-19 as a mechanism contract.
+  Nothing is renumbered, and no earlier sentence is edited.
+- **§14C, the supersession ledger:** 37 rows (C1–C37) naming which sentence ships. Three
+  absence claims of §2.3 were measured false against source (C5 `stalled` is creatable; C6 a
+  terminal task returns to `pending` when its last step is removed; C7 `ready` is creatable). One
+  caller list is incomplete (C8). The §6.2 floor conflicts with §4.1's check (C10). B6 missed a
+  second writer of an item's category (C30).
+- **Aligned with the published v1 Scanner handoff** (`2ee6f5b`): no v1 field is changed. The
+  processed `reason` codes (C26) and card 11's option B would each ship as a v2 file at closeout.
+- **Three owner cards opened (9, 10, 11)**, at the top of this document and in §17. No contract
+  here changes ratified product behaviour, so the status stays **RATIFIED**. Card 11 → B *would*
+  be a material change and re-open the gate. The planner starts on nothing until the three are
+  answered.
+- Unilateral resolutions (marked *unilateral* in §14C) are listed for ratification in
+  `handoffs/reviewer/2026-09-18_inventory_mechanism_inventory_handoff.md`.
+
+**Round 7 — 2026-09-19 — shaper folds the owner's answers to the mechanism-inventory cards.**
+- Source: the inventory handoff's "Final owner answers" table (cards 9 → C, 9a, 9b, 10, 10a, 11,
+  11a → A). Recorded with the owner's words in the new **§14D** (D1–D5), plus D6 (demand webhook
+  is set-based and synchronous — the owner's expectation from the shaper session).
+- **Material change → the gate re-opened.** Card 9 → C reverses the round-3 decision "repair mode
+  deferred": self-healing repair, the repair-record table and the manual repair command are now
+  must-ship (§12 item 11). Status `RATIFIED → READY_FOR_RATIFICATION` (no card is open, so the
+  document does not rest in COLLABORATING). Only the owner writes RATIFIED.
+- Contract text that waited on a card was rewritten to the chosen branch: §5A MC-1 (guarded
+  UPDATE + inline repair + second trigger on row deletion), §6A MC-5 (no floor), §8B MC-9 (no
+  stamp; 5 s time limit with a rule-10 instrument), §5B MC-14 last row. §9E MC-18 grew from 28 to
+  36 cells. §12A gained the repair contract and the repair-record table; the reset gained a phase.
+- Ledger: **M1's wording gained one sentence** (self-heal observable; "a correct system writes no
+  repair record"). No ID added, moved or merged. §13A rows MC-1, MC-5, MC-9, MC-14, MC-20 updated.
+- §14C: C10, C30, C37 resolved; C38–C40 added. §16: P33–P36 added (mine, strikeable). §17: no open
+  cards.
+- The published v1 Scanner handoff is untouched. Closeout still owes Scanner one additive note
+  (keep Manager's demand time limit below the sender's client timeout) and the v2 file for the
+  processed `reason` codes (C26).
+- The inventory gate's 21 unilateral resolutions (U1–U21) are put to the owner with this
+  re-ratification.
+
+**Re-ratification — 2026-09-19 (owner, David).** Owner's words: "perfect, i approve it, and you
+can commit it also." Covers round 7 in full: §14D D1–D6, the rewritten MC-1/MC-5/MC-9/MC-14/MC-18
+and the §12A repair contract, M1's added sentence, P33–P36 (none struck), and U1–U21 (none
+struck). Status → **RATIFIED**. Next gate: the mechanism-inventory re-check
+(`prompts/reviewer/2026-09-19_inventory_mechanism_inventory_recheck.md`).
 
 ---
 

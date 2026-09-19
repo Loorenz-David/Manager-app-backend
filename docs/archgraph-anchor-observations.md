@@ -1023,3 +1023,19 @@ Related: [[project-remaining-production-pressure]], [[project-task-budget-overru
 2. New evidence written: **0** `archgraph_apply_changes` calls; graph used read-only (`archgraph_status`, three `archgraph_search_nodes`). No spans, no symbols — nothing to classify.
 3. Re-anchor activity: none. Status reported 8 stale nodes and 14 pending reviews; the session neither touched nor commented on them.
 4. Review findings about location: none.
+
+## 2026-09-18 — mechanism-inventory, stock_report (round 6)
+
+1. Session type: mechanism-inventory gate (a reviewer-role document session; no code).
+2. New evidence written: **0** `archgraph_apply_changes` calls. The graph was used read-only (`archgraph_status`, one `archgraph_get_node` on `helper-task-state-transitions`, one `archgraph_search_nodes`). Nothing to classify.
+3. Re-anchor activity: none. Status reported 8 stale nodes and 14 pending reviews, untouched.
+4. Review findings about location: none. The session noted a *content* discrepancy on `helper-task-state-transitions` (the "only way into READY" claim is contradicted by `create_task`; incoming `calls` edges incomplete) and recorded it in its handoff instead of the graph, per its prompt. It did not concern line positions.
+5. Closing-work language: none about anchors.
+
+## 2026-09-19 — intention-shaper, stock_report round 7 (fold + re-ratification)
+
+1. Session type: intention shaping — folding the mechanism-inventory owner answers; a Scanner handoff (v1) was published earlier in the same session. No implementation, no review.
+2. New evidence written: **0** `archgraph_apply_changes` calls; the graph was not queried in this stretch. Nothing to classify.
+3. Re-anchor activity: none.
+4. Review findings about location: none. Source citations in the fold are `file:function` or `file:line` in prose only (e.g. `outbound-webhook-worker.ts:DISPATCH_TIMEOUT_MS`, carried from the inventory handoff), never graph anchors.
+5. Closing-work language: none about anchors.
