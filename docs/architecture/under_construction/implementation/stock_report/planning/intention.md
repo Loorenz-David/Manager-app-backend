@@ -2202,15 +2202,18 @@ conflicts with round-6 text are ledgered as §14C C41–C45.
   demand call that runs past about 5 seconds"), and the rest is mechanism. So the gate is not
   re-opened and no card is raised.
 
-**Scanner handoff v2 — 2026-09-19 (shaper, at the owner's request; no semantic change, gate not reopened).**
-- Published `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` early, so the Scanner
-  sender being built in parallel has it now. It is additive over v1 (v1 untouched): the closed
-  processed `reason` codes (C26, MC-10), the 5 s demand limit and its 503/500 answers (MC-9 D5),
-  both MC-9 sender notes (keep the client timeout above Manager's; `isRetryableError` drops its own
-  timeout — re-check X1), "no sent-at field" (D4), and the U6/U7 clarifications (category match,
-  unknown fields ignored).
-- Closeout therefore no longer owes the C26 v2 or the MC-9 sender notes; it owes a v3 only if a
-  later phase changes the wire contract.
+**Scanner handoff revised before handover — 2026-09-19 (shaper, at the owner's request; no semantic change, gate not reopened).**
+- The owner had not yet handed the v1 file to Scanner, so a short-lived v2 was withdrawn and its
+  content folded into `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v1_20260918.md` itself. The
+  v1 file becomes immutable on handover; later changes ship as v2.
+- Folded in: the closed processed `reason` codes (C26, MC-10) and article-number matching; the 5 s
+  demand limit with its 503/500 answers (MC-9, D5); both MC-9 sender notes (keep the client
+  timeout above Manager's; `isRetryableError` drops its own timeout, re-check X1); "no sent-at
+  field", so building the payload at send time is required (D4); the U6/U7 clarifications
+  (category match, `Serving Trolleys` absent in Manager, unknown fields ignored).
+- Closeout therefore no longer owes the C26 v2 file or the MC-9 sender notes. §14C C26's "ships as
+  a v2 handoff file at closeout" and MC-9's "for the closeout handoff" are satisfied by this
+  revision.
 
 ---
 

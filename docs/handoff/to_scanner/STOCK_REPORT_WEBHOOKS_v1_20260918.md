@@ -3,10 +3,11 @@
 ```
 from:      Manager backend (ManagerBeyo-app/backend) — Stock Report project
 to:        Scanner backend (Item-Scanner-Shopify/apps/backend)
-version:   v1 — 2026-09-18
-status:    PUBLISHED. This file is never edited. A change to anything below ships as a new file,
-           STOCK_REPORT_WEBHOOKS_v2_<date>.md, which lists what changed.
-authority: Manager intention, §8, §8A, §14B
+version:   v1 — drafted 2026-09-18, revised 2026-09-19 before handover (mechanism-inventory results)
+status:    PUBLISHED on handover. From the moment it is handed over this file is never edited; a
+           change to anything below ships as a new file, STOCK_REPORT_WEBHOOKS_v2_<date>.md, which
+           lists what changed.
+authority: Manager intention, §8, §8A, §8B (MC-8, MC-9, MC-10), §14B, §14D
            (docs/architecture/under_construction/implementation/stock_report/planning/intention.md)
 receiver:  NOT BUILT YET. Manager implements these two endpoints in parallel with you.
            Build against this document; there is nothing to call today.
@@ -23,11 +24,14 @@ the second to clear finished work off it. Manager never calls Scanner for either
 | Stable — build on it | May tighten before Manager ships (a v2 file will say so) |
 |---|---|
 | Both paths, method, header name | The exact text inside `error` strings |
-| Request body shapes and field names | The set of `reason` strings on the processed webhook (treat as free text for now) |
-| Units, summed across locations, absolute values | Whether Manager adds an optional sent-at field to the demand entry (see §6.3) |
+| Request body shapes and field names | |
+| Units, summed across locations, absolute values | |
 | `outcome` values: `applied`, `category_not_found`, `resolved`, `ignored` | |
+| The processed `reason` codes (§4.3) | |
 | Status code classes: 2xx / 401 / 422 / 5xx | |
 | Replays are harmless | |
+| Manager's 5-second limit on demand calls (§3.5) | |
+| No send-time / sent-at field — decided, not coming (§6.3) | |
 
 ---
 
@@ -40,10 +44,11 @@ the second to clear finished work off it. Manager never calls Scanner for either
   `LOCATION_TRACKER_API_KEY`, the Bearer key Manager uses to call Scanner's `/api/manager-app`.
   The owner generates it and gives the same value to both applications.
 - Manager compares it in constant time, before reading the body. Missing header, wrong value, or
-  a Manager that has not been configured yet → **401**, nothing read, nothing written.
+  a Manager that has not been configured yet → **401**, nothing read, nothing written. Every 401
+  has the same body, whatever the cause.
 - Manager maps the key to one Manager workspace by its own configuration. **Scanner sends no
   workspace, shop or tenant id.** One key = one Scanner shop = one Manager workspace.
-- No signature over the body, no timestamp header, no IP allow-list in v1.
+- No signature over the body, no timestamp header, no IP allow-list.
 
 ---
 
@@ -72,9 +77,20 @@ POST {MANAGER_BASE_URL}/api/v1/location-tracker/webhooks/stock-demand
 
 | Field | Type | Rule |
 |---|---|---|
-| `itemCategory` | string | The category **name** exactly as `LocationStock.itemCategory` holds it. Manager matches it case-insensitively against its own category names. Manager never creates a category. |
+| `itemCategory` | string | The category **name** exactly as `LocationStock.itemCategory` holds it. See 3.1.1 for how Manager matches it. Manager never creates a category. |
 | `properties` | object | The rule's criteria — send `LocationStock.properties` (the normalized `StockCriteria`: key → sorted lowercase string list, or `null` for "any value"). `{}` is valid: a category-only rule. Send the derived keys (`wood_group`, `drawers_range`) and the `quantity` key as they are; Manager mirrors your matcher for them. |
 | `quantityRequested` | integer ≥ 0 | **Units** still missing for this rule — see 3.2. |
+
+A field Manager does not know, in an entry, is **ignored**, not rejected. You may add fields for
+your own use without breaking the call.
+
+#### 3.1.1 Category matching
+
+Manager first looks for a category whose name equals `itemCategory` **exactly**. Only if there is
+none does it compare case-insensitively, and only a **single** match counts: several case-variant
+matches read as `category_not_found` rather than an arbitrary pick. Scanner's category names match
+Manager's seeded names exactly, with one exception known today: **`Serving Trolleys` does not
+exist in Manager** and will come back `category_not_found` until someone creates it there.
 
 ### 3.2 The four rules that make the number right
 
@@ -93,9 +109,9 @@ How "missing" is computed from thresholds and current quantity is Scanner's deci
 
 ### 3.3 Identity — what makes two entries "the same rule" to Manager
 
-Category (case-insensitive) + `properties` after Manager normalizes them: key order ignored; a
-bare string treated as a one-element list; list values trimmed, lowercased, de-duplicated and
-sorted. So `{"wood_group":["Teak","Dark"]}` and `{"wood_group":["dark","teak"]}` are one rule.
+Category + `properties` after Manager normalizes them: key order ignored; a bare string treated as
+a one-element list; list values trimmed, lowercased, de-duplicated and sorted. So
+`{"wood_group":["Teak","Dark"]}` and `{"wood_group":["dark","teak"]}` are one rule.
 **Two entries in one request that resolve to the same identity reject the whole request (422)** —
 that is the guard against the per-location mistake of 3.2 rule 1.
 
@@ -116,21 +132,44 @@ that is the guard against the per-location mistake of 3.2 rule 1.
 }
 ```
 
-- One result per entry, **in request order**, echoing `itemCategory` and `properties`.
+- One result per entry, **in request order**, echoing `itemCategory` and `properties` as you sent
+  them.
 - `applied` — Manager now holds this number (creating the board row if it was new).
-- `category_not_found` — Manager has no category of that name. **That entry wrote nothing; every
-  other entry was still applied.** Surface it (log / alert / admin view): the fix is a human one,
-  on the Manager side, and the entry will succeed on the next push after that.
+- `category_not_found` — Manager has no category of that name (3.1.1). **That entry wrote nothing;
+  every other entry was still applied.** Surface it (log / alert / admin view): the fix is a human
+  one, on the Manager side, and the entry will succeed on the next push after that.
 
 | Status | Meaning | Anything written? | Retry? |
 |---|---|---|---|
 | 200 | accepted; per-entry outcomes in the body | yes, the `applied` ones | — |
 | 401 | key missing/wrong, or Manager not configured | no | not until configuration is fixed |
-| 422 | malformed body (not an array, wrong types, negative number, `properties` not an object) **or** duplicate identity | **no — the whole request is rejected** | no; it is a sender bug |
-| 5xx / timeout / connection error | Manager fault | unknown — treat as not delivered | **yes** — replay is harmless |
+| 422 | malformed body (not an array, empty array, wrong types, negative number, `properties` not an object) **or** duplicate identity | **no — the whole request is rejected** | no; it is a sender bug |
+| 503 | the request ran past Manager's 5 s limit (3.5) | **no** | **yes** — replay is harmless |
+| 500 | a single database statement or lock wait ran past the limit, or any other Manager fault | **no** | **yes** |
+| timeout / connection error | — | treat as not delivered (see 3.5) | **yes** |
 
 Failure body: `{"error": "<human-readable message>", "ok": false}`. The message is for logs; do
 not parse it.
+
+### 3.5 Manager's 5-second limit
+
+Manager will **not commit a demand request later than 5 s after it arrived.** Past that, it rolls
+the whole request back — nothing is written — and answers 503 (or 500 if one database statement
+or lock wait was the one that ran over). Both are 5xx: retry.
+
+Why: a demand call still running inside Manager after you gave up on it could otherwise commit
+*after* your fresher retry and write an old number back (6.3). The limit sits **below your
+worker's 8 s client timeout** (`DISPATCH_TIMEOUT_MS = 8_000`), so a call you abandoned can no
+longer finish later.
+
+What that asks of you:
+- **Keep your client timeout above Manager's limit.** If the stock-demand sender uses a timeout
+  other than 8 s, tell the Manager side; Manager's limit (a setting, default 5 s) must stay below
+  yours.
+- **A timeout on your side means "not applied".** Rarely, a request can still outlive your 8 s:
+  Manager checks its limit just before committing, so it never commits late, but it may be late to
+  *answer*. In that case Manager wrote nothing and you must **retry** — see 6.6: today your worker
+  does not.
 
 ---
 
@@ -152,7 +191,11 @@ know which.
 
 `article_number` — string, sent **exactly as stored**, internal spaces included. It is the only
 identifier Manager accepts here (not `sku`). An item with no article number cannot be reported;
-Manager's users clear those by hand.
+Manager's users clear those by hand. Unknown fields in an entry are ignored.
+
+**How it is matched:** leading and trailing whitespace is trimmed; everything else is compared
+**exactly and case-sensitively** — inner spaces, slashes and leading zeros included.
+`"04 2 001 0034"` matches only an item stored as exactly `04 2 001 0034`. Do not reformat it.
 
 ### 4.2 What Manager does
 
@@ -173,7 +216,7 @@ it waits on Manager's board until a user removes it.
   "data": {
     "results": [
       { "article_number": "0000612",       "outcome": "resolved", "reason": null },
-      { "article_number": "04 2 001 0034", "outcome": "ignored",  "reason": "no open assignment" }
+      { "article_number": "04 2 001 0034", "outcome": "ignored",  "reason": "no_open_assignment" }
     ]
   },
   "ok": true,
@@ -181,9 +224,19 @@ it waits on Manager's board until a user removes it.
 }
 ```
 
-One result per entry, in request order. `reason` is informational free text in v1. Status codes
-and retry rules are the table in 3.4; `category_not_found` does not exist here, and duplicate
-article numbers in one request are not an error.
+One result per entry, in request order. `reason` is one of these, and only these (the first that
+applies, in this order):
+
+| `outcome` | `reason` | Meaning |
+|---|---|---|
+| `ignored` | `item_not_found` | No Manager item has that article number. |
+| `ignored` | `no_open_assignment` | The item exists but is not on the board (never assigned, or already closed — this is what a replay reads). |
+| `ignored` | `not_awaiting` | The item is on the board but Manager's work on it is not finished yet. Not remembered (4.2): report it again after the work is done. |
+| `resolved` | `null` | Manager closed the item's board assignment. |
+
+The same article number twice in one request is not an error: the second is evaluated after the
+first has taken effect, so it reads `no_open_assignment`. Status codes and retry rules are the
+table in 3.4 (without 503 and `category_not_found`, which are demand-only).
 
 ---
 
@@ -192,7 +245,7 @@ article numbers in one request are not an error.
 - **Both webhooks are idempotent.** Sending the same request twice leaves Manager exactly as
   sending it once. Retry freely on 5xx, timeouts and connection errors.
 - **Do not retry 401 or 422** — nothing will change until a human does.
-- No batch-size limit is defined in v1. Keep requests reasonable (hundreds of entries, not tens of
+- No batch-size limit is defined. Keep requests reasonable (hundreds of entries, not tens of
   thousands); one request per reconcile is the expected shape.
 - A request is processed in one Manager transaction: a 5xx means none of it was applied.
 
@@ -215,7 +268,8 @@ warning line each. Make 401 loud.
 Demand is absolute, so a **stale request that lands after a fresh one leaves the wrong number in
 Manager until the next push for that rule**. The existing worker makes this possible: the payload
 is frozen when the job is enqueued, a failed job is retried later with that old payload, and the
-queue runs five jobs at once. Do both of these:
+queue runs five jobs at once. Manager does **not** defend against this with a sent-at stamp (the
+owner decided against it), so both of these are **required**:
 1. **Build the demand payload when the job runs, not when it is enqueued** — the job carries
    "push demand for shop X", and the worker reads current state just before sending. A retry then
    sends fresh numbers by construction.
@@ -224,7 +278,7 @@ queue runs five jobs at once. Do both of these:
    lost. This is the cheapest correctness you can buy.
 
 Avoid running two demand pushes for the same shop concurrently (a per-shop job id or concurrency 1
-for this event type).
+for this event type). Manager's side of the same hazard is its 5 s limit (3.5).
 
 ### 6.4 New event types
 `OutboundEventType` has only `item_placed`. Demand needs a new type (e.g. `stock_demand`);
@@ -239,6 +293,40 @@ when they put an item on a board row it does not satisfy. **Editing either table
 without the same edit in Manager makes the two applications disagree.** `wood-groups.ts` is marked
 provisional — tell the Manager side when it changes.
 
+### 6.6 The worker does not retry its own timeout — fix needed
+`src/workers/outbound-webhook-worker.ts:14-25`, `isRetryableError`, decides retryability by
+searching the error **message** for `"TimeoutError"`. But the timeout from
+`AbortSignal.timeout(DISPATCH_TIMEOUT_MS)` rejects with:
+
+```
+error.name    === "TimeoutError"
+error.message === "The operation was aborted due to timeout"
+```
+
+The message never contains `"TimeoutError"`, so the check never matches. **A delivery that times
+out is treated as non-retryable: the job completes and the push is lost.** For stock demand that
+rule's number stays stale in Manager until the next full re-push (6.3 point 2). The same bug
+affects the existing `item_placed` webhook. Reproduced on Node 22.22.3 (the repo pins no Node
+version). Classify by name:
+
+```ts
+const isRetryableError = (error: unknown): boolean => {
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "unknown");
+  return (
+    message.includes("fetch failed") ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("ECONNRESET") ||
+    message.includes("socket hang up")
+  );
+};
+```
+
+Test it by pointing a target at a server that never answers: the job must be retried, not
+completed.
+
 ---
 
 ## 7. A checklist for the Scanner implementation
@@ -246,8 +334,13 @@ provisional — tell the Manager side when it changes.
 - [ ] One shared secret configured on both sides; sent as `x-api-key`.
 - [ ] Demand aggregated per (`itemCategory`, `properties`) across all locations, in units.
 - [ ] Zero sent explicitly for satisfied and for deleted rules.
-- [ ] Demand payload built at send time; full re-push on a schedule and after reconcile.
+- [ ] Demand payload built at send time (**required**); full re-push on a schedule and after reconcile.
 - [ ] Demand response body read; `category_not_found` surfaced to a human.
 - [ ] 401 alarms; 422 treated as a bug, not retried; 5xx/timeouts retried.
+- [ ] `isRetryableError` recognises the timeout by `error.name` (6.6); verified against a
+      non-answering target.
+- [ ] Stock-demand client timeout stays above Manager's 5 s limit (8 s today).
 - [ ] Processed webhook sends `article_number` verbatim; items without one are skipped knowingly.
+- [ ] If the processed `reason` is used, it is matched against the four codes of 4.3; a
+      `not_awaiting` item is reported again once Manager's work is done.
 - [ ] A change to `WOOD_GROUPS` / `DRAWER_RANGES` is communicated to Manager.
