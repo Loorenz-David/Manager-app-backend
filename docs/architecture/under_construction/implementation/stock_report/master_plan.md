@@ -5,8 +5,9 @@ state: PLANNED — plan set written 2026-09-19 (planner, planning-0) against the
        then folded (planner, planning-1, same day) to the intention as **RATIFIED at round 9,
        committed c231dfb**: round 8 (§14E, the Scanner delete-row webhook → new phase 13A) and
        round 9 (§14F, the terminal state `resolved_early` → phases 1, 3, 4, 5, 8, 9, 10, 11, 13, 14).
-       The gate is closed; the plan set awaits the owner's review, then the coordinator dispatches
-       phase 1's projection.
+       Plan set committed 67dd815 with the owner's rulings. **Execution model changed by the owner
+       (2026-09-19): phases stay the units of specification and verification; four batches (A–D)
+       are the units of implementation and review — §3A, §4A.** Batch A implementation prompt ready.
 date: 2026-09-19
 tree: c231dfb (clean except this untracked plan set and the orchestrator's observation log)
 phases: 15 planned (1–13, 13A, 14) — see §4 and §7. The owner's non-binding suggestion was 6; the
@@ -57,6 +58,10 @@ to make it agree with an upstream one.
 
 ## 3. Roles and session workflow
 
+> **Superseded where it conflicts by §3A** (owner, 2026-09-19): no per-phase projection agent, no
+> per-phase Codex or review session, no per-phase approval gate, no agent launched by the
+> coordinator. The text below is kept as the planning-time record; §3A governs execution.
+
 Orchestrated mode (owner-set, 2026-09-19): the **coordinator** (`pipeline-coordinator`) compiles
 prompts and runs the tracker; the **implementer is Codex** in a fresh `codex exec` session per
 round, working only from the phase file's Read-first list and the compiled prompt (complex phases
@@ -77,28 +82,128 @@ mechanisms, and every phase whose fixtures are externally derived under charter 
 waivable with a recorded one-line reason for the others. The self-retiring rule does not apply to
 the rule-17 phases (2, 6, 7, 9, 13A).
 
+## 3A. Batch execution model (owner, 2026-09-19) — governs execution; wins over §3, §7.2's projection column and §7.3
+
+**Principle.** Phases remain the units of specification and verification; **batches are the units
+of implementation and review.** The fifteen phase plans are unchanged and authoritative: every
+criterion row, trace cell, named mutation, dependency, contract and test obligation stands. Batching
+changes execution granularity only.
+
+**Batches** (validated against §7.2: every dependency points to an earlier batch or to an earlier
+phase of the same batch; no adjustment was needed):
+
+| Batch | Phases, in implementation order | Depends on (batch APPROVED) | Rows / criteria | Codex model |
+|---|---|---|---|---|
+| A — Foundation | 1 → 2 → 3 | — | 170 / 22 | terra, medium (phase 3 is complex) |
+| B — Core engine and demand | 4 → 5 → 6 → 7 | A | 172 / 25 | terra, medium |
+| C — Assignment lifecycle and sync | 8 → 9 → 10 → 11 | A, B | 169 / 30 | terra, medium |
+| D — Completion surfaces | 12 → 13 → 13A → 14 | A, B, C | 104 / 21 | terra, medium |
+
+Inside a batch the order above satisfies every intra-batch edge (2←1, 3←1; 5←4, 7←6; 9←8, 10←9,
+11←8; 13←12, 13A←13, 14←13A). 6 may run before 4–5, and 11 before 9–10, but the listed order is the
+default because plans 11 and 13 build `resolved_early` fixtures through `PR` once 9 exists (§7.2 note).
+
+**Roles.**
+- **Orchestrator** (the Claude coordinator session): maintains this master plan and the trackers
+  (§4, §4A); validates dependencies; performs the **batch projection** itself; compiles one Codex
+  prompt per batch and one reviewer prompt per batch; routes review findings into one focused fix
+  prompt per round; decides when the next batch may start; runs the approval gate commit and the
+  final closeout. It **launches no agent of any kind** (no Codex, reviewer, projectionist or planner)
+  and neither implements nor reviews.
+- **Codex** (implementer): one fresh session per batch implementation, one per fix round. **The
+  owner launches it by hand** with the orchestrator's prompt.
+- **Independent reviewer** (a Claude session with `plan-reviewer`, never Sonnet): one session per
+  batch review or re-review, **launched by the owner** with the orchestrator's prompt. It shares no
+  context with the implementer or the orchestrator.
+- **Owner**: carries artifacts between sessions — orchestrator → owner → Codex → owner →
+  orchestrator → owner → reviewer → owner → orchestrator — and decides exceptional questions.
+
+**Batch projection (replaces per-phase round-0 projection).** Before compiling a batch prompt the
+orchestrator reads the batch's phase plans and checks only: cross-phase contradictions, dependency
+problems, integration hazards, externally derived assumptions still unverified (rule 17), locking
+and concurrency hazards, silent-failure risks, anything that makes handing the whole batch to Codex
+unsafe. It regenerates no criteria and writes no projection artifact; its result is a short list
+of notes placed in the batch prompt and a one-line entry in §4A. §7.2's per-phase `projection:
+mandatory / not waivable` flags now mean **"the batch projection must look at this phase's rule-17
+facts and name how the batch prompt settles them"**. The six §14E questions (plan 13A §7) are
+checked in batch D's projection.
+
+**Implementation inside a batch.** Codex implements the phases in order and does not return control
+at a phase boundary. A phase boundary triggers no projection, no review and no owner gate. At each
+phase's end Codex runs that phase's L1 tests and its named mutations, and may make a
+`CHECKPOINT (not approved): phase <n>` commit for recoverability — **a checkpoint is not a gate.**
+Codex stops early only for a genuine blocker: a contradiction between plans, an impossible
+criterion, a missing prerequisite, an unplanned schema need, a contract conflict, or a semantic
+question only the owner can answer (a decision card). Ordinary implementation problems are solved
+in the session.
+
+**Dependency reading inside a batch.** A plan header's `depends_on: N (APPROVED)` means: if N is in
+an earlier batch, that batch is APPROVED; if N is in the same batch, N is IMPLEMENTED earlier in the
+same session with its L1 tests green and its named mutations run. The executor's gate check reads
+§4A (predecessor batches APPROVED, this batch `IMPLEMENTATION_PROMPT_READY` or `IMPLEMENTING`), not
+per-phase APPROVED rows.
+
+**Handoffs.** Codex returns **one batch handoff** with a section per phase (criteria rows
+implemented, test ids, test results, the named-mutation ledger with `executed == declared`, judgment
+calls, deviations) and a batch section (cross-phase integration evidence, contract compliance,
+locking evidence, the combined L2 and L4 results against the §10 baseline, the commits, blockers).
+A generic "batch implemented successfully" is not a handoff. Each phase plan's Review log still gets
+its own entry.
+
+**Review.** One reviewer session per batch evaluates **every phase against its own criteria rows**
+(a per-row verdict table, `P<n> C<k>(<x>) PASS/FAIL/NOT_VERIFIED`) and the batch as a whole:
+contract compliance, cross-phase integration, lock/transaction invariants, workspace isolation,
+event semantics, later phases breaking earlier assumptions, and perimeter escape. Findings route
+into **one** focused Codex fix prompt per round, grouped by cause; the re-review is delta-scoped.
+**Owner stop kept:** the first fix round runs on the orchestrator's prompt; a re-review that still
+returns CHANGES_REQUESTED stops for the owner's ruling per finding before any second fix round.
+Findings that only ask for an implementation-coupled test are backlog notes (charter rule 2).
+
+**Evidence (unchanged rigor, less repetition).** L1 per test file as it lands; each phase's named
+mutations at the scope its plan requires; concurrency rows as written. Expensive runs are not
+repeated at every internal phase boundary when the next phase extends the same code, unless a
+criterion requires that evidence at that point. At the batch boundary Codex runs the batch's L2
+perimeter and **one L4** full run, diffing failure IDs against §10's 21-ID baseline in both
+directions; the reviewer consumes that stamp when its tree matches. The final L4 and baseline
+comparison at closeout stay.
+
+**States.** Batch (§4A): `BATCH_NOT_STARTED → PROJECTED → IMPLEMENTATION_PROMPT_READY → IMPLEMENTING
+→ IMPLEMENTED → REVIEW_PROMPT_READY → REVIEWING → (CHANGES_REQUESTED → FIX_PROMPT_READY →
+IMPLEMENTING → IMPLEMENTED → REVIEW_PROMPT_READY → REVIEWING)* → APPROVED`. Phase (§4): `PENDING →
+IMPLEMENTED` (Codex's handoff shows the phase's rows discharged) `→ VERIFIED` (the batch review
+passed every row of the phase). A phase is never APPROVED on its own; it becomes VERIFIED when its
+batch is APPROVED. Only the orchestrator writes tracker rows, from the handoffs it consumes.
+
+**Git and closeout per batch.** Codex commits only its perimeter (`CHECKPOINT (not approved): …`),
+never pushes. At batch APPROVED the orchestrator, with the owner's authorization, makes the approval
+gate commit and moves the batch's spent prompts and consumed handoffs to `archive/batch_<X>/`; the
+owner may compact then. Prompts live in `prompts/implementer/` and `prompts/reviewer/`, handoffs in
+`handoffs/implementer/` and `handoffs/reviewer/`, named `…batch_<X>_<role>_<n>.md`.
+
 ## 4. Progress tracker
 
 One row per phase, newest state first; earlier states are appended below as *superseded* rows.
-Only the actor named for a transition writes its row.
+Only the actor named for a transition writes its row. **Since §3A (2026-09-19) phase rows use
+`PENDING → IMPLEMENTED → VERIFIED` and are written only by the orchestrator; the batch tracker is
+§4A.**
 
 | Phase | Scope (one line) | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Schema, migration, reset phases, enums (six assignment states), state map, criteria normalization, settings, test kit | NOT_STARTED | 2026-09-19 | planner | rows 53, criteria 7; complex: no (round 9: +5 rows, +1 criterion) |
-| 2 | Matcher mirror: Scanner tables, bag builder, evaluation, hand-walk fixtures | NOT_STARTED | 2026-09-19 | planner | rows 75, criteria 7; complex: no; projection mandatory (rule 17) |
-| 3 | Consistency check, manual repair, repair records, task-flag writer, their two endpoints | NOT_STARTED | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (advisory lock, renumber, multi-kind recomputation) (round 9: +1 row) |
-| 4 | Transition operation: moves over six states, unit counters, inline self-heal, removal, stamps, payloads | NOT_STARTED | 2026-09-19 | planner | rows 62, criteria 7; complex: yes (guarded statement, lock order) (round 9: +13 rows) |
-| 5 | Goal credit: the MC-5 table incl. `resolved_early`, goal self-heal, the worked sequence | NOT_STARTED | 2026-09-19 | planner | rows 22, criteria 3; complex: no (round 9: +5 rows) |
-| 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | NOT_STARTED | 2026-09-19 | planner | rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
-| 7 | Demand endpoint: key auth, body validation, duplicates, identity invariant over real bytes, envelope | NOT_STARTED | 2026-09-19 | planner | rows 52, criteria 7; complex: no |
-| 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | NOT_STARTED | 2026-09-19 | planner | rows 65, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows) |
-| 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | NOT_STARTED | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows) |
-| 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | NOT_STARTED | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
-| 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | NOT_STARTED | 2026-09-19 | planner | rows 27, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row) |
-| 12 | Priority, dense ordering, history records for user actions, the list endpoint | NOT_STARTED | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
-| 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | NOT_STARTED | 2026-09-19 | planner | rows 18, criteria 5; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten) |
-| 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | NOT_STARTED | 2026-09-19 | planner | rows 36, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable |
-| 14 | Frontend handoff and domain docs (thin; refine at prompt time) | NOT_STARTED | 2026-09-19 | planner | rows 5, criteria 2; complex: no (rounds 8–9: +1 row; depends on 13A) |
+| 1 | Schema, migration, reset phases, enums (six assignment states), state map, criteria normalization, settings, test kit | PENDING | 2026-09-19 | planner | rows 53, criteria 7; complex: no (round 9: +5 rows, +1 criterion) |
+| 2 | Matcher mirror: Scanner tables, bag builder, evaluation, hand-walk fixtures | PENDING | 2026-09-19 | planner | rows 75, criteria 7; complex: no; projection mandatory (rule 17) |
+| 3 | Consistency check, manual repair, repair records, task-flag writer, their two endpoints | PENDING | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (advisory lock, renumber, multi-kind recomputation) (round 9: +1 row) |
+| 4 | Transition operation: moves over six states, unit counters, inline self-heal, removal, stamps, payloads | PENDING | 2026-09-19 | planner | rows 62, criteria 7; complex: yes (guarded statement, lock order) (round 9: +13 rows) |
+| 5 | Goal credit: the MC-5 table incl. `resolved_early`, goal self-heal, the worked sequence | PENDING | 2026-09-19 | planner | rows 22, criteria 3; complex: no (round 9: +5 rows) |
+| 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | PENDING | 2026-09-19 | planner | rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
+| 7 | Demand endpoint: key auth, body validation, duplicates, identity invariant over real bytes, envelope | PENDING | 2026-09-19 | planner | rows 52, criteria 7; complex: no |
+| 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | PENDING | 2026-09-19 | planner | rows 65, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows) |
+| 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | PENDING | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows) |
+| 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | PENDING | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
+| 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | PENDING | 2026-09-19 | planner | rows 27, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row) |
+| 12 | Priority, dense ordering, history records for user actions, the list endpoint | PENDING | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
+| 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | PENDING | 2026-09-19 | planner | rows 18, criteria 5; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten) |
+| 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | PENDING | 2026-09-19 | planner | rows 36, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable |
+| 14 | Frontend handoff and domain docs (thin; refine at prompt time) | PENDING | 2026-09-19 | planner | rows 5, criteria 2; complex: no (rounds 8–9: +1 row; depends on 13A) |
 
 Totals (derived from the plan files by the planner's count script, 2026-09-19, after the round-8/9
 delta): **615 criterion rows in 98 criteria across 15 phases** (planning-0: 532 / 90 / 14). No phase
@@ -109,6 +214,15 @@ exceeds eight criteria (3, 6, 8, 9 sit at eight).
 M6 → 3, 12, 13A · M7 → 7, 9, 13A · M8 → 2, 8, 11 · M9 → 3, 14. Every contract MC-1…MC-20 appears
 in at least one trace cell (MC-10 only in 9; MC-11 in 10 and 13A; MC-20 in 3 and 13A). Amendment
 rows are cited as `§14E En` / `§14F Fn` beside the contract they amend.
+
+## 4A. Batch tracker (§3A)
+
+| Batch | Phases | State | Date | Actor | Note |
+|---|---|---|---|---|---|
+| A | 1, 2, 3 | IMPLEMENTATION_PROMPT_READY | 2026-09-19 | orchestrator | projected, no blocker; prompt `prompts/implementer/2026-09-19_batch_A_implement_1.md`; Codex terra/medium, launched by the owner |
+| B | 4, 5, 6, 7 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for A APPROVED |
+| C | 8, 9, 10, 11 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for B APPROVED |
+| D | 12, 13, 13A, 14 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for C APPROVED; projection checks plan 13A §7 (the six §14E questions) |
 
 ## 5. Contract resolution
 
@@ -387,7 +501,14 @@ coordinator may reorder inside the graph and records the reason in the tracker. 
 reach `resolved_early` in fixtures with `PR` (phase 9) when 9 is APPROVED before them (the default
 order) and with phase 4's `move_assignment` otherwise; each plan says so.
 
+**Since §3A:** "Depends on (APPROVED)" reads per §3A's dependency rule (earlier batch APPROVED, or
+same-batch phase IMPLEMENTED earlier in the session), and the projection column is an instruction
+to the orchestrator's batch projection, not a separate session.
+
 ### 7.3 Gates
+
+> Since §3A: projection, review and approval gates apply **per batch**; the intention gate and
+> the L4-with-baseline-diff stamp are unchanged.
 
 - **Intention gate:** every session's gate check reads `status: RATIFIED` in
   `planning/intention.md` and stops on anything else.
@@ -442,7 +563,10 @@ gate that this section previously recorded as re-opened is **closed**; the plann
   nodes (`helper-task-state-transitions` already has two known ones, inventory handoff §9) are filed
   through `archgraph-discrepancies`, not fixed in passing.
 - **Git:** checkpoint commit at every `IMPLEMENTED`; approval commit at every `APPROVED`; no push,
-  no squash, no history rewrite by any role session.
+  no squash, no history rewrite by any role session. Since §3A: checkpoints may be per phase inside a
+  batch; the approval commit is per batch.
+- **Graph delta since §3A:** one batched `apply_changes` per batch implementation (not per phase),
+  made by Codex at the batch end; fix rounds add a delta only for what they change.
 - **Owner's standing anchor-observation brief:** not a session obligation; the owner maintains it.
 
 ## 9. Standing rules
