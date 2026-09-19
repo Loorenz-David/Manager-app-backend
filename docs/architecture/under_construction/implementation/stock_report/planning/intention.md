@@ -455,16 +455,53 @@ Only drift can cause this: with correct counters `col ≥ q` always holds for th
   quantity_in_progress + :dp >= 0 AND quantity_awaiting + :da >= 0`. The row is already locked
   (lock order step 4) and exists, so **0 rows returned means exactly "a counter would go
   negative"**. There is no clamp (`greatest`) anywhere in this operation.
+  *(Re-check, round 7.)* The WHERE clause is **exactly** `client_id = :id` plus the three guards —
+  no `workspace_id`, `is_deleted` or any other predicate, because either would make 0 rows
+  ambiguous. Workspace and liveness are settled before the statement runs: the step-4 lock selects
+  the row by `client_id`, `workspace_id` and `is_deleted = false`, and the move runs only after
+  step 5's re-read found the assignment non-deleted, which implies a live row (MC-16: a row is
+  never soft-deleted before its assignments). A repair statement that itself returns ≠ 1 row is a
+  programming error (500), never a second repair.
+- *Write order — every path, every target (re-check, round 7).* The operation first writes the
+  assignment's own columns and flushes: its new `state`; for `DELETE`, its soft-delete
+  (`is_deleted`, `deleted_at`, `deleted_by_id` per MC-17); its `updated_*` per MC-17; its credit
+  memory change per MC-5. Only then does it issue the guarded counter UPDATE, and after that the
+  goal-total statement. So the flush precedes any recomputation without a separate branch. The
+  soft-delete belongs to `move_assignment(…, DELETE)`: where MC-14 and MC-16 say "`move_assignment(…,
+  DELETE)`, soft-delete it", the second clause names this same write and is not repeated.
+  **Creation:** the assignment is inserted with `state` = the target and flushed (the insert *is*
+  the own-columns write of `∅ → B`), and the operation is told the move is `∅ → B` by its caller —
+  it never infers `∅` from the stored `state`, which is `NOT NULL`. Creation cannot trip the guard
+  (every delta is `≥ 0`, and a zero delta cannot fail while the DB checks hold), and were it to,
+  the recomputation already counts the new assignment, which is the correct post-move value.
 - *Inline repair, same transaction, same lock.* On 0 rows: the moving assignment's new `state`
-  (or its soft-delete) is written and flushed **first**; then one statement sets all three
+  (or its soft-delete) is already written and flushed (write order above); then one statement sets all three
   counters to their recomputed absolute values — Σ `quantity` of the row's non-deleted assignments
   in that state (the MC-20 `counter_*` definition, the one definition of "correct") — with the
   same RETURNING list. The absolute values replace the delta; the delta is not applied on top.
   The move then proceeds normally (goal effect, flag, events from the RETURNING values).
+- *Why the recomputation cannot race (re-check, round 7; MC-11).* Its inputs are the `state`,
+  `is_deleted` and `quantity` of the row's assignments. `quantity` is immutable, and **every
+  writer of an assignment's `state`, `is_deleted` or credit memory holds that assignment's row
+  lock (step 4) before writing** — creation (MC-13 phase 2), the sync (MC-2 step 5), the Scanner
+  resolve (MC-10), every delete path (MC-14, MC-16), and the manual repair (§12A). Under READ
+  COMMITTED the recomputation statement's snapshot is taken after this transaction holds the lock,
+  so it sees every earlier lock holder's committed writes plus this transaction's flushed ones,
+  and no other writer can change an input until commit. A new writer of those columns that skips
+  the row lock breaks this premise; the MC-11 two-session instrument is its test.
 - *Trace* (card 9a → A): one repair record (§12A) per counter column where
   `stored_before + delta ≠ recomputed`, trigger `inline:<operation>`, `created_by_id` NULL, plus
-  one `logger.warning` per record naming the row, field, stored and recomputed values. At least
-  the column that would have gone negative always qualifies.
+  one `logger.warning` per record naming the row, field, stored and recomputed values **and the
+  move's delta for that column**. At least the column that would have gone negative always qualifies.
+  *(Re-check, round 7.)* `stored_before` is read **in this transaction after the guarded UPDATE
+  returned 0 rows**, by a fresh `SELECT` of the three columns (the row is locked by this
+  transaction, so the read is current) or by the repair statement's own pre-update values. It is
+  never taken from an ORM instance, which is stale after any earlier Core UPDATE of the same row in
+  the same transaction (the row-deletion cascade, the grouped processed update). `delta` is the
+  per-column delta of *this* statement (for a grouped statement, the group's sum, §8B D6 plan).
+  The record's `stored_value` is `stored_before` (§12A: "the value before the operation"), so an
+  inline record may read `stored = recomputed` (the instrument's `0 → 0`): the record's existence,
+  not the pair's difference, is the correction, and the warning's delta carries the magnitude.
 - *Second trigger — row deletion* (P36): MC-16's "counters are asserted to be 0 before the row's
   soft-delete" becomes: after every assignment is moved out, any counter ≠ 0 is set to 0 (its
   recomputed value, since no non-deleted assignment remains) with a repair record,
@@ -479,6 +516,17 @@ Only drift can cause this: with correct counters `col ≥ q` always holds for th
   exactly one repair record with `stored = 0`, `recomputed = 0` for `in_queue` and none for the
   columns that were right, and MC-20 returns `[]`. Planted defect: drop the `>= 0` guard from the
   WHERE → the DB check aborts and the row reddens.
+  *Two more instrument rows (re-check, round 7), each with its own planted defect:*
+  (b) **DELETE write order** — the same planted drift, then the user deletes the queued
+  assignment: `quantity_in_queue` ends 0, one record (`stored 0`, `recomputed 0`), MC-20 `[]`.
+  Planted defect: issue the soft-delete after the counter statement → the recomputation still
+  counts the assignment, `quantity_in_queue` ends 4, MC-20 reports it.
+  (c) **Fresh `stored_before`** — a row with A1 (q = 2) and A2 (q = 3), `A1.client_id <
+  A2.client_id` (the cascade's order), both queued, drift planted
+  as `quantity_in_queue = 3` (truth 5); delete the row. A1's move leaves 1 (no repair); A2's move
+  would write −2 → repair to 0 with one record `stored 1`, `recomputed 0`,
+  `inline:delete_stock_report_item`. Planted defect: read `stored_before` from the row's ORM
+  instance (3, loaded at the lock) → `3 − 3 = 0 = recomputed` → no record, and the row reddens.
 
 **Goal effect:** §6A (MC-5), applied in the same call after the counter UPDATE.
 
@@ -650,6 +698,38 @@ test over the scope above:
 | Category change refused (B6) | `items/update_item.py:_update_item_in_session`, which covers both `update_item` and `task_post_handling/complete_task_post_handling.py`'s call | Item `FOR UPDATE` | when `item_category_id` is in `model_fields_set` **and** differs from the stored value (None-aware): lock, re-compare, then if a non-deleted assignment in `in_queue/in_progress/awaiting` exists for the item → `ConflictError` (409), message "Unassign this item from the stock report before changing its category." Setting the same value is not a change and is not refused |
 | Category change through find-or-create | `items/find_or_create_item.py:find_or_create_item`, existing-item branch (also reached from `tasks/create_task.py:create_task`) | Item `FOR UPDATE` | **owner, cards 10 and 10a → A (round 7; §14D D3):** the same refusal as the row above — when the incoming category differs from the stored one (None-aware) and the item has a non-deleted assignment in `in_queue/in_progress/awaiting`: lock, re-compare, `ConflictError` (409) with the same message. Raised inside `create_task`'s transaction, so **the whole task creation fails and nothing is written** (no task, no step, no item change). The same category, or an item with no active assignment, behaves as today |
 
+**The find-or-create guard, made exact (re-check, round 7).**
+- *Condition:* `"item_category_id" in request.model_fields_set` **and** the incoming value differs
+  from the stored one (None-aware), exactly as in the `update_item` row. `create_task` forwards
+  `request.item.model_dump(exclude_unset=True)` (`create_task.py:253-256`), so an omitted category
+  is never a change; without the `model_fields_set` term, the request's default `None` would read
+  as "set to null" and refuse every task naming a board item.
+- *Placement:* in `find_or_create_item.py:find_or_create_item`, inside its existing-item branch,
+  before its first write to `existing` (the `_DIRECT_FIELDS` `setattr` loop): lock the matched
+  Item `FOR UPDATE` with `populate_existing`, re-compare, query the active assignment, raise. The
+  function's `maybe_begin` is subordinate under `create_task` (`transaction.py:maybe_begin`), no
+  `begin_nested` wraps the call (`create_task.py:259`), and neither earlier step in `create_task`
+  commits or dispatches (`note_writes.py`, `find_or_create_customer.py`: no `commit`, no event bus),
+  so the `ConflictError` rolls back the task insert, notes and customer with the rest; events are
+  dispatched only after the block.
+- *Callers — each gets the 409, and refusing is right for each.* Search 2026-09-19,
+  `find_or_create_item` over `app/beyo_manager/**/*.py` excluding `app/tests/**`: exactly two —
+  `tasks/create_task.py:create_task` (the only caller of `create_task` is
+  `routers/api_v1/tasks.py:route_create_task`) and `routers/api_v1/items.py:route_find_or_create_item`
+  (`POST /api/v1/items/find-or-create`, ADMIN/MANAGER). The second is an item edit by another name —
+  the door B6 already closes — so the same refusal is the ratified rule there. The
+  `create_item_in_session` branch of `create_task` (no article number, no SKU) always creates a new
+  item and needs no guard. No third writer of an existing item's category exists: `item_category_id\s*=[^=]`
+  over the same scope returns the two item writes (`update_item.py:74`, `find_or_create_item.py:103`)
+  and otherwise only constructors and queries of other models; no `update(Item)` / `UPDATE items`
+  form exists, and both `setattr` loops iterate `_DIRECT_FIELDS` sets that exclude the category.
+- *Lock order:* `create_task` holds `pg_advisory_xact_lock(hashtext(workspace_id))` and its own
+  newly inserted (flushed, uncommitted) Task row when the guard takes the Item lock. Neither can close a
+  cycle: that advisory key is taken by `create_task` alone (search `pg_advisory_xact_lock`, same
+  scope: `create_task.py:99` and `create_case.py:72`'s unrelated key), and a new, uncommitted task
+  row is invisible to every other transaction, so none can wait on it. No *existing* Task is locked
+  before the Item, so MC-1's Items → Tasks order holds.
+
 Deleting a *terminal* assignment moves no counter and touches no goal total (MC-5); it removes the
 row from the board and clears the task flag if it was the last one. "Leaves no assignment behind"
 (M2) is read as *no non-deleted assignment*, whatever its state.
@@ -743,6 +823,18 @@ credit always lands on whatever is current once the lock is held.
   and the move proceeds. A DB check `ck_stock_report_history_records_quantity_awaiting_nonneg`
   (`>= 0`) stays as the backstop for a defect in the repair itself. Upward drift of a goal total
   is found by MC-20 and fixed only by the manual repair command (§12A).
+  *(Re-check, round 7.)* **What protects `R`:** no lock is taken on `R` itself. `R` belongs to the
+  moving assignment's row (credits only ever go to that row's current goal record, and
+  `stock_report_item_id` is immutable), and **every writer of any goal total of a row holds that
+  row's lock (MC-1 step 4)** — the move, the row-deletion cascade, the manual repair; the demand
+  webhook only *inserts* goal records, under the same lock. So `R` is serialized by its row's lock
+  whether or not it is still current. `R` exists because the assignment's FK references it and
+  only the workspace reset hard-deletes history. The guarded UPDATE's WHERE is exactly
+  `client_id = :r` plus the guard (no `is_deleted`, no `workspace_id`), as in MC-1. **Order:** the
+  credit memory is cleared as part of the assignment's own-columns write, flushed before any
+  statement on `R` (MC-1 write order), so the Σ excludes the moving assignment. `stored_before`
+  for the record is read fresh, as in MC-1. Since `stored_before − q < 0 ≤ recomputed`, the rule
+  `stored + delta ≠ recomputed` always yields exactly the one record stated above.
 - **Recomputation (§10 made exact):** `R.quantity_awaiting = Σ quantity` over **all**
   `stock_task_assignments` with `credited_history_record_id = R`, **including soft-deleted ones**.
   This is §10's "currently crediting it plus those Scanner resolved while credited to it": the
@@ -992,18 +1084,115 @@ values would leave every row identical and still be a write.
 - **The one residual case, closed on Manager's side** (owner, card 11a → A; §14D D5): a first
   call that is still running inside Manager after Scanner gave up on it (Scanner's client timeout
   is 8 s — `outbound-webhook-worker.ts:DISPATCH_TIMEOUT_MS`) could commit after the fresher retry.
-  So the demand webhook's transaction opens with `SET LOCAL statement_timeout` and `SET LOCAL
-  lock_timeout`, both from one new named setting with default **5 s**
-  (`STOCK_DEMAND_WEBHOOK_TIMEOUT_MS = 5000`; the planner registers the final name). An abort
-  rolls the whole request back and answers **5xx**, which Scanner retries with fresh numbers (v1
-  §3.4) — no contract change. `SET LOCAL` ends with the transaction, so no other request inherits
-  it. The limit bounds each statement and each lock wait, not the sum; with the set-based,
-  fixed-statement-count demand path the request stays under Scanner's 8 s. *Instrument (charter
-  rule 10 — the shipped default is proven applied):* inside the webhook's transaction, `SHOW
-  statement_timeout` and `SHOW lock_timeout` equal the default with the setting unset; and a
-  second session holding a row lock makes the webhook answer 5xx within the budget with nothing
-  written. Sender note for the closeout handoff (additive, no v2): a Scanner sender using another
-  client timeout must keep Manager's setting below it.
+  So the demand webhook runs under one new named setting with default **5 s**
+  (`STOCK_DEMAND_WEBHOOK_TIMEOUT_MS = 5000`; the planner registers the final name), applied in
+  two parts **(re-check, round 7 — the round-7 text claimed the per-statement limits keep the
+  request under 8 s; they do not, see below)**:
+  1. **The guarantee — a request deadline.** `deadline = time.monotonic() + budget`, taken at
+     handler entry (MC-8 step 1, before the body is read, so a wait for a pooled connection counts
+     against it). The **last action inside the owning transaction block, after the last write and
+     immediately before the commit**, is `if time.monotonic() >= deadline: raise` a `DomainError`
+     subclass with `http_status = 503` (the planner names it). So **no demand request commits
+     later than `budget` after it entered Manager** — which is what card 11a asked for.
+  2. **Per-statement limits.** The owning transaction's **first statement** is
+     `SELECT set_config('statement_timeout', :ms, true), set_config('lock_timeout', :ms, true)`
+     with `:ms = str(budget)`. A parameterized `SET LOCAL … = :v` is a syntax error on this stack
+     (asyncpg sends `$1`; measured: `ProgrammingError`, SQLSTATE `42601`), and `set_config(…, true)`
+     is its transaction-local equivalent. They stop one stuck statement or lock wait from running
+     on; **they bound each statement, not the sum** (measured: two 250 ms statements under a
+     300 ms limit commit after 0.51 s), which is why part 1 exists. At equal values the statement
+     timer, started first, fires first even on a lock wait (measured: SQLSTATE `57014`, not
+     `55P03`); `lock_timeout` is kept as ratified.
+  - *One owning transaction, nothing before it.* MC-8 steps 4–9 run inside **one** owner-mode
+    `maybe_begin` opened before step 4, and no statement is executed on the session before it:
+    an earlier statement would autobegin a transaction, `maybe_begin` would then yield in
+    subordinate mode (`transaction.py:maybe_begin`), nothing would commit, and a test sharing the
+    session would still read the uncommitted rows. `set_config` is therefore the first statement
+    of the request.
+  - *No leak:* the settings end with the transaction; measured on the same pooled connection, the
+    next transaction reads the server defaults.
+  - *What the caller sees:* a statement or lock timeout reaches our code as
+    `sqlalchemy.exc.DBAPIError` — **exactly that class, not `OperationalError`** — whose `.orig`
+    is the asyncpg adapter's generic `Error` with `.orig.sqlstate` `57014` (statement) or `55P03`
+    (lock) (installed SQLAlchemy 2.0.40 maps asyncpg's `QueryCanceledError` /
+    `LockNotAvailableError` through `PostgresError → Error`, `dialects/postgresql/asyncpg.py:
+    _asyncpg_error_translate`; reproduced 2026-09-19). The demand service does not catch it; the
+    transaction block rolls back and `run_service`'s unexpected-error branch answers **500**. The
+    deadline answers **503**. Both are 5xx, which Scanner's worker retries (it retries any
+    non-2xx that is not 4xx, `outbound-webhook-worker.ts:72-91`).
+  - *Liveness is not guaranteed below 8 s.* A request whose statements are each under the limit
+    can still run past Scanner's 8 s client timeout (`outbound-webhook-worker.ts:12`,
+    `DISPATCH_TIMEOUT_MS = 8_000`, re-read 2026-09-19 at Scanner `0d80bf2`) before reaching the
+    deadline check. It then commits nothing (part 1), and Scanner sees its own timeout, not a 5xx.
+    See the sender note below.
+  - *Instrument (charter rule 10 — the shipped default is proven applied), three rows:*
+    (i) with the setting unset, the statement listener (MC-9) records the demand request's first
+    statement as the `set_config` call with both parameters equal to `str(<the setting's declared
+    default>)`, read from the settings class rather than typed as a literal (charter rule 13).
+    Planted defect: open the transaction with any other statement first → red;
+    (ii) with the setting unset, a second session holds `FOR UPDATE` on a row the batch names for
+    longer than the default; the webhook answers 500 no sooner than the default and before the
+    holder releases, every row and history record is byte-identical to before, and no event is
+    dispatched. Planted defect: drop the `set_config` statement → the request waits until the
+    holder releases and only then answers (503, from the deadline), so the status-and-timing
+    assertion reddens;
+    (iii) the deadline: `time.monotonic` as seen by the demand module is advanced past the
+    deadline just before the check → 503, nothing written, no event. Planted defect: delete the
+    check → the request commits and the row reddens.
+  - *Sender notes for the closeout handoff (additive, no v2):* a Scanner sender using another
+    client timeout must keep Manager's setting below it; and **Scanner's existing worker drops,
+    rather than retries, its own client timeout** — `AbortSignal.timeout` rejects with name
+    `TimeoutError` and message `"The operation was aborted due to timeout"`, and `isRetryableError`
+    matches on the *message* (`"TimeoutError"` is never in it; reproduced on Node 22.22.3), so the
+    job completes without a retry. A stock-demand sender built on that worker must classify its
+    timeout as retryable, or a Manager request that outlives 8 s loses that push until the next
+    one.
+
+**D6 statement plan — set-based, and consistent with MC-4, MC-6 and MC-9** (re-check, round 7;
+§14D D6). D6 names the statements; this fixes their order and when each is omitted. As written,
+MC-4's "one multi-row INSERT … ON CONFLICT DO NOTHING … over every identity in the request"
+contradicts MC-9: a replay would still *issue* that INSERT (inserting 0 rows), and the MC-9
+listener counts statements, not rows. This plan ships (§14C C42). Demand, inside the owning
+transaction of MC-9:
+1. `set_config` (MC-9). 2. The workspace `SELECT` (MC-8 step 4). 3. **Categories:** one `SELECT`
+of the workspace's non-deleted categories whose `lower(name)` is in the request's set of
+`lower(strip(itemCategory))`; exact-then-unique resolution (MC-8) is done in memory. 4. **Discovery,
+unlocked:** one `SELECT` of `client_id`, `item_category_id`, `properties_signature` of the
+non-deleted rows whose `(item_category_id, properties_signature)` is in the request's set — identity
+columns only, no ORM entity load (an unlocked read only discovers ids, MC-1). 5. **Insert the
+absent identities only:** one multi-row `INSERT … ON CONFLICT (…) WHERE is_deleted = false DO
+NOTHING RETURNING client_id, item_category_id, properties_signature`, VALUES sorted by
+`(item_category_id, properties_signature)`, inserted with `quantity_requested = 0`; **omitted when
+step 4 found every identity**. A row it returns is "inserted by this request" (comparison base 0,
+MC-6; `:created`, MC-4/MC-19); an identity it skips on conflict was inserted concurrently and is
+treated as existing. 6. **Lock:** one `SELECT … FOR UPDATE ORDER BY client_id` over every identity
+of the request (new and existing), returning current values (with `populate_existing` if it loads
+entities). Its values are MC-6's comparison base for existing rows — never step 4's. 7. **One bulk
+UPDATE** of `quantity_requested` for the rows where `new ≠ base` (`UPDATE … FROM (VALUES …)`,
+`RETURNING` the event fields); **omitted when none** — this is MC-9's equality short-circuit at set
+level. 8. **One bulk INSERT** of goal records for the rows where `new > base`; omitted when none.
+9. The deadline check (MC-9 part 1). Then commit, then events.
+- *MC-4 holds:* inserts are sorted, then all locks are taken in one sorted statement, the ordering
+  MC-4's two-barrier test already exercises; step 4 takes no lock, so it adds no wait edge. Two
+  concurrent first deliveries both find the identity absent at step 4, the second's INSERT waits
+  on the first and skips it, and the second then compares under the lock against the first's
+  committed value.
+- *MC-9 holds:* a replay issues steps 1–4 and 6 (all `SELECT`) and omits 5, 7 and 8 — zero
+  INSERT/UPDATE/DELETE on the four tables.
+- *The D6 criterion counts **every** statement the request executes, `SELECT` included* (the same
+  `before_cursor_execute` listener, unfiltered). A write-only count cannot see the defect D6
+  forbids — a per-entry `SELECT` loop. The row compares batches of 3 and of 300 entries **of the
+  same shape** (all new; all changed; all unchanged; one with an unknown category), expecting
+  equal counts per shape and at most 8 statements (steps 1–8). Planted defect: resolve categories
+  with one `SELECT` per entry → the 300-entry count differs and the row reddens.
+- **Processed, grouped per row** (D6 "likewise groups its counter updates per row"): each entry
+  is still decided per MC-10 and MC-11 (lock the row, then the assignment, re-read). The counter
+  effect of every assignment moving `awaiting → resolved` on one row is one guarded statement
+  with the summed delta (`quantity_awaiting − Σq`), issued after every one of those assignments'
+  `resolved` states is written and flushed (MC-1 write order), rows in ascending `client_id`. On
+  0 rows the MC-1 inline repair runs once for that row, with the group's summed delta in the
+  record rule and the trigger `inline:items_processed`. This is `move_assignment` in grouped form,
+  not a second counter path: HC-3 holds, one module owns it.
 
 **MC-10 — processed resolution** (serves M3).
 
@@ -1404,6 +1593,26 @@ the check; the response is `{"repaired": [<divergence>…], "not_repaired": [<di
 caller (MC-17); inline repairs stamp nothing beyond what the move itself stamps. Events follow
 the MC-19 net-change rule: one `stock_report_item:updated` per row whose event fields net-changed.
 No history record is written by a repair (a renumber is not a user move).
+*Mechanics, made exact (re-check, round 7).*
+- *Which tasks are locked.* After the advisory lock, an **unlocked** pre-pass of the `task_flag`
+  check lists the diverging tasks; they are locked ascending, then the rows, and the check re-runs
+  under the locks. Correctness does not depend on the task locks: the flag's input (non-deleted
+  assignments) is frozen by the row locks, because every writer of an assignment holds its row's
+  lock (MC-1). The task locks exist only so the `tasks` UPDATE never waits out of order. A task
+  that diverges under the locks but was missed by the pre-pass (only a defect racing the repair
+  can make one) is still repaired; its UPDATE takes the lock late, and the worst outcome is a
+  deadlock abort (500, nothing written), never a wrong value.
+- *Stamps.* "Rows it changes" means `stock_report_items` rows: every such row whose counters or
+  `priority_order` the command changes — including rows moved only by a renumber — gets
+  `updated_at` = the command's `now`, `updated_by_id` = the caller. `tasks` are never stamped
+  (MC-15's Core UPDATE); history records have no `updated_*`. This extends MC-17's table with a
+  "manual repair" row (§14C C41); inline repairs stamp nothing beyond what the move stamps.
+- *Events.* `stock_report_item:updated` per row whose event fields net-changed (counters,
+  `priority_order`); `goal_total` and `task_flag` repairs emit nothing (no event exists for those
+  entities, MC-19).
+- *"Zero statements" (instrument d)* is counted by the MC-9 listener over the four MC-9 tables
+  **plus `stock_report_repair_records`**. Lock statements (`SELECT … FOR UPDATE`, the advisory
+  lock) are `SELECT`s and are not counted.
 
 *The trace — table `stock_report_repair_records`* (owner, card 9a → A; the planner registers the
 final name and prefix). Append-only, `IdentityMixin`, `workspace_id` (FK, RESTRICT), and:
@@ -1418,6 +1627,25 @@ final name and prefix). Append-only, `IdentityMixin`, `workspace_id` (FK, RESTRI
 | `trigger` | `inline:<operation>` (e.g. `inline:task_sync`, `inline:delete_assignments`, `inline:items_processed`, `inline:delete_stock_report_item`) or `manual` |
 | `created_by_id` | the caller for `manual`; **NULL for inline** (the actor of the move is not the author of the repair) |
 | `created_at` | the operation's `now` |
+
+*Record fields, made exact (re-check, round 7).*
+- `target_kind` by divergence kind: `counter_*` → `stock_report_item`; `goal_total` →
+  `history_record`; `task_flag` → `task`; `priority_order_nullness` → `stock_report_item`;
+  `order_density` → `group`.
+- **One record per `(target_client_id, field)` per operation.** When one manual run changes a
+  row's `priority_order` twice (the nullness repair appends it, then the density renumber moves
+  it), it writes one record: `stored_value` = the value before the command, `recomputed_value` =
+  the final value, `target_kind` = `stock_report_item` (the row's own inconsistency is the cause).
+  A row changed only by the renumber gets `group`. A field whose final value equals its value
+  before the command gets no record.
+- Values as text: an `int` as its decimal form, a `bool` as `"true"` / `"false"` (Postgres
+  `bool::text`, **not** Python's `str(True)`), and a null value as SQL `NULL` —
+  `stored_value` and `recomputed_value` are nullable (`priority_order` null ↔ non-null).
+- `trigger` is a closed set: `manual`, or `inline:` + one of `create_assignments`, `task_sync`,
+  `delete_assignments` (user unassign), `delete_task`, `remove_item_from_task`, `delete_item`,
+  `items_processed`, `delete_stock_report_item` — the caller of `move_assignment` (or of the
+  cascade) that triggered it. `create_assignments` cannot fire on a correct system (MC-1) and is
+  listed so the set is total.
 
 Exactly **one record per corrected field**, and one `logger.warning` per record. No soft-delete
 trio and no `updated_*`: a record is never edited or removed, except by the workspace reset. It is
@@ -1434,6 +1662,13 @@ negative) — only the manual command clears it; this is the row that proves the
 still ends by asserting the check returns `[]` **and** the repair-record table is empty — a
 scenario that only passes because it self-healed is a failure (the defect families of M1 must not
 hide behind the repair).
+*(e), made exact (re-check, round 7).* It applies to every scenario that plants no drift. The two
+assertions are **one shared helper** (check `[]` **and** zero repair records for the scenario's
+workspace, `WHERE workspace_id = :ws`), so neither can be called without the other. **Proof it
+bites (charter rule 15):** plant `from`'s delta as `−2q` in `move_assignment` (a double
+decrement). A queued `q = 4` assignment moving to `in_progress` then trips the guard, self-heals,
+and leaves the counters correct, so the check alone still returns `[]`; only the repair-record
+assertion reddens. That probe is a required ledger row.
 
 **Must-ship addition — workspace reset** (grounding: `bm/services/commands/reset/reset_app.py`
 hard-deletes tasks, items, item categories and users). With `ondelete="RESTRICT"` foreign keys
@@ -1441,7 +1676,12 @@ from the three new tables, the reset would fail on the first workspace holding a
 reset phases hard-delete, in this order: `stock_report_repair_records` (round 7), then
 `stock_task_assignments`, then
 `stock_report_history_records`, then `stock_report_items`. They run before `delete_tasks`,
-`delete_items`, `delete_item_categories` and `delete_users`. Invariant: a reset of a workspace
+`delete_items`, `delete_item_categories` and `delete_users`. *(Re-check, round 7: exactly, they
+are the **first four phases** of `reset_app`, before `delete_task_events`. The users phase is
+`phases/delete_users.py:delete_orphan_bootstrap_users`, and `delete_workspace` runs last, so the
+repair records' `workspace_id` and `created_by_id` foreign keys are cleared before either.
+`stock_report_repair_records` holds no FK to the other three, so its place among the four is free;
+the other three follow their FKs: assignments → history (`credited_history_record_id`) → rows.)* Invariant: a reset of a workspace
 holding one row of each of the four new tables succeeds and leaves none. It traces to M1 (a board that cannot
 be reset cannot be re-measured). Scope ladder: with §12 item 1.
 
@@ -1656,6 +1896,11 @@ at round 6; all were answered in round 7 and the rows below carry the answers (C
 | C38 | §12 "a repair mode for the consistency check" deferred (owner, round 3) | owner, round 7 (card 9 → C, 9b → A) | **must-ship** (§12 item 11, §12A) | a self-heal with no tool behind it; upward drift unfixable without a developer |
 | C39 | §5A MC-16 "The row's three counters are asserted to be 0 before its soft-delete" | §5A MC-1 second trigger (P36) | a non-zero counter is set to 0 with a repair record; the deletion proceeds | a row that cannot be deleted because its numbers drifted |
 | C40 | §6.2 and P26 "floored at 0" | MC-5 (round 7) | no floor; self-heal | see C10 |
+| C41 | MC-17 "Any counter move … `updated_*` unchanged" | §12A manual repair, stamps (re-check, round 7) | the **manual** repair stamps every `stock_report_items` row it changes with the caller; inline repair and every move stamp nothing | a manual repair that leaves no author on the rows it rewrote, or an inline repair stamping a worker as editor |
+| C42 | MC-4 "one multi-row INSERT … over every identity in the request" | MC-9 zero-statement replay; §8B D6 statement plan (re-check, round 7) | discover unlocked, INSERT only the absent identities (omitted when none), then one sorted `FOR UPDATE` | every replay issuing an INSERT, so the MC-9 instrument reddens on a correct system, or is weakened to count rows |
+| C43 | MC-9 (round 7) "with the set-based, fixed-statement-count demand path the request stays under Scanner's 8 s" | measured: the limits are per statement (re-check, round 7) | a request deadline checked immediately before commit (503), plus the per-statement limits | a slow request made of fast statements committing after Scanner gave up: the phantom goal card 11a closed |
+| C44 | MC-14 / MC-16 "`move_assignment(…, DELETE)`, soft-delete it" | MC-1 write order (re-check, round 7) | the soft-delete is written by `move_assignment`, before its counter statement; callers do not repeat it | a recomputation counting the assignment being deleted, or two writes of `deleted_*` |
+| C45 | MC-1 "Creation first inserts the row with no counted state" | MC-1 write order (re-check, round 7) | inserted with `state` = the target (`NOT NULL`); the caller tells the operation the move is `∅ → B` | a nullable `state` column whose NULL rows are neither active nor terminal and escape the partial unique indexes |
 
 ### 14D. Amendment — the owner's answers to the mechanism-inventory cards (2026-09-18, round 7)
 
@@ -1923,6 +2168,49 @@ can commit it also." Covers round 7 in full: §14D D1–D6, the rewritten MC-1/M
 and the §12A repair contract, M1's added sentence, P33–P36 (none struck), and U1–U21 (none
 struck). Status → **RATIFIED**. Next gate: the mechanism-inventory re-check
 (`prompts/reviewer/2026-09-19_inventory_mechanism_inventory_recheck.md`).
+
+**Round 7 re-check — 2026-09-19 — mechanism-inventory gate, verdict `PASS`.** Perimeter: MC-1,
+MC-5, MC-9, MC-14, MC-18, MC-20 repair, D6. Handoff:
+`handoffs/reviewer/2026-09-19_inventory_mechanism_inventory_recheck_handoff.md`. Round-7 text
+tightened in place and marked *(re-check, round 7)*; no round 0–6 sentence edited, and the
+conflicts with round-6 text are ledgered as §14C C41–C45.
+- **MC-1:** exact WHERE (no workspace or deleted predicate); write order for every path and target
+  (own columns flushed before the counter statement; the soft-delete belongs to the operation;
+  creation inserts with the target state); the no-race premise of the recomputation (every
+  assignment writer holds the row lock); `stored_before` read fresh, never from the ORM; the
+  warning carries the delta; two more instrument rows, (b) and (c), with planted defects.
+- **MC-5:** `R` is protected by its row's lock, not a lock of its own; exact WHERE; memory flushed
+  before the Σ; exactly one record follows from the rule.
+- **MC-9:** the round-7 claim "the request stays under 8 s" was false, since the limits are per
+  statement (measured). Added a request deadline checked immediately before commit (503); the
+  limits are applied via `set_config(…, true)`, because a parameterized `SET LOCAL` is a syntax
+  error on asyncpg (measured); one owning transaction with nothing before it; the exact exception
+  class (`DBAPIError`, SQLSTATE 57014 / 55P03) → 500; the rule-10 instrument rewritten as three
+  runnable rows; Scanner's 8 s re-confirmed; a second sender note (Scanner's worker drops its own
+  timeouts instead of retrying them).
+- **D6:** a statement plan that keeps MC-9 true (the absent-identity INSERT is omitted on a
+  replay), MC-4's ordering, and MC-6's comparison base; the statement-count criterion counts every
+  statement, `SELECT` included; processed grouping defined as `move_assignment` in grouped form.
+- **MC-14:** the `model_fields_set` term; placement before the first write; both callers of
+  `find_or_create_item` named, with refusal right for each; absence of a third category writer
+  searched; lock order argued.
+- **§12A:** `target_kind` mapping; one record per `(entity, field)` per operation; value-as-text
+  rules; closed `trigger` set; how the tasks to lock are discovered; stamps; events; the table set
+  counted by instrument (d); (e) as one helper with a planted probe; exact reset phase position.
+- **MC-18:** passes unchanged (9 operations × 4 roles = 36; both new endpoints named in §12A).
+- None of this changes product behaviour: the deadline is card 11a's own words ("abandons any
+  demand call that runs past about 5 seconds"), and the rest is mechanism. So the gate is not
+  re-opened and no card is raised.
+
+**Scanner handoff v2 — 2026-09-19 (shaper, at the owner's request; no semantic change, gate not reopened).**
+- Published `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` early, so the Scanner
+  sender being built in parallel has it now. It is additive over v1 (v1 untouched): the closed
+  processed `reason` codes (C26, MC-10), the 5 s demand limit and its 503/500 answers (MC-9 D5),
+  both MC-9 sender notes (keep the client timeout above Manager's; `isRetryableError` drops its own
+  timeout — re-check X1), "no sent-at field" (D4), and the U6/U7 clarifications (category match,
+  unknown fields ignored).
+- Closeout therefore no longer owes the C26 v2 or the MC-9 sender notes; it owes a v3 only if a
+  later phase changes the wire contract.
 
 ---
 

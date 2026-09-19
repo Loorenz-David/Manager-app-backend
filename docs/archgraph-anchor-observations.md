@@ -1039,3 +1039,17 @@ Related: [[project-remaining-production-pressure]], [[project-task-budget-overru
 3. Re-anchor activity: none.
 4. Review findings about location: none. Source citations in the fold are `file:function` or `file:line` in prose only (e.g. `outbound-webhook-worker.ts:DISPATCH_TIMEOUT_MS`, carried from the inventory handoff), never graph anchors.
 5. Closing-work language: none about anchors.
+
+## 2026-09-19 — stock_report mechanism-inventory re-check (reviewer role, pre-plan)
+
+- **New evidence written:** none. No `archgraph_apply_changes` call; the prompt forbade graph
+  writes. Span rate on new entries: no datapoint from this session.
+- **Re-anchor activity:** none. No `re-anchor` ops, no `archgraph_repair_anchors`.
+- **Review findings about location:** none. Reads were `archgraph_status` (revision `fa1c510e…`,
+  unchanged since the 2026-09-18 inventory, 8 stale nodes, 14 pending) and one
+  `archgraph_search_nodes("stock report")` → 0.
+- **Closing-work language:** none about anchors. As in earlier sessions, line numbers travel
+  freely **outside** the graph: this session's intention additions and handoff cite
+  `file:line` (e.g. `create_task.py:253-256`, `outbound-webhook-worker.ts:12`) alongside
+  `file:symbol`. That is the prose habit logged on 2026-08-24, not a graph behaviour.
+- Nothing else to report.
