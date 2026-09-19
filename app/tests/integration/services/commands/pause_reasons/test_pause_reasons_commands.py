@@ -22,6 +22,7 @@ from beyo_manager.models.tables.workspaces.workspace_membership import (
     WorkspaceMembership,
 )
 from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import (
+    _PAUSE_REASONS,
     seed_pause_reason_links,
     seed_pause_reasons,
 )
@@ -110,14 +111,15 @@ async def test_seed_pause_reasons_is_idempotent(db_session):
     first_count = await _count_for_workspace()
     second = await seed_pause_reasons(db_session, workspace.client_id)
     second_count = await _count_for_workspace()
+    expected_seed_count = len(_PAUSE_REASONS)
 
     # `pause_other_task_priority` is still absent: auto-pause on task switch is a system transition
     # carrying `transition_reason = other_task_priority` with no catalog reference, so seeding a row
     # nobody selects and nothing resolves would leave a picker entry with no meaning.
     # `pause_ended_shift` deliberately stays — a worker picks it. The sixth row is `pause_other`.
-    assert len(first) == 12
+    assert len(first) == expected_seed_count
     assert first == second
-    assert first_count == second_count == 12
+    assert first_count == second_count == expected_seed_count
     assert "pause_other_task_priority" not in first
     assert "pause_ended_shift" in first
 

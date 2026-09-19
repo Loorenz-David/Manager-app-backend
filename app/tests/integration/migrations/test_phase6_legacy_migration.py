@@ -465,6 +465,7 @@ async def test_phase6_seeded_migration_journal_round_trip_and_metadata_shape():
             """,
         ) == 2
 
+        _alembic(url, "head")
         engine = create_async_engine(url)
         try:
             async with engine.connect() as connection:

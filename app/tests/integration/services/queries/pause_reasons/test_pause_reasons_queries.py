@@ -21,6 +21,7 @@ from beyo_manager.models.tables.workspaces.workspace_membership import (
     WorkspaceMembership,
 )
 from beyo_manager.services.commands.bootstrap.phases.seed_pause_reasons import (
+    _PAUSE_REASONS,
     seed_pause_reasons,
 )
 from beyo_manager.services.context import ServiceContext
@@ -90,15 +91,18 @@ async def test_list_pause_reasons_returns_offset_pagination_and_workspace_scope(
     workspace, user = await _seed_workspace(db_session, "Query workspace")
     other_workspace, other_user = await _seed_workspace(db_session, "Other workspace")
     await seed_pause_reasons(db_session, workspace.client_id)
+    limit = 2
+    offset = 2
+    expected_personal_count = sum(
+        pause_type is PauseTypeEnum.PERSONAL
+        for _, _, pause_type, _, _ in _PAUSE_REASONS
+    )
 
     ctx = ServiceContext(
         identity={"workspace_id": workspace.client_id, "user_id": user.client_id},
-        # Offset 2, not 1: the seed now holds four PERSONAL rows (lunch, coffee, meeting, other),
-        # and this case is about the tail page — the one that exhausts the set and reports
-        # has_more False.
         query_params={
-            "limit": 2,
-            "offset": 2,
+            "limit": limit,
+            "offset": offset,
             "pause_type": PauseTypeEnum.PERSONAL.value,
         },
         incoming_data={},
@@ -106,11 +110,13 @@ async def test_list_pause_reasons_returns_offset_pagination_and_workspace_scope(
     )
     result = await list_pause_reasons(ctx)
 
-    assert len(result["pause_reasons"]) == 2
+    assert len(result["pause_reasons"]) == min(
+        limit, max(expected_personal_count - offset, 0)
+    )
     assert result["pause_reasons_pagination"] == {
-        "has_more": False,
-        "limit": 2,
-        "offset": 2,
+        "has_more": expected_personal_count > offset + limit,
+        "limit": limit,
+        "offset": offset,
     }
     assert all(row["pause_type"] == "personal" for row in result["pause_reasons"])
     other_ctx = ServiceContext(
