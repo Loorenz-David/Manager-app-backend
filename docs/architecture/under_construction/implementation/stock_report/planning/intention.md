@@ -2375,6 +2375,16 @@ this ratification".
 - P42–P45 accepted, none struck. Status → **RATIFIED**.
 - Scanner handoff v1 (not yet handed over) revised in place: §1, §4.2, §4.3, §7.
 
+**Scanner handoff — v1 restored, v2 published — 2026-09-19 (shaper, at the owner's word; no semantic change).**
+- The owner had handed over the **original** v1 (`2ee6f5b`). The in-place revisions of rounds 7–9
+  were therefore reverted from `STOCK_REPORT_WEBHOOKS_v1_20260918.md`, which again reads exactly as
+  handed, and the full current contract ships as
+  `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` — complete on its own, with a
+  "What changed since v1" table.
+- Section numbers were kept, so every reference in this document to a revised "v1 handoff" section
+  (§3.1.1, §3.5, §4A, §4.2, §4.3, §6.3, §6.6, §7) now reads as **v2** of that section. The
+  "Scanner handoff revised before handover" entry above is superseded by this one.
+
 ---
 
 ## Appendix A — raw-draft map
