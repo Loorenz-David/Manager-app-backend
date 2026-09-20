@@ -1079,3 +1079,14 @@ orchestrator gate. It did not fall back to writing the intended delta in prose, 
 required when the tools are unavailable — so the batch produced **no delta text at all**, neither
 anchored nor span-free. Nothing observable about anchoring behavior this session; the only signal is
 that a permission refusal ended the graph work rather than redirecting it.
+
+## 2026-09-20 — stock_report batch A review 1 (Claude Opus 5, plan-reviewer)
+
+The reviewer made no graph write either, and said so explicitly: it recorded the intended delta in
+prose at the end of its handoff (§10) — one `capability-stock-report` node plus one node per §6
+module, with `calls`/`writes`/`reads` edges between them — and left the write to the orchestrator's
+gate. The delta is described **entirely by node and edge names, with no line spans anywhere**, and
+it anchored its *code* evidence the opposite way throughout the review (`consistency.py:121-126`,
+`_task_flag.py:14-15`, `repair_stock_report.py:38-54`). So: span-free when naming graph entities,
+span-bound when citing code — the distinction held without any prompting, and it never asked for
+anchors or mentioned the graph's anchoring model.
