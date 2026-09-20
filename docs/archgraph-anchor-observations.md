@@ -1069,3 +1069,13 @@ Related: [[project-remaining-production-pressure]], [[project-task-budget-overru
 3. Re-anchor activity: none.
 4. Review findings about location: none. New plan text again cites code and docs as `file:line` in prose (e.g. PostgreSQL §13.2.1 for the re-evaluation argument); not graph anchors. The master plan's §8 "evidence anchored on symbols" line was left as planning-0 wrote it.
 5. Closing-work language: none about anchors.
+
+## 2026-09-20 — stock_report batch A implementation (Codex, gpt-5.6-terra/medium)
+
+Codex oriented with `archgraph_status` and `archgraph_search_nodes("stock report")` at session
+start (valid graph, revision fa1c510e…, 211 nodes / 327 edges, no matching node) and made no write:
+it reported the server in `permissionMode: review` and deferred the write to the reviewer/
+orchestrator gate. It did not fall back to writing the intended delta in prose, which its prompt
+required when the tools are unavailable — so the batch produced **no delta text at all**, neither
+anchored nor span-free. Nothing observable about anchoring behavior this session; the only signal is
+that a permission refusal ended the graph work rather than redirecting it.

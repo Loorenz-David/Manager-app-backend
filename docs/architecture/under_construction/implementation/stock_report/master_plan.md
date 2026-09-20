@@ -7,9 +7,10 @@ state: PLANNED — plan set written 2026-09-19 (planner, planning-0) against the
        round 9 (§14F, the terminal state `resolved_early` → phases 1, 3, 4, 5, 8, 9, 10, 11, 13, 14).
        Plan set committed 67dd815 with the owner's rulings. **Execution model changed by the owner
        (2026-09-19): phases stay the units of specification and verification; four batches (A–D)
-       are the units of implementation and review — §3A, §4A.** Batch A implementation prompt ready.
-date: 2026-09-19
-tree: c231dfb (clean except this untracked plan set and the orchestrator's observation log)
+       are the units of implementation and review — §3A, §4A.** **Batch A is IMPLEMENTED
+       (phases 1–3, checkpoint 0d5d31d) and awaits its review; batches B–D not started.**
+date: 2026-09-20
+tree: 0d5d31d (clean)
 phases: 15 planned (1–13, 13A, 14) — see §4 and §7. The owner's non-binding suggestion was 6; the
         departure and its reasons are in §7.1.
 intention: planning/intention.md — RATIFIED round 9 at c231dfb (what this plan set cites; later
@@ -189,9 +190,9 @@ Only the actor named for a transition writes its row. **Since §3A (2026-09-19) 
 
 | Phase | Scope (one line) | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| 1 | Schema, migration, reset phases, enums (six assignment states), state map, criteria normalization, settings, test kit | PENDING | 2026-09-19 | planner | rows 53, criteria 7; complex: no (round 9: +5 rows, +1 criterion) |
-| 2 | Matcher mirror: Scanner tables, bag builder, evaluation, hand-walk fixtures | PENDING | 2026-09-19 | planner | rows 75, criteria 7; complex: no; projection mandatory (rule 17) |
-| 3 | Consistency check, manual repair, repair records, task-flag writer, their two endpoints | PENDING | 2026-09-19 | planner | rows 42, criteria 8; complex: yes (advisory lock, renumber, multi-kind recomputation) (round 9: +1 row) |
+| 1 | Schema, migration, reset phases, enums (six assignment states), state map, criteria normalization, settings, test kit | IMPLEMENTED | 2026-09-20 | orchestrator | batch A, checkpoint `0d5d31d`; not verified until the batch A review passes every row. rows 53, criteria 7; complex: no (round 9: +5 rows, +1 criterion) |
+| 2 | Matcher mirror: Scanner tables, bag builder, evaluation, hand-walk fixtures | IMPLEMENTED | 2026-09-20 | orchestrator | batch A, checkpoint `0d5d31d`; not verified until the batch A review passes every row. rows 75, criteria 7; complex: no; projection mandatory (rule 17) |
+| 3 | Consistency check, manual repair, repair records, task-flag writer, their two endpoints | IMPLEMENTED | 2026-09-20 | orchestrator | batch A, checkpoint `0d5d31d`; not verified until the batch A review passes every row. rows 42, criteria 8; complex: yes (advisory lock, renumber, multi-kind recomputation) (round 9: +1 row) |
 | 4 | Transition operation: moves over six states, unit counters, inline self-heal, removal, stamps, payloads | PENDING | 2026-09-19 | planner | rows 62, criteria 7; complex: yes (guarded statement, lock order) (round 9: +13 rows) |
 | 5 | Goal credit: the MC-5 table incl. `resolved_early`, goal self-heal, the worked sequence | PENDING | 2026-09-19 | planner | rows 22, criteria 3; complex: no (round 9: +5 rows) |
 | 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | PENDING | 2026-09-19 | planner | rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
@@ -219,7 +220,9 @@ rows are cited as `§14E En` / `§14F Fn` beside the contract they amend.
 
 | Batch | Phases | State | Date | Actor | Note |
 |---|---|---|---|---|---|
-| A | 1, 2, 3 | IMPLEMENTATION_PROMPT_READY | 2026-09-19 | orchestrator | projected, no blocker; prompt `prompts/implementer/2026-09-19_batch_A_implement_1.md`; Codex terra/medium, launched by the owner |
+| A | 1, 2, 3 | REVIEW_PROMPT_READY | 2026-09-20 | orchestrator | handoff `handoffs/implementer/2026-09-19_batch_A_implement_1_handoff.md`; checkpoint `0d5d31d` (made by the orchestrator — the Codex session ended with nothing committed); review prompt `prompts/reviewer/2026-09-20_batch_A_review_1.md` |
+| A | 1, 2, 3 | IMPLEMENTED | 2026-09-20 | orchestrator | *superseded.* Orchestrator L4 on `0d5d31d`: 21 failed / 3241 passed / 2 skipped, failure IDs identical to the 21-ID baseline in both directions (3103 + 138 new). Handoff frontmatter says `PARTIAL_NOT_READY_FOR_REVIEW` and its §"Current implementation state" claims the work is incomplete; both are **stale** — they were written early in an append-only log and are contradicted by the same handoff's later stamps and by the orchestrator's own run. Four evidence gaps carried into review: no Scanner `normalizeCriteria`/`node` transcripts (prompt projection note 3), no row-level Task 0 coverage map, no tree SHAs on the stamps, no graph delta text |
+| A | 1, 2, 3 | IMPLEMENTATION_PROMPT_READY | 2026-09-19 | orchestrator | *superseded.* projected, no blocker; prompt `prompts/implementer/2026-09-19_batch_A_implement_1.md`; Codex terra/medium, launched by the owner |
 | B | 4, 5, 6, 7 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for A APPROVED |
 | C | 8, 9, 10, 11 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for B APPROVED |
 | D | 12, 13, 13A, 14 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for C APPROVED; projection checks plan 13A §7 (the six §14E questions) |
