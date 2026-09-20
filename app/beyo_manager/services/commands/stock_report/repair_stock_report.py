@@ -240,6 +240,7 @@ async def repair_stock_report(ctx) -> dict:
             if kind == "task_flag":
                 await set_task_stock_flag(
                     ctx.session,
+                    ctx.workspace_id,
                     divergence["client_id"],
                     divergence["expected"] == "true",
                     require_update=True,

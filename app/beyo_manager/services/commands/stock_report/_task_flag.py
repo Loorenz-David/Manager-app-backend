@@ -3,11 +3,13 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.services.queries.stock_report.consistency import expected_task_flag
 
 
-async def set_task_stock_flag(session, task_id, value, *, require_update=False):
+async def set_task_stock_flag(session, workspace_id, task_id, value, *, require_update=False):
     result = await session.execute(
         update(Task)
         .where(
-            Task.client_id == task_id, Task.is_stock_assignment.is_distinct_from(value)
+            Task.client_id == task_id,
+            Task.workspace_id == workspace_id,
+            Task.is_stock_assignment.is_distinct_from(value),
         )
         .values(is_stock_assignment=value, updated_at=Task.updated_at)
     )
@@ -17,5 +19,5 @@ async def set_task_stock_flag(session, task_id, value, *, require_update=False):
 
 async def recompute_task_stock_flag(session, workspace_id, task_id):
     expected = await expected_task_flag(session, workspace_id, task_id)
-    await set_task_stock_flag(session, task_id, expected)
+    await set_task_stock_flag(session, workspace_id, task_id, expected)
     return expected

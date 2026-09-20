@@ -26,6 +26,7 @@ async def write_repair_record(
     trigger,
     created_by_id,
     now,
+    delta=None,
 ):
     record = StockReportRepairRecord(
         workspace_id=workspace_id,
@@ -45,7 +46,7 @@ async def write_repair_record(
         field,
         stored_value,
         recomputed_value,
-        None,
+        delta,
         trigger,
     )
     return record
