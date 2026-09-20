@@ -139,7 +139,7 @@ by a fresh `SELECT`.
 | C1(r) | A `failed`; `MV(failed → DELETE)` | as (q) with `state: failed` | same | MC-1 |
 | C1(s) | A `in_queue`, counters `(4, 0, 0)`; `MV(in_queue → resolved_early)` with `actor_user_id=None`, `trigger="items_processed"` | counters `(0, 0, 0)`; state `resolved_early`; `updated_by_id IS NULL`, `updated_at == now`; events `[state-changed {state: resolved_early}, :updated {…, quantity_in_queue: 0, …}]`; clean | keep the `in_queue` count (treat the target as `=`) → `(4, 0, 0)` | §14F F2, MC-1 (Scanner only), MC-17 ("Scanner resolves") |
 | C1(t) | A `in_progress`, counters `(0, 4, 0)`; `MV(in_progress → resolved_early)` with `actor_user_id=None` | `(0, 0, 0)`; state `resolved_early`; `updated_by_id IS NULL`; events `[state-changed {state: resolved_early}, :updated]`; clean | add `+q` to `quantity_awaiting` (treat it as `awaiting`) → `(0, 0, 4)` | §14F F2, MC-1 |
-| C1(u) | A `resolved_early`, counters `(0,0,0)`; `MV(resolved_early → DELETE)` with actor U | counters unchanged; soft-deleted (`deleted_by_id == U`); events `[deleted {state: resolved_early}]` **only** — no `:updated` | enumerated, `_move_assignment.py` (definition site): (i) **emit the `stock_report_item:updated` event anyway** (drop the "no counter moved ⇒ no `:updated`" rule) → the event list has two entries → red; (ii) **classify `resolved_early` as active in the allowed-move/counter table** (i.e. include it in the set read from `ACTIVE_ASSIGNMENT_STATES`) → the `resolved_early → DELETE` cell becomes a counted move and `deleted_by_id`/the event kind change → red. ("subtract `q` from `quantity_awaiting`" is an **equivalent mutant** here: the guard trips and the self-heal restores `0`, leaving every assertion of this row true.) | §14F F2 ("`resolved_early → DELETE` … like `resolved`"), MC-19 |
+| C1(u) | A `resolved_early`, counters `(0,0,0)`; `MV(resolved_early → DELETE)` with actor U | counters unchanged; soft-deleted (`deleted_by_id == U`); events `[deleted {state: resolved_early}]` **only** — no `:updated` | enumerated, `_move_assignment.py` (definition site): (i) **emit the `stock_report_item:updated` event anyway** (drop the "no counter moved ⇒ no `:updated`" rule) → the event list has two entries → red; (ii) **classify `resolved_early` as active in the allowed-move/counter table** (i.e. include it in the set read from `ACTIVE_ASSIGNMENT_STATES`) → the `resolved_early → DELETE` cell becomes a counted move and `deleted_by_id`/the event kind change → red. (iii) **subtract `q` from `quantity_awaiting`** → red. *Corrected 2026-09-21 (review note N2): the fold declared this an equivalent mutant, reasoning that the guard trips and the self-heal restores `0`. Measured, it is not — it reddens `test_c1_u` and phase 5's `test_c1_q`, because the `:updated` event is gated on the delta vector rather than on whether the counters changed, and the self-heal writes a repair record. Run it.* | §14F F2 ("`resolved_early → DELETE` … like `resolved`"), MC-19 |
 | C2(a)–C2(f) | `MV(s → s)` for each of the six states | returns `[]`; `count_writes` over the four MC-9 tables `== 0`; no stamp change | enumerated, `_move_assignment.py` (definition site): (i) **drop the `=`-cell early return** and fall through to the normal path (own-columns write + all-zero counter UPDATE) → `count_writes` over the four MC-9 tables becomes ≥ 1 → red; (ii) **stamp `updated_by_id`/`updated_at` before the `=` check** → the assignment's stamps move → the "no stamp change" assertion reddens; (iii) **return the event list instead of `[]`** → the return-value assertion reddens. | MC-1 `=` cells, MC-9 |
 | C3(a) | `MV(∅ → resolved)` | raises `IllegalAssignmentMove`; nothing written | allow it | MC-1 ✗ |
 | C3(b) | `MV(∅ → failed)` | raises | — | MC-1 ✗ (§5 r3) |
@@ -160,7 +160,7 @@ by a fresh `SELECT`.
 | C5(c) | A `q = 4` `in_queue`; raw `quantity_in_queue = 0`; `remove_assignment(...)` | `quantity_in_queue` 0; one record (`stored "0"`, `recomputed "0"`, `inline:<trigger>`); check `[]` | issue the soft-delete after the counter statement → recomputation still counts A → `quantity_in_queue` 4 → check reports it | MC-1 instrument (b) |
 | C6(a) | T with A only (A `in_queue`, live), and `tasks.is_stock_assignment` seeded **`true`** by raw SQL before the call — otherwise "skip the recompute" leaves the flag at the value the row asserts and the mutation cannot fail; `remove_assignment` | `tasks.is_stock_assignment` false | skip the recompute | MC-15 (ii) |
 | C6(b) | T with A (`in_queue`, item I) and B (`resolved`, a **second** item I2, same task T — legal because the partial unique indexes cover only the three active states), `tasks.is_stock_assignment` seeded **`true`**; remove A | flag stays true | recompute with `state IN active` → false | MC-15 truth (P21) |
-| C6(c) | (a) again (flag seeded **`true`**), with `tasks.updated_at` and `updated_by_id` first set to known non-null values by raw SQL (`UPDATE tasks SET updated_at = :t_seed, updated_by_id = :u …`, which bypasses `onupdate`), both recorded before the call | both byte-identical after | write the flag via the ORM attribute (`_task_flag.py`, already guarded in phase 3 — re-run here at the call site) | MC-15 |
+| C6(c) | (a) again (flag seeded **`true`**), with `tasks.updated_at` and `updated_by_id` first set to known non-null values by raw SQL (`UPDATE tasks SET updated_at = :t_seed, updated_by_id = :u …`, which bypasses `onupdate`), both recorded before the call | both byte-identical after | drop `updated_at=Task.updated_at` from `set_task_stock_flag`'s `.values()` (`_task_flag.py`, definition site) → `Task.updated_at`'s `onupdate` fires and the task's stamp moves → reddens exactly this row. *Corrected 2026-09-21 (review note N3): the previous cell named "write the flag via the ORM attribute", which does not reach this row's own sub-check. Phase 13 re-uses this mutation, so the cell is fixed here.* | MC-15 |
 | C7(a) | `MV(in_queue → in_progress)` with `actor_user_id = U`, `now = t0` | A `updated_by_id == U`, `updated_at == t0` | leave stamps to `onupdate` (none exists) → NULL | MC-17 |
 | C7(b) | `MV(awaiting → resolved)` with `actor_user_id = None` | `updated_by_id IS NULL`, `updated_at == t0` | stamp a fake system user | MC-17 (null = Scanner) |
 | C7(c) | A with prior `updated_by_id = X`; `MV(in_queue → DELETE)` with actor U | `deleted_by_id == U`, `deleted_at == t0`, `updated_by_id` still `X` | stamp `updated_*` on delete | MC-17 (U12) |
@@ -213,3 +213,60 @@ target the DELETE sentinel specifically, not a change to production semantics. O
 active-states set/column map inside the mutation edit itself (never shipped) since the two are
 otherwise `frozenset`/`dict` constants — this is the correct way to simulate "what if this state
 were wrongly classified active" without editing the shared enums module.
+
+
+**Reviewer, 2026-09-21 (batch_B1-review-1, tree `1351b5f`, claude-opus-5). CHANGES_REQUESTED —
+61/62 rows PASS, 1 FAIL, 0 NOT_VERIFIED; no production defect.** Full handoff:
+`handoffs/reviewer/2026-09-21_batch_B1_review_1_handoff.md`.
+
+- **C5(b) = FAIL (S1, should-fix).** The test asserts three of the outcome cell's four clauses:
+  it omits "`repair_stock_report` then clears it" (plan 5 C2(c) ships the equivalent leg), and it
+  filters the divergence list to `kind == "counter_in_queue"` instead of asserting it whole
+  (charter rule 2). Fix: mirror `test_c2_c`'s closing block.
+- **S2 (should-fix) — no test takes any lock, and the divergence is undeclared.** §5 task 4,
+  projection H6 and routed decision N-R1 all require the tests to hold the caller's locks (task
+  `FOR UPDATE` first for `remove_assignment`; row then assignment before `apply_goal_effect`).
+  `grep "with_for_update"` over the stock-report test tree returns nothing; the handoff never
+  mentions locks (charter rule 14, master plan §9 rule 4). The premise that makes
+  `remove_assignment`'s inverted write order safe is therefore unproven and unmodelled.
+- **S3 (should-fix, plan fold) — MC-19's `priority` payload has no row.** §9D MC-19 pins the
+  payload to `"high"|"medium"|"low"|null`; `_events.py` implements it and no phase-4/5 fixture
+  sets a non-null `priority`. Fold one row (natural home: C1(d) or C1(s)); the fixture must set
+  **both** `priority` and `priority_order` or `priority_order_nullness` fails the clean assertion.
+- **S4 (should-fix) — the mutation ledger's arithmetic does not close.** The summand string sums
+  to **31**, not the claimed 33; the table supports **30** distinct runs (row 13 is declared
+  not-a-run); C1(d)/(e) and C7(c) are executed but absent from the summands. Re-derive and publish
+  the plan-cell → table-row mapping, incl. "22 C3 cells → 4 guard mutations + 1 combined proof"
+  (manifest properties 3–4, §9 rule 8).
+
+Re-run independently on this tree (applied and reverted, checksums byte-identical):
+(a) the C3 combined guard removal → **18 red, `c3d…c3v` incl. c3m/s/u/v** — the four double-guarded
+rows are genuinely armed; the collapse to 4 guards + 1 combined proof is legitimate, no finding.
+(b) C4(c)'s ORM-payload mutation → reddens `test_c4_c` only; the row is armed and specific.
+(c) `set_task_stock_flag` without `updated_at=Task.updated_at` → reddens `test_c6_c` only, so
+C6(c)'s timestamp sub-check **is** armed — but the plan's own named mutation ("write the flag via
+the ORM attribute") does not reach it (charter rule 12; the implementer's stale-identity-map note
+explains why). **Replace C6(c)'s mutation cell with the probe above — plan 13 re-uses this cell.**
+(d) C1(u)'s **declared-equivalent** mutant ("subtract `q` from `quantity_awaiting`") is **not
+equivalent**: measured, it reddens `test_c1_u` and plan 5's `test_c1_q`, because `:updated` is
+gated on the delta vector and the self-heal writes a repair record. Correct the cell at the next
+fold; nothing to re-run.
+
+Fold judgment (`a306298`): no over-reach — no cell weakened a row, changed what it asserts, or
+shaped a fixture to the implementation. C2(a)–(f) and the task-flag rule were the high-value arms;
+C1(g)'s equivalence call is correct. Two analytical errors, both safe-direction: C1(u) above, and
+plan 5 C2(c)'s site narrowing (see plan 5's log).
+
+Verified correct and not to be re-reviewed: MC-1's write order and flush; the guarded `WHERE`
+(`client_id` + three guards, no other predicate); fresh `stored_before`; one repair record per
+diverging column; the delta reaching the warning (B2 discharged); events built only from
+`RETURNING`; MC-17 stamps on all four C7 rows; the six `=` cells; all 22 C3 cells; N-R3's two
+phase-4 helpers genuinely reached; workspace scoping; zero orphan tests; zero
+implementation-coupled assertions; perimeter clean.
+
+Notes carried: N3 (C6(c) mutation cell), N4 (credit-memory write sits after the counter statement,
+not in the own-columns step — no observable effect, undeclared), N6 (phase 8: `move_assignment`
+can emit a `:updated` equal to the snapshot — C5(c) is the live case, so
+`coalesce_stock_report_events` must compare values), N7 (N-S3's tenancy guard untested), N8
+(handoff test counts: measured 59 / 4, not 63 / 7), N11 (no row pins MC-17's "creation:
+`updated_*` NULL" — phase 8's).

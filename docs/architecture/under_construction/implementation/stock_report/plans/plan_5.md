@@ -148,3 +148,57 @@ Judgment calls: C2(b)/C2(d)'s fixtures construct the first assignment (A1) as a 
 (already in its final credited state) rather than driving it through `move_assignment`, to keep
 `recompute_goal_total`'s assertion independent of an unrelated intermediate value — C2(d) uses
 `move_assignment` for both A1 and A2 as the plan's "MV(...)" notation literally specifies.
+
+**Reviewer, 2026-09-21 (batch_B1-review-1, tree `1351b5f`, claude-opus-5). CHANGES_REQUESTED at
+batch level — 22/22 rows PASS, 0 FAIL, 0 NOT_VERIFIED; no finding against this phase's code or
+tests.** The batch verdict is driven by plan 4 (S1, S2) plus two batch-wide items (S3, S4) recorded
+in `handoffs/reviewer/2026-09-21_batch_B1_review_1_handoff.md`.
+
+**C2(c) — the implementer's finding is correct, and I widened it.** I planted the cell's named
+mutation at its literal site (`_uncredit`'s 1-row branch, unconditional divergence check + repair)
+and ran it over `tests/integration/services/commands/stock_report/` **and**
+`.../queries/stock_report/`: **118 passed, nothing red.** The inertia is not an artefact of the
+implementer's scope — no test in batch A or B1 would catch it. Cause is the fixture, not the
+implementation: per §6A MC-5 row 3 the first move (`awaiting → resolved`) issues **no statement at
+all** on the goal record and the second falls through to the terminal default, so `_uncredit` is
+never called. The re-siting to the `RESOLVED` early-return branch is **legitimate** — it plants the
+same defect class (an inline self-heal on a move that should leave the record alone) in the code
+that actually runs — and it reddened exactly `c2c`. The row is armed, at a different site than the
+cell names.
+
+*Residual hole (carry-forward N1, owner card 2).* The subtraction path's 1-row branch has no guard
+anywhere. One scenario closes it: A `awaiting` `q = 4` `mem = G`, raw `G = 9` (upward drift large
+enough that `9 − 4 ≥ 0` passes the guard), `MV(awaiting → in_queue)`; correct outcome `G == 5`,
+zero repair records, check reports one `goal_total` (stored 5, expected 0). Under the mutation a
+record appears and `G` becomes 0. Trace: §12A (c), the same authority C2(c) already cites.
+
+**Fold judgment on the C2(c) cell (`a306298`).** The pre-fold text ("fire inline on any mismatch")
+was implementation-agnostic and satisfiable wherever the code runs; the fold replaced it with a
+precise site that this row's own scenario never reaches. No outcome cell changed and nothing
+shipped weaker than specified, but the amendment narrowed a vague-but-correct cell into a
+precise-but-unreachable one. Lesson for batch C: **a fold that names a mutation site must check
+that the site executes under the row's own fixture cell** (charter rule 17's attribution — the
+coordinator owns the fixture/mutation seam at every fold, because amending a row is authoring one).
+The other plan-5 folds are clean and two of them were load-bearing: the explicit `created_at`
+values genuinely disarm C1(j) and C3(a) without them (ULID `client_id`s do not order reliably
+inside a millisecond), and the task-flag rule is what lets every "clean" row hold.
+
+**Verified correct, not to be re-reviewed:** MC-5's full table incl. §14F F4's two new rows;
+`current_goal_record_id`'s `(created_at, client_id)` ordering and `is_deleted` filter;
+`apply_goal_effect` takes **no lock on `R`** (N-R1's ruling — plain `SELECT`, no `with_for_update`
+anywhere in `_goal_credit.py`); the guarded subtraction's `WHERE` (`client_id` + guard only);
+memory cleared **and flushed** before the statement, which is why C2(a)'s recomputed value is 0;
+`recompute_goal_total` includes soft-deleted assignments (C2(b)) and `resolved_early` ones (C2(d));
+the worked sequence's six checkpoints; `apply_goal_effect`'s placement after the counter statement
+and before the events (plan 5 §4, MC-1 write order); N-R3's third helper genuinely reached.
+
+**Notes carried.** N4 — §5A MC-1 places the *credit memory change* in the own-columns write, before
+the counter statement; the implementation writes it inside `apply_goal_effect` at
+`_goal_credit.py:56-57`, after it. No observable difference (`recompute_row_counters` reads only
+`state`/`is_deleted`/`quantity`, and the un-credit direction does clear-and-flush first, which is
+the ordering MC-5 actually depends on), but it is an undeclared deviation from a cited sentence.
+N5 — `apply_goal_effect`'s `if from_state != AWAITING` (`:123`) can never be false, because
+`move_assignment` short-circuits `state == target` and MC-1 forbids `awaiting → resolved_early`; it
+reads as a guard and is not one. N9 — this Review log's implementer entry lists "C1(r)" among the
+declared mirrors; plan 5's rows end at C1(q). N10 — `_credit_current_goal(session, assignment,
+now)` never uses `now`.
