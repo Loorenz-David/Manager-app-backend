@@ -14,7 +14,9 @@ def normalize_stock_criteria(raw: dict) -> dict:
             and all(isinstance(v, str) for v in value)
             and any(v.strip() for v in value)
         ):
-            result[key] = sorted(set(v.strip().lower() for v in value))
+            result[key] = sorted(
+                {v.strip().lower() for v in value if v.strip().lower() != ""}
+            )
         else:
             result[key] = value
     return result

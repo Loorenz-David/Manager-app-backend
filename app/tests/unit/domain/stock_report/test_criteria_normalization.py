@@ -16,6 +16,7 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
         ({"k": ""}, {"k": ""}),
         ({"k": "  "}, {"k": "  "}),
         ({"k": ["Teak", "Dark", " teak "]}, {"k": ["dark", "teak"]}),
+        ({"k": ["Teak", "  ", "Dark"]}, {"k": ["dark", "teak"]}),
         ({"k": ["", "  "]}, {"k": ["", "  "]}),
         ({"k": ["Teak", 1]}, {"k": ["Teak", 1]}),
         ({"k": []}, {"k": []}),
@@ -34,6 +35,9 @@ def test_normalization_value_table(raw, expected):
 def test_normalization_preserves_keys_and_is_idempotent():
     raw = {"Wood_Type": ["x"], "wood_type": ["x"], " wood_type": ["x"]}
     assert set(normalize_stock_criteria(raw)) == set(raw)
+    assert compute_stock_criteria_signature(raw) != compute_stock_criteria_signature(
+        {"wood_type": ["x"]}
+    )
     assert normalize_stock_criteria(
         normalize_stock_criteria(raw)
     ) == normalize_stock_criteria(raw)
@@ -41,22 +45,59 @@ def test_normalization_preserves_keys_and_is_idempotent():
 
 @pytest.mark.unit
 def test_normalization_preserves_string_property_key_spelling():
-    assert normalize_stock_criteria({"Wood_Type": "Teak", " wood_type": "Oak"}) == {
+    raw = {"Wood_Type": "Teak", " wood_type": "Oak"}
+    assert normalize_stock_criteria(raw) == {
         "Wood_Type": ["teak"],
         " wood_type": ["oak"],
     }
+    assert compute_stock_criteria_signature(raw) != compute_stock_criteria_signature(
+        {"wood_type": "Oak"}
+    )
 
 
 @pytest.mark.unit
-def test_signature_uses_normalized_golden_vector():
-    expected = {"k": ["dark", "teak"]}
-    assert (
-        compute_stock_criteria_signature({"k": ["Teak", " dark "]})
-        == hashlib.sha256(
-            json.dumps(
-                expected, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-            ).encode()
-        ).hexdigest()
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"k": ["Teak", " dark "]}, {"k": ["dark", "teak"]}),
+        ({"k": ["Teak", " ", "Dark"]}, {"k": ["dark", "teak"]}),
+        ({"k": "  Teak "}, {"k": ["teak"]}),
+        ({"k": "Straße"}, {"k": ["straße"]}),
+        ({"k": ["", "  "]}, {"k": ["", "  "]}),
+        ({"Wood_Type": "Oak"}, {"Wood_Type": ["oak"]}),
+    ],
+)
+def test_signature_uses_normalized_golden_vectors(raw, expected):
+    assert compute_stock_criteria_signature(raw) == hashlib.sha256(
+        json.dumps(
+            expected, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
+    ).hexdigest()
+
+
+@pytest.mark.unit
+def test_normalization_is_idempotent_for_all_golden_vectors():
+    raw_payloads = [
+        {"k": None},
+        {"k": "  Teak "},
+        {"k": ""},
+        {"k": "  "},
+        {"k": ["Teak", "Dark", " teak "]},
+        {"k": ["Teak", "  ", "Dark"]},
+        {"k": ["", "  "]},
+        {"k": ["Teak", 1]},
+        {"k": []},
+        {"k": 1},
+        {"k": 1.0},
+        {"k": True},
+        {"k": {"a": 1}},
+        {"k": "Straße"},
+        {"Wood_Type": ["x"], "wood_type": ["x"], " wood_type": ["x"]},
+    ]
+    assert all(
+        normalize_stock_criteria(normalize_stock_criteria(raw))
+        == normalize_stock_criteria(raw)
+        for raw in raw_payloads
     )
 
 

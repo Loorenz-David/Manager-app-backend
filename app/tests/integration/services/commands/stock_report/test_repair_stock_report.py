@@ -26,6 +26,7 @@ from beyo_manager.services.queries.stock_report.consistency import (
     compute_stock_report_divergences,
 )
 from tests.helpers.stock_report import (
+    assert_stock_report_clean,
     capture_dispatch,
     make_ctx,
     seed_stock_report_workspace,
@@ -60,7 +61,8 @@ async def test_manual_repair_fixes_counter_and_task_flag_and_records_each_change
         )
     )
     await db_session.flush()
-    result = await repair_stock_report(make_ctx(db_session, seeded))
+    ctx = make_ctx(db_session, seeded)
+    result = await repair_stock_report(ctx)
     assert {entry["kind"] for entry in result["repaired"]} == {
         "counter_in_queue",
         "task_flag",
@@ -69,14 +71,43 @@ async def test_manual_repair_fixes_counter_and_task_flag_and_records_each_change
         await db_session.scalars(
             select(StockReportRepairRecord).where(
                 StockReportRepairRecord.workspace_id == seeded.workspace.client_id,
-                StockReportRepairRecord.target_client_id == seeded.task.client_id,
-                StockReportRepairRecord.field == "is_stock_assignment",
             )
         )
     ).all()
-    assert [(record.stored_value, record.recomputed_value) for record in records] == [
-        ("false", "true")
-    ]
+    assert {
+        (
+            record.target_kind.value,
+            record.target_client_id,
+            record.field,
+            record.stored_value,
+            record.recomputed_value,
+            record.trigger,
+            record.created_by_id,
+            record.created_at,
+        )
+        for record in records
+    } == {
+        (
+            "stock_report_item",
+            row.client_id,
+            "quantity_in_queue",
+            "5",
+            "4",
+            "manual",
+            seeded.manager.client_id,
+            ctx.now,
+        ),
+        (
+            "task",
+            seeded.task.client_id,
+            "is_stock_assignment",
+            "false",
+            "true",
+            "manual",
+            seeded.manager.client_id,
+            ctx.now,
+        ),
+    }
     assert (
         await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
         == []
@@ -98,6 +129,69 @@ async def test_manual_repair_clears_false_positive_task_flag(db_session):
         )
         is False
     )
+
+
+@pytest.mark.parametrize(
+    ("state", "field"),
+    [
+        (StockTaskAssignmentStateEnum.IN_PROGRESS, "quantity_in_progress"),
+        (StockTaskAssignmentStateEnum.AWAITING, "quantity_awaiting"),
+    ],
+)
+async def test_manual_repair_fixes_each_active_counter_and_records_exact_fields(
+    db_session, state, field
+):
+    seeded = await seed_stock_report_workspace(db_session)
+    row = StockReportItem(
+        workspace_id=seeded.workspace.client_id,
+        item_category_id=seeded.categories[0].client_id,
+        properties={"state": state.value},
+        properties_signature=compute_stock_criteria_signature({"state": state.value}),
+        **{field: 5},
+    )
+    db_session.add(row)
+    await db_session.flush()
+    db_session.add(
+        StockTaskAssignment(
+            workspace_id=seeded.workspace.client_id,
+            stock_report_item_id=row.client_id,
+            task_id=seeded.task.client_id,
+            item_id=seeded.item.client_id,
+            quantity=4,
+            state=state,
+        )
+    )
+    await db_session.flush()
+    ctx = make_ctx(db_session, seeded)
+    await repair_stock_report(ctx)
+    record = (
+        await db_session.scalars(
+            select(StockReportRepairRecord).where(
+                StockReportRepairRecord.target_client_id == row.client_id,
+                StockReportRepairRecord.field == field,
+            )
+        )
+    ).one()
+    assert (
+        record.target_kind.value,
+        record.field,
+        record.stored_value,
+        record.recomputed_value,
+        record.trigger,
+        record.created_by_id,
+        record.created_at,
+    ) == (
+        "stock_report_item",
+        field,
+        "5",
+        "4",
+        "manual",
+        seeded.manager.client_id,
+        ctx.now,
+    )
+    assert await compute_stock_report_divergences(
+        db_session, seeded.workspace.client_id
+    ) == []
 
 
 async def test_stock_report_row_lock_is_workspace_scoped(db_session):
@@ -282,11 +376,16 @@ async def test_repair_records_one_net_change_per_priority_order_field(db_session
         .all()
     )
     assert {
-        (record.target_client_id, record.stored_value, record.recomputed_value)
+        (
+            record.target_kind.value,
+            record.target_client_id,
+            record.stored_value,
+            record.recomputed_value,
+        )
         for record in records
     } == {
-        (gapped.client_id, "3", "2"),
-        (missing.client_id, None, "3"),
+        ("group", gapped.client_id, "3", "2"),
+        ("stock_report_item", missing.client_id, None, "3"),
     }
     assert (
         await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
@@ -307,6 +406,14 @@ async def test_repair_dispatches_only_changed_stock_report_rows(
     )
     db_session.add(row)
     await db_session.flush()
+    history = StockReportHistoryRecord(
+        workspace_id=seeded.workspace.client_id,
+        stock_report_item_id=row.client_id,
+        type=StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+        quantity_awaiting=5,
+    )
+    db_session.add(history)
+    await db_session.flush()
     db_session.add(
         StockTaskAssignment(
             workspace_id=seeded.workspace.client_id,
@@ -315,6 +422,7 @@ async def test_repair_dispatches_only_changed_stock_report_rows(
             item_id=seeded.item.client_id,
             quantity=4,
             state=StockTaskAssignmentStateEnum.IN_QUEUE,
+            credited_history_record_id=history.client_id,
         )
     )
     await db_session.flush()
@@ -388,6 +496,105 @@ async def test_counter_repair_stamps_only_the_changed_stock_report_row(db_sessio
         seeded.manager.client_id,
     )
     assert (unchanged.updated_at, unchanged.updated_by_id) == (None, None)
+
+
+async def test_density_repair_stamps_only_the_renumbered_row(db_session):
+    seeded = await seed_stock_report_workspace(db_session)
+    unchanged = StockReportItem(
+        workspace_id=seeded.workspace.client_id,
+        item_category_id=seeded.categories[0].client_id,
+        properties={"order": 1},
+        properties_signature=compute_stock_criteria_signature({"order": 1}),
+        priority=StockReportPriorityEnum.HIGH,
+        priority_order=1,
+    )
+    moved = StockReportItem(
+        workspace_id=seeded.workspace.client_id,
+        item_category_id=seeded.categories[1].client_id,
+        properties={"order": 3},
+        properties_signature=compute_stock_criteria_signature({"order": 3}),
+        priority=StockReportPriorityEnum.HIGH,
+        priority_order=3,
+    )
+    db_session.add_all([unchanged, moved])
+    await db_session.flush()
+    ctx = make_ctx(db_session, seeded)
+    await repair_stock_report(ctx)
+    await db_session.refresh(unchanged)
+    await db_session.refresh(moved)
+    assert (moved.priority_order, moved.updated_at, moved.updated_by_id) == (
+        2,
+        ctx.now,
+        seeded.manager.client_id,
+    )
+    assert (unchanged.priority_order, unchanged.updated_at, unchanged.updated_by_id) == (
+        1,
+        None,
+        None,
+    )
+
+
+async def test_manual_repair_clears_priority_nullness_and_records_one_item_change(
+    db_session,
+):
+    seeded = await seed_stock_report_workspace(db_session)
+    row = StockReportItem(
+        workspace_id=seeded.workspace.client_id,
+        item_category_id=seeded.categories[0].client_id,
+        properties={"priority": None},
+        properties_signature=compute_stock_criteria_signature({"priority": None}),
+        priority=None,
+        priority_order=1,
+    )
+    db_session.add(row)
+    await db_session.flush()
+    ctx = make_ctx(db_session, seeded)
+    result = await repair_stock_report(ctx)
+    await db_session.refresh(row)
+    record = (
+        await db_session.scalars(
+            select(StockReportRepairRecord).where(
+                StockReportRepairRecord.target_client_id == row.client_id,
+                StockReportRepairRecord.field == "priority_order",
+            )
+        )
+    ).one()
+    assert row.priority_order is None
+    assert result["repaired"] == [
+        {
+            "kind": "priority_order_nullness",
+            "client_id": row.client_id,
+            "field": "priority_order",
+            "stored": 1,
+            "expected": None,
+        }
+    ]
+    assert (
+        record.target_kind.value,
+        record.stored_value,
+        record.recomputed_value,
+    ) == ("stock_report_item", "1", None)
+    assert await compute_stock_report_divergences(
+        db_session, seeded.workspace.client_id
+    ) == []
+
+
+async def test_assert_stock_report_clean_rejects_a_stray_repair_record(db_session):
+    seeded = await seed_stock_report_workspace(db_session)
+    db_session.add(
+        StockReportRepairRecord(
+            workspace_id=seeded.workspace.client_id,
+            target_kind="stock_report_item",
+            target_client_id="sri_missing",
+            field="quantity_in_queue",
+            stored_value="1",
+            recomputed_value="0",
+            trigger="manual",
+        )
+    )
+    await db_session.flush()
+    with pytest.raises(AssertionError):
+        await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_manual_repair_fixes_goal_total_and_writes_history_record(db_session):

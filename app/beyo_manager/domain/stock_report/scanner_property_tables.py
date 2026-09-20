@@ -44,7 +44,7 @@ def wood_group_of_token(token: str) -> str | None:
     normalized = token.strip().lower()
     for group, values in WOOD_GROUPS.items():
         if normalized in {value.lower() for value in values}:
-            return group.lower()
+            return group
     return None
 
 

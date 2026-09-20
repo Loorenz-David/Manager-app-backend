@@ -73,7 +73,7 @@ def test_known_source_without_derived_group_reports_no_group():
         (
             {" wood_type ": " Teak "},
             4,
-            {"wood_type": "Teak", "wood_group": "teak", "quantity": "4"},
+            {"wood_type": "Teak", "wood_group": "Teak", "quantity": "4"},
         ),
         ({" a": "first", "a": "second"}, 4, {"a": "second", "quantity": "4"}),
         (
@@ -85,7 +85,7 @@ def test_known_source_without_derived_group_reports_no_group():
         (
             {"wood_group": "Dark", "wood_type": "Oak"},
             4,
-            {"wood_type": "Oak", "wood_group": "light", "quantity": "4"},
+            {"wood_type": "Oak", "wood_group": "Light", "quantity": "4"},
         ),
         (
             {"drawers_range": "6+", "drawers_qty": "2"},
@@ -102,6 +102,7 @@ def test_build_item_property_bag_scanner_table(properties, quantity, expected):
 @pytest.mark.unit
 def test_build_item_property_bag_drops_blank_values():
     assert build_item_property_bag(item({"blank": "   "}, 1)) == {"quantity": "1"}
+    assert build_item_property_bag(item({"   ": "x"}, 1)) == {"quantity": "1"}
 
 
 @pytest.mark.unit
@@ -160,6 +161,13 @@ def test_wildcard_and_token_matching_table():
         evaluate_stock_criteria(item({"shape": ", /"}), {"shape": ["oval"]})[0].reason
         is StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
     )
+    assert evaluate_stock_criteria(item({"wood_type": "Other"}), {"wood_group": None})[
+        0
+    ].reason is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+    assert evaluate_stock_criteria(item({"shape": "Oval"}), {"drawers_range": ["3-5"]})[
+        0
+    ].reason is StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
+    assert evaluate_stock_criteria(item(None), {}) == []
 
 
 @pytest.mark.unit
@@ -174,9 +182,26 @@ def test_matcher_accepts_an_unflushed_manager_item_instance():
 
 
 @pytest.mark.unit
+def test_matcher_accepts_any_of_multiple_criterion_values_and_rejects_a_miss():
+    subject = item({"wood_type": "Teak"}, 4)
+    assert evaluate_stock_criteria(subject, {"wood_group": ["dark", "teak"]}) == []
+    failures = evaluate_stock_criteria(subject, {"wood_group": ["dark", "light"]})
+    assert [(failure.key, failure.reason) for failure in failures] == [
+        ("wood_group", StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED)
+    ]
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("case", "properties", "quantity", "criteria", "expected_failures"),
     [
+        (
+            "H9-oval",
+            {"wood_type": "Oak", "shape": "Oval"},
+            1,
+            {"shape": ["oval"], "wood_group": ["light"]},
+            [],
+        ),
         ("H1", {"wood_type": "Walnut"}, 4, {"wood_group": ["dark"]}, []),
         ("H2", {"wood_type": "Elm, Beech"}, 1, {"wood_group": ["light"]}, []),
         ("H3-teak", {"wood_type": "Teak, Oak"}, 1, {"wood_group": ["teak"]}, []),

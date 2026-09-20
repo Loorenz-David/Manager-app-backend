@@ -220,3 +220,15 @@ expected values**" — a kind-set assertion does not meet it.
   `count_writes == 0` and §12A says lock `SELECT`s are not counted — the task text would make a
   correct implementation look like a violation. **L-7**: C1(g)'s dense fixture cannot discriminate
   `max+1` from `len+1`.
+
+### Implementer fix-round routing — Batch A fix 1 (2026-09-20)
+
+- The fix-round restores the dense C1(g) fixture and adds a sparse `[1, 7]` neighbour, exact
+  divergence and repair-record assertions, repair coverage for both active counters, the nullness
+  repair, density stamps, and the helper's stray-record failure probe. C2(a) uses before/after row
+  snapshots over the four MC-9 tables plus tasks and repair records, per the owner's restatement;
+  the task-5 wording about zero statements is not used.
+- Candidate criterion routed under charter rule 16: the workspace-scoped row-lock test remains a
+  structural lock-isolation criterion. The helper purge test is routed in plan 1 as the kit cleanup
+  criterion. The choice not to create `bm/services/commands/stock_report/requests/__init__.py`
+  remains intentional and is recorded here.

@@ -1,4 +1,6 @@
 from __future__ import annotations
+from typing import TypedDict
+
 from sqlalchemy import func, select
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
@@ -14,7 +16,40 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
 from beyo_manager.models.tables.tasks.task import Task
 
 
-async def recompute_row_counters(session, workspace_id: str) -> dict[str, dict]:
+class Divergence(TypedDict):
+    kind: str
+    client_id: str
+    field: str
+    stored: object
+    expected: object
+
+
+async def recompute_row_counters(session, stock_report_item_id: str) -> dict[str, int]:
+    result = await session.execute(
+        select(
+            StockTaskAssignment.state,
+            func.coalesce(func.sum(StockTaskAssignment.quantity), 0),
+        )
+        .where(
+            StockTaskAssignment.stock_report_item_id == stock_report_item_id,
+            StockTaskAssignment.is_deleted.is_(False),
+            StockTaskAssignment.state.in_(ACTIVE_ASSIGNMENT_STATES),
+        )
+        .group_by(StockTaskAssignment.state)
+    )
+    counters = {
+        "quantity_in_queue": 0,
+        "quantity_in_progress": 0,
+        "quantity_awaiting": 0,
+    }
+    for state, total in result:
+        counters[f"quantity_{state.value}"] = total
+    return counters
+
+
+async def _recompute_row_counters_for_workspace(
+    session, workspace_id: str
+) -> dict[str, dict[str, int]]:
     rows = await session.execute(
         select(
             StockTaskAssignment.stock_report_item_id,
@@ -37,7 +72,18 @@ async def recompute_row_counters(session, workspace_id: str) -> dict[str, dict]:
     return out
 
 
-async def recompute_goal_total(session, workspace_id: str) -> dict[str, int]:
+async def recompute_goal_total(session, history_record_id: str) -> int:
+    result = await session.scalar(
+        select(func.coalesce(func.sum(StockTaskAssignment.quantity), 0)).where(
+            StockTaskAssignment.credited_history_record_id == history_record_id
+        )
+    )
+    return result or 0
+
+
+async def _recompute_goal_totals_for_workspace(
+    session, workspace_id: str
+) -> dict[str, int]:
     result = await session.execute(
         select(
             StockTaskAssignment.credited_history_record_id,
@@ -52,11 +98,10 @@ async def recompute_goal_total(session, workspace_id: str) -> dict[str, int]:
     return dict(result.all())
 
 
-async def expected_task_flag(session, workspace_id: str, task_id: str) -> bool:
+async def expected_task_flag(session, task_id: str) -> bool:
     result = await session.execute(
         select(StockTaskAssignment.client_id)
         .where(
-            StockTaskAssignment.workspace_id == workspace_id,
             StockTaskAssignment.task_id == task_id,
             StockTaskAssignment.is_deleted.is_(False),
         )
@@ -65,10 +110,12 @@ async def expected_task_flag(session, workspace_id: str, task_id: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def compute_stock_report_divergences(session, workspace_id: str) -> list[dict]:
-    counters = await recompute_row_counters(session, workspace_id)
-    goals = await recompute_goal_total(session, workspace_id)
-    found = []
+async def compute_stock_report_divergences(
+    session, workspace_id: str
+) -> list[Divergence]:
+    counters = await _recompute_row_counters_for_workspace(session, workspace_id)
+    goals = await _recompute_goal_totals_for_workspace(session, workspace_id)
+    found: list[Divergence] = []
     rows = (
         (
             await session.execute(
@@ -123,7 +170,7 @@ async def compute_stock_report_divergences(session, workspace_id: str) -> list[d
                     for candidate in priority_groups[row.priority]
                     if candidate.priority_order is not None
                 ]
-                expected = len(assigned_orders) + 1
+                expected = max(assigned_orders, default=0) + 1
             found.append(
                 {
                     "kind": "priority_order_nullness",
@@ -184,7 +231,7 @@ async def compute_stock_report_divergences(session, workspace_id: str) -> list[d
         .all()
     )
     for task in tasks:
-        expected = await expected_task_flag(session, workspace_id, task.client_id)
+        expected = await expected_task_flag(session, task.client_id)
         if task.is_stock_assignment != expected:
             found.append(
                 {

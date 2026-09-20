@@ -21,30 +21,31 @@ async def write_repair_record(
     target_kind,
     target_client_id,
     field,
-    stored,
-    recomputed,
+    stored_value,
+    recomputed_value,
     trigger,
     created_by_id,
-    delta=None,
+    now,
 ):
     record = StockReportRepairRecord(
         workspace_id=workspace_id,
         target_kind=target_kind,
         target_client_id=target_client_id,
         field=field,
-        stored_value=_text(stored),
-        recomputed_value=_text(recomputed),
+        stored_value=_text(stored_value),
+        recomputed_value=_text(recomputed_value),
         trigger=trigger,
         created_by_id=created_by_id,
+        created_at=now,
     )
     session.add(record)
     logger.warning(
         "stock-report repair row=%s field=%s stored=%s recomputed=%s delta=%s trigger=%s",
         target_client_id,
         field,
-        stored,
-        recomputed,
-        delta,
+        stored_value,
+        recomputed_value,
+        None,
         trigger,
     )
     return record

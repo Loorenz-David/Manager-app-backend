@@ -10,13 +10,11 @@ from beyo_manager.domain.stock_report.scanner_property_tables import (
 
 @pytest.mark.unit
 def test_scanner_tables_and_drawer_ascii_rules():
-    assert WOOD_GROUPS["Dark"] == [
-        "Mahogany",
-        "Santos Rosewood",
-        "Dark Oak",
-        "Dark Teak",
-        "Walnut",
-    ]
+    assert WOOD_GROUPS == {
+        "Dark": ["Mahogany", "Santos Rosewood", "Dark Oak", "Dark Teak", "Walnut"],
+        "Teak": ["Teak", "Cherry"],
+        "Light": ["Oak", "Beech", "Pine", "Birch", "Elm"],
+    }
     assert DRAWER_RANGES == [("1-2", 1, 2), ("3-5", 3, 5), ("6+", 6, None)]
     assert drawer_range_of("4") == "3-5"
     assert drawer_range_of("٤") is None

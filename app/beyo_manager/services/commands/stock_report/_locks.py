@@ -1,6 +1,9 @@
 from sqlalchemy import select, text
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_report_history_record import (
+    StockReportHistoryRecord,
+)
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
@@ -44,6 +47,10 @@ async def lock_stock_report_items(session, workspace_id, client_ids):
 
 async def lock_stock_task_assignments(session, workspace_id, client_ids):
     return await _lock(session, StockTaskAssignment, workspace_id, client_ids)
+
+
+async def lock_stock_report_history_records(session, workspace_id, client_ids):
+    return await _lock(session, StockReportHistoryRecord, workspace_id, client_ids)
 
 
 async def lock_items(session, workspace_id, client_ids):

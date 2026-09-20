@@ -20,7 +20,13 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.services.commands.reset.reset_app import reset_app
-from tests.helpers.stock_report import make_ctx, seed_stock_report_workspace
+from tests.helpers.stock_report import (
+    capture_dispatch,
+    make_ctx,
+    purge_stock_report_workspace,
+    seed_stock_report_workspace,
+)
+from beyo_manager.models.tables.workspaces.workspace import Workspace
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -87,22 +93,29 @@ async def test_reset_removes_stock_report_graph_before_task_deletion_and_keeps_o
         db_session, own, incoming_data={"delete_orphan_bootstrap_users": False}
     )
     await db_session.commit()
-    dispatched = []
-
-    async def capture(events):
-        dispatched.extend(events)
-
-    monkeypatch.setattr(
-        "beyo_manager.services.commands.reset.reset_app.dispatch", capture
+    dispatched = capture_dispatch(
+        monkeypatch, "beyo_manager.services.commands.reset.reset_app.dispatch"
     )
-    await reset_app(ctx)
+    try:
+        await reset_app(ctx)
 
-    for model in (
-        StockReportItem,
-        StockTaskAssignment,
-        StockReportHistoryRecord,
-        StockReportRepairRecord,
-    ):
-        assert await _count(db_session, model, own_workspace_id) == 0
-        assert await _count(db_session, model, foreign_workspace_id) == 1
-    assert [event.event_name for event in dispatched] == ["workspace:reset"]
+        for model in (
+            StockReportItem,
+            StockTaskAssignment,
+            StockReportHistoryRecord,
+            StockReportRepairRecord,
+        ):
+            assert await _count(db_session, model, own_workspace_id) == 0
+            assert await _count(db_session, model, foreign_workspace_id) == 1
+        assert (
+            await db_session.scalar(
+                select(Workspace.client_id).where(
+                    Workspace.client_id == own_workspace_id
+                )
+            )
+            is None
+        )
+        assert [event.event_name for event in dispatched] == ["workspace:reset"]
+    finally:
+        await purge_stock_report_workspace(db_session, foreign_workspace_id)
+        await db_session.commit()

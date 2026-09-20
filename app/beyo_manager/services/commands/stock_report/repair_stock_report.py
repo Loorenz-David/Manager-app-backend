@@ -14,6 +14,7 @@ from beyo_manager.services.commands.stock_report._task_flag import set_task_stoc
 from beyo_manager.services.commands.stock_report._locks import (
     acquire_stock_report_order_lock,
     lock_stock_report_items,
+    lock_stock_report_history_records,
     lock_stock_task_assignments,
     lock_tasks,
 )
@@ -44,17 +45,63 @@ async def _repair_priority_orders(ctx, repaired, changed_row_ids):
                 .where(
                     StockReportItem.workspace_id == ctx.workspace_id,
                     StockReportItem.is_deleted.is_(False),
-                    StockReportItem.priority.is_not(None),
                 )
-                .order_by(StockReportItem.priority, StockReportItem.client_id)
+                .order_by(
+                    StockReportItem.priority,
+                    StockReportItem.priority_order,
+                    StockReportItem.client_id,
+                )
             )
         )
         .scalars()
         .all()
     )
+    for row in rows:
+        if row.priority is None and row.priority_order is not None:
+            stored = row.priority_order
+            result = await ctx.session.execute(
+                update(StockReportItem)
+                .where(
+                    StockReportItem.workspace_id == ctx.workspace_id,
+                    StockReportItem.client_id == row.client_id,
+                )
+                .values(
+                    priority_order=None,
+                    updated_at=ctx.now,
+                    updated_by_id=ctx.user_id,
+                )
+            )
+            if result.rowcount != 1:
+                raise RuntimeError(
+                    "priority-order repair affected an unexpected number of rows"
+                )
+            await write_repair_record(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                target_kind=StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM,
+                target_client_id=row.client_id,
+                field="priority_order",
+                stored_value=stored,
+                recomputed_value=None,
+                trigger="manual",
+                created_by_id=ctx.user_id,
+                now=ctx.now,
+            )
+            repaired.append(
+                {
+                    "kind": "priority_order_nullness",
+                    "client_id": row.client_id,
+                    "field": "priority_order",
+                    "stored": stored,
+                    "expected": None,
+                }
+            )
+            changed_row_ids.add(row.client_id)
+
     groups = {}
     for row in rows:
-        groups.setdefault(row.priority, []).append(row)
+        if row.priority is not None:
+            groups.setdefault(row.priority, []).append(row)
     for group_rows in groups.values():
         ordered = sorted(
             group_rows,
@@ -68,15 +115,22 @@ async def _repair_priority_orders(ctx, repaired, changed_row_ids):
             if row.priority_order == expected:
                 continue
             stored = row.priority_order
-            await ctx.session.execute(
+            result = await ctx.session.execute(
                 update(StockReportItem)
-                .where(StockReportItem.client_id == row.client_id)
+                .where(
+                    StockReportItem.workspace_id == ctx.workspace_id,
+                    StockReportItem.client_id == row.client_id,
+                )
                 .values(
                     priority_order=expected,
                     updated_at=ctx.now,
                     updated_by_id=ctx.user_id,
                 )
             )
+            if result.rowcount != 1:
+                raise RuntimeError(
+                    "priority-order repair affected an unexpected number of rows"
+                )
             await write_repair_record(
                 ctx.session,
                 workspace_id=ctx.workspace_id,
@@ -87,10 +141,11 @@ async def _repair_priority_orders(ctx, repaired, changed_row_ids):
                 ),
                 target_client_id=row.client_id,
                 field="priority_order",
-                stored=stored,
-                recomputed=expected,
+                stored_value=stored,
+                recomputed_value=expected,
                 trigger="manual",
                 created_by_id=ctx.user_id,
+                now=ctx.now,
             )
             repaired.append(
                 {
@@ -148,6 +203,15 @@ async def repair_stock_report(ctx) -> dict:
                 )
             ).all(),
         )
+        await lock_stock_report_history_records(
+            ctx.session,
+            ctx.workspace_id,
+            [
+                entry["client_id"]
+                for entry in divergences
+                if entry["kind"] == "goal_total"
+            ],
+        )
         # The unlocked read above only determines the task-lock set.  All repair
         # decisions are derived again once the report graph is locked.
         divergences = await compute_stock_report_divergences(
@@ -178,19 +242,28 @@ async def repair_stock_report(ctx) -> dict:
                     ctx.session,
                     divergence["client_id"],
                     divergence["expected"] == "true",
+                    require_update=True,
                 )
             elif kind == "goal_total":
-                await ctx.session.execute(
+                result = await ctx.session.execute(
                     update(StockReportHistoryRecord)
                     .where(
-                        StockReportHistoryRecord.client_id == divergence["client_id"]
+                        StockReportHistoryRecord.workspace_id == ctx.workspace_id,
+                        StockReportHistoryRecord.client_id == divergence["client_id"],
                     )
                     .values(quantity_awaiting=divergence["expected"])
                 )
+                if result.rowcount != 1:
+                    raise RuntimeError(
+                        "goal-total repair affected an unexpected number of rows"
+                    )
             else:
-                await ctx.session.execute(
+                result = await ctx.session.execute(
                     update(StockReportItem)
-                    .where(StockReportItem.client_id == divergence["client_id"])
+                    .where(
+                        StockReportItem.workspace_id == ctx.workspace_id,
+                        StockReportItem.client_id == divergence["client_id"],
+                    )
                     .values(
                         {
                             divergence["field"]: divergence["expected"],
@@ -199,6 +272,10 @@ async def repair_stock_report(ctx) -> dict:
                         }
                     )
                 )
+                if result.rowcount != 1:
+                    raise RuntimeError(
+                        "counter repair affected an unexpected number of rows"
+                    )
                 changed_row_ids.add(divergence["client_id"])
             await write_repair_record(
                 ctx.session,
@@ -206,10 +283,11 @@ async def repair_stock_report(ctx) -> dict:
                 target_kind=_TARGETS[kind],
                 target_client_id=divergence["client_id"],
                 field=divergence["field"],
-                stored=divergence["stored"],
-                recomputed=divergence["expected"],
+                stored_value=divergence["stored"],
+                recomputed_value=divergence["expected"],
                 trigger="manual",
                 created_by_id=ctx.user_id,
+                now=ctx.now,
             )
             repaired.append(divergence)
         remaining = await compute_stock_report_divergences(

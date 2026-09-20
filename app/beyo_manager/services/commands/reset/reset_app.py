@@ -1,5 +1,3 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from beyo_manager.config import settings
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
@@ -85,50 +83,56 @@ async def reset_app(ctx: ServiceContext) -> dict:
     Reset/clear all workspace data (bootstrap and operational).
     
     Deletes all workspace-scoped data in reverse dependency order:
+
+    Stock report:
+    1. stock_report_repair_records
+    2. stock_task_assignments
+    3. stock_report_history_records
+    4. stock_report_items
     
     Task system:
-    1. task_events
-    2. task_step_assignment_records
-    3. task_step_dependencies
-    4. step_state_records
-    5. task_steps
-    6. task_items
-    7. task_notes
-    8. tasks
+    5. task_events
+    6. task_step_assignment_records
+    7. task_step_dependencies
+    8. step_state_records
+    9. task_steps
+    10. task_items
+    11. task_notes
+    12. tasks
 
     Bootstrap data:
-    9. item_category_issue_types
-    10. working_section_item_categories
-    11. working_section_supported_issue_types
-    12. working_section_dependencies
-    13. user_section_daily_work_stats
-    14. working_section_daily_work_stats
-    15. working_section_memberships
-    16. working_sections
-    17. item_issues
-    18. item_upholstery_requirements
-    19. item_upholsteries
-    20. items
-    21. issue_types
-    22. item_categories
+    13. item_category_issue_types
+    14. working_section_item_categories
+    15. working_section_supported_issue_types
+    16. working_section_dependencies
+    17. user_section_daily_work_stats
+    18. working_section_daily_work_stats
+    19. working_section_memberships
+    20. working_sections
+    21. item_issues
+    22. item_upholstery_requirements
+    23. item_upholsteries
+    24. items
+    25. issue_types
+    26. item_categories
     
     Upholstery:
-    24. upholstery_inventories
-    25. upholsteries
+    28. upholstery_inventories
+    29. upholsteries
     
     Other operational data:
-    26. static_costs
-    27. user_shift_state_records
-    28. customers
-    29. user_work_profiles
-    30. user_daily_work_stats
-    31. user_lifetime_stats
+    30. static_costs
+    31. user_shift_state_records
+    32. customers
+    33. user_work_profiles
+    34. user_daily_work_stats
+    35. user_lifetime_stats
     
     Core workspace structures:
-    32. workspace_memberships (users remain global and unaffected)
-    33. audit_logs
-    34. workspace_roles
-    35. workspace
+    36. workspace_memberships (users remain global and unaffected)
+    37. audit_logs
+    38. workspace_roles
+    39. workspace
     
     Note: Users are global entities (not workspace-scoped). Deleting workspace_memberships
     removes workspace access for users; orphaned users remain in the system.

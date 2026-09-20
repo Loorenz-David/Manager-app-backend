@@ -196,3 +196,13 @@ compact `JSON.stringify` separators are confirmed by `node -e`. Scanner HEAD is 
   count and the enumeration. **Lesson L-9**: the rows state the right literals but no row states the
   rule ("the bag's `wood_group` is Scanner's group name verbatim"), which is why F-S1 looked
   plausible and the test was written to the code.
+
+### Implementer fix-round routing — Batch A fix 1 (2026-09-20)
+
+- The fix-round adds the missing H9 `shape: "Oval"` hand-walk case, the any-of and symmetric miss
+  matcher cases, the blank-key / derived-wildcard / missing-drawer-source / `item(None)` cases, and
+  asserts the complete Scanner literal table. No plan criterion table was edited; the plan's C6
+  prose enumerates 22 hand-walk cases despite its stale "seventeen" summary, so both H9 cases are
+  treated as required.
+- The Scanner repository and cited source remain read-only; its pinned provenance stays
+  `SCANNER_SOURCE_COMMIT = "0d80bf2"` because the review found no cited-file drift.

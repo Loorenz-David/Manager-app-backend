@@ -230,3 +230,20 @@ Rows: 53 — PASS 40 / FAIL 8 / NOT_VERIFIED 5. Full record:
 - **Lessons**: L-1 the C4 value table has no mixed blank/non-blank list row — the exact MC-3 row the
   implementation got wrong. L-5 C1(c)/(g) should quote rule 2's "expected outputs too" clause.
   L-6 §4 lists `__init__.py` files no test package in this repo uses.
+
+### Implementer fix-round routing — Batch A fix 1 (2026-09-20)
+
+- Candidate criterion: MC-3 normalization must remove blank elements from a list that mixes blank
+  and non-blank strings while preserving the non-blank normalized set; the value table did not
+  enumerate this input, so the fix-round test records it here rather than editing the criteria table.
+- Candidate criteria routed under charter rule 16: the four `test_schema_contract.py` checks, the
+  `_text` contract check in `test_repair_record_values.py`, the two settings checks in
+  `test_settings.py`, and the retained `test_stock_report_helper.py` purge-kit check. The latter is
+  retained because it is the only caller that discharges the kit cleanup obligation.
+- Accepted deviations recorded: the existing `test_stock_report_reset.py` filename is used instead
+  of the stale `test_reset_stock_report_phases.py` name, and no new `requests/__init__.py` is created
+  because the repository convention does not require it.
+- The two orphan settings checks in `tests/unit/domain/stock_report/test_settings.py` were deleted
+  under charter rule 16 after removing the sole test-package `__init__.py` exposed a duplicate-module
+  collection error with `tests/helpers/test_settings.py`; the settings behavior has no stock-report
+  criterion.
