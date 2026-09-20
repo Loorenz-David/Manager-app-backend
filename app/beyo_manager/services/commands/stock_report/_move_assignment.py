@@ -11,6 +11,7 @@ from beyo_manager.services.commands.stock_report._events import (
     build_stock_report_item_updated_event,
     build_stock_task_assignment_event,
 )
+from beyo_manager.services.commands.stock_report._goal_credit import apply_goal_effect
 from beyo_manager.services.commands.stock_report._repair_records import (
     write_repair_record,
 )
@@ -222,6 +223,16 @@ async def move_assignment(
         row_id=assignment.stock_report_item_id,
         deltas=deltas,
         workspace_id=workspace_id,
+        trigger=trigger,
+        now=now,
+    )
+
+    # Step 4 (phase 5) — the goal-credit step, after the counter statement.
+    await apply_goal_effect(
+        session,
+        assignment,
+        from_state=from_state,
+        to_state=target,
         trigger=trigger,
         now=now,
     )
