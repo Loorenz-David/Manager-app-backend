@@ -192,3 +192,41 @@ perimeter (`139 passed`; scoped Ruff and `git diff --check` clean). The configur
 database was not migrated or downgraded. The complete named-mutation set and pre-edit full-suite
 baseline are captured in the Batch-A handoff; this phase remains pending reviewer-owned
 graph/checkpoint gates and is not promoted here.
+
+### Review — batch A round 1 (2026-09-20, plan-reviewer, tree `0d5d31d`) — CHANGES_REQUESTED
+
+Rows: 53 — PASS 40 / FAIL 8 / NOT_VERIFIED 5. Full record:
+`handoffs/reviewer/2026-09-20_batch_A_review_1_handoff.md`.
+
+- **F-B2 (blocking)** `normalize_stock_criteria` (`criteria_normalization.py:17`) does not filter
+  blank elements out of an understood list: `{"k": ["Teak","  ","Dark"]}` → `['', 'dark', 'teak']`;
+  MC-3's value table says `sorted({e.strip().lower() for e in v if e.strip().lower() != ""})`.
+  Signature/identity divergence. Owner card 1 covers `CRITERIA_NORMALIZATION_VERSION`.
+- **F-S4** C1(c)/(g) FAIL: the only index test matches
+  `uix_stock_task_assignments_(item|task)_active` on a fixture violating both — the disjunction
+  charter rule 2 forbids. C1(d),(e),(f),(h),(j) NOT_VERIFIED. Reviewer probes P3,P4,P6–P9 confirm
+  all seven behaviours are **correct**; the coverage is what is missing. One row per letter, each
+  naming one index.
+- **F-S5** C2(a) FAIL: the row's `compare_metadata` instrument was replaced by a source-text grep of
+  the revision file (`tests/unit/domain/stock_report/test_schema_contract.py:98-113`), which cannot
+  observe a model↔DB divergence. Reviewer probe P2 ran the real comparison: 0 diffs on the five
+  tables. Build the row as written.
+- **F-S9** C5(a)/(b) FAIL (the "two different signatures" clause is never asserted); C5(c) FAIL
+  (idempotence over one payload, not every C4/C5 payload); C5(d) FAIL (one golden vector, the row
+  says six).
+- **F-S10** C3(a) FAIL: "the workspace row is gone" unasserted; the test commits two workspaces and
+  never purges (charter rule 11½, §9 rule 1); C3(a)'s stated caller `capture_dispatch` was
+  hand-rolled instead.
+- **F-S14** orphan tests (charter rule 16): `test_schema_contract.py` (4),
+  `test_repair_record_values.py` (1), `test_settings.py` (2) — this plan states settings carry no
+  criterion — and `tests/integration/helpers/test_stock_report_helper.py` (1, the only caller of
+  `purge_stock_report_workspace`; route it, don't delete it).
+- **Mutation audit**: C1(a),(b),(c),(f),(g),(h),(i)/(j) and C2(a),(b),(c),(e),(h) were probed against
+  `test_schema_contract.py` (ORM metadata / migration source) rather than the DB-level outcome each
+  row names. C5(g) and C7(a) never probed (both re-derived as armed).
+- Notes: N-4 `reset_app` docstring not extended (task 4); N-5 `tests/unit/domain/stock_report/__init__.py`
+  is the only `__init__.py` under `tests/` in the repo; N-6 history-record counters gained an
+  undeclared `default=0, server_default="0"`.
+- **Lessons**: L-1 the C4 value table has no mixed blank/non-blank list row — the exact MC-3 row the
+  implementation got wrong. L-5 C1(c)/(g) should quote rule 2's "expected outputs too" clause.
+  L-6 §4 lists `__init__.py` files no test package in this repo uses.

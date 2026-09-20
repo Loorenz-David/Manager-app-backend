@@ -161,3 +161,62 @@ endpoints are implemented and covered by the green focused perimeter (`139 passe
 `git diff --check` clean). Raw-SQL identity-map drift and full signature `not_repaired` records are
 explicitly tested. The complete named-mutation ledger and pre-edit full-suite baseline are captured
 in the Batch-A handoff; this phase remains pending reviewer-owned graph/checkpoint gates.
+
+### Review — batch A round 1 (2026-09-20, plan-reviewer, tree `0d5d31d`) — CHANGES_REQUESTED
+
+Rows: 42 — PASS 21 / FAIL 15 / NOT_VERIFIED 6. Full record:
+`handoffs/reviewer/2026-09-20_batch_A_review_1_handoff.md`. Bar for C1: §12A states the
+charter-rule-15 probe set requires "exactly one divergence of that kind, **with the exact stored and
+expected values**" — a kind-set assertion does not meet it.
+
+- **F-B1 (blocking)** C3(h): `repair_stock_report` **crashes** on a row with `priority = NULL` and
+  `priority_order` set. `_repair_priority_orders` (`repair_stock_report.py:40-54`) selects only rows
+  with `priority IS NOT NULL`, and the main loop `continue`s on both ordering kinds (`:171-172`), so
+  the divergence survives to the post-repair re-check and raises. Observed:
+  `RuntimeError: stock-report repair left divergences: [{'kind': 'priority_order_nullness', …,
+  'stored': 1, 'expected': None}]`. The whole transaction rolls back, so no divergence in that
+  workspace is ever repairable. §12A MC-20's repair table requires it ("`priority` null →
+  `priority_order` set null"). C1(h) is NOT_VERIFIED, which is why it shipped.
+- **F-S2** C1(g) FAIL: `consistency.py:121-126` computes the nullness `expected` as
+  `len(assigned_orders) + 1`; §12A and master plan §6.5 both say `max(group) + 1`. The shipped
+  fixture moved from the row's dense `[1, 2]` to a sparse `[1, 3]`, where the two still coincide, so
+  `test_null_priority_order_appends_after_the_group_maximum` asserts a value that is not after the
+  group maximum. Reviewer probe P5 on a `[1, 7]` group: reported 3, contract 8.
+- **F-S6** the goal-total repair issues an absolute `UPDATE stock_report_history_records`
+  (`repair_stock_report.py:183-189`) **without locking the record**; §12A's lock order ends "…
+  assignments, then history records". `_locks.py` has no history helper and §6.5 does not register
+  one (lesson L-4). Phase 5's inline goal credit will not hold the advisory lock.
+- **F-S7** (the structural check §7 asks the reviewer for) the "≠ 1 row is a programming error" rule
+  is implemented for **one** of four repair statements: `set_task_stock_flag` checks
+  `rowcount not in (0, 1)` — and accepts 0, which on the repair path means a silent no-op. The
+  counter (`:191-201`), goal-total (`:183-189`) and priority-order (`:71-79`) UPDATEs have no
+  rowcount check at all. The task-lock pre-pass **is** implemented correctly (unlocked `task_flag`
+  pre-pass → `lock_tasks` ascending → re-derive under the locks), as is MC-1's lock order
+  (advisory → tasks → rows → assignments).
+- **F-S8** undeclared §6.5 registry deviations: `recompute_row_counters`, `recompute_goal_total`,
+  `expected_task_flag` and `recompute_task_stock_flag` all ship workspace-wide signatures where the
+  registry declares per-entity ones (phase 4's inline self-heal is per row);
+  `write_repair_record` renames `stored_value`/`recomputed_value` to `stored`/`recomputed`, adds
+  `delta` and **drops `now`**, so `created_at` is wall-clock, not "the operation's `now`" (§12A);
+  the `Divergence` TypedDict is never defined.
+- **F-S11** repair-record `target_kind` is asserted **nowhere**: C3(f)/C3(g)/C6(a) each state it.
+  C3(a)/C3(d) assert no record fields at all.
+- **F-S12** C2(a) FAIL: ships `count_writes`, where the owner's 2026-09-19 ruling (master plan §7.4
+  item 5) restated the row to compare every row of the four MC-9 tables and
+  `stock_report_repair_records` before and after.
+- Weaker-than-the-row FAILs: C1(a) (kind set only), C1(e), C1(i), C1(j) (single field asserted),
+  C1(f) (single-row group, so "rows 1 and 2 not reported" is untested), C1(k) (one foreign drift, not
+  all ten — the `task_flag`/`goal_total`/`order_density`/nullness workspace filters are unguarded),
+  C6(e) (fixture omits the goal drift, so "nothing for G" is untested).
+- NOT_VERIFIED: C1(d), C1(h), C3(b), C3(c), C6(d), **C7(a)** — the last is
+  `assert_stock_report_clean`'s own charter-rule-15 probe, and that helper is the instrument every
+  later phase ends its scenarios with.
+- C8(a)–(h) all PASS. The literal 403 message is unasserted; graded PASS because it comes from shared
+  `require_roles` machinery and the discriminating content (403, service not reached) is exact (N-8).
+- Notes: N-2 `expected_task_flag` is called once per task (N+1) inside the check; N-3 the task scan
+  includes soft-deleted tasks; N-1 the ORM-metadata/predicate-string assertions are
+  implementation-coupled — backlog, not a fix-round item.
+- **Lesson L-3**: task 5 says "zero **statements** on the five tables" while C5(a) says
+  `count_writes == 0` and §12A says lock `SELECT`s are not counted — the task text would make a
+  correct implementation look like a violation. **L-7**: C1(g)'s dense fixture cannot discriminate
+  `max+1` from `len+1`.

@@ -156,3 +156,43 @@ Matcher implementation, Scanner-table validation, coercion, and H1–H16 hand-wa
 the focused Batch-A perimeter is green (`139 passed`, scoped Ruff and `git diff --check` clean).
 The full named-mutation evidence is recorded in the Batch-A handoff. This phase remains pending
 reviewer-owned graph/checkpoint gates and is not promoted here.
+
+### Review — batch A round 1 (2026-09-20, plan-reviewer, tree `0d5d31d`) — CHANGES_REQUESTED
+
+Rows: 75 — PASS 64 / FAIL 7 / NOT_VERIFIED 4. Full record, including the Scanner conformance
+transcripts the implementer owed:
+`handoffs/reviewer/2026-09-20_batch_A_review_1_handoff.md` §3.
+
+Rule-17 status: **the criteria side is discharged.** Every C6 row's criteria literal was run through
+Scanner's own `normalizeCriteria` via `tsx` and matches byte for byte; `String(4.0) === "4"` and the
+compact `JSON.stringify` separators are confirmed by `node -e`. Scanner HEAD is `a565674`, not
+`0d80bf2`, but `git diff 0d80bf2..a565674` over every file this plan cites is **empty**.
+
+- **F-S1** C2(h), C4(a), C4(b), C4(d) FAIL: `wood_group_of_token`
+  (`scanner_property_tables.py:47`) returns `group.lower()`. Scanner's
+  `deriveItemProperties` returns the declared name — measured: `{"wood_type":"Walnut"}` →
+  `wood_group: "Dark"`, `"Teak, Oak"` → `"Teak"`, `{"wood_group":"Dark","wood_type":"Oak"}` →
+  `"Light"`. The hand-walk's H1 cell says so literally ("bag `wood_group:"Dark"`"). The test at
+  `test_criteria_matcher.py:76,88` asserts the lower-cased value, cementing the divergence. No
+  user-visible wrong answer today (both sides tokenize to lower case), but `build_item_property_bag`
+  is a §6.1 public name. Return `group` unchanged; fix the four assertions to the plan's literals.
+- **F-S3** C3(d) FAIL: **no test in the tree uses a criteria list with more than one accepted value**,
+  so the any-of rule is unguarded. Reviewer probe P1 applied the row's named mutation
+  (`any(token in accepted …)` → `all(value in tokens …)`) and it **survived** L1 (56 passed) and L2
+  (96 passed). This site is absent from the implementer's ledger. Scanner does send multi-value
+  criteria (`{"wood_group":["dark","teak"]}` normalizes cleanly).
+- **F-S13** C6(j) FAIL: the hand-walk names **two** H9 items (`"shape":"Oval"` and the
+  `"Oval/Rectangular"` variant); only the variant ships. C7(a) FAIL: asserts only
+  `WOOD_GROUPS["Dark"]`, leaving the Teak and Light lists unguarded against the drift the row exists
+  to catch.
+- NOT_VERIFIED: C2(c) (blank **key** `{"   ": "x"}`), C5(d) (wildcard `None` on a derived key whose
+  source derives to nothing — the row's point is that the wildcard fails too), C5(e)
+  (`drawers_range` criterion with no `drawers_qty`), C5(n) (`{}` criteria against
+  `properties = None`).
+- Note N-9: §2 cites `repositories/location-stock.repository.ts:43-68`; the file is at
+  `modules/stock/repositories/location-stock.repository.ts`.
+- **Lesson L-2**: C6 says "seventeen rows lettered (a)–(q)" while its prose enumerates 22 cases
+  (H3 both, H9 both, H11 both, H14 three). H9's second item is what fell through the gap between the
+  count and the enumeration. **Lesson L-9**: the rows state the right literals but no row states the
+  rule ("the bag's `wood_group` is Scanner's group name verbatim"), which is why F-S1 looked
+  plausible and the test was written to the code.
