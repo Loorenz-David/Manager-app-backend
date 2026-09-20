@@ -1090,3 +1090,13 @@ it anchored its *code* evidence the opposite way throughout the review (`consist
 `_task_flag.py:14-15`, `repair_stock_report.py:38-54`). So: span-free when naming graph entities,
 span-bound when citing code — the distinction held without any prompting, and it never asked for
 anchors or mentioned the graph's anchoring model.
+
+## 2026-09-20 — stock_report batch A fix round 1 (Codex, gpt-5.6-terra/medium)
+
+Codex again inspected the graph read-only and made no write, reporting it in one line ("Architecture
+Graph was read-only inspected; no graph write was made") with no delta text of any kind — not even
+the prose fallback the reviewer had supplied a round earlier and which sat in the handoff it was
+told to read in full. Two sessions now have treated the graph as a gate belonging to someone else
+rather than as a description they owe. Nothing observable about anchoring: there is still no
+agent-authored delta in this project to judge span-free or otherwise. The only agent that has
+described the delta at all is the reviewer, unprompted.
