@@ -177,8 +177,9 @@ repair record, and duplicate criterion`.
 
 ## 9. Commits
 
-- Final checkpoint: emitted after this handoff is written, with the required message above; the SHA is
-  reported in the final owner-layer message.
+- Final checkpoint: `5dbb9eb11dd8ebc0275ba24a4543f0a83f84612f`, with the required message above.
+- This handoff-only record update is the closing documentation commit; it does not alter the tested
+  production or test tree.
 
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
