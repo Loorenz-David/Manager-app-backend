@@ -232,3 +232,52 @@ expected values**" — a kind-set assertion does not meet it.
   structural lock-isolation criterion. The helper purge test is routed in plan 1 as the kit cleanup
   criterion. The choice not to create `bm/services/commands/stock_report/requests/__init__.py`
   remains intentional and is recorded here.
+
+### Re-review — batch A round 1 fix (2026-09-20, plan-reviewer, tree `983d774`) — CHANGES_REQUESTED
+
+Rows: 42 — **PASS 40 / FAIL 2 / NOT_VERIFIED 0** (was 21/15/6). Full record:
+`handoffs/reviewer/2026-09-20_batch_A_rereview_1_handoff.md`. Batch A is CHANGES_REQUESTED on this
+plan alone; plans 1 and 2 are clear.
+
+- **F-B1 CONFIRMED.** `_repair_priority_orders:59-99` handles `expected is None` **before** the
+  density renumber (`:101-161`) — ordering verified by reading and by
+  `test_repair_applies_nullness_before_priority_density` asserting `(1, 2, 3)`. One
+  `stock_report_item` record, old order as `stored_value`, NULL as `recomputed_value`. Review 1's
+  probe P10 scenario is now a green test that asserts the post-repair check is `[]` — **no raise**.
+- **F-S2 CONFIRMED.** `consistency.py:173` is `max(assigned_orders, default=0) + 1`. C1(g) has the
+  dense `[1, 2]` fixture **and** the sparse `[1, 7]` neighbour, and the `len+1` mutant reddens **only
+  the sparse one** — exactly the discrimination lesson L-7 asked for.
+- **F-S7 CONFIRMED.** All four repair-path UPDATEs guard `rowcount == 1` and `set_task_stock_flag`
+  takes `require_update=True` on the repair path only. **All five demonstrated to fire**, each with
+  its exact `RuntimeError`.
+- **F-S6 CONFIRMED structurally.** `lock_stock_report_history_records(session, workspace_id,
+  client_ids) -> dict[str, StockReportHistoryRecord]` exists, is taken **after** the assignment
+  locks, and goes through the shared `_lock` (ascending, `FOR UPDATE`, `populate_existing`). Removing
+  it reddens nothing — a concurrency guard no single-session test can observe. **Residual (note
+  N-R1):** the lock set comes from the pre-lock divergence read while the UPDATE iterates the
+  post-lock read. Routed to phase 5.
+- **F-S11 / F-S12 CONFIRMED** except C3(d): `group`, `stock_report_item`, `task` and
+  `history_record` target kinds are all asserted and mislabelling any of them reddens; C2(a) is
+  rebuilt on the owner's restatement (row-level before/after snapshot over five tables) and a write
+  during the check reddens it.
+- **C1(k) FAIL (blocking, F-R1).** Measured: of the five workspace filters in
+  `compute_stock_report_divergences`, only the `stock_report_items` select reddens under the row's
+  named mutation. The `tasks`, `stock_report_history_records`, counter and goal filters all **survive**.
+  Worse, this round implemented §6.5's registered `expected_task_flag(session, task_id)` by
+  **deleting its `workspace_id` predicate** — the row's own mutation, applied to production, with a
+  green suite. `StockTaskAssignment` has no composite FK tying its workspace to its task, so a
+  cross-workspace row is structurally permitted and would flip a foreign task's flag. See owner
+  card 1.
+- **C3(d) FAIL (should-fix, F-R2).** `test_manual_repair_clears_false_positive_task_flag` asserts the
+  `repaired` kinds and the flag value, and nothing about the record or the post-repair check.
+  Measured: hard-coding the task record's `recomputed_value` to `"true"` leaves the file green
+  (17 passed). The `true → false` direction's `stored_value`/`recomputed_value` are asserted nowhere;
+  C3(e)'s exact record for the opposite direction is what makes the gap invisible.
+- **F-R3 (should-fix).** `test_consistency_check.py::test_consistency_matches_migrated_worker_schema`
+  is new in this delta, is byte-for-byte plan 1 C2(a)'s check, traces to no plan 3 row and is routed
+  nowhere — a new orphan added by the round sent to remove nine (charter rule 16).
+- **Lessons**: L-12 (C1(k) names one mutation for five distinct filters — one per sub-check),
+  L-13 (C3(d)/C3(e) are inverse directions of one write; each needs its own record assertion),
+  L-14 (every priority-order fixture creates rows in ascending order, so with ULID client_ids
+  C3(f)'s "renumber by client_id" mutation is only observable through the nullness row — one fixture
+  must create rows in an order that disagrees with their ordering).

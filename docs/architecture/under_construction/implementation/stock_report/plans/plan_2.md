@@ -206,3 +206,31 @@ compact `JSON.stringify` separators are confirmed by `node -e`. Scanner HEAD is 
   treated as required.
 - The Scanner repository and cited source remain read-only; its pinned provenance stays
   `SCANNER_SOURCE_COMMIT = "0d80bf2"` because the review found no cited-file drift.
+
+### Re-review — batch A round 1 fix (2026-09-20, plan-reviewer, tree `983d774`) — APPROVED (phase 2)
+
+Rows: 75 — **PASS 75 / FAIL 0 / NOT_VERIFIED 0** (was 64/7/4). Full record:
+`handoffs/reviewer/2026-09-20_batch_A_rereview_1_handoff.md`. Nothing in this plan is outstanding.
+
+- **F-S1 CONFIRMED.** `wood_group_of_token:47` returns `group` unchanged. The bag now carries
+  Scanner's declared `"Teak"` (`[properties9]`) and `"Light"` (`[properties13]`); re-lower-casing
+  reddens both. C4(a)'s `"Dark"` for Walnut is still not asserted at bag level but is now **entailed**
+  by two armed facts — C7(a)'s whole-literal `WOOD_GROUPS` assertion (two independent table edits
+  redden it) and the same single `return` statement, proved by the Teak and Light rows.
+- **F-S3 CONFIRMED — the one real coverage hole of review 1 is closed.** Review 1's probe P1 mutant
+  (`any(token in accepted …)` → `all(value in tokens …)`), which survived L1 and L2 then, now reddens
+  **`test_matcher_accepts_any_of_multiple_criterion_values_and_rejects_a_miss`** and nothing else.
+  I also ran the other "require all" direction (`all(token in accepted …)`) → RED on
+  `test_wildcard_and_token_matching_table` and `[H9]`.
+- **C2(h) CONFIRMED** by a properly-built "trust stored" mutant — the naive one (skip re-derivation)
+  is an equivalent mutant, because `wood_group` is popped by `EXCLUDED_ITEM_PROPERTY_KEYS` first. The
+  faithful mutant (drop the exclusion **and** skip re-derivation) reddens `[properties13]`.
+- **C4(b), C4(d) CONFIRMED**: last-token → RED ×3; case-sensitive member lookup → RED ×17.
+- **F-S13 CONFIRMED**: H9's first item (`{"wood_type": "Oak", "shape": "Oval"}`) ships as
+  `[H9-oval]`; C7(a) asserts the whole `WOOD_GROUPS` literal.
+- **C2(c), C5(d), C5(e), C5(n) now covered.** C5(d)'s "wildcard passes" mutant reddens. C2(c), C5(e)
+  and C5(n) declare no mutation in the plan; each asserts its exact outcome.
+- Notes: **N-R5** — C3(d)'s fixture is `{"wood_group": ["dark","teak"]}`, not the row's
+  `{"quantity": ["4","8"]}`; same code path, mutation bites, but the deviation was undeclared
+  (charter rule 14). **N-R6** — C5(d)/(e)/(n) are three sequential `assert`s appended to one test;
+  charter rule 12's short-circuit shape. Review 1's N-9 (stale §2 citation) remains open.

@@ -247,3 +247,43 @@ Rows: 53 — PASS 40 / FAIL 8 / NOT_VERIFIED 5. Full record:
   under charter rule 16 after removing the sole test-package `__init__.py` exposed a duplicate-module
   collection error with `tests/helpers/test_settings.py`; the settings behavior has no stock-report
   criterion.
+
+### Re-review — batch A round 1 fix (2026-09-20, plan-reviewer, tree `983d774`) — APPROVED (phase 1)
+
+Rows: 53 — **PASS 53 / FAIL 0 / NOT_VERIFIED 0** (was 40/8/5). Full record:
+`handoffs/reviewer/2026-09-20_batch_A_rereview_1_handoff.md`. The batch verdict is
+CHANGES_REQUESTED on plan 3 findings only; nothing in this plan is outstanding.
+
+- **F-B2 CONFIRMED.** `criteria_normalization.py:17-19` filters blank elements;
+  `{'k': ['Teak','  ','Dark']}` → `['dark','teak']`. `CRITERIA_NORMALIZATION_VERSION == 1` — the
+  owner's ruling held. Removing the filter reddens `test_normalization_value_table[raw5]` and
+  `test_signature_uses_normalized_golden_vectors[raw1]`.
+- **F-S4 CONFIRMED.** C1(c)–(j) are now seven DB-level rows, each naming **one** index. The
+  disjunction is gone: the two unique indexes are `(workspace_id, item_id)` and
+  `(workspace_id, task_id)`, and each fixture violates exactly one. All six named mutations run as
+  **database** mutations (DDL inside the rolled-back session) and every one flips the outcome —
+  except C1(h)'s.
+- **C1(h)'s named mutation is an EQUIVALENT MUTANT** (lesson L-10): `item_category_id` is FK-bound to
+  one workspace, so dropping `workspace_id` from `uix_stock_report_items_identity_active` changes no
+  observable outcome. Recorded as equivalent; no test demanded.
+- **F-S5 CONFIRMED.** C2(a) is now the real `compare_metadata` over `run_sync`, filtered to the five
+  tables. **The row's named mutation is INERT** (lesson L-11): Alembic does not diff CHECK
+  constraints — measured, 33 passed. Calibrated with "remove an index from the model" → RED. The
+  CHECKs are covered at DB level by C2(b)–(g); nothing is unguarded.
+- **F-S9 CONFIRMED.** C5(a)/(b) assert two different signatures; C5(c) runs over 15 payloads; C5(d)
+  ships six hand-written golden vectors. Two measurements worth keeping: C5(c)'s named mutation
+  (`str` wraps twice) is still idempotent and so cannot redden its own guard; C5(d)'s "drop
+  `sorted()`" reddens on only 4 of 7 `PYTHONHASHSEED` values, because the intermediate is a `set`
+  (lesson L-15). Enumeration is 7 payloads short of "every raw payload of C4 and C5" — backlog
+  note N-R2, deliberately not blocking, since every branch is represented.
+- **F-S10 PARTIAL.** C3(a) now asserts all four clauses including "the workspace row is gone", uses
+  the kit's `capture_dispatch` and purges in `finally`; both named mutations redden. Residual: the
+  **own** workspace's two kit users are still committed and never deleted (~13 → 2 rows/run) —
+  note N-R4.
+- **N-4, N-5 CONFIRMED.** Docstring renumbered (it skips 23 and 27 — a pre-existing off-by-one,
+  note N-R8); `find app/tests -name __init__.py` is now empty. The duplicate-module collection story
+  checks out: `tests/helpers/test_settings.py` contains **no tests** — it is a helper whose `test_*`
+  name makes pytest collect it (note N-R9). No basename collides under `app/tests` today, and the
+  deleted checks covered settings this plan states carry no criterion until phase 6 (routed there).
+- **Lessons**: L-10 (C1(h)'s mutation is equivalent), L-11 (C2(a)'s CHECK mutation is inert),
+  L-15 (`sorted()` over a `set` is not deterministically mutation-testable).
