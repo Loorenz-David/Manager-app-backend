@@ -188,4 +188,28 @@ passes the counter and check assertions (self-heal) and **reddens only on the re
 
 ## 8. Review log
 
-(empty)
+**Implementer, 2026-09-21 (batch B1-implement-1, tree `e50807b`).** Built `_move_assignment.py`
+(the total allowed-move table driven off `ACTIVE_ASSIGNMENT_STATES`/`TERMINAL_ASSIGNMENT_STATES`
+plus two named Scanner-only cells, the guarded counter statement with inline self-heal, MC-17
+stamps, MC-19 events with a net-change guard on `:updated`), `_remove_assignment.py`, `_events.py`.
+All 62 criterion rows covered 1:1 by test cases (parametrized for C2 and C3); `executed == declared
+== 33` named mutations, full ledger in the batch handoff
+(`handoffs/implementer/2026-09-21_batch_B1_implement_1_handoff.md` §4).
+
+Judgment calls: (1) B2's amendment required updating a *second* `set_task_stock_flag` call site
+(`repair_stock_report.py`) the prompt's routing note did not name — mechanical, authorized under
+N-S3, phase-3 suite re-verified green. (2) The plan's 22 individual "allow it" C3 cells map to
+exactly 4 distinct guard branches in `_assert_allowed_move`; I ran one mutation per guard plus one
+combined-removal proof, rather than 22 near-identical edits, and discovered C3(m)/(s)/(u)/(v) are
+each protected by two independent guards (only the combined removal reddens them) — reported as a
+structural finding, not smoothed over. (3) H9 (event payload must serialize `priority.value`, never
+the enum) and N-S3's tenancy guard are both implemented and verified ad hoc, but pin to no
+criterion row in this plan — declared as candidate criteria in the batch handoff §12, not invented
+here.
+
+One mutation (C1(g)(i), "skip -q for DELETE target") required a small local generalization to
+target the DELETE sentinel specifically, not a change to production semantics. One mutation
+(C1(u)(ii), "classify resolved_early as active") required a locally-scoped mutated copy of the
+active-states set/column map inside the mutation edit itself (never shipped) since the two are
+otherwise `frozenset`/`dict` constants — this is the correct way to simulate "what if this state
+were wrongly classified active" without editing the shared enums module.

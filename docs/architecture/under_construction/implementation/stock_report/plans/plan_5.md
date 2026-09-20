@@ -123,4 +123,28 @@ soft-deleted — C1(i), C1(l), C1(q), C2(c), and step (6) of C3(a). Every row en
 
 ## 8. Review log
 
-(empty)
+**Implementer, 2026-09-21 (batch B1-implement-1, tree `1351b5f`).** Built `_goal_credit.py`
+(`current_goal_record_id`, the credit/uncredit paths implementing MC-5's table exactly as amended
+by §14F F4, the guarded subtraction with inline self-heal) and wired `apply_goal_effect` into
+`_move_assignment.py` after the counter statement, before the events, per §4's placement. All 22
+criterion rows covered 1:1 by test cases; `executed == declared == 15` named mutations (13 named
+cells map 1:1 or via the plan's own declared mirrors — C1(c), C1(g), C1(h), C1(i), C1(o), C1(r) are
+mirrors, not separately run), full ledger in the batch handoff
+(`handoffs/implementer/2026-09-21_batch_B1_implement_1_handoff.md` §8).
+
+**Finding worth folding upstream:** C2(c)'s named mutation ("run the self-heal block
+unconditionally... after the guarded subtraction returns 1 row") is written as if a guarded
+subtraction statement runs on the row's first move (`awaiting → resolved`). In the shipped
+implementation that move issues **no statement at all** on the goal record (C1(e): "nothing: the
+record keeps the units" — read literally, not as a zero-delta statement) — so a probe planted
+inside `_uncredit`'s 1-row branch is unreachable for this scenario and came back green. I re-sited
+the same mutation to the code that actually runs on the first move (the `RESOLVED` early-return),
+and it reddened exactly `C2(c)`. Both the inert run and the corrected one are on record in the
+batch handoff §8. A future plan revision could tighten this cell's site description to name the
+`RESOLVED` branch explicitly, since "after the guarded subtraction" does not hold for every reader's
+implementation shape.
+
+Judgment calls: C2(b)/C2(d)'s fixtures construct the first assignment (A1) as a direct ORM insert
+(already in its final credited state) rather than driving it through `move_assignment`, to keep
+`recompute_goal_total`'s assertion independent of an unrelated intermediate value — C2(d) uses
+`move_assignment` for both A1 and A2 as the plan's "MV(...)" notation literally specifies.
