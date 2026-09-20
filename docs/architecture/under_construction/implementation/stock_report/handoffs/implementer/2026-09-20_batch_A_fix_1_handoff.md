@@ -5,7 +5,7 @@ round: batch_A-fix-1
 state: IMPLEMENTED_WITH_MUTATION_GAPS
 date: 2026-09-20
 actor: Codex
-tree: b4770d882b41aafc08dec995ebe4d009bd9260a1 + working-diff 7cb5cc8e00eec5abc6eb3b169a03aa10c4930d515e43e3f4bc54fdd81a74425f
+tree: 90f6b82 (checkpoint; L2/L4 ran on equivalent pre-commit source tree b4770d8 + working-diff 7cb5cc8e00eec5abc6eb3b169a03aa10c4930d515e43e3f4bc54fdd81a74425f)
 ---
 
 # Batch A fix 1 implementer handoff
@@ -116,8 +116,7 @@ docs commit; those files are outside this fix-round perimeter.
 
 ## 8. Commits
 
-No fix-round checkpoint commit has been created yet; the required scoped checkpoint commit is the
-next closing action.
+- `90f6b82` — `CHECKPOINT (not approved): stock_report batch A fix 1 — implement blocking repairs and contract tests`
 
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
