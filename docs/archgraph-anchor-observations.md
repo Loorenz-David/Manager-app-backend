@@ -1100,3 +1100,14 @@ told to read in full. Two sessions now have treated the graph as a gate belongin
 rather than as a description they owe. Nothing observable about anchoring: there is still no
 agent-authored delta in this project to judge span-free or otherwise. The only agent that has
 described the delta at all is the reviewer, unprompted.
+
+## 2026-09-20 — stock_report batch A re-review 1 (Claude Opus 5, plan-reviewer)
+
+Again no graph write, and again the reviewer is the only role that treats the delta as something
+owed: it carried review 1's prose delta forward unchanged and routed it to the orchestrator's gate
+in its carry-forward table, rather than dropping it the way both Codex rounds did. Still entirely
+node/edge names, no spans. The contrast sharpened this round: the same session anchored 55 mutation
+sites to file-and-line (`consistency.py:101-110`, `repair_stock_report.py:275`, `_locks.py:52`) and
+recorded SHA-256 hashes for every mutated file, so it is plainly willing to be precise about
+locations when the evidence is code — it simply does not reach for spans when the subject is the
+graph. Three sessions in, no agent has asked what an anchor is or offered one unprompted.
