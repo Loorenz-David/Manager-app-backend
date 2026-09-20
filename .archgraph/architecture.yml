@@ -7372,6 +7372,258 @@ nodes:
         symbol: load_live_worked_time
         contentHash: 2228a752fa0817602ab66336e5c36ff422482fb63310197492ec31c34940fc45
         linkedAt: 2026-09-16T06:40:26.948Z
+  - id: table-stock-report-item
+    type: table
+    name: stock_report_items
+    description: One row per (workspace, item_category, normalized criteria
+      signature) stock demand. Carries the four unit counters
+      (quantity_requested, quantity_in_queue, quantity_in_progress,
+      quantity_awaiting), priority and a dense priority_order within its
+      priority group. Identity is enforced by a partial unique index on
+      (workspace_id, item_category_id, properties_signature) where is_deleted =
+      false, so a soft-deleted identity is reusable.
+    tags:
+      - stock_report
+      - batch_A
+      - phase_1
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/stock_report/stock_report_item.py
+          symbol: StockReportItem
+          summary: Declares the table with four non-negative counter CHECK constraints and
+            the partial unique identity index predicated on is_deleted = false.
+          inferenceReason: The model plus its migration are the authoritative definition
+            of the stock report's central aggregate row.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: table-stock-task-assignment
+    type: table
+    name: stock_task_assignments
+    description: Links a task to a stock_report_items row for a quantity, in one of
+      six states (in_queue, in_progress, awaiting active; resolved,
+      resolved_early, failed terminal). Two partial unique indexes keep at most
+      one active assignment per (workspace, item) and per (workspace, task),
+      both predicated on is_deleted = false AND state IN the three active
+      states, so terminal and soft-deleted rows free the slot.
+    tags:
+      - stock_report
+      - batch_A
+      - phase_1
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/stock_report/stock_task_assignment.py
+          symbol: StockTaskAssignment
+          summary: Declares the six-state enum column, a positive-quantity CHECK, and the
+            two active-uniqueness partial indexes.
+          inferenceReason: The active/terminal partition and the two uniqueness slots are
+            the core invariant every later stock-report phase writes against.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: table-stock-report-history-record
+    type: table
+    name: stock_report_history_records
+    description: "Append-only history for a stock_report_items row:
+      quantity-requested changes and goal records carrying quantity_awaiting,
+      from which the goal total is recomputed."
+    tags:
+      - stock_report
+      - batch_A
+      - phase_1
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/stock_report/stock_report_history_record.py
+          symbol: StockReportHistoryRecord
+          summary: Declares the record type enum and a non-negative quantity_awaiting
+            CHECK.
+          inferenceReason: Goal-total consistency is computed by summing these records, so
+            the table is a first-class node in the consistency mechanism.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: table-stock-report-repair-record
+    type: table
+    name: stock_report_repair_records
+    description: "Audit trail written by the stock-report repair: one row per
+      (target, field) net change, with target_kind (stock_report_item, group,
+      task, history_record), the stored and recomputed values as contract text,
+      the trigger, the actor and the operation's now."
+    tags:
+      - stock_report
+      - batch_A
+      - phase_3
+    metadata:
+      evidence:
+        - path: app/beyo_manager/models/tables/stock_report/stock_report_repair_record.py
+          symbol: StockReportRepairRecord
+          summary: Declares the repair-target kind enum and the stored/recomputed text
+            columns.
+          inferenceReason: Every repair write is accompanied by one of these rows, so it
+            is the observable outcome the repair criteria assert.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: domain-stock-criteria-normalization
+    type: domain
+    name: stock criteria normalization and signature
+    description: Normalizes a Scanner criteria payload to the MC-3 value table
+      (strings stripped and lower-cased, understood lists sorted, deduplicated
+      and stripped of blank elements, keys preserved verbatim) and derives
+      properties_signature from it. CRITERIA_NORMALIZATION_VERSION is 1; the
+      version exists to force a re-signing migration when the recipe changes.
+    tags:
+      - stock_report
+      - batch_A
+      - phase_1
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/stock_report/criteria_normalization.py
+          symbol: normalize_stock_criteria
+          summary: Implements the value table, filtering blank list elements before
+            sorting and deduplicating.
+          inferenceReason: The signature this produces is the identity half of
+            stock_report_items, so normalization changes re-file every row.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: domain-stock-criteria-matcher
+    type: domain
+    name: stock criteria matcher (Scanner mirror)
+    description: "Mirrors Scanner's matchesCriteria: builds an item property bag
+      with Scanner's coercion rules, derives wood_group and drawers_range from
+      Scanner's literal tables, and evaluates a criteria payload with any-of
+      semantics, returning sorted failure reasons (missing_on_item,
+      value_not_accepted, criterion_not_understood, no_group_for_value)."
+    tags:
+      - stock_report
+      - batch_A
+      - phase_2
+      - scanner_mirror
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/stock_report/criteria_matcher.py
+          symbol: evaluate_stock_criteria
+          summary: Evaluates each criterion against the item bag and accumulates sorted
+            failures without short-circuiting.
+          inferenceReason: This is a deliberate mirror of an external repository's logic,
+            so it is an architectural coupling worth recording as its own node.
+        - path: app/beyo_manager/domain/stock_report/scanner_property_tables.py
+          symbol: wood_group_of_token
+          summary: Returns Scanner's declared group name verbatim from the WOOD_GROUPS
+            literal table.
+          inferenceReason: The bag's values must equal what Scanner would produce, so the
+            tables are part of the same mirrored contract.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: query-stock-report-consistency
+    type: command
+    name: compute_stock_report_divergences
+    description: Read-only workspace-wide consistency check. Recomputes the four
+      counters, the goal total, the task stock flag, the criteria signature,
+      priority-order density and priority-order nullness, and returns the
+      divergences sorted by (kind, client_id, field) with exact stored and
+      expected values. Every read is workspace-filtered; it writes nothing.
+    tags:
+      - stock_report
+      - batch_A
+      - phase_3
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: compute_stock_report_divergences
+          summary: Assembles divergences of eight kinds from workspace-scoped reads and
+            emits no write statements.
+          inferenceReason: This is the instrument every self-heal and repair path is
+            measured against, so it is the hub of the consistency mechanism.
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: expected_task_flag
+          summary: Filters candidate assignments by workspace_id as well as task_id before
+            deriving the expected flag.
+          inferenceReason: The workspace predicate is the tenancy boundary of the whole
+            check; without it a foreign assignment can set a local task's flag.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: command-repair-stock-report
+    type: command
+    name: repair_stock_report
+    description: Manual repair of a workspace's stock-report divergences. Takes the
+      advisory order lock, then locks tasks, rows, assignments and history
+      records ascending by client_id; applies counter, goal-total, task-flag,
+      priority-nullness and priority-density repairs, each guarded to affect
+      exactly one row; writes one repair record per (target, field) net change;
+      re-runs the consistency check and raises if any non-signature divergence
+      remains. Signature divergences are reported as not_repaired by design.
+    tags:
+      - stock_report
+      - batch_A
+      - phase_3
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/repair_stock_report.py
+          symbol: repair_stock_report
+          summary: Orders the repair steps with nullness before density renumbering and
+            re-checks before returning.
+          inferenceReason: The lock order and the step order are the contract this command
+            exists to hold, and later phases reuse both.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: infrastructure-stock-report-locks
+    type: infrastructure
+    name: stock report lock helpers
+    description: "The stock-report lock ladder: an advisory transaction lock per
+      workspace for ordering, plus SELECT ... FOR UPDATE helpers for items,
+      assignments, tasks and history records, each workspace-scoped and ordered
+      ascending by client_id to give a single global lock order."
+    tags:
+      - stock_report
+      - batch_A
+      - phase_3
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_locks.py
+          symbol: lock_stock_report_history_records
+          summary: Locks history records through the shared _lock helper, ascending by
+            client_id, after the assignment locks.
+          inferenceReason: Ascending client_id order across every class is what prevents
+            deadlocks between the repair and the inline self-heal paths added in
+            later phases.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - id: endpoint-stock-report-consistency
+    type: endpoint
+    name: stock report consistency and repair endpoints
+    description: "Two manager-only API v1 routes: a GET returning the workspace's
+      consistency envelope and a POST running the manual repair. Both reject
+      WORKER and SELLER with 403 without reaching the service."
+    tags:
+      - stock_report
+      - batch_A
+      - phase_3
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          summary: Mounts both routes behind require_roles limited to admin and manager.
+          inferenceReason: The role cells are criterion rows in plan 3, so the endpoint
+            pair is an architectural surface with an asserted authorization
+            boundary.
+    origin: ai_inferred
+    confidence: 0.85
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -13516,3 +13768,169 @@ edges:
     confidence: 0.95
     createdAt: 2026-09-16T06:40:26.948Z
     updatedAt: 2026-09-16T06:40:26.948Z
+  - sourceNodeId: command-repair-stock-report
+    relationshipType: calls
+    targetNodeId: query-stock-report-consistency
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/repair_stock_report.py
+          symbol: repair_stock_report
+          summary: Calls the divergence computation to derive its work set and again after
+            repairing to assert nothing non-signature remains.
+          inferenceReason: The repair is defined as closing exactly what the check
+            reports, so the dependency is structural, not incidental.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: command-repair-stock-report
+    relationshipType: depends_on
+    targetNodeId: infrastructure-stock-report-locks
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/repair_stock_report.py
+          symbol: repair_stock_report
+          summary: Acquires the advisory lock and then each class lock in the documented
+            order before writing.
+          inferenceReason: The lock ladder is the concurrency contract of the repair path.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: command-repair-stock-report
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-repair-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_repair_records.py
+          symbol: write_repair_record
+          summary: Writes one record per net change with the operation's now as
+            created_at.
+          inferenceReason: The repair record is the repair's audit outcome.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: command-repair-stock-report
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/repair_stock_report.py
+          symbol: repair_stock_report
+          summary: Updates counters and priority_order on diverging rows, stamping
+            updated_at and updated_by_id only on rows it changes.
+          inferenceReason: Counter and ordering repair is the command's primary write target.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: command-repair-stock-report
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-history-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/repair_stock_report.py
+          symbol: repair_stock_report
+          summary: Corrects a diverging goal record's quantity_awaiting under the
+            history-record lock.
+          inferenceReason: The goal total lives in these records, so repairing it writes here.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: query-stock-report-consistency
+    relationshipType: reads_from
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: compute_stock_report_divergences
+          summary: Selects the workspace's rows and compares stored counters, signature
+            and ordering against recomputed values.
+          inferenceReason: The row is the primary subject of the check.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: query-stock-report-consistency
+    relationshipType: reads_from
+    targetNodeId: table-stock-task-assignment
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: expected_task_flag
+          summary: Reads workspace-scoped, non-deleted assignments to derive both the
+            counters and the expected task flag.
+          inferenceReason: Assignments are the source of truth the counters are recomputed from.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: query-stock-report-consistency
+    relationshipType: reads_from
+    targetNodeId: table-stock-report-history-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: compute_stock_report_divergences
+          summary: Sums workspace-scoped goal records to recompute the goal total.
+          inferenceReason: The goal_total divergence kind is derived entirely from these rows.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: query-stock-report-consistency
+    relationshipType: depends_on
+    targetNodeId: domain-stock-criteria-normalization
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/consistency.py
+          symbol: compute_stock_report_divergences
+          summary: Recomputes each row's properties_signature from its stored criteria to
+            detect signature drift.
+          inferenceReason: Signature divergence is defined by the normalization recipe, so
+            the check depends on it.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: domain-stock-criteria-matcher
+    relationshipType: depends_on
+    targetNodeId: domain-stock-criteria-normalization
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/stock_report/criteria_matcher.py
+          symbol: evaluate_stock_criteria
+          summary: Evaluates the same normalized criteria shape that the normalization
+            module produces and signs.
+          inferenceReason: Matcher and signature must agree on the normalized form or a
+            rule would match under one identity and be stored under another.
+    origin: ai_inferred
+    confidence: 0.8
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: endpoint-stock-report-consistency
+    relationshipType: accepts
+    targetNodeId: query-stock-report-consistency
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          summary: The GET route delegates to the consistency query service.
+          inferenceReason: The endpoint is the external surface of the check.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: endpoint-stock-report-consistency
+    relationshipType: accepts
+    targetNodeId: command-repair-stock-report
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          summary: The POST route delegates to the repair command.
+          inferenceReason: The endpoint is the external trigger of the manual repair.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-20T21:55:54.526Z
+    updatedAt: 2026-09-20T21:55:54.526Z

@@ -293,3 +293,52 @@ plan alone; plans 1 and 2 are clear.
 - F-R3: the duplicate worker-schema comparison test was deleted from plan 3 because plan 1 C2(a)
   owns that criterion and its identical test.
 - No master-plan, intention, scanner, graph, tracker, or out-of-scope phase changes were made.
+
+### Re-review — batch A round 2 fix (2026-09-20, plan-reviewer, tree `f2157bd`) — APPROVED
+
+Rows: 42 — **PASS 42 / FAIL 0 / NOT_VERIFIED 0** (was 40/2/0). Batch A total **170/0/0**. Full
+record: `handoffs/reviewer/2026-09-20_batch_A_rereview_2_handoff.md`. Perimeter verified: four app
+files (+261/−31), three plan Review-log appends (zero deletions), one handoff; no escape, no
+master-plan or tracker edit. The L4 stamp on `f2157bd` is consumed by citation — my `app/` is
+byte-identical to it.
+
+- **F-R1 CONFIRMED, both halves.** Production: `expected_task_flag(session, workspace_id, task_id)`
+  carries `StockTaskAssignment.workspace_id == workspace_id` (`consistency.py:101-111`), threaded at
+  `:235` and in `_task_flag.py:18-19`; a repo-wide grep finds no unthreaded call site. Coverage:
+  **all six** tenancy sites now redden C1(k) — the four that were GREEN at re-review 1
+  (`stock_report_history_records` select, `tasks` select, `_recompute_row_counters_for_workspace`,
+  `_recompute_goal_totals_for_workspace`) plus `stock_report_items` and `expected_task_flag` itself.
+  M6's red is card 1's story as a test: `{'client_id': 'tsk_sr_consistency-own', 'kind': 'task_flag',
+  'expected': 'true'}` — W's own task claimed by a row belonging to F. M3 (foreign task ids leaking
+  **into** W's result) and M6 (W's own task mis-derived) are distinct shapes, so neither masks the other.
+- **C1(k) PASS, and the fixture is faithful rather than implementation-shaped.** Four of the six
+  filters are *lookup-key* filters (`counters.get(own_row_id)`, `goals.get(own_history_id)`, one
+  `expected_task_flag` call per own task), so a drift living only in F is unobservable by
+  construction; only cross-workspace reference rows can arm them. The own-workspace `[]` is exact
+  for the right reason: M4 reddens on an **own** row's counter, M5 on an **own** history record, M6
+  on the **own** task, and the charter-rule-15 presence probe (point the same assertion at F)
+  reddens with nine divergences spanning **all eight** MC-20 kinds. **N-S1:** the lettered clause is
+  8/10 — (e) (assignment present, flag `false`) and (h) (`priority` NULL, order set) are unplanted;
+  both are the same kind through the same filter as their planted twin, so no discrimination is lost.
+- **F-R2 CONFIRMED.** `test_manual_repair_clears_false_positive_task_flag` asserts the full tuple
+  `("task", T, "is_stock_assignment", "true", "false", "manual", U, ctx.now)` plus a clean
+  post-repair check; the row's named mutation reddens exactly that test (was green on the whole file).
+  **C3(e) undamaged and independently armed:** the mirror mutant (hard-code `"false"`) reddens C3(e)'s
+  test and not C3(d)'s — L-13 discharged.
+- **Regression.** C1(d) and C1(e) still armed: dropping the `task_flag` kind reddens four tests
+  including both rows'. C1(k)'s large fixture swallows nothing — self-contained workspaces,
+  flush-only, private helper with six call sites, other 15 tests green in all ten probe runs.
+  `recompute_task_stock_flag` still has zero callers repo-wide (N-R3), so the signature change
+  reaches no live path.
+- **Notes.** **N-S2** §6.5 line 376 still registers `recompute_task_stock_flag(session, task_id)`
+  (documentation drift; the round was forbidden the master plan and declared it) → orchestrator.
+  **N-S3** `set_task_stock_flag`'s UPDATE has no workspace predicate — contract-faithful to MC-15
+  and unreachable today, but it is the write half of the boundary card 1 closed on the read half
+  → **phase 4**. **N-S4** C1(l)'s stated `[]` is unachievable with its own fixture (the
+  `resolved_early` assignment makes the task's expected flag `true`); the shipped test asserts the
+  one residual `task_flag` entry instead, undeclared — row not re-verdicted → coordinator fold.
+- **Lessons.** **L-16** a tenancy row whose fixture lives only in the foreign workspace is inert by
+  construction — lookup-key filters need a cross-workspace *reference* row, and the fixture cell must
+  say so (one level below L-12). **L-17** a row's exact outcome is computed from its own fixture,
+  side effects included (C1(l)). **L-18** a ruling that amends one registry row amends its callers
+  in the same act (§6.5's `_task_flag.py` row).

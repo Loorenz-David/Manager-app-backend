@@ -293,3 +293,16 @@ CHANGES_REQUESTED on plan 3 findings only; nothing in this plan is outstanding.
 Plan 1's migration-schema criterion remains the sole owner of the worker-schema comparison. The
 byte-for-byte duplicate test in plan 3 was deleted under charter rule 16; no plan 1 production or
 criterion change was needed.
+
+### Re-review — batch A round 2 fix (2026-09-20, plan-reviewer, tree `f2157bd`) — APPROVED
+
+Rows: 53 — **PASS 53 / FAIL 0 / NOT_VERIFIED 0**, unchanged and not re-verdicted. Full record:
+`handoffs/reviewer/2026-09-20_batch_A_rereview_2_handoff.md`.
+
+- **F-R3 CONFIRMED.** C2(a)'s test, `test_stock_report_schema.py:264-279`
+  (`test_stock_report_migration_matches_runtime_metadata`), is intact and byte-for-byte what
+  re-review 1 verified; plan 1 is again the sole owner of the worker-schema comparison. A
+  function-name diff of both touched test files across `983d774..f2157bd` shows exactly **one**
+  deletion (the plan 3 duplicate) and **zero** additions, so nothing else went with it.
+- Nothing else in plan 1's perimeter moved. The cited L4 on `f2157bd` (21 / 3264 / 2, baseline-identical
+  both ways) is the regression evidence; its −1 against 3265 is exactly that deletion.

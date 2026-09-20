@@ -1111,3 +1111,22 @@ sites to file-and-line (`consistency.py:101-110`, `repair_stock_report.py:275`, 
 recorded SHA-256 hashes for every mutated file, so it is plainly willing to be precise about
 locations when the evidence is code — it simply does not reach for spans when the subject is the
 graph. Three sessions in, no agent has asked what an anchor is or offered one unprompted.
+
+## 2026-09-20 — stock_report batch A approval gate (orchestrator, the first graph write of this project)
+
+Four sessions produced no graph write; I made it at the gate. Worth recording against the brief,
+because I am the subject this time and the result is mixed. I anchored every one of the 22 changes
+with `symbol` rather than `startLine`/`endLine` — `StockReportItem`, `evaluate_stock_criteria`,
+`repair_stock_report`, `expected_task_flag`, `lock_stock_report_history_records` — and used a span
+nowhere, which is the behaviour the brief watches for. But I did not choose it: the tool's own
+schema says a symbol "survives the edits above it; a line range does not" and tells the caller to
+omit lines when a symbol exists. So this is a compliant write, not evidence of an internalized
+model; the one file-level node with no symbol (the router) I left unanchored beyond its path rather
+than reaching for a line range, which is the only unprompted part.
+
+Two frictions, both mine and both caught only by trying: `uses`, `writes` and `reads` are not
+registered relationship types, and a dry run reported them as warnings while still applying, so a
+non-dry first call would have written nine edges under invented type names. The registered forms
+are `depends_on`, `writes_to`, `reads_from`. Second, `permissionMode: review` did **not** block the
+write, contrary to what both Codex sessions concluded from reading the status field alone — the
+gate they reported as closed was open the whole time. Neither agent tried it.

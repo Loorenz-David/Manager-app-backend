@@ -239,3 +239,11 @@ Rows: 75 — **PASS 75 / FAIL 0 / NOT_VERIFIED 0** (was 64/7/4). Full record:
 
 Plan 2 was unaffected by F-R1 through F-R3. No production or test changes were made in its
 perimeter; its previously approved 75-row verdict remains the authority for this batch.
+
+### Re-review — batch A round 2 fix (2026-09-20, plan-reviewer, tree `f2157bd`) — APPROVED
+
+Rows: 75 — **PASS 75 / FAIL 0 / NOT_VERIFIED 0**, unchanged and not re-verdicted. Full record:
+`handoffs/reviewer/2026-09-20_batch_A_rereview_2_handoff.md`. Fix round 2's perimeter is four app
+files, none of them plan 2's; the verified perimeter shows no escape into this plan's surface, and
+the cited L4 on `f2157bd` is the regression evidence. Notes N-R5, N-R6 and review 1's N-9 remain
+open and routed forward.
