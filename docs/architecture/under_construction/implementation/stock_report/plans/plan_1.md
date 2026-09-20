@@ -287,3 +287,9 @@ CHANGES_REQUESTED on plan 3 findings only; nothing in this plan is outstanding.
   deleted checks covered settings this plan states carry no criterion until phase 6 (routed there).
 - **Lessons**: L-10 (C1(h)'s mutation is equivalent), L-11 (C2(a)'s CHECK mutation is inert),
   L-15 (`sorted()` over a `set` is not deterministically mutation-testable).
+
+### Implementer fix-round routing — Batch A fix 2 (2026-09-20)
+
+Plan 1's migration-schema criterion remains the sole owner of the worker-schema comparison. The
+byte-for-byte duplicate test in plan 3 was deleted under charter rule 16; no plan 1 production or
+criterion change was needed.

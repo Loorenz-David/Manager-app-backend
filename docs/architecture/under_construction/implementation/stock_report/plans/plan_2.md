@@ -234,3 +234,8 @@ Rows: 75 — **PASS 75 / FAIL 0 / NOT_VERIFIED 0** (was 64/7/4). Full record:
   `{"quantity": ["4","8"]}`; same code path, mutation bites, but the deviation was undeclared
   (charter rule 14). **N-R6** — C5(d)/(e)/(n) are three sequential `assert`s appended to one test;
   charter rule 12's short-circuit shape. Review 1's N-9 (stale §2 citation) remains open.
+
+### Implementer fix-round routing — Batch A fix 2 (2026-09-20)
+
+Plan 2 was unaffected by F-R1 through F-R3. No production or test changes were made in its
+perimeter; its previously approved 75-row verdict remains the authority for this batch.

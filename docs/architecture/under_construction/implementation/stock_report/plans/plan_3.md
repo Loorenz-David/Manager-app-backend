@@ -281,3 +281,15 @@ plan alone; plans 1 and 2 are clear.
   L-14 (every priority-order fixture creates rows in ascending order, so with ULID client_ids
   C3(f)'s "renumber by client_id" mutation is only observable through the nullness row — one fixture
   must create rows in an order that disagrees with their ordering).
+
+### Implementer fix-round routing — Batch A fix 2 (2026-09-20)
+
+- F-R1: `expected_task_flag` now takes `(session, workspace_id, task_id)` and filters assignments by
+  workspace; its current caller and the private recompute wrapper carry the workspace through. C1(k)
+  now plants counter, signature, goal-total, task-flag, order-density, and nullness drift in the
+  foreign workspace, including cross-workspace assignment references that arm all five filters.
+- F-R2: C3(d)'s test asserts the complete task repair-record tuple (`true` → `false`) and a clean
+  post-repair divergence check.
+- F-R3: the duplicate worker-schema comparison test was deleted from plan 3 because plan 1 C2(a)
+  owns that criterion and its identical test.
+- No master-plan, intention, scanner, graph, tracker, or out-of-scope phase changes were made.

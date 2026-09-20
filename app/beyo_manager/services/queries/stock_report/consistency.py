@@ -98,10 +98,11 @@ async def _recompute_goal_totals_for_workspace(
     return dict(result.all())
 
 
-async def expected_task_flag(session, task_id: str) -> bool:
+async def expected_task_flag(session, workspace_id: str, task_id: str) -> bool:
     result = await session.execute(
         select(StockTaskAssignment.client_id)
         .where(
+            StockTaskAssignment.workspace_id == workspace_id,
             StockTaskAssignment.task_id == task_id,
             StockTaskAssignment.is_deleted.is_(False),
         )
@@ -231,7 +232,7 @@ async def compute_stock_report_divergences(
         .all()
     )
     for task in tasks:
-        expected = await expected_task_flag(session, task.client_id)
+        expected = await expected_task_flag(session, workspace_id, task.client_id)
         if task.is_stock_assignment != expected:
             found.append(
                 {

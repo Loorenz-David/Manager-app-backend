@@ -15,7 +15,7 @@ async def set_task_stock_flag(session, task_id, value, *, require_update=False):
         raise RuntimeError("task flag update affected an unexpected number of rows")
 
 
-async def recompute_task_stock_flag(session, task_id):
-    expected = await expected_task_flag(session, task_id)
+async def recompute_task_stock_flag(session, workspace_id, task_id):
+    expected = await expected_task_flag(session, workspace_id, task_id)
     await set_task_stock_flag(session, task_id, expected)
     return expected

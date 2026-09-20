@@ -120,7 +120,8 @@ async def test_manual_repair_clears_false_positive_task_flag(db_session):
         text("UPDATE tasks SET is_stock_assignment = true WHERE client_id = :task_id"),
         {"task_id": seeded.task.client_id},
     )
-    result = await repair_stock_report(make_ctx(db_session, seeded))
+    ctx = make_ctx(db_session, seeded)
+    result = await repair_stock_report(ctx)
     assert [entry["kind"] for entry in result["repaired"]] == ["task_flag"]
     assert (
         await db_session.scalar(
@@ -128,6 +129,41 @@ async def test_manual_repair_clears_false_positive_task_flag(db_session):
             {"task_id": seeded.task.client_id},
         )
         is False
+    )
+    records = (
+        await db_session.scalars(
+            select(StockReportRepairRecord).where(
+                StockReportRepairRecord.workspace_id == seeded.workspace.client_id,
+            )
+        )
+    ).all()
+    assert {
+        (
+            record.target_kind.value,
+            record.target_client_id,
+            record.field,
+            record.stored_value,
+            record.recomputed_value,
+            record.trigger,
+            record.created_by_id,
+            record.created_at,
+        )
+        for record in records
+    } == {
+        (
+            "task",
+            seeded.task.client_id,
+            "is_stock_assignment",
+            "true",
+            "false",
+            "manual",
+            seeded.manager.client_id,
+            ctx.now,
+        )
+    }
+    assert (
+        await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
+        == []
     )
 
 

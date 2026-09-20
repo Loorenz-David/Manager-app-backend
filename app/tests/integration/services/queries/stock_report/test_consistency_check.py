@@ -1,8 +1,9 @@
 import pytest
-from alembic.autogenerate import compare_metadata
-from alembic.migration import MigrationContext
-from sqlalchemy import text
-from beyo_manager.models import Base
+from sqlalchemy import func, select, text
+from beyo_manager.domain.items.enums import ItemStateEnum
+from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.tasks.task import Task
 from tests.helpers.stock_report import (
     seed_stock_report_workspace,
     assert_stock_report_clean,
@@ -31,6 +32,36 @@ from beyo_manager.services.queries.stock_report.get_stock_report_consistency imp
 from tests.helpers.stock_report import make_ctx
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
+
+
+async def _foreign_task_item(db_session, seeded, suffix):
+    next_scalar_id = (
+        await db_session.scalar(
+            select(func.max(Task.task_scalar_id)).where(
+                Task.workspace_id == seeded.workspace.client_id
+            )
+        )
+        or 0
+    ) + 1
+    task = Task(
+        client_id=f"tsk_{suffix}_{seeded.workspace.client_id}",
+        workspace_id=seeded.workspace.client_id,
+        task_scalar_id=next_scalar_id,
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TaskStateEnum.PENDING,
+        created_by_id=seeded.manager.client_id,
+    )
+    item = Item(
+        client_id=f"itm_{suffix}_{seeded.workspace.client_id}",
+        workspace_id=seeded.workspace.client_id,
+        article_number=f"{suffix}-{seeded.workspace.client_id}",
+        state=ItemStateEnum.PENDING,
+        quantity=1,
+        item_category_id=seeded.categories[0].client_id,
+    )
+    db_session.add_all([task, item])
+    await db_session.flush()
+    return task, item
 
 
 async def test_clean_seed_has_no_stock_report_divergences(db_session):
@@ -114,24 +145,6 @@ async def test_consistency_service_returns_workspace_timestamp_and_divergences(
         "divergences": [],
     }
     assert after == before
-
-
-async def test_consistency_matches_migrated_worker_schema(db_session):
-    connection = await db_session.connection()
-
-    def compare(sync_connection):
-        context = MigrationContext.configure(sync_connection, opts={"compare_type": True})
-        return compare_metadata(context, Base.metadata)
-
-    diffs = await connection.run_sync(compare)
-    owned = {
-        "stock_report_items",
-        "stock_task_assignments",
-        "stock_report_history_records",
-        "stock_report_repair_records",
-        "tasks",
-    }
-    assert [diff for diff in diffs if any(table in repr(diff) for table in owned)] == []
 
 
 async def test_resolved_early_is_terminal_but_still_counts_toward_goal_total(
@@ -502,15 +515,195 @@ async def test_consistency_does_not_report_foreign_workspace_drift(db_session):
     foreign = await seed_stock_report_workspace(
         db_session, suffix="consistency-foreign"
     )
-    row = StockReportItem(
+
+    own_rows = []
+    for state, field in (
+        (StockTaskAssignmentStateEnum.IN_QUEUE, "quantity_in_queue"),
+        (StockTaskAssignmentStateEnum.IN_PROGRESS, "quantity_in_progress"),
+        (StockTaskAssignmentStateEnum.AWAITING, "quantity_awaiting"),
+    ):
+        row = StockReportItem(
+            workspace_id=own.workspace.client_id,
+            item_category_id=own.categories[0].client_id,
+            properties={"scope": field},
+            properties_signature=compute_stock_criteria_signature({"scope": field}),
+        )
+        own_rows.append((row, state))
+        db_session.add(row)
+    await db_session.flush()
+
+    own_history = StockReportHistoryRecord(
+        workspace_id=own.workspace.client_id,
+        stock_report_item_id=own_rows[0][0].client_id,
+        type=StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+        quantity_awaiting=0,
+    )
+    db_session.add(own_history)
+    await db_session.flush()
+
+    foreign_task_ids = []
+    for index, (state, field) in enumerate(
+        (
+            (StockTaskAssignmentStateEnum.IN_QUEUE, "quantity_in_queue"),
+            (StockTaskAssignmentStateEnum.IN_PROGRESS, "quantity_in_progress"),
+            (StockTaskAssignmentStateEnum.AWAITING, "quantity_awaiting"),
+        )
+    ):
+        row = StockReportItem(
+            workspace_id=foreign.workspace.client_id,
+            item_category_id=foreign.categories[0].client_id,
+            properties={"foreign_counter": field},
+            properties_signature=compute_stock_criteria_signature(
+                {"foreign_counter": field}
+            ),
+            **{field: 5},
+        )
+        db_session.add(row)
+        await db_session.flush()
+        task, item = await _foreign_task_item(db_session, foreign, f"counter{index}")
+        foreign_task_ids.append(task.client_id)
+        db_session.add(
+            StockTaskAssignment(
+                workspace_id=foreign.workspace.client_id,
+                stock_report_item_id=row.client_id,
+                task_id=task.client_id,
+                item_id=item.client_id,
+                quantity=4,
+                state=state,
+            )
+        )
+        await db_session.flush()
+
+        cross_task, cross_item = await _foreign_task_item(
+            db_session, foreign, f"cross{index}"
+        )
+        foreign_task_ids.append(cross_task.client_id)
+        db_session.add(
+            StockTaskAssignment(
+                workspace_id=foreign.workspace.client_id,
+                stock_report_item_id=own_rows[index][0].client_id,
+                task_id=cross_task.client_id,
+                item_id=cross_item.client_id,
+                quantity=4,
+                state=state,
+            )
+        )
+        await db_session.flush()
+
+    signature_row = StockReportItem(
         workspace_id=foreign.workspace.client_id,
         item_category_id=foreign.categories[0].client_id,
-        properties={},
+        properties={"wood_group": ["Teak"]},
         properties_signature="stale",
-        quantity_in_queue=99,
     )
-    db_session.add(row)
+    db_session.add(signature_row)
     await db_session.flush()
+
+    nullness_row = StockReportItem(
+        workspace_id=foreign.workspace.client_id,
+        item_category_id=foreign.categories[0].client_id,
+        properties={"foreign_nullness": True},
+        properties_signature=compute_stock_criteria_signature(
+            {"foreign_nullness": True}
+        ),
+        priority=StockReportPriorityEnum.HIGH,
+        priority_order=None,
+    )
+    density_rows = [
+        StockReportItem(
+            workspace_id=foreign.workspace.client_id,
+            item_category_id=foreign.categories[0].client_id,
+            properties={"foreign_density": order},
+            properties_signature=compute_stock_criteria_signature(
+                {"foreign_density": order}
+            ),
+            priority=StockReportPriorityEnum.HIGH,
+            priority_order=order,
+        )
+        for order in (1, 3)
+    ]
+    db_session.add_all([nullness_row, *density_rows])
+    await db_session.flush()
+
+    foreign_goal_row = StockReportItem(
+        workspace_id=foreign.workspace.client_id,
+        item_category_id=foreign.categories[0].client_id,
+        properties={"foreign_goal": True},
+        properties_signature=compute_stock_criteria_signature({"foreign_goal": True}),
+    )
+    db_session.add(foreign_goal_row)
+    await db_session.flush()
+    foreign_history = StockReportHistoryRecord(
+        workspace_id=foreign.workspace.client_id,
+        stock_report_item_id=foreign_goal_row.client_id,
+        type=StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+        quantity_awaiting=5,
+    )
+    db_session.add(foreign_history)
+    await db_session.flush()
+    foreign_goal_task, foreign_goal_item = await _foreign_task_item(
+        db_session, foreign, "foreign-goal"
+    )
+    foreign_task_ids.append(foreign_goal_task.client_id)
+    db_session.add(
+        StockTaskAssignment(
+            workspace_id=foreign.workspace.client_id,
+            stock_report_item_id=foreign_goal_row.client_id,
+            task_id=foreign_goal_task.client_id,
+            item_id=foreign_goal_item.client_id,
+            quantity=4,
+            state=StockTaskAssignmentStateEnum.RESOLVED_EARLY,
+            credited_history_record_id=foreign_history.client_id,
+        )
+    )
+    await db_session.flush()
+
+    cross_goal_task, cross_goal_item = await _foreign_task_item(
+        db_session, foreign, "cross-goal"
+    )
+    foreign_task_ids.append(cross_goal_task.client_id)
+    db_session.add(
+        StockTaskAssignment(
+            workspace_id=foreign.workspace.client_id,
+            stock_report_item_id=foreign_goal_row.client_id,
+            task_id=cross_goal_task.client_id,
+            item_id=cross_goal_item.client_id,
+            quantity=4,
+            state=StockTaskAssignmentStateEnum.RESOLVED_EARLY,
+            credited_history_record_id=own_history.client_id,
+        )
+    )
+    await db_session.flush()
+
+    task_flag_task, task_flag_item = await _foreign_task_item(
+        db_session, foreign, "cross-task-flag"
+    )
+    foreign_task_ids.append(task_flag_task.client_id)
+    db_session.add(
+        StockTaskAssignment(
+            workspace_id=foreign.workspace.client_id,
+            stock_report_item_id=foreign_goal_row.client_id,
+            task_id=own.task.client_id,
+            item_id=task_flag_item.client_id,
+            quantity=1,
+            state=StockTaskAssignmentStateEnum.RESOLVED_EARLY,
+        )
+    )
+    await db_session.flush()
+    for task_id in foreign_task_ids:
+        await db_session.execute(
+            text(
+                "UPDATE tasks SET is_stock_assignment = true "
+                "WHERE workspace_id = :workspace_id AND client_id = :task_id"
+            ),
+            {"workspace_id": foreign.workspace.client_id, "task_id": task_id},
+        )
+    await db_session.execute(
+        text("UPDATE tasks SET is_stock_assignment = true WHERE client_id = :task_id"),
+        {"task_id": foreign.task.client_id},
+    )
+    await db_session.flush()
+
     assert (
         await compute_stock_report_divergences(db_session, own.workspace.client_id)
         == []
