@@ -160,6 +160,18 @@ into **one** focused Codex fix prompt per round, grouped by cause; the re-review
 returns CHANGES_REQUESTED stops for the owner's ruling per finding before any second fix round.
 Findings that only ask for an implementation-coupled test are backlog notes (charter rule 2).
 
+**Re-review scope (owner, 2026-09-20).** The first review of a batch is full. A re-review after a
+fix round is **light by default**: it reads only the fix diff and re-verdicts (i) every row a
+finding named, (ii) every row whose test or source the fix touched, and (iii) the orchestrator's
+L4 against the 21-ID baseline in both directions — that run is 66s and is the only cheap way to
+catch a fix that breaks a row which already passed. It does **not** re-verdict the rows the first
+review passed and the fix did not touch, and it does not re-derive evidence the first review
+already supplied (Scanner conformance, the mutation audit). The reviewer widens the scope on its
+own judgment in exactly one case: the fix touched a **shared foundation** — the test kit,
+`_locks.py`, consistency recomputation, the migration, an enum or a state list — and then only to
+the rows that depend on it, naming them and why. A light re-review that returns CHANGES_REQUESTED
+still triggers the owner stop above.
+
 **Evidence (unchanged rigor, less repetition).** L1 per test file as it lands; each phase's named
 mutations at the scope its plan requires; concurrency rows as written. Expensive runs are not
 repeated at every internal phase boundary when the next phase extends the same code, unless a
