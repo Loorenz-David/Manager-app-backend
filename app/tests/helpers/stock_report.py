@@ -1,0 +1,173 @@
+from dataclasses import dataclass
+from uuid import uuid4
+from sqlalchemy import delete, select
+from beyo_manager.domain.items.enums import ItemStateEnum, ItemMajorCategoryEnum
+from beyo_manager.domain.tasks.enums import (
+    TaskStateEnum,
+    TaskTypeEnum,
+    TaskItemRoleEnum,
+)
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.items.item_category import ItemCategory
+from beyo_manager.models.tables.stock_report.stock_report_repair_record import (
+    StockReportRepairRecord,
+)
+from beyo_manager.models.tables.stock_report.stock_task_assignment import (
+    StockTaskAssignment,
+)
+from beyo_manager.models.tables.stock_report.stock_report_history_record import (
+    StockReportHistoryRecord,
+)
+from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.models.tables.users.user import User
+from beyo_manager.models.tables.workspaces.workspace import Workspace
+from beyo_manager.services.context import ServiceContext
+
+
+@dataclass(frozen=True)
+class SeededWorkspace:
+    workspace: Workspace
+    manager: User
+    worker: User
+    categories: tuple[ItemCategory, ItemCategory]
+    item: Item
+    task: Task
+
+
+async def seed_stock_report_workspace(session, *, suffix=None):
+    suffix = suffix or uuid4().hex[:10]
+    manager = User(
+        client_id=f"usr_sm_{suffix}",
+        username=f"sr-manager-{suffix}",
+        email=f"sr-manager-{suffix}@example.com",
+        password="test",
+    )
+    worker = User(
+        client_id=f"usr_sw_{suffix}",
+        username=f"sr-worker-{suffix}",
+        email=f"sr-worker-{suffix}@example.com",
+        password="test",
+    )
+    workspace = Workspace(client_id=f"ws_sr_{suffix}", name=f"Stock report {suffix}")
+    session.add_all([manager, worker, workspace])
+    await session.flush()
+    categories = (
+        ItemCategory(
+            client_id=f"itc_sr_a_{suffix}",
+            workspace_id=workspace.client_id,
+            name="Dining Chairs",
+            major_category=ItemMajorCategoryEnum.SEAT,
+        ),
+        ItemCategory(
+            client_id=f"itc_sr_b_{suffix}",
+            workspace_id=workspace.client_id,
+            name="Coffee Tables",
+            major_category=ItemMajorCategoryEnum.WOOD,
+        ),
+    )
+    session.add_all(categories)
+    await session.flush()
+    item = Item(
+        client_id=f"itm_sr_{suffix}",
+        workspace_id=workspace.client_id,
+        article_number=f"SR-{suffix}",
+        state=ItemStateEnum.PENDING,
+        quantity=4,
+        item_category_id=categories[0].client_id,
+        properties={"wood_type": "Teak", "upholstery": "Down"},
+    )
+    task = Task(
+        client_id=f"tsk_sr_{suffix}",
+        workspace_id=workspace.client_id,
+        task_scalar_id=1,
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TaskStateEnum.PENDING,
+        created_by_id=manager.client_id,
+    )
+    session.add_all([item, task])
+    await session.flush()
+    session.add(
+        TaskItem(
+            client_id=f"tim_sr_{suffix}",
+            workspace_id=workspace.client_id,
+            task_id=task.client_id,
+            item_id=item.client_id,
+            role=TaskItemRoleEnum.PRIMARY,
+            created_by_id=manager.client_id,
+        )
+    )
+    await session.flush()
+    return SeededWorkspace(workspace, manager, worker, categories, item, task)
+
+
+def make_ctx(
+    session,
+    seeded,
+    *,
+    role_name="manager",
+    user=None,
+    incoming_data=None,
+    query_params=None,
+):
+    user = user or seeded.manager
+    return ServiceContext(
+        identity={
+            "workspace_id": seeded.workspace.client_id,
+            "user_id": user.client_id,
+            "role_name": role_name,
+        },
+        incoming_data=incoming_data or {},
+        query_params=query_params or {},
+        session=session,
+    )
+
+
+def capture_dispatch(monkeypatch, import_site: str) -> list:
+    """Capture events dispatched by a command module that imported ``dispatch``."""
+    captured = []
+
+    async def _capture(events):
+        captured.extend(events)
+
+    monkeypatch.setattr(import_site, _capture)
+    return captured
+
+
+async def assert_stock_report_clean(session, workspace_id):
+    from beyo_manager.services.queries.stock_report.consistency import (
+        compute_stock_report_divergences,
+    )
+
+    assert await compute_stock_report_divergences(session, workspace_id) == []
+    assert (
+        await session.execute(
+            select(StockReportRepairRecord).where(
+                StockReportRepairRecord.workspace_id == workspace_id
+            )
+        )
+    ).scalars().all() == []
+
+
+async def purge_stock_report_workspace(session, workspace_id):
+    """Remove the stock-report seed graph in FK-safe order for committing tests."""
+    for model in (
+        StockReportRepairRecord,
+        StockTaskAssignment,
+        StockReportHistoryRecord,
+        StockReportItem,
+        TaskItem,
+        Task,
+        Item,
+        ItemCategory,
+    ):
+        await session.execute(delete(model).where(model.workspace_id == workspace_id))
+    await session.execute(delete(Workspace).where(Workspace.client_id == workspace_id))
+    if workspace_id.startswith("ws_sr_"):
+        suffix = workspace_id.removeprefix("ws_sr_")
+        await session.execute(
+            delete(User).where(
+                User.client_id.in_((f"usr_sm_{suffix}", f"usr_sw_{suffix}"))
+            )
+        )

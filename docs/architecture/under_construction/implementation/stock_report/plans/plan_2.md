@@ -149,3 +149,10 @@ the order listed; each row's id in the test names the hand-walk id (`H1`, …, `
 ## 8. Review log
 
 (empty)
+
+### Implementer note — Batch A session (2026-09-20)
+
+Matcher implementation, Scanner-table validation, coercion, and H1–H16 hand-walk tests are present;
+the focused Batch-A perimeter is green (`139 passed`, scoped Ruff and `git diff --check` clean).
+The full named-mutation evidence is recorded in the Batch-A handoff. This phase remains pending
+reviewer-owned graph/checkpoint gates and is not promoted here.

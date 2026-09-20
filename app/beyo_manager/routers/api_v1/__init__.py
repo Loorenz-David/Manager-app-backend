@@ -28,6 +28,7 @@ from beyo_manager.routers.api_v1 import (
     shopify,
     shopify_webhooks,
     sku_templates,
+    stock_report,
     task_step_acknowledgments,
     tasks,
     upholsteries,
@@ -72,6 +73,7 @@ def register_v1_routers(app: FastAPI) -> None:
     app.include_router(history.router, prefix="/api/v1/history", tags=["history"])
     app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
     app.include_router(item_economics.router, prefix="/api/v1/item-economics", tags=["item-economics"])
+    app.include_router(stock_report.router, prefix="/api/v1/stock-report", tags=["stock-report"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
     app.include_router(pause_reasons.router, prefix="/api/v1/pause-reasons", tags=["pause-reasons"])
     app.include_router(sku_templates.router)

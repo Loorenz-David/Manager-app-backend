@@ -153,3 +153,11 @@ returns exactly one element for W. `MR` = `repair_stock_report(make_ctx(...))` a
 ## 8. Review log
 
 (empty)
+
+### Implementer note — Batch A session (2026-09-20)
+
+Consistency, manual repair, repair records, task-flag writing, locks/recomputation, and both
+endpoints are implemented and covered by the green focused perimeter (`139 passed`; scoped Ruff and
+`git diff --check` clean). Raw-SQL identity-map drift and full signature `not_repaired` records are
+explicitly tested. The complete named-mutation ledger and pre-edit full-suite baseline are captured
+in the Batch-A handoff; this phase remains pending reviewer-owned graph/checkpoint gates.

@@ -555,7 +555,8 @@ def test_schema_assertion_rejects_missing_metadata_table_with_required_tables_pr
 def test_schema_assertion_rejects_unenumerated_public_table() -> None:
     table_names = expected_public_tables() | {"unexpected_public_table"}
 
-    with pytest.raises(RuntimeError, match="expected 109 public tables"):
+    expected_count = len(expected_public_tables())
+    with pytest.raises(RuntimeError, match=rf"expected {expected_count} public tables"):
         assert_migrated_schema(
             "beyo_test_main_template",
             actual_head=EXPECTED_HEAD,

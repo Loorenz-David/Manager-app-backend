@@ -61,6 +61,10 @@ This document lists all `CLIENT_ID_PREFIX` abbreviations used for client_id gene
 | ShopifyWebhookIntake | shpwhi | shpwhi_xxxxxxx |
 | ShopifyWebhookSubscription | shpwhs | shpwhs_xxxxxxx |
 | StepStateRecord | ssr | ssr_xxxxxxx |
+| StockReportItem | sri | sri_xxxxxxx |
+| StockTaskAssignment | sta | sta_xxxxxxx |
+| StockReportHistoryRecord | srh | srh_xxxxxxx |
+| StockReportRepairRecord | srr | srr_xxxxxxx |
 | TaskEvent | tev | tev_xxxxxxx |
 | TaskItem | tki | tki_xxxxxxx |
 | TaskNote | tno | tno_xxxxxxx |

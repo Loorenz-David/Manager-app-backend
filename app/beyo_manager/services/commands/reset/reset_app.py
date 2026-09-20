@@ -74,6 +74,10 @@ from beyo_manager.services.commands.reset.phases.delete_customers import delete_
 from beyo_manager.services.commands.reset.phases.delete_pending_uploads import delete_pending_uploads
 from beyo_manager.services.commands.reset.phases.delete_workspace_roles import delete_workspace_roles
 from beyo_manager.services.commands.reset.phases.delete_workspace import delete_workspace
+from beyo_manager.services.commands.reset.phases.delete_stock_report_repair_records import delete_stock_report_repair_records
+from beyo_manager.services.commands.reset.phases.delete_stock_task_assignments import delete_stock_task_assignments
+from beyo_manager.services.commands.reset.phases.delete_stock_report_history_records import delete_stock_report_history_records
+from beyo_manager.services.commands.reset.phases.delete_stock_report_items import delete_stock_report_items
 
 
 async def reset_app(ctx: ServiceContext) -> dict:
@@ -139,6 +143,10 @@ async def reset_app(ctx: ServiceContext) -> dict:
     deleted_bootstrap_roles = 0
     
     async with ctx.session.begin():
+        await delete_stock_report_repair_records(ctx.session, workspace_id)
+        await delete_stock_task_assignments(ctx.session, workspace_id)
+        await delete_stock_report_history_records(ctx.session, workspace_id)
+        await delete_stock_report_items(ctx.session, workspace_id)
         # Task system data
         await delete_task_events(ctx.session, workspace_id)
         await delete_task_step_assignment_records(ctx.session, workspace_id)

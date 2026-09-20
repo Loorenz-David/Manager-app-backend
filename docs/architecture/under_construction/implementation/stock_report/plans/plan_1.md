@@ -184,3 +184,11 @@ reads the default from the class.
 ## 8. Review log
 
 (empty — append-only, shared by implementer and reviewer)
+
+### Implementer note — Batch A session (2026-09-20)
+
+Schema/domain/reset implementation and focused tests are present and green as part of the Batch-A
+perimeter (`139 passed`; scoped Ruff and `git diff --check` clean). The configured development
+database was not migrated or downgraded. The complete named-mutation set and pre-edit full-suite
+baseline are captured in the Batch-A handoff; this phase remains pending reviewer-owned
+graph/checkpoint gates and is not promoted here.

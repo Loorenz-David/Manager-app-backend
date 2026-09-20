@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import sqlalchemy as sa
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -111,6 +113,9 @@ class Task(IdentityMixin, Base):
         index=True,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_stock_assignment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa.false()
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("users.client_id", ondelete="RESTRICT"), nullable=True
