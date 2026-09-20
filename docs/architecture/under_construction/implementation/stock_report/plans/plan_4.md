@@ -99,18 +99,33 @@ New: `bm/services/commands/stock_report/_move_assignment.py`, `_remove_assignmen
 
 Fixture: **F0** with row R at `quantity_requested 10`, **no goal record**, assignment A `q = 4` in the
 stated state, counters pre-set to the consistent values for that state (e.g. A `in_queue` → R
-`quantity_in_queue = 4`). `MV(from → to)` = call `move_assignment` for that pair. "counters" = the
-triple `(in_queue, in_progress, awaiting)` read back by a fresh `SELECT`.
+`quantity_in_queue = 4`). **Task flag:** `move_assignment` never writes `tasks.is_stock_assignment`,
+and MC-20 compares every task in the workspace against "a non-deleted assignment names it". So a
+scenario that **ends with A non-deleted** seeds `T.is_stock_assignment = true` by raw SQL
+(`UPDATE tasks SET is_stock_assignment = true WHERE client_id = :t`, which bypasses `onupdate`), and a
+scenario that **ends with A soft-deleted** leaves it `false` — rows C1(g), C1(k), C1(p), C1(q), C1(r),
+C1(u), C5(c), C7(c). Every assignment added beyond A brings its own `Item` and `Task` when it is
+active (the two partial unique indexes are on `(workspace_id, item_id)` and `(workspace_id, task_id)`
+over the three active states), and each such task follows the same rule. `MV(from → to)` = call
+`move_assignment` for that pair. "counters" = the triple `(in_queue, in_progress, awaiting)` read back
+by a fresh `SELECT`.
+
+> **Fold note (orchestrator, 2026-09-21, batch B projection F4-1 — lesson L-17/L-16).** The task-flag
+> sentences above are a fixture-cell amendment, not a change to any outcome. Measured: the shipped
+> check reports a `task_flag` divergence for any task carrying a live assignment while its flag is
+> `false` (`consistency.py:223-245`; shipped proof `test_consistency_check.py:97-112`). The kit seeds
+> the flag `false`. Without this rule every row whose outcome says "clean" — and the two rows that
+> enumerate the check's exact output — fails as written.
 
 | Row | Fixture / input | Exact outcome | Named mutation (site) | Trace |
 |---|---|---|---|---|
-| C1(a) | `MV(∅ → in_queue)` (`is_creation=True`, A inserted with `state in_queue`, counters 0) | counters `(4, 0, 0)`; events `[stock_task_assignment:created {state: in_queue}, stock_report_item:updated {…, quantity_in_queue: 4, …}]`; helper clean | delta sign flipped (`-q`) → guard trips → record → helper reddens | MC-1 |
+| C1(a) | `MV(∅ → in_queue)` (`is_creation=True`, A inserted with `state in_queue`, counters 0) | counters `(4, 0, 0)`; events `[stock_task_assignment:created {state: in_queue}, stock_report_item:updated {…, quantity_in_queue: 4, …}]`; helper clean | enumerated, `_move_assignment.py` (definition site): (i) **skip the `+q` on the creation target** (`dq` vector all-zero for `is_creation=True`) → counters stay `(0,0,0)` → the counter assertion reddens; (ii) **flip the delta sign to `−q`** → the guard trips → self-heal repairs the counters, so (ii) reddens **only** the repair-record half of `assert_stock_report_clean`; (iii) **build the assignment event with kind `state-changed` instead of `created`** → the event assertion reddens. Record which of the three reddened which sub-check. | MC-1 |
 | C1(b) | `MV(∅ → in_progress)` | `(0, 4, 0)`; `created`; clean | same | MC-1 |
 | C1(c) | `MV(∅ → awaiting)` | `(0, 0, 4)`; `created`; clean | same | MC-1 |
 | C1(d) | `MV(in_queue → in_progress)` | `(0, 4, 0)`; `state-changed {state: in_progress}` + `:updated`; clean | apply `+q` without `−q` → `(4, 4, 0)` | MC-1, M1 |
 | C1(e) | `MV(in_queue → awaiting)` | `(0, 0, 4)`; clean | same | MC-1 |
 | C1(f) | `MV(in_queue → failed)` | `(0, 0, 0)`, state `failed`; `state-changed {state: failed}` + `:updated`; clean | skip the `−q` for a terminal target | MC-1, §5 r5 |
-| C1(g) | `MV(in_queue → DELETE)` | `(0, 0, 0)`; `is_deleted true`, `deleted_at == now`, `deleted_by_id == actor`; events `[deleted {state: in_queue}, :updated]`; clean | soft-delete after the counter statement (C5(c) bites too) | MC-1, MC-16 |
+| C1(g) | `MV(in_queue → DELETE)` | `(0, 0, 0)`; `is_deleted true`, `deleted_at == now`, `deleted_by_id == actor`; events `[deleted {state: in_queue}, :updated]`; clean | enumerated, `_move_assignment.py` (definition site): (i) **skip the `−q` for the `DELETE` target** (treat `DELETE` like a terminal target, which moves nothing) → counters stay `(4,0,0)` → red; (ii) **emit the assignment event with kind `state-changed` instead of `deleted`** → red; (iii) **write `updated_by_id`/`updated_at` instead of `deleted_by_id`/`deleted_at`** → `deleted_at` stays NULL → red. (The write-order mutation "soft-delete after the counter statement" is an **equivalent mutant on this row** — the guard never trips from a consistent counter — and is carried by C5(c), where drift makes it observable.) | MC-1, MC-16 |
 | C1(h) | `MV(in_progress → in_queue)` | `(4, 0, 0)`; clean | — (mirror of (d)) | MC-1 (§14C C6) |
 | C1(i) | `MV(in_progress → awaiting)` | `(0, 0, 4)`; clean | — | MC-1 |
 | C1(j) | `MV(in_progress → failed)` | `(0, 0, 0)`; clean | — | MC-1 |
@@ -124,8 +139,8 @@ triple `(in_queue, in_progress, awaiting)` read back by a fresh `SELECT`.
 | C1(r) | A `failed`; `MV(failed → DELETE)` | as (q) with `state: failed` | same | MC-1 |
 | C1(s) | A `in_queue`, counters `(4, 0, 0)`; `MV(in_queue → resolved_early)` with `actor_user_id=None`, `trigger="items_processed"` | counters `(0, 0, 0)`; state `resolved_early`; `updated_by_id IS NULL`, `updated_at == now`; events `[state-changed {state: resolved_early}, :updated {…, quantity_in_queue: 0, …}]`; clean | keep the `in_queue` count (treat the target as `=`) → `(4, 0, 0)` | §14F F2, MC-1 (Scanner only), MC-17 ("Scanner resolves") |
 | C1(t) | A `in_progress`, counters `(0, 4, 0)`; `MV(in_progress → resolved_early)` with `actor_user_id=None` | `(0, 0, 0)`; state `resolved_early`; `updated_by_id IS NULL`; events `[state-changed {state: resolved_early}, :updated]`; clean | add `+q` to `quantity_awaiting` (treat it as `awaiting`) → `(0, 0, 4)` | §14F F2, MC-1 |
-| C1(u) | A `resolved_early`, counters `(0,0,0)`; `MV(resolved_early → DELETE)` with actor U | counters unchanged; soft-deleted (`deleted_by_id == U`); events `[deleted {state: resolved_early}]` **only** — no `:updated` | emit `:updated` anyway / subtract `q` | §14F F2 ("`resolved_early → DELETE` … like `resolved`"), MC-19 |
-| C2(a)–C2(f) | `MV(s → s)` for each of the six states | returns `[]`; `count_writes` over the four MC-9 tables `== 0`; no stamp change | write equal values | MC-1 `=` cells, MC-9 |
+| C1(u) | A `resolved_early`, counters `(0,0,0)`; `MV(resolved_early → DELETE)` with actor U | counters unchanged; soft-deleted (`deleted_by_id == U`); events `[deleted {state: resolved_early}]` **only** — no `:updated` | enumerated, `_move_assignment.py` (definition site): (i) **emit the `stock_report_item:updated` event anyway** (drop the "no counter moved ⇒ no `:updated`" rule) → the event list has two entries → red; (ii) **classify `resolved_early` as active in the allowed-move/counter table** (i.e. include it in the set read from `ACTIVE_ASSIGNMENT_STATES`) → the `resolved_early → DELETE` cell becomes a counted move and `deleted_by_id`/the event kind change → red. ("subtract `q` from `quantity_awaiting`" is an **equivalent mutant** here: the guard trips and the self-heal restores `0`, leaving every assertion of this row true.) | §14F F2 ("`resolved_early → DELETE` … like `resolved`"), MC-19 |
+| C2(a)–C2(f) | `MV(s → s)` for each of the six states | returns `[]`; `count_writes` over the four MC-9 tables `== 0`; no stamp change | enumerated, `_move_assignment.py` (definition site): (i) **drop the `=`-cell early return** and fall through to the normal path (own-columns write + all-zero counter UPDATE) → `count_writes` over the four MC-9 tables becomes ≥ 1 → red; (ii) **stamp `updated_by_id`/`updated_at` before the `=` check** → the assignment's stamps move → the "no stamp change" assertion reddens; (iii) **return the event list instead of `[]`** → the return-value assertion reddens. | MC-1 `=` cells, MC-9 |
 | C3(a) | `MV(∅ → resolved)` | raises `IllegalAssignmentMove`; nothing written | allow it | MC-1 ✗ |
 | C3(b) | `MV(∅ → failed)` | raises | — | MC-1 ✗ (§5 r3) |
 | C3(c) | `MV(∅ → DELETE)` | raises | — | MC-1 ✗ |
@@ -138,18 +153,18 @@ triple `(in_queue, in_progress, awaiting)` read back by a fresh `SELECT`.
 | C3(p)–C3(t) | `MV(resolved_early → in_queue / in_progress / awaiting / resolved / failed)` | raises, nothing written | allow → terminal revived | §14F F1 (terminal: "nothing moves an assignment out of it except deletion"), §5 r1 |
 | C3(u)–C3(v) | `MV(resolved → resolved_early)` and `MV(failed → resolved_early)` | raises | — | MC-1 `—` cells (terminal to terminal) |
 | C4(a) | A `q = 8` `in_queue`; `MV(in_queue → in_progress)` | `(0, 8, 0)` (units, not 1) | use `1` instead of `quantity` | HC-2a, M1 |
-| C4(b) | Two assignments on R: A `q = 3` `in_queue`, B `q = 5` `in_queue` (different items/tasks), counters `(8,0,0)`; move A | `(5, 3, 0)` | — | M1 |
-| C4(c) | Load R into the session; raw `UPDATE stock_report_items SET quantity_requested = 99` in the same transaction; then `MV(in_queue → in_progress)` | the `:updated` payload has `quantity_requested: 99` (from `RETURNING`) | build the payload from the ORM instance → `10` | MC-1 "RETURNING is the only source", MC-19 |
+| C4(b) | Two assignments on R: A `q = 3` `in_queue` on the kit's (I, T), B `q = 5` `in_queue` on a **second** item I2 and task T2 created in the same workspace (both partial unique indexes are on `(workspace_id, item_id)` and `(workspace_id, task_id)` over the active states, so two active assignments cannot share either); counters `(8,0,0)`; both T and T2 seeded `is_stock_assignment = true`; move A | `(5, 3, 0)` | — | M1 |
+| C4(c) | Load R into the session (`session.get(StockReportItem, R)`), then raw `UPDATE stock_report_items SET quantity_requested = 99 WHERE client_id = :r` in the same transaction — do **not** expire, refresh or re-select R afterwards, because the mutation's bite is exactly that the identity-mapped instance still reads 10; then `MV(in_queue → in_progress)` | the `:updated` payload has `quantity_requested: 99` (from `RETURNING`) | build the payload from the ORM instance → `10` | MC-1 "RETURNING is the only source", MC-19 |
 | C5(a) | A `q = 4` `in_queue`; raw `quantity_in_queue = 0`; `MV(in_queue → in_progress)` with `trigger="task_sync"` | move succeeds; counters `(0, 4, 0)`; exactly one repair record `{stock_report_item, R, quantity_in_queue, stored "0", recomputed "0", trigger "inline:task_sync", created_by NULL}`; none for the other two columns; one warning whose message contains the delta `-4`; check `[]` | drop the `>= 0` guard from the WHERE → DB check aborts (`IntegrityError`) → red | MC-1 instrument (a), M1 |
-| C5(b) | A `in_queue`; raw `quantity_in_queue = 5` (upward drift); `MV(in_queue → in_progress)` | succeeds; counters `(1, 4, 0)`; **zero** repair records; check reports one `counter_in_queue` (stored 1, expected 0); `repair_stock_report` then clears it | fire inline repair on any mismatch → a record appears | §12A (c): inline fires only downward |
+| C5(b) | A `in_queue`; raw `quantity_in_queue = 5` (upward drift); `MV(in_queue → in_progress)` | succeeds; counters `(1, 4, 0)`; **zero** repair records; check reports one `counter_in_queue` (stored 1, expected 0); `repair_stock_report` then clears it | run the self-heal block unconditionally instead of only on a 0-row result: in `_move_assignment.py` (definition site), after the guarded UPDATE returns **1** row, compare each `RETURNING` counter against `recompute_row_counters(session, R)` and, on any difference, write the repair record and the absolute UPDATE → one record appears and "**zero** repair records" reddens | §12A (c): inline fires only downward |
 | C5(c) | A `q = 4` `in_queue`; raw `quantity_in_queue = 0`; `remove_assignment(...)` | `quantity_in_queue` 0; one record (`stored "0"`, `recomputed "0"`, `inline:<trigger>`); check `[]` | issue the soft-delete after the counter statement → recomputation still counts A → `quantity_in_queue` 4 → check reports it | MC-1 instrument (b) |
-| C6(a) | T with A only; `remove_assignment` | `tasks.is_stock_assignment` false | skip the recompute | MC-15 (ii) |
-| C6(b) | T with A (`in_queue`) and B (`resolved`, another item — inserted directly, legal since terminal); remove A | flag stays true | recompute with `state IN active` → false | MC-15 truth (P21) |
-| C6(c) | (a) again, recording `tasks.updated_at`, `updated_by_id` before | both byte-identical after | write the flag via the ORM attribute (`_task_flag.py`, already guarded in phase 3 — re-run here at the call site) | MC-15 |
+| C6(a) | T with A only (A `in_queue`, live), and `tasks.is_stock_assignment` seeded **`true`** by raw SQL before the call — otherwise "skip the recompute" leaves the flag at the value the row asserts and the mutation cannot fail; `remove_assignment` | `tasks.is_stock_assignment` false | skip the recompute | MC-15 (ii) |
+| C6(b) | T with A (`in_queue`, item I) and B (`resolved`, a **second** item I2, same task T — legal because the partial unique indexes cover only the three active states), `tasks.is_stock_assignment` seeded **`true`**; remove A | flag stays true | recompute with `state IN active` → false | MC-15 truth (P21) |
+| C6(c) | (a) again (flag seeded **`true`**), with `tasks.updated_at` and `updated_by_id` first set to known non-null values by raw SQL (`UPDATE tasks SET updated_at = :t_seed, updated_by_id = :u …`, which bypasses `onupdate`), both recorded before the call | both byte-identical after | write the flag via the ORM attribute (`_task_flag.py`, already guarded in phase 3 — re-run here at the call site) | MC-15 |
 | C7(a) | `MV(in_queue → in_progress)` with `actor_user_id = U`, `now = t0` | A `updated_by_id == U`, `updated_at == t0` | leave stamps to `onupdate` (none exists) → NULL | MC-17 |
 | C7(b) | `MV(awaiting → resolved)` with `actor_user_id = None` | `updated_by_id IS NULL`, `updated_at == t0` | stamp a fake system user | MC-17 (null = Scanner) |
 | C7(c) | A with prior `updated_by_id = X`; `MV(in_queue → DELETE)` with actor U | `deleted_by_id == U`, `deleted_at == t0`, `updated_by_id` still `X` | stamp `updated_*` on delete | MC-17 (U12) |
-| C7(d) | any move | R's `updated_at`/`updated_by_id` unchanged | stamp the row on a counter move | MC-17 "any counter move: unchanged" |
+| C7(d) | C1(d)'s move (`MV(in_queue → in_progress)`, actor U, `now = t0`), with R's `updated_at` and `updated_by_id` first set to known non-null values (`t_seed`, X) by raw SQL | R's `updated_at`/`updated_by_id` unchanged | stamp the row on a counter move | MC-17 "any counter move: unchanged" |
 
 **Required ledger row (charter rule 15, §12A (e)):** plant `from`'s delta as `−2q` in
 `_move_assignment.py` (definition site). Expected: every C1 ✓ row from a counted state still

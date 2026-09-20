@@ -66,34 +66,45 @@ counter statement, before the events).
 ## 6. Criteria
 
 Fixture: **F0** with goal record **G** (type `quantity_requested_change`, `quantity_requested 10`,
-`quantity_awaiting 0`, `created_by NULL`) inserted as an ORM instance; where a second goal **G2** is
-named it is inserted later with a greater `created_at`. Every row ends with
+`quantity_awaiting 0`, `created_by NULL`) inserted as an ORM instance with an **explicit**
+`created_at`; where a second goal **G2** is named it is inserted with an **explicit, strictly
+greater** `created_at` (the current-goal rule orders by `(created_at, client_id)` and ULID
+client_ids do not order reliably inside one millisecond). R's three counters are pre-set to the
+values consistent with A's stated state, and `tasks.is_stock_assignment` follows plan 4's rule:
+seeded **`true`** wherever A ends non-deleted, left **`false`** for the rows that end with A
+soft-deleted — C1(i), C1(l), C1(q), C2(c), and step (6) of C3(a). Every row ends with
 `assert_stock_report_clean` unless it plants drift. `mem(A)` = `credited_history_record_id`.
+
+> **Fold note (orchestrator, 2026-09-21, batch B projection F5-1 — lessons L-17/L-16/L-14).** The
+> `created_at` and task-flag sentences are fixture-cell amendments; no outcome cell changed. Without
+> the task-flag rule every "clean" row fails against the shipped check (plan 4's fold note has the
+> measurement). Without explicit `created_at` values the current-goal tiebreak is non-deterministic,
+> which silently disarms C1(j) and C3(a).
 
 | Row | Fixture / input | Exact outcome | Named mutation (site) | Trace |
 |---|---|---|---|---|
 | C1(a) | `MV(∅ → awaiting)`, A `q = 4` | `G.quantity_awaiting == 4`; `mem(A) == G` | skip credit on creation | MC-5 row 1 |
 | C1(b) | `MV(in_queue → awaiting)` | `G == 4`; `mem == G` | credit `1` instead of `q` | MC-5 row 1, HC-2a |
-| C1(c) | `MV(in_progress → awaiting)` | `G == 4`; `mem == G` | — | MC-5 row 1 |
+| C1(c) | `MV(in_progress → awaiting)` | `G == 4`; `mem == G` | — (mirror of (b): the same credit statement with a different *from* state; declared as a mirror so the ledger's `declared` count is honest) | MC-5 row 1 |
 | C1(d) | no goal record; `MV(in_queue → awaiting)` | no history write (`count_writes` on `stock_report_history_records == 0`); `mem IS NULL` | create a goal record on the fly | MC-5 row 2 |
 | C1(e) | A `awaiting`, `mem = G`, `G = 4`; `MV(awaiting → resolved)` | `G == 4`; `mem == G` (kept) | subtract on resolve | MC-5 row 3, M5 |
 | C1(f) | A `awaiting`, `mem = G`, `G = 4`; `MV(awaiting → in_queue)` | `G == 0`; `mem IS NULL` | keep the memory | MC-5 row 4 |
-| C1(g) | same; `MV(awaiting → in_progress)` | `G == 0`; `mem IS NULL` | — | MC-5 row 4 |
-| C1(h) | same; `MV(awaiting → failed)` | `G == 0`; `mem IS NULL` | — | MC-5 row 4 |
-| C1(i) | same; `MV(awaiting → DELETE)` | `G == 0`; `mem IS NULL`; A soft-deleted | — | MC-5 row 5 |
-| C1(j) | A `awaiting` `mem = G` (`G = 4`); then G2 inserted (awaiting 0); `MV(awaiting → in_progress)` | `G == 0`, `G2 == 0` (subtraction lands on the credited record, not the current one) | subtract from `current_goal_record_id` → `G2 = −4` guard trips / wrong record | MC-5 row 4 "even if R is no longer current", M5 |
+| C1(g) | same; `MV(awaiting → in_progress)` | `G == 0`; `mem IS NULL` | — (mirror of (f): the same guarded subtraction and memory clear; declared as a mirror) | MC-5 row 4 |
+| C1(h) | same; `MV(awaiting → failed)` | `G == 0`; `mem IS NULL` | — (mirror of (f): the same guarded subtraction and memory clear; declared as a mirror) | MC-5 row 4 |
+| C1(i) | same; `MV(awaiting → DELETE)` | `G == 0`; `mem IS NULL`; A soft-deleted | — (mirror of (f): the same guarded subtraction and memory clear; declared as a mirror) | MC-5 row 5 |
+| C1(j) | A `awaiting` `mem = G` (`G = 4`), G inserted with an explicit `created_at = t0`; then G2 inserted with an explicit `created_at = t0 + 1 s` (awaiting 0) so `current_goal_record_id` is unambiguously G2 regardless of ULID ordering; `MV(awaiting → in_progress)` | `G == 0`, `G2 == 0` (subtraction lands on the credited record, not the current one) | subtract from `current_goal_record_id` → `G2 = −4` guard trips / wrong record | MC-5 row 4 "even if R is no longer current", M5 |
 | C1(k) | A `awaiting` with `mem IS NULL` (entered before any goal); G inserted afterwards; `MV(awaiting → in_queue)` | `G == 0`; no history write | subtract from current anyway | MC-5 row 6 |
 | C1(l) | A `resolved`, `mem = G` (`G = 4`); `MV(resolved → DELETE)` | `G == 4`; `mem == G` | clear on delete | MC-5 row 7 |
-| C1(m) | A `in_queue`, `mem IS NULL`; `MV(in_queue → failed)` | no history write; `mem IS NULL` | — | MC-5 row 8 |
+| C1(m) | A `in_queue`, `mem IS NULL`; `MV(in_queue → failed)` | no history write; `mem IS NULL` | credit on entering **any** terminal state (extend the credit test from `{awaiting, resolved_early}` to `TERMINAL_ASSIGNMENT_STATES ∪ {awaiting}`), `_goal_credit.py` (definition site) → `G` is credited 4 and a history write appears → red | MC-5 row 8 |
 | C1(n) | A `in_queue` `q = 4`, `mem IS NULL`; `MV(in_queue → resolved_early)` (actor None) | `G.quantity_awaiting == 4`; `mem(A) == G` | treat `resolved_early` like `failed` (terminal, no credit) → `G == 0` | §14F F4 (card 14 → A), MC-5 new row 1, M5 |
 | C1(o) | A `in_progress` `q = 4`; `MV(in_progress → resolved_early)` | `G == 4`; `mem == G` | credit `1` instead of `q` | §14F F4, HC-2a |
 | C1(p) | no goal record; `MV(in_queue → resolved_early)` | no history write (`count_writes` on `stock_report_history_records == 0`); `mem IS NULL` | create a goal record on the fly | §14F F4, MC-5 new row 2 |
 | C1(q) | A `resolved_early`, `mem = G` (`G = 4`); `MV(resolved_early → DELETE)` | `G == 4`; `mem == G` (kept) | subtract on delete (treat it as `awaiting → DELETE`) → `G == 0` | §14F F4 ("never removed"), MC-5 row 7 by analogy |
 | C2(a) | A `awaiting` `q = 4` `mem = G`; raw `UPDATE … SET quantity_awaiting = 1 WHERE client_id = G`; `MV(awaiting → in_progress)` with `trigger="task_sync"` | move succeeds; `G == 0` (recomputed: memory cleared and flushed before the Σ); one repair record `{history_record, G, quantity_awaiting, stored "1", recomputed "0", inline:task_sync, created_by NULL}`; warning with delta `-4`; check `[]` (the M1 check's `goal_total` kind is now consistent) | drop the guard → `ck_stock_report_history_records_quantity_awaiting_nonneg` aborts → red | MC-5 self-heal, §12A |
-| C2(b) | A1 `resolved`, `mem = G`, `q = 2`, then soft-deleted (`is_deleted true`, memory kept); A2 `awaiting`, `mem = G`, `q = 3`; raw `G = 0` (truth 5); `MV(A2: awaiting → in_queue)` | `G == 2` (A1's deleted resolved credit counted); record stored `"0"` recomputed `"2"` | exclude deleted assignments from the Σ → recomputed `0` → red | MC-5 recomputation (C17, MC-16 row) |
-| C2(c) | A `awaiting` `mem = G` (`G = 4`); raw `G = 5` (upward); `MV(awaiting → resolved)` then `MV(resolved → DELETE)` | no repair record from either move; check reports one `goal_total` (stored 5, expected 4); `repair_stock_report` clears it with one `manual` record | fire inline on any mismatch | §12A (c) for goal totals |
-| C2(d) | A1 `resolved_early`, `mem = G`, `q = 2` (via `MV(in_queue → resolved_early)`); A2 `awaiting`, `mem = G`, `q = 3`; raw `G = 0` (truth 5); `MV(A2: awaiting → in_queue)` | `G == 2` (A1's `resolved_early` credit counted by the recomputation); record stored `"0"` recomputed `"2"` | Σ filtered to `state IN (awaiting, resolved)` → recomputed `0` → red | §14F F11 (recomputation includes `resolved_early`), MC-5 recomputation |
-| C3(a) | The worked sequence, exact: row at 10 with G1 (0); steps (1) A `q = 4` `∅ → awaiting`; (2) G2 inserted (0); (3) `MV(awaiting → in_progress)`; (4) `MV(in_progress → awaiting)`; (5) `MV(awaiting → resolved)` with actor None; (6) `remove_assignment` | after (1) `G1 == 4`, `mem == G1`; after (3) `G1 == 0`, `mem IS NULL`; after (4) `G2 == 4`, `mem == G2`, `G1 == 0`; after (5) `G2 == 4`, `mem == G2`; after (6) counters `(0,0,0)`, `G2 == 4`, A soft-deleted; `recompute_goal_total(G1) == 0`, `recompute_goal_total(G2) == 4`; check `[]`; zero repair records | any of C1's mutations | MC-5 worked sequence, M5 |
+| C2(b) | A1 inserted `resolved` with `mem = G`, `q = 2`, then soft-deleted **by direct column write** (`is_deleted = true`, `deleted_at` set, `credited_history_record_id` left at G — there is no delete command in this phase); A2 then created `awaiting`, `mem = G`, `q = 3` on the same (I, T) (legal: A1 is neither active nor live); raw `UPDATE stock_report_history_records SET quantity_awaiting = 0 WHERE client_id = :g` (truth 5); `MV(A2: awaiting → in_queue)` | `G == 2` (A1's deleted resolved credit counted); record stored `"0"` recomputed `"2"` | exclude deleted assignments from the Σ → recomputed `0` → red | MC-5 recomputation (C17, MC-16 row) |
+| C2(c) | A `awaiting` `mem = G` (`G = 4`); raw `G = 5` (upward); `MV(awaiting → resolved)` then `MV(resolved → DELETE)` | no repair record from either move; check reports one `goal_total` (stored 5, expected 4); `repair_stock_report` clears it with one `manual` record | run the self-heal block unconditionally instead of only on a 0-row result: in `_goal_credit.py` (definition site), after the guarded subtraction returns **1** row, compare `G`'s value against `recompute_goal_total(session, G)` and write a record + absolute UPDATE on any difference → a record appears on the first move and "no repair record from either move" reddens | §12A (c) for goal totals |
+| C2(d) | In this order on the kit's (I, T): A1 `in_queue` `q = 2` → `MV(in_queue → resolved_early)` (G becomes 2, `mem(A1) = G`; A1 is now terminal so the active-state unique indexes free the pair); then A2 created `awaiting` `q = 3` with `mem = G` (G becomes 5); then raw `UPDATE stock_report_history_records SET quantity_awaiting = 0 WHERE client_id = :g` (truth 5); then `MV(A2: awaiting → in_queue)` | `G == 2` (A1's `resolved_early` credit counted by the recomputation); record stored `"0"` recomputed `"2"` | Σ filtered to `state IN (awaiting, resolved)` → recomputed `0` → red | §14F F11 (recomputation includes `resolved_early`), MC-5 recomputation |
+| C3(a) | The worked sequence, exact: row at 10 with G1 (0) inserted at an explicit `created_at = t0`; steps (1) A `q = 4` `∅ → awaiting`; (2) G2 inserted with an explicit `created_at = t0 + 1 s` (0); (3) `MV(awaiting → in_progress)`; (4) `MV(in_progress → awaiting)`; (5) `MV(awaiting → resolved)` with actor None; (6) `remove_assignment` | after (1) `G1 == 4`, `mem == G1`; after (3) `G1 == 0`, `mem IS NULL`; after (4) `G2 == 4`, `mem == G2`, `G1 == 0`; after (5) `G2 == 4`, `mem == G2`; after (6) counters `(0,0,0)`, `G2 == 4`, A soft-deleted; `recompute_goal_total(G1) == 0`, `recompute_goal_total(G2) == 4`; check `[]`; zero repair records | any of C1's mutations | MC-5 worked sequence, M5 |
 
 ## 7. Notes
 
