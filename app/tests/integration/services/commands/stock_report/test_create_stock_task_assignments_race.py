@@ -27,6 +27,7 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
     create_stock_task_assignments,
 )
+from tests.helpers.statement_listener import count_writes, record_statements
 from tests.helpers.stock_report import (
     assert_stock_report_clean,
     make_ctx,
@@ -172,9 +173,20 @@ async def test_c5a_concurrent_create_on_the_same_item_leaves_exactly_one_active(
                     return None, exc
             raise AssertionError("Database session generator yielded no session")
 
-        (result_a, error_a), (result_b, error_b) = await asyncio.wait_for(
-            asyncio.gather(_run_a(), _run_b()), timeout=10
-        )
+        # C5(a) (owner card 1, 2026-09-21; master plan §9 rule 7): the losing call
+        # must write nothing — the only clause that distinguishes the Item lock
+        # from the unique-index backstop, since both answer the same reason.
+        # `record_statements` listens at the shared engine (both sessions use the
+        # one process-wide `_engine`), so a per-call recorder cannot be scoped to
+        # only the loser's own connection; recording across the whole barrier-
+        # released race and asserting the *total* write count is 1 is the
+        # equivalent, race-scoped form of the same measurement — exactly one
+        # participant is ever the winner, so "the loser wrote nothing" and "the
+        # race wrote exactly once" are the same fact. Documented judgment call.
+        async with record_statements(db_session) as statements:
+            (result_a, error_a), (result_b, error_b) = await asyncio.wait_for(
+                asyncio.gather(_run_a(), _run_b()), timeout=10
+            )
 
         outcomes = [(result_a, error_a), (result_b, error_b)]
         winners = [r for r, e in outcomes if r is not None]
@@ -197,6 +209,7 @@ async def test_c5a_concurrent_create_on_the_same_item_leaves_exactly_one_active(
             .all()
         )
         assert len(active) == 1
+        assert count_writes(statements, {"stock_task_assignments"}) == 1
 
         await assert_stock_report_clean(db_session, workspace_id)
     finally:

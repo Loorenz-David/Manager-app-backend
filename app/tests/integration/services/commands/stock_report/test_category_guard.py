@@ -125,6 +125,7 @@ async def test_c4a_changing_category_with_active_assignment_is_refused(db_sessio
     assert after.item_category_snapshot == before_snapshot
     assert after.item_major_category_snapshot == before_major_snapshot
     assert after.updated_at == before_updated_at
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4b_setting_the_same_category_is_not_a_change(db_session):
@@ -141,6 +142,7 @@ async def test_c4b_setting_the_same_category_is_not_a_change(db_session):
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[0].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4d_null_to_a_category_is_a_change(db_session):
@@ -169,6 +171,7 @@ async def test_c4d_null_to_a_category_is_a_change(db_session):
             db_session, seeded, item_category_id=seeded.categories[0].client_id
         )
     assert str(excinfo.value) == _MESSAGE
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4e_a_category_to_null_is_a_change(db_session):
@@ -183,6 +186,7 @@ async def test_c4e_a_category_to_null_is_a_change(db_session):
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[0].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4c_changing_an_unrelated_field_with_active_assignment_is_allowed(db_session):
@@ -194,6 +198,7 @@ async def test_c4c_changing_an_unrelated_field_with_active_assignment_is_allowed
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.designer == "x"
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4f_changing_category_of_a_resolved_only_assignment_is_allowed(db_session):
@@ -215,6 +220,7 @@ async def test_c4f_changing_category_of_a_resolved_only_assignment_is_allowed(db
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[1].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c4g_changing_category_of_a_soft_deleted_only_assignment_is_allowed(db_session):
@@ -254,6 +260,7 @@ async def test_c4i_changing_category_of_a_resolved_early_only_assignment_is_allo
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[1].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +360,7 @@ async def test_c5a_create_task_naming_a_new_category_for_an_actively_assigned_it
         assert await _workspace_counts(db_session, workspace_id) == before
         item = await db_session.get(Item, seeded.item.client_id)
         assert item.item_category_id == seeded.categories[0].client_id
+        await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.execute(
@@ -379,6 +387,7 @@ async def test_c5b_create_task_naming_the_same_category_is_allowed(db_session):
     assert result["client_id"]
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[0].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c5c_create_task_omitting_category_with_active_assignment_is_allowed(db_session):
@@ -403,6 +412,7 @@ async def test_c5c_create_task_omitting_category_with_active_assignment_is_allow
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[0].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c5d_no_assignment_at_all_category_change_through_create_task_behaves_as_today(
@@ -415,6 +425,7 @@ async def test_c5d_no_assignment_at_all_category_change_through_create_task_beha
 
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[1].client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c5e_find_or_create_item_directly_refuses_with_active_assignment(db_session):
@@ -437,3 +448,4 @@ async def test_c5e_find_or_create_item_directly_refuses_with_active_assignment(d
     with pytest.raises(ConflictError) as excinfo:
         await find_or_create_item(ctx)
     assert str(excinfo.value) == _MESSAGE
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)

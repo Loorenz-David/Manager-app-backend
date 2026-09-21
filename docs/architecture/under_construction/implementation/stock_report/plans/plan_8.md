@@ -349,3 +349,76 @@ own assertion.
 
 *Reviewer probes:* **no production file was touched.** Two temporary test files were created, run
 and deleted; tree verified byte-identical to `a9b734f` (`git diff --quiet`). No L4 taken.
+
+**Implementer, 2026-09-21 (batch C1 fix round 1, Sonnet). Production + verification, no tester/
+no independent reviewer this round (owner ruling).** Handoff
+`handoffs/implementer/2026-09-21_batch_C1_fix_1_handoff.md`.
+
+*B1 fixed* — `_phase3_reason` (`create_stock_task_assignments.py`, definition site) now reads
+`if task is None or task.is_deleted: return "task_not_found"` and
+`if item is None or item.is_deleted: return "item_not_found"`, matching the row check one line
+above. `_locks.py` untouched. **C1(v) and C1(w) built and armed**: each drops its own predicate
+independently (two separate mutation runs, whole-file L1), reddening exactly its own new test
+(41/42 and 41/42 green respectively) and nothing else; reverted.
+
+*S1 fixed* — `ConfigDict(extra="forbid")` added to all three router body models
+(`_StockTaskAssignmentEntryBody`, `_CreateStockTaskAssignmentsBody`,
+`_DeleteStockTaskAssignmentsBody`) in `bm/routers/api_v1/stock_report.py`. Three new unit tests
+(`test_create_assignments_route_refuses_unknown_top_level_field`,
+`test_create_assignments_route_refuses_unknown_entry_field`,
+`test_delete_assignments_route_refuses_unknown_top_level_field`); each of the three mutations
+(drop `extra="forbid"` from one model at a time) reddened exactly its own test, reverted.
+
+*S3 implemented* — `test_property_mismatch_without_override_raises_409_with_sorted_failures`
+(C3(a)) rebuilt on the folded four-key fixture (`zone` added); asserts all four failures in
+alphabetical order per S4's corrected outcome cell (already folded into §6's table). Mutation
+(drop `sorted(...)` in `criteria_matcher.py:evaluate_stock_criteria`, definition site) reddened
+this test **and** the pre-existing `test_matcher_reports_all_sorted_failures`; reverted.
+
+*S2 — attempted, could not reproduce a red in this environment.* Added the `record_statements` /
+`count_writes(statements, {"stock_task_assignments"}) == 1` clause to
+`test_c5a_concurrent_create_on_the_same_item_leaves_exactly_one_active` (race-scoped: both
+sessions share the one process-wide engine, so a per-connection recorder cannot isolate the
+loser's own statements without a custom connection filter — documented as a judgment call in the
+handoff). Ran the row's own named mutation ("drop the Item lock, phase 2") at two sites — an
+inline unlocked select in `create_stock_task_assignments.py` itself, and `_locks.py:lock_items`'s
+definition — each five and three consecutive runs, plus a diagnostic variant with a forced
+50 ms pause to rule out a scheduling artefact. **All runs stayed green** (`count_writes == 1`
+held even with the lock removed). Traced to a structural asymmetry in the test's own two-session
+shape: session A reuses the already-connected `db_session` fixture and session B acquires a
+fresh connection through `get_db_session()`; A's post-query continuation resumes measurably
+before B's (confirmed by the query log — B's own `active_item_ids` read only ever executes after
+A's commit, lock or no lock), so the test cannot force the two-writer interleaving the row's
+mutation needs regardless of the Item lock's presence. **Not claimed as armed.** The assertion is
+left in (harmless, and correct for the reason clause it accompanies), but S2 is reported
+NOT_VERIFIED-by-mutation rather than closed — see the handoff for the full trace and an owner
+card on whether the fixture should be rebuilt with two independently-acquired sessions (neither
+reusing `db_session`) to remove the asymmetry.
+
+*S5 done, no stop-and-report cases.* Added `assert_stock_report_clean` to the ten plan 8 rows the
+review named (C3(b), C3(c), C4(g), C4(h), C4(k), C1(r), C1(s), C6(c), C6(h), C7(a) — the last two
+in plan 8's delete test file). None reddened; no drift found.
+
+*C6(j) built and armed* (plan is B2's row) — see plan 8 §5 note: fixture header literally reads
+`DL([A, A, B])`, but the outcome cell ("ends at B's remaining 4") only holds if B is never named
+in the delete call — a literal three-id request would delete B too and leave the row at 0. Built
+as `DL([A, A])` on a row that also holds an active, untouched B(4), matching master plan §9 rule
+7's own citation of the measured defect ("`DL([A, A])` on a row also holding an active B(4)").
+**Flagged as a fixture-header transcription defect** per §6's own preamble ("an outcome that
+disagrees with its own fixture is a plan defect: report it, never reconcile it in the test") —
+built on the outcome cell plus the master plan's independent citation, not silently reconciled.
+Mutation (revert the dedup to `ids = request.client_ids`, `delete_stock_task_assignments.py`
+definition site) reddened exactly this test; reverted.
+
+*Perimeter (cycle-scoped):* production —
+`beyo_manager/services/commands/stock_report/create_stock_task_assignments.py`,
+`beyo_manager/services/commands/stock_report/delete_stock_task_assignments.py`,
+`beyo_manager/routers/api_v1/stock_report.py`. Tests — the five files named in the fix prompt's
+perimeter. Mutation probes applied-and-reverted, none left behind: `_locks.py` (S2's second
+siting attempt) and `criteria_matcher.py` (S3's mutation) — both already declared in §7's probe
+perimeter extension.
+
+*Not in scope, not touched:* the other 90 rows' mutation ledger, plan 11 (see its own Review
+log), the §9 fold-count note for C1(v)/C1(w)/C6(j) (still owed — those three rows are not yet
+reflected in the running 621/100 total), `_locks.py`/`criteria_matcher.py` production code
+(mutation-probed only).

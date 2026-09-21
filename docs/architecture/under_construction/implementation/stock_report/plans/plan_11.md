@@ -278,3 +278,27 @@ C1(c)'s `failed`-then-active construction; the three trigger strings.
 
 *Reviewer probes:* no production file was touched; two temporary test files created, run and
 deleted; tree byte-identical to `a9b734f`.
+
+**Implementer, 2026-09-21 (batch C1 fix round 1, Sonnet). No production defect routed to this
+plan this round** — B1 lives in plan 8's own file (`create_stock_task_assignments.py`); this
+plan's only obligation was **S5**. Handoff
+`handoffs/implementer/2026-09-21_batch_C1_fix_1_handoff.md`.
+
+*S5 done, no stop-and-report cases.* Added `assert_stock_report_clean` to all 17 non-drift rows
+the review named — C1(b), C1(c) (`test_task_side_removals.py`); C2(b), C2(c), C3(b)
+(`test_item_side_removals.py`); C4(a)–(f), C4(i), C5(a)–(e) (`test_category_guard.py`, 12 tests).
+C1(a), C2(a), C3(a), C4(g) already complied and were left unchanged. The three drift-planted C6
+tests (trigger-string rows) are exempt per §6's own preamble ("unless drift is planted") and were
+not touched. None of the 17 additions reddened; no drift found in any of them. C5(a)'s addition
+sits inside its existing `try` block, before the `finally`'s `purge_stock_report_workspace` —
+`assert_stock_report_clean` reads `db_session`/the shared workspace, which is unaffected by the
+second, fresh `get_db_session()` session C5(a) also uses.
+
+*Perimeter (cycle-scoped):* `test_task_side_removals.py`, `test_item_side_removals.py`,
+`test_category_guard.py` — additive assertions only, no fixture or production changes. No
+mutation probe touched any file under this plan's perimeter this round.
+
+*Not in scope, not touched:* C7(a)/(b)'s structural-check status (unchanged from review 1: C7(a)
+PASSES, C7(b) re-verifies once plan 8's B1 lands — it has, in this same round, but re-verifying
+the structural check is a review act, not an implementer one, and is left for the next review
+round); the mutation ledger for the other 25 rows.

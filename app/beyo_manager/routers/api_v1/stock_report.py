@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
@@ -29,6 +29,8 @@ router = APIRouter()
 
 
 class _StockTaskAssignmentEntryBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     stock_report_item_id: str
     task_id: str
     item_id: str
@@ -36,10 +38,14 @@ class _StockTaskAssignmentEntryBody(BaseModel):
 
 
 class _CreateStockTaskAssignmentsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     entries: list[_StockTaskAssignmentEntryBody]
 
 
 class _DeleteStockTaskAssignmentsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     client_ids: list[str]
 
 

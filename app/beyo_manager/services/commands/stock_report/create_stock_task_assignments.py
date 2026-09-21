@@ -135,10 +135,10 @@ def _phase3_reason(
     if row is None or row.is_deleted:
         return "stock_report_item_not_found"
     task = locked_tasks.get(entry.task_id)
-    if task is None:
+    if task is None or task.is_deleted:
         return "task_not_found"
     item = locked_items.get(entry.item_id)
-    if item is None:
+    if item is None or item.is_deleted:
         return "item_not_found"
     if (entry.task_id, entry.item_id) not in primary_pairs:
         return "item_not_task_primary"

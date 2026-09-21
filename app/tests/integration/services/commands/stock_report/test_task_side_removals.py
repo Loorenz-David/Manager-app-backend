@@ -218,6 +218,7 @@ async def test_c1b_deleting_task_removes_resolved_assignment_without_counter_cha
     names = [event.event_name for event in captured]
     assert "stock_task_assignment:deleted" in names
     assert "stock_report_item:updated" not in names
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c1c_deleting_task_removes_every_non_deleted_assignment_of_the_task(db_session):
@@ -243,6 +244,7 @@ async def test_c1c_deleting_task_removes_every_non_deleted_assignment_of_the_tas
     assert await _counters(db_session, row.client_id) == (0, 0, 0)
     task = await db_session.get(Task, seeded.task.client_id)
     assert task.is_stock_assignment is False
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c6a_repair_record_carries_the_delete_task_trigger(db_session):

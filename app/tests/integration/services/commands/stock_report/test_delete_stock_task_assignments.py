@@ -209,6 +209,7 @@ async def test_deleting_resolved_assignment_leaves_counters_untouched(
     assert [event.event_name for event in captured] == ["stock_task_assignment:deleted"]
     refreshed_task = await db_session.get(Task, seeded.task.client_id)
     assert refreshed_task.is_stock_assignment is False
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c6b_deleting_an_awaiting_assignment_uncredits_the_goal(db_session):
@@ -412,6 +413,119 @@ async def test_two_assignments_on_one_row_coalesce_to_one_updated_event(
     assert len(updated) == 1
     assert len(deleted) == 2
     assert updated[0].extra["quantity_in_queue"] == 0
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+async def test_c6j_the_same_assignment_named_twice_in_one_delete_is_removed_once(
+    db_session, monkeypatch
+):
+    """C6(j) (owner card 2, batch C1 review finding B2). Row header says
+    `DL([A, A, B])`; built as `DL([A, A])` on a row that also holds an active,
+    untouched B(4) — the row's own outcome cell ("ends at B's remaining 4") is
+    only true if B is never named in the delete call, and master plan §9 rule 7's
+    citation of the measured defect (line ~322: "`DL([A, A])` on a row also
+    holding an active B(4)") confirms this reading; a literal `[A, A, B]` request
+    would delete B too and leave the row at 0, contradicting its own outcome cell.
+    Flagged as a fixture-header transcription defect in the Review log (§6
+    preamble: "an outcome that disagrees with its own fixture is a plan defect:
+    report it, never reconcile it in the test") — built on the outcome cell and
+    the master plan's independent citation, not reconciled silently.
+
+    The batch succeeds; A is removed **once**, so R's `quantity_in_queue` falls by
+    4, not 8, and ends at B's remaining 4; exactly one
+    `stock_task_assignment:deleted` for A; the response lists each id once,
+    sorted."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    a_id = await _create_one(db_session, seeded, row)
+
+    from sqlalchemy import func
+
+    from beyo_manager.domain.items.enums import ItemStateEnum
+    from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum as TState, TaskTypeEnum
+    from beyo_manager.models.tables.items.item import Item
+    from beyo_manager.models.tables.tasks.task_item import TaskItem
+
+    next_scalar_id = (
+        await db_session.scalar(
+            select(func.max(Task.task_scalar_id)).where(
+                Task.workspace_id == seeded.workspace.client_id
+            )
+        )
+        or 0
+    ) + 1
+    task_b = Task(
+        client_id=f"tsk_c6j_{seeded.workspace.client_id}",
+        workspace_id=seeded.workspace.client_id,
+        task_scalar_id=next_scalar_id,
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TState.PENDING,
+        created_by_id=seeded.manager.client_id,
+    )
+    item_b = Item(
+        client_id=f"itm_c6j_{seeded.workspace.client_id}",
+        workspace_id=seeded.workspace.client_id,
+        article_number=f"c6j-{seeded.workspace.client_id}",
+        state=ItemStateEnum.PENDING,
+        quantity=4,
+        item_category_id=seeded.categories[0].client_id,
+        properties={"wood_type": "Teak", "upholstery": "Down"},
+    )
+    db_session.add_all([task_b, item_b])
+    await db_session.flush()
+    db_session.add(
+        TaskItem(
+            client_id=f"tim_c6j_{seeded.workspace.client_id}",
+            workspace_id=seeded.workspace.client_id,
+            task_id=task_b.client_id,
+            item_id=item_b.client_id,
+            role=TaskItemRoleEnum.PRIMARY,
+            created_by_id=seeded.manager.client_id,
+        )
+    )
+    await db_session.flush()
+    b_result = await _CR(
+        db_session,
+        seeded,
+        [
+            {
+                "stock_report_item_id": row.client_id,
+                "task_id": task_b.client_id,
+                "item_id": item_b.client_id,
+                "override_property_mismatch": False,
+            }
+        ],
+    )
+    b_id = b_result["stock_task_assignments"][0]["client_id"]
+    assert await _counters(db_session, row.client_id) == (8, 0, 0)
+    captured = capture_dispatch(
+        monkeypatch,
+        "beyo_manager.services.commands.stock_report.delete_stock_task_assignments.dispatch",
+    )
+
+    result = await _DL(db_session, seeded, [a_id, a_id])
+
+    assert result["deleted_client_ids"] == [a_id]
+    assert await _counters(db_session, row.client_id) == (4, 0, 0)
+    deleted_events = [e for e in captured if e.event_name == "stock_task_assignment:deleted"]
+    assert len(deleted_events) == 1
+    a = await _fresh_assignment(db_session, a_id)
+    b = await _fresh_assignment(db_session, b_id)
+    assert a.is_deleted is True
+    assert b.is_deleted is False
+    records = (
+        (
+            await db_session.execute(
+                select(StockReportRepairRecord).where(
+                    StockReportRepairRecord.workspace_id == seeded.workspace.client_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert records == []
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_repair_record_carries_the_delete_assignments_trigger(db_session):

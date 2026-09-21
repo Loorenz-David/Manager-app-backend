@@ -44,7 +44,11 @@ def _row_values(row) -> dict:
 
 async def delete_stock_task_assignments(ctx: ServiceContext) -> dict:
     request = parse_delete_stock_task_assignments_request(ctx.incoming_data)
-    ids = request.client_ids
+    # De-duplicated once, here, so discovery, the missing-check, the removal loop
+    # and the response all read the same set (a repeated id must not be removed,
+    # and therefore double-subtracted, twice — master plan §6.5, batch C1 review
+    # card 2 / B2).
+    ids = sorted(set(request.client_ids))
 
     async with maybe_begin(ctx.session):
         # Discovery, unlocked — decides only which ids exist, are live and are ours.

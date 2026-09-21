@@ -266,6 +266,7 @@ async def test_quantity_floors_at_one(db_session):
 
     assert result["stock_task_assignments"][0]["quantity"] == 1
     assert await _counters(db_session, row.client_id) == (1, 0, 0)
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 @pytest.mark.parametrize(
@@ -341,6 +342,7 @@ async def test_c4g_quantity_is_copied_from_the_item(db_session):
 
     assert result["stock_task_assignments"][0]["quantity"] == 8
     assert (await _counters(db_session, row.client_id)) == (8, 0, 0)
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_two_entries_ascending_item_id_response_order_and_summed_counters(db_session):
@@ -362,6 +364,7 @@ async def test_two_entries_ascending_item_id_response_order_and_summed_counters(
     returned_item_ids = [a["item_id"] for a in result["stock_task_assignments"]]
     assert returned_item_ids == ordered_pair
     assert (await _counters(db_session, row.client_id)) == (8, 0, 0)
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 # ---------------------------------------------------------------------------
@@ -535,6 +538,7 @@ async def test_c1r_a_new_task_for_the_same_item_is_not_affected(db_session):
     result = await _CR(db_session, seeded, [_entry(row, task2, seeded.item)])
 
     assert result["stock_task_assignments"][0]["state"] == "in_queue"
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c1s_a_soft_deleted_resolved_assignment_does_not_refuse(db_session):
@@ -555,6 +559,7 @@ async def test_c1s_a_soft_deleted_resolved_assignment_does_not_refuse(db_session
     result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
 
     assert result["stock_task_assignments"][0]["state"] == "in_queue"
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c1t_item_not_task_primary_comes_before_already_processed(db_session):
@@ -572,6 +577,63 @@ async def test_c1t_item_not_task_primary_comes_before_already_processed(db_sessi
     with pytest.raises(StockAssignmentRefused) as excinfo:
         await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
     assert excinfo.value.details == [{"index": 0, "reason": "item_not_task_primary"}]
+
+
+async def test_c1v_soft_deleted_task_is_refused_task_not_found(db_session):
+    """C1(v) (owner card 1, batch C1 review finding B1): T is soft-deleted but
+    otherwise a valid target (`pending`, I PRIMARY on it, category and properties
+    matching R) — MC-16's `tasks.is_deleted = false` creation-lookup predicate is
+    the only reason the call refuses. Nothing is written: no assignment row, R's
+    counters stay at F0's zeros, T's `is_stock_assignment` is not set."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await db_session.execute(
+        Task.__table__.update()
+        .where(Task.client_id == seeded.task.client_id)
+        .values(is_deleted=True)
+    )
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "task_not_found"}]
+    assert (
+        await db_session.execute(
+            select(StockTaskAssignment).where(
+                StockTaskAssignment.workspace_id == seeded.workspace.client_id
+            )
+        )
+    ).scalars().all() == []
+    assert (await _counters(db_session, row.client_id)) == (0, 0, 0)
+    refreshed_task = await db_session.get(Task, seeded.task.client_id)
+    assert refreshed_task.is_stock_assignment is False
+
+
+async def test_c1w_soft_deleted_item_is_refused_item_not_found(db_session):
+    """C1(w) (owner card 1, batch C1 review finding B1): I is soft-deleted but
+    otherwise a valid target (PRIMARY on a `pending` T, category and properties
+    matching R) — MC-16's `items.is_deleted = false` creation-lookup predicate is
+    the only reason the call refuses. Nothing is written: no assignment row, R's
+    `quantity_in_queue` does not rise by I's quantity, T's `is_stock_assignment` is
+    not set."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await db_session.execute(
+        Item.__table__.update()
+        .where(Item.client_id == seeded.item.client_id)
+        .values(is_deleted=True)
+    )
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "item_not_found"}]
+    assert (
+        await db_session.execute(
+            select(StockTaskAssignment).where(
+                StockTaskAssignment.workspace_id == seeded.workspace.client_id
+            )
+        )
+    ).scalars().all() == []
+    assert (await _counters(db_session, row.client_id)) == (0, 0, 0)
+    refreshed_task = await db_session.get(Task, seeded.task.client_id)
+    assert refreshed_task.is_stock_assignment is False
 
 
 async def test_c1u_already_processed_comes_before_task_failed_or_cancelled(db_session):
@@ -743,9 +805,23 @@ async def test_c2c_phase1_and_phase3_reasons_arrive_in_one_error(db_session):
 
 
 async def test_property_mismatch_without_override_raises_409_with_sorted_failures(db_session):
+    """C3(a) (S3/S4 fold, 2026-09-21): the fixture carries a fourth, short
+    late-alphabet key (`zone`) precisely because criteria are stored as JSONB and
+    Postgres orders JSONB keys by length then bytes — for the original three keys
+    that order happens to coincide with alphabetical, so the "sorted failures"
+    sub-check could not fail (L-14). With `zone` present, JSONB order is
+    `zone, quantity, upholstery, wood_group` while the assertion below is
+    alphabetical, so dropping the matcher's sort reddens this test."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(
-        db_session, seeded, criteria={"quantity": ["4"], "upholstery": ["down"], "wood_group": ["teak"]}
+        db_session,
+        seeded,
+        criteria={
+            "quantity": ["4"],
+            "upholstery": ["down"],
+            "wood_group": ["teak"],
+            "zone": ["a1"],
+        },
     )
     await db_session.execute(
         Item.__table__.update().where(Item.client_id == seeded.item.client_id).values(
@@ -764,6 +840,7 @@ async def test_property_mismatch_without_override_raises_409_with_sorted_failure
                 {"key": "quantity", "reason": "value_not_accepted"},
                 {"key": "upholstery", "reason": "missing_on_item"},
                 {"key": "wood_group", "reason": "missing_on_item"},
+                {"key": "zone", "reason": "missing_on_item"},
             ],
         }
     ]
@@ -793,6 +870,7 @@ async def test_override_on_a_mismatching_entry_creates_with_flag_true(db_session
     assert payload["property_mismatch_overridden"] is True
     assert payload["state"] == "in_queue"
     assert (await _counters(db_session, row.client_id)) == (1, 0, 0)
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_override_on_a_matching_entry_is_ignored(db_session):
@@ -802,6 +880,7 @@ async def test_override_on_a_matching_entry_is_ignored(db_session):
         db_session, seeded, [_entry(row, seeded.task, seeded.item, override=True)]
     )
     assert result["stock_task_assignments"][0]["property_mismatch_overridden"] is False
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_c3d_retry_after_a_409_is_re_evaluated_from_scratch(db_session):
@@ -889,6 +968,7 @@ async def test_two_entries_on_one_row_dispatch_two_created_and_one_coalesced_upd
     assert len(created) == 2
     assert len(updated) == 1
     assert updated[0].extra["quantity_in_queue"] == 8
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
 async def test_refused_request_dispatches_nothing(db_session, monkeypatch):

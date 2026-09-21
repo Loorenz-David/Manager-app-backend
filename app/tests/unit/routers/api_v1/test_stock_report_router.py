@@ -116,6 +116,39 @@ def test_stock_assignment_refused_renders_code_and_details(monkeypatch):
     }
 
 
+# ---------------------------------------------------------------------------
+# S1 (batch C1 review 1, 2026-09-21) — unknown fields refused with 422 over HTTP.
+# Intention §9C MC-13: "Unknown fields -> 422 (a local API, so strict)." Without
+# `extra="forbid"` on the router's own body models, an unrecognized field was
+# silently dropped by `body.model_dump()` before the command's own strict model
+# ever saw it, so the request succeeded (200) instead of refusing (422).
+# ---------------------------------------------------------------------------
+
+
+def test_create_assignments_route_refuses_unknown_top_level_field(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    body = {"entries": [_ASSIGNMENT_ENTRY], "unexpected": True}
+    response = http.post("/api/v1/stock-report/assignments", json=body)
+    assert response.status_code == 422
+    assert calls == []
+
+
+def test_create_assignments_route_refuses_unknown_entry_field(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    body = {"entries": [{**_ASSIGNMENT_ENTRY, "unexpected": True}]}
+    response = http.post("/api/v1/stock-report/assignments", json=body)
+    assert response.status_code == 422
+    assert calls == []
+
+
+def test_delete_assignments_route_refuses_unknown_top_level_field(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    body = {"client_ids": ["sta_1"], "unexpected": True}
+    response = http.post("/api/v1/stock-report/assignments/delete", json=body)
+    assert response.status_code == 422
+    assert calls == []
+
+
 def test_stock_assignment_property_mismatch_renders_code_and_details(monkeypatch):
     details = [
         {
