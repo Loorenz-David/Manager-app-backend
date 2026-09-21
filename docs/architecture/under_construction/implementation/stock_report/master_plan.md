@@ -1101,7 +1101,17 @@ C4(k) and C6(h); every `ascending client_id` claim in §6.5 should be re-read ag
   `before_cursor_execute` users are worker-stats, item-economics, users, acknowledgments and
   presentations tests); (c) two existing guard suites read documents — `tests/unit/docs/` (phase 14);
   (d) `TestClient` router tests fake `get_db` and `run_service`; DB-backed webhook tests call the
-  command with `raw_body` bytes, not the HTTP layer.
+  command with `raw_body` bytes, not the HTTP layer; (e) **a non-`main` `BEYO_TEST_SLOT` flips two
+  tests that assert the *default* slot** (batch C2 implementer, 2026-09-21, first real run of a
+  non-default slot at L4): `test_database_isolation.py::test_worker_name_resolution_uses_xdist_worker`
+  and `::test_worker_name_resolution[None-None-beyo_test_main_main]` read `settings.test_slot`
+  (bound from the `BEYO_TEST_SLOT` env var at process start) after `monkeypatch.delenv` — the
+  monkeypatch cannot undo a value already baked into the settings singleton, so with the env var
+  genuinely exported as `c2` both assert `beyo_test_c2_*` against a hard-coded `beyo_test_main_*`
+  expectation. Confirmed independent of any stock_report code change (same two tests pass in
+  isolation with the var unset, fail in isolation with it set to `c2`). Not a stock_report defect;
+  every `BEYO_TEST_SLOT=<non-main>` L4 for the rest of this project should expect these two IDs
+  atop the 21-ID baseline, diffed out explicitly rather than mistaken for a regression.
 
 ### 10.1 The 21 baseline failures against the phases (owner table 1)
 
