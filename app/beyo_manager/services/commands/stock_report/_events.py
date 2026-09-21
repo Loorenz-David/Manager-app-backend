@@ -39,3 +39,59 @@ def build_stock_task_assignment_event(
             "state": state,
         },
     )
+
+
+def _coalesce_key(event):
+    name = event.event_name
+    if name.startswith("stock_report_item:"):
+        return ("row", event.client_id, name.rsplit(":", 1)[1])
+    if name.startswith("stock_task_assignment:"):
+        return ("assignment", event.client_id, name.rsplit(":", 1)[1])
+    return ("other", id(event))
+
+
+def coalesce_stock_report_events(events, *, initial_row_values):
+    """MC-19's net-change rule (master plan §6.5, phase 8), one request wide.
+
+    Per row (`stock_report_item:*`, keyed by the row's own `client_id`): keep only the
+    **last** `:updated` event, and drop it entirely when its payload equals the row's
+    initial values (a self-healing or no-op sequence emitted nothing observable) or
+    when the same row also carries a `:created` or a `:deleted` in this request (a
+    created-then-touched or about-to-be-deleted row gets only its one lifecycle
+    event — the `:deleted` half also covers a 13A request that deletes several rows
+    of one group, shifting a later row before deleting it).
+
+    Per assignment (`stock_task_assignment:*`, keyed by `(client_id, kind)`): keep
+    only the last event of each kind.
+
+    First-seen order is preserved: a kept event's position in the result is the
+    position at which its `(entity, client_id, kind)` key first appeared in `events`,
+    never the position of the occurrence whose payload was kept.
+    """
+    last_by_key: dict[tuple, object] = {}
+    first_index: dict[tuple, int] = {}
+    row_created: set[str] = set()
+    row_deleted: set[str] = set()
+
+    for index, event in enumerate(events):
+        key = _coalesce_key(event)
+        if key[0] == "row":
+            if key[2] == "created":
+                row_created.add(key[1])
+            elif key[2] == "deleted":
+                row_deleted.add(key[1])
+        last_by_key[key] = event
+        first_index.setdefault(key, index)
+
+    result = []
+    for key in sorted(last_by_key, key=lambda candidate: first_index[candidate]):
+        entity, client_id, kind = key
+        event = last_by_key[key]
+        if entity == "row" and kind == "updated":
+            if client_id in row_created or client_id in row_deleted:
+                continue
+            initial = initial_row_values.get(client_id)
+            if initial is not None and event.extra == initial:
+                continue
+        result.append(event)
+    return result

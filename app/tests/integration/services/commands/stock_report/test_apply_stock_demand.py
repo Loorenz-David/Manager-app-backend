@@ -166,6 +166,40 @@ async def test_c1b_existing_row_quantity_changes_emits_updated_only(db_session):
         await db_session.commit()
 
 
+async def test_c4m_demand_never_stamps_authorship_columns(db_session):
+    """Plan 8 C4(m) (batch B2 review 1 N4/CF-1; owner card 1, 2026-09-21): the demand
+    path is a system actor. A created row's `created_by_id`/`updated_by_id`/
+    `updated_at` are all NULL, and a later quantity change leaves `updated_by_id`/
+    `updated_at` NULL too — this project stamps authorship on user-facing writers
+    only (MC-17), never on Scanner's webhook. The fixture and both named mutations
+    live in `apply_stock_demand.py` (phase 7's approved perimeter, not phase 8's own
+    surface) per plan 8 §7's one-file perimeter extension."""
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        properties_raw = {"wood_group": ["teak"]}
+        first = await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", properties_raw, 5)])
+        created_id = first.events[0].client_id
+
+        await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", properties_raw, 9)])
+
+        row = (
+            await db_session.execute(
+                select(StockReportItem).where(StockReportItem.client_id == created_id)
+            )
+        ).scalar_one()
+        assert row.quantity_requested == 9
+        assert row.created_by_id is None
+        assert row.updated_by_id is None
+        assert row.updated_at is None
+
+        await assert_stock_report_clean(db_session, workspace_id)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
 async def test_c1c_replay_same_quantity_writes_nothing(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     await db_session.commit()

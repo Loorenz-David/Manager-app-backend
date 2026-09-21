@@ -202,4 +202,52 @@ Tenancy rows (C1(c), C6(f)) use a **cross-workspace reference**: the foreign ent
 
 **Owner, 2026-09-21 — criterion row authored (batch B2 card 1, CF-1).** **C4(m)** added: the demand path must leave `created_by_id` and `updated_*` NULL when it creates a row, and `updated_*` unchanged when it changes `quantity_requested` (MC-17). **No test exists yet — this row is owed by this phase's implementation round.** See §7 for the one-file perimeter extension it carries: the code under test is phase 7's, which is VERIFIED, so the row could not be placed in plan 6 or 7 without reopening a closed gate.
 
-(empty)
+**Implementer, 2026-09-21 (batch C1, Sonnet).** Built: `serializers.py` (three functions,
+due-in-this-phase per §9B ruling 2); the two structured errors in `errors/stock_report.py`;
+`requests/__init__.py` (`StockTaskAssignmentEntry`, `CreateStockTaskAssignmentsRequest`,
+`DeleteStockTaskAssignmentsRequest` — `SetStockReportItemPriority(Order)Request` deliberately
+**not** added: they belong to phase 12 and charter rule 4 forbids a name with no caller yet);
+`create_stock_task_assignments.py` and `delete_stock_task_assignments.py`;
+`coalesce_stock_report_events` in `_events.py`; the two routes plus structured-error rendering in
+`stock_report.py`. C4(m)'s test landed in `test_apply_stock_demand.py` per §7's perimeter
+extension — no production change there, both authorship clauses were already true.
+
+**Judgment calls:**
+- Phase-1 duplicate check order: item_id checked before task_id when an entry could name either
+  (not specified by the plan; no criterion exercises both at once).
+- Phase-4 matcher: collects **every** post-phase-3 entry's mismatch into one
+  `StockAssignmentPropertyMismatch` (the plan's C3(a) sentence is singular but the batch is
+  all-or-nothing elsewhere; no criterion row tests two simultaneous mismatches).
+- `delete_stock_task_assignments`'s response order and the "re-read after lock" pass over
+  `locked_assignments` (a race-defence beyond what any C6 row forces) follow §9 rule 4's standing
+  instruction, not a named criterion.
+- Router body models (`_CreateStockTaskAssignmentsBody`, `_DeleteStockTaskAssignmentsBody`) are
+  fully-typed FastAPI models, matching this codebase's established convention (e.g.
+  `item_upholsteries.py:_CreateBody`) rather than a raw-dict passthrough — master plan §6.5/§6.6
+  registers only the command-level request classes, not a router-level shape, so this is filled
+  in as a judgment call. Consequence: an actual HTTP client sending an unrecognized top-level
+  field gets FastAPI's own validation error, not `StockAssignmentRefused`/`ValidationError` — C3(e)
+  ("unknown field → `ValidationError` 422") is proven at the `CR()`/command boundary only, per the
+  plan's own fixture shorthand, which bypasses the router. Flagging this because a future reviewer
+  or the frontend may expect uniform error envelopes across the whole surface; no criterion in this
+  phase asks for it.
+
+**C5(b) — the caller's lock order (owner card C / L-29).** The named mutation site ("remove the
+`sorted(...)` from the Item-lock acquisition in `create_stock_task_assignments.py`, definition
+site") does not exist in the file I wrote: my command passes an unordered Python `set` of
+`item_ids` straight to phase-3's approved `lock_items` helper (`_locks.py`), whose single
+`SELECT … ORDER BY client_id … FOR UPDATE` already guarantees deterministic ascending lock
+acquisition in one atomic statement, regardless of the order ids arrive in. `_locks.py` is out of
+this phase's perimeter (phase 3, APPROVED) and I have not touched it. I believe C5(b)'s production
+requirement — "acquire the locks in sorted order, deterministically" — is met by construction via
+that one call, with nothing left for this phase to add. I did not build a two-session test for
+C5(b) (unlike C5(a), which I did build — see the implementer handoff): there is no
+phase-8-authored logic path for such a test to exercise red→green against, and forcing the
+opposite-order interleaving is exactly the kind of adversarial proof this project's tester owns.
+Flagging this now so the tester sites its arming attempt against `_locks.py`'s single-statement
+lock, not a `sorted()` call in my file that was never written — an L-25 site-mismatch caught before
+arming time rather than during it.
+
+**C4(l)'s second clause** ("`set(element) == set(GET /items/{client_id}/assignments`'s element)")
+is not exercised: that endpoint is phase 13, not yet built in this batch. My tests assert the
+fourteen-key shape directly instead.
