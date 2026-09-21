@@ -358,3 +358,24 @@ neither a mutation nor a fixture cell, so it is outside the fold authority grant
 >    **Two distinct bind names, not one used twice** (O1).
 
 Until it is applied, the shipped code is right and the task text is stale.
+
+---
+
+**2026-09-21, batch B2 re-review 1 (Opus, reviewer) — APPROVED.** Phase 6 was not in this round's
+perimeter and was not re-verdicted: `git diff ff39a96..29b4395 -- app/beyo_manager/` is empty and
+neither `test_apply_stock_demand.py` nor `test_apply_stock_demand_timing.py` changed. **36/36
+stands** from review 1. Batch total 88/88; batch B2 — and with it batch B — is **APPROVED**.
+
+Outstanding against this plan, unchanged and still the owner's: **§5 task 2 step 1 contradicts the
+shipped code** after the O1 decision (review 1 N9); the replacement text is in review 1 §8 item 1
+and repeated above in this log. Notes N3 (C1(f)'s unasserted "nothing written" half — equivalent),
+N5/CF-2 (MC-4's sorted VALUES has no test that can fail — owner card 1), N6 (C6(b) carries one
+statement of slack) and N7/CF-5 (C6 and C7(a) are implementation-coupled by design) are carried
+forward unchanged.
+
+One measurement this round adds that touches this plan's files: `count_writes` — the instrument
+behind C1(c), C4(a), C4(b) and C5(c) — had never been observed returning non-zero anywhere in the
+repository (twelve call sites, all `== 0`). It is now measured capable of firing on the demand path
+(three writes observed under an apply-then-reject probe in `receive_stock_demand_webhook.py`). The
+instrument is real; those rows are measured-armed, not assumed-armed. Handoff:
+`handoffs/reviewer/2026-09-21_batch_B2_rereview_1_handoff.md`.

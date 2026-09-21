@@ -7736,6 +7736,94 @@ nodes:
     confidence: 0.85
     createdAt: 2026-09-21T00:52:45.640Z
     updatedAt: 2026-09-21T00:52:45.640Z
+  - id: command-apply-stock-demand
+    type: command
+    name: apply_stock_demand
+    description: Owner-mode command that applies a batch of Scanner demand entries
+      to a workspace. Refuses a session already in a transaction, sets a
+      statement and lock timeout for its own transaction, then resolves each
+      entry's category, finds or creates the identity row with a single INSERT
+      ... ON CONFLICT DO NOTHING against the partial unique index, re-discovers
+      every row by identity rather than by generated id, takes one sorted FOR
+      UPDATE, and writes the goal history. The whole path is Core statements
+      with an exact statement budget — eight for an all-new request, seven
+      all-changed, five all-unchanged — so a stray SELECT is a contract breach,
+      not an inefficiency. Deadline is checked against the caller's budget and a
+      replay of the same entries is a no-op.
+    tags:
+      - stock_report
+      - batch_B2
+      - phase_6
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/apply_stock_demand.py
+          symbol: apply_stock_demand
+          summary: Implements the set-based find-or-create with ON CONFLICT DO NOTHING,
+            identity re-discovery, one sorted lock and the goal-record write,
+            inside its own owner-mode transaction.
+          inferenceReason: This is the only write path Scanner's demand webhook has into
+            the stock report, and its statement budget and lock order are
+            contract, not implementation detail.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - id: endpoint-stock-demand-webhook
+    type: endpoint
+    name: Scanner stock-demand webhook
+    description: The POST endpoint Scanner delivers stock demand to, mounted under
+      the location-tracker prefix. Verifies a shared API key against the
+      configured workspace, parses and validates the raw JSON body, rejects a
+      duplicate identity within one batch, and hands the parsed entries to
+      apply_stock_demand. It opens no transaction — the command owns it — and
+      computes the request deadline on its first line, so the budget covers
+      verification and parsing as well as the write.
+    tags:
+      - stock_report
+      - batch_B2
+      - phase_7
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/receive_stock_demand_webhook.py
+          summary: Verifies the key, parses the body, then delegates to the command
+            without opening a transaction.
+          inferenceReason: It is the external boundary of the whole demand path and the
+            place the identity invariant is proven end to end.
+        - path: app/beyo_manager/services/infra/location_tracker/webhook_verifier.py
+          summary: Compares the presented key with hmac.compare_digest and returns the
+            configured workspace id.
+          inferenceReason: Authentication for the webhook is a separate, shared surface
+            that a second Scanner webhook will reuse.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - id: domain-stock-demand-request
+    type: domain
+    name: stock demand request parsing and identity
+    description: "Turns raw Scanner JSON into demand entries, deriving each entry's
+      identity from the normalized criteria signature. This is where MC-3's
+      identity invariant is realized: payloads differing only in key order, list
+      order, element case or whitespace, duplicate elements, or a bare string
+      versus a one-element list resolve to one identity, while differences in
+      key case or whitespace resolve to two. The signature is computed once here
+      and is the single value the duplicate check, the row discovery, the insert
+      and the lock all use."
+    tags:
+      - stock_report
+      - batch_B2
+      - phase_7
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/stock_demand_request.py
+          summary: Builds each entry's properties_signature from the normalized criteria
+            and rejects duplicate identities within a batch.
+          inferenceReason: Identity convergence is the guarantee that keeps one Scanner
+            rule from becoming two board rows, and it is decided here.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -14205,3 +14293,102 @@ edges:
     confidence: 0.85
     createdAt: 2026-09-21T00:52:45.640Z
     updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: endpoint-stock-demand-webhook
+    relationshipType: accepts
+    targetNodeId: command-apply-stock-demand
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/receive_stock_demand_webhook.py
+          summary: Delegates the parsed entries to apply_stock_demand, which owns the
+            transaction.
+          inferenceReason: The webhook is the command's only caller and the command is the
+            webhook's only writer.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: endpoint-stock-demand-webhook
+    relationshipType: depends_on
+    targetNodeId: domain-stock-demand-request
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/receive_stock_demand_webhook.py
+          summary: Parses the raw body through the request module before any write is
+            attempted.
+          inferenceReason: Parsing before applying is what makes a rejected batch leave no
+            trace.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: domain-stock-demand-request
+    relationshipType: depends_on
+    targetNodeId: domain-stock-criteria-normalization
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/stock_demand_request.py
+          summary: Derives each entry's signature from normalize_stock_criteria's output.
+          inferenceReason: The demand path's identity and the stored row's identity must
+            come from the same recipe or the same rule would land twice.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: command-apply-stock-demand
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/apply_stock_demand.py
+          symbol: apply_stock_demand
+          summary: Inserts new identity rows and updates the requested quantity of
+            existing ones.
+          inferenceReason: Creating and updating demand rows is the command's purpose.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: command-apply-stock-demand
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-history-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/apply_stock_demand.py
+          symbol: apply_stock_demand
+          summary: Writes a goal history record for each entry whose requested quantity
+            changed.
+          inferenceReason: The goal record is how a demand change becomes a target the
+            board reports against.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: command-apply-stock-demand
+    relationshipType: reads_from
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/apply_stock_demand.py
+          symbol: apply_stock_demand
+          summary: Discovers existing rows by identity and re-locks them with one sorted
+            SELECT FOR UPDATE.
+          inferenceReason: Re-discovery by identity rather than by generated id is what
+            keeps two concurrent deliveries on one lock order.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: command-apply-stock-demand
+    relationshipType: depends_on
+    targetNodeId: domain-stock-demand-request
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/apply_stock_demand.py
+          symbol: apply_stock_demand
+          summary: Consumes the demand entries and their precomputed identity signatures.
+          inferenceReason: The command never recomputes identity; it trusts the single
+            value the request module produced.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T03:11:11.021Z
+    updatedAt: 2026-09-21T03:11:11.021Z

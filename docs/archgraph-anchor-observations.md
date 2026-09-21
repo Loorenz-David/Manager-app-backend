@@ -1130,3 +1130,25 @@ non-dry first call would have written nine edges under invented type names. The 
 are `depends_on`, `writes_to`, `reads_from`. Second, `permissionMode: review` did **not** block the
 write, contrary to what both Codex sessions concluded from reading the status field alone — the
 gate they reported as closed was open the whole time. Neither agent tried it.
+
+## 2026-09-21 — stock_report batch B, autonomous overnight run (6 agent sessions + orchestrator)
+
+First run where the owner was absent and I launched every agent. Graph behaviour across six
+sessions: **no agent made or proposed a graph write, and none mentioned the graph at all** — not
+the projectionist, neither implementer round, nor any of the four reviews. The batch A pattern
+(Codex deferring, the reviewer carrying a prose delta forward) did not even recur; the subject
+simply never came up. Every prompt I wrote said "no graph write — that gate is mine", so this is
+compliance with an instruction, not evidence about anchoring instinct. Worth noting that the
+instruction may be suppressing the very signal the brief watches for; if I want a reading, a future
+prompt has to ask an agent to *describe* the delta without writing it.
+
+My own two writes (batch A gate, batch B gate) again used `symbol` anchors throughout and no line
+spans — but as recorded on 2026-09-20, the tool's schema recommends exactly that, so it remains
+compliance rather than instinct.
+
+One observation that is genuinely about anchoring, from the batch B2 re-review: it found that plan
+7's key-order identity row is armed by a line in `properties_signature.py`, **a file neither plan
+mentions**. That is an anchoring failure of the plan set rather than the graph — a guarantee whose
+proof lives in a file outside every declared perimeter — and it is the same shape the graph's
+anchor model exists to prevent. Recorded here because it is the first time this project has
+produced an argument *for* span-free, symbol-anchored provenance from its own evidence.

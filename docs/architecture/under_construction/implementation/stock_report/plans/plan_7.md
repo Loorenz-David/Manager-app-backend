@@ -366,3 +366,61 @@ implement handoff §"L2 (batch end)"): **343 passed** = 334 + 10 additions − 1
 this run (passed).
 
 Handoff: `handoffs/implementer/2026-09-21_batch_B2_fix_1_handoff.md`.
+
+---
+
+**2026-09-21, batch B2 re-review 1 (Opus, reviewer) — APPROVED.** Delta-scoped against review 1's
+80/88. Gate: intention `status: RATIFIED` — PASS. My tree is byte-identical to `29b4395` over
+`app/`; the L4 stamp (21 failed / 3445 passed / 2 skipped, failing-ID set identical to the 21-ID
+baseline both ways) and the 23-passed L1 are tree-matched and consumed by citation, not re-run.
+
+**B1 CLOSED — all eight rows CONFIRMED.** C4(a)–(h) are now eight separate tests in
+`test_receive_stock_demand_webhook.py`, each delivering two **real JSON bodies**
+(`json.dumps(...).encode("utf-8")`) through `receive_stock_demand_webhook` and counting live
+`stock_report_items` rows for W — 1 for (a)–(e), 2 for (f)–(h). No pre-built `DemandEntry` anywhere
+in the eight. Intention §4A MC-3's final bullet is satisfied at the scope it names.
+
+**The arming question — ruled, by measurement.** The fix round's single mutation reddened (a)–(e)
+on their own row-count assertion and left (f)–(h)'s row-count assertion green (they failed only at
+`assert_stock_report_clean`). Its disposition cited review 1's runs of the lower-keys / strip-keys /
+normalize-numbers mutants — but those were run against the **parser** tests, which are different
+tests; the endpoint rows' arming had not been shown. I ran the missing instruments, whole-file,
+one at a time, each reverted and checksum-verified:
+
+| probe | mutation (site) | first failing assertion |
+|---|---|---|
+| P1 | `normalize_stock_criteria` → identity (`criteria_normalization.py`) | C4(b) L373, (c) L393, (d) L413, (e) L433 — `assert 2 == 1` |
+| P2 | `key = key.lower()` (same file) | C4(f) L453 — `assert 1 == 2` |
+| P3 | `key = key.strip()` (same file) | C4(g) L473 — `assert 1 == 2` |
+| P4 | int/float → `float` (same file) | C4(h) L493 — `assert 1 == 2` |
+| P5 | `sort_keys=False` (`domain/items/properties_signature.py`) | C4(a) L353 — `assert 2 == 1` |
+
+**Ruling: all eight discriminate on their own row-count assertion; all eight are armed 1:1; no
+production change is needed.** Two corrections to the record: (i) C4(a) is *not* armed by any
+mutation of `criteria_normalization.py` — its only arming site is `sort_keys=True` in
+`properties_signature.py`, a file neither plan lists (note N-R3); (ii) the fix round's mutant can
+only *split* identities, so it could never arm a "two rows" row — the (f)–(h) result was a category
+error in the instrument, not a shortfall in the tests (lesson L-24).
+
+**S1 CLOSED.** `test_c2a_c2x_malformed_bodies_write_nothing_through_the_command` and
+`test_c2y_extra_key_is_ignored_and_the_entry_is_applied` assert what the cells name. `WRITE_TABLES`
+is restated byte-identical to the approved set and all four names are real `__tablename__`s.
+Armed by measurement: P6 (apply-then-reject in `receive_stock_demand_webhook.py`) reddens C2(a)'s
+`count_writes` at L270 with `assert 3 == 0`; P7 (the same, gated to UTF-8-decodable bodies) reddens
+C2(x)'s at L289; P8 (parser rejects unknown entry keys) reddens C2(y). Both halves of the combined
+function bite on their own sub-check, so charter rule 12 holds by construction.
+
+**S2 CLOSED.** The orphan is deleted; C1(d)/C1(e) already cover its two cases at command scope, so
+nothing lost coverage. The sibling is declared as candidate criterion **CF-4** — now due, since
+batch B is closing.
+
+**Trace.** All nine net new tests map to rows (8 → C4(a)–(h); 1 → C2(a)+C2(x); 1 → C2(y)). No
+orphan introduced. No row pulled in under the widening: the file's instruments are per-test scoped,
+every new test is workspace-scoped and purges, and four independent counts reconcile (13→23, 2→1,
+334→343, 3436→3445).
+
+**Phase 7: 52/52.** Batch 88/88. New notes: N-R1 (the arming run used `-k`), N-R2 (`_live_row_count`
+omits `is_deleted` — stronger today, revisit at 13A), N-R3, N-R4 (`count_writes` measured positive
+for the first time in this repository), N-R5 (the log's L4 tree SHA differs in wording from the
+handoff's). Owner card 1 (CF-1/CF-2/CF-3) is carried verbatim and untouched. Handoff:
+`handoffs/reviewer/2026-09-21_batch_B2_rereview_1_handoff.md`.
