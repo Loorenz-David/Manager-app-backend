@@ -389,29 +389,45 @@ owner card 2 because phase 8 cannot compare against an endpoint phase 13 builds.
 99 → 100 because plan 13 gains a C6 group. No other row count moved — the tester edited no
 criterion cell (`git diff` over the criteria tables: 0 lines).
 
-**Totals re-derived by script, 2026-09-21 — and the long-running discrepancy is closed.**
-**713 criterion rows in 106 criteria across 16 plans** (plan 8A included). Per plan: 1 → 53/7 · 
-2 → 75/7 · 3 → 42/8 · 4 → 83/8 · 5 → 23/3 · 6 → 64/8 · 7 → 72/7 · 8 → 70/8 · 8A → 20/6 · 
-9 → 44/8 · 10 → 35/7 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 · 13A → 37/7 · 14 → 5/2.
+**Totals, derived by committed script — `count_criteria.py`, re-run at every gate.**
 
-*Why this differs from the 615 → 620 → 621 figures carried since planning.* Those counted
-**table lines**; this counts **criterion rows**. Seven plans use a shorthand line that stands for
-several rows — `| C8(a)–C8(d) | … |` is one line and four criteria — and expanding them adds 62
-rows (2: +16 · 3: +6 · 4: +16 · 8: +6 · 8A: +3 · 12: +9 · 13: +6). The batch C1 investigation
-found this for plan 8 alone and reconciled it exactly (61 lines − 2 shorthand + 8 = 67, and 70
-after this batch's three authored rows). **The same cause explains the rest.**
+```
+DERIVED TOTAL: 645 criterion rows in 106 criteria across 16 plans
+  table lines 583 + 62 shorthand expansion = 645 rows
+```
 
-*One residual, owed.* Carrying the published chain forward gives 645; expanding shorthand gives
-707; the script measures **713**. The 6-row gap is not yet explained and is **owed at the batch
-C2 gate** — most likely rows added by folds that were never added to the published running total.
-Until then, prefer the derived figure over any carried one, and re-run the derivation rather than
-incrementing a number by hand. The script is trivial (match `^\| C\d+\([a-z]\)`, expand an
-`–C\d+\([a-z]\)` range, collect the `C\d+` group) and should be re-run at every gate.
+Per plan (rows/criteria): 1 → 53/7 · 2 → 75/7 · 3 → 42/8 · 4 → 63/8 · 5 → 23/3 · 6 → 36/8 ·
+7 → 52/7 · 8 → 70/8 · 8A → 20/6 · 9 → 44/8 · 10 → 35/7 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 ·
+13A → 37/7 · 14 → 5/2.
 
-*Why this matters beyond bookkeeping.* Charter manifest property 3 requires every count to be
-derived, never typed. This entry replaces a hand-arithmetic note that was itself wrong — the
-orchestrator typed a total and a derivation that did not agree with each other, which is exactly
-the defect the rule exists to prevent.
+*Rows vs table lines.* Seven plans use a shorthand line standing for several rows —
+`| C8(a)–C8(d) | … |` is one line and four criteria, and `| C2(a)–(f) |` repeats the group only
+on the left. Expanding both forms adds **62** rows (2: +16 · 3: +6 · 4: +16 · 8: +6 · 8A: +3 ·
+12: +9 · 13: +6). The batch C1 investigation found this for plan 8 alone and reconciled it
+exactly (64 lines + 6 = 70 after this batch's authored rows).
+
+> ### ⚠ Correction, 2026-09-21 — the 713 figure published earlier today was wrong, and so was the "6-row residual"
+>
+> An earlier version of this block announced **713 rows** and recorded an unexplained **6-row
+> gap** as owed at this gate. **Both are withdrawn.** The true total is **645**, which is exactly
+> what carrying the published `615 → 620 → 621` chain forward already gave. **There was never a
+> discrepancy to close** — the chain was right the whole time.
+>
+> **The cause:** the ad-hoc script matched `^\| C` across the *whole plan file*. Plans also carry
+> `| C…` lines in their **§7 mutation ledgers** and **§8 Review logs**, and those were counted as
+> criterion rows — inflating four plans (4: 63→83 · 6: 36→69 · 7: 52→74, and a further drift from
+> range lines in §7 ledger tables) and the total by 68. The fix is scope: count only between
+> `## 6. Criteria` and the next `## ` heading. `count_criteria.py` does that and is committed so
+> the next gate re-runs it instead of re-deriving it.
+>
+> **The lesson, and it is not the obvious one.** Charter manifest property 3 says derive, never
+> type. I obeyed it — I replaced a bad hand-arithmetic note with a *script* — and still published
+> a wrong number, because **the script was unscoped and nobody checks a script's premises the way
+> they check a sum.** Deriving a figure makes it look verified; it only moves the error from the
+> arithmetic to the query. Both of today's totals errors (the hand sum, then the script) sat in
+> the same block within hours of each other. The discipline that actually caught it was the
+> boring one: a derived number must be reconciled against an independent figure, and when it
+> disagrees with a long-carried published chain, **the chain is a witness, not noise.**
 
 **Trace coverage (derived by the same script from the trace cells).** Ledger: M1 → 1, 3, 4, 8, 10,
 13, 13A · M2 → 9, 10, 11, 13A · M3 → 6, 9, 13A · M4 → 1, 6, 7, 8, 9, 12, 13, 13A · M5 → 5, 9, 12 ·
