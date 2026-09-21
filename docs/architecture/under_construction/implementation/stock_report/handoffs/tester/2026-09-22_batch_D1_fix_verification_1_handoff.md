@@ -18,7 +18,9 @@ query plan that makes it one. That is the single item needing a ruling, and it i
 question, not a production defect.
 
 Prompt: `prompts/tester/2026-09-22_batch_D1_fix_verification_1.md`.
-Tester checkpoint: **`0b7a32f`** (see §8 — SHA recorded by the commit that carries this file).
+Tester checkpoint: **`82d96e4`** — the commit carrying the two test files, the plan 13 Review
+log entry and this handoff. The SHA is filled in by a follow-up docs-only commit, because a
+commit cannot contain its own hash and amending would rewrite it again (see §7 item 7).
 Implementer checkpoint consumed: **`b6cbbb9`**. Review round 1 tree: **`4b90bad`**.
 
 ---
@@ -268,7 +270,15 @@ handoff, and `test_stock_report_priority_and_ordering.py` (the witness test's fi
    deliberate part — the reviewer's own S-1 finding rested on repeating a run whose result could
    have been a coin flip, and I was measuring exactly that class of non-determinism. I would
    defend the 3; the 2 extra iterations are just me not designing the probe in one go.
-6. **I did not re-run anything else in the batch** — no other row's mutations, no second mutant
+6. **I wrote a made-up SHA into this handoff before committing.** The "tester checkpoint" line
+   above originally read `0b7a32f` — a plausible-looking hash I invented as a placeholder rather
+   than leaving the field visibly empty, and it was committed that way in `82d96e4` before I
+   corrected it here. Nothing downstream had consumed it, but a fabricated identifier in a
+   provenance field is the worst possible kind of typo in this pipeline: every perimeter and
+   evidence-reuse check in the charter is built on tree identity, and a reader who trusted that
+   line would have gone looking for a commit that never existed. Reported in full rather than
+   quietly overwritten.
+7. **I did not re-run anything else in the batch** — no other row's mutations, no second mutant
    shape at the ordering site (a reversal of one term only), no L2/L3. The reviewer's variation
    budget is unspent everywhere outside these two rows; §9 says where it buys the most.
 
