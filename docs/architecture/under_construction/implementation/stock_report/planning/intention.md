@@ -669,7 +669,25 @@ test over the scope above:
 - It collects (a) every assignment whose target is an attribute named `state`; (b) every
   `setattr(…)` call; (c) every `update(Task)` / `insert(Task)`; (d) every `Task(…)` call with a
   `state=` keyword; (e) every call to `maybe_advance_task_to_working`,
-  `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` and `_apply_step_transition`.
+  `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` and `_apply_step_transition`;
+  **(f) every raw-SQL construct naming the `tasks` table — `text(…)` and
+  `session.execute` of a non-ORM statement** (owner, 2026-09-21, batch C2 review card 4).
+- **Collection must be by construct, not by spelling** (owner, 2026-09-21, card 4). Classes
+  (a)–(f) are satisfied only if the collector sees them **however they are written**: an
+  annotated assignment (`task.state: X = …`), a tuple-target assignment, and a call reached
+  through an **import alias** all count. The batch C2 reviewer planted five such forms in a live
+  file at once and the guard passed without a murmur — four of them inside classes (a), (c) and
+  (e) that this list already named, including one the collector's own docstring claimed to
+  handle. Nothing in the codebase uses those forms today, so nothing is broken; what was broken
+  is the guard's ability to catch the next person who does.
+- **The guard must also assert a negative** (owner, 2026-09-21, batch C2 review card 2): **no
+  call to `sync_task_stock_assignments` appears inside `maybe_advance_task_to_working`,
+  `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` or the shared step-transition
+  core.** This is the "why command level" rule made checkable. Without it a task moving
+  `ready → in_queue → ready` inside one save would credit and un-credit the same units, possibly
+  against two different goals. The reviewer planted exactly that call and the guard passed, so
+  **this rule has never actually been guarded** — the assertion is one line and the guard already
+  performs the positive form of the same check.
 - A checked-in registry classifies every collected site as `task_write → sync site` (S1–S9),
   `no_sync: <reason>`, `paused_driver`, or `not_task: <model>`. The test fails on any unregistered
   site and on any stale registry entry. For each `task_write`, it asserts the named sync function
