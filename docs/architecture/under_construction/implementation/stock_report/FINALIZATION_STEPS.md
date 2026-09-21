@@ -97,3 +97,27 @@ column and a permissive request model as evidence of a domain rule, called it "d
 wrong — the owner caught it. Unattended, nobody catches it, and the failure mode there is
 propagating an internal enforcement gap outward into a published contract, which is the one
 direction retreat is expensive from.
+
+---
+
+## Carry into the D1 / D2 implementer prompts (found 2026-09-21, after the projection)
+
+1. **Plan 13 does not say where `stock_report_item:deleted` is built.** `§6.5`'s `_events.py`
+   registers only the `:updated` and assignment builders, and `stock_report_item:created` is built
+   inline in `apply_stock_demand.py`. Whichever site phase 13 picks, **it must be registered in
+   §6.5 in the same act** (§9 rule 18) — otherwise plan 14's C1(b) guard, now rooted in §6.7 plus
+   every `event_name=` site, will find a name in code that no registry entry explains.
+   *Coordinator applies the §6.5 entry once phase 13 chooses.*
+
+2. **Plan 12's priority-order route has no tenancy criterion.** C1(o) — restated under owner card 4
+   to cover foreign / soft-deleted / absent — is written for the **priority** route only. No
+   equivalent row exists for `PATCH …/priority-order`. The lookup code is shared, so the behaviour
+   is probably right; what is missing is the row that would catch it if it were not. **Raise at
+   D1's projection-check, do not author silently** — a new row is the owner's, and the orchestrator
+   should propose the cell text rather than apply it.
+
+3. **Plan 13A's shared per-field validator extraction is conditional** (`§4`: "only if the
+   per-field validators must be exposed for reuse"). §7 records the recommendation to extract with
+   no behaviour change, and notes it is "silent freedom over a phase-7 APPROVED file". **Settle it
+   in the D2 prompt, in writing, before the implementer starts** — an approved file must not be
+   touched on an implementer's judgement.
