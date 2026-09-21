@@ -13,15 +13,18 @@ and mutation arming belong to the tester (see the implementer handoff).
 """
 
 import itertools
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import select, text
 
+from beyo_manager.config import Settings
 from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
+    normalize_stock_criteria,
 )
 from beyo_manager.domain.stock_report.enums import (
     StockReportHistoryRecordTypeEnum,
@@ -43,16 +46,21 @@ from beyo_manager.models.tables.stock_report.stock_task_assignment import (
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
+from beyo_manager.services.commands.stock_report.apply_stock_demand import (
+    apply_stock_demand,
+)
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
     create_stock_task_assignments,
 )
 from beyo_manager.services.commands.stock_report.delete_stock_report_item import (
     delete_stock_report_item,
 )
+from beyo_manager.services.commands.stock_report.stock_demand_entries import DemandEntry
 from tests.helpers.stock_report import (
     assert_stock_report_clean,
     capture_dispatch,
     make_ctx,
+    purge_stock_report_workspace,
     seed_stock_report_workspace,
 )
 
@@ -63,6 +71,7 @@ DELETE_SITE = (
     "beyo_manager.services.commands.stock_report.delete_stock_report_item.dispatch"
 )
 CRITERIA = {"wood_group": ["teak"]}
+_TIMEOUT_MS = Settings.model_fields["stock_demand_webhook_timeout_ms"].default
 
 
 async def _make_row(session, seeded, *, criteria=None, quantity_requested=10):
@@ -527,27 +536,101 @@ async def test_delete_refuses_deleted_absent_and_foreign_rows(db_session):
 async def test_a_demand_for_the_same_identity_after_deletion_creates_a_new_row(
     db_session,
 ):
-    """C1(c): the soft-deleted row is invisible to identity discovery, so a later
-    demand inserts a **new** row with empty history rather than reviving it."""
+    """C1(c): after `DR(R)`, a **demand delivery** carrying R's identity produces a
+    **new** live row with empty history — it does not revive R and does not inherit
+    R's records.
+
+    Proven at the delivery surface the row names (`apply_stock_demand`), not at
+    `discover_live_rows_by_identity`: proving it at the lookup would be a §9 rule 17
+    relocation to a narrower surface, which is the owner's. `apply_stock_demand`
+    refuses a session already in a transaction, so this one test in the file is a
+    committing test with a `purge` in `finally` (charter rule 11½).
+    """
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     await _make_goal(db_session, seeded, row)
     workspace_id = seeded.workspace.client_id
+    await db_session.commit()
+    try:
+        await _DR(db_session, seeded, row.client_id)
+        await db_session.commit()
 
-    await _DR(db_session, seeded, row.client_id)
+        properties = dict(CRITERIA)
+        await apply_stock_demand(
+            db_session,
+            workspace_id=workspace_id,
+            entries=[
+                DemandEntry(
+                    index=0,
+                    item_category_raw=seeded.categories[0].name,
+                    properties_raw=properties,
+                    properties_normalized=normalize_stock_criteria(properties),
+                    properties_signature=compute_stock_criteria_signature(properties),
+                    quantity_requested=10,
+                )
+            ],
+            now=NOW,
+            deadline=time.monotonic() + 60,
+            timeout_ms=_TIMEOUT_MS,
+        )
+        await db_session.commit()
 
-    from beyo_manager.services.commands.stock_report._demand_lookup import (
-        discover_live_rows_by_identity,
-    )
-
-    discovered = await discover_live_rows_by_identity(
-        db_session,
-        workspace_id=workspace_id,
-        identities={
+        live = (
             (
-                seeded.categories[0].client_id,
-                compute_stock_criteria_signature(CRITERIA),
+                await db_session.execute(
+                    select(StockReportItem).where(
+                        StockReportItem.workspace_id == workspace_id,
+                        StockReportItem.is_deleted.is_(False),
+                    )
+                )
             )
-        },
-    )
-    assert discovered == {}
+            .scalars()
+            .all()
+        )
+        assert len(live) == 1
+        fresh = live[0]
+        # A **new** row, not the revived one.
+        assert fresh.client_id != row.client_id
+        assert fresh.item_category_id == seeded.categories[0].client_id
+        assert fresh.properties_signature == compute_stock_criteria_signature(
+            properties
+        )
+        # …with a fresh history: it inherits nothing from R. The delivery writes
+        # this row's own first goal record (MC-6: 0 -> 10 is an increase), which is
+        # why the cell's literal "empty history" is reported as an owner card
+        # rather than asserted as `== []`.
+        fresh_history = (
+            (
+                await db_session.execute(
+                    select(StockReportHistoryRecord)
+                    .where(
+                        StockReportHistoryRecord.stock_report_item_id
+                        == fresh.client_id
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [
+            (record.type, record.quantity_requested, record.is_deleted)
+            for record in fresh_history
+        ] == [
+            (StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE, 10, False)
+        ]
+        old_history = (
+            (
+                await db_session.execute(
+                    select(StockReportHistoryRecord).where(
+                        StockReportHistoryRecord.stock_report_item_id == row.client_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert old_history and all(record.is_deleted for record in old_history)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()

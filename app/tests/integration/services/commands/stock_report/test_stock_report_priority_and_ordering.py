@@ -16,13 +16,16 @@ This file exercises one representative case per code path; row-by-row transcript
 and mutation arming belong to the tester (see the implementer handoff).
 """
 
+import itertools
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select, text
 
 from beyo_manager.config import Settings
+from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
     normalize_stock_criteria,
@@ -30,15 +33,27 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
 from beyo_manager.domain.stock_report.enums import (
     StockReportHistoryRecordTypeEnum,
     StockReportPriorityEnum,
+    StockTaskAssignmentStateEnum,
 )
+from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
+from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.stock_report.stock_task_assignment import (
+    StockTaskAssignment,
+)
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_item import TaskItem
+from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
 from beyo_manager.services.commands.stock_report.apply_stock_demand import (
     apply_stock_demand,
+)
+from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
+    create_stock_task_assignments,
 )
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
     set_stock_report_item_priority,
@@ -48,6 +63,7 @@ from beyo_manager.services.commands.stock_report.set_stock_report_item_priority_
 )
 from beyo_manager.services.commands.stock_report.stock_demand_entries import DemandEntry
 from beyo_manager.services.context import ServiceContext
+from tests.helpers.statement_listener import count_writes, record_statements
 from tests.helpers.stock_report import (
     assert_stock_report_clean,
     capture_dispatch,
@@ -60,6 +76,14 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 NOW = datetime(2026, 9, 21, 12, 0, 0, tzinfo=timezone.utc)
 _TIMEOUT_MS = Settings.model_fields["stock_demand_webhook_timeout_ms"].default
+# The four tables plan 12 C1(c)/C1(k) count writes on (the project's established
+# set, `test_apply_stock_demand.py:WRITE_TABLES`).
+WRITE_TABLES = {
+    "stock_report_items",
+    "stock_task_assignments",
+    "stock_report_history_records",
+    "tasks",
+}
 
 PRIORITY_SITE = (
     "beyo_manager.services.commands.stock_report.set_stock_report_item_priority.dispatch"
@@ -199,6 +223,86 @@ async def _row(session, client_id):
     ).scalar_one()
 
 
+_scalar_ids = itertools.count(2)
+
+
+async def _awaiting_assignment(session, seeded, row_client_id, quantity):
+    """Give a row a real `awaiting` assignment of `quantity`, so its live
+    `quantity_awaiting` counter is non-zero **without planting drift** (plan 12
+    C3(d): the record's `quantity_awaiting` clause cannot discriminate at 0).
+
+    `CR` sets `quantity = max(item.quantity, 1)`, so the item is seeded at the
+    intended quantity rather than edited afterwards.
+    """
+    suffix = uuid4().hex[:10]
+    item = Item(
+        client_id=f"itm_sr_{suffix}",
+        workspace_id=seeded.workspace.client_id,
+        article_number=f"SR-{suffix}",
+        state=ItemStateEnum.PENDING,
+        quantity=quantity,
+        item_category_id=seeded.categories[0].client_id,
+        properties={"wood_type": "Teak", "upholstery": "Down"},
+    )
+    task = Task(
+        client_id=f"tsk_sr_{suffix}",
+        workspace_id=seeded.workspace.client_id,
+        task_scalar_id=next(_scalar_ids),
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TaskStateEnum.PENDING,
+        created_by_id=seeded.manager.client_id,
+    )
+    session.add_all([item, task])
+    await session.flush()
+    session.add(
+        TaskItem(
+            client_id=f"tim_sr_{suffix}",
+            workspace_id=seeded.workspace.client_id,
+            task_id=task.client_id,
+            item_id=item.client_id,
+            role=TaskItemRoleEnum.PRIMARY,
+            created_by_id=seeded.manager.client_id,
+        )
+    )
+    await session.flush()
+    created = await create_stock_task_assignments(
+        make_ctx(
+            session,
+            seeded,
+            role_name="worker",
+            incoming_data={
+                "entries": [
+                    {
+                        "stock_report_item_id": row_client_id,
+                        "task_id": task.client_id,
+                        "item_id": item.client_id,
+                        "override_property_mismatch": True,
+                    }
+                ]
+            },
+        )
+    )
+    assignment_id = created["stock_task_assignments"][0]["client_id"]
+    assignment = (
+        await session.execute(
+            select(StockTaskAssignment)
+            .where(StockTaskAssignment.client_id == assignment_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    await move_assignment(
+        session,
+        assignment,
+        StockTaskAssignmentStateEnum.AWAITING,
+        workspace_id=seeded.workspace.client_id,
+        actor_user_id=seeded.manager.client_id,
+        now=NOW,
+        trigger="test",
+    )
+    await session.commit()
+    return assignment_id
+
+
 def _seller(session, seeded):
     """The identity of `S`, a permitted role, captured **once** while the seed's ORM
     instances are live: `session.rollback()` expires them, and a later attribute read
@@ -274,11 +378,17 @@ async def test_move_up_shifts_only_the_block_it_enters(db_session, monkeypatch):
             ("stock_report_item:updated", g.A),
             ("stock_report_item:updated", g.B),
         ]
-        assert captured[0].extra["priority_order"] == 1
-        assert captured[0].extra["priority"] == "high"
-        # Only the mover is stamped (MC-17).
+        # Every payload carries the position **after** the move (C6(a)), not the one
+        # the row held when the command started.
+        assert [
+            (event.extra["priority"], event.extra["priority_order"])
+            for event in captured
+        ] == [("high", 1), ("high", 2), ("high", 3)]
+        # Only the mover is stamped (MC-17): A and B are shifted and must not be,
+        # D is untouched.
         assert (await _row(db_session, g.C)).updated_at == ctx.now
         assert (await _row(db_session, g.A)).updated_at is None
+        assert (await _row(db_session, g.B)).updated_at is None
         assert (await _row(db_session, g.D)).updated_at is None
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -318,14 +428,17 @@ async def test_move_to_the_held_position_writes_nothing(db_session, monkeypatch)
         g = await _seed_groups(db_session, workspace_id)
         before = await _state(db_session, workspace_id)
 
-        result, _ctx, captured = await _SO(
-            db_session, S, g.B, 2, monkeypatch=monkeypatch
-        )
+        async with record_statements(db_session) as statements:
+            result, _ctx, captured = await _SO(
+                db_session, S, g.B, 2, monkeypatch=monkeypatch
+            )
 
         assert await _state(db_session, workspace_id) == before
         assert await _records(db_session, workspace_id) == []
         assert captured == []
         assert (await _row(db_session, g.B)).updated_at is None
+        # B2: not one write reaches any of the four tables.
+        assert count_writes(statements, WRITE_TABLES) == 0
         assert result["stock_report_item"]["priority_order"] == 2
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
@@ -452,9 +565,68 @@ async def test_priority_change_closes_the_source_gap_and_appends(
             ("stock_report_item:updated", g.D),
         ]
         assert captured[0].extra["priority"] == "low"
-        # Only the mover is stamped (MC-17).
-        assert (await _row(db_session, g.B)).updated_by_id == actor
-        assert (await _row(db_session, g.C)).updated_at is None
+        # C5(a): the mover is stamped and nothing else in the workspace is —
+        # neither the shifted rows (C, D) nor the untouched ones (A, X, Y).
+        mover = await _row(db_session, g.B)
+        assert mover.updated_by_id == actor
+        assert mover.updated_at == ctx.now
+        for label in ("A", "C", "D", "X", "Y"):
+            other = await _row(db_session, getattr(g, label))
+            assert other.updated_at is None, label
+            assert other.updated_by_id is None, label
+        await assert_stock_report_clean(db_session, workspace_id)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_session):
+    """Plan 12 C3(d) — `SP(B, low)` with B's `quantity_awaiting = 4`.
+
+    MC-6 "Timing and values": the record is inserted **after** all row mutations
+    and snapshots `priority_order` (3, the appended position) and the row's **live**
+    `quantity_awaiting` (4). A record built before the append would read
+    `priority_order` NULL.
+
+    **This test is currently RED on the unmutated tree, and that is the finding**
+    (tester, batch D1 — routed `BLOCKED-PRODUCTION`):
+
+      input     `SP(B, low)` on a row carrying one `awaiting` assignment of q = 4,
+                a scenario that plants no drift (§9 rule 2 therefore requires
+                `assert_stock_report_clean`).
+      expected  the record snapshots `quantity_awaiting = 4` (MC-6) **and** the
+                workspace is consistent.
+      observed  the record is correct, but `compute_stock_report_divergences`
+                answers `[{'kind': 'goal_total', 'client_id': <the new
+                priority_change record>, 'field': 'quantity_awaiting',
+                'stored': 4, 'expected': 0}]`.
+
+    Cause: `consistency.py:compute_stock_report_divergences` applies the
+    `goal_total` check to **every** history record, while intention §14C defines it
+    as "`quantity_awaiting` of each **goal record**" — a goal record being a
+    `quantity_requested_change` (§6.2/MC-5). A `priority_change` record legitimately
+    snapshots a non-zero live counter that nothing credits, so it can never satisfy
+    the check. `repair_stock_report.py`'s `goal_total` branch would then overwrite
+    that snapshot with 0, contradicting §6.2's "Priority records are never touched
+    after they are written". The fix is in APPROVED phase 3's files, not phase 12's.
+    """
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    S = _seller(db_session, seeded)
+    try:
+        g = await _seed_groups(db_session, workspace_id)
+        await _awaiting_assignment(db_session, seeded, g.B, 4)
+        assert (await _row(db_session, g.B)).quantity_awaiting == 4
+
+        _result, _ctx, _captured = await _SP(db_session, S, g.B, "low")
+
+        records = await _records(db_session, workspace_id)
+        assert len(records) == 1
+        # The row's own clauses — these pass today.
+        assert records[0].priority_order == 3
+        assert records[0].quantity_awaiting == 4
+        # §9 rule 2 — this is the clause that fails.
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
@@ -521,14 +693,17 @@ async def test_setting_the_priority_a_row_already_has_writes_nothing(
         before = await _state(db_session, workspace_id)
         client_id = getattr(g, label)
 
-        _result, _ctx, captured = await _SP(
-            db_session, S, client_id, value, monkeypatch=monkeypatch
-        )
+        async with record_statements(db_session) as statements:
+            _result, _ctx, captured = await _SP(
+                db_session, S, client_id, value, monkeypatch=monkeypatch
+            )
 
         assert await _state(db_session, workspace_id) == before
         assert await _records(db_session, workspace_id) == []
         assert captured == []
         assert (await _row(db_session, client_id)).updated_at is None
+        # B2: zero writes (plan 12 C1(k)/C1(l)).
+        assert count_writes(statements, WRITE_TABLES) == 0
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)

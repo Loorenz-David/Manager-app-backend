@@ -171,24 +171,33 @@ async def test_no_filter_lists_only_null_priority_rows_by_created_at(db_session)
     workspace_id = seeded.workspace.client_id
     identity = make_ctx(db_session, seeded).identity
     try:
-        # Two separate `AD` calls, so the two null rows carry different `created_at`.
+        # Two separate `AD` calls, so the two null rows carry different
+        # `created_at`, plus a third row that is given a priority.
         await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak0")])
-        first = (await _ids(db_session, workspace_id))[0]
         await db_session.commit()
         await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak1")])
+        await db_session.commit()
+        await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak2")])
+        await db_session.commit()
+
+        # A ULID carries no monotonic counter (master plan §10), so *which* row is
+        # back-dated is chosen from the **sorted real ids**: N1 is the null row with
+        # the LARGER `client_id`, so `created_at` ascending is guaranteed to
+        # disagree with `client_id` ascending. Leaving it to creation order makes the
+        # cell's second mutant inert on roughly a third of runs.
+        ids = await _ids(db_session, workspace_id)  # descending `client_id`
+        priced = ids[1]
+        N1, N2 = ids[0], ids[2]  # N1 > N2 by `client_id`
         await db_session.execute(
             text(
                 "UPDATE stock_report_items SET created_at = :created_at "
                 "WHERE client_id = :client_id"
             ),
-            {"created_at": NOW.replace(hour=9), "client_id": first},
+            {"created_at": NOW.replace(hour=9), "client_id": N1},
         )
-        await db_session.commit()
-        await _AD(db_session, workspace_id, [_entry(0, "Dining Chairs", "teak2")])
-        ids = await _ids(db_session, workspace_id)
-        priced = [client_id for client_id in ids if client_id != first][0]
         await _set_order(db_session, priced, "high", 1)
         await db_session.commit()
+        assert N1 > N2
 
         listed = [
             row["client_id"]
@@ -196,10 +205,9 @@ async def test_no_filter_lists_only_null_priority_rows_by_created_at(db_session)
         ]
 
         assert priced not in listed
-        # `first` was back-dated, so `created_at` ascending puts it first even
-        # though it does not sort first by `client_id`.
-        assert listed[0] == first
-        assert len(listed) == 2
+        # `created_at` ascending puts N1 first; `client_id` ascending would put N2
+        # first, which is what makes the ordering half of this row discriminating.
+        assert listed == [N1, N2]
 
         # An empty parameter means the same null listing, not the unknown-token case.
         assert [
@@ -257,9 +265,19 @@ async def test_row_shape_carries_the_four_key_category_including_a_null_image(
 
         assert len(rows) == 2
         by_name = {row["item_category"]["name"]: row for row in rows}
-        for row in rows:
-            assert set(row) == ROW_KEYS
-            assert set(row["item_category"]) == CATEGORY_KEYS
+        # Both rows in ONE assertion, keyed by category, so a mutant that drops
+        # `image_url` shows **both** reddenings at once instead of aborting the
+        # loop on whichever row the read order happens to return first.
+        assert {name: set(row) for name, row in by_name.items()} == {
+            "Dining Chairs": ROW_KEYS,
+            "Coffee Tables": ROW_KEYS,
+        }
+        assert {
+            name: set(row["item_category"]) for name, row in by_name.items()
+        } == {
+            "Dining Chairs": CATEGORY_KEYS,
+            "Coffee Tables": CATEGORY_KEYS,
+        }
         assert (
             by_name["Dining Chairs"]["item_category"]["image_url"]
             == "https://example.test/chairs.png"

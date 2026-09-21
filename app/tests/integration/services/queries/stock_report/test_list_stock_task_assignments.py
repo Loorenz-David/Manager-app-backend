@@ -15,6 +15,11 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select, text
 
+from beyo_manager.domain.images.enums import (
+    ImageLinkEntityTypeEnum,
+    ImageSourceTypeEnum,
+    ImageStorageProviderEnum,
+)
 from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
@@ -22,6 +27,8 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
 from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.not_found import NotFound
+from beyo_manager.models.tables.images.image import Image
+from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
@@ -67,6 +74,15 @@ ITEM_KEYS = {
     "item_category_snapshot",
     "item_major_category_snapshot",
     "item_images",
+}
+# `serialize_image_light`'s shape (`bm/domain/images/serializers.py:49`) — the
+# element type C4(b) names for `item_images`.
+IMAGE_LIGHT_KEYS = {
+    "client_id",
+    "image_url",
+    "width_px",
+    "height_px",
+    "file_size_bytes",
 }
 TASK_KEYS = {
     "client_id",
@@ -243,10 +259,32 @@ async def test_every_non_deleted_state_is_listed_in_created_at_client_id_order(
 async def test_the_element_is_the_fourteen_key_shape_with_its_two_nested_objects(
     db_session,
 ):
-    """C4(b): the element and both nested objects, key for key."""
+    """C4(b): the element and both nested objects, key for key — including the
+    `item_images` element type, asserted against a **linked image** so the clause
+    is exercised rather than satisfied by an empty list."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
-    await _CR(db_session, seeded, row)
+    created = await _CR(db_session, seeded, row)
+    image = Image(
+        image_url="https://images.example/chair.jpg",
+        storage_provider=ImageStorageProviderEnum.EXTERNAL,
+        source_type=ImageSourceTypeEnum.EXTERNAL_URL,
+        created_by_id=seeded.manager.client_id,
+        width_px=800,
+        height_px=600,
+        file_size_bytes=12345,
+    )
+    db_session.add(image)
+    await db_session.flush()
+    db_session.add(
+        ImageLink(
+            image_id=image.client_id,
+            entity_type=ImageLinkEntityTypeEnum.ITEM,
+            entity_client_id=created["item_id"],
+            display_order=0,
+        )
+    )
+    await db_session.flush()
 
     listed = await _GA(db_session, seeded, row.client_id)
 
@@ -254,7 +292,10 @@ async def test_the_element_is_the_fourteen_key_shape_with_its_two_nested_objects
     assert set(element) == ASSIGNMENT_KEYS
     assert set(element["item"]) == ITEM_KEYS
     assert set(element["task"]) == TASK_KEYS
-    assert element["item"]["item_images"] == []
+    assert [set(entry) for entry in element["item"]["item_images"]] == [
+        IMAGE_LIGHT_KEYS
+    ]
+    assert element["item"]["item_images"][0]["client_id"] == image.client_id
 
 
 async def test_the_create_and_list_surfaces_return_the_same_key_set(db_session):

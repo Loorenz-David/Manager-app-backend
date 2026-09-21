@@ -346,3 +346,48 @@ group and not some other one — with a mutation that can actually fail: call
 **Why this is a fold and not an owner card:** §3B assigns mutation and fixture cells to the
 orchestrator and reserves outcomes and criterion rows to the owner. The outcome (`high = A1 C2 D3;
 low = X1 Y2 B3`), the fixture and the trace are byte-unchanged.
+
+---
+
+## Review log — verification, batch D1 round 1 (2026-09-21, Opus tester, slot `dt`)
+
+Ledger: `handoffs/tester/2026-09-21_batch_D1_test_1_handoff.md`. Declared named mutations for
+this plan, derived by script from the §6 table: **C1=18 + C2=1 + C3=5 + C4=11 + C5=2 + C6=2 +
+C7=12 = 51**, all 51 executed.
+
+**Judgment calls and re-sitings.**
+- **C1(o)'s three mutants were re-sited.** The cell names "`set_stock_report_item_priority.py`'s
+  row lookup"; the implementation carries that lookup **twice** (`_find_row` for the unlocked
+  discovery and `_lock_row_and_groups` + the `row is None or row.is_deleted` check for the
+  post-lock re-read). Applied to `_find_row` alone all three are inert — the post-lock copy is a
+  second sufficient cause. Both runs are in the ledger; applied to both copies all three redden.
+- **C5(b) and C3(b) were applied inside `shift_within_group`**, not inside `_shift`, so the
+  mutant cannot leak into `close_priority_gap` (which the deletion cascade also calls).
+- **C4(a)'s mutant is the rank map re-ordered to the column's text order** (`high, low, medium`),
+  which is what "order by the `priority` column's text" produces; ordering by the enum column
+  itself would sort by the type's declared order and be inert.
+
+**Equivalent mutants found (three).** Each was run, landed and reverted; each is an
+`EQUIVALENT` row in the ledger with a proposed replacement that was verified to bite.
+- **C1(a) and C1(b)** — widening the shift band to include the mover's own position
+  (`[t, p]`, `[p, t]`) changes nothing on disk, because the mover's own `UPDATE … RETURNING`
+  overwrites its `priority_order` immediately afterwards. Same family as the C1(h)(i) mutant the
+  D1 gate already replaced. C1(a)'s mutant reddens **C6(a)'s** payload assertion (the mover's
+  event then carries the shifted order), not C1(a)'s own state assertion; C1(b)'s reddens nothing.
+  Proposed replacements, both measured red on this tree: C1(a) → `low=to_order + 1` (A stays at 1
+  and the mover lands on it); C1(b) → `high=to_order - 1`.
+- **C6(a)** — building one `:updated` per group row instead of per shifted row is absorbed by
+  `coalesce_stock_report_events`, which drops an `:updated` whose payload equals the row's initial
+  values, so D's spurious event never reaches the dispatch list. Proposed replacement, measured
+  red: sort the neighbour events by `client_id` instead of by their new `priority_order`.
+
+**Tests strengthened (no new test except C3(d)'s).** `count_writes` on the four tables added to
+C1(c)/C1(k)/C1(l) (the cells' fifth clause, previously unasserted); C5(a) now asserts every
+non-mover row in the workspace, C5(b) adds B; C6(a) asserts all three payloads, not just the
+mover's; C4(b)'s fixture now **chooses which null row to back-date from the sorted real ids**, so
+`created_at` ascending is guaranteed to disagree with `client_id` ascending (it agreed on roughly
+a third of runs before, leaving the cell's second mutant inert); C4(e) asserts both fixture rows'
+key sets in one mapping assertion, so the `image_url` mutant shows **both** reddenings in one run.
+
+**C2(a)/C2(b)** are the plan's class-3 rows: no mutant declared, none attempted, no test added.
+**C3(d)** is `BLOCKED-PRODUCTION` — see the handoff and owner card 1.

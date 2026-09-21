@@ -274,3 +274,48 @@ intermittent red nobody could reproduce on demand.
   needs its own `task_scalar_id` — `uq_tasks_workspace_scalar_id`.
 - No row in this phase exercises the `actor_user_id=None` path, C4(b)'s cross-suite
   observed-red set, or C6(a)'s "phase 8 rows stay green" half; those are the tester's.
+
+---
+
+## Review log — verification, batch D1 round 1 (2026-09-21, Opus tester, slot `dt`)
+
+Ledger: `handoffs/tester/2026-09-21_batch_D1_test_1_handoff.md`. Declared named mutations for
+this plan, derived by script from the §6 table: **C1=7 + C2=2 + C3=1 + C4=8 + C5=8 + C6=1 = 27**,
+all 27 executed.
+
+**C1(c) was built at the surface the cell names.** The implementer's
+`test_a_demand_for_the_same_identity_after_deletion_creates_a_new_row` asserted only that
+`discover_live_rows_by_identity` returns `{}`; it is replaced in place by a test that runs a real
+demand delivery after `DR(R)` and asserts a new live row with its own fresh history. The old
+probe is not a separate deletion: the same test id now carries the row's own surface.
+
+**Foreign sites, reported not moved (L-25).** Two cells name
+`_delete_stock_report_item_cascade.py` for behaviour that lives elsewhere: C1(a) mutant (ii)
+(`resolved_early → DELETE` credit removal) is decided in `_goal_credit.py:apply_goal_effect`, and
+C2(b)'s inline repair is `_move_assignment.py:_apply_counter_delta`. Both were run at the real
+site; C1(a)(ii) bites, C2(b) does not (below).
+
+**Two equivalent mutants, one of them blocking.**
+- **C1(a) mutant (i)** — soft-deleting the row before the assignment loop changes nothing
+  observable: no code on the cascade path reads the row's `is_deleted`, and the cascade's own
+  later `UPDATE` re-applies the same values. MC-16's ordering clause is therefore unguarded by
+  any row in this phase. `EQUIVALENT`.
+- **C2(b) cannot fail** — the planted defect ("read `stored_before` from the row's ORM instance")
+  was run at the named site **and** at the real site, and the test stays green at both. Measured
+  cause, by probe on this tree: the counter statement is an **ORM-enabled** `update(StockReportItem)`
+  executed through `session.execute`, so SQLAlchemy synchronises the identity-mapped instance
+  (`synchronize_session="auto"` → `fetch` with `RETURNING`). At the moment `_apply_counter_delta`
+  reads `stored_before`, the ORM instance and a fresh `SELECT` both answer **1**. The instrument
+  MC-1 (c) exists to protect cannot observe the defect it names. `BLOCKED-PLAN`, owner card 2 —
+  and the same mechanism puts **13A C5(b)**'s `removed_order` evidence in doubt before D2 starts.
+
+**C3(a) is `BLOCKED-PLAN` on its own arithmetic** (owner card 3): the cell says "three
+`stock_task_assignment:deleted`" over C1(a)'s fixture, which carries **four** assignments since
+the round-8/9 fold added `resolved_early`. Its paired mutant was run and reddens both delete
+tests; no test was authored against the corrected count.
+
+**C4(b) and C6(a) cross-suite red sets are recorded.** The radius was established by grep (the
+three compact serializers have exactly two production consumers and three asserting test files);
+C4(b)'s mutants redden phase 8's `test_stock_report_serializers.py` (all three) and
+`test_create_stock_task_assignments.py` (mutant (i) only), while **C6(a)'s mutant leaves both
+phase-8 files green**, which is the half the cell exists for.
