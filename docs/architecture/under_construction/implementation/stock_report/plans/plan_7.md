@@ -88,7 +88,7 @@ the row says otherwise. "401" = raises `LocationTrackerWebhookAuthError` with `h
 | C1(b) | key setting `"   "` | 401 | skip `strip()` check | MC-8 step 2 |
 | C1(c) | workspace setting `None` | 401 | — | MC-8 step 2 |
 | C1(d) | no `x-api-key` header | 401 | — | MC-8 step 3 |
-| C1(e) | header `wrong` | 401 | compare with `==` (passes only this row's literal — recorded, the real bite is (f)) | MC-8 step 3 |
+| C1(e) | header `wrong` | 401 | remove the comparison entirely from `verify_location_tracker_webhook` (`webhook_verifier.py`, definition site) — return the configured workspace id as soon as the header is present → this row's 401 assertion reddens. (Swapping `compare_digest` for `==` is **inert on this row** — a wrong value is unequal either way — and is carried by C1(f), where the non-ASCII input makes the two forms diverge.) | MC-8 step 3 |
 | C1(f) | header `"clé-non-ascii"` against an ASCII key | 401 (**not** 500) | compare `str` objects (`compare_digest(str, str)` raises `TypeError` on non-ASCII) | MC-8 bytes rule (C24) |
 | C1(g) | workspace setting names a non-existent workspace | 401 | — (phase 6 C1(f) covers the SELECT; this row proves the command maps it) | MC-8 step 4 |
 | C1(h) | rows (a), (d), (g) | the three error messages are byte-identical (`"Unauthorized."`) | include the cause in the message | MC-8 (U19) |
@@ -116,14 +116,14 @@ the row says otherwise. "401" = raises `LocationTrackerWebhookAuthError` with `h
 | C2(t) | `quantityRequested: 5.0` | 422 | accept integral floats | MC-8 |
 | C2(u) | `quantityRequested: true` | 422 (`type(v) is int`) | `isinstance(v, int)` → accepts bool | MC-8 |
 | C2(v) | `quantityRequested: -1` | 422 | — | MC-8 |
-| C2(w) | `quantityRequested: 2147483648` | 422 | drop the upper bound → DB error (500) | MC-8 |
+| C2(w) | `quantityRequested: 2147483648` | 422 | drop the `v <= 2147483647` bound from `parse_stock_demand_body` (`stock_demand_request.py`, definition site) → the parser returns an entry instead of raising → `pytest.raises(ValidationError)` reddens. *Corrected at the fold: C2 is a **unit** test of the parser and never reaches a database, so the previous cell's "DB error (500)" names a consequence this row cannot observe.* | MC-8 |
 | C2(x) | entries 0 and 2 malformed, 1 valid | 422 whose message names `entry 0` **and** `entry 2`; nothing written (entry 1 not applied) | stop at the first defect | MC-8 "names every offending entry", §8 atomic |
 | C2(y) | entry with an extra key `"location": "LC1"` | 200, `applied` | reject unknown keys | MC-8 (U7) |
 | C3(a) | two entries same category, same properties | 422 naming `entries 0 and 1` | — | MC-8 step 7, §8.1 |
 | C3(b) | two entries, properties `{"wood_group": ["Teak", "Dark"]}` and `{"wood_group": ["dark", "teak"]}` | 422 (same identity after normalization) | compare raw dicts → 200 | MC-8 step 7, MC-3 |
-| C3(c) | same properties, categories K and K2 | 200, both applied | — | MC-8 |
+| C3(c) | same properties, categories K and K2 | 200, both applied | key the duplicate check on `properties_signature` alone (drop `item_category_key` from the tuple), `stock_demand_request.py` (definition site) → these two entries collide → 422 instead of 200 → red | MC-8 |
 | C3(d) | categories `"Sofas"` and `"sofas"` with identical properties | 422 (key is `lower(strip(name))`) | compare raw names | MC-8 step 7 |
-| C4(a) | two deliveries: `{"a": ["x"], "b": ["y"]}` then `{"b": ["y"], "a": ["x"]}` (bytes in that order) | one live row | — | MC-3 invariant (a), M4 |
+| C4(a) | two deliveries: `{"a": ["x"], "b": ["y"]}` then `{"b": ["y"], "a": ["x"]}` (bytes in that order) | one live row | compute the identity from the **raw** dict's `json.dumps` instead of `compute_stock_criteria_signature(normalize_stock_criteria(raw))`, `stock_demand_request.py` (`DemandEntry` construction, definition site) → the two key orders produce different signatures → two rows → red | MC-3 invariant (a), M4 |
 | C4(b) | `["teak", "dark"]` then `["dark", "teak"]` | one row | drop `sorted()` | MC-3 (b) |
 | C4(c) | `["Teak"]` then `[" teak "]` | one row | drop strip/lower | MC-3 (c) |
 | C4(d) | `["teak", "teak"]` then `["teak"]` | one row | drop dedupe | MC-3 (d) |
@@ -132,10 +132,10 @@ the row says otherwise. "401" = raises `LocationTrackerWebhookAuthError` with `h
 | C4(g) | `{" wood_group": ["teak"]}` then `{"wood_group": ["teak"]}` | two rows | strip keys | MC-3 |
 | C4(h) | `{"n": 1}` then `{"n": 1.0}` | two rows | normalise numbers | MC-3 (not-understood values) |
 | C5(a) | entries `[K new with `["Teak","Dark"]`, unknown category]` | `results` in request order: `[{itemCategory: "Dining Chairs", properties: {"wood_group": ["Teak","Dark"]} (as received), outcome: applied}, {itemCategory: "Bar Stools", properties: {...}, outcome: category_not_found}]`; the stored row's `properties` is `{"wood_group": ["dark","teak"]}` | echo the normalized form | MC-3 "echo as received", v2 §3.4 |
-| C5(b) | any accepted request | every result has exactly the keys `itemCategory`, `properties`, `outcome` | — | §8A |
+| C5(b) | any accepted request | every result has exactly the keys `itemCategory`, `properties`, `outcome` | add a fourth key (e.g. `"index"`) to each result dict in `receive_stock_demand_webhook.py` (definition site) → the exact-key-set assertion reddens | §8A |
 | C5(c) | unit router test: `TestClient` POST `/api/v1/location-tracker/webhooks/stock-demand` with `content=b'[...]'`, header `X-API-KEY: k`, `run_service` faked | the command receives `incoming_data == {"raw_body": b'[...]', "headers": {..."x-api-key": "k"...}}` and `identity == {}`; success renders `{"data": {"results": ...}, "ok": true, "warnings": []}`; a faked `LocationTrackerWebhookAuthError` renders status 401 body `{"error": "Unauthorized.", "ok": false}` | — (wiring; calibration) | §8A envelope |
-| C6(a) | valid request | the created row's `workspace_id == W` (the setting), events carry `W` | read `ctx.workspace_id` in the command → FK failure | MC-8 guard, §2.5 |
-| C7(a) | `receive_stock_demand_webhook` with `apply_stock_demand.time.monotonic` patched past the deadline | `run_service` outcome `success False`, `error.http_status == 503`; nothing written; no dispatch | — (phase 6 C7(c) carries the mutation) | MC-9 part 1, §14D D5 |
+| C6(a) | valid request | the created row's `workspace_id == W` (the setting), events carry `W` | pass `ctx.workspace_id` instead of the verifier's return value into `apply_stock_demand`, `receive_stock_demand_webhook.py` (call site) → `ctx.workspace_id` is `""` on a webhook path, so step 2's workspace `SELECT` finds nothing and a 401 is raised before any write → the "created row's `workspace_id == W`" assertion reddens. *Corrected at the fold: no FK is ever touched on this path.* | MC-8 guard, §2.5 |
+| C7(a) | `receive_stock_demand_webhook` run through `run_service`, with **`monkeypatch.setattr(apply_stock_demand, "time", SimpleNamespace(monotonic=lambda: 10**9))`** — the module *reference inside `apply_stock_demand`* is replaced, not `time.monotonic` itself. Patching `apply_stock_demand.time.monotonic` mutates the shared `time` module, so the command's own first-line `deadline = time.monotonic() + timeout_ms/1000` moves with it and the deadline can **never** be exceeded (it would also freeze the asyncio event-loop clock) | `run_service` outcome `success False`, `error.http_status == 503`; nothing written; no dispatch | — (phase 6 C7(c) carries the mutation) | MC-9 part 1, §14D D5 |
 
 ## 7. Notes
 
