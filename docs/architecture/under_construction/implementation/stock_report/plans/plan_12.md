@@ -97,8 +97,8 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 
 | Row | Fixture / input | Exact outcome | Named mutation (site) | Trace |
 |---|---|---|---|---|
-| C1(a) | `SO(C, 1)` | high = A2 B3 C1 D4 | `_ordering.py:shift_within_group` (def.): shift `[t, p]` instead of `[t, p−1]` → C lands at 1 with A still at 1 → `order_density` diverges → red | MC-7 row 1, M6 |
-| C1(b) | `SO(A, 3)` | high = B1 C2 A3 D4 | `_ordering.py:shift_within_group` (def.): shift `[p, t]` instead of `[p+1, t]` → A is shifted with the block it is leaving → red | MC-7 row 2 |
+| C1(a) | `SO(C, 1)` | high = A2 B3 C1 D4 | `_ordering.py:shift_within_group` (def.): **replaced at the D1 gate — the folded mutant was inert (§8)**: shift `[t+1, p−1]` instead of `[t, p−1]` (raise the band's **lower** bound) → A is never moved, C lands on an occupied 1 → `order_density` diverges → red | MC-7 row 1, M6 |
+| C1(b) | `SO(A, 3)` | high = B1 C2 A3 D4 | `_ordering.py:shift_within_group` (def.): **replaced at the D1 gate — the folded mutant was inert (§8)**: shift `[p+1, t−1]` instead of `[p+1, t]` (lower the band's **upper** bound) → C is never moved, A lands on an occupied 3 → red | MC-7 row 2 |
 | C1(c) | `SO(B, 2)` | unchanged; no record; no event; no stamp; `count_writes` on the four tables `== 0` | `set_stock_report_item_priority_order.py` (def.): delete the `t == p` short-circuit → the `−1`/`+1` pair still runs and the mover is re-written, so `count_writes` on the four tables is non-zero and one `priority_order_change` record appears → red | MC-7 row 3, B2 |
 | C1(d) | `SO(A, 0)` | `ValidationError` 422 starting `STOCK_REPORT_TARGET_OUT_OF_RANGE:`; state unchanged | `set_stock_report_item_priority_order.py` (def.): widen the range guard to `0 <= t <= n` → `SO(A, 0)` is accepted → red | MC-7 row 4 |
 | C1(e) | `SO(A, 5)` (n = 4) | same 422 | `set_stock_report_item_priority_order.py` (def.): widen the range guard to `1 <= t <= n + 1` → `SO(A, 5)` is accepted → red. Adjacent pair with C1(d); both runs recorded (§9 rule 8) | MC-7 row 4 (adjacent pair with (b)/(f)) |
@@ -128,7 +128,7 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 | C4(g) | R's category K soft-deleted by raw SQL | R still listed with `item_category.name == "Dining Chairs"` | `list_stock_report_items.py` (def.): load categories with an inner join carrying `ItemCategory.is_deleted == False` instead of the batch load by id → R vanishes from the payload → red | MC-16 "serializes the deleted category's name" |
 | C5(a) | `SP(B, low)` | B `updated_by_id == S`, `updated_at == ctx.now`; A, C, D, X, Y `updated_*` unchanged | `set_stock_report_item_priority.py` (def.): add `updated_by_id = :actor, updated_at = :now` to the SET list of the shift statements as well as the mover's → A, C, D are stamped → red | MC-17, §4.5 |
 | C5(b) | `SO(C, 1)` | C stamped; A, B not | `_ordering.py:shift_within_group` (def.): add `updated_by_id = :actor, updated_at = :now` to the shift statement's SET list → A and B are stamped → red. C5(a)'s mutant sits at the priority command's stamp site, this one at the shift statement; **both runs recorded** (§9 rule 8 — the cells are not the same edit) | MC-17 |
-| C6(a) | `SO(C, 1)` with `capture_dispatch` | exactly three `stock_report_item:updated` (C, A, B) with payload `priority`/`priority_order` after the move; none for D | `set_stock_report_item_priority_order.py` (def.): build one `:updated` event per row of the group instead of per row returned by the shift statements → a fourth event for D appears → red | MC-19 "one per shifted neighbour" |
+| C6(a) | `SO(C, 1)` with `capture_dispatch` | exactly three `stock_report_item:updated` (C, A, B) with payload `priority`/`priority_order` after the move; none for D | `set_stock_report_item_priority_order.py` (def.): **replaced at the D1 gate — the folded mutant was inert (§8)**: order the neighbour events by `client_id` instead of by their new `priority_order` → the fixture pins the two orderings against each other, so the list comes back `(C, B, A)` → red | MC-19 "one per shifted neighbour" |
 | C6(b) | C1(c) | no event | `set_stock_report_item_priority_order.py` (def.): build the `:updated` event **before** the `t == p` short-circuit → one event is dispatched for a no-op → red. Shared short-circuit site with C1(c)/C3(c); this run is recorded against the dispatch-list assertion (§9 rule 8) | MC-19 no-op |
 | C7(a)–C7(d) | `PATCH …/priority` as admin / manager / worker / seller | reached / reached / 403 / reached | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `PATCH …/priority` route (def.) — **both directions run and recorded** (L-13/L-24): (i) remove the role under test → its "reached" cell answers 403; (ii) add `WORKER` to the list → the 403 cell reaches the service | MC-18 |
 | C7(e)–C7(h) | `PATCH …/priority-order` as admin / manager / worker / seller | reached / reached / 403 / reached | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `PATCH …/priority-order` route (def.) — both directions, as C7(a)–(d), run and recorded separately: this is a **second route**, not the same edit (§9 rule 8) | MC-18 |
@@ -391,3 +391,32 @@ key sets in one mapping assertion, so the `image_url` mutant shows **both** redd
 
 **C2(a)/C2(b)** are the plan's class-3 rows: no mutant declared, none attempted, no test added.
 **C3(d)** is `BLOCKED-PRODUCTION` — see the handoff and owner card 1.
+
+---
+
+## Review log — D1 tester round, orchestrator folds, 2026-09-21
+
+**Three further mutation cells were inert and are replaced.** The tester found them, proposed a
+replacement for each, and **measured each replacement red on the row's own assertion** (its §10,
+probes P-1/P-2/P-3). Mutation cells are the orchestrator's under §3B, so these are folds; the
+fixtures, outcomes and traces are byte-unchanged.
+
+| Cell | Why the old mutant could not fail |
+|---|---|
+| C1(a) | widening the shift band to `[t, p]` includes the **mover**, whose own `UPDATE … RETURNING` runs afterwards and overwrites the value the shift gave it — the extra write is invisible |
+| C1(b) | same mechanism, the other direction: widening to `[p, t]` also only touches the mover |
+| C6(a) | a spurious `:updated` for D is **absorbed by `coalesce_stock_report_events`**, which drops an event whose values did not change |
+
+Each replacement attacks the same property the cell was reaching for, from a direction production
+does not absorb: narrow the band instead of widening it (so a neighbour is *missed* rather than
+double-written), and reorder the event list instead of adding to it.
+
+**This is now five inert mutants found in one plan** — C1(h)(i) at the implementer's hand-back,
+and these three, plus plan 13 C1(a)(i) which has **no** replacement and is an owner card. The
+common mechanism is worth naming: **a mutant that adds a write is absorbed when a later write
+overwrites it, and a mutant that adds an event is absorbed by the coalescer.** In a phase whose
+production code is deliberately idempotent and de-duplicating, *additive* mutants are the wrong
+shape; **subtractive** ones bite. Fold that into the next batch's projection.
+
+**None of these rows was unarmed.** Every one carries a second mutant that always bit. What was
+wrong in each case was the *claim* of two independent runs.

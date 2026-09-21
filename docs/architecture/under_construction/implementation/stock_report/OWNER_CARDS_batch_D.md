@@ -132,6 +132,153 @@ to the frontend, and the only one that renders.
 `HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` §6.1.
 
 
+---
+
+## Card D-5 — **THE ONE THAT MATTERS.** Phase 12 activates a data-destroying defect in APPROVED phase 3
+
+**Class:** production defect in **APPROVED, VERIFIED** phase-3 code. **Parked because fixing it
+reopens an approved phase**, which is a gate decision and yours — not because the direction is
+unclear. The direction is settled by ratified text; only the authority to act is missing.
+
+**This is the reason D1 is not APPROVED.** Found by the tester as `BLOCKED-PRODUCTION` on plan 12
+**C3(d)**; I confirmed both halves by hand against the code and the intention.
+
+### What breaks
+
+Change a row's priority while it has work out (`quantity_awaiting > 0`) and two things follow:
+
+1. **The board reports phantom drift forever.** MC-6 requires the `priority_change` record to
+   snapshot the live `quantity_awaiting`, and phase 12 does exactly that. But
+   `consistency.py:compute_stock_report_divergences` runs its `goal_total` rule over **every**
+   `StockReportHistoryRecord` in the workspace with no `type` filter (`:200-222`), comparing each
+   record's `quantity_awaiting` against the sum of assignments *credited to it*. Nothing is ever
+   credited to a priority record, so the expected value is `0` and the snapshot is reported as a
+   divergence — permanently, on every health check.
+2. **Running the repair endpoint then destroys the record.** `repair_stock_report.py:248-255`
+   answers that divergence with
+   `UPDATE stock_report_history_records SET quantity_awaiting = 0` keyed on `client_id` alone,
+   again with **no type filter**. The snapshot MC-6 required is overwritten with zero. History
+   records are append-only by §6.2; this silently rewrites one.
+
+### Why the intention settles the direction
+
+§14C's divergence table, line 1594, scopes the rule to **"`quantity_awaiting` of each goal
+record"** — and §6.2 (line 794) and MC-5 (line 836) both define a *goal record* as the row's
+`quantity_requested_change` record. The code applies the rule to all three record types. **The
+code contradicts ratified text**; the fix is a `type == quantity_requested_change` filter in the
+two places above.
+
+### Why nobody caught it before, and why it is phase 12's problem anyway
+
+**Phase 3 was not observably wrong when it was approved.** Until this batch, the only history
+records that existed were `quantity_requested_change` — phase 12 is the first writer of
+`priority_change` and `priority_order_change`. The defect was **latent and unreachable**, and
+phase 3's suite could not have seen it. Phase 12 is what makes it live.
+
+That cuts both ways, and I want to be straight about it: phase 12's own code is **correct** — it
+snapshots the counter MC-6 tells it to. But shipping phase 12 as it stands turns on a path that
+corrupts data, so I do not think D1 should be approved without this resolved.
+
+### Branches
+
+- **Authorise the fix inside D1** (my recommendation): add the type filter in `consistency.py` and
+  `repair_stock_report.py`, re-run phase 3's suite unchanged as the proof of inertness — the same
+  shape as the `_row_values` consolidation the registry already ordered. Reopens phase 3's
+  approval for one narrowly-scoped, ratified-text-directed change.
+- **Defer it to its own phase after D:** honest, but D1 then ships a live corruption path, and the
+  tester's witness test stays red on the tree.
+- **Rule that priority records should not snapshot the counter at all:** contradicts MC-6 and
+  changes a criterion row. I do not recommend it, but it is the only branch that leaves phase 3
+  untouched.
+
+**On silence.** Nothing is fixed, C3(d) stays `BLOCKED-PRODUCTION`, D1 is **not** approved, and
+the suite carries one deliberate red (`test_the_priority_record_snapshots_the_live_awaiting_counter`)
+that documents input → expected → observed. The tester kept it red on purpose rather than deleting
+an assertion to ship green, which was the right call.
+
+**Trace.** Intention §14C (line 1594), §6.2 (line 794), MC-5 (line 836), MC-6;
+`consistency.py:200-222`; `repair_stock_report.py:248-255`; plan 12 C3(d).
+
+---
+
+## Card D-6 — a tripwire that cannot trip, and the correction that saves D2
+
+**Class:** criterion row (C2(b)'s restatement is yours). **The D2 half I resolved myself, by
+measurement.**
+
+**Two findings here, and the second one reverses the first's implication — so read both.**
+
+### The confirmed half: plan 13 C2(b) cannot fail
+
+C2(b) exists purely as a tripwire: it should redden if anyone makes the counter repair read a
+stale ORM copy of `stored_before` instead of re-reading it. The tester planted exactly that
+defect, at the site the cell names *and* at the site the code actually lives
+(`_move_assignment.py:_apply_counter_delta`), and **the test stayed green both times**.
+
+**Confirmed by my own measurement.** The counter statement is
+`update(StockReportItem).where(client_id == …).values(…).returning(…)` — an ORM-enabled UPDATE
+whose criteria SQLAlchemy can evaluate, so it synchronises the identity-mapped instance. I probed
+it directly: after the update the ORM attribute reads **7** and a fresh `SELECT` reads **7**. The
+stale-copy defect is not merely hard to observe here; it **cannot occur**. The production code is
+correct; the proof behind it is empty.
+
+### The half the tester got wrong — and it is the one that decides D2
+
+The tester extrapolated: *"13A C5(b), the only armed evidence anywhere for the gap-close's fresh
+`removed_order`, is likely to be inert for the same reason."* If true, that would have removed the
+entire stated reason for splitting batch D.
+
+**It is not true, and I measured it rather than reasoning about it.** I probed
+`close_priority_gap`'s shift statement in the exact shape 13A C5(b) will use — load a row into the
+identity map, run the shift, then compare. Result: **ORM attribute = 3, fresh `SELECT` = 2.** The
+instance **is stale**.
+
+The asymmetry is real and now explained, both halves measured in one run:
+
+| statement | shape | ORM after | DB after | stale? |
+|---|---|---|---|---|
+| counter (`_apply_counter_delta`) | equality on `client_id`, `RETURNING` | 7 | 7 | **no** — synchronised |
+| shift (`close_priority_gap`) | range criteria `priority_order > n`, column-referencing SET | 3 | 2 | **yes** |
+
+SQLAlchemy can match and refresh an instance identified by a simple primary-key equality; it
+cannot evaluate the shift's range criteria, so those instances are left untouched.
+
+**Consequences, and they are good news:** §9 rule 3 holds for the shift statements it was written
+about. **13A C5(b) is armable, the cascade's fresh `removed_order` is a real requirement with real
+evidence coming, and the D1-before-D2 split was correct.** No action needed on 13A.
+
+### What I need from you, narrowly
+
+Only C2(b)'s disposition. The tester recommends *accept it unguarded and record why*; I agree —
+the requirement it guards is genuine but unobservable at that site, so a restatement would be
+inventing a defect to catch. **Restating the row is yours.** On silence it stays `BLOCKED-PLAN`
+and is not counted as covered, which is the honest state.
+
+**Worth keeping as a lesson regardless (L-40):** *"ORM-enabled `update(Model)` is not a Core
+update — whether it leaves an instance stale depends on whether SQLAlchemy can evaluate the
+criteria. A staleness rule stated over 'any UPDATE' is too coarse, in both directions: it
+over-promises evidence at PK-equality sites and it under-credits real evidence at range-criteria
+sites."*
+
+---
+
+## Card D-7 — three smaller rulings the tester raised
+
+Grouped because each is a sentence, none blocks anything, and all three are yours.
+
+1. **Plan 13 C3(a) counts three assignment-deletion events; its own C1(a) fixture makes four.**
+   Stale since the round-8/9 `resolved_early` addition. The code emits four and the tests agree —
+   only the written rule disagrees with its own setup. *Recommendation: correct it to four.*
+   Correcting a criterion outcome is yours, so it stays `BLOCKED-PLAN`.
+2. **Plan 13 C1(c)'s "empty history" is not achievable** for a re-created row, per the tester.
+   Needs your reading of what the row should say.
+3. **Plan 13 C1(a) mutant (i) is inert** (soft-deleting the row before the assignment loop is
+   unobservable) and **the tester could find no replacement** — MC-16's cascade-ordering clause is
+   genuinely unguarded. *Whether that deserves a criterion row is yours.* I folded five other
+   inert mutants this round where a working replacement existed and was measured; this is the one
+   where none does.
+
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:
