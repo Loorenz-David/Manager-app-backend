@@ -7624,6 +7624,118 @@ nodes:
     confidence: 0.85
     createdAt: 2026-09-20T21:55:54.526Z
     updatedAt: 2026-09-20T21:55:54.526Z
+  - id: command-move-assignment
+    type: command
+    name: move_assignment
+    description: "The single operation that moves a stock task assignment between
+      states — including creation, the two Scanner-only exits, and soft delete —
+      and moves the row's unit counters with it. Asserts the move is legal
+      against a total six-state table read from the ACTIVE/TERMINAL frozensets,
+      writes its own columns and flushes, then issues one guarded
+      column-referencing UPDATE whose WHERE carries nothing but the
+      non-negativity guard. On a zero-row result it self-heals: fresh read of
+      the stored counters, recompute, one absolute UPDATE, one repair record per
+      diverging column, one warning carrying the delta. Returns events built
+      only from RETURNING, never from the ORM instance. Opens no transaction,
+      commits nothing, dispatches nothing — the caller owns all three."
+    tags:
+      - stock_report
+      - batch_B1
+      - phase_4
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Implements the allowed-move table, the guarded counter statement and
+            the inline self-heal in MC-1's write order.
+          inferenceReason: Every later stock-report phase that changes an assignment's
+            state goes through this one operation, so it is the hub of the write
+            side.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - id: command-remove-assignment
+    type: command
+    name: remove_assignment
+    description: Soft-deletes a stock task assignment by delegating to
+      move_assignment with the DELETE sentinel, then recomputes the owning
+      task's is_stock_assignment flag. Its write to tasks happens after the row
+      and assignment locks, which inverts the global lock order — it is safe
+      only under the contract that the caller already holds the task lock. That
+      premise is documented but, as of batch B1, provable only in phase 8 where
+      the first real caller is written.
+    tags:
+      - stock_report
+      - batch_B1
+      - phase_4
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_remove_assignment.py
+          symbol: remove_assignment
+          summary: Calls move_assignment with the delete sentinel and then
+            recompute_task_stock_flag.
+          inferenceReason: The task-flag recompute after the move is what couples
+            assignment removal to the task aggregate.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - id: command-apply-goal-effect
+    type: command
+    name: apply_goal_effect
+    description: "Maintains a stock report row's goal record running total as
+      assignments move. Credits the current goal record when an assignment
+      enters awaiting or resolves early, and un-credits the record the
+      assignment remembers when it leaves that state, clearing the memory before
+      issuing its own statement. Takes no lock on the row itself — the
+      protection is the moving assignment's row lock, held by every writer of
+      that row's goal totals. Self-heals only downward: a total that would go
+      below zero is repaired inline, while upward drift is left for the manual
+      repair so a human sees it."
+    tags:
+      - stock_report
+      - batch_B1
+      - phase_5
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_goal_credit.py
+          symbol: apply_goal_effect
+          summary: Credits and un-credits the goal record from the assignment's credit
+            memory, with a guarded subtraction and a downward-only self-heal.
+          inferenceReason: The goal total is the figure the stock board reports against,
+            and this is the only operation that moves it outside the manual
+            repair.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - id: domain-stock-report-events
+    type: domain
+    name: stock report event builders
+    description: "Builds the two workspace events the stock report emits: the
+      assignment event in its created/state-changed/deleted kinds, and the row
+      updated event whose payload is taken from the database's own RETURNING
+      values. Serializes the row's priority as its string value rather than the
+      enum member, because the payload travels to the audit writer and the
+      socket broadcast, neither of which can carry an internal object."
+    tags:
+      - stock_report
+      - batch_B1
+      - phase_4
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_events.py
+          symbol: build_stock_report_item_updated_event
+          summary: Constructs the workspace event directly and emits the priority as its
+            string value or None.
+          inferenceReason: The payload shape is a ratified contract and the enum
+            serialization is a safeguard against a failure that would be silent
+            in production.
+    origin: ai_inferred
+    confidence: 0.85
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -13934,3 +14046,162 @@ edges:
     confidence: 0.9
     createdAt: 2026-09-20T21:55:54.526Z
     updatedAt: 2026-09-20T21:55:54.526Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Issues the guarded counter UPDATE against the row and, on self-heal, an
+            absolute one.
+          inferenceReason: Moving the unit counters is the operation's primary effect.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: writes_to
+    targetNodeId: table-stock-task-assignment
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Writes the assignment's own state or soft-delete columns and flushes
+            before the counter statement.
+          inferenceReason: The assignment is the entity whose state the operation exists
+            to change.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-repair-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Writes one repair record per diverging column when the guarded
+            statement matches no row.
+          inferenceReason: The inline self-heal shares the repair-record audit trail with
+            the manual repair.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: calls
+    targetNodeId: query-stock-report-consistency
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Calls recompute_row_counters from the consistency module during the
+            inline self-heal.
+          inferenceReason: The inline repair and the manual repair recompute from the same
+            function, which is what keeps them consistent.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: calls
+    targetNodeId: domain-stock-report-events
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Builds its returned events through the two builders.
+          inferenceReason: Events are the operation's output to the rest of the system.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-move-assignment
+    relationshipType: calls
+    targetNodeId: command-apply-goal-effect
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: move_assignment
+          summary: Invokes the goal effect after the counter statement and before building
+            events.
+          inferenceReason: The goal step's placement in the write order is a contract
+            requirement, not an implementation detail.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-remove-assignment
+    relationshipType: calls
+    targetNodeId: command-move-assignment
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_remove_assignment.py
+          symbol: remove_assignment
+          summary: Delegates the whole move to move_assignment with the DELETE sentinel.
+          inferenceReason: Removal is defined as a move, so the counter and event
+            semantics are inherited rather than duplicated.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-remove-assignment
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_remove_assignment.py
+          symbol: remove_assignment
+          summary: Through move_assignment, the delete moves the row's active counter
+            down.
+          inferenceReason: Removing live work has to be reflected in the row's counters.
+    origin: ai_inferred
+    confidence: 0.8
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-apply-goal-effect
+    relationshipType: writes_to
+    targetNodeId: table-stock-report-history-record
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_goal_credit.py
+          symbol: apply_goal_effect
+          summary: Issues the guarded add and subtract against the goal record's awaiting
+            quantity.
+          inferenceReason: The goal record is the entity whose running total this
+            operation maintains.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-apply-goal-effect
+    relationshipType: writes_to
+    targetNodeId: table-stock-task-assignment
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_goal_credit.py
+          symbol: apply_goal_effect
+          summary: Sets and clears the assignment's credited_history_record_id, clearing
+            it before the subtraction statement.
+          inferenceReason: The credit memory on the assignment is what makes the un-credit
+            land on the right record rather than the current one.
+    origin: ai_inferred
+    confidence: 0.85
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
+  - sourceNodeId: command-apply-goal-effect
+    relationshipType: calls
+    targetNodeId: query-stock-report-consistency
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_goal_credit.py
+          symbol: apply_goal_effect
+          summary: Calls recompute_goal_total during its downward self-heal.
+          inferenceReason: Same shared recomputation as the manual repair, which is what
+            keeps the two paths agreeing.
+    origin: ai_inferred
+    confidence: 0.85
+    createdAt: 2026-09-21T00:52:45.640Z
+    updatedAt: 2026-09-21T00:52:45.640Z
