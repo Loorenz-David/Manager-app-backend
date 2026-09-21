@@ -273,13 +273,20 @@ async def resolve_processed_group(session, assignments, *, row, workspace_id, no
     plan §6.5; intention §8B D6 "Processed, grouped per row"; §14F F5).
 
     `assignments` is every assignment of `row` that this request decided to move,
-    each still carrying its **current** (pre-move) `state` — the caller has already
-    re-read it after the row/assignment locks and decided, per entry in request
-    order, that it is active. The target is `resolved` from `awaiting`, otherwise
+    each still carrying its **current** (pre-move) `state`. The target is computed
+    here, not taken from the caller: `resolved` from `awaiting`, otherwise
     `resolved_early` (from `in_queue`/`in_progress` — the only other active states,
-    §14F F2). One guarded counter statement carries the group's summed per-column
-    delta (HC-3: the same statement builder and repair routine as `move_assignment`,
-    never a second counter path); the goal step (F4) runs per assignment after it.
+    §14F F2; from a **terminal** state the computed target is still
+    `resolved_early`, which is illegal). The function defends its own docstring's
+    premise — that every input is active — itself, via `_assert_allowed_move`
+    (plan 10 review F-1/F-4, plan 9 C8(d)): it does not merely assume the caller
+    re-read under lock, it re-checks. It also mirrors `move_assignment`'s own
+    `from_state == target` short-circuit (an assignment already at its computed
+    target is left untouched, with no event for it) and its zero-delta guard on
+    the row's `:updated` event (N-5). One guarded counter statement carries the
+    group's summed per-column delta (HC-3: the same statement builder and repair
+    routine as `move_assignment`, never a second counter path); the goal step (F4)
+    runs per moved assignment after it.
     """
     moved: list[tuple[object, "StockTaskAssignmentStateEnum", "StockTaskAssignmentStateEnum"]] = []
     for assignment in assignments:
@@ -289,10 +296,17 @@ async def resolve_processed_group(session, assignments, *, row, workspace_id, no
             if from_state == StockTaskAssignmentStateEnum.AWAITING
             else StockTaskAssignmentStateEnum.RESOLVED_EARLY
         )
+        if from_state == target:
+            continue  # '=' cell, mirrors move_assignment's own short-circuit
+        _assert_allowed_move(from_state, target, is_creation=False)
         assignment.state = target
         assignment.updated_by_id = None
         assignment.updated_at = now
         moved.append((assignment, from_state, target))
+
+    if not moved:
+        return []
+
     await session.flush()
 
     deltas = {"quantity_in_queue": 0, "quantity_in_progress": 0, "quantity_awaiting": 0}
@@ -329,11 +343,12 @@ async def resolve_processed_group(session, assignments, *, row, workspace_id, no
         )
         for assignment, _from_state, target in moved
     ]
-    events.append(
-        build_stock_report_item_updated_event(
-            client_id=row.client_id,
-            workspace_id=workspace_id,
-            values=values,
+    if any(value != 0 for value in deltas.values()):
+        events.append(
+            build_stock_report_item_updated_event(
+                client_id=row.client_id,
+                workspace_id=workspace_id,
+                values=values,
+            )
         )
-    )
     return events
