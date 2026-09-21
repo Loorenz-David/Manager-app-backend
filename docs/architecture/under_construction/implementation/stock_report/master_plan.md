@@ -484,6 +484,9 @@ depends on a new one adds a row here in the same act.
 | `bm/domain/items/properties_signature.py` | `sort_keys=True` in the `json.dumps` of `compute_properties_signature` (line ~25) | Row identity under JSON key reordering — intention §4A MC-3, **plan 7 C4(a)**. Every mutation cell in that family pointed at `criteria_normalization.py`, where C4(a) is provably **inert** (measured, batch B2 re-review P1). | batch B2 re-review, L-25 |
 | `bm/services/commands/tasks/add_item_to_task.py` | the one-active-PRIMARY-per-task check (`:47-57`) and the `removed_at IS NULL` duplicate check (`:59-68`) | MC-13's `item_not_task_primary` and MC-14's "a swap is removal then add" — and, negatively, the **constructibility** of plan 8 C6(g) / plan 11 C1(c): because a task holds one active PRIMARY item, "one task with two assignments" is reachable only as terminal + active for the same item | batch C1 projection, L-25 |
 | `bm/services/commands/task_post_handling/complete_task_post_handling.py` | its `_update_item_in_session` call builds `UpdateItemRequest(client_id=…, item_zone=…)` (`:120-129`) — `item_category_id` is never in `model_fields_set` | MC-14's "the guard covers both callers" is true by *placement*, not because this caller can change a category. This is why plan 11 C4(h) was withdrawn (owner card F, 2026-09-21) | batch C1 projection, L-25 |
+| `bm/services/commands/tasks/update_task.py` | that `update_task` writes **no** `Task.state` (`:48-113`; `_DIRECT_FIELDS` at `:24-37` excludes `state`) | It is the landing site for MC-2 probes P-a…P-d, i.e. plan 10 **C4(b)–(e)**. If a future change adds a real `Task.state` write here, four probe rows stop being planted defects and **C4(a)** ("the guard on the current tree passes") flips red | batch C2 projection, L-25 |
+| `bm/services/commands/users/_clock_worker_shift.py` | `new_state=TaskStepStateEnum.PAUSED` at `:213` inside `clock_out_shift_for_user` (`:131`) | The registry's `paused_driver` classification and probe P-f — plan 10 **C4(g)** and the guard's `paused_driver` rule. Changing the literal breaks the guard's own contract, not just the probe | batch C2 projection, L-25 |
+| `bm/services/tasks/task_steps/finalize_pending_step_completion.py` | `performed_by = payload["performed_by_user_id"]` at `:34` — this handler has **no `ctx`**, so the payload key is the only actor source | MC-17's "performer, not credited user" at S9 — plan 10 **C1(l)**. It is also why `ctx.user_id` is not an available mutant there | batch C2 projection, L-25 |
 
 A source comment now marks the argument in place and points back here, so the next editor of that
 file sees the dependency without reading this plan set.
@@ -1010,7 +1013,12 @@ C4(k) and C6(h); every `ascending client_id` claim in §6.5 should be re-read ag
   then review the file against §6.2 (partial-index `postgresql_where`, `server_default`, enum names,
   checks) — autogenerate does not always emit partial-index predicates or CHECK constraints; add them
   by hand inside the generated file if missing, and say so in the handoff.
-- **Baseline: 21 failed / 3103 passed / 1 skipped, collection 3125, at `cce4b1b`** (unchanged at
+- **Baseline — the invariant is the 21-ID failure set, not the pass count.** Every L4 diffs its
+  failure IDs against that set in both directions; **the pass count rises with every batch and is
+  never itself the comparator** (3103 → 3264 → 3349 → 3436 → 3445 → 3512 → 3541 → **3547** at
+  `798fc69`, batch C1 APPROVED). Clarified 2026-09-21 after a planner cited the figure below as
+  current; the historical record stands as written.
+- **Historical baseline: 21 failed / 3103 passed / 1 skipped, collection 3125, at `cce4b1b`** (unchanged at
   `f575488`, which touched only docs). The failing set is exactly the published 21-ID set in
   `docs/architecture/archives/test_isolation_and_xdist/archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md` §3.
   Every L4 run diffs its failure IDs against that set in both directions. One inherited drifter is
