@@ -214,3 +214,81 @@ def test_match_preview_route_rejects_unknown_field(monkeypatch):
     )
     assert response.status_code == 422
     assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Plan 12 C7 — the three phase-12 routes: role cells, `client_id` in the path,
+# and the two request-model contracts the endpoint's 422s rest on.
+# ---------------------------------------------------------------------------
+
+PRIORITY_ROUTES = [
+    ("/api/v1/stock-report/items/sri_1/priority", {"priority": "high"}),
+    ("/api/v1/stock-report/items/sri_1/priority-order", {"priority_order": 2}),
+]
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "seller"])
+@pytest.mark.parametrize(("path", "body"), PRIORITY_ROUTES)
+def test_ordering_routes_reach_service_for_permitted_roles(
+    monkeypatch, role, path, body
+):
+    http, calls = client(monkeypatch, role)
+    assert http.patch(path, json=body).status_code == 200
+    assert len(calls) == 1
+    assert calls[0][1].incoming_data["client_id"] == "sri_1"
+
+
+@pytest.mark.parametrize(("path", "body"), PRIORITY_ROUTES)
+def test_ordering_routes_reject_worker(monkeypatch, path, body):
+    http, calls = client(monkeypatch, "worker")
+    assert http.patch(path, json=body).status_code == 403
+    assert calls == []
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "worker", "seller"])
+def test_list_items_route_reaches_service_for_every_role(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    response = http.get("/api/v1/stock-report/items?priority=high,low")
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0][1].query_params == {"priority": "high,low"}
+
+
+def test_list_items_route_passes_no_priority_when_the_param_is_absent(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    assert http.get("/api/v1/stock-report/items").status_code == 200
+    assert calls[0][1].query_params == {"priority": None}
+
+
+@pytest.mark.parametrize(("path", "body"), PRIORITY_ROUTES)
+def test_ordering_routes_refuse_unknown_fields(monkeypatch, path, body):
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(path, json={**body, "unexpected": True}).status_code == 422
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        # The key is required and has no default (plan 12 C1(m)).
+        ("/api/v1/stock-report/items/sri_1/priority", {}),
+        # Rejected by value, not silently passed through.
+        ("/api/v1/stock-report/items/sri_1/priority", {"priority": "urgent"}),
+        # `StrictInt`: pydantic's lax mode would coerce "2" to 2 (plan 12 C1(n)).
+        ("/api/v1/stock-report/items/sri_1/priority-order", {"priority_order": "2"}),
+    ],
+)
+def test_ordering_routes_refuse_malformed_bodies(monkeypatch, path, body):
+    http, calls = client(monkeypatch, "manager")
+    assert http.patch(path, json=body).status_code == 422
+    assert calls == []
+
+
+def test_priority_route_accepts_an_explicit_null(monkeypatch):
+    """`null` is a legal value and means "clear the priority"."""
+    http, calls = client(monkeypatch, "manager")
+    response = http.patch(
+        "/api/v1/stock-report/items/sri_1/priority", json={"priority": None}
+    )
+    assert response.status_code == 200
+    assert calls[0][1].incoming_data == {"priority": None, "client_id": "sri_1"}

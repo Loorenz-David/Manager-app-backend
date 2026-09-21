@@ -1,7 +1,7 @@
 """Response serializers for the stock-report project (master plan §6.1).
 
-`serialize_stock_report_item` (the row's own read shape) belongs to phase 12 and is
-added to this file then. The three serializers here — `serialize_stock_task_assignment`,
+`serialize_stock_report_item` (the row's own read shape) is phase 12's; the three
+others — `serialize_stock_task_assignment`,
 `serialize_item_compact`, `serialize_task_compact` — ship in phase 8 by owner ruling
 (master plan §9B ruling 2): the assignment-creation response returns the same shape as
 `GET /items/{client_id}/assignments` (phase 13), so a frontend can render a newly
@@ -9,6 +9,48 @@ created assignment without a second request.
 """
 
 from beyo_manager.domain.images.serializers import serialize_image_light
+
+
+def serialize_stock_report_item(row, *, category) -> dict:
+    """The stock-report row's read shape (intention §9 "Response shapes"; master plan
+    §6.1) — the payload of `GET /stock-report/items` and of both `PATCH` responses.
+
+    `item_category` is **four** keys: `client_id`, `name`, `major_category` and
+    `image_url` (owner addition 2026-09-21, plan 12 C4(e)). `ItemCategory.image_url`
+    is nullable, and on a category with no image the key is **present and `None`,
+    never absent** — an omitted key and a null key are different things to a
+    renderer, and the published frontend contract states it as `string | null`.
+
+    `category` may be a soft-deleted category: no command soft-deletes an
+    `ItemCategory` today, and MC-16 says a row whose category is later deleted keeps
+    working and serializes the deleted category's name — so the caller loads
+    categories **by id**, never through a filtered join.
+
+    There is no `item_type` key (intention §9: no "ItemType" concept leaks ahead of
+    the Item Domain migration) and no pagination key (master plan §5: this endpoint
+    is exempt from the `07_queries_local` pagination gate by ratified owner answer).
+    """
+    return {
+        "client_id": row.client_id,
+        "item_category": {
+            "client_id": category.client_id,
+            "name": category.name,
+            "major_category": category.major_category.value,
+            "image_url": category.image_url,
+        },
+        "properties": row.properties,
+        "properties_signature": row.properties_signature,
+        "quantity_requested": row.quantity_requested,
+        "quantity_in_queue": row.quantity_in_queue,
+        "quantity_in_progress": row.quantity_in_progress,
+        "quantity_awaiting": row.quantity_awaiting,
+        "priority": row.priority.value if row.priority is not None else None,
+        "priority_order": row.priority_order,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "created_by_id": row.created_by_id,
+        "updated_by_id": row.updated_by_id,
+    }
 
 
 def serialize_item_compact(item, *, images) -> dict:

@@ -28,20 +28,10 @@ from beyo_manager.services.commands.stock_report._locks import (
     lock_stock_report_items,
     lock_stock_task_assignments,
 )
+from beyo_manager.services.commands.stock_report._row_values import row_values
 from beyo_manager.services.commands.stock_report._move_assignment import (
     move_assignment,
 )
-
-
-def _row_values(row) -> dict:
-    return {
-        "quantity_requested": row.quantity_requested,
-        "quantity_in_queue": row.quantity_in_queue,
-        "quantity_in_progress": row.quantity_in_progress,
-        "quantity_awaiting": row.quantity_awaiting,
-        "priority": row.priority.value if row.priority is not None else None,
-        "priority_order": row.priority_order,
-    }
 
 
 async def sync_task_stock_assignments(
@@ -88,7 +78,7 @@ async def sync_task_stock_assignments(
         )
         row = locked_rows[assignment.stock_report_item_id]
         if row.client_id not in initial_row_values:
-            initial_row_values[row.client_id] = _row_values(row)
+            initial_row_values[row.client_id] = row_values(row)
         locked_assignments = await lock_stock_task_assignments(
             session, workspace_id, [assignment.client_id]
         )

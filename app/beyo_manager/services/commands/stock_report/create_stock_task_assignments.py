@@ -42,6 +42,7 @@ from beyo_manager.services.commands.stock_report._locks import (
 )
 from beyo_manager.services.commands.stock_report._task_flag import set_task_stock_flag
 from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
+from beyo_manager.services.commands.stock_report._row_values import row_values
 from beyo_manager.services.commands.stock_report.requests import (
     parse_create_stock_task_assignments_request,
 )
@@ -51,17 +52,6 @@ from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.queries.stock_report.assignment_check_inputs import (
     fetch_assignment_check_inputs,
 )
-
-
-def _row_values(row) -> dict:
-    return {
-        "quantity_requested": row.quantity_requested,
-        "quantity_in_queue": row.quantity_in_queue,
-        "quantity_in_progress": row.quantity_in_progress,
-        "quantity_awaiting": row.quantity_awaiting,
-        "priority": row.priority.value if row.priority is not None else None,
-        "priority_order": row.priority_order,
-    }
 
 
 async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
@@ -90,7 +80,7 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
         locked_tasks = await lock_tasks(ctx.session, ctx.workspace_id, task_ids)
         locked_rows = await lock_stock_report_items(ctx.session, ctx.workspace_id, row_ids)
         initial_row_values = {
-            row_id: _row_values(row) for row_id, row in locked_rows.items()
+            row_id: row_values(row) for row_id, row in locked_rows.items()
         }
 
         primary_pairs, processed_pairs, active_item_ids = (

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession
+from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
     StockAssignmentRefused,
@@ -9,7 +10,7 @@ from beyo_manager.errors.stock_report import (
 from beyo_manager.models.database import get_db
 from beyo_manager.routers.http.response import build_err, build_ok
 from beyo_manager.routers.utils.jwt_dep import require_roles
-from beyo_manager.routers.utils.roles import ADMIN, MANAGER, WORKER
+from beyo_manager.routers.utils.roles import ADMIN, MANAGER, SELLER, WORKER
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.run_service import run_service
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
@@ -21,8 +22,17 @@ from beyo_manager.services.commands.stock_report.delete_stock_task_assignments i
 from beyo_manager.services.commands.stock_report.repair_stock_report import (
     repair_stock_report,
 )
+from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
+    set_stock_report_item_priority,
+)
+from beyo_manager.services.commands.stock_report.set_stock_report_item_priority_order import (
+    set_stock_report_item_priority_order,
+)
 from beyo_manager.services.queries.stock_report.get_stock_report_consistency import (
     get_stock_report_consistency,
+)
+from beyo_manager.services.queries.stock_report.list_stock_report_items import (
+    list_stock_report_items,
 )
 from beyo_manager.services.queries.stock_report.preview_stock_task_assignment_match import (
     preview_stock_task_assignment_match,
@@ -52,6 +62,21 @@ class _DeleteStockTaskAssignmentsBody(BaseModel):
     client_ids: list[str]
 
 
+class _SetStockReportItemPriorityBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # No default: an omitted key is a 422 (plan 12 C1(m)); `null` is a legal value
+    # and means "clear the priority".
+    priority: StockReportPriorityEnum | None
+
+
+class _SetStockReportItemPriorityOrderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Strict: pydantic's lax mode would coerce the string "2" to 2 (plan 12 C1(n)).
+    priority_order: StrictInt
+
+
 class _PreviewStockTaskAssignmentBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,10 +94,21 @@ class _PreviewStockTaskAssignmentBody(BaseModel):
 _STRUCTURED_ASSIGNMENT_ERRORS = (StockAssignmentRefused, StockAssignmentPropertyMismatch)
 
 
-async def _run(service, claims: dict, session: AsyncSession, incoming_data: dict | None = None):
+async def _run(
+    service,
+    claims: dict,
+    session: AsyncSession,
+    incoming_data: dict | None = None,
+    query_params: dict | None = None,
+):
     outcome = await run_service(
         service,
-        ServiceContext(identity=claims, incoming_data=incoming_data or {}, session=session),
+        ServiceContext(
+            identity=claims,
+            incoming_data=incoming_data or {},
+            query_params=query_params or {},
+            session=session,
+        ),
     )
     if outcome.success:
         return build_ok(outcome.data)
@@ -136,6 +172,49 @@ async def route_preview_stock_task_assignment_match(
 ):
     return await _run(
         preview_stock_task_assignment_match,
+        claims,
+        session,
+        incoming_data={**body.model_dump(), "client_id": client_id},
+    )
+
+
+@router.get("/items")
+async def route_list_stock_report_items(
+    priority: str | None = None,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        list_stock_report_items, claims, session, query_params={"priority": priority}
+    )
+
+
+@router.patch("/items/{client_id}/priority")
+async def route_set_stock_report_item_priority(
+    client_id: str,
+    body: _SetStockReportItemPriorityBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    # `client_id` travels in the path (§9B ruling 1) and is injected exactly as the
+    # shipped match-preview route does.
+    return await _run(
+        set_stock_report_item_priority,
+        claims,
+        session,
+        incoming_data={**body.model_dump(), "client_id": client_id},
+    )
+
+
+@router.patch("/items/{client_id}/priority-order")
+async def route_set_stock_report_item_priority_order(
+    client_id: str,
+    body: _SetStockReportItemPriorityOrderBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        set_stock_report_item_priority_order,
         claims,
         session,
         incoming_data={**body.model_dump(), "client_id": client_id},

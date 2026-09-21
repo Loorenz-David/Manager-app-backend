@@ -171,7 +171,93 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 
 ## 8. Review log
 
-(empty)
+### Implementation, batch D1 round 1 (2026-09-21, Opus implementer, slot `d1`)
+
+**What was built.** `_row_values.py` (shared, §6.5 ledger D-6) and the three copies
+replaced; `_ordering.py`; the two commands; `serialize_stock_report_item`;
+`list_stock_report_items`; the two request models plus their parse wrappers in
+`requests/__init__.py`; three routes. Tests: `test_stock_report_priority_and_ordering.py`
+(15), `test_stock_report_ordering_locks.py` (1), `test_list_stock_report_items.py` (6),
+and 12 cases appended to `test_stock_report_router.py`. This project runs a tester, so
+this round wrote no row-by-row transcription, ran no named mutation and carries no
+mutation ledger (master plan §3B).
+
+**Judgment calls, each the smallest choice the plan left open.**
+
+1. **`shift_within_group(from_order, to_order)` is the mover's `p` and `t`, not the
+   band.** §6.5 registers the two argument names and no direction argument, so the
+   band and the sign are derived inside the function: `t < p` → `[t, p−1]` `+1`,
+   `t > p` → `[p+1, t]` `−1`. Both of MC-7's cases therefore reach the same one
+   statement, and C1(a)/C1(b)'s named mutations sit at exactly that derivation.
+2. **Both parse wrappers live in `requests/__init__.py`**, beside the two models and
+   the shipped `_raise_validation_error`, not in the two command modules. §6.5 names
+   the two functions but registers the models in `requests/__init__.py`, which is
+   also what §4 lists as edited and what C1(m)/C1(n) name as their mutation site;
+   splitting the model from its parser across two files would have put the 422
+   contract in two places. The registered names are unchanged.
+3. **The row lookup is duplicated, deliberately, in each command module.** C1(o)
+   names `set_stock_report_item_priority.py`'s row lookup as its mutation site, so
+   the three visibility terms have to be *in that file*. `_find_row` is therefore a
+   private function per command rather than a shared helper.
+4. **Discovery is unlocked, then the row and its groups are locked in one
+   statement.** The source group cannot be named before the row's current priority
+   is known, and §9 rule 4 allows an unlocked read that only discovers ids. The
+   advisory lock is taken **before** that read, so no other ordering operation can
+   change the priority in between.
+5. **The response is re-read after the Core statements** (`_serialize`) rather than
+   serialized from the stale ORM instance (§9 rule 3), and its category is fetched
+   **by id** so a soft-deleted category still serializes (MC-16, C4(g)).
+6. **Event order is deterministic:** the mover's `:updated` first, then the shifted
+   neighbours ordered by their **new** `priority_order`. A shift statement's
+   `RETURNING` order is not guaranteed by Postgres, and C6(a)'s cell lists
+   `(C, A, B)` — mover, then neighbours in position order.
+7. **The history record is built from the mover statement's `RETURNING`**, so its
+   `priority_order` and live `quantity_awaiting` are the post-move values MC-6's
+   timing clause requires (C3(d)).
+
+**Rule 17 contradiction check — no contradiction; both shapes measured on the
+installed pydantic 2.11.3.** `SetStockReportItemPriorityRequest.priority` rejects
+`"urgent"` by value, accepts `"high"` and `null`, and 422s an omitted key;
+`priority_order: StrictInt` refuses the string `"2"` instead of coercing it. Both
+wrappers convert pydantic's error to `bm.errors.validation.ValidationError`, the only
+class that yields a 422 here.
+
+**One production defect the plan could not have predicted, found by a test and
+fixed.** `list_stock_report_items`' read-order `CASE` was first written as
+`case({...}, value=StockReportItem.priority)`. The mapping form binds each key as a
+bare parameter, and asyncpg rejects it: *invalid input for query argument $2:
+<StockReportPriorityEnum.HIGH: 'high'> (expected str, got StockReportPriorityEnum)* —
+**every** `priority=` request would have been a 500. It is now written as explicit
+`when` pairs comparing the column, which takes the column's own enum type for the
+bind. C4(a) is what caught it.
+
+**Observations for the tester and the coordinator (not changes).**
+
+- **C1(h) mutant (i) looks inert at the site.** The cell says `append_to_priority_group`
+  computing `max` over a set that still includes the mover makes B land at 3 in `low`
+  "with Y already at 2 → wrong order" — but B at `low 3` **is** the row's stated
+  outcome. The mover is never a member of its destination group when the append runs
+  (`X == Y` is short-circuited earlier), and even if its stale `high` order 2 were
+  counted, `max(1, 2, 2) + 1 = 3`, the same answer. Mutant (ii) of the same cell (skip
+  the source gap close) does bite. Raised for the coordinator, not acted on.
+- **`priority` in the event payload and in `row_values` is `.value`, never the enum
+  member**, in both new commands — the coalescer compares the two dicts and an enum
+  member never equals a string, which would emit a spurious `:updated` for an
+  unchanged row.
+- **`PATCH …/priority-order` has no tenancy criterion.** Both routes use the same
+  lookup shape (`_find_row` in each command module: `workspace_id` + `client_id` +
+  `is_deleted = false`, else `NotFound("Stock report item not found.")`), so the
+  behaviour is identical on both; only the priority route is covered by a row (C1(o)).
+  Reported, not authored.
+- **Intention §9's "Response shapes" sentence still reads `item_category
+  {client_id, name, major_category}` — three keys.** C4(e), the owner's 2026-09-21
+  addition and the published v2 frontend contract all say four, including
+  `image_url`; the code follows C4(e). The intention sentence is the stale one and
+  wants a lettered amendment at the coordinator's next fold.
+- **A pre-existing lint error sits in this phase's L2 surface and was left alone:**
+  `tests/integration/services/commands/stock_report/test_apply_stock_demand_timing.py:15`
+  `F401 sqlalchemy.text imported but unused` (phase 6, APPROVED, unchanged by this
+  round — `git diff HEAD` on that file is empty).
 
 
 ---

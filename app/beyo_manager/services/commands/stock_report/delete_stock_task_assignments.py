@@ -23,23 +23,13 @@ from beyo_manager.services.commands.stock_report._locks import (
 from beyo_manager.services.commands.stock_report._remove_assignment import (
     remove_assignment,
 )
+from beyo_manager.services.commands.stock_report._row_values import row_values
 from beyo_manager.services.commands.stock_report.requests import (
     parse_delete_stock_task_assignments_request,
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
-
-
-def _row_values(row) -> dict:
-    return {
-        "quantity_requested": row.quantity_requested,
-        "quantity_in_queue": row.quantity_in_queue,
-        "quantity_in_progress": row.quantity_in_progress,
-        "quantity_awaiting": row.quantity_awaiting,
-        "priority": row.priority.value if row.priority is not None else None,
-        "priority_order": row.priority_order,
-    }
 
 
 async def delete_stock_task_assignments(ctx: ServiceContext) -> dict:
@@ -81,7 +71,7 @@ async def delete_stock_task_assignments(ctx: ServiceContext) -> dict:
             ctx.session, ctx.workspace_id, set(discovered_by_id)
         )
         initial_row_values = {
-            row_id: _row_values(row) for row_id, row in locked_rows.items()
+            row_id: row_values(row) for row_id, row in locked_rows.items()
         }
 
         # Re-read (§9 rule 4): a concurrent delete between discovery and the lock
