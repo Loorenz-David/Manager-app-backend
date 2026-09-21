@@ -1152,3 +1152,40 @@ mentions**. That is an anchoring failure of the plan set rather than the graph �
 proof lives in a file outside every declared perimeter — and it is the same shape the graph's
 anchor model exists to prevent. Recorded here because it is the first time this project has
 produced an argument *for* span-free, symbol-anchored provenance from its own evidence.
+
+## 2026-09-21 — stock_report phase 8A, Codex terra implementer (graph delta written by the agent)
+
+**The first genuine reading this brief has produced from a non-orchestrator agent.** Every prior
+entry was either my own write (where the tool schema recommends symbol anchors, so compliance and
+instinct are indistinguishable) or an agent under an explicit "no graph write" instruction. Phase
+8A's prompt said the orchestrator owns the §6 registry but did **not** forbid a graph write, and
+Codex went ahead and wrote one unasked.
+
+**New evidence written:** 2 nodes (`endpoint-stock-assignment-match-preview`,
+`domain-assignment-acceptability-evaluator`) and at least 1 edge, 65 added lines in
+`.archgraph/architecture.yml`, all pure insertions with no foreign hunks.
+
+- Evidence entries: 3 observed (2 node, 1 edge).
+- Carrying `startLine`/`endLine`: **0**.
+- Carrying `symbol`: **3 of 3** — `route_preview_stock_task_assignment_match`,
+  `evaluate_assignment_checks`, `preview_stock_task_assignment_match`.
+
+So: span-free, symbol-anchored, unprompted, by an agent that was not told how to anchor and was
+not reminded the policy exists. That is the observation the brief has been waiting for since
+2026-08-23. One agent on one delta is not a trend, but it is the first data point that is not
+contaminated by either the schema's own prompting or a suppressing instruction.
+
+Two caveats worth keeping honest. First, all three anchored symbols are **newly created** in this
+phase, which is the easy case — nothing had drifted, so choosing a symbol over a span cost nothing
+and no re-anchor judgment was exercised. The brief's real question, whether an agent re-anchors on
+position drift, remains untested. Second, `origin: ai_inferred` with `confidence: 0.94`/`0.95` and
+`inferenceReason` on every entry: Codex volunteered the inference metadata too, unasked.
+
+**Re-anchor activity:** none. No `repair_anchors` call, no re-anchor op.
+
+**Review findings about location:** none yet — the 8A review had not run at the time of writing.
+
+Not mentioned to the session, not corrected, and nothing in the 8A prompts will change as a
+result. Noting for my own discipline that I *read* this delta closely before committing it, but
+only to confirm it carried no foreign hunks before an orchestrator-made checkpoint — not to judge
+its anchoring.
