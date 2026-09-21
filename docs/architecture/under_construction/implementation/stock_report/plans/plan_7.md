@@ -303,3 +303,66 @@ Note **N10**: C1(j)'s "accepted" is proven compositionally (`run_service` is fak
 test), which is how the cell itself routes it — PASS, no action.
 
 Handoff: `handoffs/reviewer/2026-09-21_batch_B2_review_1_handoff.md`.
+
+---
+
+**2026-09-21, batch B2 fix round 1 (Sonnet) — tests only, no production change.**
+
+**B1 closed.** Added the endpoint half of C4(a)-(h) in `test_receive_stock_demand_webhook.py`:
+eight tests, each two successive `receive_stock_demand_webhook` calls with the two raw JSON bodies
+the cell names, then a live `stock_report_items` row count for W (`_live_row_count` helper) — 1 for
+(a)-(e), 2 for (f)-(h). The eight parser tests in `test_stock_demand_request.py` are unchanged and
+kept, per the prompt. Armed with one shared identity-collapse mutation at
+`stock_demand_request.py`'s `DemandEntry` construction (def. site): `properties_signature=
+json.dumps(properties_raw)` instead of `compute_stock_criteria_signature(properties_raw)` (the same
+family C4(a)'s own named mutation describes). Result: **(a)-(e) reddened on their own row-count
+assertion** (`assert 2 == 1`), exactly the invariant these rows exist to prove. **(f)-(h)'s
+row-count assertion itself did not redden** (stayed correctly at 2 — this mutation only removes
+normalization, which cannot cause two already-distinguishable identities to collapse into one); all
+three test *functions* still failed, but at the `assert_stock_report_clean` call, because the
+mutated stored signature no longer matches a fresh recompute from `row.properties` — a real but
+incidental divergence caught by an unrelated consistency check, not by the identity invariant this
+round is proving. This is expected and not a gap: (f)-(h)'s own named mutations (lower keys / strip
+keys / normalize numbers) are a different family, already run against `criteria_normalization.py`
+and closed in review 1 §3 (`declared 29 = executed 29`, unchanged by this round). Reported here per
+the prompt's "if some do not redden, that is a finding" instruction, resolved as a non-finding: the
+mutation was correctly sited for (a)-(e) and correctly inert for (f)-(h)'s own claim.
+
+**S1 closed.** Two new tests in `test_receive_stock_demand_webhook.py`:
+`test_c2a_c2x_malformed_bodies_write_nothing_through_the_command` (discharges both C2(a) and C2(x)
+in one function, per the prompt's own framing of the correction) asserts `count_writes(...,
+WRITE_TABLES) == 0` around both a C2(a) body (invalid UTF-8) and a C2(x) body (entries 0 and 2
+malformed, entry 1 valid — message names entries 0 and 2, not 1, and nothing is written); and
+`test_c2y_extra_key_is_ignored_and_the_entry_is_applied` asserts `outcome == "applied"` and the
+created row's `quantity_requested`. `WRITE_TABLES` is restated locally in this file (the same four
+MC-9 tables `test_apply_stock_demand.py` defines) so the file stays self-contained.
+
+**S2 closed — deleted, not declared.** Deleted
+`test_raises_unauthorized_when_key_is_missing_or_wrong` from
+`test_location_tracker_webhook_verifier.py`: it traced to no criterion row, duplicated C1(d)/C1(e)
+at a narrower scope, and added no coverage beyond what the command-level integration tests already
+give — the file's own stated purpose ("the one thing the command-level rows do not directly pin")
+was never what this test served. **Declaring its sibling, per the prompt's "also":**
+`test_returns_the_configured_workspace_id_on_success` is routed as **candidate criterion CF-4** —
+it is the only test pinning `verify_location_tracker_webhook`'s return value, which C6(a) otherwise
+proves only indirectly (through the row and dispatched event carrying the configured workspace, not
+through the verifier's own output). For the coordinator to fold into a criterion row or refuse with
+a recorded reason.
+
+**Out of scope, untouched, as directed:** production code (verified — `git diff ff39a96..HEAD --
+app/beyo_manager/` is empty); the 80 passing rows; phase 6; the seven mutations review 1 closed;
+`criteria_normalization.py`; the master plan; plan 6's task cell (N9, the owner's to apply); the 21
+baseline failures; card 1's three carry-forward items (CF-1, CF-2, CF-3 — left exactly as review 1
+recorded them, for the owner).
+
+**Evidence.** L1 (whole file, no `-k`): `test_receive_stock_demand_webhook.py` 23 passed (was 13;
++8 B1, +2 S1); `test_location_tracker_webhook_verifier.py` 1 passed (was 2; −1 S2);
+`test_stock_demand_request.py` 37 passed, unchanged. L2 (batch scope, ten folders/files from the
+implement handoff §"L2 (batch end)"): **343 passed** = 334 + 10 additions − 1 deletion. L4 on tree
+`2542a58` + this round's dirty diff (committed as the fix-1 checkpoint): **21 failed / 3445 passed /
+2 skipped**; failing-ID set diffed both ways against the published 21-ID baseline —
+**identical, zero difference either direction**. Analytics drifter
+(`test_c3_real_concurrent_open_insert_translates_the_loser[model]`) not present in the failing set
+this run (passed).
+
+Handoff: `handoffs/implementer/2026-09-21_batch_B2_fix_1_handoff.md`.
