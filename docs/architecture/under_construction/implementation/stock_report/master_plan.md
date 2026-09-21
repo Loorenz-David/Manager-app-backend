@@ -291,6 +291,24 @@ its projection.
   tester handoff with a `BLOCKED-PRODUCTION` row returns to the implementer before any review is
   compiled. Phase rows (§4) are unchanged: `PENDING → IMPLEMENTED → VERIFIED`.
 
+- *Phase 8A (owner, 2026-09-21) — a second, narrower exception.* Phase 8A (match preview,
+  intention §14G) runs **outside** the batch machinery and outside the orchestrator's bandwidth:
+  the **owner** runs both its implementation and its review on **Codex (terra)**, by hand, so the
+  orchestrator can carry batch C2 in parallel. Flow: projection → implement → review, with no
+  tester session. **This knowingly sets aside the never-Sonnet reviewer rule for one phase.**
+  That rule was earned by measurement (a head-to-head where the weaker reviewer approved a phase
+  carrying an inert safety switch and a silent `DROP DATABASE`, and affirmed coverage that did
+  not exist **by trusting the implementer's ledger**). Two things bound the risk, and the review
+  prompt must be built on both: (a) the extraction half is independently guarded by plan 8's 67
+  armed rows — if that suite passes unchanged, the refactor is proven by evidence no one in this
+  loop authored; (b) the prompt is written for **review by execution, not by judgment** — every
+  claim the reviewer makes must be backed by a command it ran and whose output it pastes, and it
+  is explicitly forbidden to discharge a mutation cell by reading a ledger. Scope: phase 8A only;
+  it sets no precedent for batch C2 or D.
+- *Concurrency constraint while 8A and C2 overlap:* the test databases are fixed names
+  (`beyo_test_main_gw0…gw5`, §10), so **only one workstream runs a suite at a time**. A
+  concurrent L4 corrupts both results and looks like a real failure.
+
 **Phase 10 (C2).** Its concurrency evidence is exactly plan 10's three C5 rows — the three
 serialization orders MC-11/§14F F6 distinguish — each forced by lock acquisition (§9 rule 9) and
 each armed by its own cell's mutation (the post-lock re-read / the pre-lock decision). The tester

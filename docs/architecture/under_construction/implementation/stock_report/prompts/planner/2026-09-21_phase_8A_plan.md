@@ -82,15 +82,24 @@ element shape being identical to the 409's.
   the blank is deliberate** (master plan §3B's *Mutation cells* bullet, class 2). A cell naming a
   site that turns out not to exist costs a round — that happened this batch, on plan 8 C5(b).
 
-## A fix round is in flight — plan against the post-fix shape
+## The fix round has landed — plan against the current tree
 
-A fix round is editing `create_stock_task_assignments.py` **right now**. It will add two checks to
-`_phase3_reason`, between the existing `task is None` / `item is None` tests and the rest:
-soft-deleted Task → `task_not_found`, soft-deleted Item → `item_not_found` (intention MC-16's
-predicate table requires both). Plan 8 rows **C1(v)** and **C1(w)** cover them.
+Batch C1 is **APPROVED** (`798fc69`); phases 8 and 11 are VERIFIED. The tree is stable and
+`_phase3_reason` is in its final shape — read it directly rather than imagining it. It now
+refuses a soft-deleted Task and a soft-deleted Item as well as absent ones (plan 8 C1(v), C1(w)),
+and its parameters are unchanged: `locked_rows`, `locked_tasks`, `locked_items`, `primary_pairs`,
+`processed_pairs`, `active_item_ids`. It still performs **no I/O**, which is the property MC-21
+depends on.
 
-**Plan as though those two checks are already there** — they will be before this phase is
-implemented. The function's parameters do not change. Nothing else in your scope is affected.
+Suite baseline for anything you cite: **21 failed / 3547 passed / 1 skipped**, the 21 failure IDs
+being the published set in master plan §10.
+
+One caveat worth knowing before you write a concurrency row: plan 8 **C5(a)**'s two-session race
+fixture was measured this round **not to force its race** — the lock was removed and the test
+stayed green 9 runs out of 9, because one session's connection is warm and the other's opens
+lazily after the barrier. The owner accepted that as a known gap. **Do not copy that fixture
+pattern into this phase.** This phase is read-only and should need no two-session row at all; if
+you think it needs one, say why rather than reaching for the existing shape.
 
 ## Deliverable
 
