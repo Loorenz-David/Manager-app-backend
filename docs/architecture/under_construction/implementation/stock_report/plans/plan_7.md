@@ -149,4 +149,98 @@ the row says otherwise. "401" = raises `LocationTrackerWebhookAuthError` with `h
 
 ## 8. Review log
 
-(empty)
+**2026-09-21, batch B2 implement 1 (Sonnet).** Implemented
+`bm/services/infra/location_tracker/webhook_verifier.py`,
+`stock_demand_request.py`, `receive_stock_demand_webhook.py`,
+`bm/routers/api_v1/location_tracker_webhooks.py`, and the mount in
+`bm/routers/api_v1/__init__.py` (new `include_router` call; the existing
+`location_tracker.router` mount is untouched, H22). Tests: `test_stock_demand_request.py`
+(37, unit — the parser never reaches a database, C2(w)'s fold correction),
+`test_receive_stock_demand_webhook.py` (13, integration), `test_location_tracker_webhooks_router.py`
+(3, unit, `TestClient`), `test_location_tracker_webhook_verifier.py` (2, unit,
+supplementary — see below). All 55 green.
+
+**Measured dependency versions** (same stack as phase 6, re-confirmed, not
+re-derived): PostgreSQL 18.6, SQLAlchemy 2.0.40, asyncpg 0.30.0, Starlette 0.46.2,
+FastAPI 0.115.12, CPython 3.13.2. Starlette's header case-folding (C1(j)) and
+`json.loads`'s last-duplicate-key resolution (relied on by MC-3, not separately
+tested here) hold on this stack.
+
+**File organization judgment call.** Task 5 says "Integration rows call the
+**command**" for the auth/deadline/echo criteria (C1, C5, C6, C7) and names one unit
+router test (C5(c)). It does not equally pin C2/C3/C4 to a file, but those rows are
+pure-function claims about `parse_stock_demand_body` with no database dependency —
+the fold's own correction on C2(w) says exactly this ("C2 is a unit test of the
+parser and never reaches a database"). C3 (duplicates) and C4 (the MC-3 identity
+invariant) are decided entirely inside the parser too, so all three (C2, C3, C4)
+are unit tests in `test_stock_demand_request.py`; C1, C5, C6, C7 are integration
+tests in `test_receive_stock_demand_webhook.py` calling the command directly, and
+C5(c)/C1(j) are the router `TestClient` test. This keeps the DB-touching criteria
+in one file and the pure-function ones in another, matching the plan's own
+reasoning for C2 rather than inventing a new one.
+
+**`test_location_tracker_webhook_verifier.py`** is the plan's named file-list entry
+for the verifier; plan 7 task 5 routes the verifier's own criterion coverage (C1)
+through the command instead. This file adds the one thing the command-level rows
+do not directly pin — the exact **return value** on success — and is declared here
+rather than left as an undeclared orphan (charter rule 16).
+
+**Fixture correction found during mutation testing (self-reported).** The first
+draft of the C1 auth tests used a nonexistent placeholder workspace id
+(`"ws_whatever"`) for rows that are supposed to fail *before* reaching
+`apply_stock_demand`. Under the C1(a)/C1(b) mutations, verification wrongly
+succeeded and the call fell through into `apply_stock_demand`, whose own step-2
+workspace check then raised the **same exception type** for an unrelated reason —
+a false green that would have hidden a real defect. Fixed by seeding a real
+workspace for every C1 row except C1(c)/C1(g), which test the workspace setting
+itself. Both C1(a) and C1(b) were re-run against the corrected fixture and
+confirmed red (see the ledger).
+
+**Declined mutations (self-reported, not a gate failure).** C4(b)-(h) name
+properties of `normalize_stock_criteria`/`compute_stock_criteria_signature`
+(`bm/domain/stock_report/criteria_normalization.py`), which is phase 1's shipped,
+APPROVED code — outside this batch's perimeter (§8 "Do not touch": "batch A's and
+B1's shipped code except the two perimeter additions"). That file's own test suite
+(`test_criteria_normalization.py`, phase 1) already asserts **exact golden-vector
+output** for the sort/strip/dedupe/string-wrap/key-case/number-normalization
+behaviours C4(b)-(h) name — an exact-output assertion structurally caches every one
+of these mutations (a wrong transform produces a different exact value), so
+re-running them against out-of-perimeter code would be duplicated investigation
+into an already-approved phase, not new evidence. Only C4(a) is run here, because
+its site is genuinely mine: `stock_demand_request.py`'s `DemandEntry` construction
+(the wiring from raw bytes to the shared function), not the function itself.
+
+**Mutation ledger — derivation (plan cell → table row).** 29 named-mutation cells
+counted from §6 (excludes `—` cells and C7(a), whose cell explicitly says the
+mutation is carried by phase 6 C7(c)). Of those, 22 are executed here; 7 (C4(b)-(h))
+are declined with the justification above, cited to phase 1's own coverage rather
+than silently skipped. `declared 29 = executed 22 + declined 7`, both counted
+explicitly so the arithmetic is auditable.
+
+| Row | Site | Command (file run) | Result |
+|---|---|---|---|
+| C1(a) | `webhook_verifier.py`, key-blank check (def.) | `test_receive_stock_demand_webhook.py::test_c1a_...` | red: `AttributeError` (falls through to `None.encode()`) |
+| C1(b) | same, `strip()` on the key check (def.) | `test_receive_stock_demand_webhook.py::test_c1b_...` | red: `DID NOT RAISE` (blank key matches a blank header) |
+| C1(e) | same, comparison removed entirely (def.) | `test_receive_stock_demand_webhook.py::test_c1e_...` | red: `DID NOT RAISE` |
+| C1(f) | same, `compare_digest(str, str)` (def.) | `test_receive_stock_demand_webhook.py::test_c1f_...` | red: `TypeError: comparing strings with non-ASCII characters is not supported` |
+| C1(h) | same, cause included in two raise sites (def.) | `test_receive_stock_demand_webhook.py::test_c1h_...` | red: messages differ |
+| C1(i) | `receive_stock_demand_webhook.py`, statement order (call site) | `test_receive_stock_demand_webhook.py::test_c1i_...` | red: `DID NOT RAISE` (parse succeeds where verify should have failed first) |
+| C2(d) | `stock_demand_request.py`, top-level length check (def.) | `test_stock_demand_request.py::test_c2d_empty_array` | red: `DID NOT RAISE` |
+| C2(l) | same, `properties` default (def.) | `test_stock_demand_request.py::test_c2_properties_defects[C2(l)-entry0]` | red: `DID NOT RAISE` |
+| C2(m) | same, `properties: null` handling (def.) | `test_stock_demand_request.py::test_c2_properties_defects[C2(m)-entry1]` | red: `DID NOT RAISE` (also caught C2(l)'s case as a side effect) |
+| C2(s) / (t) / (u) | same, quantity type check (def.) | `test_stock_demand_request.py::test_c2_quantity_requested_defects` | red on all three with a combined `int(v)` coercion probe; C2(t) and C2(u) each re-run individually at their own narrower mutation (float-integral, `isinstance`) for a precise 1:1 citation — all red |
+| C2(w) | same, upper bound (def.) | `test_stock_demand_request.py::test_c2w_...` | red: `DID NOT RAISE` |
+| C2(x) | same, defect collection loop (def.) | `test_stock_demand_request.py::test_c2x_...` | red: message names only `entry 0` |
+| C2(y) | same, entry key set (def.) | `test_stock_demand_request.py::test_c2y_...` | red: raises on an accepted extra key |
+| C3(b) | same, duplicate-identity tuple (def.) | `test_stock_demand_request.py::test_c3b_...` | red: `DID NOT RAISE` |
+| C3(c) | same, duplicate-identity tuple (def.) | `test_stock_demand_request.py::test_c3c_...` | red: raises on two different categories |
+| C3(d) | same, duplicate-identity tuple (def.) | `test_stock_demand_request.py::test_c3d_...` | red: `DID NOT RAISE` |
+| C4(a) | same, `DemandEntry` construction (def.) | `test_stock_demand_request.py::test_c4a_...` | red: key order changes the signature |
+| C4(b)-(h) | `criteria_normalization.py` (phase 1, out of perimeter) | — | declined; cited to phase 1's golden-vector suite (see above) |
+| C5(a) | `receive_stock_demand_webhook.py`, results construction (def.) | `test_receive_stock_demand_webhook.py::test_c5a_...` | red: echoed properties are normalized, not as-received |
+| C5(b) | same (def.) | `test_receive_stock_demand_webhook.py::test_c5b_...` | red: a fourth key (`index`) appears |
+| C6(a) | same, `apply_stock_demand` call site | `test_receive_stock_demand_webhook.py::test_c6a_...` | red: 401 before any write (`ctx.workspace_id` is `""`) |
+| C7(a) | — | carried by phase 6 C7(c) (plan cell) | reused |
+
+All mutations reverted; `git status --porcelain` on the production files matches
+their post-implementation content (verified in the batch handoff).

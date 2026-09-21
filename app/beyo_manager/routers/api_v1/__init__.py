@@ -22,6 +22,7 @@ from beyo_manager.routers.api_v1 import (
     item_categories,
     item_upholsteries,
     location_tracker,
+    location_tracker_webhooks,
     notifications,
     pause_reasons,
     reset,
@@ -138,6 +139,11 @@ def register_v1_routers(app: FastAPI) -> None:
         location_tracker.router,
         prefix="/api/v1/location-tracker",
         tags=["location-tracker"],
+    )
+    app.include_router(
+        location_tracker_webhooks.router,
+        prefix="/api/v1/location-tracker",
+        tags=["location-tracker-webhooks"],
     )
     app.include_router(
         app_update_presentations.router,
