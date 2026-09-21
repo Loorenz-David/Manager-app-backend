@@ -888,8 +888,14 @@ Charter rules 1–17 apply in full. Project-specific rules, each binding on ever
 7. **Statement counting is reserved for the ratified bounds** (MC-9 zero-write replay, D6 counts,
    MC-20 read-only, the image batch bound, and — **fifth use, owner card A, 2026-09-21** — a
    *refused-before-the-write* clause where a database constraint would otherwise reproduce the
-   refusal's whole observable, as in plan 8 C1(j)/C1(k)) and always through `record_statements`.
-   It is never used to assert query text or internal structure.
+   refusal's whole observable, as in plan 8 C1(j)/C1(k); and — **sixth use, owner card 8,
+   2026-09-21** — a *one-statement-per-lock-class* clause, where a batch command's promise is that
+   each MC-1 lock class is acquired in exactly one sorted statement **whatever the number of
+   entities in the request**, and the alternative is a reviewer inspecting statements by eye
+   (plan 13A C5(b), §7 Q2)) and always through `record_statements`.
+   It is never used to assert query text or internal structure. **That closing sentence is not
+   softened by the sixth use**: it counts *statements per lock class*, which is an outcome of the
+   batching promise, not the text or internal structure of any query.
 8. **Named mutations name file and definition-vs-call-site; the row is run whole-file, never
    `-k`;** a mutation's observed-red set is recorded across the suite when the symbol is
    asserted in more than one file (earned three pipelines running).
