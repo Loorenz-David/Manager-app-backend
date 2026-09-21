@@ -232,3 +232,27 @@ declared mutations (C1(j)/C1(k) share row 6, since both mutate `_uncredit` to co
 same terminal-`DELETE` "nothing" branch of `apply_goal_effect`). `declared == executed == 13`
 (14 runs, rows 12/13 being the same mutation re-sited once). Confirms the reviewer's own recount;
 S4 named no phase-5 cell for re-execution, so nothing here was re-run.
+
+**Reviewer, 2026-09-21 (batch_B1-rereview-1, tree `60d6a12`, claude-opus-5, plan-reviewer).**
+**APPROVED** — phase 5: 22/22 PASS, unchanged from review 1. Handoff:
+`SR/handoffs/reviewer/2026-09-21_batch_B1_rereview_1_handoff.md`.
+
+- **Card 2 CONFIRMED; N1 discharged.** `test_c2_c_second_upward_drift_survives_a_subtracting_move`
+  implements review 1 §4.2's fixture exactly and is the first scenario in the project to reach
+  `_uncredit`'s guarded-subtraction **1-row** branch. Independently armed with my own mutant text at
+  the cell's **literal** site (the one probe D measured inert): **1 failed / 22 passed**, exactly the
+  new test, with `test_c2_c_upward_drift_is_not_self_healed_by_a_move` staying green. C2(c)'s
+  existing clauses are undisturbed — the new test is additive and shares no fixture.
+- **N15.** The new test filters the divergence list to `kind == "goal_total"` — the shape S1 just
+  removed from plan 4 C5(b). Measured: asserting the list **whole** also passes (23 passed). When the
+  candidate criterion is folded, state "exactly one divergence" and drop the filter; it is free.
+- **Phase-5 ledger CONFIRMED.** 22 rows against 13 distinct declared texts over 14 runs; the two
+  sharings (C1(j)/C1(k) → row 6, C1(l)/C1(q) → row 7) check out against the table's own observed-red
+  sets. `declared == executed == 13`, becoming 14/14 once card 2's candidate criterion is folded.
+- **N13 — plan 5's tests model no caller locks.** 26 call sites in `test_goal_credit.py` (25
+  `move_assignment`, 1 `remove_assignment`), zero locks; S2's helper was deliberately not extended
+  here and the divergence is declared (charter rule 14 satisfied). Not a blocker: the fixture is
+  executable documentation, not a guard — violating the modelled contract inside plan 4's copy left
+  all 63 tests green. Route to a fold or record a refusal; the real obligation (prove the caller
+  holds the task lock, and take **no** lock on `R`, per MC-5) belongs to phase 8, where the first
+  production caller is written.

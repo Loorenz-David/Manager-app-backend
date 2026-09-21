@@ -408,3 +408,51 @@ prompt's explicit instruction that a criterion row is the owner's/coordinator's 
 total **86**. N9: plan 5's Review log names "C1(r)" among its declared mirrors; plan 5's table ends
 at C1(q) — there is no C1(r). Not edited in place (the entry is dated and attributed to the
 implement round); recorded here instead, per the "never rewrite a published record" spirit.
+
+**Reviewer, 2026-09-21 (batch_B1-rereview-1, tree `60d6a12`, claude-opus-5, plan-reviewer).**
+**APPROVED** — phase 4: 62/62 PASS (was 61/1). Handoff:
+`SR/handoffs/reviewer/2026-09-21_batch_B1_rereview_1_handoff.md`. Perimeter verified: `60d6a12`
+touches exactly its five declared files; `git diff 1351b5f..60d6a12 -- app/beyo_manager/` empty;
+the three production checksums in review 1 §9 still match.
+
+- **S1 CONFIRMED.** C5(b) now asserts all four outcome clauses incl. the `repair_stock_report` leg,
+  and the divergence list unfiltered. Row armed — see the C5(b) run below.
+- **S2 PARTIAL.** `_hold_caller_locks` present at **26/26** `move_assignment` and **4/4**
+  `remove_assignment` call sites, order task → `stock_report_items` → `stock_task_assignment`
+  (= §9 rule 4; matches `repair_stock_report.py:173-194`). Measured: with the modelled contract
+  violated inside the fixture (task lock dropped, assignment locked first) **63 passed** — a
+  single-transaction fixture can observe no lock-order defect. It is executable documentation of
+  the caller contract, not a guard, and must never be cited as proof of H6/N-R1's premise; there is
+  today no production caller of either command (grep over `beyo_manager/`), so the premise becomes
+  provable only in **phase 8**. Note N14: the fixture models the lock *order*, not the caller's lock
+  *call* — substituting `_locks.py`'s real helpers (`populate_existing=True`) keeps all 63 green but
+  makes **C4(c)'s mutation inert** (59 passed; 1 failed/58 under the shipped column-only fixture).
+  Phase 8 must not write a C4(c)-shaped staleness row under a caller that locks that way.
+- **S3 CONFIRMED** on all three checks: both fields set (the row still ends clean, so
+  `priority_order_nullness` was honoured); `_assert_row_event` compares `extra` whole, so
+  `priority="high"` is a real assertion; mutation `priority.value → priority` gives **1 failed / 58
+  passed**, exactly `test_c1_s`. Observable because `StockReportPriorityEnum` is a plain `enum.Enum`,
+  not a `str` mixin.
+- **S4 CONFIRMED and the phase-4 ledger is now CLOSED.** The criterion → table-row map was checked
+  row by row against the implement-1 table and re-derived independently from this plan's own
+  mutation cells; both agree. C3 collapse confirmed (rows 18–21 guards + row 22 combined;
+  4+2+11+1 = 18 single-guarded + 4 double-guarded = 22). Spot-checks, own mutant texts, on the two
+  cells nobody had ever run: **C5(a)** → 1 failed / 58, exactly `test_c5_a`, via
+  `CheckViolationError`; **C5(b)** → 1 failed / 58, exactly `test_c5_b`. Both match the round exactly.
+  C1(u)(iii) and C6(c) consumed by citation (tree-matched) rather than reproduced.
+- **N12 (C5(c)) CLOSED by the reviewer.** Its declared-unrun mutation — soft-delete deferred past the
+  counter statement (`move_assignment`, definition site) — gives **1 failed / 85 passed**, exactly
+  `test_c5_c_delete_write_order_self_heals_with_one_repair_record`. Add it to the ledger.
+- **N17 — C7(c)'s mutation cell.** "Stamp `updated_*` on delete" is an **additive** edit, not row 8's
+  replace-form; the replace-form trips the row's first assertion so the third sub-check
+  (`updated_by_id` still X) never executes (charter rule 12). The additive mutant, run here for the
+  first time: **1 failed / 62 passed**, exactly `test_c7_c`, biting on the third assertion. Record it
+  as C7(c)'s own ledger row. N16: the map's "Declared" column sums to 35 *cells* against 34 distinct
+  *texts* — the difference is C1(u)(i)'s shared text; relabel the column.
+- **Widening (lock fixture in every scenario): no row perturbed.** C4(c) still armed (1 failed/58);
+  C7(d) still armed under ledger row 30's mutation (1 failed/58); C6(c) armed per the round's
+  tree-matched run; C2(a)–(f) structurally clear (the helper runs before `record_statements` opens,
+  and reads are not counted); C1(q)/(r)/(u) structurally clear.
+- **Evidence discipline.** No L4 (the clean post-03:00 stamp is the orchestrator's); no L2/L3; no
+  `-k`; every cited round/review result tree-matched and consumed rather than re-run. Twelve probes,
+  all applied-and-reverted, all files checksum-confirmed byte-identical (handoff §7).
