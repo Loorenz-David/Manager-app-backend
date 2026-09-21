@@ -314,6 +314,17 @@ its projection.
   batch C2 on slot `c2`. Omitting the variable silently shares the default slot and makes both
   results worthless while looking like genuine failures. The first run in a fresh slot builds its
   template, so it is slower once.
+- *A ruling that adds an assertion must reach the tester, or it is paperwork* (earned in batch
+  C1, 2026-09-21). In C1 the orchestrator folded owner cards into the plans **after** the tester
+  had already handed over. The clauses were ratified and correct; nothing implemented them, and
+  the reviewer raised them as findings **S2** and **S3**. That was nobody's defect — the
+  implementer and tester both finished the plans they were given — it is a hole the tester role
+  opened by adding a stage between authoring and proving. **The rule:** once a batch reaches
+  `TEST_PROMPT_READY`, any fold that adds or strengthens an assertion is either (a) carried to
+  the tester explicitly, as a named addendum in the test prompt or a `SendMessage` to the running
+  session, or (b) deferred to the next round and recorded as deferred. Silently editing a plan
+  cell behind a running tester produces a ratified clause with no evidence, which the reviewer
+  will find and charge to the round. The same applies to the reviewer once a review is running.
 
 **Phase 10 (C2).** Its concurrency evidence is exactly plan 10's three C5 rows — the three
 serialization orders MC-11/§14F F6 distinguish — each forced by lock acquisition (§9 rule 9) and
@@ -344,7 +355,7 @@ Only the actor named for a transition writes its row. **Since §3A (2026-09-19) 
 | 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | PENDING | 2026-09-19 | planner | rows 43, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows; owner card 1 fold 2026-09-21: +1 row, C1(e)) |
 | 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | PENDING | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
 | 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | **VERIFIED** | 2026-09-21 | orchestrator | rows 26, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row; **batch C1 fold 2026-09-21: −1 row, C4(h) WITHDRAWN as unbuildable — owner card F**; 8 mutation + 4 fixture cells folded; cards B, E ruled); **VERIFIED 2026-09-21, batch C1 APPROVED** |
-| 8A | Assignment match preview: the shared acceptability evaluation (MC-21) extracted from phase 8, plus the read-only preview endpoint | **PLANNED** | 2026-09-21 | orchestrator | rows 20, criteria 6; complex: no (read-only; the risk is the refactor, guarded by phase 8's 67 armed rows). Intention §14G, round 10, additive. Runs **outside the batch machinery**: owner-run on Codex terra, projection → implement → review, no tester (§3B). Three owner cards ruled 2026-09-21 (C3(e), C3(f) authored; C5(a) amended); C6(f) withdrawn to a §7 note |
+| 8A | Assignment match preview: the shared acceptability evaluation (MC-21) extracted from phase 8, plus the read-only preview endpoint | **IMPLEMENTED** | 2026-09-21 | orchestrator | Checkpoint `9105f71`, **not approved** — review pending on Codex terra. Implementer-reported: phase 8's create suite `42 passed` before **and** after the extraction (the refactor's whole proof); L4 `21 failed / 3575 passed / 1 skipped`, = baseline 3547 + 28 new cases. The checkpoint commit was made by the orchestrator, not the implementer, which left the tree dirty and would have blocked both the review and batch C2. rows 20, criteria 6; complex: no (read-only; the risk is the refactor, guarded by phase 8's 67 armed rows). Intention §14G, round 10, additive. Runs **outside the batch machinery**: owner-run on Codex terra, projection → implement → review, no tester (§3B). Three owner cards ruled 2026-09-21 (C3(e), C3(f) authored; C5(a) amended); C6(f) withdrawn to a §7 note |
 | 12 | Priority, dense ordering, history records for user actions, the list endpoint | PENDING | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
 | 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | PENDING | 2026-09-19 | planner | rows 19, criteria 6; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten; **batch C1 tester card 2, 2026-09-21: +1 row and +1 criterion, C6(a) — plan 8 C4(l)'s cross-shape clause moved here, the only phase where both shapes exist**) |
 | 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | PENDING | 2026-09-19 | planner | rows 37, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable (owner card 1 fold 2026-09-21: +1 row, C5(g)) |

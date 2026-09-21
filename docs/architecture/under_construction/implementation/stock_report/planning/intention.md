@@ -2079,7 +2079,20 @@ Response:
 | `refusal_reason` | **what `create` would refuse with** — the first failure in MC-13's order, or null |
 | `property_failures` | `[{key, reason}]`, the **same element shape** as the 409's `details[].failures[]`, reasons from `StockCriteriaMismatchReasonEnum` |
 | `matched_item_client_id` | the live item the identifier resolved to, or null |
+| `values_source` | `"stored"` or `"supplied"` — **which values were actually evaluated**; see the resolution rule below |
 | `checks` | `[{check, result, advisory}]` in MC-13 order; `result` ∈ `pass` / `fail` / `pass_by_construction` / `not_evaluated` |
+
+**The resolution rule — stored values win** (owner, 2026-09-21, round 10 card 2). When
+`article_number` or `sku` resolves to a live item, the evaluation uses **that item's stored
+category, properties and quantity**, and the body's `item_category_id`, `properties` and
+`quantity` are ignored. `values_source` reads `"stored"`. When nothing resolves, the body's values
+are used and it reads `"supplied"`.
+
+This is not a convenience. `create` will act on the stored item, so a preview that honoured the
+body's values could answer `true` where `create` answers `false` — **the exact divergence MC-21
+forbids**. `values_source` exists so the caller can see which of the two happened rather than
+having to infer it from `matched_item_client_id`, and so the divergence is observable in a test
+rather than only in production.
 
 **The construction rule.** With `task_id` null the caller is creating the task in the same act, so
 three checks **pass by construction** and are reported `pass_by_construction`, never `pass`: a new

@@ -122,8 +122,25 @@ rows assume.
 
 ## Environment
 
-**Baseline: 21 failed / 3547 passed / 1 skipped** at `798fc69`. The **invariant is the 21-ID
-failure set**, not the pass count — diff your failure IDs against the published set in
+**Baseline: 21 failed / 3575 passed / 1 skipped** at `9105f71`, which is your starting HEAD.
+
+> **Read this before you reconcile anything.** The batch C1 gate was `798fc69` at
+> **3547 passed**. Since then one commit landed that is **not yours and not under review by
+> you**: `9105f71`, phase 8A's checkpoint (the match-preview endpoint and the MC-21 extraction),
+> implemented by a separate Codex session. It adds **28 passing test cases** — 22 preview
+> integration, 1 evaluator unit, 5 router. `3547 + 28 = 3575`. Reconcile your arithmetic against
+> **3575**, not 3547.
+>
+> Phase 8A is **implemented but NOT approved** — its review is running in parallel right now and
+> may change those files. Treat it exactly as you treat approved code: **you call it, you do not
+> change it.** Its perimeter is disjoint from yours. If you believe a phase 8A file must change,
+> **stop and report** — do not edit it, because a reviewer is reading it as you work.
+>
+> If the 8A review lands fixes while you are running, your pass count may move again. That is
+> expected and is not your defect: reconcile what you can, and **state the arithmetic you used**
+> so the tester and reviewer can follow it.
+
+The **invariant is the 21-ID failure set**, not the pass count — diff your failure IDs against the published set in
 `docs/architecture/archives/test_isolation_and_xdist/archive/plan_3/2026-08-22_phase3_fix_r5_handoff.md` §3
 in **both directions** and print both. Reconcile the pass count arithmetic exactly.
 
