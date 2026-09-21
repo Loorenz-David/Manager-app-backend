@@ -680,6 +680,26 @@ test over the scope above:
   (e) that this list already named, including one the collector's own docstring claimed to
   handle. Nothing in the codebase uses those forms today, so nothing is broken; what was broken
   is the guard's ability to catch the next person who does.
+- **Four further forms, on the owner's ruling of 2026-09-21 (batch C2 re-review card 1 / R-1).**
+  The re-reviewer planted eleven shapes and four still passed. The collector must also see:
+  **(c-bis)** the write made through the **table object** rather than the mapper —
+  `Task.__table__.update()…values(state=…)` and `update(Task.__table__)`; **(a-bis)** an
+  attribute target bound by a **`for` target** (`for task.state in …`) or a **`with … as`
+  target**; **(b-bis)** `setattr` reached through `builtins` (`builtins.setattr(task, "state", …)`);
+  **(d-bis)** `Task(**{"state": …})` — the keyword supplied by **dict unpacking** rather than
+  written literally. These are the same classes (a)–(d) the list already names, in four more
+  spellings, so the by-construct clause above already governs them; they are enumerated here only
+  because they were measured to slip past. **Zero live instances** in `beyo_manager/` or
+  `scripts/` at the time of the ruling.
+- **Two exclusions, stated so they are ruled rather than assumed** (orchestrator note on the same
+  ruling). The collector's scope is `beyo_manager/` and `scripts/`, excluding any path containing
+  `tests` or `migrations`. **Test files are therefore never scanned** — the three
+  `Task.__table__.update()` sites in this project's own tests are outside the guard's reach and
+  extending the class list does not bring them in; they are evidence that the idiom is a team
+  habit, which is the reason to close the gap, not evidence of a coverage failure.
+  **Migrations are likewise never scanned**, so a migration writing task state is invisible
+  whatever form it uses. That exclusion is **not yet ruled** and is carried as an open owner
+  question, not a decision.
 - **The guard must also assert a negative** (owner, 2026-09-21, batch C2 review card 2): **no
   call to `sync_task_stock_assignments` appears inside `maybe_advance_task_to_working`,
   `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` or the shared step-transition

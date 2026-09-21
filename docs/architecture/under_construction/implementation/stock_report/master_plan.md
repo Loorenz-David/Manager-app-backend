@@ -396,10 +396,10 @@ DERIVED TOTAL: 651 criterion rows in 107 criteria across 16 plans
   table lines 589 + 62 shorthand expansion = 651 rows
 ```
 
-**645 → 647 → 650 → 651 on 2026-09-21**, criteria 106 → 107. Two rows from the batch C2 **tester's** cards — plan 9 **C8(d)** and plan 10 **C8(a)** (a new criterion, which is why criteria moved) — then three from the batch C2 **review's** cards: plan 10 **C1(m)** (card 1, the two-assignment task), **C4(i)** (card 2, the guard's negative assertion) and **C4(j)** (card 4, the five constructs the collector misses). Plans now 9 → **45/8** and 10 → **39/8**. **All five are OWED by the C2 fix round**, none satisfied on the gate tree. The 651st is plan 8A **C3(g)**, authored on the phase 8A round-2 reopening (8A → **21/6**) and satisfied at `efaf9f6`. Re-run `count_criteria.py`; never increment this by hand.
+**645 → 647 → 650 → 651 → 652 on 2026-09-21**, criteria 106 → 107. Two rows from the batch C2 **tester's** cards — plan 9 **C8(d)** and plan 10 **C8(a)** (a new criterion, which is why criteria moved) — then three from the batch C2 **review's** cards: plan 10 **C1(m)** (card 1, the two-assignment task), **C4(i)** (card 2, the guard's negative assertion) and **C4(j)** (card 4, the five constructs the collector misses). Plans now 9 → **45/8** and 10 → **39/8**. **All five are OWED by the C2 fix round**, none satisfied on the gate tree. The 651st is plan 8A **C3(g)**, authored on the phase 8A round-2 reopening (8A → **21/6**) and satisfied at `efaf9f6`. The **652nd** is plan 10 **C4(k)** (10 → **40/8**), authored on the owner's ruling of batch C2 re-review card 1 (R-1) — the four constructs that still slip past the write-site guard after C4(j). **OWED**, dispatched to Codex. Re-run `count_criteria.py`; never increment this by hand.
 
 Per plan (rows/criteria): 1 → 53/7 · 2 → 75/7 · 3 → 42/8 · 4 → 63/8 · 5 → 23/3 · 6 → 36/8 ·
-7 → 52/7 · 8 → 70/8 · 8A → 21/6 · 9 → 45/8 · 10 → 39/8 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 ·
+7 → 52/7 · 8 → 70/8 · 8A → 21/6 · 9 → 45/8 · 10 → 40/8 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 ·
 13A → 37/7 · 14 → 5/2.
 
 *Rows vs table lines.* Seven plans use a shorthand line standing for several rows —
