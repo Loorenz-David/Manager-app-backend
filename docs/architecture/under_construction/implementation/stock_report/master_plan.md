@@ -92,6 +92,9 @@ the rule-17 phases (2, 6, 7, 9, 13A).
 
 ## 3A. Batch execution model (owner, 2026-09-19) — governs execution; wins over §3, §7.2's projection column and §7.3
 
+> **Amended from batch C on by §3B** (owner, 2026-09-21): a tester session sits between Codex and
+> the reviewer, and takes over the named mutations and the coverage map. Where they differ, §3B wins.
+
 **Principle.** Phases remain the units of specification and verification; **batches are the units
 of implementation and review.** The fifteen phase plans are unchanged and authoritative: every
 criterion row, trace cell, named mutation, dependency, contract and test obligation stands. Batching
@@ -200,6 +203,63 @@ gate commit and moves the batch's spent prompts and consumed handoffs to `archiv
 owner may compact then. Prompts live in `prompts/implementer/` and `prompts/reviewer/`, handoffs in
 `handoffs/implementer/` and `handoffs/reviewer/`, named `…batch_<X>_<role>_<n>.md`.
 
+## 3B. Tester role (owner, 2026-09-21) — amends §3A from batch C on
+
+**Declared: this project runs the charter's tester role** (charter "The tester role"; procedure in
+`/Users/davidloorenz/agent-skills/verification-engineer.md`, skill `verification-engineer`). This
+section records only what is specific to this project; the role's procedure, ledger format, stop
+conditions and anti-over-testing rules live in the skill and are not restated here. Every
+criterion row, outcome, fixture cell, trace cell, dependency and contract in the fifteen plans
+stands unchanged. Batches A, B1 and B2 are closed under the old split and are not re-opened.
+
+**Why.** Reviews of A–B2: production code right in round 1 almost everywhere; 26 of batch A's 30
+first-review FAILs, all four of B1's findings and all of B2's were tests weaker than their row,
+mutations that could not fail, or ledgers that did not add up. Each cost a full review → fix →
+re-review cycle. **Implement once. Prove only what must be proved. Review independently.**
+
+**Batch shape.** Per batch: `projection + lesson fold → implementer → tester → reviewer →
+APPROVED, or a fix routed by cause → light re-review`. Batch C is split by the owner into
+**C1 = 8 → 11** and **C2 = 9 → 10**, each with its own implement → test → review → approval cycle
+(§7.2 holds: 11←8 inside C1; 9←7, 8 and 10←9 put C2 after C1 APPROVED; plan 11 already names its
+`resolved_early` fixture path when 9 does not exist yet — its §7). Batch D's split is decided at
+its projection.
+
+**What changes against §3A, and nothing else:**
+- *Implementation inside a batch:* the implementer no longer runs each phase's named mutations nor
+  writes the row-level coverage map (executor "When the project runs a tester"). It runs each
+  phase's L1 tests as it goes, the batch L2 and **one L4** against §10's baseline, and hands over
+  the tester contract. §3A's dependency reading becomes: a same-batch predecessor is IMPLEMENTED
+  earlier in the session **with its L1 tests green** (its mutations are the tester's).
+- *Handoffs:* Codex's batch handoff drops the named-mutation ledger and gains the tester contract.
+  The **tester's handoff** (`handoffs/tester/`, prompts in `prompts/tester/`) carries the
+  three-table verification ledger per phase with `executed == declared` and its own L4 on the tree
+  it hands over. The reviewer consumes the tester's stamp.
+- *Mutation cells:* a cell that names a mutation is binding (closed set). For a `—` cell the
+  tester applies its doctrine — one load-bearing mutation, a shared one already observed on the
+  row's own assertion, or a recorded equivalent — and **proposes** the cell's backfill; the
+  orchestrator folds it. The tester edits no plan cell. §9 rules 8 and 9 bind the tester as written.
+- *Review:* per §3A, against the tester's ledger; every finding carries `route: production |
+  verification | plan`. *Fix:* one prompt **per routed role**, not one Codex prompt — production
+  first when both exist, and the tester then re-arms only the rows whose test or mutation site the
+  fix touched. §3A's owner stop on a second CHANGES_REQUESTED and its light re-review scope are
+  unchanged.
+- *Who runs it:* a Claude session with `verification-engineer`, **never Sonnet, launched by the
+  owner** with the orchestrator's prompt (§3A's manual bridge; the orchestrator still launches
+  nothing). It shares no context with the implementer.
+- *States (§4A):* `… IMPLEMENTED → TEST_PROMPT_READY → TESTING → TESTED → REVIEW_PROMPT_READY →
+  REVIEWING → (CHANGES_REQUESTED → FIX_PROMPT_READY[role] → … → TESTED → …)* → APPROVED`. A
+  tester handoff with a `BLOCKED-PRODUCTION` row returns to the implementer before any review is
+  compiled. Phase rows (§4) are unchanged: `PENDING → IMPLEMENTED → VERIFIED`.
+
+**Phase 10 (C2).** Its concurrency evidence is exactly plan 10's three C5 rows — the three
+serialization orders MC-11/§14F F6 distinguish — each forced by lock acquisition (§9 rule 9) and
+each armed by its own cell's mutation (the post-lock re-read / the pre-lock decision). The tester
+adds no interleaving, no repetition loop and no thread-count variant; its work on C5 is to show
+that each test **forces** its order, i.e. that the cell's mutation produces the wrong outcome
+deterministically (the B1 lesson: a lock test inside one transaction ran and could not fail). Rows
+the plans already declare unforceable (plan 9 C8(b), plan 11 C7(a)–(b)) stay `UNFORCEABLE` with the
+reviewer's structural check — the tester does not try to make them bite.
+
 ## 4. Progress tracker
 
 One row per phase, newest state first; earlier states are appended below as *superseded* rows.
@@ -278,7 +338,9 @@ rows are cited as `§14E En` / `§14F Fn` beside the contract they amend.
 | B2 | 6, 7 | IMPLEMENTATION_PROMPT_READY | 2026-09-21 | orchestrator | *superseded.* | prompt `prompts/implementer/2026-09-21_batch_B2_implement_1.md`, Sonnet. Fold applied to plans 6-7 at `a2f4fc2` — 21 mutation/fixture cells. Blockers B3 (statement listener cannot see parameters → `record_statement_calls` added, perimeter extended), B4 (`StockDemandOutcomeEnum` never shipped → `enums.py` added to the perimeter for that name only), B5 (every row commits and purges), B6 (self-defeating monkeypatch) and outcome defect O1 (bind two distinct parameters, which satisfies the cell verbatim) are all resolved in the prompt |
 | B2 | 6, 7 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | *superseded.* | waits for B1 APPROVED. Fold for plans 6-7 (16 cells) applied at B2 prompt time, not now. Carries blockers B3 (statement listener cannot see parameters), B4 (`StockDemandOutcomeEnum` never shipped), B5 (every row must commit and purge), B6 (plan 7 C7(a)'s monkeypatch is self-defeating), and outcome defect O1 (plan 6 C7(a) says "two parameters"; one shared bind compiles to one) |
 | B | 4, 5, 6, 7 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | *superseded by the B1/B2 split.* |
-| C | 8, 9, 10, 11 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for B APPROVED |
+| C1 | 8, 11 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | **Batch C split into C1 (8 → 11) and C2 (9 → 10) by the owner, 2026-09-21, and run under §3B** (implementer → tester → reviewer). A, B1, B2 APPROVED, so C1 is unblocked; next act is the batch C projection + lesson fold (§9A) |
+| C2 | 9, 10 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | waits for C1 APPROVED (9←8). Phase 10's concurrency evidence is bounded by §3B |
+| C | 8, 9, 10, 11 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | *superseded by the C1/C2 split.* |
 | D | 12, 13, 13A, 14 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for C APPROVED; projection checks plan 13A §7 (the six §14E questions) |
 
 ## 5. Contract resolution
