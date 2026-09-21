@@ -323,3 +323,60 @@ Handoff: `handoffs/reviewer/2026-09-21_batch_C2_review_1_handoff.md`.
   plan-7 precedent hold, so not a finding this round — flag for a later retirement pass.
 - **N-5 (production):** `resolve_processed_group` has no `from_state == target` short-circuit and no
   `any(delta != 0)` guard on its row event (tester CC-2, confirmed at `:332`); fold into C8(d)'s fix.
+
+**Implementer, 2026-09-21 (batch C2 fix round 1, Sonnet).** **C8(d) built per the
+review's own restated fixture (F-4/owner card 3), not the row's original text**:
+`resolve_processed_group` (`_move_assignment.py`) now calls `_assert_allowed_move`
+before writing an assignment's new state. New test
+`test_c8d_resolve_processed_group_refuses_a_terminal_assignment` drives A to
+`resolved` (via `_create_at`'s `[AWAITING, RESOLVED]` walk, not through the
+webhook — the row is explicit that the grouped path must defend itself with no
+webhook re-read in front of it), calls `resolve_processed_group` directly and
+asserts `IllegalAssignmentMove`, then re-reads the assignment and the row's
+counters and finds both untouched. **Named mutation** (removing the
+`_assert_allowed_move` call): reddened exactly this one test, file run whole —
+`1 failed, 41 passed`. The observed failure is `KeyError:
+StockTaskAssignmentStateEnum.RESOLVED` at `_COUNTER_COLUMN[from_state]`, not
+`IllegalAssignmentMove` — this is F-4's own correction (today's code, without the
+guard, flushes the illegal state and dies on the counter lookup) and is exactly
+what the row's evidence column now says. Reverted, `git diff --quiet` on the
+production file confirmed (md5 identical before/after).
+
+**N-5 folded into the same change.** `resolve_processed_group` now (a) skips an
+assignment already at its computed target (`from_state == target`, mirroring
+`move_assignment`'s own short-circuit) with no write and no event for it, and
+(b) guards the row's `stock_report_item:updated` event on `any(delta != 0)`,
+mirroring `move_assignment`. Neither is reachable through the webhook today
+(discovery only ever hands the function active-state assignments, so
+`from_state` can never already equal the computed target on that path) — both
+are the function's own defence for a future or direct caller, the same footing
+as the `_assert_allowed_move` call itself. **Not a lettered row** (N-5 is a
+production note, not a criterion), so its test
+(`test_resolve_processed_group_short_circuits_an_assignment_already_at_target`)
+is declared here as its trace rather than shipped as an orphan (rule 16): it
+drives an assignment already `resolved_early` through `resolve_processed_group`
+directly and asserts `events == []`, the state and `updated_at` unchanged, and
+the counters unchanged. **Named mutation** (removing the `from_state == target`
+short-circuit): reddened exactly this one test — `1 failed, 42 passed` — with
+the same `KeyError` shape (from_state `RESOLVED_EARLY` has no `_COUNTER_COLUMN`
+entry either). Reverted, md5 identical.
+
+**N-1 disposed**: `test_numbers_are_echoed_as_received_not_stripped`
+(`test_items_processed_request.py`) now carries a docstring declaring its trace
+to C3(g), naming the command-level echo test
+(`test_c3g_outer_whitespace_matches_and_echoes_untouched`) as C3(g)'s own row
+and this one as a parser-level companion — the same deliberate two-surface
+pattern N-2 already accepts. Not retired: it is the only test proving the
+parser's own contract (task 1's "as received (echo)" clause) independent of the
+command layer.
+
+**N-2, N-3, N-6 — no plan-9 action; disposed in the batch handoff** (N-2 and N-6
+are plan-10 notes; N-3 was already closed by the reviewer's own reading, nothing
+to build).
+
+**Perimeter this round (plan 9's share):**
+`app/beyo_manager/services/commands/stock_report/_move_assignment.py` (production),
+`app/tests/integration/services/commands/stock_report/test_process_items_processed.py`,
+`app/tests/unit/services/commands/stock_report/test_items_processed_request.py`.
+`sync_task_stock_assignments.py` (plan 10's file) is also touched, for F-1 — see
+plan 10's entry.

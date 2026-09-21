@@ -351,3 +351,126 @@ three findings below sit **past the rows**, in the authority they were derived f
 - **C8(a)** is **not** discharged by the two existing direct-call tests: both assert `events == []`,
   so neither exercises a moved assignment and neither pins the returned event kinds. Row text is
   well formed and provable as written.
+
+**Implementer, 2026-09-21 (batch C2 fix round 1, Sonnet).**
+
+**F-1 fixed** — `sync_task_stock_assignments.py`'s step-3 discovery query restores
+both dropped halves: `StockTaskAssignment.state.in_(ACTIVE_ASSIGNMENT_STATES)`
+(frozenset, rule 16) and `scalar_one_or_none()` in place of `scalar`. The post-lock
+terminal skip is untouched — C5(a)/C5(c) still depend on it. **C1(m) built**:
+`test_c1m_sync_selects_the_active_assignment_over_a_terminal_one` creates A1 on
+`(T, I, R)`, drives it to `FAILED` via `move_assignment` (fixture only — this is
+not the webhook), creates A2 on the same triple (both while T is `ASSIGNED`, so
+both start `in_queue`, matching the S1 fixture's own precondition), then drives T
+`assigned -> working` through the real S1 command
+(`transition_step_state`). Asserts: A1 stays `FAILED`, A2 moves to `IN_PROGRESS`,
+counters follow A2 alone, exactly one `stock_task_assignment:state-changed`
+(A2's `client_id` only) and one `stock_report_item:updated` for R. **Named
+mutation** (drop `state.in_(ACTIVE_ASSIGNMENT_STATES)`, keeping
+`scalar_one_or_none`): reddened exactly this test, file run whole — `1 failed,
+26 passed`. **Observed failure is `sqlalchemy.exc.MultipleResultsFound`, not the
+row's narrated "discovery returns A1, zero events"** — the row's own text
+predicts the pre-fix `scalar()` behaviour, but this fix keeps
+`scalar_one_or_none()` (the row explicitly asks for it too, and rule 16 forbids
+reverting a correct half to arm the other), so a two-row discovery raises
+loudly instead of silently picking one. This is a **stronger** failure than the
+row narrates, and it still discharges the row: A2 is provably never synced,
+zero events are dispatched, and nothing about the fix is compromised by the
+`MultipleResultsFound` shape — it is in fact the guard `scalar_one_or_none`
+exists to provide (F-1's own correction text: "what makes a future breach of
+MC-4's 'at most one' promise loud instead of a coin flip"). Reverted, md5
+identical on `sync_task_stock_assignments.py`.
+
+**C4(i) built** — one negative assertion added to the guard
+(`test_c4i_no_sync_call_inside_the_task_state_helpers_or_the_shared_core`,
+using the existing `function_contains_call` machinery, per the review's own
+proposed remedy): none of `maybe_advance_task_to_working`,
+`maybe_reopen_task_to_working`, `maybe_evaluate_task_ready` or
+`_apply_step_transition` may contain a call to `sync_task_stock_assignments`.
+**Named mutation**: planted exactly the forbidden call (per §14F/§5B's own
+"why command level" example) at the end of `maybe_evaluate_task_ready`'s body,
+after its `task.state = TaskStateEnum.READY` write (line 109, unshifted — the
+plant sits after every registered line in the file) so no other registered
+site moved. Guard run whole-file: `1 failed, 6 passed`, naming
+`maybe_evaluate_task_ready` in the assertion message exactly as the finding
+predicted. Reverted (`_task_state_transitions.py` md5 identical before/after);
+`test_task_state_write_sites_are_registered.py` re-run green, `7 passed`
+(C4(a)'s control row and the six inherited probes C4(b)-(h) all unaffected).
+
+**C4(j) built** — `_task_state_write_scanner.py` extended per the review's own
+correction list: `visit_AnnAssign` (class (a)'s annotated form); tuple/list/
+starred targets walked in `visit_Assign` (class (a)'s tuple form); an
+import-alias table built per file (`_collect_import_aliases`) resolving
+`update`/`insert`/`Task`/the four helper names before either a callee or an
+`update(Task)`-style argument is matched (classes (c)/(e), and the `Task`
+argument of (c)); class **(f)**, a `text(...)`/`.execute(...)` call whose
+literal argument names both `tasks` and `state` (case-insensitive). **Named
+mutation** (the row's own shape: all five constructs planted at once, in one
+live file — `update_task.py`, EOF, after every registered site so no line
+shifted): an annotated `task.state: TaskStateEnum = ...`, a tuple-target
+`_unused, task.state = ...`, an aliased `update(Task as _TaskAlias)`, an
+aliased helper call (`maybe_evaluate_task_ready as _helper_alias`), and a raw
+`text("UPDATE tasks SET state = 'ready' WHERE id = 1")`. Guard run whole-file:
+`1 failed, 6 passed`, naming all five new lines
+(`update_task.py:131`-`135`) as unregistered in one assertion message — the
+row's own predicted shape (one run proves all five, since any single one would
+already redden `test_c4a_every_collected_site_has_a_registry_entry`). Reverted
+(`update_task.py` md5 identical to the pre-probe hash, which also matches the
+hash the review's own probe declaration recorded — same starting tree).
+**Grepped the whole scanned corpus for all five forms** (annotated `.state:`
+assignment, tuple-target `.state`, `import Task as`, `import <helper> as`, and
+`text(` literals naming both `tasks` and `state`): zero hits. The 85 registered
+sites are unaffected; this guards the next writer, not a live leak, exactly as
+F-2/F-6 found. **Not shipped as a permanent test** — same footing as the six
+inherited MC-2 probes (C4(b)-(h)), which this project's precedent already
+treats as arm-and-revert evidence, not committed regression tests.
+
+**C8(a) built** — `test_c8a_sync_task_stock_assignments_contract` calls
+`sync_task_stock_assignments` directly (not through any of the nine sites) with
+a task whose captured state differs from its current one, on a task genuinely
+carrying a moving assignment (`in_queue -> in_progress`). Asserts the returned
+list is exactly one `stock_task_assignment:state-changed` plus one
+`stock_report_item:updated` — the contract only, per the row's own scope fence
+(C1/C4 already own the nine call sites' behaviour). **Named mutation** (drop the
+row event from the return, definition site): reddened this test as expected —
+but the same mutation also reddens three other tests in the same file that
+assert `:updated` counts (`test_c1m_...`, `test_c1c_s2_batch_...`,
+`test_c7a_s4_...`), because the mutation strips every row event this function
+ever returns, not just this test's. Recorded per §9 rule 8 (the observed-red
+set spans more than the named test): `4 failed, 24 passed`. Reverted, md5
+identical.
+
+**N-4 disposed — left as is, recorded.** Validating a `not_task: <model>`
+registry claim (rather than only that the field is present) would need type
+information the AST sweep does not have — the collector sees `x.state = ...`
+and a target expression's text, never the runtime type of `x`. A sound check
+would require either a type-inference pass over the whole corpus or a curated
+allowlist of known non-`Task` variable names, either of which is a materially
+larger instrument than this fix round's perimeter (F-2/C4(j)) and was not
+asked for by name. No criterion row demands it and no live mis-registration is
+known to exist. Flagged for the coordinator as a possible future guard
+enhancement, not built here.
+
+**N-6 disposed — left as is, recorded.** `test_c5a_...` inlines the referee
+choreography instead of calling the shared `_run_forced_order` helper C5(b)/(c)
+use; both forms observe both participant blocks identically. Cosmetic only;
+not touched, to keep this round's perimeter to what the six findings and five
+owed rows ask for.
+
+**Perimeter this round (plan 10's share):**
+`app/beyo_manager/services/commands/stock_report/sync_task_stock_assignments.py`,
+`app/tests/unit/services/commands/stock_report/_task_state_write_scanner.py`,
+`app/tests/unit/services/commands/stock_report/task_state_write_site_registry.py`
+(one line: the `_move_assignment.py` registry entry's line number, shifted by
+plan 9's C8(d) fix — see below),
+`app/tests/unit/services/commands/stock_report/test_task_state_write_sites_are_registered.py`,
+`app/tests/integration/services/commands/stock_report/test_task_state_sync.py`.
+
+**One cross-plan registry fix, declared here.** Plan 9's C8(d) fix added lines to
+`_move_assignment.py` ahead of its own `NOT_TASK` line (the file's third
+`attr_state` site, `resolve_processed_group`'s `assignment.state = target`),
+shifting it from line 292 to 302. `task_state_write_site_registry.py`'s entry
+for that key is updated to match (a registry key, not a criterion row — no plan
+text changes). Caught by running the plan 10 guard suite immediately after the
+plan 9 production edit, before writing any new test, exactly as rule 19's
+lesson (run collection-sensitive suites, not just the named file) generalizes.
