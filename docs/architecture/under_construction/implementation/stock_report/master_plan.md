@@ -332,6 +332,19 @@ review finding.
 | `criteria_matcher.py` | `CriterionFailure` (frozen dataclass: `key: str`, `reason: StockCriteriaMismatchReasonEnum`); `build_item_property_bag(item) -> dict[str, str]`; `tokenize_property_value(value: str) -> list[str]`; `evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]` (sorted by key); `matches_stock_criteria(item, criteria) -> bool` |
 | `serializers.py` | `serialize_stock_report_item(row, *, category) -> dict`; `serialize_stock_task_assignment(assignment, *, item, task, images) -> dict`; `serialize_item_compact(item, *, images) -> dict`; `serialize_task_compact(task) -> dict` |
 
+### 6.1b Foreign load-bearing dependencies (owner, 2026-09-21 — lesson L-25)
+
+Files **outside every plan's perimeter** that nonetheless arm a Stock Report guarantee. Editing one
+silently edits this project. Any phase touching them re-reads this table; any future plan that
+depends on a new one adds a row here in the same act.
+
+| File (foreign) | The load-bearing detail | What it arms | How it was found |
+|---|---|---|---|
+| `bm/domain/items/properties_signature.py` | `sort_keys=True` in the `json.dumps` of `compute_properties_signature` (line ~25) | Row identity under JSON key reordering — intention §4A MC-3, **plan 7 C4(a)**. Every mutation cell in that family pointed at `criteria_normalization.py`, where C4(a) is provably **inert** (measured, batch B2 re-review P1). | batch B2 re-review, L-25 |
+
+A source comment now marks the argument in place and points back here, so the next editor of that
+file sees the dependency without reading this plan set.
+
 ### 6.2 Models `bm/models/tables/stock_report/` (registered in `bm/models/__init__.py`; prefixes added to `bm/models/tables/client_id_prefix_map.md`)
 
 | Class / file | Prefix | Table | Columns beyond `client_id`, `workspace_id` |
@@ -425,7 +438,7 @@ name every offending entry by zero-based index (MC-8); Scanner does not parse th
 | `receive_stock_demand_webhook.py` (phase 7) | `receive_stock_demand_webhook(ctx) -> dict` → `{"results": [...]}` |
 | `items_processed_request.py` / `process_items_processed.py` (phase 9) | `parse_items_processed_body(raw: bytes) -> list[str]`; `process_items_processed(ctx) -> dict` → `{"results": [...]}` |
 | `process_stock_demand_deleted.py` (phase 13A) | `process_stock_demand_deleted(ctx) -> dict` → `{"results": [...]}`; the owning command of the third webhook: deadline → verify → parse → one owner-mode transaction (`set_config`, workspace, **advisory lock before discovery**, the two `_demand_lookup` statements, id discovery, sorted locks tasks → rows+groups → assignments, then `cascade_delete_stock_report_item(…, actor_user_id=None, trigger="stock_demand_deleted")` per candidate row ascending, deadline check) → coalesced events |
-| `requests/__init__.py` | `CreateStockTaskAssignmentsRequest` (`entries: list[StockTaskAssignmentEntry]`, `model_config = ConfigDict(extra="forbid")`, ≥ 1 entry), `StockTaskAssignmentEntry` (`stock_report_item_id`, `task_id`, `item_id`, `override_property_mismatch: bool = False`), `DeleteStockTaskAssignmentsRequest` (`client_ids: list[str]`, ≥ 1), `SetStockReportItemPriorityRequest` (`client_id`, `priority: StockReportPriorityEnum \| None`), `SetStockReportItemPriorityOrderRequest` (`client_id`, `priority_order: int`), `DeleteStockReportItemRequest` (`client_id`) and their `parse_*_request` functions |
+| `requests/__init__.py` | `CreateStockTaskAssignmentsRequest` (`entries: list[StockTaskAssignmentEntry]`, `model_config = ConfigDict(extra="forbid")`, ≥ 1 entry), `StockTaskAssignmentEntry` (`stock_report_item_id`, `task_id`, `item_id`, `override_property_mismatch: bool = False`), `DeleteStockTaskAssignmentsRequest` (`client_ids: list[str]`, ≥ 1), `SetStockReportItemPriorityRequest` (`priority: StockReportPriorityEnum \| None`), `SetStockReportItemPriorityOrderRequest` (`priority_order: int`), `DeleteStockReportItemRequest` — **removed** (**owner ruling 2026-09-21: `client_id` travels in the path, never in the body.** The three item-scoped routes in §6.6 already declare `{client_id}`; the router injects it into `incoming_data` and the request models no longer carry the field. `DELETE` therefore takes **no body at all**, so its request model is dropped. This resolves the §6.5/§6.6 contradiction the endpoint inventory found) and their `parse_*_request` functions |
 
 `bm/services/infra/location_tracker/webhook_verifier.py` (new): `verify_location_tracker_webhook(headers: Mapping[str, str]) -> str`
 — MC-8 steps 2–3, returns the configured workspace id, raises `LocationTrackerWebhookAuthError`.
@@ -694,6 +707,86 @@ all-new **8**, all-changed **7**, all-unchanged **5**, one-unknown-category **8*
 inserting exactly one stray `SELECT` inside `apply_stock_demand`'s transaction block: plan 6 C6(a),
 C6(c) and C6(d) redden, C6(b) does not. A later phase that adds a statement to this path must move
 these numbers deliberately.
+
+## 9A. Reviewer lesson register (owner, 2026-09-21) — the batch C/D fold worklist
+
+Consolidated from the seven reviewer handoffs of batches A, B1 and B2. **Batch B1's re-review
+restarted its numbering at L-1 and collided with batch A's L-1…L-4; those four are renumbered
+L-27…L-30 here, and no id is ever reused.** One lesson was unnumbered prose in the B1 review; it is
+L-31. Verbatim texts stay in their source handoffs — this table is the worklist, not the archive.
+
+**The finding that matters most: plans 8–13A have never received a lesson fold.** `git log` on those
+files shows only `67dd815` (the original plan set) and `ff05bb3` (owner card 1). Every lesson from
+four review rounds is unlanded there, and the concrete debt is **94 criterion rows carrying an empty
+(`—`) mutation cell** — plan 8: 26, plan 9: 18, plan 10: 15, plan 11: 8, plan 12: 16, plan 13: 6,
+plan 13A: 5.
+
+**Fold order is not free.** L-20 lands **first** (it defines which cells an agent may touch), then
+L-17 (the projection called its batch-B instance "the single most important item"; plans 12/13/13A
+seed rows by ORM and raw SQL under the same `assert_stock_report_clean` obligation and carry no
+preamble clause), then the rest.
+
+| Id | Rule, in one line | Status | Fold targets | Cell type |
+|---|---|---|---|---|
+| L-1 | Charter rule 2's "enumerate, never sample" binds the *value table*, not only ordered rules | OPEN | 9, 12 | **OUTCOME (owner)** |
+| L-2 | The count and the enumeration must be derived from one another | OPEN | 8, 12, 13, §4 totals | **OUTCOME (owner)** |
+| L-3 | Task text must not contradict its own criterion | OPEN | 9, 12, 13A | **TASK (owner)** |
+| L-4 | Provision the contracts the plan cites | **APPLIED** (§6.5 `lock_stock_report_history_records`) | — | — |
+| L-5 | A row whose outcome is an error identity must pin the identity | OPEN (partly folded into 4, 6) | 8, 12, 13, 13A | **OUTCOME (owner)** + fixture |
+| L-6 | A plan must not require a file the repo's convention forbids | **APPLIED** (no forward target) | — | — |
+| L-7 | A fixture must make its own predicate the only reason the outcome holds | OPEN | **12** (`high = A1 B2 C3` is dense), 13, 13A | FIXTURE |
+| L-8 | Pin each phase's registered public signatures with a criterion | OPEN — *explicitly unimplemented*; already cost projection blocker B1 | §9 or §6.5 + one row per phase | **OUTCOME (owner)** or standing rule |
+| L-9 | Rule-17 rows carry the *rule* next to the literal | OPEN (folded into 4–7) | 8, 9, 13A | NOTE + mutation |
+| L-10 | Say "equivalent mutant"; do not name a defect that cannot exist | OPEN | **all of 8–13A — the 94 `—` cells** | MUTATION |
+| L-11 | A mutation against a dependency's comparison engine must be grounded in what that engine compares | OPEN | **10** (the AST registry guard C4(a)–(g)), 13A | MUTATION |
+| L-12 | One mutation per sub-check | OPEN (folded into 4, 5, 7) | 8, 9, 10, 12, 13, 13A | MUTATION |
+| L-13 | Inverse directions of one write each need their own assertion | OPEN | 10, 11, 13 | MUTATION / outcome |
+| L-14 | At least one fixture must order rows against their ordering key | OPEN | **12** (the dedicated ordering phase, ascending-only), 13, 13A | FIXTURE |
+| L-15 | `sorted()` over a `set` is not deterministically mutation-testable (needs ≥3 elements, or the assertion is the guard) | OPEN | 8, 9, 10, 13, 13A | FIXTURE + mutation |
+| L-16 | A tenancy row needs a *cross-workspace reference* fixture, not a foreign-only one | OPEN (folded into 4, 5, 6) | 8, 12, 13, 13A | FIXTURE |
+| L-17 | A row's exact outcome is computed from its own fixture, side effects included | OPEN — **highest yield** | §6 preambles of **8, 9, 10, 11, 12, 13, 13A** | FIXTURE preamble + **outcome (owner)** where an outcome is arithmetically wrong |
+| L-18 | A ruling that amends one registry row amends its callers in the same act | **APPLIED** (both instances) | residual: not a §9 standing rule | NOTE |
+| L-19 | A mutation whose bite depends on a preamble condition repeats that condition in the cell | OPEN | 9, 10, 13A | MUTATION |
+| L-20 | **Relocating a row's test to a narrower surface is a criterion change, and criterion changes are the owner's** | OPEN — **land first** | §9 standing rule, then 8, 12, 13 | NOTE (authority boundary) |
+| L-21 | "The dependency's own suite covers it" never discharges a mutation cell | OPEN | §9 rule 8 + 8, 9, 13A | NOTE + mutation |
+| L-22 | Bound the shape you derived — no `≤` on a derived count | OPEN (the §9 statement budget landed; the cells did not) | **13A C5(d) `≤ 7`**, audit 9, 12 | **OUTCOME (owner)** |
+| L-23 | A mutation ledger is scoped to a **test id**, never to a mutant — a test that moves re-runs its mutations at the new surface | OPEN | §9 rule 8 + 8, 12, 13 | NOTE |
+| L-24 | A bidirectional invariant needs one mutation per direction | OPEN | 13A C1/C2, 8 C3, 11 C6 | MUTATION |
+| L-25 | Name the arming *site*, and verify it is the site the row depends on | OPEN (residual — §6.1b landed, the verification clause did not) | §9 rule 8; 10, 11 (foreign sites) | NOTE + mutation |
+| L-26 | An absence instrument deserves one positive observation per project | OPEN | §9 rule 7; 9, 10, 12, 13A | NOTE + mutation |
+| L-27 | Route a declined mutation to the reviewer in the same round, not to a fold | OPEN | §3A / fix-prompt template | NOTE (process) |
+| L-28 | "Same code edit" is a claim to be measured, not asserted | OPEN | §9 rule 8 + every shared/mirror cell in 8–13A | NOTE + mutation |
+| L-29 | A fixture that models an environment cannot fail — write the premise as a criterion on the caller | OPEN | **8** (named by the lesson itself), 11, 13 | **OUTCOME (owner)** |
+| L-30 | Where a plan offers a choice of fixture, the criterion names the choice that keeps the row armed | OPEN | 8, 12, 13 | FIXTURE |
+| L-31 | A fold that replaces a vague mutation with a precise site must verify the site executes under the row's own fixture | OPEN as a standing rule (honoured once, in batch B2) | the fold protocol itself | NOTE (process) |
+
+**Clusters — fold as one pass, not one at a time.**
+- **L-21 + L-23 + L-28** are one proposition-conflation defect at three levels. One §9 rule 8
+  amendment: *a mutation ledger is scoped to a test id; a shared or mirrored cell must be shown to
+  reach the second row's distinguishing assertion.*
+- **L-10 / L-11 / L-19 / L-25 / L-30** are one family — "the named mutation cannot fail", by five
+  different causes. One pass over the 94 `—` cells, not five.
+- **L-16 ⊂ L-12** (tenancy instance of one-mutation-per-sub-check) but they fix different cells.
+- **L-24 ≠ L-13**: L-13 is one *assertion* per direction, L-24 one *mutant of opposite sign*.
+
+**Authority split.** Owner-only (OUTCOME or TASK cells): **L-1, L-2, L-3, L-5, L-8, L-17's outcome
+half, L-22, L-29** — a projection agent must not fold these. Foldable (mutation/fixture cells):
+**L-7, L-9, L-10, L-11, L-12, L-13, L-14, L-15, L-16, L-17's preamble half, L-19, L-24, L-28, L-30.**
+Process/NOTE only: **L-18, L-20, L-21, L-23, L-25, L-26, L-27, L-31.**
+
+## 9B. Owner API rulings, 2026-09-21
+
+Both resolve contradictions the endpoint inventory found, and both are frontend-visible.
+
+1. **`client_id` travels in the path, never in the body**, on `PATCH …/items/{client_id}/priority`,
+   `PATCH …/items/{client_id}/priority-order` and `DELETE …/items/{client_id}`. The router injects
+   the path param into `incoming_data`; the request models drop the field; `DeleteStockReportItemRequest`
+   is removed entirely because `DELETE` now takes **no body**. §6.5 amended.
+2. **`POST /stock-report/assignments` returns the full read shape** — `serialize_stock_task_assignment`,
+   fourteen keys with nested `item` and `task`, identical to `GET /items/{client_id}/assignments`.
+   This moves the three serializers from phase 13 into **phase 8**, and phase 8's command must load
+   each assignment's item (with images) and task. Plan 8 §5 task 2 amended; its criterion rows that
+   name the old seven-key shape are superseded and re-stated at the batch C fold.
 
 ## 10. Environment topology (verified 2026-09-19 by the planner; if reality disagrees, update here)
 

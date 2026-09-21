@@ -71,8 +71,15 @@ rendering), `app/tests/unit/routers/api_v1/test_stock_report_router.py` (cells +
    flush, `move_assignment(..., target=that state, is_creation=True, trigger="create_assignments",
    actor_user_id=ctx.user_id)`, `set_task_stock_flag(task_id, True)`; collect events; after the block
    `dispatch(coalesce_stock_report_events(events, initial_row_values=<values read at the row lock>))`;
-   return `{"stock_task_assignments": [{client_id, state, stock_report_item_id, task_id, item_id,
-   quantity, property_mismatch_overridden}]}`. `IntegrityError` naming either assignment index inside
+   return `{"stock_task_assignments": [serialize_stock_task_assignment(...)]}` — the **full**
+   fourteen-key read shape with nested `item` and `task`, **not** the seven flat columns this task
+   previously named (**owner ruling 2026-09-21**: the create response and
+   `GET /items/{client_id}/assignments` return one shape, so a frontend can render a newly created
+   assignment without a second request). This makes `serialize_stock_task_assignment`,
+   `serialize_item_compact` and `serialize_task_compact` (master plan §6.1) **due in this phase**
+   rather than in phase 13, and the command must load each assignment's `item` (with images) and
+   `task`. The criterion rows that name the old seven-key shape are superseded by this ruling and
+   are re-stated during the batch C fold; the reviewer verifies against this text. `IntegrityError` naming either assignment index inside
    phase 5 is mapped to `StockAssignmentRefused` with `item_already_assigned` (backstop).
 3. `delete_stock_task_assignments(ctx)`: parse; `maybe_begin`; discover `(stock_report_item_id,
    task_id)` unlocked; lock tasks → rows → assignments (ascending); re-read; any id absent, deleted or
