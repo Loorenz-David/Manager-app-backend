@@ -107,7 +107,7 @@ REGISTRY: dict[tuple[str, int], dict] = {
     ("beyo_manager/services/commands/cases/update_case_state.py", 29): {"classification": NOT_TASK, "model": "Case"},
     ("beyo_manager/services/commands/stock_report/_move_assignment.py", 205): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
     ("beyo_manager/services/commands/stock_report/_move_assignment.py", 212): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
-    ("beyo_manager/services/commands/stock_report/_move_assignment.py", 292): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
+    ("beyo_manager/services/commands/stock_report/_move_assignment.py", 302): {"classification": NOT_TASK, "model": "StockTaskAssignment"},
     ("beyo_manager/services/commands/upholstery/set_current_stored_amount_inventory.py", 184): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},
     ("beyo_manager/services/commands/upholstery/receive_upholstery_order.py", 64): {"classification": NOT_TASK, "model": "UpholsteryOrder"},
     ("beyo_manager/services/commands/items/complete_single_and_reallocate.py", 50): {"classification": NOT_TASK, "model": "ItemUpholsteryRequirement"},

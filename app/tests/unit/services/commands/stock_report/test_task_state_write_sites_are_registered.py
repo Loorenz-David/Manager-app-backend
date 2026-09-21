@@ -99,3 +99,31 @@ def test_c4a_no_sync_and_not_task_entries_carry_their_required_field():
             assert entry.get("reason"), f"{key}: no_sync entry with no reason"
         if entry["classification"] == NOT_TASK:
             assert entry.get("model"), f"{key}: not_task entry with no model"
+
+
+# C4(i) — MC-2's "why command level" rule, made checkable (owner, 2026-09-21, batch
+# C2 review card 2). A helper-level sync would move an assignment through an
+# intermediate state the transaction never settles on (e.g.
+# `ready -> in_queue -> ready` inside one `remove_task_step` save), un-crediting and
+# re-crediting a goal for no net task change, possibly onto a *different* goal
+# record. The positive checks above prove every registered command-level site is
+# wired; this is the mirror negative: none of the three helpers, nor the shared
+# step-transition core, may carry the call themselves. The reviewer planted exactly
+# this call inside `maybe_evaluate_task_ready` and the guard passed without it
+# (finding F-3) — this assertion is what makes that plant fail.
+_NO_SYNC_INSIDE_HELPERS = (
+    "maybe_advance_task_to_working",
+    "maybe_reopen_task_to_working",
+    "maybe_evaluate_task_ready",
+    "_apply_step_transition",
+)
+
+
+def test_c4i_no_sync_call_inside_the_task_state_helpers_or_the_shared_core():
+    for helper in _NO_SYNC_INSIDE_HELPERS:
+        assert not function_contains_call(None, helper, "sync_task_stock_assignments"), (
+            f"{helper}: calls sync_task_stock_assignments directly — the sync runs "
+            "once, at command level, after the command's last Task.state write, "
+            "never inside a helper that flips an intermediate state (§5B "
+            "'why command level')"
+        )
