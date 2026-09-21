@@ -168,3 +168,39 @@ four days on a previous project, and the guard against it is positional, not edi
 ## 8. Review log
 
 (empty)
+
+
+---
+
+## Review log — 2026-09-21: the frontend handoff was written early; task 3 becomes a re-verification
+
+**The owner asked for the frontend document before batch D ran**, so the frontend could implement
+against a reliable contract and the morning's wiring would be a pointer move rather than a
+negotiation. It is published:
+
+`handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md`
+
+Card 7's protocol was followed exactly: a **new** dated file in this project's own
+`handoffs/to_frontend/`, a `supersedes:` key, and the two superseded documents **moved** to
+`handoffs/to_frontend/archived/` — moved, not edited, not deleted. **`…match_preview_v2…` was not
+superseded and not archived**; it remains the ratified authority for that endpoint's semantics and
+the new document points at it. No v3 exists.
+
+**Every line is tagged VERIFIED or SPECIFIED.** VERIFIED = read out of shipping code on
+2026-09-21, field by field, by a dedicated sweep. SPECIFIED = pinned by a criterion row in plans
+12/13/13A, not yet built — **six of the thirteen routes**. The document states the guarantee
+plainly: build against a SPECIFIED shape, and if the code ships differently that is a **backend
+defect**, not a contract change the frontend absorbs. That is the strongest honest promise
+available for unwritten code, and the two tiers are never blurred.
+
+**Task 3 therefore changes from *author* to *re-verify and re-issue*.** When this phase runs, the
+six SPECIFIED routes will have shipped. The job is to re-read each against the code, flip its tag
+to VERIFIED, correct anything that moved, and — **only if something moved** — publish a new dated
+file superseding this one, moving it to `archived/`. If nothing moved, say so in the handoff and
+leave the published file alone. **Never edit it in place.**
+
+This is strictly better than authoring it here: the document now gets a verification pass at the
+end of the batch instead of being born unverified, and the frontend gets to start today.
+
+**Tasks 1, 2 and 4 are unchanged**, and C1(b)'s widened root (owner card 6) now has a real target
+to guard — the published file — rather than one that does not exist yet.
