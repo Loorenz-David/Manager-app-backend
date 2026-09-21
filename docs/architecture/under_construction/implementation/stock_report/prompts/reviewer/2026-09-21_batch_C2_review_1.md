@@ -48,16 +48,19 @@ files:
 
 ```
 app/beyo_manager/domain/stock_report/assignment_checks.py
-app/beyo_manager/domain/stock_report/enums.py                      # ALSO in plan 9's perimeter
-app/beyo_manager/routers/api_v1/stock_report.py                    # possibly also plan 9's
+app/beyo_manager/domain/stock_report/enums.py                      <-- THE ONE OVERLAP
+app/beyo_manager/routers/api_v1/stock_report.py
 app/beyo_manager/services/commands/stock_report/create_stock_task_assignments.py
 app/beyo_manager/services/queries/stock_report/assignment_check_inputs.py
 app/beyo_manager/services/queries/stock_report/preview_stock_task_assignment_match.py
 ```
 
-Three are shared surfaces. **8A's content is out of your scope and is not a finding here.** What
-*is* in your scope: whether this batch's changes to the three shared files are correct and
-declared. If you cannot separate the two authorships in a diff, say so rather than guessing.
+**Exactly one is also this batch's: `enums.py`, declared in plan 9 §4.** I checked both plans'
+declared perimeters against 8A's file list — the other five appear in neither plan 9 §4 nor plan
+10 §4. **8A's content is out of your scope and is not a finding here.** What *is* in your scope:
+whether this batch's changes to `enums.py` are correct and declared, and whether anything in this
+batch touched the other five at all (that would be an undeclared perimeter breach and a finding).
+If you cannot separate the two authorships in a diff, say so rather than guessing.
 
 ## Already verified by the orchestrator — consume by citation, do not re-run
 
