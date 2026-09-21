@@ -92,6 +92,46 @@ ordered for the same reason (one shared helper, divergence is the failure mode).
 
 ---
 
+## Card D-4 — the ratified intention still calls `item_category` three keys
+
+**Class:** ratified intention **and** a published frontend contract. **Parked — this is the exact
+class I do not rule unattended**, and the D1 implementer was right to raise it rather than fix it.
+
+**The state of the three documents.** You asked on 2026-09-21 for the item category's picture to
+reach the stock-report board. The code now sends it: `serialize_stock_report_item` emits
+`item_category` as **four** keys, and I verified at the D1 gate that the key is genuinely armed —
+including the case that matters, a category with **no** image, where the key must be present and
+`null` rather than absent. `HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` §6.1 promises it
+to the frontend as `string | null`. **But intention §9 "Response shapes" still says three.**
+
+**Nobody is blocked and nothing is wrong today.** The risk is entirely in the future, and it is
+the one this project has already been bitten by: the intention is the document everything is
+re-derived from. Someone re-deriving the board from it drops a key the app renders, and the
+pictures disappear from a screen that has shown them for a year.
+
+**Why I am not amending it myself,** even though the answer looks obvious: the intention is
+RATIFIED and carries a status header every gate reads, and the key is in a **published** contract.
+Both halves of my overnight limit apply at once. Earlier today I reasoned from a schema to a
+domain rule, called it "decisive", and was wrong — the failure mode there was propagating
+something outward into a contract, and this is the same direction.
+
+**Branches.**
+- **Amend the intention** (a lettered note under §9, the way other owner amendments land): the
+  three documents agree again, nothing in the code or the frontend moves.
+- **Drop the key from the code:** reverts the row you personally asked for and breaks a promise
+  already made to the frontend in writing. I would advise against this, but it is available.
+- **Leave it:** shipped behaviour stays right, the root document stays wrong.
+
+**Recommendation: amend.** The four-key shape is the one you instructed, the one already promised
+to the frontend, and the only one that renders.
+
+**On silence:** nothing changes. The code keeps four keys, the contract stands, and the batch is
+**not** gated on this — the gate holds on the amendment, not on D1.
+
+**Trace.** Intention §9 "Response shapes"; plan 12 C4(e) and its Review-log notes;
+`HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` §6.1.
+
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:

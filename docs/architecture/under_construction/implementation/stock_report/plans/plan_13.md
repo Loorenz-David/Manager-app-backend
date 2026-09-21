@@ -139,8 +139,11 @@ Tenancy and visibility rows (C1(d), C4(d)) enumerate all three cells per entity 
 
 ## 7. Notes
 
-- Sizing: 18 criterion rows in 5 criteria; `complex: yes`. (Counts re-derived by script after the
-  round-8/9 fold; see the delta handoff.)
+- Sizing: **19 criterion rows in 6 criteria**; `complex: yes`. (Re-derived by the committed
+  script `SR/count_criteria.py` at the D1 gate, 2026-09-21 — never typed. The previous "18 in 5"
+  was stale from the round-8/9 fold: **owner card 2 later moved C6(a) in from plan 8**, which
+  added both a nineteenth row and a sixth criterion, and the sizing line was never re-run. Plan
+  12's "45 rows in 7 criteria" is correct as written.)
 - C4(c) (equal statement count for 1 vs 5 assignments) was removed (owner ruling 2026-09-19: outcomes, not internals): it asserted query count,
   not an outcome. Batch-loading stays the implementation rule of task 2, unguarded by a test.
 - Rounds 8–9 (2026-09-19): C1(a)'s fixture gained a `resolved_early` assignment (its credit is kept

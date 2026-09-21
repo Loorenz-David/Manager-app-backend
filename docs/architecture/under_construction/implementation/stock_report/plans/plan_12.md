@@ -104,7 +104,7 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 | C1(e) | `SO(A, 5)` (n = 4) | same 422 | `set_stock_report_item_priority_order.py` (def.): widen the range guard to `1 <= t <= n + 1` → `SO(A, 5)` is accepted → red. Adjacent pair with C1(d); both runs recorded (§9 rule 8) | MC-7 row 4 (adjacent pair with (b)/(f)) |
 | C1(f) | `SO(D, 4)` | no-op (t == p == n) | `set_stock_report_item_priority_order.py` (def.): narrow the range guard to `1 <= t <= n − 1` → `SO(D, 4)` answers 422 instead of the no-op → red. C1(d)/C1(e) stay green under this mutant, which is what makes the upper boundary its own sub-check (L-12) | MC-7 |
 | C1(g) | `SO(N, 1)` | 422 `STOCK_REPORT_ROW_HAS_NO_PRIORITY:` | `set_stock_report_item_priority_order.py` (def.): drop the `priority IS NULL → ValidationError` guard → `n` is computed over the null rows and the move proceeds → red | MC-7 row 5 |
-| C1(h) | `SP(B, low)` | high = A1 C2 D3; low = X1 Y2 B3 | two mutants at `_ordering.py` (def.), **both runs recorded**: (i) `append_to_priority_group` computes `max` over a set that still includes the mover → B lands at 3 in `low` with Y already at 2 → wrong order; (ii) skip `close_priority_gap` for the source group → `high` stays `A1 C3 D4` → `order_density` diverges | MC-7 row 6 |
+| C1(h) | `SP(B, low)` | high = A1 C2 D3; low = X1 Y2 B3 | two mutants, **both runs recorded**: (i) **replaced at the D1 gate — the folded mutant was inert at the site (§8)**: `set_stock_report_item_priority.py` (def.) calls `append_to_priority_group` with the **source** priority `X` instead of the destination `Y` → B is appended after `high`'s maximum rather than `low`'s and lands at `low 4` (the source gap closes first, so `high` is `A1 C2 D3`, max 3) instead of 3 → red; (ii) `_ordering.py` (def.): skip `close_priority_gap` for the source group → `high` stays `A1 C3 D4` → `order_density` diverges | MC-7 row 6 |
 | C1(i) | `SP(B, null)` | high = A1 C2 D3; B = (null, null) | `set_stock_report_item_priority.py` (def.): omit `priority_order = NULL` from the mover's UPDATE when the target priority is null → B keeps order 3 with a null priority → `priority_order_nullness` diverges → red | MC-7 row 7, §7 "null ⇔ null" |
 | C1(j) | `SP(N, high)` | high = A1 B2 C3 D4 N5 | `_ordering.py:append_to_priority_group` (def.): return `max` instead of `max + 1` → N lands at 4 beside D → `order_density` diverges → red | MC-7 row 8 |
 | C1(k) | `SP(B, high)` | unchanged; no record; no event; zero writes | `set_stock_report_item_priority.py` (def.): delete the `X == Y` short-circuit → the source gap closes and B re-appends at `high 3`, one `priority_change` record is written and `count_writes` is non-zero → red | MC-7 row 9, B2 |
@@ -123,7 +123,7 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 | C4(b) | `GET` with no `priority`, and two null-priority rows N1 and N2 seeded by **two separate `AD` calls** so their `created_at` differ, with the pair chosen so that `created_at` ascending **disagrees** with `client_id` ascending (preamble) | `[N1, N2]` only (nulls by `created_at, client_id`) | two mutants at `list_stock_report_items.py` (def.), **both runs recorded** (L-12, one per sub-check): (i) drop the `priority IS NULL` predicate when the parameter is omitted → every row is returned → red; (ii) order the null listing by `client_id` only → N1/N2 come back reversed, because the preamble pins the pair so that `created_at` ascending disagrees with `client_id` ascending | §7A, owner answer |
 | C4(c) | `priority=urgent` | 422 `STOCK_REPORT_UNKNOWN_PRIORITY_FILTER:` | `list_stock_report_items.py` (def.): drop the token-membership check and filter on whatever was sent → `priority=urgent` returns an empty list with 200 → red | §7A |
 | C4(d) | `priority=` (empty) | nulls only | `list_stock_report_items.py` (def.): strip empty tokens before the branch, so `priority=` is treated as the unknown-token case → 422 instead of the null listing → red. C4(b)'s mutants leave this row green and vice versa (L-12) | §7A |
-| C4(e) | any row in the payload, whose category has a non-null `image_url`, **and** a second row whose category's `image_url` is `NULL` | keys exactly: `client_id`, `item_category {client_id, name, major_category, **image_url**}` (**four** keys — owner addition 2026-09-21; on the null-category-image row `image_url` is present **and `None`**, never absent, because an omitted key and a null key differ to a renderer), `properties`, `properties_signature`, `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting`, `priority`, `priority_order`, `created_at`, `updated_at`, `created_by_id`, `updated_by_id`; no `item_type`; no pagination key | two mutants at `serialize_stock_report_item` (def.), **both runs recorded** (L-13, one per direction): (i) add `"item_type": row.item_category_id` → an extra key → red; (ii) drop `properties_signature` → a missing key → red; **(iii) drop `image_url` from the `item_category` block → both the populated and the `None` row go red** (owner addition 2026-09-21 — the key must be asserted, not merely emitted) | §9 response shape (P18), master plan §5; `ItemCategory.image_url` `Mapped[str \| None]` `String(1024)` (`models/tables/items/item_category.py:23`) |
+| C4(e) | any row in the payload, whose category has a non-null `image_url`, **and** a second row whose category's `image_url` is `NULL` | keys exactly: `client_id`, `item_category {client_id, name, major_category, **image_url**}` (**four** keys — owner addition 2026-09-21; on the null-category-image row `image_url` is present **and `None`**, never absent, because an omitted key and a null key differ to a renderer), `properties`, `properties_signature`, `quantity_requested`, `quantity_in_queue`, `quantity_in_progress`, `quantity_awaiting`, `priority`, `priority_order`, `created_at`, `updated_at`, `created_by_id`, `updated_by_id`; no `item_type`; no pagination key | **three** mutants at `serialize_stock_report_item` (def.), **all three runs recorded** (L-13, one per direction, plus the owner's key): (i) add `"item_type": row.item_category_id` → an extra key → red; (ii) drop `properties_signature` → a missing key → red; **(iii) drop `image_url` from the `item_category` block → both the populated and the `None` row go red** (owner addition 2026-09-21 — the key must be asserted, not merely emitted) | §9 response shape (P18), master plan §5; `ItemCategory.image_url` `Mapped[str \| None]` `String(1024)` (`models/tables/items/item_category.py:23`) |
 | C4(f) | a soft-deleted row and a foreign-workspace row exist | neither is listed | two mutants at `list_stock_report_items.py` (def.), **both runs recorded**: (i) drop `is_deleted = false` → the soft-deleted row is listed; (ii) drop `workspace_id` → the foreign row is listed. One predicate per sub-check; either alone leaves the other half green | MC-16, M4 |
 | C4(g) | R's category K soft-deleted by raw SQL | R still listed with `item_category.name == "Dining Chairs"` | `list_stock_report_items.py` (def.): load categories with an inner join carrying `ItemCategory.is_deleted == False` instead of the batch load by id → R vanishes from the payload → red | MC-16 "serializes the deleted category's name" |
 | C5(a) | `SP(B, low)` | B `updated_by_id == S`, `updated_at == ctx.now`; A, C, D, X, Y `updated_*` unchanged | `set_stock_report_item_priority.py` (def.): add `updated_by_id = :actor, updated_at = :now` to the SET list of the shift statements as well as the mover's → A, C, D are stamped → red | MC-17, §4.5 |
@@ -291,3 +291,58 @@ asserted, not assumed), and a **third mutant** that drops the key and must redde
 **Whose authority.** The owner instructed this directly. It is recorded here rather than applied
 silently, and the criterion text below is the orchestrator's transcription of that instruction —
 correct it if it overreaches.
+
+---
+
+## Review log — D1 gate, orchestrator, 2026-09-21: two mutation-cell corrections
+
+Both are **mutation-cell folds**, which are the orchestrator's (§3B *Mutation cells*, class 1/3).
+Neither touches a fixture, an outcome or a trace, and neither weakens anything. Both landed
+**before the tester was dispatched**, so the `declared` set it derives is the corrected one — §3B
+requires that a ruling adding or changing an assertion reach the tester or it is paperwork.
+
+### 1. C4(e) said "two mutants" and listed three — corrected to three
+
+My defect, introduced when I added the `image_url` mutant `(iii)` to the cell and left the
+preamble words as they were. The enumeration was always right; only the count was stale. Left
+uncorrected, the tester's `executed == declared` arithmetic would have closed while the owner's
+own key went unproven — which is exactly the failure the amendment existed to prevent.
+
+**Verified armed by hand at the gate, not consumed from a stamp.** Two mutants at
+`serialize_stock_report_item`, each run on the D1 tree and each reverted:
+
+- **drop `image_url` entirely** → `test_row_shape_carries_the_four_key_category_including_a_null_image`
+  red, and it is the **only** red in the file (1 failed, 5 passed);
+- **emit the key only when non-`None`** (the sharper defect: present when set, absent when null —
+  precisely the "an absent key and a null key are different things to a renderer" case) → the same
+  test red. This one matters more than the first: it proves the **null half** is independently
+  asserted rather than riding on the populated row's key-set check.
+
+Tree restored, `git diff --quiet` exit 0.
+
+### 2. C1(h) mutant (i) was inert at the site — replaced
+
+**Found by the implementer and reported rather than passed over** (its handoff, item 6). The cell
+read: *"`append_to_priority_group` computes `max` over a set that still includes the mover → B
+lands at 3 in `low` with Y already at 2 → wrong order."* But `low X1 Y2 B3` **is** this row's
+stated outcome, so the mutant's own predicted result is the expected result.
+
+**I confirmed it at the site, and it is inert twice over.** `_ordering.py:append_to_priority_group`
+computes `max` over the destination group, and the mover is never a member of that group when it is
+called — the caller short-circuits `X == Y` as a no-op (B2, C1(k)). And even in the one shape where
+the mover *could* be counted (setting its priority to `Y` before computing the max), its stale
+`high` order is 2, so `max(1, 2, 2) + 1 = 3` — the expected answer again. There is no
+implementation under which this mutant changes the outcome: it is an **equivalent mutant**, the
+same class as L-37's unreachable mirror guard.
+
+**C1(h) was never unarmed** — mutant (ii) bites and is untouched. What was wrong was the *claim*
+that the row carried two independent runs.
+
+**The replacement tests what the cell was reaching for** — that the append reads the **destination**
+group and not some other one — with a mutation that can actually fail: call
+`append_to_priority_group` with the source priority `X`. The source gap closes first, so `high` is
+`A1 C2 D3` with max 3 and B lands at `low 4` instead of 3 → red.
+
+**Why this is a fold and not an owner card:** §3B assigns mutation and fixture cells to the
+orchestrator and reserves outcomes and criterion rows to the owner. The outcome (`high = A1 C2 D3;
+low = X1 Y2 B3`), the fixture and the trace are byte-unchanged.
