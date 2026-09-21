@@ -7992,6 +7992,352 @@ nodes:
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
     updatedAt: 2026-09-21T15:05:25.734Z
+  - id: domain-stock-report-dense-ordering
+    type: domain
+    name: stock report dense ordering
+    description: "The board's ordering mechanism: a group is (workspace, priority)
+      over non-deleted rows, orders are 1-based and dense, and null priority
+      means null order. Every positional change is one column-referencing UPDATE
+      over a closed order band with RETURNING, never a read-then-assign, so each
+      shifted neighbour's post-state comes back from the database and becomes
+      one row-updated event. Three operations share it — close the gap a leaving
+      row vacated, append at max+1, and shift the band between a mover's current
+      and target position — and the direction and band are derived inside the
+      shift from the mover's own from/to, so both of the contract's cases reach
+      one statement. The leaving row is excluded from its own gap close by the
+      band starting one past it, which is what lets the deletion cascade keep
+      the deleted row's own order while its group renumbers."
+    tags:
+      - stock_report
+      - ordering
+      - phase_12
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_ordering.py
+          symbol: shift_within_group
+          summary: "Derives the band and the sign from the mover's from_order/to_order:
+            t<p shifts [t,p-1] by +1, t>p shifts [p+1,t] by -1, and p itself is
+            never in the band."
+          inferenceReason: Both of the ordering contract's in-group cases are expressed as
+            one statement whose direction is computed, so a caller cannot get
+            the sign wrong and the mover is never carried by the block it
+            leaves.
+        - path: app/beyo_manager/services/commands/stock_report/_ordering.py
+          symbol: close_priority_gap
+          summary: Shifts every row of the group with priority_order strictly greater than
+            the vacated position down by one, unbounded above.
+          inferenceReason: The strict lower bound is the mechanism that keeps a
+            still-non-deleted leaving row out of its own gap close, which the
+            deletion cascade depends on.
+        - path: app/beyo_manager/services/commands/stock_report/_ordering.py
+          symbol: _shift
+          summary: One UPDATE ... RETURNING client_id plus the six event fields, filtered
+            to the workspace, the priority and is_deleted = false.
+          inferenceReason: Positions and event payloads come from the same statement, so
+            no ORM instance is consulted for a value the database just changed.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: command-set-stock-report-item-priority
+    type: command
+    name: set_stock_report_item_priority
+    description: Moves a board row between priority groups, or clears its priority.
+      Serializes workspace-wide on the ordering advisory lock before reading any
+      position, then locks the target row and every non-deleted row of the
+      source and destination groups in one ascending statement and decides on
+      the re-read. Setting the priority the row already holds is a no-op with no
+      write, no history record, no stamp and no event. Otherwise it closes the
+      source group's gap, appends at the destination's max+1 (or nulls both
+      fields), stamps only the mover, and inserts exactly one priority-change
+      history record after every row mutation so the record's order and live
+      awaiting counter are post-move values. Events are the mover's and each
+      shifted neighbour's row-updated, coalesced and dispatched after the
+      transaction.
+    tags:
+      - stock_report
+      - ordering
+      - phase_12
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority.py
+          symbol: set_stock_report_item_priority
+          summary: Advisory lock, unlocked discovery of the row, one ascending FOR UPDATE
+            over the row plus both groups, re-read, equality short-circuit, gap
+            close, append, mover UPDATE ... RETURNING, history record, coalesced
+            events.
+          inferenceReason: The order of these steps is the ordering contract's
+            serialization rule made executable; the short-circuit sitting before
+            the first write is what makes the no-op observable as zero writes.
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority.py
+          symbol: _find_row
+          summary: The lookup filters workspace_id, client_id and is_deleted = false and
+            raises NotFound otherwise.
+          inferenceReason: Absent, soft-deleted and foreign rows are one indistinguishable
+            answer, which is the tenancy boundary of this route.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: command-set-stock-report-item-priority-order
+    type: command
+    name: set_stock_report_item_priority_order
+    description: Moves a board row to a target position inside its own priority
+      group. Takes the ordering advisory lock, locks the row and its group in
+      one ascending statement, and only then reads the group size, so the range
+      it validates against is the committed one. A row with no priority is
+      refused, a target outside 1..n is refused, and a target equal to the held
+      position is a no-op with no write, no record and no event. A real move is
+      one shift statement plus the mover's own UPDATE, one priority-order-change
+      history record for the mover alone, and one row-updated event per row that
+      actually moved.
+    tags:
+      - stock_report
+      - ordering
+      - phase_12
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority_order.py
+          symbol: set_stock_report_item_priority_order
+          summary: Computes n from the locked group, refuses a null priority and an
+            out-of-range target, short-circuits t == p, then shifts and writes
+            the mover.
+          inferenceReason: Reading the group size only after the locks is what makes the
+            range check race-free; the two refusals and the no-op are the
+            contract's three non-moving outcomes.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: domain-stock-report-item-deletion-cascade
+    type: domain
+    name: stock report row deletion cascade
+    description: "The one owner of what happens when a board row disappears, shared
+      by the user-facing delete and the Scanner delete webhook. In order: every
+      non-deleted assignment of the row is removed ascending by client_id
+      through the shared move operation, so units leave the counters and an
+      awaiting credit is subtracted before any history is soft-deleted; then,
+      once after the loop, a fresh read of the three counters repairs any
+      non-zero one to zero with a repair record rather than blocking the
+      deletion; then the group's gap is closed from a freshly read position, and
+      the row and its history records are soft-deleted. It takes every stamp
+      value from its arguments and never from a request context, which is what
+      lets the webhook caller stamp NULL. The row's own priority and order
+      survive on the deleted row because the gap close excludes its position."
+    tags:
+      - stock_report
+      - cascade
+      - phase_13
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_delete_stock_report_item_cascade.py
+          symbol: cascade_delete_stock_report_item
+          summary: Assignment loop first, then one post-loop counter read and repair, then
+            the gap close and the two soft-deletes; workspace_id, actor_user_id,
+            now and trigger are parameters and the module imports no context
+            type.
+          inferenceReason: The ordering is the cascade contract; taking stamps from
+            arguments is what makes a second caller with a null actor possible
+            without touching this module.
+        - path: app/beyo_manager/services/commands/stock_report/_delete_stock_report_item_cascade.py
+          symbol: cascade_delete_stock_report_item
+          summary: Both the counter snapshot and the priority/priority_order pair are read
+            with their own SELECT immediately before they are used, not from the
+            instance loaded at the lock.
+          inferenceReason: Earlier statements in the same transaction change those columns
+            underneath the loaded instance, so a stale read would either
+            suppress a repair record or renumber the wrong band.
+        - path: app/beyo_manager/services/commands/stock_report/_delete_stock_report_item_cascade.py
+          symbol: build_stock_report_item_deleted_event
+          summary: Builds the row-deleted workspace event with an empty payload, in this
+            module rather than in the shared event builders.
+          inferenceReason: The deleted event is where the coalescer learns to drop every
+            row-updated event of the same row in the same request, so a deletion
+            emits one lifecycle event instead of a burst.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: endpoint-stock-report-board-writes
+    type: endpoint
+    name: stock report board read and write endpoints
+    description: "The board's own API surface: an unpaginated list of rows filtered
+      by a comma-separated priority parameter (omitted or empty means the
+      null-priority rows, an unknown token is a refusal), two priority routes
+      that admin, manager and seller may call but a worker may not, a delete
+      that only admin and manager may call and that takes no body, and a read of
+      one row's assignments open to all four roles. Every route carries the
+      row's client id in the path and injects it into the service's incoming
+      data; the two write bodies are strict, so an omitted priority key and the
+      string form of an integer are both refused at the boundary rather than
+      coerced."
+    tags:
+      - stock_report
+      - api
+      - phase_12
+      - phase_13
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_list_stock_report_items
+          summary: GET /items with an optional priority query parameter passed through
+            query_params; no page or cursor key exists in the request or the
+            response.
+          inferenceReason: The absence of pagination is a ratified product decision, not
+            an omission, and the read order lives in the query service rather
+            than the router.
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_set_stock_report_item_priority
+          summary: PATCH /items/{client_id}/priority for admin, manager and seller,
+            injecting the path id beside the strict body.
+          inferenceReason: Worker is excluded here while it is permitted on assignment
+            creation, so the role split is per operation rather than per
+            resource.
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_delete_stock_report_item
+          summary: DELETE /items/{client_id} for admin and manager only, with no request
+            body at all.
+          inferenceReason: This is the narrowest route on the resource because the
+            operation cascades to every assignment of the row, including ones a
+            worker is holding.
+    origin: ai_inferred
+    confidence: 0.88
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: query-list-stock-report-items
+    type: command
+    name: list_stock_report_items
+    description: The board's read. Orders by an explicit high-medium-low rank
+      expression and then by position within the group, because ordering by the
+      priority column itself would sort alphabetically and put low before
+      medium. With no filter it returns the null-priority rows by creation time,
+      which is a distinct listing rather than everything. Categories are
+      batch-loaded by id with no deleted filter, so a row whose category was
+      soft-deleted still renders with its category's name instead of vanishing,
+      and the serialized category always carries its image url as a key even
+      when it is null.
+    tags:
+      - stock_report
+      - query
+      - phase_12
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_report_items.py
+          symbol: _PRIORITY_RANK
+          summary: A CASE built from explicit column comparisons rather than the
+            value-mapping form, which binds the enum member as a bare parameter
+            the driver rejects.
+          inferenceReason: The read order is a domain rule that cannot be expressed by the
+            storage column's own collation, and the binding form is a real
+            constraint of the installed driver.
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_report_items.py
+          symbol: list_stock_report_items
+          summary: Categories are fetched by id in one query with no is_deleted predicate
+            and joined in memory.
+          inferenceReason: A filtered join would silently drop rows whose category was
+            deleted, which the cascade decisions explicitly forbid.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: query-list-stock-task-assignments
+    type: command
+    name: list_stock_task_assignments
+    description: Reads one board row's assignments in every non-deleted state,
+      terminal ones included, because the row's history of who did what is the
+      traceability surface the board shows. The row lookup is the visibility
+      boundary and answers not-found for an absent, soft-deleted or foreign id
+      rather than an empty array. Items, tasks and images are each batch-loaded
+      once for the whole response, and the element is produced by the same
+      serializer the creation endpoint returns, so a freshly created assignment
+      and a reloaded one render identically.
+    tags:
+      - stock_report
+      - query
+      - phase_13
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_task_assignments.py
+          symbol: list_stock_task_assignments
+          summary: Filters only on workspace, row and is_deleted — no state predicate —
+            and orders by created_at then client_id.
+          inferenceReason: Omitting the state filter is the deliberate choice that keeps
+            resolved and resolved-early assignments visible; a state predicate
+            here would hide completed work from the board.
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_task_assignments.py
+          symbol: list_stock_task_assignments
+          summary: Calls the shared assignment serializer rather than building the element
+            inline.
+          inferenceReason: Sharing the serializer with the creation endpoint is what makes
+            the two surfaces' key sets agree by construction rather than by
+            review.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: domain-stock-report-row-values-snapshot
+    type: domain
+    name: stock report row values snapshot
+    description: "The single six-field snapshot of a board row that the event
+      coalescer compares a request's final row-updated payload against. It
+      exists once because the shape was duplicated in three commands and
+      divergence was the failure mode: the priority must be rendered as its
+      string value and never as the enum member, since the coalescer compares
+      this snapshot to an event payload and an enum member never equals a
+      string, which would make an unchanged row emit a spurious update."
+    tags:
+      - stock_report
+      - events
+      - phase_12
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_row_values.py
+          symbol: row_values
+          summary: Returns the four counters plus priority as .value and priority_order,
+            and is imported by the create, sync and delete assignment commands
+            and by the row delete command.
+          inferenceReason: One definition consumed by every command that coalesces events
+            is what guarantees the comparison base and the event payload are
+            built the same way.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - id: command-delete-stock-report-item
+    type: command
+    name: delete_stock_report_item
+    description: The user-facing row deletion. Discovers the row and its assignments
+      unlocked, then acquires the lock classes in the global order — advisory,
+      tasks, the row together with its priority group, assignments — and
+      re-reads before deciding, so an id that was deleted between discovery and
+      the lock is refused rather than cascaded twice. It delegates every effect
+      to the shared cascade with the acting user and its own trigger name, then
+      coalesces and dispatches after the transaction and answers with the
+      deleted row's id.
+    tags:
+      - stock_report
+      - cascade
+      - phase_13
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/delete_stock_report_item.py
+          symbol: delete_stock_report_item
+          summary: Unlocked discovery, four lock classes in order, then the post-lock
+            re-read that raises NotFound for an absent, soft-deleted or foreign
+            row.
+          inferenceReason: The refusal is decided on the locked state, not the discovered
+            state, which is what stops a concurrent delete from cascading the
+            same row twice.
+        - path: app/beyo_manager/services/commands/stock_report/delete_stock_report_item.py
+          symbol: delete_stock_report_item
+          summary: Passes actor_user_id and trigger into the cascade rather than letting
+            the cascade read them.
+          inferenceReason: It is one of two callers of a shared cascade whose second
+            caller has no acting user at all.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -14658,3 +15004,243 @@ edges:
     confidence: 0.9
     createdAt: 2026-09-21T15:05:25.734Z
     updatedAt: 2026-09-21T15:05:25.734Z
+  - sourceNodeId: command-set-stock-report-item-priority
+    relationshipType: calls
+    targetNodeId: domain-stock-report-dense-ordering
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority.py
+          symbol: set_stock_report_item_priority
+          summary: Calls close_priority_gap for the source group and
+            append_to_priority_group for the destination.
+          inferenceReason: The command owns the transaction and the decision; the
+            positional arithmetic belongs to the shared ordering mechanism.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: command-set-stock-report-item-priority-order
+    relationshipType: calls
+    targetNodeId: domain-stock-report-dense-ordering
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority_order.py
+          symbol: set_stock_report_item_priority_order
+          summary: Calls shift_within_group with the mover's current and target positions.
+          inferenceReason: The in-group move is expressed entirely as one shared shift
+            plus the mover's own write.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: domain-stock-report-item-deletion-cascade
+    relationshipType: calls
+    targetNodeId: domain-stock-report-dense-ordering
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_delete_stock_report_item_cascade.py
+          symbol: cascade_delete_stock_report_item
+          summary: Calls close_priority_gap with a freshly read priority and position
+            before soft-deleting the row.
+          inferenceReason: Deletion is an ordering operation as much as a lifecycle one,
+            which is why it shares the same gap-closing statement as a priority
+            change.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: command-set-stock-report-item-priority
+    relationshipType: depends_on
+    targetNodeId: infrastructure-stock-report-locks
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority.py
+          symbol: set_stock_report_item_priority
+          summary: Acquires the workspace ordering advisory lock as the first statement of
+            its transaction.
+          inferenceReason: The advisory lock is what removes the phantom of another
+            operation moving a row into a group after this one read it.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: command-set-stock-report-item-priority-order
+    relationshipType: depends_on
+    targetNodeId: infrastructure-stock-report-locks
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/set_stock_report_item_priority_order.py
+          symbol: set_stock_report_item_priority_order
+          summary: Acquires the workspace ordering advisory lock before discovering or
+            locking any row.
+          inferenceReason: The group size it validates against is only meaningful once
+            ordering operations are serialized.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: command-delete-stock-report-item
+    relationshipType: depends_on
+    targetNodeId: infrastructure-stock-report-locks
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/delete_stock_report_item.py
+          symbol: delete_stock_report_item
+          summary: Takes the advisory lock, then tasks, then the row and its group, then
+            the assignments, each ascending by client_id.
+          inferenceReason: The deletion crosses four lock classes in one transaction, so
+            it is the operation the global lock order exists for.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: command-delete-stock-report-item
+    relationshipType: calls
+    targetNodeId: domain-stock-report-item-deletion-cascade
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/delete_stock_report_item.py
+          symbol: delete_stock_report_item
+          summary: Calls cascade_delete_stock_report_item with the locked row and its own
+            trigger name.
+          inferenceReason: The command owns the transaction, the locks and the response;
+            the cascade owns the effects, so a second caller reuses them
+            unchanged.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: domain-stock-report-item-deletion-cascade
+    relationshipType: produces
+    targetNodeId: domain-stock-report-events
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_delete_stock_report_item_cascade.py
+          symbol: build_stock_report_item_deleted_event
+          summary: Returns the row-deleted event alongside the assignment events and the
+            shifted neighbours' row-updated events.
+          inferenceReason: The deleted event is the signal the coalescer uses to suppress
+            every row-updated event of that row, so the event set of a deletion
+            is a lifecycle event plus its neighbours.
+    origin: ai_inferred
+    confidence: 0.88
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: domain-stock-report-events
+    relationshipType: depends_on
+    targetNodeId: domain-stock-report-row-values-snapshot
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_row_values.py
+          symbol: row_values
+          summary: Produces the comparison base the coalescer receives as
+            initial_row_values.
+          inferenceReason: The coalescer drops a row-updated event whose payload equals
+            this snapshot, so the two must be built to the same field shape and
+            the same priority rendering.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: query-list-stock-report-items
+    relationshipType: reads_from
+    targetNodeId: table-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_report_items.py
+          symbol: list_stock_report_items
+          summary: Selects non-deleted rows of the caller's workspace and orders them by
+            the priority rank and position.
+          inferenceReason: This is the board's only read of the rows table and it is where
+            the ordering contract becomes visible to a user.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: query-list-stock-task-assignments
+    relationshipType: reads_from
+    targetNodeId: table-stock-task-assignment
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_task_assignments.py
+          symbol: list_stock_task_assignments
+          summary: Selects the row's non-deleted assignments in every state, ordered by
+            created_at then client_id.
+          inferenceReason: The read deliberately spans terminal states, which is what
+            distinguishes this traceability read from the active-assignment
+            lookups elsewhere.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: endpoint-stock-report-board-writes
+    relationshipType: calls
+    targetNodeId: command-set-stock-report-item-priority
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_set_stock_report_item_priority
+          summary: Runs the priority command with the path id merged into the body.
+          inferenceReason: "The router is thin: the id transport is its only contribution
+            to the request."
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: endpoint-stock-report-board-writes
+    relationshipType: calls
+    targetNodeId: command-set-stock-report-item-priority-order
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_set_stock_report_item_priority_order
+          summary: Runs the priority-order command with the path id merged into the strict
+            body.
+          inferenceReason: The strict integer body is what makes the refusal of a
+            string-typed position a boundary decision rather than a service one.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: endpoint-stock-report-board-writes
+    relationshipType: calls
+    targetNodeId: command-delete-stock-report-item
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_delete_stock_report_item
+          summary: Runs the delete command with only the path id as incoming data.
+          inferenceReason: There is no body at all on this route, so the path is the
+            entire request.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: endpoint-stock-report-board-writes
+    relationshipType: calls
+    targetNodeId: query-list-stock-report-items
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/list_stock_report_items.py
+          symbol: list_stock_report_items
+          summary: The route runs the list query with the priority query parameter.
+          inferenceReason: The filter arrives as a raw string and is validated in the
+            query service, so the refusal of an unknown token is a domain
+            answer.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
+  - sourceNodeId: endpoint-stock-report-board-writes
+    relationshipType: calls
+    targetNodeId: query-list-stock-task-assignments
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_list_stock_task_assignments
+          summary: Runs the assignment read with the path id.
+          inferenceReason: Open to all four roles, unlike the delete on the same resource.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T20:28:53.547Z
+    updatedAt: 2026-09-21T20:28:53.547Z
