@@ -566,5 +566,10 @@ criterion cell enumerates N plants, the round runs N.
 
 **Evidence policy and the foreign commit:** as recorded in plan 9's round-2 entry —
 no L4 taken, pre-run authorization line given there, and `df09143` (phase 8A) landed
-mid-session, so the gate stamp `3669` is stale and the approval-gate L4 must be
-re-taken (expect **3668**; 23-ID set unchanged).
+mid-session, so the gate stamp `3669` went stale. **Resolved before close:** `d38f3b3`
+re-took the L4 at `df09143` — **23 failed / 3668 passed / 1 skipped**, same 21
+published IDs + 2 slot IDs, `3669 − 1` for the withdrawn C3(g) case — on a tree
+carrying all of batch C2's work byte-unchanged. **No re-take is owed on C2's
+account.** See the handoff's §14 addendum, which also records that `d38f3b3` swept
+this round's handoff and plan 9's entry into a phase-8A commit I did not author
+(reported, not undone; `git diff -- app/` still empty).

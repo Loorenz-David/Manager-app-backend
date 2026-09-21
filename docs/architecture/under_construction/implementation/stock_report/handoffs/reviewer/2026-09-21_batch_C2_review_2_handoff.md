@@ -438,3 +438,36 @@ cleanup item).
   equivalent without declaring the divergence (rule 14). Neither hid a defect — I ran the rest and
   everything bit — but both left the reviewer buying evidence the round was asked to buy. Manifest
   property 4 should be read as covering a cell's **input enumeration**, not only its mutation column.
+
+---
+
+## 14. Addendum, appended at session close — nothing above is edited
+
+Two things changed on `main` after §0–§13 were written. **Appended, never rewritten** (project
+lesson: never rewrite a published handoff).
+
+**(a) The gate L4 concern in §2 is RESOLVED, not open.** While I was closing, `d38f3b3`
+("re-take phase 8A's gate L4 on the reworked tree") recorded an L4 at `df09143`:
+**`23 failed / 3668 passed / 1 skipped`**, the same 21 published IDs plus the two slot IDs, passes
+reconciling as `3669 − 1` for the withdrawn C3(g) case. That is exactly the count §2 predicted, and
+it was taken on a tree carrying **all** of batch C2's work byte-unchanged. So batch C2's approval
+gate now has a tree-matched L4 behind it and **no re-take is owed on C2's account**. §2's "must be
+re-taken; expect 3668" and the same sentence in plan 9's Review log entry stand as written at the
+time; this is their resolution.
+
+**(b) My artifacts were swept into a foreign commit, reported not undone.** The same `d38f3b3`
+committed, alongside its own `master_plan.md` change, this handoff (440 lines) and plan 9's
+round-2 Review log entry (67 lines) — files I was still writing and had not committed. I did not
+author that commit and I have not rewritten history to unpick it. Consequences for the
+orchestrator, stated plainly so no perimeter reconstruction is confused later:
+- this handoff and **plan 9**'s round-2 entry are already in `main` at `d38f3b3`, under a subject
+  line about phase 8A;
+- **plan 10**'s round-2 entry (94 lines) and this addendum remain **uncommitted** in the working
+  tree at close;
+- `git diff -- app/` is still empty; **no code of mine is in that commit or anywhere else**.
+
+This is the second cross-workstream collision of the session (the first, `df09143`, is in §2). Both
+are phase-8A commits landing on the shared branch while batch C2 is mid-round. Worth a standing
+note for the coordinator: **two workstreams sharing one branch cannot both rely on
+`git status`/`git add .` to define their own perimeter**, and this round only escaped an ambiguous
+perimeter because every probe was reverted before each run and re-checked by md5.
