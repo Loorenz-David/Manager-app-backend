@@ -301,3 +301,48 @@ disposition. 29 tests added, 0 removed, 1 renamed; no production change (`git di
 *Blocked:* **C5(a)** `BLOCKED-PLAN` and **C4(l)** (second clause) `BLOCKED-PLAN` — see the
 handoff's owner cards 1 and 2. No `BLOCKED-PRODUCTION` row: production behaved correctly under
 every probe.
+
+**Reviewer, 2026-09-21 (batch C1 review 1, Opus). CHANGES_REQUESTED — 65 PASS / 0 FAIL /
+2 NOT_VERIFIED of 67.** Handoff `handoffs/reviewer/2026-09-21_batch_C1_review_1_handoff.md`.
+
+*Blocking (route `production`), both measured, neither reachable by any existing row:*
+- **B1** — `_phase3_reason` checks `row is None or row.is_deleted` but only `item is None` /
+  `task is None`. `_lock` filters `workspace_id` + `client_id` only (correctly — §9 rule 4 puts
+  the deletion decision on the caller). Intention §5A **MC-16**'s predicate table requires
+  `items.is_deleted = false` and `tasks.is_deleted = false` for the *creation* lookups. Measured:
+  after `delete_item(I)`, `CR([I on R])` creates `in_queue` and moves the counter to 4; after
+  `delete_task(T)` the same, plus `tasks.is_stock_assignment` flips back to `true` on a deleted
+  task. Neither assignment is reachable by any plan-11 hook. Fix: `or item.is_deleted` /
+  `or task.is_deleted` in `_phase3_reason`; do **not** touch `_locks.py`. Rows owed — owner card 1.
+- **B2** — `delete_stock_task_assignments` removes with `for client_id in sorted(ids)` (the
+  request list), not the discovered set, against §5 task 3's "per **assignment** ascending
+  `client_id`". `DL([A, A])` on a row also holding an active B(4) measured `quantity_in_queue = 0`
+  (truth 4) with **zero repair records** — the self-heal never fires because the counter never
+  goes negative. Response echoes the id twice. Fix: iterate `sorted(locked_assignments)` and
+  return the same. Owner card 2 decides refuse-vs-deduplicate.
+
+*Should-fix:* **S1** (`production`) the router's own body models carry no `extra="forbid"`, so an
+unknown field is dropped by `body.model_dump()` and the request succeeds 200 — MC-13's "Unknown
+fields → 422" is unmet at the endpoint (C3(e) still PASSes at the command boundary, which is the
+plan's shorthand). **S2** (`verification`) C5(a)'s ratified `count_writes == 0` clause is asserted
+by no test → **NOT_VERIFIED**. **S3** (`verification`) C3(a)'s folded four-key fixture is
+implemented by no test, so "failures sorted by key" is still unarmable → **NOT_VERIFIED**.
+**S4** (`plan`, owner) C3(a)'s outcome cell lists three failures against a four-key fixture —
+`zone` resolves to `missing_on_item` and belongs in the list. **S5** (`verification`) §6's "every
+success row ends with `assert_stock_report_clean`" is met by 14 of 79 tests across the batch;
+C3(b), C3(c), C4(g), C4(h), C4(k), C1(r), C1(s), C6(c), C6(h), C7(a) miss it. **S6** (`plan`)
+C1 enumerates absent/deleted/foreign for the row and absent-only for the task and the item.
+
+*Verified correct and not to be re-spent:* MC-13's nine-arm phase-3 order; MC-1's lock order in
+both commands; **C5(b)'s structural check PASSES** — `LockRows` sits above the sort, so one
+`ORDER BY client_id … FOR UPDATE` does discharge the batch lock-order promise, and the row is
+`UNFORCEABLE` for the right reason (no caller-supplied order can reach acquisition); the
+`IntegrityError` backstop is positively observed by M56; post-commit serialization is safe
+(`expire_on_commit=False`, `models/database.py:44`); MC-19 coalescing; the 14-key shape; tenancy on
+all four classes. The tester's arithmetic re-derived independently and matching (69 + 26 = 95
+declared, 68 + 25 distinct edits, 95 tests in the reverse map, zero silent orphans); every
+`EQUIVALENT` re-derived from the code is genuine; both `ARMED-SHARED` rows reach the second row's
+own assertion.
+
+*Reviewer probes:* **no production file was touched.** Two temporary test files were created, run
+and deleted; tree verified byte-identical to `a9b734f` (`git diff --quiet`). No L4 taken.

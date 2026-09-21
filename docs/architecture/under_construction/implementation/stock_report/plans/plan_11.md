@@ -230,3 +230,51 @@ ledger: `handoffs/tester/2026-09-21_batch_C1_test_1_handoff.md`.
   assert (task flag, the dispatched stock events, R's counters).
 
 *Blocked:* none. No `BLOCKED-PRODUCTION` row.
+
+**Reviewer, 2026-09-21 (batch C1 review 1, Opus). CHANGES_REQUESTED — 25 PASS / 1 FAIL /
+0 NOT_VERIFIED of 26 live rows.** Handoff
+`handoffs/reviewer/2026-09-21_batch_C1_review_1_handoff.md`.
+
+**C7(b) FAILs.** The row was recorded `UNFORCEABLE` pending "the reviewer's structural check";
+the check was performed and **does not discharge the row**. The new Item `FOR UPDATE` in
+`delete_item` is present, correctly ordered, and observed by `test_removal_locks.py` — and in the
+serialisation it creates (delete_item commits first, `CR` then proceeds) the waiting creation
+**still creates an active assignment on the soft-deleted item**, because
+`create_stock_task_assignments._phase3_reason` never checks `item.is_deleted` and `_lock` filters
+only `workspace_id` + `client_id`. Measured by the reviewer: `in_queue` assignment created, row
+counter 4. The same hole exists on the Task side. Routed to plan 8 as **B1** (intention §5A
+**MC-16**'s predicate table: `items.is_deleted = false` for the creation lookup,
+`tasks.is_deleted = false` for the creation task lookup). C7(b) re-verifies once B1 lands.
+
+**C7(a) PASSES.** Structural check performed: `remove_item_from_task` takes
+`lock_tasks(..., {request.task_id})` before its discovery block and before the `TaskItem` write,
+and `create_stock_task_assignments` reads `_lookup_primary_pairs` only after its own task lock.
+Both serialisations give the row's outcome — unlink-first ⇒ the waiting `CR` sees `removed_at` and
+refuses `item_not_task_primary`; create-first ⇒ the hook removes the assignment. The absence of an
+automated instrument does not weaken the row; the cell's honesty about it is correct.
+
+*Should-fix:* **S5** (`verification`) §6's "every row ends with `assert_stock_report_clean` unless
+drift is planted" is met by 4 of 21 non-drift rows — C1(b), C1(c), C2(b), C2(c), C3(b), C4(a)–(f),
+C4(i), C5(a)–(e) all miss it. Sharpest instance: **C3(b)**, whose `(0,0,0)` counters clause is
+also what a double-subtract-then-self-heal produces; only the repair-record half of the helper
+separates them.
+
+*Notes:* **N2** (`plan`) `test_removal_locks.py`'s two tests assert generated query text, which
+charter rule 2 forbids as a criterion — keep them as engineering aids, but the tester's candidate
+criterion 3 must not be folded as a lettered row, and C7(b) is the demonstration that a
+statement-order proxy is not the row's outcome. **N3** (`verification`) the mutation ledger skips
+id `N06`; the totals close, so a one-line "merged into N04" would settle it. **N6**
+(`production`, backlog) `task_item.role` is read before the Task lock and never re-read under it
+(§9 rule 4's re-read); benign today because nothing in the tree writes `role` in place.
+
+*Verified correct:* all five call sites and their lock orders (MC-1 holds in each);
+`_category_guard.py`'s None-awareness in both directions and its use of `ACTIVE_ASSIGNMENT_STATES`
+rather than a typed list (§9 rule 16); the guard's placement **before** the `_DIRECT_FIELDS` loop
+in both writers, which is the right call for the reason the implementer gave (`populate_existing`
+would discard staged field changes) — the uncovered "category plus another field in one request"
+case remains tester candidate criterion 4, and I agree nothing catches it; C5(a)'s second-session
+proof and the three counts it asserts, all written before `find_or_create_item` is reached;
+C1(c)'s `failed`-then-active construction; the three trigger strings.
+
+*Reviewer probes:* no production file was touched; two temporary test files created, run and
+deleted; tree byte-identical to `a9b734f`.
