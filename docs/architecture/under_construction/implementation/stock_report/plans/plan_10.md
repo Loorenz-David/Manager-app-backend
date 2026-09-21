@@ -639,3 +639,53 @@ row-that-cannot-fail shape this pipeline has found eleven times in one batch, an
 **Disposition:** C4(k) stays **OWED**. Routed to a short follow-up round to add the test; the five
 plants above are proven to work and can be transcribed directly. Batch C2's gate should wait for
 it — plan 10 reads 40 rows and 39 are satisfied.
+
+---
+
+## Review log — owner card R-1 / C4(k) and C4(j) arming follow-up, Codex 2026-09-21
+
+The follow-up added tests only in `app/tests/unit/services/commands/stock_report/
+test_task_state_write_sites_are_registered.py`. The collector, production code, registry, scan
+roots, and criteria were not changed. The probe helper invokes the private file visitor with the
+same import-alias table and `(path, line)` de-duplication used by the live collector, so each row
+asserts its exact collected key and class rather than merely asserting a non-empty result.
+
+Coverage is one parametrized case per construct: C4(j) has 5 cases (annotated `state`, tuple
+target, aliased `update`, aliased `Task`, and raw SQL), and C4(k) has 6 cases (the two table-object
+forms, `for` target, `with` target, qualified `builtins.setattr`, and dict-unpacked `Task`). The
+optional `with` case was included because the collector extension supports it and it is cheap to
+arm beside the required `for` case.
+
+Targeted guard result: **18 passed** with `BEYO_TEST_SLOT=r1b`. Ruff passed on both the touched test
+module and the unchanged scanner module.
+
+Mutation ledger (each mutation was isolated, run against the complete targeted guard, restored,
+and followed by `git diff --quiet -- app/tests/unit/services/commands/stock_report/_task_state_write_scanner.py`):
+
+| mutation | extension disabled | red evidence | revert proof |
+|---|---|---|---|
+| 1 | annotated-assignment `state` targets | annotated-assignment case; **1 failed, 17 passed** | PASS |
+| 2 | tuple/list assignment targets | tuple-target case; **1 failed, 17 passed** | PASS |
+| 3 | aliased `update`/`insert` imports | aliased-update case; **1 failed, 17 passed** | PASS |
+| 4 | aliased `Task` import | aliased-constructor case; **1 failed, 17 passed** | PASS |
+| 5 | raw-SQL `text`/`execute` detection | raw-SQL case; **1 failed, 17 passed** | PASS |
+| 6 | `Task.__table__` reference recognition | both table cases; **2 failed, 16 passed** | PASS |
+| 7 | `for`/`with` attribute-target visitors | both target cases; **2 failed, 16 passed** | PASS |
+| 8 | qualified `builtins.setattr` recognition | builtins-setattr case; **1 failed, 17 passed** | PASS |
+| 9 | dict-unpacked `Task` constructor recognition | dict-unpacked constructor case; **1 failed, 17 passed** | PASS |
+
+Mutation ledger totals: **9 declared / 9 executed / 9 red / 9 reverted**. No scanner diff remains.
+
+Required L4 (`BEYO_TEST_SLOT=r1b`, `pytest -m 'not e2e'`): **23 failed / 3679 passed / 1 skipped**.
+The 21 published failure IDs remain unchanged; the two additional failures are
+`test_worker_name_resolution[None-None-beyo_test_main_main]` and
+`test_worker_name_resolution_uses_xdist_worker`. Their ID diff against the expected baseline is
+empty. The added 11 tests explain the pass-count increase from the prior 3668-pass baseline:
+`23 = 21 + 2` and `23 + 3679 + 1 = 3703` collected tests.
+
+The write perimeter is limited to this review-log entry, the guard test file, and the exact
+follow-up handoff. Concurrent edits in plan 12, plan 13, plan 13A, and plan 14 were preserved and
+not staged. Architecture Graph status/search/node inspection found no runtime architectural delta
+because this round is tests-only; no graph mutation was made.
+
+**Checkpoint:** `CHECKPOINT (not approved): arm C4(k) and C4(j)`

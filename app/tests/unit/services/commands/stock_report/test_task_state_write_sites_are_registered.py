@@ -24,9 +24,13 @@ is correctly wired on the tree as shipped.
 
 from __future__ import annotations
 
+import ast
+
 import pytest
 
 from tests.unit.services.commands.stock_report._task_state_write_scanner import (
+    _FileVisitor,
+    _collect_import_aliases,
     call_keyword_value_repr,
     collect_write_sites,
     function_contains_call,
@@ -43,6 +47,104 @@ from tests.unit.services.commands.stock_report.task_state_write_site_registry im
 pytestmark = pytest.mark.unit
 
 _VALID_CLASSIFICATIONS = {TASK_WRITE, NO_SYNC, PAUSED_DRIVER, NOT_TASK}
+
+
+def _collect_probe_sites(source: str):
+    tree = ast.parse(source)
+    visitor = _FileVisitor("beyo_manager/_probe.py", _collect_import_aliases(tree))
+    visitor.visit(tree)
+
+    unique_sites = {}
+    for site in visitor.sites:
+        unique_sites.setdefault(site.key, site)
+    return list(unique_sites.values())
+
+
+@pytest.mark.parametrize(
+    ("case", "source", "expected_lineno", "expected_class"),
+    [
+        (
+            "annotated assignment",
+            "task.state: TaskStateEnum = TaskStateEnum.READY\n",
+            1,
+            "attr_state",
+        ),
+        (
+            "tuple-target assignment",
+            "task.state, other = state, other\n",
+            1,
+            "attr_state",
+        ),
+        (
+            "aliased update",
+            "from sqlalchemy import update as mutate\nmutate(Task).values(state='working')\n",
+            2,
+            "update_or_insert_task",
+        ),
+        (
+            "aliased Task constructor",
+            "from beyo_manager.models.tables.tasks.task import Task as TaskAlias\n"
+            "TaskAlias(state='working')\n",
+            2,
+            "task_ctor",
+        ),
+        (
+            "raw SQL",
+            'text("UPDATE tasks SET state = \'working\'")\n',
+            1,
+            "raw_sql_tasks_state",
+        ),
+    ],
+    ids=lambda case: case,
+)
+def test_c4j_collector_arm_collects_each_construct(case, source, expected_lineno, expected_class):
+    sites = _collect_probe_sites(source)
+
+    assert len(sites) == 1, f"{case}: expected one de-duplicated site, got {sites!r}"
+    site = sites[0]
+    assert site.key == ("beyo_manager/_probe.py", expected_lineno)
+    assert site.class_ == expected_class
+
+
+@pytest.mark.parametrize(
+    ("case", "source", "expected_lineno", "expected_class"),
+    [
+        (
+            "Task table update chain",
+            'Task.__table__.update().where(Task.client_id == cid).values(state="working")\n',
+            1,
+            "update_or_insert_task",
+        ),
+        (
+            "update of Task table",
+            'update(Task.__table__).values(state="working")\n',
+            1,
+            "update_or_insert_task",
+        ),
+        ("for target", "for task.state in states:\n    pass\n", 1, "attr_state"),
+        ("with target", "with context() as task.state:\n    pass\n", 1, "attr_state"),
+        (
+            "builtins setattr",
+            "import builtins\nbuiltins.setattr(task, 'state', 'working')\n",
+            2,
+            "setattr",
+        ),
+        (
+            "dict-unpacked Task constructor",
+            'Task(**{"state": "working"})\n',
+            1,
+            "task_ctor",
+        ),
+    ],
+    ids=lambda case: case,
+)
+def test_c4k_collector_arm_collects_each_construct(case, source, expected_lineno, expected_class):
+    sites = _collect_probe_sites(source)
+
+    assert len(sites) == 1, f"{case}: expected one de-duplicated site, got {sites!r}"
+    site = sites[0]
+    assert site.key == ("beyo_manager/_probe.py", expected_lineno)
+    assert site.class_ == expected_class
 
 
 def test_c4a_every_collected_site_has_a_registry_entry():
