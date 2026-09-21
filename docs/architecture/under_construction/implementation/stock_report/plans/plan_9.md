@@ -296,3 +296,30 @@ after a fixture repair, +1 re-siting). Tests: 19 → 41 in
   names `process_items_processed.py` but the symbol is in `_move_assignment.py` — backfill
   proposed. **Candidate criterion:** `resolve_processed_group` never calls
   `_assert_allowed_move`; see owner card 1.
+
+**Reviewer, 2026-09-21 (batch C2 review 1, Opus) — CHANGES_REQUESTED.** Tree `4581209`.
+Handoff: `handoffs/reviewer/2026-09-21_batch_C2_review_1_handoff.md`.
+**Plan 9: 44 PASS / 0 FAIL / 1 NOT_VERIFIED** of 45 (C8(d) OWED). No row of this plan failed.
+
+- **C8(b) structural check discharged** (§9 rule 9): `_locks.py:_lock` issues exactly one
+  `SELECT … ORDER BY client_id … FOR UPDATE` per model class and `process_items_processed.py:113-120`
+  passes the whole candidate set once to each of `lock_stock_report_items` /
+  `lock_stock_task_assignments`, so no request can interleave acquisitions per entry.
+- **C8(c) checked for over-verification** (§9 rule 18): the contract test pins the signature and the
+  event-kind set only and does not duplicate C3–C7. Correctly scoped.
+- **C7(b) checked against owner card 1**: no statement-count and no runtime-ordering assertion.
+- **F-4 (should-fix, route `plan`) — C8(d)'s example fixture cannot produce an illegal target.**
+  `resolve_processed_group:286-291` computes each target itself from `assignment.state`, so an
+  `in_progress` assignment yields the **legal** `resolved_early`. The provable fixture is a
+  *terminal* assignment. Also: the measurement C8(d) cites (tester CC-1 / owner card 1) says an
+  illegal transition was "written silently"; under P27 the stored state, counter column and goal
+  credit were all **correct** — only the response's `reason` was stale. For a terminal input today's
+  code flushes the illegal state and dies on a bare `KeyError` at `_COUNTER_COLUMN` (`:300`), not on
+  `IllegalAssignmentMove`, which makes the row's "nothing is written" clause load-bearing.
+  **Owner card 3.**
+- **N-1 (verification):** `t_ipr::test_numbers_are_echoed_as_received_not_stripped` traces to task 1,
+  not to a lettered row, and is undeclared — declare it against C3(g) or retire it (rule 16).
+- **N-2 (verification):** the eight C2 rows carry two test surfaces each; D-1's justification and the
+  plan-7 precedent hold, so not a finding this round — flag for a later retirement pass.
+- **N-5 (production):** `resolve_processed_group` has no `from_state == target` short-circuit and no
+  `any(delta != 0)` guard on its row event (tester CC-2, confirmed at `:332`); fold into C8(d)'s fix.

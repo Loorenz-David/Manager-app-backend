@@ -289,3 +289,62 @@ built and passing, three consecutive runs, no flake observed); C7(a)/(b)/(c)
   and neither was made to bite. **Candidate criterion:** plan 10 registers
   `sync_task_stock_assignments` in §6.5 but carries no §9 rule-18 row pinning it; see owner
   card 2.
+
+**Reviewer, 2026-09-21 (batch C2 review 1, Opus) — CHANGES_REQUESTED.** Tree `4581209`.
+Handoff: `handoffs/reviewer/2026-09-21_batch_C2_review_1_handoff.md`.
+**Plan 10: 35 PASS / 0 FAIL / 1 NOT_VERIFIED** of 36 (C8(a) OWED). No row of this plan failed; all
+three findings below sit **past the rows**, in the authority they were derived from.
+
+- **F-1 — BLOCKING, route `production`. `sync_task_stock_assignments` does not implement MC-2
+  step 3.** `sync_task_stock_assignments.py:57-63` queries *any* non-deleted assignment of the task
+  — the `state.in_(ACTIVE_ASSIGNMENT_STATES)` predicate is absent — with `session.scalar` instead of
+  the specified `scalar_one_or_none` and no `ORDER BY`. §14F F1 ratifies that a terminal assignment
+  "does not block a new assignment", `uix_stock_task_assignments_task_active` is partial on the
+  three active states, and phase 8A's `_SCANNER_PROCESSED_STATES` is `{RESOLVED, RESOLVED_EARLY}`
+  only — so a `failed` assignment does not block re-assigning the same `(task, item)`, and plan 10
+  C3(b)'s own X1 path un-fails the task. **Measured** (reviewer probe, created/run/deleted): with
+  A1 `failed` and A2 `in_queue` on one task, the discovery query returned A1, line 81 skipped, and
+  A2 stayed `in_queue` when the task moved to `working` — zero events, no error, permanent board
+  drift. **Correction:** restore the `ACTIVE_ASSIGNMENT_STATES` predicate (frozenset, rule 16) and
+  `scalar_one_or_none`; keep the post-lock terminal skip, which C5(a)/C5(c) depend on.
+- **F-5 — should-fix, route `plan`.** No row covers a task with more than one non-deleted
+  assignment; every plan 10 fixture is "A created through `CR`", singular. MC-2 step 3's
+  "(at most one, MC-4)" premise is unasserted, which is why the tester could not have found F-1.
+  **Owner card 1.**
+- **F-2 — should-fix, route `production`. The MC-2 write-site collector misses four of MC-2's own
+  site classes.** Five constructs planted at EOF of `update_task.py` (no registered line shifted);
+  `t_grd` stayed **green, 6 passed**: annotated attribute assignment `task.state: T = …` (class (a),
+  and `_task_state_write_scanner.py:6-7`'s own docstring claims it — there is no `visit_AnnAssign`);
+  tuple-target `task.state, task.updated_at = …` (class (a) — `visit_Assign` never descends into an
+  `ast.Tuple` target); `update(TaskModel)` with the model imported under an alias (class (c) —
+  matcher requires `args[0].id == "Task"`); a helper called under an import alias (class (e) —
+  `_call_func_name` resolves the alias); plus raw SQL (F-6). Two further latent gaps of the same
+  shape: `sa.update(Task)` / `models.Task(state=…)` fail the `isinstance(node.func, ast.Name)` test.
+  **No live miss on this tree** — I grepped every form and the corpus contains none, so the 85
+  entries are correct today; and the rows the implementer said rest only on the guard
+  (C1(b),(c),(e),(f),(i),(j),(l)) were all given their own end-to-end tests by the tester. The
+  defect is the instrument's forward-looking reach.
+- **F-3 — should-fix, route `plan`. C2(a)'s declared evidence does not exist.** The owner ruling
+  delegates C2(a)'s real evidence to "the C4 registry guard, which refuses a sync call inside the
+  three helpers". The guard has no negative assertion of any kind. **Measured:** a
+  `sync_task_stock_assignments(...)` call planted inside `maybe_evaluate_task_ready` left `t_grd`
+  **green, 6 passed**. C2(a) currently has no evidence. **Remedy (owner card 2):** one assertion
+  inside the existing guard, using machinery it already has —
+  `assert not function_contains_call(None, helper, "sync_task_stock_assignments")` for the three
+  helpers and `_apply_step_transition`. Same idiom as the existing positive check, so not an
+  implementation-coupled test demand.
+- **F-6 — should-fix, route `plan`.** MC-2's guard classes (a)–(e) omit raw SQL, although §5B's own
+  2026-09-18 audit searched `text\(` containing `tasks`. Planted `text("UPDATE tasks SET state …")`
+  invisible to the guard; nothing in the corpus uses the form today. **Owner card 4.**
+- **C7(b) structural check discharged:** `resolve_task.py` raises `ConflictError` on its terminal
+  pre-check before the first `Task.state` write and well before the sync call. Label accurate.
+- **C5(a)–(c) choreography independently verified:** both participant blocks are observed in every
+  order (`:212-217`; shared `_run_forced_order` at `:412-417`), referee lock, no barrier, no sleep,
+  `finally` release and purge. The B1 anti-pattern is not present.
+- **N-3:** CC-6 closed by reading — `remove_task_steps` (plural) is byte-symmetric with the singular
+  caller including the `stock_report_events` hand-up. No test owed.
+- **N-4 (verification):** the guard never validates a `not_task: <model>` claim, only that the field
+  is non-empty; fold with F-2's fix.
+- **C8(a)** is **not** discharged by the two existing direct-call tests: both assert `events == []`,
+  so neither exercises a moved assignment and neither pins the returned event kinds. Row text is
+  well formed and provable as written.
