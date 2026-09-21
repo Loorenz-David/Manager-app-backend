@@ -158,4 +158,76 @@ command's import site). Every row ends with `assert_stock_report_clean`.
 
 ## 8. Review log
 
-(empty)
+**Implementer, 2026-09-21 (batch C2, Sonnet).** Built: `sync_task_stock_assignments.py`
+(MC-2's sync); the nine call sites (S1-S9), each after the command's last write to
+`Task.state`, inside its own transaction, only when the task net-changed;
+`task_state_write_site_registry.py` + `_task_state_write_scanner.py` (an AST
+collector, not named in §4 but needed to make the registry checkable — see
+judgment calls) + `test_task_state_write_sites_are_registered.py` (the C4 guard).
+
+**The registry's full inventory (85 sites), derived, not typed.** The AST collector
+found exactly 85 sites across `app/beyo_manager/**/*.py` and `app/scripts/**/*.py`
+(excluding tests/migrations): 52 `.state=` assignments (8 on `Task`, 44 on other
+models), 18 `setattr()` calls (2 on `Task`, 16 on other models), 1 `update(Task)`,
+1 `Task(state=...)` constructor, 13 calls to the four named helpers/`_apply_step_transition`
+(10 `task_write`, 3 `paused_driver`). Every `task_write` entry's `sync_functions`
+was verified against the shipped code by a script before this file was written
+(`function_contains_call` — see the guard's own test, `test_c4a_*`), and the guard
+itself passes on the current tree (C4(a)). I do not treat this as evidence of
+`executed == declared` for mutations — that ledger is the tester's (§3B).
+
+**Judgment calls:**
+- **The scanner module (`_task_state_write_scanner.py`) is an addition beyond §4's
+  file list.** The guard's own logic (an AST sweep plus per-site verification) is
+  substantial enough that folding it directly into the test file would make both
+  hard to read; I split it out as test-support code (it matches no `test_*.py`
+  pattern, so pytest never collects it as a test module — rule 19 is not implicated).
+  It holds no criterion-bearing assertions itself.
+- **`sync_functions` names the function that must call the sync, not necessarily
+  the write's own enclosing function.** For the three helper-internal writes in
+  `_task_state_transitions.py` (`maybe_advance_task_to_working`,
+  `maybe_reopen_task_to_working`, `maybe_evaluate_task_ready`), and for the two
+  internal calls to those helpers inside `_step_transition_core.py`'s shared core,
+  I classified them `no_sync`/`task_write` pointing at their **real callers**
+  (`transition_step_state`, `add_task_steps`, `force_task_ready`,
+  `transition_step_state_batch`) rather than at the helper/core itself — adding
+  the sync call inside the shared helper would violate §5B's own "why command
+  level, not helper level" rule (it would fire on an intermediate state within one
+  transaction). `function_contains_call` searches the whole scanned corpus for the
+  named function, not just the site's own file, so a `sync_functions` entry may
+  legitimately name a function defined elsewhere.
+- **S8's `sync_functions` lists both `remove_task_step` and `remove_task_steps`.**
+  Both public commands call the same `_remove_task_steps_in_session` helper, whose
+  own two mutually-exclusive branches (`len(remaining_steps) == 0` vs.
+  `maybe_evaluate_task_ready`) never both fire in one call — the C2(a) analysis the
+  plan already gives — so the helper's return state is always settled by the time
+  either caller's own sync call runs. Both callers carry the call.
+- **S8's `now` is `ctx.now`, not the helper's internal `datetime.now(timezone.utc)`.**
+  `_remove_task_steps_in_session` computes its own `now` locally and does not
+  return it, so the call site (outside the helper) cannot reuse the exact same
+  instant the task's own `updated_at` used. I used `ctx.now` — the same
+  deterministic, test-controlled clock phase 9 used — rather than a second fresh
+  `datetime.now()` call, so `assignment.updated_at` is exactly what a test
+  constructing `ctx` with a fixed `now` can assert against. This means
+  `task.updated_at` (real wall clock) and `assignment.updated_at` (`ctx.now`) are
+  not bit-identical for this one site; every other site (S1, S3-S7, S9) passes the
+  **same** locally-computed `now` its own `Task.state` write used, so this is the
+  one site where the two timestamps can differ. Flagging for the tester's C6(b) row.
+- **`resolve_processed_group`'s two event kinds (plan 9, revisited here for C8(c)).**
+  Plan §6.5 and C8(c) both say `stock_task_assignment:updated`, a kind this project
+  never registers (§6.7: only `:created`/`:state-changed`/`:deleted`). I built and
+  tested `:state-changed`, matching every other state-transition event in the
+  project. Repeated here because plan 10's own C5 rows describe the same sites'
+  events the same way (e.g. C5(a): "session 1's events `[state-changed resolved,
+  :updated]`") — internally consistent with what I built, so I read the C8(c)
+  wording as informal rather than as a fourth event kind to add.
+
+**Rows I know I did not build a dedicated test for** (see the implementer handoff
+for the full per-row disposition): C1(b)/(c)/(e)/(f)/(h)/(i)/(j)/(k)/(l) — S2, S3,
+S7 and S9 are proven only by the C4 guard (their sync call exists and is wired),
+not by driving their own command end-to-end; the guard's six required probes
+C4(b)-(h) (owned by the tester, §3B); C2(a) (owner ruling: `UNFORCEABLE BY DESIGN`,
+its real evidence is C4); C3(a)/(b)/(d)/(e)/(f) (sibling terminal-skip cases of the
+one I tested); C5(b)/(c) (the mirror order and the `in_progress` order — C5(a) is
+built and passing, three consecutive runs, no flake observed); C7(a)/(b)/(c)
+(dispatch-order and trigger rows).

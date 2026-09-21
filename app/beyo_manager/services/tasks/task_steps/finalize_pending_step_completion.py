@@ -19,6 +19,9 @@ from beyo_manager.services.commands.task_steps._settle_step_time import settle_c
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.infra.events import event_bus
 from beyo_manager.services.infra.events.build_event import build_workspace_event
@@ -257,6 +260,20 @@ async def handle_finalize_pending_step_completion(payload: dict, task_client_id:
                         task,
                         "task:state-changed",
                         extra={"new_state": task.state.value},
+                    )
+                )
+
+            # MC-2 S9 — after this command's last write to Task.state, still inside
+            # its transaction. This handler has no `ctx`, so the actor is the
+            # payload's own performer (§9 "performer, not credited user" / MC-17).
+            if old_task_state is not None and task.state != old_task_state:
+                pending_events.extend(
+                    await sync_task_stock_assignments(
+                        session,
+                        [(task, old_task_state)],
+                        workspace_id=workspace_id,
+                        actor_user_id=performed_by,
+                        now=now,
                     )
                 )
 

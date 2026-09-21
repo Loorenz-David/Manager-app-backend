@@ -38,6 +38,9 @@ from beyo_manager.services.commands.task_steps._upholstery_installation_side_eff
     apply_upholstery_installation_side_effect,
 )
 from beyo_manager.services.commands.task_steps._settle_step_time import settle_closed_step_time
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.task_steps._user_working_record import fetch_open_user_working_record
 from beyo_manager.services.commands.task_steps.mark_step_time_inaccurate import (
     _apply_inaccurate_time_flag,
@@ -131,6 +134,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
     """
     request = parse_transition_step_state_request(ctx.incoming_data)
     old_task_state = None
+    stock_report_events: list = []
     auto_paused_step: TaskStep | None = None
     # True when this transition is the one that flipped the whole task to READY
     # (i.e. it closed the last still-open step). See the response's `was_final_step`.
@@ -521,6 +525,17 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
                     )),
                 )
 
+        # MC-2 S1 — after this command's last write to Task.state, still inside its
+        # transaction. Only offered when the task net-changed (§5B step 1).
+        if old_task_state is not None and task.state != old_task_state:
+            stock_report_events = await sync_task_stock_assignments(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=now,
+            )
+
     state_changed_items = [
         {
             "client_id": step.client_id,
@@ -555,6 +570,7 @@ async def transition_step_state(ctx: ServiceContext) -> dict:
             )
         )
     pending_events.extend(upholstery_events)
+    pending_events.extend(stock_report_events)
     await event_bus.dispatch(pending_events)
     return {
         "step_id": step.client_id,

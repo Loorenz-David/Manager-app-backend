@@ -13,6 +13,9 @@ from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.models.tables.tasks.task_step_acknowledgment import TaskStepAcknowledgment
 from beyo_manager.models.tables.tasks.task_step_dependency import TaskStepDependency
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.task_steps.requests import (
     parse_remove_task_step_request,
     parse_remove_task_steps_request,
@@ -246,6 +249,7 @@ async def _dispatch_remove_step_events(
     readiness_changes: list[tuple[TaskStep, object]],
     removed_steps: list[TaskStep],
     pending_ack_removed_by_worker: dict[str, list[str]],
+    stock_report_events: list | None = None,
 ) -> None:
     pending_events: list = [
         build_workspace_event(task, "task:updated"),
@@ -292,6 +296,8 @@ async def _dispatch_remove_step_events(
                 extra={"task_id": task.client_id, "step_ids": sorted(step_ids)},
             )
         )
+    if stock_report_events:
+        pending_events.extend(stock_report_events)
     await event_bus.dispatch(pending_events)
 
 
@@ -311,6 +317,20 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
             step_ids=[request.step_id],
         )
 
+        # MC-2 S8 — after this command's last write to Task.state (inside the
+        # helper above), still inside its transaction. Only offered when the task
+        # net-changed (§5B step 1). `ctx.now`, not a fresh clock read, so the
+        # assignment's stamp is the deterministic one tests (and callers) control.
+        stock_report_events: list = []
+        if task.state != old_task_state:
+            stock_report_events = await sync_task_stock_assignments(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=ctx.now,
+            )
+
     await _dispatch_remove_step_events(
         ctx=ctx,
         task=task,
@@ -318,6 +338,7 @@ async def remove_task_step(ctx: ServiceContext) -> dict:
         readiness_changes=readiness_changes,
         removed_steps=removed_steps,
         pending_ack_removed_by_worker=pending_ack_removed_by_worker,
+        stock_report_events=stock_report_events,
     )
     return {"step_id": request.step_id}
 
@@ -339,6 +360,18 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
             step_ids=step_ids,
         )
 
+        # MC-2 S8 — same call site as `remove_task_step` above; both share this
+        # helper and both drive the sync from the command level.
+        stock_report_events: list = []
+        if task.state != old_task_state:
+            stock_report_events = await sync_task_stock_assignments(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=ctx.now,
+            )
+
     await _dispatch_remove_step_events(
         ctx=ctx,
         task=task,
@@ -346,5 +379,6 @@ async def remove_task_steps(ctx: ServiceContext) -> dict:
         readiness_changes=readiness_changes,
         removed_steps=removed_steps,
         pending_ack_removed_by_worker=pending_ack_removed_by_worker,
+        stock_report_events=stock_report_events,
     )
     return {"step_ids": step_ids}

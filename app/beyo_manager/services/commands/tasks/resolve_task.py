@@ -17,6 +17,9 @@ from beyo_manager.services.commands.history._create_history_record_in_session im
     _create_history_record_in_session,
 )
 from beyo_manager.services.commands.history.message_builder import build_state_change_message
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -52,12 +55,23 @@ async def resolve_task(ctx: ServiceContext) -> dict:
             raise ConflictError("Task is already in a terminal state.")
 
         original_state = task.state.value
+        original_state_enum = task.state
         now = datetime.now(timezone.utc)
         task.state = TaskStateEnum.RESOLVED
         task.closed_at = now
         task.completed_at = now
         task.updated_at = now
         task.updated_by_id = ctx.user_id
+
+        # MC-2 S4 — after this command's last write to Task.state, still inside its
+        # transaction. Always net-changes (the guard above refuses a terminal task).
+        stock_report_events = await sync_task_stock_assignments(
+            ctx.session,
+            [(task, original_state_enum)],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+        )
 
         username = ctx.identity.get("username")
         await _create_history_record_in_session(
@@ -106,7 +120,9 @@ async def resolve_task(ctx: ServiceContext) -> dict:
             payload=asdict(ItemCostResultPayload(workspace_id=ctx.workspace_id, task_id=task.client_id)),
         )
 
-    await event_bus.dispatch([
+    events = [
         build_workspace_event(task, "task:state-changed", extra={"new_state": TaskStateEnum.RESOLVED.value}),
-    ])
+    ]
+    events.extend(stock_report_events)
+    await event_bus.dispatch(events)
     return {"client_id": task.client_id}

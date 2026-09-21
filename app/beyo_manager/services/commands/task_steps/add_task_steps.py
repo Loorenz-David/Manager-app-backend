@@ -30,6 +30,9 @@ from beyo_manager.services.commands.task_steps.assign_worker_to_step import (
     _resolve_worker_for_section,
 )
 from beyo_manager.services.commands.task_steps.requests import parse_add_task_steps_request
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_reopen_task_to_working
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -64,6 +67,7 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
     task: Task | None = None
     old_task_state: TaskStateEnum | None = None
     task_reopened = False
+    stock_report_events: list = []
 
     async with maybe_begin(ctx.session):
         if provided_client_ids:
@@ -260,6 +264,18 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 actor_id=ctx.user_id,
             )
 
+        # MC-2 S7 — after this command's last write to Task.state (`pending ->
+        # assigned` above, or the reopen `ready -> working`), still inside its
+        # transaction. Only offered when the task net-changed (§5B step 1).
+        if old_task_state is not None and old_task_state != task.state:
+            stock_report_events = await sync_task_stock_assignments(
+                ctx.session,
+                [(task, old_task_state)],
+                workspace_id=ctx.workspace_id,
+                actor_user_id=ctx.user_id,
+                now=now,
+            )
+
     if not created_steps:
         return {"step_ids": []}
 
@@ -308,5 +324,6 @@ async def add_task_steps(ctx: ServiceContext) -> dict:
                 extra={"task_id": request.task_id, "step_ids": sorted(step_ids)},
             )
         )
+    pending_events.extend(stock_report_events)
     await event_bus.dispatch(pending_events)
     return {"step_ids": [step.client_id for step in created_steps]}

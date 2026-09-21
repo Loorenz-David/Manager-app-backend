@@ -30,6 +30,9 @@ from beyo_manager.services.commands.task_step_acknowledgments.mark_step_obligati
 )
 from beyo_manager.services.commands.task_steps._step_transition_core import _apply_step_transition
 from beyo_manager.services.commands.task_steps.requests import parse_batch_transition_step_state_request
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.task_steps.transition_step_state import (
     _ALLOWED_TRANSITIONS,
     _completed_the_whole_task,
@@ -234,6 +237,17 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
         # Task-level: one notification per distinct task whose state net-changed.
         actor = ctx.identity.get("username") or "someone"
         changed_tasks = [t for t in tasks if t.state != old_task_states.get(t.client_id)]
+
+        # MC-2 S2 — one call for every net-changed task, after this command's last
+        # write to Task.state, still inside its transaction.
+        stock_report_events = await sync_task_stock_assignments(
+            ctx.session,
+            [(t, old_task_states.get(t.client_id)) for t in changed_tasks],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+        )
+
         for task in changed_tasks:
             task_pin_user_ids = list(
                 await resolve_task_notification_targets(
@@ -284,6 +298,7 @@ async def transition_step_state_batch(ctx: ServiceContext) -> dict:
             )
         )
     pending_events.extend(upholstery_events)
+    pending_events.extend(stock_report_events)
     await event_bus.dispatch(pending_events)
 
     return {"items": result_items}

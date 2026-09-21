@@ -60,6 +60,9 @@ from beyo_manager.services.commands.task_steps._step_transition_core import _app
 from beyo_manager.services.commands.task_steps._upholstery_installation_side_effect import (
     apply_upholstery_installation_side_effect,
 )
+from beyo_manager.services.commands.stock_report.sync_task_stock_assignments import (
+    sync_task_stock_assignments,
+)
 from beyo_manager.services.commands.tasks._task_state_transitions import maybe_evaluate_task_ready
 from beyo_manager.services.commands.tasks.requests import parse_force_task_ready_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
@@ -109,6 +112,7 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
             raise ConflictError("Task is already ready.")
 
         original_state = task.state.value
+        original_state_enum = task.state
 
         # Same `is_deleted` filter the readiness predicate uses, so the set this command
         # closes is exactly the set that predicate will re-check.
@@ -226,6 +230,17 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
             # predicate silently turning this endpoint into a no-op that reports success.
             raise ConflictError("Task could not be marked ready.")
 
+        # MC-2 S3 — after this command's last write to Task.state, still inside its
+        # transaction (the task always net-changes here: the guard above refuses
+        # otherwise).
+        stock_report_events = await sync_task_stock_assignments(
+            ctx.session,
+            [(task, original_state_enum)],
+            workspace_id=ctx.workspace_id,
+            actor_user_id=ctx.user_id,
+            now=now,
+        )
+
         username = ctx.identity.get("username")
         actor = username or "Someone"
         await _create_history_record_in_session(
@@ -290,6 +305,7 @@ async def force_task_ready(ctx: ServiceContext) -> dict:
         build_workspace_event(task, "task:state-changed", extra={"new_state": TaskStateEnum.READY.value})
     )
     pending_events.extend(upholstery_events)
+    pending_events.extend(stock_report_events)
     await event_bus.dispatch(pending_events)
 
     return {
