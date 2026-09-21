@@ -75,5 +75,11 @@ def test_c2h_two_malformed_entries_are_both_named():
 
 
 def test_numbers_are_echoed_as_received_not_stripped():
+    """Traces to plan 9 **C3(g)** (review N-1): task 1's "as received (echo)"
+    clause, proven here at the parser boundary — the command-level echo (the
+    response's `article_number` field) is C3(g)'s own row,
+    `test_c3g_outer_whitespace_matches_and_echoes_untouched` in
+    `test_process_items_processed.py`. Kept as a parser-level companion (the same
+    deliberate two-surface pattern as N-2's C2 rows), not retired."""
     numbers = parse_items_processed_body(_body([{"article_number": " SR-x "}]))
     assert numbers == [" SR-x "]

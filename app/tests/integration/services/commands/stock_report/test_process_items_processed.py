@@ -47,6 +47,7 @@ from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.models.tables.tasks.task_step import TaskStep
 from beyo_manager.services.commands.stock_report._move_assignment import (
+    IllegalAssignmentMove,
     move_assignment,
     resolve_processed_group,
 )
@@ -1409,6 +1410,98 @@ async def test_c8c_resolve_processed_group_contract(db_session, monkeypatch):
 
         # This row asserts the direct call's contract only (plan 9 C8(c)); the
         # planted drift's own repair record is removed by the purge below.
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# C8(d) — resolve_processed_group refuses an illegal move on its own (owner card 3
+# restated the fixture to a terminal assignment; the function computes its own
+# target from the re-read state, so an *active* input can never yield an illegal
+# one — only a terminal one can)
+# ---------------------------------------------------------------------------
+
+
+async def test_c8d_resolve_processed_group_refuses_a_terminal_assignment(
+    db_session, monkeypatch
+):
+    """C8(d): called directly with an assignment already **terminal**
+    (`resolved`), `resolve_processed_group` computes `resolved_early` as its
+    target (every non-`awaiting` `from_state` maps there) — a `resolved ->
+    resolved_early` move, illegal under MC-1/§14F. The call must refuse with
+    `IllegalAssignmentMove` and write **nothing**: the assignment keeps its state,
+    the row's counters are unchanged, and no event is returned. This is the
+    grouped path's own defence via `_assert_allowed_move`, not a caller's — it
+    holds with no webhook re-read in front of it (rule 18's other half; F-4)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    assignment_id = await _create_at(
+        db_session, seeded, row, seeded.task, seeded.item, [S.AWAITING, S.RESOLVED]
+    )
+    workspace_id = seeded.workspace.client_id
+    try:
+        assignment = await _fresh_assignment(db_session, assignment_id)
+        assert assignment.state == S.RESOLVED
+        before_counters = await _counters(db_session, row.client_id)
+
+        with pytest.raises(IllegalAssignmentMove):
+            await resolve_processed_group(
+                db_session,
+                [assignment],
+                row=row,
+                workspace_id=workspace_id,
+                now=NOW,
+                trigger="test_c8d",
+            )
+
+        after = await _fresh_assignment(db_session, assignment_id)
+        assert after.state == S.RESOLVED
+        assert await _counters(db_session, row.client_id) == before_counters
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_resolve_processed_group_short_circuits_an_assignment_already_at_target(
+    db_session, monkeypatch
+):
+    """Not a lettered row — this proves the two N-5 additions folded into C8(d)'s
+    fix (plan 9 §7, review N-5), so they ship with evidence rather than as an
+    unverified side effect of the F-4 correction. An assignment already at its
+    computed target (`resolved_early`, called directly with no active input in the
+    group) hits `resolve_processed_group`'s own `from_state == target`
+    short-circuit — mirroring `move_assignment`'s — so nothing is written: no
+    counter statement, no goal effect, and the zero-delta guard on the row's
+    `:updated` event means an empty `moved` list returns `[]`, not an event."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    assignment_id = await _create_at(
+        db_session, seeded, row, seeded.task, seeded.item, [S.RESOLVED_EARLY]
+    )
+    workspace_id = seeded.workspace.client_id
+    try:
+        assignment = await _fresh_assignment(db_session, assignment_id)
+        assert assignment.state == S.RESOLVED_EARLY
+        before_counters = await _counters(db_session, row.client_id)
+        before_updated_at = assignment.updated_at
+
+        later = datetime(2026, 9, 22, 12, 0, 0, tzinfo=timezone.utc)
+        events = await resolve_processed_group(
+            db_session,
+            [assignment],
+            row=row,
+            workspace_id=workspace_id,
+            now=later,
+            trigger="test_shortcircuit",
+        )
+
+        assert events == []
+        after = await _fresh_assignment(db_session, assignment_id)
+        assert after.state == S.RESOLVED_EARLY
+        # untouched by the no-op — not re-stamped with the call's own `now`
+        assert after.updated_at == before_updated_at
+        assert await _counters(db_session, row.client_id) == before_counters
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)
         await db_session.commit()

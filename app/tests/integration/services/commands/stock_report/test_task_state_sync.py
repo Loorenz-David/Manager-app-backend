@@ -411,6 +411,100 @@ async def test_s1_transition_step_state_advances_the_assignment(db_session, monk
 
 
 # ---------------------------------------------------------------------------
+# C1(m) — a task carrying a terminal AND an active assignment: the discovery
+# query must select the live one, never whichever row the database returns
+# first (review F-1/F-5, owner card 1; intention §14F F1,
+# `uix_stock_task_assignments_task_active`).
+# ---------------------------------------------------------------------------
+
+
+async def test_c1m_sync_selects_the_active_assignment_over_a_terminal_one(
+    db_session, monkeypatch
+):
+    """A task may legitimately carry a terminal assignment **and** an active one:
+    §14F F1 says a terminal assignment does not block a new assignment, and
+    `uix_stock_task_assignments_task_active`'s partial unique index constrains
+    only the three *active* states, never "at most one, period". A1 fails
+    (terminal); A2 is a fresh assignment created afterwards for the same
+    `(task, item, row)` — the exact story review finding F-1 reproduced (a job
+    fails, a step removal re-opens it, Scanner re-assigns the same item). Driving
+    T through S1 (`in_queue -> working`) must move **A2 only**, with exactly one
+    `stock_task_assignment:state-changed` for A2 and one `:updated` for R; A1
+    must not appear in either the state read or the dispatched events."""
+    from beyo_manager.domain.task_steps.enums import TaskStepStateEnum
+    from beyo_manager.services.commands.task_steps.transition_step_state import (
+        transition_step_state,
+    )
+
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    section = await _section(db_session, seeded, "C1m section")
+    step = await _add_step(
+        db_session, seeded, seeded.task, section, state=TaskStepStateEnum.PENDING
+    )
+    # maybe_advance_task_to_working only fires from ASSIGNED (same precondition
+    # as the S1 test above); both assignments are created while T is ASSIGNED.
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.ASSIGNED)
+
+    a1_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    a1 = await _fresh_assignment(db_session, a1_id)
+    await move_assignment(
+        db_session, a1, S.FAILED,
+        workspace_id=seeded.workspace.client_id, actor_user_id=seeded.manager.client_id,
+        now=NOW, trigger="test",
+    )
+    a2_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    await db_session.commit()
+
+    workspace_id = seeded.workspace.client_id
+    try:
+        a1_before = await _fresh_assignment(db_session, a1_id)
+        assert a1_before.state == S.FAILED
+        a2_before = await _fresh_assignment(db_session, a2_id)
+        assert a2_before.state == S.IN_QUEUE
+
+        captured = capture_dispatch(
+            monkeypatch,
+            "beyo_manager.services.commands.task_steps.transition_step_state.event_bus.dispatch",
+        )
+        ctx = make_ctx(
+            db_session, seeded, role_name="worker",
+            incoming_data={"step_id": step.client_id, "task_id": seeded.task.client_id, "new_state": "working"},
+        )
+        await transition_step_state(ctx)
+
+        task_after = await _fresh_task(db_session, seeded.task.client_id)
+        assert task_after.state == TaskStateEnum.WORKING
+
+        a1_after = await _fresh_assignment(db_session, a1_id)
+        assert a1_after.state == S.FAILED  # untouched
+        a2_after = await _fresh_assignment(db_session, a2_id)
+        assert a2_after.state == S.IN_PROGRESS
+        assert await _counters(db_session, row.client_id) == (0, 4, 0)
+
+        state_changed = [
+            event
+            for event in captured
+            if event.event_name == "stock_task_assignment:state-changed"
+        ]
+        assert [event.client_id for event in state_changed] == [a2_id]
+        assert state_changed[0].extra["state"] == "in_progress"
+        updated = [
+            event
+            for event in captured
+            if event.event_name == "stock_report_item:updated"
+            and event.client_id == row.client_id
+        ]
+        assert len(updated) == 1
+
+        await assert_stock_report_clean(db_session, workspace_id)
+    finally:
+        await _cleanup_task_side_effects(db_session, seeded)
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
 # S4/S5/S6 — the three terminal task commands (symmetric fixture)
 # ---------------------------------------------------------------------------
 
@@ -1626,6 +1720,53 @@ async def test_c7c_the_syncs_inline_repair_carries_the_task_sync_trigger(
         assert len(repairs) == 1
         assert repairs[0].field == "quantity_in_queue"
         assert repairs[0].trigger == "inline:task_sync"
+    finally:
+        await _cleanup_task_side_effects(db_session, seeded)
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# C8(a) — sync_task_stock_assignments's own contract (rule 18's third instance,
+# the twin of plan 9 C8(c)). Owed: the two existing direct-call tests above
+# (`test_sync_never_moves_a_resolved_early_assignment`,
+# `test_sync_no_ops_when_the_assignment_is_already_at_target`) both assert
+# `events == []`, so neither exercises a moved assignment nor pins the returned
+# event-kind set (review, plan 10 §8). This row is the contract only — the
+# argument shape and the returned event kinds — never a second copy of the nine
+# call sites' own behaviour, which C1 and C4 already own.
+# ---------------------------------------------------------------------------
+
+
+async def test_c8a_sync_task_stock_assignments_contract(db_session, monkeypatch):
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    assignment_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    old_state = seeded.task.state  # pending, A in_queue
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.WORKING)
+    await db_session.commit()
+
+    workspace_id = seeded.workspace.client_id
+    try:
+        task = await _fresh_task(db_session, seeded.task.client_id)
+
+        events = await sync_task_stock_assignments(
+            db_session,
+            [(task, old_state)],
+            workspace_id=workspace_id,
+            actor_user_id=seeded.manager.client_id,
+            now=NOW,
+        )
+
+        event_names = [event.event_name for event in events]
+        assert event_names.count("stock_task_assignment:state-changed") == 1
+        assert event_names.count("stock_report_item:updated") == 1
+        assert len(events) == 2
+
+        assignment = await _fresh_assignment(db_session, assignment_id)
+        assert assignment.state == S.IN_PROGRESS
+
+        await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await _cleanup_task_side_effects(db_session, seeded)
         await purge_stock_report_workspace(db_session, workspace_id)
