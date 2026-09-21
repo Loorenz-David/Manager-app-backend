@@ -556,8 +556,14 @@ the cascade's ordering. Owner card 5.
 
 **Hypothesis:** the tree I hand over does not move the enumerated baseline except by the rows I
 declare. **Scope:** L4 (the cycle-closing stamp).
-**Tree identity:** `HEAD = 1a22263`, working tree carrying only my declared perimeter,
-`git diff -- app/` digest `2f1ff5889344cdb7` (`shasum -a 256`, first 16).
+**Tree identity:** taken at `HEAD = 1a22263` with the working tree carrying only my declared
+perimeter, `git diff -- app/` digest `2f1ff5889344cdb7` (`shasum -a 256`, first 16). That working
+tree is now the tester checkpoint **`a0bb9b4`** — `app/` is byte-identical between the two (the
+digest was re-checked immediately before the commit), and the only files added afterwards are
+this handoff and the two plan Review logs, zero of them under `app/`.
+
+**Checkpoints:** implementer `568a1cb` (phase 12) → `b6cbbb9` (phase 13) → tester **`a0bb9b4`**.
+Nothing was pushed.
 **Command:** `cd app && BEYO_TEST_SLOT=dt PYTHONPATH=. .venv/bin/pytest -m 'not e2e' -q`
 **Result:** **24 failed / 3739 passed / 1 skipped**, 75 s.
 
