@@ -22,6 +22,9 @@ from beyo_manager.services.commands.stock_report.delete_stock_task_assignments i
 from beyo_manager.services.commands.stock_report.repair_stock_report import (
     repair_stock_report,
 )
+from beyo_manager.services.commands.stock_report.delete_stock_report_item import (
+    delete_stock_report_item,
+)
 from beyo_manager.services.commands.stock_report.set_stock_report_item_priority import (
     set_stock_report_item_priority,
 )
@@ -33,6 +36,9 @@ from beyo_manager.services.queries.stock_report.get_stock_report_consistency imp
 )
 from beyo_manager.services.queries.stock_report.list_stock_report_items import (
     list_stock_report_items,
+)
+from beyo_manager.services.queries.stock_report.list_stock_task_assignments import (
+    list_stock_task_assignments,
 )
 from beyo_manager.services.queries.stock_report.preview_stock_task_assignment_match import (
     preview_stock_task_assignment_match,
@@ -218,4 +224,33 @@ async def route_set_stock_report_item_priority_order(
         claims,
         session,
         incoming_data={**body.model_dump(), "client_id": client_id},
+    )
+
+
+@router.delete("/items/{client_id}")
+async def route_delete_stock_report_item(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER])),
+    session: AsyncSession = Depends(get_db),
+):
+    # DELETE takes no body (§9B ruling 1); `client_id` travels in the path.
+    return await _run(
+        delete_stock_report_item,
+        claims,
+        session,
+        incoming_data={"client_id": client_id},
+    )
+
+
+@router.get("/items/{client_id}/assignments")
+async def route_list_stock_task_assignments(
+    client_id: str,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        list_stock_task_assignments,
+        claims,
+        session,
+        incoming_data={"client_id": client_id},
     )

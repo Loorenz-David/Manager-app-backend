@@ -189,4 +189,85 @@ Tenancy and visibility rows (C1(d), C4(d)) enumerate all three cells per entity 
 
 ## 8. Review log
 
-(empty)
+### Implementation, batch D1 round 1 (2026-09-21, Opus implementer, slot `d1`)
+
+**What was built.** `_delete_stock_report_item_cascade.py`, `delete_stock_report_item.py`,
+`list_stock_task_assignments.py`, and the two routes. **No serializer and no request
+model were added** (owner card 5): the three compact serializers ship in phase 8 and
+`DELETE` takes no body. Tests: `test_delete_stock_report_item.py` (6),
+`test_list_stock_task_assignments.py` (5), and 3 cases appended to
+`test_stock_report_router.py`. This project runs a tester, so this round wrote no
+row-by-row transcription, ran no named mutation and carries no mutation ledger
+(master plan §3B).
+
+**The two fresh `SELECT`s, named, because one of them has no armed evidence in this
+phase.**
+
+- The **counter repair's `stored_before`** at the second self-heal trigger:
+  `_delete_stock_report_item_cascade.py:cascade_delete_stock_report_item`, the
+  `stored_counters` `SELECT` taken **after** the assignment loop ends, once, never
+  per assignment. (The *inline* repair inside a move is the approved
+  `_move_assignment.py:_apply_counter_delta`, which already reads fresh after its
+  guarded statement returned zero rows — that is what C2(b) exercises.)
+- The **gap close's `removed_order`**: the `position` `SELECT` of
+  `(priority, priority_order)` in the same function, immediately before
+  `close_priority_gap`. It is a fresh `SELECT`, **not** `row.priority_order` as
+  loaded at the lock. **Nothing in this phase can observe it** — this phase deletes
+  one row at a time; its only armed evidence anywhere is phase 13A C5(b), and 13A's
+  perimeter forbids editing this module.
+
+**The cascade reads no `ctx`.** `_delete_stock_report_item_cascade.py` does not
+import `ServiceContext` and takes `workspace_id`, `actor_user_id`, `now` and
+`trigger` from its arguments only, so phase 13A's `actor_user_id=None,
+trigger="stock_demand_deleted"` call works unchanged. That path is **not exercised
+by any criterion here** (plan §7), and no test in this round covers it.
+
+**Judgment calls.**
+
+1. **`stock_report_item:deleted` is built in
+   `_delete_stock_report_item_cascade.py:build_stock_report_item_deleted_event`** —
+   inline in this phase's own module, not in `_events.py`. Plan 13 §4 does not list
+   `_events.py`, which belongs to APPROVED phase 8, so adding a builder there would
+   be a perimeter violation; the inline precedent is `apply_stock_demand.py`'s
+   `stock_report_item:created`. It is a named module-level function precisely so
+   plan 14's accuracy guard has a `file:symbol` to find. **It must be registered in
+   §6.5 by the coordinator in the same act (§9 rule 18), and plan 14 C1(b)'s guard,
+   which currently roots in `_events.py` alone, would not see it.**
+2. **No `:updated` for the deleted row is produced by suppression, not by
+   omission.** The per-assignment moves legitimately return `stock_report_item:updated`
+   for R; the cascade keeps them and relies on `coalesce_stock_report_events`' rule
+   that a row carrying a `:deleted` in the request gets no `:updated`. That is the
+   shipped phase-8 rule and the one C3(a)'s paired mutant targets.
+3. **The cascade re-queries the row's non-deleted assignments itself** (ascending
+   `client_id`) rather than taking a list argument: its registered signature takes
+   only `row`, and the caller has already locked exactly those rows, so the query
+   reads locked rows.
+4. **The row soft-delete is a Core `UPDATE`, not an ORM attribute write.** The ORM
+   instance is stale after the loop's Core statements (§9 rule 3); a Core statement
+   removes the whole staleness class rather than relying on SQLAlchemy emitting only
+   the dirty columns.
+5. **The command's post-lock re-read is `_lock_row_and_group` plus the
+   `row is None` check**, in `delete_stock_report_item.py` — that is where
+   `workspace_id`, `is_deleted = false` and the raise live, which is the site C1(d)
+   names.
+6. **`list_stock_task_assignments` returns early on an empty assignment list**, so a
+   row with no assignments costs one lookup and one list query and no image query.
+
+**Fixture note the tester should keep (it was a real flake).** C2(b)'s two
+assignments must carry `q = 2` on the **smaller** `client_id` and `q = 3` on the
+larger, or the row asserts a different `stored_before` on roughly half its runs —
+the cascade's loop is ascending `client_id` and a ULID has no monotonic counter
+(master plan §10). The test binds the quantities to the **sorted real ids** after
+creation for exactly this reason. My first draft did not, and it would have been an
+intermittent red nobody could reproduce on demand.
+
+**Observations.**
+
+- C1(a)'s fixture cannot reuse F0's own item/task for the `q = 2` assignment: `CR`
+  sets `quantity = max(item.quantity, 1)` at creation and the counter moves with it,
+  so editing the quantity afterwards plants counter drift and the cascade then writes
+  a (correct) repair record the row does not expect. Each of the four assignments
+  gets its own (item, task) pair seeded at the intended quantity. A second pair also
+  needs its own `task_scalar_id` — `uq_tasks_workspace_scalar_id`.
+- No row in this phase exercises the `actor_user_id=None` path, C4(b)'s cross-suite
+  observed-red set, or C6(a)'s "phase 8 rows stay green" half; those are the tester's.

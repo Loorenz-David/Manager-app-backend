@@ -292,3 +292,34 @@ def test_priority_route_accepts_an_explicit_null(monkeypatch):
     )
     assert response.status_code == 200
     assert calls[0][1].incoming_data == {"priority": None, "client_id": "sri_1"}
+
+
+# ---------------------------------------------------------------------------
+# Plan 13 C5 — the two phase-13 routes. `DELETE` is narrower than every other
+# route (admin and manager only); `GET …/assignments` is open to all four roles.
+# Both take `client_id` from the path, and `DELETE` takes no body at all.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("role", ["admin", "manager"])
+def test_delete_item_route_reaches_service_for_admin_and_manager(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.delete("/api/v1/stock-report/items/sri_1").status_code == 200
+    assert len(calls) == 1
+    assert calls[0][1].incoming_data == {"client_id": "sri_1"}
+
+
+@pytest.mark.parametrize("role", ["worker", "seller"])
+def test_delete_item_route_rejects_worker_and_seller(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    assert http.delete("/api/v1/stock-report/items/sri_1").status_code == 403
+    assert calls == []
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "worker", "seller"])
+def test_list_assignments_route_reaches_service_for_every_role(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    response = http.get("/api/v1/stock-report/items/sri_1/assignments")
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0][1].incoming_data == {"client_id": "sri_1"}
