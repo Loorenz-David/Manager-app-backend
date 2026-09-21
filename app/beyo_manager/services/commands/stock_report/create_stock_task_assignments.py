@@ -16,14 +16,13 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
-from beyo_manager.domain.stock_report.criteria_matcher import evaluate_stock_criteria
-from beyo_manager.domain.stock_report.enums import (
-    ACTIVE_ASSIGNMENT_STATES,
-    StockTaskAssignmentStateEnum,
+from beyo_manager.domain.stock_report.assignment_checks import (
+    evaluate_assignment_checks,
+    first_failed_check,
 )
+from beyo_manager.domain.stock_report.criteria_matcher import evaluate_stock_criteria
 from beyo_manager.domain.stock_report.serializers import serialize_stock_task_assignment
 from beyo_manager.domain.stock_report.state_map import ASSIGNMENT_STATE_BY_TASK_STATE
-from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
     StockAssignmentRefused,
@@ -33,7 +32,6 @@ from beyo_manager.models.tables.images.image_link import ImageLink
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
-from beyo_manager.models.tables.tasks.task_item import TaskItem
 from beyo_manager.services.commands.stock_report._events import (
     coalesce_stock_report_events,
 )
@@ -50,15 +48,8 @@ from beyo_manager.services.commands.stock_report.requests import (
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import dispatch
-
-_TASK_FAILED_OR_CANCELLED_STATES = frozenset(
-    {TaskStateEnum.FAILED, TaskStateEnum.CANCELLED}
-)
-_SCANNER_PROCESSED_STATES = frozenset(
-    {
-        StockTaskAssignmentStateEnum.RESOLVED,
-        StockTaskAssignmentStateEnum.RESOLVED_EARLY,
-    }
+from beyo_manager.services.queries.stock_report.assignment_check_inputs import (
+    fetch_assignment_check_inputs,
 )
 
 
@@ -71,88 +62,6 @@ def _row_values(row) -> dict:
         "priority": row.priority.value if row.priority is not None else None,
         "priority_order": row.priority_order,
     }
-
-
-async def _lookup_primary_pairs(session, workspace_id, task_ids, item_ids) -> set[tuple[str, str]]:
-    if not task_ids or not item_ids:
-        return set()
-    rows = await session.execute(
-        select(TaskItem.task_id, TaskItem.item_id).where(
-            TaskItem.workspace_id == workspace_id,
-            TaskItem.task_id.in_(task_ids),
-            TaskItem.item_id.in_(item_ids),
-            TaskItem.role == TaskItemRoleEnum.PRIMARY,
-            TaskItem.removed_at.is_(None),
-        )
-    )
-    return {(task_id, item_id) for task_id, item_id in rows}
-
-
-async def _lookup_processed_pairs(session, workspace_id, task_ids, item_ids) -> set[tuple[str, str]]:
-    if not task_ids or not item_ids:
-        return set()
-    rows = await session.execute(
-        select(StockTaskAssignment.task_id, StockTaskAssignment.item_id)
-        .where(
-            StockTaskAssignment.workspace_id == workspace_id,
-            StockTaskAssignment.task_id.in_(task_ids),
-            StockTaskAssignment.item_id.in_(item_ids),
-            StockTaskAssignment.is_deleted.is_(False),
-            StockTaskAssignment.state.in_(_SCANNER_PROCESSED_STATES),
-        )
-        .distinct()
-    )
-    return {(task_id, item_id) for task_id, item_id in rows}
-
-
-async def _lookup_active_item_ids(session, workspace_id, item_ids) -> set[str]:
-    if not item_ids:
-        return set()
-    rows = await session.execute(
-        select(StockTaskAssignment.item_id)
-        .where(
-            StockTaskAssignment.workspace_id == workspace_id,
-            StockTaskAssignment.item_id.in_(item_ids),
-            StockTaskAssignment.is_deleted.is_(False),
-            StockTaskAssignment.state.in_(ACTIVE_ASSIGNMENT_STATES),
-        )
-        .distinct()
-    )
-    return {item_id for (item_id,) in rows}
-
-
-def _phase3_reason(
-    entry,
-    *,
-    locked_rows,
-    locked_tasks,
-    locked_items,
-    primary_pairs,
-    processed_pairs,
-    active_item_ids,
-):
-    row = locked_rows.get(entry.stock_report_item_id)
-    if row is None or row.is_deleted:
-        return "stock_report_item_not_found"
-    task = locked_tasks.get(entry.task_id)
-    if task is None or task.is_deleted:
-        return "task_not_found"
-    item = locked_items.get(entry.item_id)
-    if item is None or item.is_deleted:
-        return "item_not_found"
-    if (entry.task_id, entry.item_id) not in primary_pairs:
-        return "item_not_task_primary"
-    if (entry.task_id, entry.item_id) in processed_pairs:
-        return "already_processed_by_scanner"
-    if task.state in _TASK_FAILED_OR_CANCELLED_STATES:
-        return "task_failed_or_cancelled"
-    if entry.item_id in active_item_ids:
-        return "item_already_assigned"
-    if item.item_category_id is None:
-        return "item_has_no_category"
-    if item.item_category_id != row.item_category_id:
-        return "category_mismatch"
-    return None
 
 
 async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
@@ -184,26 +93,30 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
             row_id: _row_values(row) for row_id, row in locked_rows.items()
         }
 
-        primary_pairs = await _lookup_primary_pairs(
-            ctx.session, ctx.workspace_id, task_ids, item_ids
+        primary_pairs, processed_pairs, active_item_ids = (
+            await fetch_assignment_check_inputs(
+                ctx.session,
+                workspace_id=ctx.workspace_id,
+                task_ids=task_ids,
+                item_ids=item_ids,
+            )
         )
-        processed_pairs = await _lookup_processed_pairs(
-            ctx.session, ctx.workspace_id, task_ids, item_ids
-        )
-        active_item_ids = await _lookup_active_item_ids(ctx.session, ctx.workspace_id, item_ids)
 
         # Phase 3 — per-entry refusal checks, first failing reason wins.
         for index, entry in enumerate(entries):
             if index in reasons:
                 continue
-            reason = _phase3_reason(
-                entry,
-                locked_rows=locked_rows,
-                locked_tasks=locked_tasks,
-                locked_items=locked_items,
-                primary_pairs=primary_pairs,
-                processed_pairs=processed_pairs,
-                active_item_ids=active_item_ids,
+            reason = first_failed_check(
+                evaluate_assignment_checks(
+                    row=locked_rows.get(entry.stock_report_item_id),
+                    task=locked_tasks.get(entry.task_id),
+                    item=locked_items.get(entry.item_id),
+                    task_id=entry.task_id,
+                    item_id=entry.item_id,
+                    primary_pairs=primary_pairs,
+                    processed_pairs=processed_pairs,
+                    active_item_ids=active_item_ids,
+                )
             )
             if reason is not None:
                 reasons[index] = reason

@@ -443,4 +443,22 @@ ruling (criterion-row authorship is reserved — master plan §3B):
 
 ## 8. Review log
 
-*(empty — append-only, shared by the implementer and the reviewer.)*
+*(append-only, shared by the implementer and the reviewer.)*
+
+### 2026-09-21 — implementer round 1 — Codex
+
+- Implemented the shared MC-21 evaluator, extracted create-path inputs, added the read-only
+  assignment match-preview service and route, and added the evaluator/preview/router tests.
+- Required extraction gate: plan-8 create suite was `42 passed` before and `42 passed` after.
+  Targeted phase suite: `49 passed`.
+- One authoritative L4: `21 failed, 3575 passed, 1 skipped`; current-minus-published and
+  published-minus-current failure-ID sets are both empty. Pass arithmetic is `3547 + 28 = 3575`.
+- Mutation ledger executed exactly `10 named + 16 class-2 = 26`; `25` were red and reverted.
+  C1(a)(i) was equivalent because the shared evaluator independently checks task deletion and is
+  reported for owner/coordinator disposition. C6(f) is withdrawn by the §7 note but its declared
+  path-wiring site was probed as a non-blocking backfill.
+- Architecture Graph delta recorded the preview endpoint and assignment acceptability evaluator;
+  graph status was valid with no diagnostics at revision
+  `6df549d436ade66e8a2fb254455953f4b9161342b73b14054bd0d822f82155ed`.
+- Full evidence, mutation sites, proposed backfills, perimeter, and the two owner questions are in
+  `handoffs/implementer/2026-09-21_phase_8A_implement_1_handoff.md`.

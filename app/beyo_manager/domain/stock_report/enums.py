@@ -54,6 +54,13 @@ class StockCriteriaMismatchReasonEnum(enum.Enum):
     CRITERION_NOT_UNDERSTOOD = "criterion_not_understood"
 
 
+class StockAssignmentCheckResultEnum(enum.Enum):
+    PASS = "pass"
+    FAIL = "fail"
+    PASS_BY_CONSTRUCTION = "pass_by_construction"
+    NOT_EVALUATED = "not_evaluated"
+
+
 class StockDemandOutcomeEnum(enum.Enum):
     """Per-entry outcome of the demand webhook (batch B2, plan 6 — master plan §6.1
     blocker B4). Only this one name is added here; the other five names batch B

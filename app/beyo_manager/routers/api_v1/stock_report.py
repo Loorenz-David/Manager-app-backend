@@ -24,6 +24,9 @@ from beyo_manager.services.commands.stock_report.repair_stock_report import (
 from beyo_manager.services.queries.stock_report.get_stock_report_consistency import (
     get_stock_report_consistency,
 )
+from beyo_manager.services.queries.stock_report.preview_stock_task_assignment_match import (
+    preview_stock_task_assignment_match,
+)
 
 router = APIRouter()
 
@@ -47,6 +50,17 @@ class _DeleteStockTaskAssignmentsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     client_ids: list[str]
+
+
+class _PreviewStockTaskAssignmentBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str | None = None
+    article_number: str | None = None
+    sku: str | None = None
+    item_category_id: str
+    properties: dict
+    quantity: int
 
 
 # The two structured assignment errors are rendered explicitly with their `code` and
@@ -110,4 +124,19 @@ async def route_delete_stock_task_assignments(
 ):
     return await _run(
         delete_stock_task_assignments, claims, session, incoming_data=body.model_dump()
+    )
+
+
+@router.post("/items/{client_id}/match-preview")
+async def route_preview_stock_task_assignment_match(
+    client_id: str,
+    body: _PreviewStockTaskAssignmentBody,
+    claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+    session: AsyncSession = Depends(get_db),
+):
+    return await _run(
+        preview_stock_task_assignment_match,
+        claims,
+        session,
+        incoming_data={**body.model_dump(), "client_id": client_id},
     )

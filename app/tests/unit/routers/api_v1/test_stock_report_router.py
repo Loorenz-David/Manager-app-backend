@@ -24,6 +24,14 @@ ASSIGNMENT_ROUTES = [
     ("POST", "/api/v1/stock-report/assignments", {"entries": [_ASSIGNMENT_ENTRY]}),
     ("POST", "/api/v1/stock-report/assignments/delete", {"client_ids": ["sta_1"]}),
 ]
+PREVIEW_BODY = {
+    "task_id": "tsk_1",
+    "article_number": "SR-1",
+    "sku": None,
+    "item_category_id": "itc_1",
+    "properties": {"wood_type": "Teak"},
+    "quantity": 4,
+}
 
 
 def client(monkeypatch, role, *, fake_outcome=None):
@@ -176,3 +184,33 @@ def test_stock_assignment_property_mismatch_renders_code_and_details(monkeypatch
         "code": "stock_assignment_property_mismatch",
         "details": details,
     }
+
+
+@pytest.mark.parametrize("role", ["admin", "manager", "worker"])
+def test_match_preview_route_reaches_service_for_allowed_roles(monkeypatch, role):
+    http, calls = client(monkeypatch, role)
+    response = http.post(
+        "/api/v1/stock-report/items/sri_1/match-preview", json=PREVIEW_BODY
+    )
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0][1].incoming_data["client_id"] == "sri_1"
+
+
+def test_match_preview_route_rejects_seller(monkeypatch):
+    http, calls = client(monkeypatch, "seller")
+    response = http.post(
+        "/api/v1/stock-report/items/sri_1/match-preview", json=PREVIEW_BODY
+    )
+    assert response.status_code == 403
+    assert calls == []
+
+
+def test_match_preview_route_rejects_unknown_field(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    response = http.post(
+        "/api/v1/stock-report/items/sri_1/match-preview",
+        json={**PREVIEW_BODY, "unexpected": True},
+    )
+    assert response.status_code == 422
+    assert calls == []

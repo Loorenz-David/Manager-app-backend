@@ -7824,6 +7824,53 @@ nodes:
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
     updatedAt: 2026-09-21T03:11:11.021Z
+  - id: endpoint-stock-assignment-match-preview
+    type: endpoint
+    name: stock assignment match preview
+    description: A read-only stock-report endpoint that answers whether a proposed
+      item and task can be assigned to a board row. It validates the path row
+      within the caller's workspace, resolves optional task and item
+      identifiers, and reports every assignment check plus matcher failures
+      without writing, locking or reserving anything. The endpoint preserves
+      MC-13 check order and exposes advisory and construction-assumed results so
+      callers can distinguish measured refusals from contextual information. Its
+      contract must remain consistent with the assignment creation command's
+      shared acceptability decision.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/stock_report.py
+          symbol: route_preview_stock_task_assignment_match
+          summary: The router registers POST /items/{client_id}/match-preview for ADMIN,
+            MANAGER and WORKER and injects the path client_id into the query
+            service context.
+          inferenceReason: A dedicated route with its own role boundary and
+            path-to-service handoff is an independently named API endpoint.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T13:52:14.508Z
+  - id: domain-assignment-acceptability-evaluator
+    type: domain
+    name: assignment acceptability evaluator
+    description: The shared pure decision boundary for whether an item, task and
+      stock-report row satisfy MC-13 phase-3 assignment checks. It evaluates the
+      closed checks in precedence order and returns one result per check, while
+      allowing callers to mark construction assumptions without performing I/O.
+      Assignment creation consumes the first failure and match preview consumes
+      the full ordered result list. The check order, predicates and advisory
+      semantics must remain identical for both callers.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/domain/stock_report/assignment_checks.py
+          symbol: evaluate_assignment_checks
+          summary: The pure evaluator emits nine ordered AssignmentCheckResult values from
+            already-fetched entities, with advisory and assumed-result handling.
+          inferenceReason: A named pure domain boundary shared by creation and preview
+            owns the acceptability semantics independently of either transport.
+    origin: ai_inferred
+    confidence: 0.95
+    createdAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T13:52:14.508Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -14392,3 +14439,21 @@ edges:
     confidence: 0.9
     createdAt: 2026-09-21T03:11:11.021Z
     updatedAt: 2026-09-21T03:11:11.021Z
+  - sourceNodeId: endpoint-stock-assignment-match-preview
+    relationshipType: depends_on
+    targetNodeId: domain-assignment-acceptability-evaluator
+    description: The preview endpoint depends on the shared acceptability evaluator
+      for the ordered check results it returns.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/queries/stock_report/preview_stock_task_assignment_match.py
+          symbol: preview_stock_task_assignment_match
+          summary: The preview query fetches entities, invokes evaluate_assignment_checks
+            and serializes the complete result list.
+          inferenceReason: The query service is the endpoint's implementation boundary and
+            directly demonstrates the endpoint's dependency on the shared domain
+            decision.
+    origin: ai_inferred
+    confidence: 0.94
+    createdAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T13:52:14.508Z
