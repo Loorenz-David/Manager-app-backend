@@ -17,6 +17,9 @@ from beyo_manager.services.commands.location_tracker.enqueue_item_zone_push impo
     enqueue_item_zone_location_push,
 )
 from beyo_manager.services.commands.items.requests import parse_update_item_request
+from beyo_manager.services.commands.stock_report._category_guard import (
+    assert_item_category_change_allowed,
+)
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
 from beyo_manager.services.infra.events import event_bus
@@ -64,6 +67,31 @@ async def _update_item_in_session(
     if item is None:
         raise NotFound("Item not found.")
 
+    if "item_category_id" in request.model_fields_set:
+        incoming_category_id = request.item_category_id
+        if incoming_category_id != item.item_category_id:
+            # MC-14 "category change refused" (master plan §6.1b): lock the Item and
+            # re-read the stored category under the lock before deciding. This runs
+            # before any other field write below — `populate_existing` refreshes
+            # every mapped column from the fresh row, so it must not run after this
+            # function has already staged an in-memory change to `item`.
+            item = (
+                await session.execute(
+                    select(Item)
+                    .where(Item.client_id == item.client_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one()
+            if incoming_category_id != item.item_category_id:
+                await assert_item_category_change_allowed(
+                    session,
+                    workspace_id=workspace_id,
+                    item_id=item.client_id,
+                    current_category_id=item.item_category_id,
+                    incoming_category_id=incoming_category_id,
+                )
+
     zone_before_update = item.item_zone
 
     for field_name in _DIRECT_FIELDS:
@@ -71,15 +99,16 @@ async def _update_item_in_session(
             setattr(item, field_name, getattr(request, field_name))
 
     if "item_category_id" in request.model_fields_set:
-        item.item_category_id = request.item_category_id
-        if request.item_category_id is None:
+        incoming_category_id = request.item_category_id
+        item.item_category_id = incoming_category_id
+        if incoming_category_id is None:
             item.item_category_snapshot = None
             item.item_major_category_snapshot = None
         else:
             category_result = await session.execute(
                 select(ItemCategory).where(
                     ItemCategory.workspace_id == workspace_id,
-                    ItemCategory.client_id == request.item_category_id,
+                    ItemCategory.client_id == incoming_category_id,
                     ItemCategory.is_deleted.is_(False),
                 )
             )

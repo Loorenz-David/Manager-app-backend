@@ -143,4 +143,55 @@ Every outcome is computed from **F0**'s own values (I `quantity 4`, R `quantity_
 
 ## 8. Review log
 
-(empty)
+**Implementer, 2026-09-21 (batch C1, Sonnet).** Built `_category_guard.py`
+(`assert_item_category_change_allowed`) and its five call sites: `delete_task.py` (hook
+between the existing task lock and `task.is_deleted = True`), `remove_item_from_task.py`
+(new Task lock, PRIMARY-only removal), `delete_item.py` (new Item lock, first statement
+in the transaction), `update_item.py` and `find_or_create_item.py`'s existing-item
+branch (both: lock+re-read+guard *before* any other field write to the item — see the
+ordering note below).
+
+**Judgment call — guard placement relative to `_DIRECT_FIELDS`.** In both `update_item.py`
+and `find_or_create_item.py`, the category guard's `with_for_update().execution_options(
+populate_existing=True)` re-select refreshes **every** mapped column on the item from the
+database, discarding any not-yet-flushed in-memory attribute changes. The plan's task text
+places the guard "before the first write to `existing`", which I read as before the
+`_DIRECT_FIELDS` loop too, not only before the category assignment line — placing it after
+that loop (as a literal reading of "before item.item_category_id = ..." might suggest) would
+silently drop the request's other field changes whenever a category change is also requested
+in the same call. I moved the guard block to run first in both functions. No criterion row
+in this phase exercises "category change plus another field in one request", so this is
+undeclared by any row; flagging it since a mutation that reintroduces the ordering bug would
+not be caught by any of my tests or (as far as I can tell) any named cell in this plan.
+
+**C5(a)'s "whole creation rolls back" claim is not independently testable at this file's
+scope.** My `test_category_guard.py` proves the guard fires with the exact message and
+leaves the item's own category unchanged, but cannot observe "no task row exists" from
+inside the same test session: `db_session` has been in one continuously-autobegun
+transaction since the fixture's first flush, so `create_task`'s own `maybe_begin` never
+reaches owner mode in-test and never gets a chance to roll back — the flushed-but-uncommitted
+Task row is visible to a same-session read regardless of whether production's real,
+fresh-per-request session would have discarded it. The full-rollback guarantee is argued
+analytically in intention §5B ("no `begin_nested` wraps the call, no earlier step commits")
+and I did not reproduce it with an isolated two-session test given this batch's scope; naming
+it here rather than asserting something my own fixture cannot actually discriminate.
+
+**C7(a)/(b) are not built** — plan §7 already declares them unable to force their
+interleaving; the reviewer's structural check is the intended instrument (master plan §9
+rule 9). `test_removal_locks.py` instead verifies each hook's own **statement order**
+(MC-1: items → tasks → rows → assignments) via `record_statements`, which is a different,
+buildable claim.
+
+**Environment finding, fixed in this round (not a criterion, a collision):** the new unit
+test `app/tests/unit/domain/stock_report/test_serializers.py` (phase 8) collided at the
+full-suite L4 with the pre-existing `app/tests/unit/domain/shopify/test_serializers.py` —
+this test tree has no `__init__.py` files, so pytest's rootdir import mode uses the bare
+filename as the module name and the second file collected errors out instead of running.
+Renamed to `test_stock_report_serializers.py`. Caught only at the batch's one L4 run,
+never at L1/L2 scope (both files import and run cleanly alone) — worth a standing rule if
+this project adds more `test_serializers.py`-shaped files elsewhere.
+
+**Rows not exercised by this round's tests** (named per the tester contract, see the batch
+handoff for the full per-criterion map): C4(b), C4(d), C4(e) (built: C4(a), C4(c), C4(f),
+C4(g), C4(i)); C5(b) (declared known-unarmed by the plan itself); the two C7 rows (declared
+unforceable); C6(a)-(c) (the trigger-string rows) — not built in this round.

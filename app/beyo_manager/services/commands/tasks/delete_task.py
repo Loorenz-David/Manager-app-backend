@@ -17,6 +17,16 @@ from beyo_manager.services.commands.items.cancel_upholstery_requirements import 
     cancel_unfinished_item_requirements_in_session,
     lock_and_filter_items_without_active_tasks,
 )
+from beyo_manager.models.tables.stock_report.stock_task_assignment import (
+    StockTaskAssignment,
+)
+from beyo_manager.services.commands.stock_report._locks import (
+    lock_stock_report_items,
+    lock_stock_task_assignments,
+)
+from beyo_manager.services.commands.stock_report._remove_assignment import (
+    remove_assignment,
+)
 from beyo_manager.services.commands.tasks.requests import parse_terminal_task_request
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -28,6 +38,7 @@ from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 async def delete_task(ctx: ServiceContext) -> dict:
     request = parse_terminal_task_request(ctx.incoming_data)
     cancelled_item_upholstery_ids: list[str] = []
+    stock_events: list = []
 
     async with maybe_begin(ctx.session):
         result = await ctx.session.execute(
@@ -89,6 +100,42 @@ async def delete_task(ctx: ServiceContext) -> dict:
             {row.item_upholstery_id for row in cancelled}
         )
 
+        # MC-14 row 1 (master plan §6.5): every non-deleted assignment of this task,
+        # any state, before the task itself is soft-deleted. Lock order Items ->
+        # Task (existing, above) -> rows -> assignments (MC-1).
+        discovered = (
+            (
+                await ctx.session.execute(
+                    select(StockTaskAssignment).where(
+                        StockTaskAssignment.workspace_id == ctx.workspace_id,
+                        StockTaskAssignment.task_id == task.client_id,
+                        StockTaskAssignment.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        row_ids = {assignment.stock_report_item_id for assignment in discovered}
+        await lock_stock_report_items(ctx.session, ctx.workspace_id, row_ids)
+        locked_assignments = await lock_stock_task_assignments(
+            ctx.session, ctx.workspace_id, {a.client_id for a in discovered}
+        )
+        for client_id in sorted(locked_assignments):
+            assignment = locked_assignments[client_id]
+            if assignment.is_deleted:
+                continue  # re-read after lock: a concurrent delete won here
+            stock_events.extend(
+                await remove_assignment(
+                    ctx.session,
+                    assignment,
+                    workspace_id=ctx.workspace_id,
+                    actor_user_id=ctx.user_id,
+                    now=now,
+                    trigger="delete_task",
+                )
+            )
+
         task.is_deleted = True
         task.deleted_at = now
         task.deleted_by_id = ctx.user_id
@@ -120,5 +167,6 @@ async def delete_task(ctx: ServiceContext) -> dict:
         )
         for item_upholstery_id in cancelled_item_upholstery_ids
     )
+    events.extend(stock_events)
     await event_bus.dispatch(events)
     return {"client_id": task.client_id}

@@ -17,6 +17,9 @@ from beyo_manager.services.commands.items._properties_snapshot import (
     apply_properties_snapshot,
 )
 from beyo_manager.services.commands.items.requests import parse_find_or_create_item_request
+from beyo_manager.services.commands.stock_report._category_guard import (
+    assert_item_category_change_allowed,
+)
 from beyo_manager.services.commands.utils.client_id import validate_provided_client_id
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.context import ServiceContext
@@ -93,6 +96,30 @@ async def find_or_create_item(
         existing = existing_result.scalar_one_or_none()
 
         if existing is not None:
+            if "item_category_id" in request.model_fields_set:
+                incoming_category_id = request.item_category_id
+                if incoming_category_id != existing.item_category_id:
+                    # MC-14 second caller (master plan §6.1b): lock the matched
+                    # Item and re-read the stored category before deciding, ahead
+                    # of any other write to `existing` below — the ConflictError
+                    # rolls back the whole `create_task` transaction.
+                    existing = (
+                        await ctx.session.execute(
+                            select(Item)
+                            .where(Item.client_id == existing.client_id)
+                            .with_for_update()
+                            .execution_options(populate_existing=True)
+                        )
+                    ).scalar_one()
+                    if incoming_category_id != existing.item_category_id:
+                        await assert_item_category_change_allowed(
+                            ctx.session,
+                            workspace_id=ctx.workspace_id,
+                            item_id=existing.client_id,
+                            current_category_id=existing.item_category_id,
+                            incoming_category_id=incoming_category_id,
+                        )
+
             zone_before_update = existing.item_zone
 
             for field_name in _DIRECT_FIELDS:
