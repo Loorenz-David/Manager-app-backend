@@ -335,7 +335,6 @@ async def test_preview_ignores_deleted_or_foreign_candidate_item(db_session, ite
     [
         pytest.param("same", "pass", "pass", True, None, id="own_category"),
         pytest.param("other", "fail", "pass", False, "category_mismatch", id="different_category"),
-        pytest.param(None, "pass", "fail", False, "item_has_no_category", id="null_category"),
     ],
 )
 async def test_preview_supplied_category_takes_effect_with_no_item(
@@ -346,17 +345,18 @@ async def test_preview_supplied_category_takes_effect_with_no_item(
     expect_can_proceed,
     expect_refusal_reason,
 ):
-    # C3(g), owner ruling round 2, 2026-09-21: with no item resolving, the supplied
-    # item_category_id must reach category_mismatch / item_has_no_category exactly as
-    # the supplied properties/quantity already reach the property checks (C3(c)/C3(d)).
+    # C3(g), owner ruling round 2, 2026-09-21 (case (iii) withdrawn on the owner's
+    # round-3 ruling): with no item resolving, the supplied item_category_id must reach
+    # category_mismatch exactly as the supplied properties/quantity already reach the
+    # property checks (C3(c)/C3(d)). item_category_id is REQUIRED -- every Item must have
+    # a category -- so item_has_no_category cannot fail on this branch and reads pass in
+    # both cases; it stays asserted to pin that it is evaluated, not skipped.
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     if category_override == "same":
         item_category_id = seeded.categories[0].client_id
-    elif category_override == "other":
-        item_category_id = seeded.categories[1].client_id
     else:
-        item_category_id = None
+        item_category_id = seeded.categories[1].client_id
     result = await _preview(
         db_session,
         seeded,

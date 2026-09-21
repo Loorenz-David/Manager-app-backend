@@ -303,7 +303,7 @@ blank carries its note; the implementer sites it on the real code, runs it, and 
 | C3(d) | A second row **R2** in K whose criteria are `{"quantity": ["4"]}` only, previewed in the path. Two cases, otherwise `B0` with `article_number: None`: (i) `quantity: 4`; (ii) `quantity: 7` | (i) `property_failures == []` and `override_required false`; (ii) `property_failures == [{"key": "quantity", "reason": "value_not_accepted"}]` and `override_required true`. **`can_proceed` is deliberately not asserted by this row**: no item resolves here, so owner card 1 owns it | — *(class 2, one per case: the preview's construction of the candidate — e.g. build it without the request's `quantity`, which `build_item_property_bag` would then read off a default)* | §14G request table (`quantity` is a matched criterion), MC-12 step 1.5, M8 |
 | C3(e) | **Authored by the owner, card 1, 2026-09-21.** C3(c)'s two cases (i) an `article_number` matching no live item and (ii) neither identifier sent, both otherwise `B0` with a `task_id` present and acceptable | **Corrected 2026-09-21 on the owner's ruling (round 2) — the original list named the wrong two.** The four **item-dependent** checks — `item_not_found`, `item_not_task_primary`, `already_processed_by_scanner`, `item_already_assigned` — each read `result == "not_evaluated"`, because each needs a *persisted* item to mean anything. **`item_has_no_category` and `category_mismatch` are NOT in this set**: they are computable from the supplied `item_category_id` and **must be evaluated**, exactly as the property and quantity checks are (§14G semantics 2, C3(g)); `refusal_reason is None`; **`can_proceed` is `true`** even though no item exists; `matched_item_client_id is None`; `values_source == "supplied"`. The property and quantity checks still run against the supplied values (C3(c)) | force the unresolved-item path to report `item_not_found` as a **failure** rather than `not_evaluated` (`preview_stock_task_assignment_match.py`, definition site) → `can_proceed` flips to `false` and `refusal_reason` becomes `item_not_found`, which is the answer that would make this endpoint refuse the one case it exists for | §14G semantics 2 ("a normal outcome, not a 404 — the creation case this endpoint exists for"), MC-21; owner card 1 |
 | C3(f) | **Authored by the owner, card 2, 2026-09-21.** An item I **does** resolve by `article_number`, and the request deliberately disagrees with it: I is stored with category K, `properties {"wood_group": "teak"}` and `quantity 4`, while the body sends `item_category_id: K2`, `properties: {"wood_group": "oak"}` and `quantity: 7`. R's criteria accept teak and quantity 4 | the evaluation reads **the stored item**, not the body: `property_failures == []`, `category_mismatch` reads `pass`, `can_proceed true`, `matched_item_client_id == I`, and **`values_source == "stored"`** — the field exists so a caller can see that its typed values were not the ones evaluated (owner, 2026-09-21). Were the body's values used instead, the row would report a category mismatch and an oak failure | evaluate against the request's `item_category_id`/`properties`/`quantity` when an item resolved (`preview_stock_task_assignment_match.py`, definition site) → the preview answers `false` where `create` would answer `true`, the exact preview-lies-to-create divergence MC-21 forbids | §14G request table, MC-21 ("one evaluation, two callers"); owner card 2 |
-| C3(g) | **Authored by the owner, 2026-09-21, round 2** — the supplied category must match, same as properties and quantity. Three cases, all with **no item resolving** (`article_number` matching nothing) and a `task_id` present and acceptable: (i) `item_category_id: K` — R's own category; (ii) `item_category_id: K2` — a different live category; (iii) `item_category_id: null` | (i) `category_mismatch` reads `"pass"` and `item_has_no_category` reads `"pass"`; `can_proceed true`. (ii) **`category_mismatch` reads `"fail"`**, `can_proceed` is **`false`** and `refusal_reason == "category_mismatch"` — the refusal has no override, so this is the answer the endpoint exists to give **before** the item is created. (iii) `item_has_no_category` reads `"fail"`, `refusal_reason == "item_has_no_category"`. In all three `matched_item_client_id is None` and `values_source == "supplied"` | pass `matched_item` instead of `candidate` as `evaluate_assignment_checks`'s `item=` argument (`preview_stock_task_assignment_match.py`, definition site) → case (ii) reports `not_evaluated` and `can_proceed true`, which is **exactly the defect this row closes**: the supplied `item_category_id` becomes inert and the preview answers `true` where `create` will answer `false` | §14G semantics 2, MC-13, MC-21 (the two callers may not diverge); owner ruling round 2 |
+| C3(g) | **Authored by the owner, 2026-09-21, round 2; case (iii) WITHDRAWN by the owner round 3, same day** — the supplied category must match, same as properties and quantity. **Two** cases, both with **no item resolving** (`article_number` matching nothing) and a `task_id` present and acceptable: (i) `item_category_id: K` — R's own category; (ii) `item_category_id: K2` — a different live category. *(iii) `item_category_id: null` is withdrawn: `item_category_id` is **required**, because every Item must have a category.)* | (i) `category_mismatch` reads `"pass"` and `item_has_no_category` reads `"pass"`; `can_proceed true`. (ii) **`category_mismatch` reads `"fail"`**, `can_proceed` is **`false`** and `refusal_reason == "category_mismatch"` — the refusal has no override, so this is the answer the endpoint exists to give **before** the item is created. In both `matched_item_client_id is None` and `values_source == "supplied"`. **`item_has_no_category` reads `"pass"` in both and cannot fail on this branch** — the request requires a category, so the candidate always has one. It stays asserted to pin that it is *evaluated*, not skipped | pass `matched_item` instead of `candidate` as `evaluate_assignment_checks`'s `item=` argument (`preview_stock_task_assignment_match.py`, definition site) → case (ii) reports `not_evaluated` and `can_proceed true`, which is **exactly the defect this row closes**: the supplied `item_category_id` becomes inert and the preview answers `true` where `create` will answer `false` | §14G semantics 2, MC-13, MC-21 (the two callers may not diverge); owner ruling round 2 |
 | C4(a) | Three cases in the path, body `B0`: (i) `client_id` of no row; (ii) R raw-set `is_deleted = true`; (iii) a row in a **foreign** workspace that is otherwise a valid target (same category, same criteria) | each raises `NotFound`; nothing read back changes | — *(class 2, one per case: the preview's row lookup — drop the existence branch, the `is_deleted` predicate, the `workspace_id` predicate)* | §14G ("a soft-deleted, foreign or absent row in the path is `NotFound`"), MC-16, M4 |
 | C4(b) | Two malformed bodies: (i) `B0` without `quantity`; (ii) `B0` with **both** `article_number` and `sku` set to live values | each raises `beyo_manager.errors.validation.ValidationError` (`http_status 422`); nothing else is read | — *(class 2: the request model in the new preview module — drop the required-`quantity` declaration; drop the alternatives constraint)* | §14G request table (`quantity` **required**; `article_number` and `sku` "are alternatives, not both"), MC-13 phase 0 (a local API, so strict) — see §7 for the reading of "not both" |
 | C4(c) | Two cases, body `B0` with the named `article_number`: (i) the value belongs only to a **soft-deleted** item in W; (ii) the value belongs only to a live item in a **foreign** workspace that is otherwise a valid candidate (same category, same properties) | `matched_item_client_id is None` in both; no error; the response is otherwise the C3(c) shape | — *(class 2, one per case: the preview's item lookup — drop `is_deleted`, drop `workspace_id`)* | §14G request table ("at most one **live** item per workspace"), MC-16, M4, §9 rule 1 |
@@ -619,3 +619,52 @@ ruling (criterion-row authorship is reserved — master plan §3B):
   was fully specified; the one open point (item_category_id's type) had a single correct answer
   forced by C3(g)(iii) and the existing nullable domain column, not a judgment split between two
   reasonable outcomes, so it is recorded as a judgment call rather than escalated.
+
+---
+
+## Review log — round 3 (owner ruling, 2026-09-21): the widening is withdrawn
+
+**The owner ruled against ratifying the `item_category_id` widening, and against releasing the v3
+frontend addendum. The ratified v2 preview contract stands unchanged.**
+
+**The domain rule, stated by the owner:** *an Item cannot validly exist without an item category.*
+`item_category_id` is mandatory for Item creation. Therefore the preview requires it too.
+
+**What I got wrong, and it is worth naming precisely.** I treated two pieces of code —
+`Item.item_category_id` being `Mapped[str | None]`, and the item-create request carrying
+`item_category_id: str | None = None` — as *evidence of a domain rule*. They are not. They are an
+**existing backend enforcement gap**. The invariant has been held by frontend validation, and there
+should be no category-less Items in the database today. Permissiveness in a persistence model is
+not a specification, and I reasoned from the schema to the domain when the direction only runs the
+other way. Recorded as **L-35**.
+
+Had this been ratified it would have propagated an enforcement gap outward into a published API
+contract — the one direction from which it becomes expensive to retreat.
+
+**Changes made on this ruling:**
+
+1. `item_category_id` restored to `str` (required) in **both** the service request model
+   (`preview_stock_task_assignment_match.py`) and the router body model (`stock_report.py`).
+2. **C3(g) case (iii) withdrawn.** The row is now two cases. `item_has_no_category` cannot fail on
+   the no-item branch — the request requires a category, so the candidate always has one — and the
+   row still asserts it reads `"pass"`, pinning that it is evaluated rather than skipped.
+3. The **DRAFT v3 frontend addendum was deleted, never sent.** No frontend communication was
+   issued about this at any point.
+
+**What is unchanged, and this is the point:** the round-2 production fix **stands in full**. The
+supplied `item_category_id` still takes effect — `evaluate_assignment_checks` receives `candidate`,
+and `category_mismatch` is still computed from the supplied value on the no-item branch. The
+defect the owner originally identified is still fixed. Only the nullability question is withdrawn.
+
+**Re-verified after the rework** (orchestrator, slot `a8`): the 8A preview surface and phase 8's
+create suite together = **66 passed** (25 → 24 preview, one case fewer; create **42 passed**,
+unchanged). C3(g)'s named mutation (`item=candidate` → `item=matched_item`) re-applied and observed
+red on `different_category`, reverted clean — **the row keeps real discriminating power without
+case (iii)**.
+
+**Routed out of this phase as a separate domain-alignment issue, NOT fixed here:** the backend does
+not enforce the mandatory-category invariant on Item creation, and `Item.item_category_id` is
+nullable in the persistence model. That is a pre-existing gap across the items surface, far wider
+than phase 8A, and closing it needs its own intention — a migration, a backfill audit for any
+category-less rows already present, and a decision about every existing caller. **Owner card,
+carried out of the stock_report pipeline.**

@@ -58,7 +58,7 @@ class _PreviewStockTaskAssignmentBody(BaseModel):
     task_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
-    item_category_id: str | None = None
+    item_category_id: str
     properties: dict
     quantity: int
 
