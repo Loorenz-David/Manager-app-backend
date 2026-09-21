@@ -147,12 +147,13 @@ planted.
 | C8(a) | after a `200` with a resolve | a **fresh** session (`get_db_session()`) reads A `resolved` (the transaction committed) | execute any statement on `ctx.session` before `maybe_begin` (e.g. the workspace SELECT) → subordinate mode → nothing commits → red | X3, MC-9 "one owning transaction" |
 | C8(b) | two concurrent requests: request 1 names items on R then R2, request 2 names items on R2 then R (four awaiting assignments), barrier-released after parse | both return 200; all four assignments `resolved`; no `DBAPIError` | lock rows per entry in request order — **interleaving not forced**; the reviewer verifies the single ascending lock statement structurally | X2, MC-1 lock order |
 | C8(c) | **Authored by the owner, 2026-09-21, card 5** — §9 rule 18's first instance. Call `resolve_processed_group` **directly** (not through the webhook) with one group: a row R and two of its assignments in `in_queue`, one of them carrying planted counter drift | the call accepts the registered argument shape of master plan §6.5 and returns the **two event kinds** a group produces — one `stock_report_item:updated` for R and one `stock_task_assignment:updated` per resolved assignment — and nothing else. **The contract only**: this row asserts the callable's signature and returned event kinds, and deliberately does **not** re-assert the webhook's behavioural coverage (counters, reasons, replay), which C3–C7 already own | change the return to a bare list of assignment events, dropping the row event (**`_move_assignment.py:resolve_processed_group`** — **[Backfilled from the C2 tester's measurement, 2026-09-21 — orchestrator]** **file corrected, B-6**: the cell named `process_items_processed.py`, but the symbol lives in `_move_assignment.py`. The edit itself was right) → the event-kind set shrinks and a future direct caller silently stops updating the board row | master plan §6.5 `resolve_processed_group`, §9 **rule 18**; §9A L-8; owner card 5 |
+| C8(d) | **Authored by the owner, 2026-09-21, batch C2 tester card 1** — **OWED: not satisfied on this tree, see §7.** Call `resolve_processed_group` **directly** with an assignment whose re-read state makes its computed target an **illegal** transition under the MC-1 move table (e.g. an `in_progress` assignment presented for the `awaiting → resolved` decision) | the call **refuses** — `IllegalAssignmentMove` is raised and **nothing is written**: the assignment keeps its state, the row's counters are unchanged, and no event is returned. The refusal is the grouped path's **own**, not a caller's: it must hold when called directly, with no webhook re-read in front of it | remove the `_assert_allowed_move` call from `resolve_processed_group` (`_move_assignment.py`, definition site) → the illegal transition is written **silently** and the row reddens on the absent raise. **Measured by the C2 tester before this row existed**: that is exactly today's behaviour (candidate criterion CC-1) | MC-1 move table, §6.5 `resolve_processed_group`, §14F F5; owner card 1; tester CC-1/CC-2 |
 
 ## 7. Notes
 
 - **Perimeter extension (§9 rule 17 / L-25).** Two named mutations are applied outside §4's file list and are authorized here: `bm/services/infra/location_tracker/webhook_verifier.py` (C1(b) definition site, C1(e) both guards — phase 7's file) and, for the reviewer's perimeter diff, the two `Edited:` additions above. Every probe is reverted in the same round.
 
-- Sizing: **44** criterion rows in 8 criteria; `complex: yes`. **[Corrected 2026-09-21 by the orchestrator — backfill B-7.]** This note said **43**; the table has **44**, script-derived and independently confirmed twice: by the C2 tester's per-criterion summands (C1 6 + C2 6 + C3 13 + C4 8 + C5 2 + C6 2 + C7 5 + C8 2 = 44 declared mutations over 44 rows) and by the committed `SR/count_criteria.py`, which derives 44/8 for this plan. (Counts re-derived by script after the
+- Sizing: **45** criterion rows in 8 criteria (**44 + C8(d)**, owner card 1, 2026-09-21); `complex: yes`. **[Corrected 2026-09-21 by the orchestrator — backfill B-7.]** This note said **43**; the table has **44**, script-derived and independently confirmed twice: by the C2 tester's per-criterion summands (C1 6 + C2 6 + C3 13 + C4 8 + C5 2 + C6 2 + C7 5 + C8 2 = 44 declared mutations over 44 rows) and by the committed `SR/count_criteria.py`, which derives 44/8 for this plan. (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
 - **Owner card 1 fold, 2026-09-21.** The count above is the previously derived count **+1**: exactly one criterion row was added to this plan by that fold, verified as a single `^+| C` line in `git diff` (not re-derived by a new script — the published totals and my regex disagree on row shape, and a typed count is the defect this project keeps finding).
 - The grouped entry point is the one sanctioned extension of `_move_assignment.py` after phase 4;
@@ -185,6 +186,30 @@ planted.
   mixed-state twin. Both rows lost their "exactly one `UPDATE`" clause (owner ruling 2026-09-19: outcomes, not internals); the grouped
   per-column statement stays the implementation rule of task 2, unguarded by a test. The row's guarded statement now carries up to three
   non-zero deltas; the repair-record rule is unchanged (one record per column actually wrong).
+
+- **⚠ OWED BY A FIX ROUND — plan 9 C8(d), authored 2026-09-21 after the tester handed over.**
+  The owner ruled batch C2 tester **card 1** *add the row*. It is **not satisfied on this tree**:
+  `resolve_processed_group` does **not** call `_assert_allowed_move` today, so the row is red by
+  construction until a fix round adds the guard and its test. This is recorded rather than folded
+  silently because §3B now requires that **a ruling adding an assertion reach the tester, or it is
+  paperwork** — the C1 batch produced review findings S2 and S3 exactly this way. The batch C2
+  reviewer was told directly, mid-review.
+
+  **Why the owner said yes.** Every other write path reaches the move table through
+  `move_assignment`, which calls `_assert_allowed_move` first. This one does not. It is harmless
+  *today* only because the F5 ladder re-reads each assignment's state under lock immediately
+  before deciding — but the tester **measured** what happens when that re-read is removed: the
+  command wrote an `awaiting → resolved` transition on an assignment that was actually
+  `in_progress`, **silently**, with every test still green and the plan's predicted 500 never
+  occurring. Correctness therefore rests entirely on every present and future caller getting its
+  own re-read right, with nothing behind it. The guard already exists one function away, so this
+  connects a guard rather than inventing one, and the failure it prevents is silent.
+
+  **CC-2 rides with it:** `resolve_processed_group` appends its per-row `:updated` event
+  unconditionally, where `move_assignment` guards on `any(delta != 0)`. The implementer declared
+  this safe *"only because every caller passes a non-empty, all-active group"* — an unguarded
+  premise with the same root cause. The fix round should state whether it holds the premise or
+  guards it; this row does not itself assert it.
 
 ## 8. Review log
 

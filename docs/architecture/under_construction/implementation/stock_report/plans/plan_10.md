@@ -128,10 +128,11 @@ command's import site). Every row ends with `assert_stock_report_clean`.
 | C7(a) | S4 `resolve_task` | the dispatched list contains the task's own events **and** the stock events, all after commit | dispatch inside the sync | MC-19 hand-up, 06_commands_local |
 | C7(b) | `resolve_task` on a task already `resolved` (the command raises) | no stock event dispatched; A unchanged | **UNFAILABLE BY DESIGN — owner ruling, 2026-09-21, card 3.** No edit in this phase turns it red: `resolve_task` refuses on its first check (`resolve_task.py:51-52`) before writing anything and long before the sync would run, and even a mis-wired sync is covered twice over — the failed request rolls back, and events dispatch only after a clean commit. Kept as a cheap regression guard; the **label is the point**, so a future reviewer does not count it as evidence. Reviewer's structural check: confirm by reading that the sync call sits after the refusal | MC-19 "rolled-back request"; `resolve_task.py:51-52`; §9 rules 6 and 9; charter rule 15; owner card 3 |
 | C7(c) | A `in_queue` via `CR`; raw `quantity_in_queue = 0`; S1 advance | one repair record with `trigger == "inline:task_sync"` | `sync_task_stock_assignments.py` (the `move_assignment` call site) — pass `trigger="task_sync_x"` → `_move_assignment.py:172` writes `inline:task_sync_x` and the row's `trigger == "inline:task_sync"` reddens | §12A trigger set |
+| C8(a) | **Authored by the owner, 2026-09-21, batch C2 tester card 2** — §9 rule 18's third instance, the twin of plan 9 C8(c). **OWED: see §7.** Call `sync_task_stock_assignments` **directly** (not through any of its nine command call sites) for a task whose state change moves one assignment | the call accepts the argument shape registered in master plan §6.5 and returns the registered event kinds — `stock_task_assignment:state-changed` per moved assignment and one `stock_report_item:updated` per touched row — and nothing else. **The contract only**: this row pins the callable's signature and returned event-kind set, and deliberately does **not** re-assert the nine call sites' behaviour, which C1 and C4 already own | change the return to drop the row event (`sync_task_stock_assignments.py`, definition site) → the event-kind set shrinks and the nine callers silently stop updating the board row | master plan §6.5 `sync_task_stock_assignments`, §9 **rule 18**; §9A L-8; owner card 2; tester CC-3 |
 
 ## 7. Notes
 
-- Sizing: 35 criterion rows in 7 criteria; `complex: yes`. (Counts re-derived by script after the
+- Sizing: **36** criterion rows in **8** criteria; `complex: yes`. (**35/7 + C8(a)**, owner card 2, 2026-09-21 — the new criterion C8 puts this phase **at the §15 eight-criteria cap**.) (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
 - C4(b)–(g) are the six required probes of MC-2: each is planted, observed red, reverted, and
   recorded with the observed failure message — they are rows, not prose.
@@ -155,6 +156,24 @@ command's import site). Every row ends with `assert_stock_report_clean`.
   statement-count test if one wraps a sync site; none was found on 2026-09-19 — the reviewer
   re-checks the L4 delta against the baseline set.
 - The registry lives in tests; it is data for the guard, not production code.
+
+- **⚠ OWED BY A FIX ROUND — plan 10 C8(a), authored 2026-09-21 after the tester handed over.**
+  The owner ruled batch C2 tester **card 2** *add the row*. Recorded, not folded silently, for the
+  same §3B reason as plan 9 C8(d); the batch C2 reviewer was told directly, mid-review.
+
+  **Why the owner said yes.** §9 **rule 18** requires every newly registered shared signature to be
+  pinned by a row in its own plan, so a later phase cannot cite a contract that has quietly
+  changed. Phase 9's twin, `resolve_processed_group`, got C8(c). This one — called from **nine**
+  sites — got nothing. The only evidence today is the implementer's two direct-call tests, which
+  cover the contract *by accident*, and the tester declared them as candidate-criterion evidence
+  (CC-3) rather than shipping them silently. If the return shape drifts, the failure surfaces as
+  missing live board updates in one of nine places, weeks later.
+
+  **This may already be green.** Unlike plan 9 C8(d), no production change is implied — the fix
+  round's job is to add the pinning test and arm it, and to say plainly if the two existing
+  direct-call tests already discharge it (in which case they are traced to this row rather than
+  duplicated). **Plan 10 now carries 8 criteria, at the §15 cap — no further criterion may be
+  added to this phase without a re-size.**
 
 ## 8. Review log
 

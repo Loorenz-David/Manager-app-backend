@@ -352,8 +352,8 @@ Only the actor named for a transition writes its row. **Since §3A (2026-09-19) 
 | 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | **VERIFIED** | 2026-09-21 | orchestrator | batch B2 APPROVED; every row of this phase passed re-review 1 and is mutation-armed. rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
 | 7 | Demand endpoint: key auth, body validation, duplicates, identity invariant over real bytes, envelope | **VERIFIED** | 2026-09-21 | orchestrator | batch B2 APPROVED; every row of this phase passed re-review 1 and is mutation-armed. rows 52, criteria 7; complex: no |
 | 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | **VERIFIED** | 2026-09-21 | orchestrator | rows 67, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows; owner card 1 fold 2026-09-21: +1 row, C4(m) — one-file perimeter extension, §7; **batch C1 fold 2026-09-21: +1 row, C5(b) — the caller's lock order, owner card C / L-29**; 24 mutation + 4 fixture cells folded; cards A, B, D ruled); **VERIFIED 2026-09-21, batch C1 APPROVED** |
-| 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | PENDING | 2026-09-19 | planner | rows 43, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows; owner card 1 fold 2026-09-21: +1 row, C1(e)) |
-| 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | PENDING | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
+| 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | **IMPLEMENTED** | 2026-09-21 | orchestrator | batch C2: implemented `8a5ebc2`, tested `a00d858` (44/44 mutations, 0 production defects), review in flight. **rows 45, criteria 8** (script-derived; §7's 43 was wrong, backfill B-7). Owner card 1 authored **C8(d) — OWED by a fix round**: `resolve_processed_group` never calls `_assert_allowed_move`, measured to write an illegal transition silently. | rows 43, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows; owner card 1 fold 2026-09-21: +1 row, C1(e)) |
+| 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | **IMPLEMENTED** | 2026-09-21 | orchestrator | batch C2: implemented `ffa591e`, tested `a00d858` (32/32 mutations). The C5 referee choreography is built and all three orders genuinely forced. **rows 36, criteria 8 — at the §15 cap.** Owner card 2 authored **C8(a) — OWED**: §9 rule 18's pin for `sync_task_stock_assignments`, the twin of plan 9 C8(c). | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
 | 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | **VERIFIED** | 2026-09-21 | orchestrator | rows 26, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row; **batch C1 fold 2026-09-21: −1 row, C4(h) WITHDRAWN as unbuildable — owner card F**; 8 mutation + 4 fixture cells folded; cards B, E ruled); **VERIFIED 2026-09-21, batch C1 APPROVED** |
 | 8A | Assignment match preview: the shared acceptability evaluation (MC-21) extracted from phase 8, plus the read-only preview endpoint | **IMPLEMENTED** | 2026-09-21 | orchestrator | Checkpoint `9105f71`, **not approved** — review pending on Codex terra. Implementer-reported: phase 8's create suite `42 passed` before **and** after the extraction (the refactor's whole proof); L4 `21 failed / 3575 passed / 1 skipped`, = baseline 3547 + 28 new cases. The checkpoint commit was made by the orchestrator, not the implementer, which left the tree dirty and would have blocked both the review and batch C2. rows 20, criteria 6; complex: no (read-only; the risk is the refactor, guarded by phase 8's 67 armed rows). Intention §14G, round 10, additive. Runs **outside the batch machinery**: owner-run on Codex terra, projection → implement → review, no tester (§3B). Three owner cards ruled 2026-09-21 (C3(e), C3(f) authored; C5(a) amended); C6(f) withdrawn to a §7 note |
 | 12 | Priority, dense ordering, history records for user actions, the list endpoint | PENDING | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
@@ -392,9 +392,14 @@ criterion cell (`git diff` over the criteria tables: 0 lines).
 **Totals, derived by committed script — `count_criteria.py`, re-run at every gate.**
 
 ```
-DERIVED TOTAL: 645 criterion rows in 106 criteria across 16 plans
-  table lines 583 + 62 shorthand expansion = 645 rows
+DERIVED TOTAL: 647 criterion rows in 107 criteria across 16 plans
+  table lines 585 + 62 shorthand expansion = 647 rows
 ```
+
+**645 → 647 / 106 → 107 on 2026-09-21**, from the two rows the owner authored on the batch C2
+tester's cards: plan 9 **C8(d)** (45/8) and plan 10 **C8(a)** (36/8, a new criterion, which is why
+criteria moved too). Both are **OWED by a C2 fix round**, not satisfied on the gate tree. Re-run
+`count_criteria.py`; do not increment this by hand.
 
 Per plan (rows/criteria): 1 → 53/7 · 2 → 75/7 · 3 → 42/8 · 4 → 63/8 · 5 → 23/3 · 6 → 36/8 ·
 7 → 52/7 · 8 → 70/8 · 8A → 20/6 · 9 → 44/8 · 10 → 35/7 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 ·
