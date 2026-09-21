@@ -7871,6 +7871,127 @@ nodes:
     confidence: 0.95
     createdAt: 2026-09-21T13:52:14.508Z
     updatedAt: 2026-09-21T13:52:14.508Z
+  - id: endpoint-items-processed-webhook
+    type: endpoint
+    name: items processed webhook
+    description: "Scanner's third stock message: key-authenticated, raw-bytes JSON
+      reporting article numbers it has physically placed. Decides each entry on
+      the §14F F5 ladder (item_not_found → no_open_assignment → resolved from
+      awaiting → resolved (reason early) from in_queue/in_progress), inside one
+      owning transaction with sorted row and assignment locks, and is
+      replay-safe (a second delivery of an already-resolved article is a
+      zero-write no-op)."
+    tags:
+      - stock_report
+      - webhook
+      - phase_9
+    metadata:
+      evidence:
+        - path: app/beyo_manager/routers/api_v1/location_tracker_webhooks.py
+          symbol: items_processed_webhook_route
+          summary: A dedicated POST /webhooks/items-processed route, key-authenticated
+            like the sibling stock-demand route, forwarding raw bytes and
+            headers to the command.
+          inferenceReason: A distinct route with its own auth and transport shape is an
+            independently named API endpoint, mirroring the sibling stock-demand
+            webhook already in the graph.
+        - path: app/beyo_manager/services/commands/stock_report/process_items_processed.py
+          symbol: process_items_processed
+          summary: Verifies the webhook, parses the body, then inside one transaction
+            discovers items and their active assignments, locks rows and
+            assignments ascending, decides each entry in request order on the
+            re-read state, and resolves each row's group.
+          inferenceReason: This command is the endpoint's whole implementation boundary.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - id: domain-processed-webhook-resolution
+    type: domain
+    name: processed webhook resolution
+    description: "The grouped form of the assignment-move operation for Scanner's
+      processed webhook: every assignment a request decides to move off a row is
+      written and flushed together, then one guarded counter statement carries
+      the group's summed per-column delta (never a second counter path),
+      followed by the per-assignment goal-credit step. Shares the same statement
+      builder and repair routine as the single-assignment move."
+    tags:
+      - stock_report
+      - phase_9
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: resolve_processed_group
+          summary: Computes each assignment's target from its pre-move state (awaiting →
+            resolved, otherwise → resolved_early), writes and flushes their own
+            columns, issues one guarded counter statement for the row's summed
+            delta, then runs the goal-credit step per assignment.
+          inferenceReason: The one function that performs the grouped move is the
+            mechanism's implementation.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - id: domain-task-state-stock-sync
+    type: domain
+    name: task state to stock assignment sync
+    description: Keeps a task's active stock-report assignment in step with the
+      task's own state, at command level (never inside a shared step-transition
+      helper, so an intermediate state within one transaction is never synced).
+      Called once per command, after its last write to Task.state, only for
+      tasks whose state net-changed; skips deleted or terminal assignments
+      (resolved/failed/resolved_early are never revived) and no-ops when the
+      assignment already matches the mapped target.
+    tags:
+      - stock_report
+      - phase_10
+      - tasks
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/sync_task_stock_assignments.py
+          symbol: sync_task_stock_assignments
+          summary: Flushes first, then per changed task locks the row and assignment,
+            re-reads state, skips terminal/deleted/already-at-target
+            assignments, and otherwise calls move_assignment with trigger
+            task_sync.
+          inferenceReason: This is the one function every task-state-changing command
+            calls to keep the board in sync.
+    origin: ai_inferred
+    confidence: 0.93
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - id: test-task-state-write-site-guard
+    type: test
+    name: task state write-site guard
+    description: An AST sweep of the whole application and scripts tree (excluding
+      tests/migrations) collecting every site that could write Task.state —
+      attribute assignments, setattr calls, update/insert(Task), the Task
+      constructor, and calls to the four sync-adjacent helpers — checked against
+      a hand-classified, checked-in registry. Fails on an unregistered site, a
+      stale registry entry, a task_write whose named function never calls the
+      sync, or a paused-driver whose new_state is not the literal PAUSED.
+    tags:
+      - stock_report
+      - phase_10
+      - guard
+    metadata:
+      evidence:
+        - path: app/tests/unit/services/commands/stock_report/test_task_state_write_sites_are_registered.py
+          symbol: test_c4a_every_collected_site_has_a_registry_entry
+          summary: Compares the AST collector's live output against the checked-in
+            registry and fails on any unregistered or stale site.
+          inferenceReason: This is the guard's own control test, proving the instrument is
+            correctly wired on the shipped tree.
+        - path: app/tests/unit/services/commands/stock_report/task_state_write_site_registry.py
+          summary: The hand-classified registry of all 85 collected sites
+            (task_write/no_sync/paused_driver/not_task), each task_write naming
+            the function(s) that must call the sync.
+          inferenceReason: The registry is the guard's data half — it is what makes the
+            AST sweep meaningful rather than merely descriptive.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
 edges:
   - sourceNodeId: intention-step-transition-analytics
     relationshipType: contains
@@ -14457,3 +14578,83 @@ edges:
     confidence: 0.94
     createdAt: 2026-09-21T13:52:14.508Z
     updatedAt: 2026-09-21T13:52:14.508Z
+  - sourceNodeId: endpoint-items-processed-webhook
+    relationshipType: depends_on
+    targetNodeId: domain-processed-webhook-resolution
+    description: The webhook command calls the grouped resolution mechanism once per
+      touched row to move assignments and settle counters.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/process_items_processed.py
+          symbol: process_items_processed
+          summary: After deciding every entry, groups the assignments to move by row and
+            calls resolve_processed_group once per row, ascending.
+          inferenceReason: Direct call site demonstrating the dependency.
+    origin: ai_inferred
+    confidence: 0.92
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - sourceNodeId: domain-processed-webhook-resolution
+    relationshipType: modifies
+    targetNodeId: table-stock-task-assignment
+    description: Writes each moved assignment's state, updated_at and updated_by_id.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: resolve_processed_group
+          summary: Sets assignment.state to the resolved target and stamps
+            updated_by_id/updated_at for every assignment in the group before
+            flushing.
+          inferenceReason: Direct write to the table's mapped model.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - sourceNodeId: domain-processed-webhook-resolution
+    relationshipType: modifies
+    targetNodeId: table-stock-report-item
+    description: Issues the guarded counter statement for the row's summed per-column delta.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/_move_assignment.py
+          symbol: resolve_processed_group
+          summary: Calls the shared guarded counter UPDATE against the row after the
+            assignments are flushed.
+          inferenceReason: Direct write to the table's mapped model.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - sourceNodeId: domain-task-state-stock-sync
+    relationshipType: modifies
+    targetNodeId: table-stock-task-assignment
+    description: Moves the task's active assignment to the state the task's own
+      resulting state maps to.
+    metadata:
+      evidence:
+        - path: app/beyo_manager/services/commands/stock_report/sync_task_stock_assignments.py
+          symbol: sync_task_stock_assignments
+          summary: Locks the assignment and calls move_assignment with the mapped target
+            when it differs from the current state.
+          inferenceReason: Direct write path to the table's mapped model.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
+  - sourceNodeId: test-task-state-write-site-guard
+    relationshipType: verifies
+    targetNodeId: domain-task-state-stock-sync
+    description: Proves every Task.state write site in the application is either
+      wired to call the sync, deliberately excluded with a reason, or is not a
+      Task write at all.
+    metadata:
+      evidence:
+        - path: app/tests/unit/services/commands/stock_report/test_task_state_write_sites_are_registered.py
+          summary: The guard's five assertions check registration completeness, staleness,
+            sync-call presence, and the paused-driver literal.
+          inferenceReason: The guard's whole purpose is to verify this mechanism's
+            completeness across the codebase.
+    origin: ai_inferred
+    confidence: 0.9
+    createdAt: 2026-09-21T15:05:25.734Z
+    updatedAt: 2026-09-21T15:05:25.734Z
