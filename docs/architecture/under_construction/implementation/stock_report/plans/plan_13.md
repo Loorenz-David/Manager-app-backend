@@ -104,6 +104,7 @@ Fixture: **F0** with several assignments created through `CR` on different tasks
 | C4(d) | `GET` for a deleted row / absent id / foreign row | `NotFound` each | — | M4 |
 | C5(a)–C5(d) | `DELETE …/items/{id}` as admin / manager / worker / seller | reached / reached / 403 / 403 | — | MC-18 |
 | C5(e)–C5(h) | `GET …/items/{id}/assignments` as admin / manager / worker / seller | reached ×4 | — | MC-18 |
+| C6(a) | **Moved here from plan 8 C4(l) by the owner, card 2, 2026-09-21** — it can only be true where both shapes exist. Create an assignment with `CR([I on R])`, keep the create response element, then `GET /api/v1/stock-report/items/{R}/assignments` and take the same assignment's element | `set(create_element) == set(list_element)` — the two surfaces return the **same key set**, so a board can render a freshly created assignment and a reloaded one identically | make `list_stock_task_assignments` build its element inline instead of calling `serialize_stock_task_assignment` (definition site), then drop one key → the two key sets diverge | master plan §9B ruling 2, §6.1; plan 8 C4(l); batch C1 tester card 2 |
 
 ## 7. Notes
 
