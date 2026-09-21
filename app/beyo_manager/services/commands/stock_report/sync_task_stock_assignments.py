@@ -13,7 +13,10 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from beyo_manager.domain.stock_report.enums import TERMINAL_ASSIGNMENT_STATES
+from beyo_manager.domain.stock_report.enums import (
+    ACTIVE_ASSIGNMENT_STATES,
+    TERMINAL_ASSIGNMENT_STATES,
+)
 from beyo_manager.domain.stock_report.state_map import ASSIGNMENT_STATE_BY_TASK_STATE
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
@@ -53,14 +56,27 @@ async def sync_task_stock_assignments(
 
     for task, _old_state in sorted(changed, key=lambda pair: pair[0].client_id):
         # Step 3 — the "cheap skip": a fresh query, never the possibly-stale ORM
-        # `task.is_stock_assignment` (§4.4/MC-2 step 3).
-        assignment = await session.scalar(
-            select(StockTaskAssignment).where(
-                StockTaskAssignment.workspace_id == workspace_id,
-                StockTaskAssignment.task_id == task.client_id,
-                StockTaskAssignment.is_deleted.is_(False),
+        # `task.is_stock_assignment` (§4.4/MC-2 step 3). The `state.in_(...)`
+        # predicate is not optional: `uix_stock_task_assignments_task_active`
+        # only guarantees "at most one" *inside* the active-state predicate, so a
+        # task may carry any number of non-deleted terminal assignments beside
+        # one active one (§14F F1 — a terminal assignment does not block a new
+        # one). Without the filter this query can return a terminal row and the
+        # post-lock terminal skip below then discards the whole sync, leaving the
+        # task's genuinely active assignment un-synced forever (review F-1).
+        # `scalar_one_or_none` (not `scalar`) is what makes a future breach of
+        # MC-4's "at most one active" promise raise instead of silently picking
+        # whichever row Postgres returns first.
+        assignment = (
+            await session.execute(
+                select(StockTaskAssignment).where(
+                    StockTaskAssignment.workspace_id == workspace_id,
+                    StockTaskAssignment.task_id == task.client_id,
+                    StockTaskAssignment.is_deleted.is_(False),
+                    StockTaskAssignment.state.in_(ACTIVE_ASSIGNMENT_STATES),
+                )
             )
-        )
+        ).scalar_one_or_none()
         if assignment is None:
             continue
 
