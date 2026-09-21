@@ -7,6 +7,7 @@ shaped_from: raw_intention.md (deleted by the owner after ratification; its sect
 source_evidence: scanner_source_evidence.md (this folder) — cited below as E1…E10
 date: 2026-09-18
 round: 9 (early Scanner resolution into the terminal state `resolved_early` — §14F; card 14 answered; re-ratified 2026-09-19; 0 cards open)
+round 10 (2026-09-21): §14G added — match preview + MC-21. **Additive by owner ruling: the gate holds and no re-ratification was required**, because the section adds a read-only surface over already-ratified checks and changes no contract, invariant or outcome. Status above is unchanged and only the owner writes it.
 ```
 
 Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
@@ -1710,6 +1711,8 @@ merge.)
 
 ### 13A. Mechanism-contract register — trace targets for planner criteria (mechanism-inventory, round 6)
 
+*MC-21 added 2026-09-21 (§14G, additive): one evaluation of an assignment's acceptability, two callers — the creation command takes the first failure, the match preview takes the whole list. Serves M4.*
+
 The ledger above is unchanged. It still holds nine entries against the 3–7 guideline, by the
 owner's acceptance, and none is merged or renumbered. Each contract below is a trace target in
 its own right. A criterion cites `MC-n` and, through it, the ledger entry it serves.
@@ -2019,6 +2022,93 @@ phase 9 (processed decision order F5, MC-11 rows F6), phase 10 (sync skip — al
 
 ---
 
+### 14G. Amendment — match preview before an assignment is created (owner, 2026-09-21, round 10)
+
+**Additive. The intention gate holds** (owner ruling, 2026-09-21): this section adds a read-only
+surface over checks that are already ratified. It changes no existing contract, no invariant, no
+outcome and no mechanism in MC-1…MC-20. Nothing computed here is new; only its reachability is.
+
+**The problem.** A user building a task and an item to fulfil a board row learns whether the pair
+is acceptable only by creating both and calling `POST /stock-report/assignments`. Two of MC-13's
+refusals — `item_has_no_category` and `category_mismatch` — have **no override**, so by the time
+the user sees one the item exists and cannot be used for the purpose it was made for. A property
+mismatch is recoverable but costs a second request. The board therefore teaches its users to
+create garbage and then discover it.
+
+**MC-21 — one evaluation, two callers** (serves M4; new contract, registered in §13A).
+
+> The acceptability of an `(item, task, row)` triple is decided by **exactly one implementation**.
+> It evaluates every check MC-13 phase 3 names, **in MC-13's precedence order**, and returns the
+> per-check results in that order. `create_stock_task_assignments` consumes the **first failure**
+> and refuses with it; the preview consumes the **whole list** and reports it. Neither re-implements
+> the other's checks, and neither may hold a check the other lacks.
+>
+> The evaluation is a **pure function of already-fetched entities** — it performs no I/O, so the
+> creation path may supply row-locked entities and the preview plain reads. This is already true
+> of `_phase3_reason` (`create_stock_task_assignments.py`), which takes `locked_rows`,
+> `locked_tasks`, `locked_items`, `primary_pairs`, `processed_pairs` and `active_item_ids` and
+> queries nothing; the contract makes that property binding rather than incidental.
+>
+> **Why a contract and not a note:** a second implementation of the ordering would drift from the
+> first, and the drift surfaces as a preview that promises what the create then refuses — the
+> failure mode this endpoint exists to remove. MC-13's order is deliberately not intuitive
+> (`item_already_assigned` precedes `item_has_no_category` and `category_mismatch`), so a
+> re-derivation would very likely get it wrong.
+
+**The endpoint.** `POST /api/v1/stock-report/items/{client_id}/match-preview`, roles **ADMIN,
+MANAGER, WORKER** — the set that may create an assignment. **Single, not batch** (owner,
+2026-09-21). Read-only: it writes nothing, locks nothing and reserves nothing.
+
+Request:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `task_id` | `str \| null` | the task the assignment would go on. **Null means "a task that does not exist yet"** — see the construction rule below. |
+| `article_number` | `str \| null` | identifies an existing item. At most one live item per workspace carries a given value (partial unique index). |
+| `sku` | `str \| null` | same; `article_number` and `sku` are alternatives, not both. |
+| `item_category_id` | `str` | the candidate's category — compared by identity to the row's, as MC-13 does. |
+| `properties` | `dict` | the candidate's property snapshot. |
+| `quantity` | `int` | **required.** `quantity` is a matched criterion, not metadata: `build_item_property_bag` sets `bag["quantity"]`, and board criteria routinely constrain it. Omitting it would evaluate every quantity criterion against nothing. |
+
+Response:
+
+| Field | Meaning |
+|---|---|
+| `can_proceed` | no non-advisory check failed, property mismatches aside |
+| `override_required` | property failures exist and are overridable with `override_property_mismatch` |
+| `refusal_reason` | **what `create` would refuse with** — the first failure in MC-13's order, or null |
+| `property_failures` | `[{key, reason}]`, the **same element shape** as the 409's `details[].failures[]`, reasons from `StockCriteriaMismatchReasonEnum` |
+| `matched_item_client_id` | the live item the identifier resolved to, or null |
+| `checks` | `[{check, result, advisory}]` in MC-13 order; `result` ∈ `pass` / `fail` / `pass_by_construction` / `not_evaluated` |
+
+**The construction rule.** With `task_id` null the caller is creating the task in the same act, so
+three checks **pass by construction** and are reported `pass_by_construction`, never `pass`: a new
+task is `pending` (`task_failed_or_cancelled` cannot fire), the item will be PRIMARY on it
+(`item_not_task_primary` cannot fire), and it has no prior assignment pair
+(`already_processed_by_scanner` cannot fire). With `task_id` supplied, all three are evaluated
+against the real task. **A preview taken with a null `task_id` does not license a create against
+an existing task**, and the response says so by construction because the caller can see which
+results were assumed rather than measured.
+
+**Three semantics that must not be softened.**
+
+1. **`item_already_assigned` is advisory, always** (`advisory: true`). Another actor may take the
+   item between preview and create. A subsequent refusal is correct behaviour, not a defect in
+   either call. Every other check is stable between the two.
+2. **An unresolved `article_number` / `sku` is a normal outcome, not a 404.** It means "no such
+   item yet" — the creation case this endpoint exists for — and the category, property and
+   quantity checks still run against the supplied values.
+3. **The preview is not a promise.** It answers *"would this triple be accepted right now?"*, not
+   *"will the create succeed?"*. Any client rendering it as a guarantee has mis-read it.
+
+A soft-deleted, foreign or absent row in the path is `NotFound`, as every other read of a row is
+(MC-16, M4).
+
+**The reverse query is dropped** (owner, 2026-09-21). "Given this item, which board rows does it
+match?" was raised, considered and **rejected as unneeded** — it would require ordering and
+pagination decisions over all rows for no current caller. Recorded here so it is not re-proposed
+as an oversight. If a caller appears, it is a new amendment.
+
 ## 15. Pre-implementation protocol
 
 1. ~~Owner answers the §17 cards~~ — done, rounds 1–4.
@@ -2088,6 +2178,24 @@ Ratifying the document ratifies these.
 ### Open
 
 None.
+
+### Closed (round 10 — 2026-09-21)
+
+- **Match preview before creation** — build it. §14G, MC-21. Prompted by the frontend hitting the
+  real problem: `category_mismatch` and `item_has_no_category` have no override, so the user
+  learns only after creating an item they cannot use.
+- **`quantity` in the preview request** — required. It is a matched criterion
+  (`build_item_property_bag` sets `bag["quantity"]`), not metadata; omitting it would silently
+  mis-evaluate every quantity criterion. Found by reading the matcher, not by design.
+- **Batch or single** — single.
+- **Shared evaluation vs a second implementation** — shared, and made binding as MC-21 rather
+  than left as guidance.
+- **`assumes_new_task` flag vs optional `task_id`** — optional `task_id`. It is strictly more
+  capable and mirrors the create entry shape, so the two inputs cannot drift.
+- **Does §14G re-open the intention gate?** No — additive, gate holds.
+- **Reverse query ("which rows does this item match?")** — **dropped**, not deferred. No caller
+  now, and it would need ordering and pagination decisions over all rows. Recorded so it is not
+  re-proposed as an oversight.
 
 ### Closed (round 9)
 
