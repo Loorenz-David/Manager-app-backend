@@ -185,4 +185,115 @@ non-timing row ends with `assert_stock_report_clean`.
 
 ## 8. Review log
 
-(empty)
+**2026-09-21, batch B2 implement 1 (Sonnet).** Implemented `stock_demand_entries.py`,
+`_demand_lookup.py`, `apply_stock_demand.py`, `bm/errors/stock_report.py` (new file,
+`LocationTrackerWebhookAuthError` + `StockDemandDeadlineExceeded` only — the two
+structured assignment errors belong to phase 8). Tests:
+`test_apply_stock_demand.py` (28 rows/tests) and `test_apply_stock_demand_timing.py`
+(3 rows/tests, C7 — the sleeping test lives here per H25). All 31 green.
+
+**Perimeter additions (blockers B3/B4), final signatures:**
+- `app/tests/helpers/statement_listener.py`: added
+  `record_statement_calls(session)`, an `asynccontextmanager` yielding
+  `list[tuple[str, Any]]` of `(statement, parameters)` from the same
+  `before_cursor_execute` hook as `record_statements`. `record_statements` and
+  `count_writes` are byte-identical to before.
+- `bm/domain/stock_report/enums.py`: added `StockDemandOutcomeEnum` only
+  (`APPLIED = "applied"`, `CATEGORY_NOT_FOUND = "category_not_found"`). The other
+  five names master plan §6.1 claims (round-8/9 items) are still missing and belong
+  to phases 9/13A — not added here (charter rule 4).
+
+**O1 decision (outcome cell, plan 6 C7(a)):** implemented as the fold prescribes —
+two distinct bind names, `:statement_timeout_ms` and `:lock_timeout_ms`, both bound
+to `str(timeout_ms)`. The compiled statement carries `$1`/`$2`; C7(a) asserts
+`tuple(first_params) == (expected, expected)`.
+
+**Measured dependency versions** (re-confirmed against the installed stack, not
+re-derived): PostgreSQL 18.6, SQLAlchemy 2.0.40, asyncpg 0.30.0, Starlette 0.46.2,
+FastAPI 0.115.12, CPython 3.13.2.
+
+**Judgment calls:**
+1. Step 6's lock (task 2 step 6) locks by **identity**
+   (`tuple_(item_category_id, properties_signature).in_(...)`), never by the
+   client_ids steps 4/5 happened to see (H17) — a concurrent insert can win an
+   identity between step 4's discovery and this lock, and step 5's own
+   `ON CONFLICT DO NOTHING` then returns nothing for it, so the locally generated
+   client_id is not the row's id. This is not spelled out as a separate task step,
+   but H17 requires it and C5(a)'s two-session invariant depends on it.
+- `apply_stock_demand.py`'s step-7 UPDATE is one `UPDATE ... FROM (VALUES (CAST(:id_i
+  AS varchar), CAST(:q_i AS integer)), ...) AS v(id, q)` statement. **Measured**:
+  SQLAlchemy's `text()` bind-parameter scanner does not recognize `:name::type`
+  (Postgres's own cast syntax) as a parameter followed by a cast — it treats the
+  whole `:name::type` token as unparseable and leaves it as literal text, which
+  asyncpg then rejects with a syntax error. `CAST(:name AS type)` avoids the
+  adjacency and compiles correctly. Recorded here since master plan §9 rule 14 asks
+  Postgres/SQLAlchemy shapes to be cited, not invented, and this one is not in the
+  re-check handoff.
+- The step-7 UPDATE's `RETURNING` columns are bound to their real column types via
+  `text(...).columns(...)`, reusing `StockReportItem.__table__.c.priority.type` for
+  `priority` — this is what makes the raw-SQL `RETURNING` produce a real
+  `StockReportPriorityEnum` member (not a string) for
+  `_events.py:build_stock_report_item_updated_event`, which the existing (batch B1)
+  code assumes.
+- `resolve_categories_for_entries` resolves per **entry**, using the first entry
+  seen for a given `item_category_key` as the "raw" string compared for the exact
+  match. Two entries sharing one key but differing only in casing (already
+  duplicate-rejected as a single-identity in phase 7 when their properties also
+  match) is not exercised by any plan-6 row; documented as a smallest-reasonable
+  reading of the master plan's `dict[str, str | None]` signature, not a new
+  contract.
+- C3(g)'s fixture: the plan names the row's own `priority_order = 2` while asserting
+  the workspace stays clean. A single row at `priority_order = 2` is not dense
+  (`order_density` expects `1`), so the test adds a companion row at
+  `priority_order = 1` in the same "high" group — the smallest addition that makes
+  the plan's literal numbers a consistent fixture rather than a self-contradicting
+  one.
+
+**Mutation ledger — derivation (plan cell → table row).** 30 named-mutation cells
+counted from §6 (excludes `—` cells, the C8(a) reuse of C1(a)'s mutation, the
+C3(a)-iii equivalent mutant carried by C3(g), and C5(b)'s declared-unrunnable
+interleaving). `executed == declared == 30`. Two cells (C1(c), C4(a)) name the
+identical code change (the equality guard before `to_update`/`to_credit`) and are
+recorded as one physical mutation run against both tests. Two mutations were
+**re-sited** after an initial false green (see notes): C2(d) and C3(f) needed a
+different code change than first tried; C6(a) needed to loop per **entry**, not per
+distinct key, since the fixture's 3-vs-300 batches share one category.
+
+| Row | Site | Command (file run) | Result |
+|---|---|---|---|
+| C1(a) | `apply_stock_demand.py`, event-filter (def.) | `test_apply_stock_demand.py::test_c1a_...` | red: event count 2, spurious `:updated` |
+| C1(b)(i) | `apply_stock_demand.py`, step 5 absent-set + ON CONFLICT (def.) | `test_apply_stock_demand.py::test_c1b_...` | red: `IntegrityError` on the INSERT |
+| C1(b)(ii) | `apply_stock_demand.py`, `created_client_ids` after lock (def.) | `test_apply_stock_demand.py::test_c1b_...` | red: spurious `:created`, event-shape assertion fails |
+| C1(c) / C4(a) | `apply_stock_demand.py`, step-7 equality guard (def.) | `test_apply_stock_demand.py::test_c1c_...`, `test_c4a_...` (also incidentally `test_c6c_...`) | red on all three: `count_writes != 0` |
+| C1(d) | `_demand_lookup.py::discover_live_rows_by_identity`, `is_deleted` filter (def.) | `test_apply_stock_demand.py::test_c1d_...` | red: matched the soft-deleted row, no new row created |
+| C1(f) | `apply_stock_demand.py`, step-2 workspace check (def.) | `test_apply_stock_demand.py::test_c1f_...` | red: no exception raised |
+| C2(b) | `_demand_lookup.py::resolve_categories_for_entries`, case-insensitive fallback (def.) | `test_apply_stock_demand.py::test_c2b_...` | red: `category_not_found` instead of resolved |
+| C2(c) | same, ambiguous case-insensitive branch (def.) | `test_apply_stock_demand.py::test_c2c_...` | red: resolved (picked one) instead of `category_not_found` |
+| C2(d) | same, check order (def.) — re-sited: reordering alone was inert (case-insensitive returns the same ambiguous 2 either way and still falls through); the real mutation stops at the ambiguous case-insensitive result | `test_apply_stock_demand.py::test_c2d_...` | red (2nd attempt): resolved to `None` instead of K |
+| C2(e) | `apply_stock_demand.py`, category-not-found branch (def.) | `test_apply_stock_demand.py::test_c2e_...` | red: `RuntimeError` propagates, whole request fails |
+| C2(f) | `stock_demand_entries.py::DemandEntry.__post_init__` (def.) | `test_apply_stock_demand.py::test_c2f_...` | red: `category_not_found` instead of resolved |
+| C2(g) | `_demand_lookup.py::resolve_categories_for_entries`, `is_deleted` filter (def.) | `test_apply_stock_demand.py::test_c2g_...` | red: resolved the soft-deleted category |
+| C3(a)(i) | `apply_stock_demand.py`, history `quantity_requested` value (def.) | `test_apply_stock_demand.py::test_c3_sequence_...` | red: record shows 0 (stale) instead of 5 |
+| C3(a)(ii) | same, history `created_at` (def.) | `test_apply_stock_demand.py::test_c3_sequence_...` | red: `created_at != NOW` |
+| C3(c) | `apply_stock_demand.py`, credit guard (def.) | `test_apply_stock_demand.py::test_c3_sequence_...` | red: a record appears on `5→3` |
+| C3(d) | same, comparison base (def.) — extra query against `StockReportHistoryRecord` max | `test_apply_stock_demand.py::test_c3_sequence_...` | red: no record on `3→4` |
+| C3(f) | `apply_stock_demand.py`, step 5 (def.) — re-sited: the `>`/`>=` swap at the credit guard is inert for this row (a new row at 0 never enters `to_update`, since `0 != 0` is false regardless); the real mutation unconditionally credits every created row | `test_apply_stock_demand.py::test_c3f_...` | red (2nd attempt): a goal record appears for the 0-quantity new row |
+| C3(g) | `apply_stock_demand.py`, history `quantity_awaiting` value (def.) | `test_apply_stock_demand.py::test_c3g_...` | red: record shows 3 (the live counter) instead of 0 |
+| C4(b) | `apply_stock_demand.py`, step 5 omission guard (def.) | `test_apply_stock_demand.py::test_c4b_...` | red: `count_writes({"stock_report_items"}) != 0` on replay |
+| C5(a) | `apply_stock_demand.py`, step 5 ON CONFLICT (def.) | `test_apply_stock_demand.py::test_c5a_...` | red: `IntegrityError` under the concurrent race |
+| C5(b) | — | not run (plan: interleaving cannot be forced; reviewer performs the structural check on the sorted VALUES / `ORDER BY`) | declined by design |
+| C5(c) | `apply_stock_demand.py`, locked-set assertion (def.) | `test_apply_stock_demand.py::test_c5c_...` | red: no `RuntimeError`, `pytest.raises` fails |
+| C6(a) | `_demand_lookup.py::resolve_categories_for_entries` (def.) — re-sited: looping per distinct **key** was a false green (both batch sizes share one category key); looping per **entry** reddens | `test_apply_stock_demand.py::test_c6a_...` | red (2nd attempt): statement counts diverge (also reddened C6b/c/d as a bonus, each re-run at its own site below) |
+| C6(b) | `apply_stock_demand.py`, step 7 (def.) | `test_apply_stock_demand.py::test_c6b_...` | red: per-row UPDATE count scales with batch size |
+| C6(c) | `apply_stock_demand.py`, step 7 loop (def.) | `test_apply_stock_demand.py::test_c6c_...` | red: statement count is 305 instead of 5 for the 300-entry batch |
+| C6(d) | — | not run (cell is `—`) | declared not run |
+| C7(a) | `apply_stock_demand.py`, top of the owner-mode block (def.) | `test_apply_stock_demand_timing.py::test_c7a_...` | red: first statement is `SELECT 1`, not `set_config` |
+| C7(b) | `apply_stock_demand.py`, step 1 (def.) | `test_apply_stock_demand_timing.py::test_c7b_...` | red (~8.6s): call succeeds after the holder releases instead of raising `DBAPIError` |
+| C7(c) | `apply_stock_demand.py`, step 9 (def.) | `test_apply_stock_demand_timing.py::test_c7c_...` | red: no `StockDemandDeadlineExceeded` raised |
+| C8(a) | — | discharged by the C1(a) run above (plan cell says "(C1(a) mutation)") | reused |
+| C8(b) | `apply_stock_demand.py`, event-payload construction (def.) | `test_apply_stock_demand.py::test_c8b_...` | red: payload shows the stale step-6 values, not `RETURNING` |
+| C8(c) | — | not run (cell is `—`) | declared not run |
+| C8(d) | `apply_stock_demand.py`, `:created` event construction (def.) | `test_apply_stock_demand.py::test_c8d_...` | red: `workspace_id == ""` |
+
+All mutations reverted; `git status --porcelain` on the two production files matches
+their post-implementation content (verified below in the batch handoff).
