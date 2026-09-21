@@ -231,3 +231,42 @@ its real evidence is C4); C3(a)/(b)/(d)/(e)/(f) (sibling terminal-skip cases of 
 one I tested); C5(b)/(c) (the mirror order and the `in_progress` order — C5(a) is
 built and passing, three consecutive runs, no flake observed); C7(a)/(b)/(c)
 (dispatch-order and trigger rows).
+
+**Tester (verification engineer), 2026-09-21 (batch C2 round 1, Opus).** 35 criterion rows,
+32 plan-named mutation cells (C2(a), C4(a) and C7(b) carry no site by ruling or by design),
+**32 executed**. Tests: 8 → 26 in `test_task_state_sync.py`, 1 → 3 in
+`test_two_writers_on_one_assignment.py`; no test removed. Full ledger in
+`handoffs/tester/2026-09-21_batch_C2_test_1_handoff.md`.
+
+- **All three C5 orders are built and each is armed by the synchronization site itself.** The §6
+  referee-lock choreography works as written: both participant blocks are observed, so the order
+  is forced, not raced. C5(a)/C5(c) redden on `IllegalAssignmentMove` when the terminal skip is
+  decided on the value captured at the unlocked discovery step; C5(b) reddens when Scanner's F5
+  ladder is run on the discovery-time state. No barrier, no sleep, no repetition loop.
+- **C5(b)'s predicted failure mode is wrong, and the reason matters.** The cell says
+  `_move_assignment.py:74-79` refuses the stale decision with `IllegalAssignmentMove` (500). It
+  does not: `resolve_processed_group` (plan 9) does **not** call `_assert_allowed_move`, so the
+  illegal `awaiting → resolved` is written silently and the row reddens on its own `results`
+  assertion instead. The row is armed either way. See owner card 1.
+- **C1(f) and C1(i) share one landed edit**, and each half alone is EQUIVALENT exactly as the
+  C1(i) cell predicts — both halves were run separately and recorded. C3(a)/C3(c) share one
+  edit; C3(d)/(e)/(f) share one edit and each row's own task exit was observed red in it.
+- **The six MC-2 probes fire, and each names its own planted site** — checked explicitly,
+  because inserting a line into `update_task.py` shifts every registered line number below it
+  and would redden the guard on its own. The unregistered-site set names line 67 (the probe) as
+  well as the shifted 71, so the collector really observes the planted construct.
+- **C4(h)'s named mutation is EQUIVALENT.** With the stale entry planted, dropping the
+  `function_exists` assertion leaves the same test red on the adjacent `function_contains_call`
+  assertion. The row's positive observation (the planted stale entry, observed red and named) is
+  recorded; backfill proposed.
+- **Two rows could not fail as shipped and were repaired.** C6(a) was built on `fail_task` with
+  no `credited_user_id` at all, so "use the credited user" had nothing to read; it is now S1 with
+  the manager performing and the worker credited. C1(g)/C1(h) were built from the wrong
+  pre-states (`in_queue` where the rows say `from working` / `from assigned`).
+- **C6(b) is proven at S8**, the one site whose `now` is `ctx.now` and therefore the only one a
+  fixture can pin to an exact instant (the implementer's flagged judgment call). S8 is a full
+  command boundary, so this is a fixture choice, not a narrower surface (§9 rule 17).
+- **C2(a) and C7(b) recorded `UNFORCEABLE`** per the owner's rulings; both keep a regression test
+  and neither was made to bite. **Candidate criterion:** plan 10 registers
+  `sync_task_stock_assignments` in §6.5 but carries no §9 rule-18 row pinning it; see owner
+  card 2.

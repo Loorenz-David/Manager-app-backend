@@ -238,3 +238,36 @@ representative of each family for; C4(e) (the `in_progress` credit sub-check, si
 `in_queue` row I did test); C7(b)/(d)/(e) (the two-row and mixed-state groupings, siblings of the
 three-row C7(a)/(c) I did test); C8(b) (declared unforceable by the plan itself, routed to the
 reviewer's structural check).
+
+**Tester (verification engineer), 2026-09-21 (batch C2 round 1, Opus).** 44 criterion rows,
+44 plan-named mutation cells, **44 executed** (+2 sited from the deliberate blanks, +2 re-runs
+after a fixture repair, +1 re-siting). Tests: 19 → 41 in
+`test_process_items_processed.py`; no test removed. Full ledger in
+`handoffs/tester/2026-09-21_batch_C2_test_1_handoff.md`.
+
+- **Row count.** §7 says "43 criterion rows"; the table has **44** (C1 5, C2 8, C3 12, C4 7,
+  C5 2, C6 2, C7 5, C8 3), derived by script. Not re-typed here — the handoff carries the
+  derivation.
+- **Judgment calls / re-sitings.** C3(c) and C6(b) name a hand-typed terminal list; applied at
+  the unlocked discovery predicate **alone** it is EQUIVALENT, because the in-loop ladder's own
+  `state not in ACTIVE_ASSIGNMENT_STATES` check absorbs it. Both sites must be hand-typed
+  together. C6(a)'s cell has the same shape and the same result; re-sited to both places it
+  reddens on its own `count_writes == 0` clause. Three cell backfills proposed.
+- **C2(a) EQUIVALENT** (sited on the real guard, as the cell invites); **C2(d) ARMED** by
+  `item.get("article_number", "<placeholder>")` — a real isolating site does exist, backfill
+  proposed. **C8(b)** `UNFORCEABLE` per the plan; no test written, reviewer's structural check
+  named in the handoff.
+- **Two rows could not fail as shipped and were repaired.** C3(c) was built for the `failed`
+  sub-case only; its own named mutation bites **only** the `resolved_early` sub-case, so it is
+  now parametrized over all three. C4(c)'s `is_stock_assignment is True` read the task from the
+  stale identity map (the session runs `expire_on_commit=False`), so no task write was
+  observable; it now reads with `populate_existing`. C1(e)'s API-key twin carried a second
+  sufficient cause (a mismatched header) and is now sent the same blank value as the setting.
+- **Deviations declared.** C4 rows restored to the §6 preamble's `q = 8` (the implementer used
+  F0's default 4). C4(e)'s "T `working` with a `working` step" is built without a step: this
+  file has no step teardown and no code path reads task steps, so the F3 clause is asserted as a
+  task fingerprint (state, `updated_at`, `updated_by_id`, `is_stock_assignment`, step count).
+- **C8(c)** read per the orchestrator's ruling (`:state-changed`), satisfied; its mutation cell
+  names `process_items_processed.py` but the symbol is in `_move_assignment.py` — backfill
+  proposed. **Candidate criterion:** `resolve_processed_group` never calls
+  `_assert_allowed_move`; see owner card 1.
