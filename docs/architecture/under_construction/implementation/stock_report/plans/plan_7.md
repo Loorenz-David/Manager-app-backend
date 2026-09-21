@@ -244,3 +244,62 @@ explicitly so the arithmetic is auditable.
 
 All mutations reverted; `git status --porcelain` on the production files matches
 their post-implementation content (verified in the batch handoff).
+
+---
+
+**2026-09-21, batch B2 review 1 (Opus, `plan-reviewer`) — 44/52 PASS, 8 FAIL. Verdict for the
+batch: CHANGES_REQUESTED.** Tree `ff39a96`, clean; the implementer's L4 and L1 records are
+tree-matched and consumed by citation. No L4 run.
+
+**BLOCKING — B1: C4(a)–(h) (8 rows).** Implemented in `test_stock_demand_request.py` as comparisons
+of two hex signatures from `parse_stock_demand_body`. The cells' outcome is "**one live row**"
+(a)–(e) / "**two rows**" (f)–(h), and intention §4A MC-3 states the invariant verbatim as
+"**proven through the webhook endpoint with real JSON bytes** … Each of (a)–(e) is its own row, and
+so is each 'two rows' case" (ledger **M4**). No test in batch B2 delivers two requests with
+equivalent-but-differently-spelled properties and counts live rows: plan 6's replay rows re-send
+identical `DemandEntry` objects and C5(a) makes one delivery. **No production defect** —
+`properties_signature` is computed once (`stock_demand_request.py:74`) and is the single value used
+by the duplicate check, discovery, insert and lock, so parser equality does imply row convergence.
+Correction (tests only): keep the eight parser tests and add the endpoint half in
+`test_receive_stock_demand_webhook.py` — two `receive_stock_demand_webhook` calls with the cell's
+two raw bodies, then assert 1 (a–e) / 2 (f–h) live `stock_report_items` rows for W, with
+`finally: purge + commit`.
+
+**SHOULD-FIX — S1 (same cause):** C2(a), C2(x) ("nothing written") and C2(y) ("200, `applied`") are
+asserted at parser scope; the database half of those cells is asserted nowhere (intention §8 atomic,
+ledger M3). Structurally safe (parse precedes the only writer). Fold into B1's fix.
+**SHOULD-FIX — S2:** `tests/unit/services/infra/test_location_tracker_webhook_verifier.py::test_raises_unauthorized_when_key_is_missing_or_wrong`
+traces to no row and duplicates C1(d)/C1(e) — charter rule 16. Delete it, or declare it as the
+sibling is declared. The sibling (`…returns_the_configured_workspace_id_on_success`) is a genuine
+candidate criterion and should be routed as one.
+
+**The seven declined mutations (C4(b)–(h)) are closed by the reviewer.** The decline was factually
+accurate — phase 1's `test_criteria_normalization.py` does assert exact golden vectors for every
+transform named — but a mutation cell asserts that *this row's* test reddens, which phase 1's
+coverage cannot establish. All seven were applied to `criteria_normalization.py` one at a time and
+each reddened its own row 1:1 (details in the handoff §3). The file is byte-identical
+(`5be822d6…`). Plan 7's ledger now reads **declared 29 = executed 29**.
+
+**Risk-5 sweep — the self-caught false green.** The fix is real: with a *varied* mutant
+(`if not api_key:`) C1(b) reddens (1 failed / 12 passed); under the first-draft placeholder-workspace
+fixture it would have stayed green. Audited all ten C1 rows: (a), (b), (d), (e), (f), (h), (i) now
+seed and configure a real workspace, so a verification bypass reaches `apply_stock_demand` and
+writes; (g) is by design the row that proves the command maps phase 6's SELECT. **C1(c) still
+carries the shape** — measured, deleting the whole workspace-setting guard from
+`webhook_verifier.py` leaves 13/13 + 2/2 green. At today's boundary that is an **equivalent mutant**
+(same 401, same message, nothing written), so no test is demanded; it stops being equivalent when a
+second consumer of this shared verifier ships without its own workspace lookup (**phase 9** —
+carry-forward CF-3, owner card 1).
+
+Verified correct: MC-8's 9-step order and the identical-401 rule at all five raise sites; the bytes
+form of `compare_digest` (C1(f) is 401, not 500); H20 (explicit UTF-8 decode before `json.loads`,
+both exceptions caught); H22 (the new mount added, the existing `location_tracker.router` untouched);
+H24 (`build_ok` / `build_err` bodies and statuses exact); the command opens no transaction
+(`run_service` is a pure error boundary) and computes the deadline on its first executable line,
+before verify and parse; it never reads `ctx.workspace_id`; the settings-coverage restoration is
+complete (C1(a)/(b)/(c) plus plan 6 C7(a)'s `Settings.model_fields[...].default`).
+
+Note **N10**: C1(j)'s "accepted" is proven compositionally (`run_service` is faked in the router
+test), which is how the cell itself routes it — PASS, no action.
+
+Handoff: `handoffs/reviewer/2026-09-21_batch_B2_review_1_handoff.md`.

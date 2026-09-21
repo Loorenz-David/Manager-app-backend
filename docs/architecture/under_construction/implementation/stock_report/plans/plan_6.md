@@ -297,3 +297,64 @@ distinct key, since the fixture's 3-vs-300 batches share one category.
 
 All mutations reverted; `git status --porcelain` on the two production files matches
 their post-implementation content (verified below in the batch handoff).
+
+---
+
+**2026-09-21, batch B2 review 1 (Opus, `plan-reviewer`) — 36/36 PASS, no finding against this
+phase.** Tree `ff39a96`, clean; the implementer's L4 (21/3436/2, baseline-identical both ways) and
+L1/L2 records are tree-matched and consumed by citation. No L4 run.
+
+Verified correct, specifically: H17 — step 6 locks by `tuple_(item_category_id,
+properties_signature).in_(...)`, never by the ids steps 4/5 saw, and `created_client_ids` comes only
+from step 5's `RETURNING`, which is what makes C5(a)'s "exactly one `:created`" true under a
+concurrent winner; the locked-set assertion compares two identity-keyed collections and cannot be
+fooled by duplicates. H15 — C5(c)'s `record_statements` window opens after the holder's UPDATE is
+issued (line 822, after `holder_locked` is awaited) and closes before the `count_writes` assertion,
+so the engine-wide listener cannot charge H's write to this row; `asyncio.shield` inside
+`wait_for(…, 0.5)` cancels the waiter and not the task. B5 — every seeding test carries
+`finally: purge + commit`; the three that seed nothing write nothing; every intermediate read closes
+its autobegun transaction before the next `AD`. MC-19 net-change, MC-17 demand authorship (step 5
+omits `updated_*`, step 7 sets `quantity_requested` only), H9 (`priority.value`, not the enum).
+Every assertion is workspace- or row-scoped; no global total.
+
+Reviewer probes (all applied, run, reverted, sha256-verified byte-identical — see the handoff §9):
+- **C3(a)-iii equivalence, independently confirmed.** Mutating step 8's `"quantity_awaiting": 0` to
+  `row.quantity_awaiting` leaves C3(a)'s test green and reddens **C3(g)** (1 failed / 27 passed).
+  The fold's equivalence call and the F6-2 fixture that re-arms it are both correct.
+- **The C6 bound is exact.** One stray `SELECT` inside the transaction reddens C6(a), C6(c) and
+  C6(d) and leaves C6(b) green → measured counts **all-new 8, all-changed 7, all-unchanged 5,
+  unknown-category 8**, matching H16. The demand path takes no stray `SELECT`, `session.get`,
+  autoflush or lazy load.
+- **C5(b) is unforceable, as declared.** Removing `sorted(absent_identities)` *and*
+  `.order_by(StockReportItem.client_id)` leaves all 28 tests green. The delegated **structural check
+  passes**; recorded as standing debt (handoff N5/CF-2) — MC-4's "sorting the VALUES" has no test
+  that can fail.
+
+Notes carried forward from this phase: **N3** C1(f)'s "nothing written" half is unasserted
+(equivalent — the row's own mutation writes nothing either); **N4** MC-17's two demand-authorship
+cells are implemented correctly but asserted by no row (candidate criterion); **N6** C6(b) bounds a
+derived count of 7 with `≤ 8` (plan lesson L-22); **N7** C6 and C7(a) are implementation-coupled by
+design and discharge ratified decisions D6 / MC-9 (i) — they will redden on a correct statement-plan
+refactor; **N9** §5 task 2 step 1 still prescribes the single-`:ms` bind the O1 decision replaced —
+amendment text in handoff §8 (the O1 call itself is judged **correct**: the outcome cell is
+satisfied verbatim, the row is stronger, nothing behavioural moved, and it was declared).
+
+Handoff: `handoffs/reviewer/2026-09-21_batch_B2_review_1_handoff.md`.
+
+
+### Orchestrator note — O1 task-cell contradiction (2026-09-21, batch B2 review 1)
+
+**§5 task 2 step 1 still describes one bind name used twice; the shipped code uses two.** The
+review confirmed the change was correct — a repeated bind compiles to a single `$1` with one
+parameter, which cannot satisfy C7(a)'s "its two parameters", while two names compile to `$1`/`$2`
+and make the row pin that *both* limits are set. Semantically identical to PostgreSQL.
+
+The replacement text the task cell needs, verbatim, **for the owner to apply** (a task cell is
+neither a mutation nor a fixture cell, so it is outside the fold authority granted for the
+2026-09-21 autonomous run):
+
+> 1. `SELECT set_config('statement_timeout', :statement_timeout_ms, true),
+>    set_config('lock_timeout', :lock_timeout_ms, true)` with both binds set to `str(timeout_ms)`.
+>    **Two distinct bind names, not one used twice** (O1).
+
+Until it is applied, the shipped code is right and the task text is stale.
