@@ -474,3 +474,97 @@ for that key is updated to match (a registry key, not a criterion row — no pla
 text changes). Caught by running the plan 10 guard suite immediately after the
 plan 9 production edit, before writing any new test, exactly as rule 19's
 lesson (run collection-sensitive suites, not just the named file) generalizes.
+
+**Reviewer, 2026-09-21 (batch C2 re-review, round 2, Opus). Verdict: APPROVED for
+plan 10 — 39/39 PASS, 0 FAIL, 0 NOT_VERIFIED.** Handoff
+`handoffs/reviewer/2026-09-21_batch_C2_review_2_handoff.md`. Delta-scoped;
+round 1's 35 settled rows not re-verified. Perimeter verified against the five
+checkpoint commits — exact match to the eight declared files, nothing outside, no
+criterion cell edited.
+
+**F-1 is complete, not merely present.** Both halves of MC-2 step 3 are restored
+(`state.in_(ACTIVE_ASSIGNMENT_STATES)` via the frozenset, `scalar_one_or_none`), the
+post-lock terminal skip is untouched, and the corrected query is the **only** reader
+of that assignment before the locked re-read. Enumerated every other query on
+`StockTaskAssignment.task_id` in the corpus: `remove_item_from_task.py:60` and
+`delete_task.py:111` are deliberately any-state (MC-14 rows 1–2) and both
+`.scalars().all()`, so the singular-selection bug has no analogue;
+`consistency.py:106` (`expected_task_flag`) is any-state by definition;
+`assignment_check_inputs.py:40` is a bulk `in_` projection. **No second stale read.**
+The new `_assert_allowed_move` call introduces no false refusal: all three active
+`from_state` values (`awaiting→resolved`, `in_queue`/`in_progress`→`resolved_early`)
+pass.
+
+**C1(m) — PASS, new.** The fixture genuinely carries two non-deleted assignments on
+one task (A1 `failed`, A2 `in_queue`, both asserted as preconditions) and drives T
+through S1 with the **real** `transition_step_state` command. Outcome cell
+discharged line by line: A2 → `in_progress`, counters `(0, 4, 0)`, A1 untouched,
+exactly one `state-changed` for A2 and one `:updated` for R. Arming consumed by
+citation (orchestrator's revert-at-the-site run, tree-matched).
+
+**C2(a)'s delegated evidence now exists** — round 1's F-3 is closed. I verified at
+the site that `test_c4i_…` performs the *same* check the owner ruling delegated to:
+no `sync_task_stock_assignments` call inside the four named helpers, the shared
+step-transition core included.
+
+**C4(i) — PASS, new, and now fully discharged.** The cell names **four** plants; the
+round executed one and the orchestrator a second. **I executed the remaining two**
+(slot `rv2`, whole-file): a forbidden sync call inside `_apply_step_transition`
+(`_step_transition_core.py` — a *different file*, which also proves
+`function_contains_call`'s cross-file reach) → `3 failed, 4 passed` with the C4(i)
+assertion naming `_apply_step_transition`; and inside `maybe_reopen_task_to_working`
+→ `3 failed, 4 passed` naming `maybe_reopen_task_to_working`. (The two extra
+failures each time are registry line-drift from a mid-file insertion — expected, not
+a defect.) All four helper names exist as real definitions, so no element of the
+guard's loop is vacuous. Both probes reverted, tree clean.
+
+**C4(j) — PASS, new.** I re-planted all five constructs at EOF of `update_task.py`
+alongside six of my own: the guard reddens and names **all five** C4(j) lines
+individually (`121`–`125`), which is per-construct discrimination, not an aggregate.
+No construct is double-collected, so this is informationally equivalent to the cell's
+"revert each extension in turn" — recorded as note **N-9** (the round ran the plant
+and logged it as "the row's own shape" without declaring the divergence, rule 14)
+rather than left as an unrun mutation. `update_task.py` md5
+`a9d1d5242e6bf18d7ac35225c13064b9` before and after, matching both prior rounds'
+pre-probe hash.
+
+**C8(a) — PASS, was NOT_VERIFIED.** Calls the sync directly, pins the argument shape
+and the returned event-kind set, and correctly does not re-assert the nine call
+sites. Mutation tree-matched; its multi-test bite set is properly recorded.
+
+**One finding — R-1 (should-fix, route `plan`, owner card 1).** The collector still
+misses **four constructs inside MC-2's own class list** and one outside it. Measured
+in the same run as C4(j): lines 126–131 of my eleven-construct plant are absent from
+the assertion, i.e. invisible. (c) `Task.__table__.update().values(state=…)` — the
+model is the receiver, `node.args` is empty; (c) `update(Task.__table__)` — class (c)
+requires `isinstance(node.args[0], ast.Name)`; (a) `for task.state in (…)` — no
+`visit_For`; (a) `with … as task.state` — no `visit_With`; (b) `builtins.setattr(...)`
+— the branch requires `isinstance(node.func, ast.Name)`. Outside the list:
+`Task(**{"state": …})`, since class (d) needs a literal `state=` keyword.
+**The first is the one that matters:** this repository's own test suite already
+writes `Task.state` that way three times
+(`test_create_stock_task_assignments.py:159`, `test_process_items_processed.py:547`
+and `:845`). **Live impact today: none** — grepped the scanned corpus for all six
+forms, zero hits; the 85 registered sites are correct. Routed `plan`, not against the
+implementer: C4(j) was built exactly as the owner authored it and built correctly.
+Extending the class list is the owner's — **owner card 1**. Lesson **L-38**.
+
+**N-2/N-4/N-6 checked at their sites.** N-2 and N-4's dispositions are true (the
+`not_task` assertion at `:101` really does check only field truthiness, and the
+collector really does hold no type information — `WriteSite.detail` is unparsed
+target text). **N-6's substance holds, but one citation is corrected:** the shared
+helper C5(b)/C5(c) use is `_run_referee_ordered`
+(`test_two_writers_on_one_assignment.py:384`), **not** `_run_forced_order`, which
+exists nowhere — a slip in the round-1 *reviewer* handoff, corrected here rather than
+propagated. `test_c5a_…` (`:118`) does still inline the choreography.
+
+**Note N-12 (carried):** `test_task_state_write_sites_are_registered.py`'s module
+docstring (`:4-8`) still lists five collected classes and omits class (f), and `:15`
+still reads "C4(b)-(h), the six required probes" with C4(i)/C4(j) now beside them —
+the inverse of L-32. Fold with R-1's fix or a cleanup pass. Lesson **L-39**: when a
+criterion cell enumerates N plants, the round runs N.
+
+**Evidence policy and the foreign commit:** as recorded in plan 9's round-2 entry —
+no L4 taken, pre-run authorization line given there, and `df09143` (phase 8A) landed
+mid-session, so the gate stamp `3669` is stale and the approval-gate L4 must be
+re-taken (expect **3668**; 23-ID set unchanged).
