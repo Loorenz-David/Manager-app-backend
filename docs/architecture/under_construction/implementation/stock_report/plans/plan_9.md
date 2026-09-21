@@ -159,6 +159,25 @@ planted.
   it must call the same guarded-statement builder and the same repair routine (a second copy is a
   review finding).
 - C8(b) is declared unable to force its interleaving (master plan §9 rule 9).
+
+- **⚠ Orchestrator ruling, 2026-09-21 — C8(c) names an event kind that does not exist; read it as
+  `:state-changed`.** The owner's card-5 row text says the call returns "one
+  `stock_task_assignment:updated` per resolved assignment". **There is no such registered kind.**
+  Master plan §6.5 registers exactly three for assignments — `stock_task_assignment:created`,
+  **`:state-changed`**, `:deleted` — and `:state-changed` is the only transition kind this project
+  has ever registered. The implementer built `:state-changed` and was right to.
+
+  **The ruling:** the registry is the higher authority over a plan cell (the batch prompt's own
+  rule — the ratified authority wins over any plan), so **C8(c) is satisfied by
+  `stock_report_item:updated` for R plus `stock_task_assignment:state-changed` per resolved
+  assignment.** The row's substance — that the callable's signature and its returned event-kind
+  *set* are pinned, and nothing more — is unaffected; only the spelling of one kind was wrong.
+
+  **The cell text is deliberately left as the owner wrote it.** Authoring and amending a criterion
+  row is reserved to the owner, and this is a wording defect in an owner-authored row, so it is
+  **an owner card for ratification at the C2 gate**, not an orchestrator edit. The tester and
+  reviewer are told to read the row per this ruling. Recorded here rather than in the cell so no
+  one has to reconcile two versions of the same row.
 - MC-11's three interleavings (Scanner first while `awaiting`; task reopen first; Scanner first
   while `in_progress`) are phase 10's C5.
 - Round 9 (2026-09-19): C3(c)–(f) rewritten to the §14F F5 order (the retired reason appears

@@ -1113,6 +1113,35 @@ C4(k) and C6(h); every `ascending client_id` claim in §6.5 should be re-read ag
   every `BEYO_TEST_SLOT=<non-main>` L4 for the rest of this project should expect these two IDs
   atop the 21-ID baseline, diffed out explicitly rather than mistaken for a regression.
 
+> **⚠ Orchestrator ruling, 2026-09-21 — the slot-adjusted baseline, and whose defect this is.**
+>
+> **The gate condition for any L4 run under a non-`main` slot is 23 failures: the published 21-ID
+> set plus exactly these two IDs, named.** A run showing 23 with those two IDs **meets** the
+> baseline invariant; it is not a CHANGES_REQUESTED condition and no phase is blocked by it.
+> Anything else — a 22nd unexplained ID, or either slot ID missing while the slot is set — is a
+> real finding.
+>
+> **This is my defect, not the implementer's and not phase 8A's.** I mandated `BEYO_TEST_SLOT` on
+> every pytest command (correcting an earlier, wronger rule that said to serialise the suite)
+> **without checking whether the isolation suite asserts its own default.** It does, in two
+> places. So the very mechanism I introduced to let two workstreams run at once is what put two
+> tests red, and both workstreams then hit it independently — batch C2 on slot `c2` and the phase
+> 8A review on slot `a8`, each diagnosing it correctly and in isolation. Two independent
+> confirmations on different slots is strong evidence; I also reproduced it myself
+> (`51 passed` with the variable unset, `2 failed / 49 passed` with it set to `c2`).
+>
+> **Consequence for phase 8A:** its review returned `CHANGES_REQUESTED` **solely** on this — all
+> 20 rows green at their boundaries, all 9 active named mutations observed red and reverted. Under
+> this ruling that blocker is discharged and 8A needs no code fix round for it. The review's other
+> content still stands on its own.
+>
+> **The underlying test defect is real and is NOT fixed here.** The two tests should pin the slot
+> explicitly instead of reading the ambient settings singleton. They live in
+> `app/tests/integration/infrastructure/test_database_isolation.py`, which belongs to the
+> **APPROVED** `test_isolation_and_xdist` project — an approved foreign file, so changing it is an
+> **owner decision**, not mine (§3A). Raised as an owner card; until it is ruled, this project
+> lives with the 23-ID slot baseline, which costs nothing because both IDs are named.
+
 ### 10.1 The 21 baseline failures against the phases (owner table 1)
 
 Column meaning: *module* = the production module the test exercises; *overlaps* = a phase edits that
