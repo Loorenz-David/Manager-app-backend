@@ -3,17 +3,13 @@ batch: C2
 phases: [9, 10]
 role: review
 round: 1
-state: DRAFT
+state: PROMPT_READY
 date: 2026-09-21
 actor: orchestrator
 model: Opus
 ---
 
 # Batch C2 review — plans 9 and 10
-
-> **DRAFT.** "Trees and artifacts", "Already verified by the orchestrator" and "Where your budget
-> buys something new" are completed by the orchestrator from the implementer's and tester's
-> handoffs before dispatch. Do not dispatch while this banner is present.
 
 Read these by absolute path first and follow them as session doctrine:
 
@@ -32,8 +28,11 @@ Project dir: `docs/architecture/under_construction/implementation/stock_report/`
 
 - **Implementer handoff:** `SR/handoffs/implementer/2026-09-21_batch_C2_implement_1_handoff.md`
 - **Tester handoff:** `SR/handoffs/tester/2026-09-21_batch_C2_test_1_handoff.md`
-- **Implementer checkpoints:** _(orchestrator fills)_
-- **Tester checkpoint:** _(orchestrator fills)_
+- **Implementer checkpoints:** phase 9 `8a5ebc2`, phase 10 `ffa591e`
+- **Tester checkpoint:** `a00d858`
+- **Production diff must be empty:** `git diff ffa591e..HEAD -- app/beyo_manager/` — the tester
+  left no production change, and I re-verified `git diff a00d858..HEAD -- app/` is **empty** for
+  all committed work.
 
 ## ⚠ A second workstream is in this tree — do not charge it to this batch
 
@@ -53,7 +52,12 @@ app/beyo_manager/routers/api_v1/stock_report.py
 app/beyo_manager/services/commands/stock_report/create_stock_task_assignments.py
 app/beyo_manager/services/queries/stock_report/assignment_check_inputs.py
 app/beyo_manager/services/queries/stock_report/preview_stock_task_assignment_match.py
+app/tests/unit/domain/stock_report/test_stock_report_assignment_checks.py   <-- 8A FIX, LIVE NOW
 ```
+
+**A phase 8A fix round is running as you work** and is editing that last file (rebuilding a
+fixture off `SimpleNamespace`). It may commit mid-review. It is **not yours**: do not revert it,
+do not report it as tester residue, and do not let it into your diffs.
 
 **Exactly one is also this batch's: `enums.py`, declared in plan 9 §4.** I checked both plans'
 declared perimeters against 8A's file list — the other five appear in neither plan 9 §4 nor plan
@@ -64,15 +68,66 @@ If you cannot separate the two authorships in a diff, say so rather than guessin
 
 ## Already verified by the orchestrator — consume by citation, do not re-run
 
-_(orchestrator fills: the independently re-run L4, both failure-ID diffs, the pass-count
-arithmetic, and confirmation that the tester's tree matches the implementer's in production code.)_
+**The tester's L4 is tree-matched and I verified the tree, not the number.**
+`BEYO_TEST_SLOT=c2 PYTHONPATH=. pytest -m 'not e2e'` at `a00d858` → **23 failed / 3661 passed /
+1 skipped**, failure-ID diff empty in **both** directions against (published 21-ID set + the two
+named slot IDs). Pass arithmetic: `3619 + 42 = 3661`. I confirmed `git diff a00d858..HEAD -- app/`
+is **empty**, so that stamp still describes the tree you are given.
+
+I also independently reproduced the slot behaviour itself rather than accepting it:
+`tests/integration/infrastructure/test_database_isolation.py` gives **51 passed** with
+`BEYO_TEST_SLOT` unset and **2 failed / 49 passed** with it set, on a byte-identical tree.
+
+**Your gate condition is 23, not 21** (master plan §10 ruling): the published 21 plus exactly
+`test_database_isolation.py::test_worker_name_resolution_uses_xdist_worker` and
+`::test_worker_name_resolution[None-None-beyo_test_main_main]`. That is a **pass** — it is my
+defect (I mandated slots without checking the isolation suite asserts its own default), the fix
+belongs to an APPROVED foreign project, and it is an open owner card. **Do not route it as a
+finding against this batch.**
 
 Per the charter's test-evidence rule, tree-matched evidence is consumed by citation. **Do not
 re-run an L4 to confirm what is already tree-matched** — spend that budget on variation instead.
 
+### Changed after the tester stamped, deliberately
+
+I folded the tester's **nine plan-cell backfills** (`a567d7b`) into plans 9 and 10 after its
+handover. Every one is a **recording of what the tester measured**, not a new assertion, so §3B's
+"a ruling that adds an assertion must reach the tester or it is paperwork" is not tripped — but
+you should know the cells moved, and each carries a dated `[Backfilled …]` marker so you can find
+them. Three matter to you: **B-3/B-4/B-5** (plan 9 C3(c), C6(a), C6(b)) corrected cells that named
+**one** mutation site where **two** are required — at the discovery predicate alone the mutant is
+`EQUIVALENT` because the F5 ladder's frozenset check absorbs it; **B-8** (plan 10 C5(b)) replaced a
+predicted failure mode that was simply wrong; **B-6** corrected plan 9 C8(c)'s file reference.
+
+I also ruled, before the tester ran, that **plan 9 C8(c)'s `stock_task_assignment:updated` is not
+a registered kind** and the row is satisfied by `:state-changed` (plan 9 §7). The owner's cell text
+is deliberately unedited — amending a criterion row is the owner's — so **do not report the code
+as wrong there**.
+
 ## Where your budget buys something new
 
-_(orchestrator fills from tester §10 "variation not spent" and both handoffs' judgment calls.)_
+**The tester states what it did not spend (its §11), and one item there is the single best use
+of your budget:**
+
+> **No independent re-derivation of the guard's 85-site registry.** It proved the collector
+> observes six planted things, but **not that it misses no seventh class.**
+
+That guard is load-bearing far beyond its own rows: by the implementer's own §6, plan 10
+**C1(b), (c), (d), (f), (i), (j), (l)** are proven **only** by it — S1's `HC-4` sibling and
+S2/S3/S7/S9 were never driven end-to-end through their own commands. **If the AST collector has a
+blind spot, seven rows are resting on nothing**, and neither prior session looked. That is exactly
+where your budget buys something no one else bought.
+
+Also unspent: no second mutant shape of the same sign anywhere; no `TZ`/locale/worker-count
+variation; no HTTP-layer coverage; no `remove_task_steps` path; no repetition of the C5 rows.
+
+**The tester's own results, for calibration:** 76 declared == 76 executed (83 runs), **zero
+production defects**, and **five rows that could not fail, all repaired** — plan 9 C3(c) (one of
+three sub-cases built, and the cell's mutation bites only the skipped one), C4(c) (a stale
+identity map under `expire_on_commit=False` made the task write invisible, so the mutation
+reddened a different assertion), C1(e)'s API-key twin (a second sufficient cause), plan 10 C6(a)
+(no `credited_user_id` in the fixture at all) and C1(g)/C1(h) (wrong pre-states). **The repairs are
+where a newly-inert mutation would hide** — sample them.
 
 Standing leads for this batch, independent of what the handoffs say:
 
