@@ -319,3 +319,71 @@ three compact serializers have exactly two production consumers and three assert
 C4(b)'s mutants redden phase 8's `test_stock_report_serializers.py` (all three) and
 `test_create_stock_task_assignments.py` (mutant (i) only), while **C6(a)'s mutant leaves both
 phase-8 files green**, which is the half the cell exists for.
+
+---
+
+## Review log — independent review, batch D1 round 1 (2026-09-21, Opus reviewer, slot `dr`)
+
+Handoff: `handoffs/reviewer/2026-09-21_batch_D1_review_1_handoff.md`. Tree `06ad124`; the tester's
+27 plan-13 mutation rows are consumed by citation (matching tree), and the reviewer's budget went
+to the variation its §13 declared unspent. Verdict **CHANGES_REQUESTED** (batch-level).
+
+**Plan 13: 19 rows — 16 PASS / 1 FAIL / 2 NOT_VERIFIED.**
+FAIL: **C4(a)** (S-1, route `verification`). NOT_VERIFIED: **C2(b)** (`BLOCKED-PLAN`, card D-6 —
+the instrument cannot fail at either site) and **C3(a)** (`BLOCKED-PLAN`, card D-7.1 — three
+declared events against a four-assignment fixture).
+
+### S-1 · route `verification` · C4(a)'s ordering clause cannot fail
+
+The row names the key *"ordered by `created_at, client_id`"*; its fixture creates four assignments
+in one loop with nothing pinning the two orderings apart, and the test derives its expectation
+from a second query using the same two keys. Measured on this tree:
+
+- **RP-1** production ordered by `client_id` **alone** → **green** (repeated 5×, so not a flake);
+- **RP-1b** production ordered by `created_at` **alone** → **green**;
+- **RP-2** both terms reversed → red.
+
+Three different order keys satisfy the fixture. This is the exact twin of the defect the tester
+repaired the same evening in plan 12 C4(b), whose test now back-dates the null row with the
+**larger** `client_id`, chosen from the sorted real ids, and asserts `N1 > N2` (master plan §10).
+**Correction (tester's lane, no criterion change):** back-date one assignment the same way and
+re-run RP-1 as the arming proof. The row's state-filter half (M-71, M-72) is genuinely armed.
+
+### S-2 · route `plan` · §9 rule 18 — `build_stock_report_item_deleted_event` is pinned by no row
+
+The builder was registered in master plan §6.5 at the D1 gate (`extra {}`, §6.7). **RP-10** changes
+`extra={}` to a non-empty dict and the whole delete file stays green (6 passed);
+`grep -rn "stock_report_item:deleted" app/tests` returns two lines, both asserting only the name
+and the row id, so nothing anywhere reads `extra`. The nearest row, C3(a), is itself
+`BLOCKED-PLAN`. A criterion row is the owner's to author — **owner card R-1** — and RP-10 is its
+ready-made arming mutant.
+
+### Reviewer probes that confirmed arming (all reverted, `git diff --quiet` exit 0)
+
+- **RP-6** cascade, history soft-delete `UPDATE` deleted → **red** at C1(a):333 and at C1(c):633.
+- **RP-7** cascade, `updated_at`/`updated_by_id` dropped from the row soft-delete → **red** at
+  C1(a):319. Both clauses carry no named mutation; both bite.
+- **RP-8** `serialize_item_compact`'s `item_images` elements replaced by `{client_id}` → **red** at
+  C4(b):295 — the tester's real-image fixture strengthening is load-bearing.
+
+### N-2 · a seventh absorbed-additive mutant (RP-9)
+
+Emitting every shifted neighbour's `:updated` **twice** in the cascade is invisible —
+`coalesce_stock_report_events` de-duplicates — so C3(a)'s "one `:updated` for C" clause is held by
+production's coalescer, not by the cascade. Recorded as an **equivalent mutant**; never a test
+demand. With C1(h)(i), 12 C1(a)/C1(b)/C6(a), 13 C1(a)(i) and 13 C2(b) that is seven inert mutants
+in one batch, **every one additive**. Fold into the D2 projection as a rule: in a module that
+de-duplicates or overwrites, name a subtraction or a re-order, never an addition.
+
+### N-4 · route `verification` · C2(a) does not assert `target_kind`
+
+The cell names the repair record as `{stock_report_item, R, field, stored, recomputed,
+inline:…}`; the test asserts every field except `target_kind`. One line.
+
+### Confirmations
+
+C1(c) **is** exercised at the surface the cell names — the tester's in-place rewrite runs a real
+`apply_stock_demand` delivery after `DR(R)`; the review prompt's "NOT EXERCISED" is stale (only the
+"empty history" wording is open, card D-7.2). The cascade's two fresh `SELECT`s and its
+`ctx`-free argument list are consumed from the gate's own reading. Perimeter clean: no serializer
+and no request model was added, exactly as owner card 5 requires.

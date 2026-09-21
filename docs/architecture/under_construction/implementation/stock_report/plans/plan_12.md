@@ -420,3 +420,48 @@ shape; **subtractive** ones bite. Fold that into the next batch's projection.
 
 **None of these rows was unarmed.** Every one carries a second mutant that always bit. What was
 wrong in each case was the *claim* of two independent runs.
+
+---
+
+## Review log — independent review, batch D1 round 1 (2026-09-21, Opus reviewer, slot `dr`)
+
+Handoff: `handoffs/reviewer/2026-09-21_batch_D1_review_1_handoff.md`. Tree `06ad124`
+(`app/` byte-identical to the implementer checkpoint `b6cbbb9`, so the tester's 51 plan-12
+mutation rows are consumed by citation, not re-run). Verdict **CHANGES_REQUESTED**.
+
+**Plan 12: 45 rows — 42 PASS / 1 FAIL / 2 NOT_VERIFIED.**
+FAIL: **C3(d)** (blocking B-1, owner card D-5 — the phase-3 `goal_total` rule has no type filter,
+so phase 12's `priority_change` record reports permanent phantom drift and the repair endpoint
+rewrites it to zero). NOT_VERIFIED: **C2(a)**, **C2(b)** — class-3, no test; the reviewer's
+structural check holds and is recorded, but it is a derivation, not evidence.
+
+**Perimeter clean.** `git diff --name-only 6aed93f b6cbbb9 -- app/` = 14 production + 6 test
+files, all inside §4 plus the registry-authorised `_row_values` consolidation; the tester touched
+zero production files.
+
+**Reviewer probes on this plan's surface** (applied, run whole-file on slot `dr`, reverted,
+`git diff --quiet` exit 0):
+- **RP-3** `set_stock_report_item_priority_order.py`, `t == p` branch — an *idempotent* write
+  (`SET priority_order = priority_order`), no record, no event, no stamp → **red** at
+  `test_move_to_the_held_position_writes_nothing`. C1(c)'s `count_writes == 0` clause is
+  discriminating against a mutant shape no round had run.
+- **RP-4** `set_stock_report_item_priority.py` mover `UPDATE` — stamps dropped (the *subtractive*
+  direction of C5(a), whose declared mutant is additive) → **red**, `assert None == 'usr_sm_…'`.
+- **RP-5** `list_stock_report_items.py` — `priority_order.desc()` inside the rank → **red**.
+  C4(a)'s intra-group sub-check is armed independently of M-25's rank mutant (rule 12).
+
+**Confirmations.** C3(d)'s witness test is correctly kept red — dropping its
+`assert_stock_report_clean` would satisfy §9 rule 2's letter and destroy the only record of a live
+corruption path. C4(e) consumed (the gate's two hand-run mutants plus M-30/31/32). The three
+tester-round folds (C1(a), C1(b), C6(a)) are covered by P-1/P-2/P-3, measured on this same tree.
+
+**Notes routed from this plan.** (N-1, route `production`, owner card R-2) the mover `UPDATE` and
+`_serialize`'s re-read address the row by `client_id` alone while the same functions thread
+`workspace_id` elsewhere — safe today, asymmetric to read. (N-5b) the review prompt cites a
+doctrine file that does not exist (`independent-reviewer.md`). (N-6) twelve role-cell rows say
+"both directions run and recorded" while each row is reddened by exactly one edit — the tester's
+reading is right; the wording will keep producing two totals for the same work.
+
+**Lesson (L-D).** C3(d)'s named mutant M-24 was run against a test that is **red at baseline**, so
+it can only be read by where the failure lands, never as green → red. Its mutation must be re-run
+once the blocker is fixed.
