@@ -3,8 +3,8 @@ batch: D
 plans: [12, 13, 13A, 14]
 role: projection
 round: 0
-verdict: AMENDMENTS_REQUIRED
-state: OWNER_DECISIONS_PENDING
+verdict: PROJECTED (was AMENDMENTS_REQUIRED; all 8 cards ruled and applied — see the addendum, §9)
+state: DONE
 date: 2026-09-21
 actor: projectionist (Opus, plan-projection)
 ---
@@ -596,3 +596,102 @@ owner ruling and are the eight cards; the other seven are folded or routed to th
 **The implementer prompt compiles when the eight cards are ruled and F-1's requirement is in plan 13
 task 1.** Recommended execution shape: **D1 = 12 + 13**, then **D2 = 13A + 14**, with D1 APPROVED
 before D2 starts (F-1).
+
+---
+
+# 9. Addendum — the eight cards ruled and applied (2026-09-21)
+
+Appended, never rewritten: §0–§8 above are the state at the moment the cards were raised and are
+left exactly as they were. The orchestrator relayed the owner's delegated rulings — seven approved
+as proposed, card 7 approved with a correction — and this section records what changed in the
+plans. **F-1 is closed by card 5's third correction.** Verdict moves from AMENDMENTS_REQUIRED to
+**PROJECTED — ledger fully routed**.
+
+## 9.1 Every edit, by file and row
+
+| Card | File | Row / section | What changed |
+|---|---|---|---|
+| 1 | plan 13A | **C5(d)** outcome | `≤ 7` → **exactly 5** (all `not_found`) and **exactly 4** (all `category_not_found`), identical at 3 and 30 entries, with the derivation named inline including the two early-return line refs the orchestrator verified |
+| 1 | plan 13A | **§7 Q3** rule + status | "Making the cell exact is an owner card" → APPLIED; status now reads "no bound for the cascade; the find step is bounded **exactly**" |
+| 2 | plan 13 | **C4(b)** outcome | "`task` keys exactly the eleven of §9B" → "exactly the **twelve** of §9B — `client_id` plus the eleven fields §2 lists" |
+| 2 | plan 13 | **§5 task 3** | same substitution; the three key counts are now stated explicitly (7 / 12 / 14) so the two readings that produced the error cannot diverge again |
+| 3 | plan 13A | **C3(a)** fixture | five assignments → **six**; `A6 in_progress q = 3` added on a sixth task/item, with the reason it is never credited (MC-5 credits on entering `awaiting`/`resolved_early`); counters `(1, 0, 2)` → **`(1, 3, 2)`**; `G == 10` unchanged and now explained |
+| 3 | plan 13A | **C3(a)** outcome | "all five assignments" → **six**; "all five tasks'" → **six** |
+| 3 | plan 13A | **C3(a)** mutation | kept both mutants, added why the sixth assignment matters from the other side: a filter keeping only *terminal* states would leave A3 and A6 alive, which the five-state fixture could not see |
+| 3 | plan 13A | **C3(b)** fixture | "each of the five tasks" → **six** |
+| 3 | plan 13A | **C3(d)** outcome | "five `stock_task_assignment:deleted`" → **six** |
+| 3 | plan 13A | **C5(e)** fixture | "the identical row, group and five assignments" → **six** — *a consequence the card did not name; see §9.2* |
+| 4 | plan 12 | **C1(o)** fixture, outcome, mutation | one foreign-row call → **three** calls (foreign / soft-deleted / absent); outcome "`NotFound` each; no state anywhere changes; the foreign workspace's group is byte-identical"; three mutants, one per visibility cell, all runs recorded |
+| 5 | plan 13 | **§5 task 1** | split into three numbered stages so the loop boundary is unambiguous: **(i)** the assignment loop does `remove_assignment` and nothing else; **(ii)** *after the loop ends*, once, the fresh counter `SELECT` and the per-column repair; **(iii)** the gap close, the row soft-delete, the history soft-delete |
+| 5 | plan 13 | **§5 task 1** | every stamp now reads `now` / `actor_user_id` — **the cascade's own arguments, never `ctx`** — with the reason inline (13A passes `actor_user_id=None`, so a cascade reading `ctx` cannot serve its second caller) |
+| 5 | plan 13 | **§5 task 1** (**closes F-1**) | the gap close's `removed_order` now explicitly comes from a **fresh `SELECT` of the row's `priority_order`**, never from the ORM instance loaded at the lock, citing §9 rule 3 and 13A C5(b) as the only row that can observe it |
+| 5 | plan 13 | **§5 task 3** | "Serializers: …" → "**this phase adds none**", with the three shipped shapes listed only as what task 2 consumes and re-adding them called a review finding |
+| 5 | plan 13 | **§4** | dropped `serializers.py` and `requests/__init__.py` from the edited list, with the reason for each (§9B.2 moved the serializers to phase 8; §9B.1 removed the delete request model and `DELETE` takes no body) and a note that the perimeter check now treats a change to either as a finding |
+| 5, 2 | plan 13 | **§7** notes | the three projection notes that said "owner card" now say **APPLIED** and name the card and date; the F-1 note gains the batch-split consequence |
+| 6 | plan 14 | **C1(b)** fixture, outcome, mutation | root `_events.py` → **master plan §6.7 plus every `event_name=` site** under `bm/services/commands/stock_report/` (the `{kind}` template's three values included); the row now fails **in both directions**; two mutants, both runs recorded |
+| 6 | plan 14 | **§5 task 4** | the guard's event-name clause rewritten to the same roots, with the reason the old root could not work and an instruction to state the roots in the test |
+| 7 | plan 14 | **§4** | the third-file-in-another-folder entry replaced by the **supersession protocol** (see §9.2 for the correction I applied) |
+| 7 | plan 14 | **§2** | read-first gains §14G/MC-21, the two shipped 8A modules, and **both already-published frontend documents** as item 5 |
+| 7 | plan 14 | **§5 tasks 1 and 3** | task 1 now names thirteen routes including `POST /items/{client_id}/match-preview`; task 3 gains the current-document section, the `supersedes:` key, and match-preview with `item_category_id` **required** and a pointer to v2 for that endpoint's semantics |
+| 7, 6 | plan 14 | **§7** notes | the three notes that described open cards now say **APPLIED** and carry the ruling |
+| 8 | plan 13A | **C5(b)** outcome | the sentence "The reviewer verifies structurally that steps 3, 7, 8, 9 are each one statement — unforceable by a test" replaced by the **measured** clause: under `record_statements` the request issues exactly one advisory lock, one `tasks` `FOR UPDATE`, one `stock_report_items` `FOR UPDATE` and one `stock_task_assignments` `FOR UPDATE`, whatever the number of candidate rows |
+| 8 | plan 13A | **C5(b)** mutation | two mutants → **three**, the new one being "take the class-4 and class-5 locks inside the per-row loop" → both counts become 2 while every other assertion in the row stays green |
+| 8 | plan 13A | **§7 Q2** status | records that the one-statement-per-class half is now measured, not inspected |
+| 8 | plan 13A | **§8** notes | new note: C5(b)'s measured clause depends on a master-plan edit this plan may not make, and rests on the note until §9 rule 7 carries it |
+
+`count_criteria.py` re-run after every pass: **plan 12 45/7, plan 13 19/6, plan 13A 37/7, plan 14
+5/2 — batch D 106/22, project 652/107.** Unchanged, as expected: no row was added, removed or
+withdrawn, and no criteria group changed.
+
+## 9.2 Where I did not simply transcribe — flagged rather than improvised
+
+Three places where the ruling did not map one-to-one onto the plan's current wording.
+
+**(a) Card 3 reaches a fourth row the card did not name.** The ruling says "update C3(a), C3(b)
+counters and C3(d) to six". **C5(e)** also carries the number: its fixture seeds the foreign
+workspace W′ with "the identical row, group and **five** assignments" — identical to C3(a)'s, which
+is now six. Leaving it would have made C5(e) mirror a fixture that no longer exists. I applied
+**five → six** there too. It changes no outcome (W′ is untouched by the webhook and the row asserts
+`[]` either way). Say the word if you want it reverted.
+
+**(b) Card 7's "`supersedes:` naming every document it replaces" — I read v2 as NOT replaced.**
+The correction says to name every document the new handoff replaces, and separately that v2 is
+correct, stays, and has no v3. The new API handoff will *describe* match-preview, which could be
+read as partially replacing v2. I resolved it the narrow way: **v2 is neither listed in
+`supersedes:` nor moved to `archived/`**; the new document points at it as the ratified source for
+that endpoint's semantics, and only `HANDOFF_TO_FRONTEND_stock_report_api_20260921.md` is
+superseded and archived. That keeps exactly one ratified statement of the preview contract and
+avoids an archive move that would make the live contract harder to find. If you meant v2 to be
+folded in and archived, that is a one-line change to plan 14 §4 — but it would need the owner,
+because v2 is ratified.
+
+**(c) Card 7's folder.** The ruling says "the SAME folder". The two published documents live in
+`…/implementation/stock_report/handoffs/to_frontend/`, not in the repo-wide
+`backend/docs/handoff/to_frontend/` that plan 14 originally named (that folder holds another
+project's handoffs and a template). I used the project folder, since that is where "the existing
+name" actually exists. The repo-wide folder is untouched.
+
+## 9.3 FOR THE ORCHESTRATOR — master_plan §9 rule 7 addition
+
+Card 8 authorizes a sixth use. I did not edit `master_plan.md`. Add this to §9 rule 7's
+parenthesised list of authorized uses, after the fifth:
+
+> and — **sixth use, owner card 8, 2026-09-21** — a *one-statement-per-lock-class* clause, where a
+> batch command's promise is that each MC-1 lock class is acquired in exactly one sorted statement
+> **whatever the number of entities in the request**, and the alternative is a reviewer inspecting
+> statements by eye (plan 13A C5(b), §7 Q2)
+
+Two notes for when you apply it. First, the rule's own sentence "It is never used to assert query
+text or internal structure" still holds and should not be softened: this use counts **statements
+per lock class**, which is an outcome of the batching promise, not the text of any query. Second,
+plan 13A §8 now carries a note saying C5(b)'s measured clause rests on that note until §9 rule 7
+carries the sentence — once you apply it, that note can be shortened to a pointer.
+
+## 9.4 State after the rulings
+
+Verdict **PROJECTED** — every ledger row routed, every card applied, zero owner cards open.
+Remaining items are the coordinator's, unchanged from §4 and §6: **D-2** (`client_id` transport)
+and **D-3** (the two `parse_*_request` wrappers) and **D-6** (`_row_values`) are §6.5 registry
+edits; **F-15** is a recorded note. The batch split stands: **D1 = 12 + 13**, then **D2 = 13A +
+14**, D1 APPROVED before D2 starts — card 5's third correction states the fresh-read requirement,
+but 13A C5(b) is still the only test of it anywhere.

@@ -43,8 +43,15 @@ New: `bm/services/commands/stock_report/_delete_stock_report_item_cascade.py`, `
 `bm/services/queries/stock_report/list_stock_task_assignments.py`;
 `app/tests/integration/services/commands/stock_report/test_delete_stock_report_item.py`;
 `app/tests/integration/services/queries/stock_report/test_list_stock_task_assignments.py`.
-Edited: `bm/domain/stock_report/serializers.py` (three serializers added), `requests/__init__.py`,
-`bm/routers/api_v1/stock_report.py` (two routes), `app/tests/unit/routers/api_v1/test_stock_report_router.py`.
+Edited: `bm/routers/api_v1/stock_report.py` (two routes),
+`app/tests/unit/routers/api_v1/test_stock_report_router.py`.
+
+**Corrected by owner card 5, 2026-09-21.** Two entries were dropped from this list because they are
+stale, and the reviewer's perimeter check treats a change to either as a finding:
+`bm/domain/stock_report/serializers.py` — the three compact serializers **already ship in phase 8**
+(owner ruling §9B.2), so this phase adds none; `requests/__init__.py` — `DELETE` takes **no body**
+(owner ruling §9B.1 removed `DeleteStockReportItemRequest` entirely), so this phase adds no request
+model. The router injects `{client_id}` into `incoming_data` per phase 8A's shipped precedent.
 
 ## 5. Tasks
 
@@ -57,15 +64,28 @@ Edited: `bm/domain/stock_report/serializers.py` (three serializers added), `requ
    (new subordinate module `_delete_stock_report_item_cascade.py`, master plan §6.5 — the command
    is its one caller in this phase; **phase 13A's Scanner delete webhook is its second caller**, with
    `actor_user_id=None` and `trigger="stock_demand_deleted"`, so the cascade must take every stamp
-   value from its arguments and never from `ctx`). The cascade, in order: for each assignment
-   ascending `client_id`:
-   `remove_assignment(..., trigger=trigger)`; then, per counter column, a fresh
-   `SELECT` of the three counters — any ≠ 0 → one `UPDATE` setting it to 0 (its recomputed value, no
-   assignments remain) with one repair record (`stock_report_item`, R, field, `stored_before`, `"0"`,
-   `inline:delete_stock_report_item`, NULL author) and a warning; close the gap in the row's group
-   (when priority non-null); soft-delete the row (`is_deleted`, `deleted_at = ctx.now`, `deleted_by_id
-   = ctx.user_id`, **and** `updated_at = ctx.now`, `updated_by_id = ctx.user_id`); soft-delete its
-   history records (`deleted_*` only); the cascade returns the events: `stock_report_item:deleted`
+   value from its arguments and never from `ctx`). The cascade, in order:
+
+   **(i) The assignment loop.** For each assignment ascending `client_id`:
+   `remove_assignment(..., actor_user_id=actor_user_id, now=now, trigger=trigger)`. Nothing else
+   happens inside this loop.
+
+   **(ii) After the loop ends** — once, not per assignment: one fresh `SELECT` of the three
+   counters; for each column ≠ 0, one `UPDATE` setting that column to 0 (its recomputed value, since
+   no non-deleted assignment remains) with one repair record (`stock_report_item`, R, field,
+   `stored_before`, `"0"`, `inline:<trigger>`, NULL author) and a warning. This is MC-1's second
+   trigger and MC-16 puts it after every assignment has been moved out; C2(a) and C2(b) both read it
+   that way. (Owner card 5, 2026-09-21: the loop boundary was ambiguous in the previous wording.)
+
+   **(iii) Then**: close the gap in the row's group (when priority non-null) — `removed_order` comes
+   from a **fresh `SELECT` of the row's `priority_order`**, never from the ORM instance loaded at the
+   lock, which is stale after any earlier Core shift in the same transaction (§9 rule 3; see §7 and
+   phase 13A C5(b), the only row anywhere that can observe this); soft-delete the row (`is_deleted`,
+   `deleted_at = now`, `deleted_by_id = actor_user_id`, **and** `updated_at = now`, `updated_by_id =
+   actor_user_id` — **the cascade's own arguments, never `ctx`**: the command passes
+   `now=ctx.now, actor_user_id=ctx.user_id`, and phase 13A passes `actor_user_id=None`, so a cascade
+   that reads `ctx` cannot serve its second caller. Owner card 5, 2026-09-21); soft-delete its
+   history records (`deleted_*` only, from the same two arguments); the cascade returns the events: `stock_report_item:deleted`
    for the row, `stock_task_assignment:deleted` per assignment, `:updated` per shifted neighbour,
    **no** `:updated` for the row. The command coalesces, dispatches after the block, and returns
    `{"client_id": R}`. With `actor_user_id=None` the cascade stamps NULL everywhere (MC-17) — not
@@ -74,13 +94,18 @@ Edited: `bm/domain/stock_report/serializers.py` (three serializers added), `requ
    `NotFound`); its non-deleted assignments in all states ordered by `created_at, client_id`; items,
    tasks batch-loaded by id; images batch-loaded once for all items (the `tasks.py` pattern);
    `{"stock_task_assignments": [serialize_stock_task_assignment(...)]}`.
-3. Serializers: `serialize_item_compact(item, *, images)` → `client_id`, `article_number`, `sku`,
+3. **Serializers — this phase adds none** (owner card 5, 2026-09-21). All three ship in **phase 8**
+   by owner ruling §9B.2 and are live in `bm/domain/stock_report/serializers.py` today; re-adding or
+   re-defining them is a review finding. They are listed here only as the shapes task 2 consumes:
+   `serialize_item_compact(item, *, images)` → `client_id`, `article_number`, `sku`,
    `quantity`, `item_category_snapshot`, `item_major_category_snapshot`, `item_images` (list of
-   `serialize_image_light`); `serialize_task_compact(task)` → the eleven fields of §9B;
+   `serialize_image_light`) — **seven keys**; `serialize_task_compact(task)` → **twelve keys**,
+   `client_id` plus the eleven fields §2 lists (owner card 2, 2026-09-21: the previous "eleven"
+   disagreed with the shipped function and with §9B's own enumeration);
    `serialize_stock_task_assignment(a, *, item, task, images)` → `client_id`, `state`,
    `stock_report_item_id`, `task_id`, `item_id`, `quantity`, `property_mismatch_overridden`,
    `credited_history_record_id`, `created_at`, `created_by_id`, `updated_at`, `updated_by_id`, `item`,
-   `task`.
+   `task` — **fourteen keys**.
 4. Router: two routes.
 5. Tests first from the table.
 
@@ -106,7 +131,7 @@ Tenancy and visibility rows (C1(d), C4(d)) enumerate all three cells per entity 
 | C2(b) | instrument (c): A1 `q = 2`, A2 `q = 3`, both `in_queue`, `A1.client_id < A2.client_id`; raw `quantity_in_queue = 3` (truth 5); `DR(R)` | A1's move → 1 (no repair); A2's move would write −2 → repaired to 0 with **one** record `stored "1"`, `recomputed "0"`, `inline:delete_stock_report_item`; no second-trigger record (already 0); deletion completes | `_delete_stock_report_item_cascade.py` (def.): read `stored_before` from the row's ORM instance (3, loaded at the lock) instead of a fresh `SELECT` after the guarded statement returned zero rows → `3 − 3 = 0 = recomputed` → no record is written → red (MC-1 instrument (c); §9 rule 3) | MC-1 instrument (c) |
 | C3(a) | C1(a)'s fixture with `capture_dispatch` | dispatched: one `stock_report_item:deleted` (R), three `stock_task_assignment:deleted` (states at deletion), one `:updated` for C (shifted 3 → 2); **no** `:updated` for R | `_delete_stock_report_item_cascade.py` (def.): append a `stock_report_item:updated` for R after the counter repair instead of relying on the coalescer's `:deleted` rule, and drop the `:deleted` clause from `coalesce_stock_report_events` → an `:updated` for R appears → red. Both edits are needed for the bite, and that is the point (L-36: the pair is load-bearing, each alone is an equivalent mutant); the pair is run and recorded as one mutant | MC-19 row deletion |
 | C4(a) | R with A1 active, A2 `resolved`, A3 soft-deleted, A4 `resolved_early`; `GET` | lists A1, A2 and A4 (all states, non-deleted) ordered by `created_at, client_id`, A4's `state == "resolved_early"`; A3 absent | two mutants at `list_stock_task_assignments.py` (def.), **both runs recorded**: (i) filter to `ACTIVE_ASSIGNMENT_STATES` → A2 and A4 vanish; (ii) filter to a hand-typed `state IN ('in_queue','in_progress','awaiting','resolved','failed')` → only A4 vanishes, which is the §9 rule 16 defect this row exists to catch | §9 "non-deleted, all states", §14F F10 (the traceability surface), rule 16 |
-| C4(b) | any listed assignment | keys exactly the fourteen of task 3; `item` keys exactly `client_id, article_number, sku, quantity, item_category_snapshot, item_major_category_snapshot, item_images`; `task` keys exactly the eleven of §9B; `item_images` elements are `serialize_image_light` shapes | three mutants, **all runs recorded across the suite** (§9 rule 8 — these serializers ship in phase 8, so each mutant reddens phase 8 rows as well and the observed-red set is recorded whole): (i) `serialize_stock_task_assignment` (def.) drops `credited_history_record_id`; (ii) `serialize_item_compact` (def.) adds `"item_category_id"`; (iii) `serialize_task_compact` (def.) drops `completed_at` | §9B response shapes |
+| C4(b) | any listed assignment | keys exactly the fourteen of task 3; `item` keys exactly `client_id, article_number, sku, quantity, item_category_snapshot, item_major_category_snapshot, item_images`; `task` keys exactly the **twelve** of §9B — `client_id` plus the eleven fields §2 lists; `item_images` elements are `serialize_image_light` shapes | three mutants, **all runs recorded across the suite** (§9 rule 8 — these serializers ship in phase 8, so each mutant reddens phase 8 rows as well and the observed-red set is recorded whole): (i) `serialize_stock_task_assignment` (def.) drops `credited_history_record_id`; (ii) `serialize_item_compact` (def.) adds `"item_category_id"`; (iii) `serialize_task_compact` (def.) drops `completed_at` | §9B response shapes |
 | C4(d) | `GET` for a deleted row / absent id / foreign row | `NotFound` each | three mutants at `list_stock_task_assignments.py`'s row lookup (def.), **all three runs recorded** (L-34): drop `is_deleted = false`; drop `workspace_id`; return `{"stock_task_assignments": []}` instead of raising when the row is absent | M4 |
 | C5(a)–C5(d) | `DELETE …/items/{id}` as admin / manager / worker / seller | reached / reached / 403 / 403 | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `DELETE …/items/{client_id}` route (def.) — **both directions run and recorded** (L-13/L-24): (i) remove ADMIN, then MANAGER → the matching "reached" cell answers 403; (ii) add WORKER, then SELLER → the matching 403 cell reaches the service | MC-18 |
 | C5(e)–C5(h) | `GET …/items/{id}/assignments` as admin / manager / worker / seller | reached ×4 | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `GET …/items/{client_id}/assignments` route (def.): remove the role under test → that cell answers 403 → red. Four runs, one per role, each recorded; every cell here is "reached", so there is no opposite direction | MC-18 |
@@ -131,23 +156,23 @@ Tenancy and visibility rows (C1(d), C4(d)) enumerate all three cells per entity 
 
 **Added by the batch D projection + fold, 2026-09-21 (round 0). Nothing below changes a criterion outcome.**
 
-- **The three compact serializers already ship.** Owner ruling §9B.2 moved
-  `serialize_stock_task_assignment`, `serialize_item_compact` and `serialize_task_compact` into
-  **phase 8**; they are live in `bm/domain/stock_report/serializers.py` today. Task 3 and §4's
-  "three serializers added" are stale: this phase adds **none** and must not re-add them. Only
-  `serialize_stock_report_item` is still owed, and that one belongs to phase 12. Correcting the
-  task text is an owner card (see the projection handoff).
-- **`serialize_task_compact` returns twelve keys, not eleven** — `client_id` plus the eleven
-  fields §2 lists. Task 3 and C4(b) both say "eleven"; the shipped function and §9B's own
-  enumeration say twelve. Owner card (an outcome cell).
-- **The gap close must read a *fresh* `priority_order`.** Phase 13A calls this same cascade once
-  per row inside one transaction (13A C5(b)), so by the second call the ORM instance loaded at the
-  lock is stale after the first cascade's Core shift (§9 rule 3). `close_priority_gap`'s
-  `removed_order` therefore comes from a fresh `SELECT` (or a re-populated instance) taken inside
-  the cascade, never from `row.priority_order` as loaded. **No row in this phase can observe
-  that** — this phase deletes one row at a time. Its only armed evidence anywhere is 13A **C5(b)**,
-  and 13A's §4 perimeter forbids editing this module, so the requirement has to be true when this
-  phase ships.
+- **The three compact serializers already ship — APPLIED, owner card 5, 2026-09-21.** Owner ruling
+  §9B.2 moved `serialize_stock_task_assignment`, `serialize_item_compact` and
+  `serialize_task_compact` into **phase 8**; they are live in
+  `bm/domain/stock_report/serializers.py` today. Task 3 now says so and §4 no longer lists the
+  file. Only `serialize_stock_report_item` is still owed, and that one belongs to phase 12.
+- **`serialize_task_compact` returns twelve keys, not eleven — APPLIED, owner card 2,
+  2026-09-21.** `client_id` plus the eleven fields §2 lists. Task 3 and C4(b) now read "twelve …
+  `client_id` plus the eleven fields", which reconciles both readings that produced the error.
+- **The gap close must read a *fresh* `priority_order` — APPLIED to task 1, owner card 5,
+  2026-09-21.** Phase 13A calls this same cascade once per row inside one transaction (13A C5(b)),
+  so by the second call the ORM instance loaded at the lock is stale after the first cascade's Core
+  shift (§9 rule 3). `close_priority_gap`'s `removed_order` therefore comes from a fresh `SELECT`
+  taken inside the cascade, never from `row.priority_order` as loaded. **No row in this phase can
+  observe that** — this phase deletes one row at a time. Its only armed evidence anywhere is 13A
+  **C5(b)**, and 13A's §4 perimeter forbids editing this module, so the requirement has to be true
+  when this phase ships. This is why batch D is split with **D1 (12 + 13) APPROVED before D2 (13A +
+  14) starts**.
 - **C4(b) overlaps phase 8's own key rows** (the three serializers are shipped and pinned there).
   It is kept because it pins the *list* endpoint's element, and C6(a) proves the two surfaces
   agree; its mutants redden phase 8 tests too, so the observed-red set is recorded across the
