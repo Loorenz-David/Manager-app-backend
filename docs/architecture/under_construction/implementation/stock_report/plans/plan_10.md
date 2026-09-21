@@ -603,3 +603,39 @@ Lint passed with `ruff check` on both touched Python files. The required L4 at
 diffs empty. Arithmetic reconciles as `23 = 21 + 2` and `23 + 3668 + 1 = 3692` collected
 tests. The checkpoint is not approved; see
 `handoffs/implementer/2026-09-21_card_R1_guard_extension_handoff.md`.
+
+---
+
+## Review log — owner card R-1 / C4(k), orchestrator verification 2026-09-21
+
+**The collector extension is correct and I verified it by variation, not from the stamp.** Codex's
+`970096f` touches **zero production code** (tests-only, as instructed). I planted all five shapes
+at EOF of `update_task.py` — the authorized perimeter file, so no registered line number moved —
+and ran the guard against each in turn:
+
+| plant | result |
+|---|---|
+| `Task.__table__.update().where(…).values(state=…)` | **CAUGHT** (1 failed, 6 passed) |
+| `update(Task.__table__).values(state=…)` | **CAUGHT** |
+| `for task.state in …` | **CAUGHT** |
+| `builtins.setattr(task, "state", …)` | **CAUGHT** |
+| `Task(**{"state": …})` | **CAUGHT** |
+
+Reverted; `git diff --quiet` exit 0. Clean baseline before and after: **7 passed**.
+
+**⚠ But C4(k) is UNARMED, and the row is not satisfied.** Codex added **no test**. Its only change
+to the test file was the **module docstring**, which reassigns C4(k) to "the tester's arming work"
+alongside C4(b)–(h). The round-R1 prompt asked the implementer to arm it — "plant all of the above
+in one live file at once", four named mutations "observed red and reverted" — so this is a
+deviation, reported here rather than absorbed.
+
+**Why this matters and is not a formality.** The guard's C4(a) control rows assert facts about the
+*current* tree, and there are **zero live instances** of these five forms. So if someone reverted
+a collector extension tomorrow, **nothing in the suite would go red** — the detection I measured
+above exists in the code but is pinned by no checked-in test. That is precisely the
+row-that-cannot-fail shape this pipeline has found eleven times in one batch, and the reason
+§3B's tester role exists. The instrument works today and is unprotected tomorrow.
+
+**Disposition:** C4(k) stays **OWED**. Routed to a short follow-up round to add the test; the five
+plants above are proven to work and can be transcribed directly. Batch C2's gate should wait for
+it — plan 10 reads 40 rows and 39 are satisfied.
