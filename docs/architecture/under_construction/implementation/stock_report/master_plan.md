@@ -305,9 +305,15 @@ its projection.
   claim the reviewer makes must be backed by a command it ran and whose output it pastes, and it
   is explicitly forbidden to discharge a mutation cell by reading a ledger. Scope: phase 8A only;
   it sets no precedent for batch C2 or D.
-- *Concurrency constraint while 8A and C2 overlap:* the test databases are fixed names
-  (`beyo_test_main_gw0…gw5`, §10), so **only one workstream runs a suite at a time**. A
-  concurrent L4 corrupts both results and looks like a real failure.
+- *Running two workstreams at once (corrected 2026-09-21).* An earlier note here said only one
+  workstream may run a suite at a time. **That was wrong** — `tests/database_isolation.py`
+  already supports parallel checkouts through `BEYO_TEST_SLOT` (`[a-z0-9]{1,12}`, default
+  `main`), which yields `beyo_test_<slot>_gwN` **and a per-slot template**. Each workstream sets
+  its own slot on **every** pytest command — `pytest.ini` carries `-n 6 --dist loadfile`, so even
+  a single-file L1 claims six worker databases. In flight 2026-09-21: phase 8A on slot `a8`,
+  batch C2 on slot `c2`. Omitting the variable silently shares the default slot and makes both
+  results worthless while looking like genuine failures. The first run in a fresh slot builds its
+  template, so it is slower once.
 
 **Phase 10 (C2).** Its concurrency evidence is exactly plan 10's three C5 rows — the three
 serialization orders MC-11/§14F F6 distinguish — each forced by lock acquisition (§9 rule 9) and

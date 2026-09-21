@@ -56,9 +56,9 @@ this is a move, not a rewrite. **The checks, their order and their reason string
 
 ```
 # before you touch anything
-PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
+BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
 # after the move
-PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
+BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
 ```
 
 Paste both results in your handoff. **Write no new criterion tests for this half** — plan 8A says
@@ -95,8 +95,9 @@ name in plan 8A collides with an existing one in §6, stop and report rather tha
 
 ## Environment — and one hard coordination rule
 
-From `app/`: **L1** `PYTHONPATH=. pytest <file>` (whole file, never `-k`). **L4**
-`PYTHONPATH=. pytest -m 'not e2e'` (`pytest.ini` adds `-n 6 --dist loadfile`).
+From `app/`, **always with `BEYO_TEST_SLOT=a8`** (see the box below): **L1**
+`pytest <file>` (whole file, never `-k`). **L4** `pytest -m 'not e2e'` (`pytest.ini` adds
+`-n 6 --dist loadfile`).
 
 **Baseline: 21 failed / 3547 passed / 1 skipped** at `798fc69`; the 21 failure IDs are the
 published set in
@@ -104,10 +105,20 @@ published set in
 Diff your failure IDs against that set **in both directions** and print both. Reconcile the pass
 count exactly.
 
-> **⚠ Only one workstream may run the suite at a time.** The test databases are fixed names
-> (`beyo_test_main_gw0…gw5`, cloned per xdist worker). Another workstream (batch C2) is active in
-> this same repository. A concurrent full run corrupts both results **and looks like a genuine
-> failure**. Confirm with the owner before your L4, and take exactly one.
+> **⚠ Run every pytest invocation under your own test slot.** Another workstream is active in
+> this repository. Set `BEYO_TEST_SLOT=a8` on **every** pytest command — not just the L4 —
+> because `pytest.ini` carries `-n 6 --dist loadfile`, so even a single-file run claims six
+> worker databases. The slot gives you your own set (`beyo_test_a8_gw0…gw5`) and its own
+> template, so the two workstreams cannot collide and neither has to wait for the other:
+>
+> ```
+> BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest <file>
+> BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest -m 'not e2e'
+> ```
+>
+> The first run in a fresh slot builds its template at the Alembic head, so expect it to be
+> slower once. If you omit the variable you silently share the default `main` slot with the
+> other workstream, and both results become worthless while looking like genuine failures.
 
 ## Your handoff
 

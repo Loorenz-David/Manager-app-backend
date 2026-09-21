@@ -61,8 +61,8 @@ move, not a rewrite: the checks, their order and their reason strings must be un
 8's own 67 armed rows are the proof.** Run them and paste the result:
 
 ```
-cd app && PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
-cd app && PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_delete_stock_task_assignments.py
+cd app && BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_create_stock_task_assignments.py
+cd app && BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest tests/integration/services/commands/stock_report/test_delete_stock_task_assignments.py
 ```
 
 Then **read the moved code against the original** and confirm by eye that the **order** of checks
@@ -102,12 +102,25 @@ Test these against the running code, not by reading:
 
 ## Step 5 — what the suite says
 
-One L4, **but only after confirming with the owner that no other workstream is running one** —
-the test databases are fixed names (`beyo_test_main_gw0…gw5`) and a concurrent run corrupts both
-results while looking like a genuine failure.
+One L4. Run it — and every other pytest command — under your own test slot:
+
+> **⚠ Run every pytest invocation under your own test slot.** Another workstream is active in
+> this repository. Set `BEYO_TEST_SLOT=a8` on **every** pytest command — not just the L4 —
+> because `pytest.ini` carries `-n 6 --dist loadfile`, so even a single-file run claims six
+> worker databases. The slot gives you your own set (`beyo_test_a8_gw0…gw5`) and its own
+> template, so the two workstreams cannot collide and neither has to wait for the other:
+>
+> ```
+> BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest <file>
+> BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest -m 'not e2e'
+> ```
+>
+> The first run in a fresh slot builds its template at the Alembic head, so expect it to be
+> slower once. If you omit the variable you silently share the default `main` slot with the
+> other workstream, and both results become worthless while looking like genuine failures.
 
 ```
-cd app && PYTHONPATH=. pytest -m 'not e2e'
+cd app && BEYO_TEST_SLOT=a8 PYTHONPATH=. pytest -m 'not e2e'
 ```
 
 Expected **21 failed / 1 skipped**, the 21 IDs identical to the published set in
