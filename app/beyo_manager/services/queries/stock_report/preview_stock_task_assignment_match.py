@@ -32,7 +32,7 @@ class PreviewStockTaskAssignmentRequest(BaseModel):
     task_id: str | None = None
     article_number: str | None = None
     sku: str | None = None
-    item_category_id: str
+    item_category_id: str | None = None
     properties: dict
     quantity: int
 
@@ -118,8 +118,6 @@ async def preview_stock_task_assignment_match(ctx) -> dict:
             "item_not_task_primary",
             "already_processed_by_scanner",
             "item_already_assigned",
-            "item_has_no_category",
-            "category_mismatch",
         ):
             assumed[check] = StockAssignmentCheckResultEnum.NOT_EVALUATED
     if request.task_id is None:
@@ -134,7 +132,7 @@ async def preview_stock_task_assignment_match(ctx) -> dict:
     checks = evaluate_assignment_checks(
         row=row,
         task=task,
-        item=matched_item,
+        item=candidate,
         task_id=request.task_id,
         item_id=matched_item.client_id if matched_item is not None else None,
         primary_pairs=primary_pairs,

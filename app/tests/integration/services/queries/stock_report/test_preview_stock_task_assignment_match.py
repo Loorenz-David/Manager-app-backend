@@ -231,12 +231,18 @@ async def test_preview_quantity_is_matched_from_supplied_candidate(db_session):
 
 @pytest.mark.parametrize("body", [{"article_number": "SR-does-not-exist"}, {"article_number": None, "sku": None}])
 async def test_preview_unresolved_item_marks_item_checks_not_evaluated(db_session, body):
+    # C3(e), corrected round 2, 2026-09-21: the four ITEM-DEPENDENT checks (need a
+    # persisted item to mean anything) read not_evaluated. item_has_no_category and
+    # category_mismatch are NOT in this set any more -- they are computable from the
+    # supplied item_category_id and must be evaluated (C3(g) pins that they are).
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     result = await _preview(db_session, seeded, row, **_body(seeded, **body))
     by_name = {check["check"]: check for check in result["checks"]}
-    for name in ("item_not_found", "item_already_assigned", "item_has_no_category", "category_mismatch"):
+    for name in ("item_not_found", "item_not_task_primary", "already_processed_by_scanner", "item_already_assigned"):
         assert by_name[name]["result"] == "not_evaluated"
+    for name in ("item_has_no_category", "category_mismatch"):
+        assert by_name[name]["result"] == "pass"
     assert result["refusal_reason"] is None
     assert result["can_proceed"] is True
     assert result["values_source"] == "supplied"
@@ -320,6 +326,55 @@ async def test_preview_ignores_deleted_or_foreign_candidate_item(db_session, ite
     result = await _preview(db_session, seeded, row, **_body(seeded, article_number=article_number, properties={}, quantity=1))
     assert result["matched_item_client_id"] is None
     assert result["property_failures"] == [{"key": "wood_group", "reason": "missing_on_item"}]
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+@pytest.mark.parametrize(
+    "category_override, expect_category_mismatch, expect_item_has_no_category, "
+    "expect_can_proceed, expect_refusal_reason",
+    [
+        pytest.param("same", "pass", "pass", True, None, id="own_category"),
+        pytest.param("other", "fail", "pass", False, "category_mismatch", id="different_category"),
+        pytest.param(None, "pass", "fail", False, "item_has_no_category", id="null_category"),
+    ],
+)
+async def test_preview_supplied_category_takes_effect_with_no_item(
+    db_session,
+    category_override,
+    expect_category_mismatch,
+    expect_item_has_no_category,
+    expect_can_proceed,
+    expect_refusal_reason,
+):
+    # C3(g), owner ruling round 2, 2026-09-21: with no item resolving, the supplied
+    # item_category_id must reach category_mismatch / item_has_no_category exactly as
+    # the supplied properties/quantity already reach the property checks (C3(c)/C3(d)).
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    if category_override == "same":
+        item_category_id = seeded.categories[0].client_id
+    elif category_override == "other":
+        item_category_id = seeded.categories[1].client_id
+    else:
+        item_category_id = None
+    result = await _preview(
+        db_session,
+        seeded,
+        row,
+        **_body(
+            seeded,
+            article_number=None,
+            sku=None,
+            item_category_id=item_category_id,
+        ),
+    )
+    by_name = {check["check"]: check for check in result["checks"]}
+    assert by_name["category_mismatch"]["result"] == expect_category_mismatch
+    assert by_name["item_has_no_category"]["result"] == expect_item_has_no_category
+    assert result["can_proceed"] is expect_can_proceed
+    assert result["refusal_reason"] == expect_refusal_reason
+    assert result["matched_item_client_id"] is None
+    assert result["values_source"] == "supplied"
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 

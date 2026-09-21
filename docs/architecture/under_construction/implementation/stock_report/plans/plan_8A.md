@@ -532,3 +532,90 @@ ruling (criterion-row authorship is reserved — master plan §3B):
   non-defects from the review ruling; the published 21-ID set is otherwise identical.
 - No Architecture Graph delta was needed: this was a test-fixture correction within the existing
   evaluator boundary.
+
+### 2026-09-21 — fix round 2 — Claude (Sonnet)
+
+- **Fix, exactly as prescribed plus one necessary consequence.** In
+  `preview_stock_task_assignment_match.py`: (1) `evaluate_assignment_checks`'s `item=` argument is
+  now `candidate` (was `matched_item`); (2) the no-item `assumed` NOT_EVALUATED set is now exactly
+  four — `item_not_found`, `item_not_task_primary`, `already_processed_by_scanner`,
+  `item_already_assigned` — `item_has_no_category` and `category_mismatch` removed; (3) `item_id`
+  stays `None` when nothing resolved; (4) the stored-item branch is untouched in effect (`candidate
+  is matched_item` on that path, so behaviour is identical to before).
+- **Judgment call, undocumented by the prompt, required by C3(g)(iii):** `item_category_id` was
+  `str` (required, non-nullable) in both `PreviewStockTaskAssignmentRequest`
+  (`preview_stock_task_assignment_match.py`) and the router's `_PreviewStockTaskAssignmentBody`
+  (`stock_report.py`). C3(g) case (iii) sends `item_category_id: null` and expects the request to
+  parse and `item_has_no_category` to be evaluated (`fail`) — impossible under a required `str`
+  field (`model_validate` raises `string_type` before any check runs; verified by hand). Widened
+  both to `str | None = None`. This is the smallest change that makes the row constructible and is
+  the router-level counterpart of the same defect class: without it a real client could never
+  express "no category yet" and `item_has_no_category` would stay unreachable through the actual
+  endpoint, not just through the internal function. `Item.item_category_id` is already nullable at
+  the model layer (`models/tables/items/item.py:31`), so a transient candidate with no category is
+  not a new domain concept.
+- **C3(e), corrected round 2, test updated.**
+  `test_preview_unresolved_item_marks_item_checks_not_evaluated` asserted the old, wrong six-check
+  `not_evaluated` set. Updated to assert the corrected four (`item_not_found`,
+  `item_not_task_primary`, `already_processed_by_scanner`, `item_already_assigned`) as
+  `not_evaluated`, and added the missing positive assertion that `item_has_no_category` and
+  `category_mismatch` now read `pass` for that fixture (its default category and criteria agree)
+  — this is expected test churn from the plan's own correction, not a regression.
+- **C3(g) armed.** New test `test_preview_supplied_category_takes_effect_with_no_item`
+  (3 parametrized cases: own category / different category / null category) in
+  `test_preview_stock_task_assignment_match.py`, all green, asserting `category_mismatch`,
+  `item_has_no_category`, `can_proceed`, `refusal_reason`, `matched_item_client_id` and
+  `values_source` per the row.
+- **C3(g)'s named mutation, run and reverted.** Reapplied `item=matched_item` (the pre-fix line) at
+  `preview_stock_task_assignment_match.py`'s `evaluate_assignment_checks` call (definition-adjacent
+  call site). Observed red: 2 of 3 cases failed —
+  `test_preview_supplied_category_takes_effect_with_no_item[different_category]` (line 372:
+  `category_mismatch` expected `fail`, got `pass`) and `[null_category]` (line 373:
+  `item_has_no_category` expected `fail`, got `pass`); `[own_category]` stayed green (its expected
+  `pass` is invariant to this mutation, as it must be). Reverted; `git diff` on
+  `preview_stock_task_assignment_match.py` afterward shows only the three intended fix hunks — no
+  mutation residue.
+- **C3(f) and C5(a) reverified green**, unaffected: the stored-item branch's `candidate is
+  matched_item`, and C5(a)'s fixture resolves an item so the no-item `assumed` narrowing never
+  applies to it.
+- **Phase 8's create suite unaffected**: `test_create_stock_task_assignments.py` — `42 passed`,
+  same as before this round; `create_stock_task_assignments.py` was not touched.
+- **Lint clean** (`ruff check`) on all three touched files.
+- **One L4** under `BEYO_TEST_SLOT=a8`. First run: `24 failed / 3667 passed / 1 skipped` — one
+  failure beyond the 23-gate,
+  `test_task_state_sync.py::test_c1m_sync_selects_the_active_assignment_over_a_terminal_one`, in a
+  file the concurrent batch-C2 fix round owns and was mid-editing in this shared tree (confirmed:
+  `git diff --stat` on that file shows +94 lines uncommitted from that round). Re-ran the single
+  test in isolation immediately after — `1 passed` — and re-ran the full L4 a second time on the
+  same (still-dirty-elsewhere) tree: **23 failed / 3668 passed / 1 skipped**, both failure-ID diffs
+  against the published 21-ID set plus the two known slot IDs empty in both directions. Citing the
+  second (clean) run as the authoritative stamp; the first is recorded as a flaky capture per
+  charter rule, caused by a concurrent session's file, not by this round's changes, and is not this
+  round's defect to fix. Pass arithmetic on the authoritative run: this round adds exactly 3 new
+  test IDs (C3(g)'s three cases); the remaining rise from the last recorded 3661 baseline
+  (3661 + 3 = 3664 vs. observed 3668) is the concurrent C2 round's own in-flight, uncommitted test
+  additions in files this round does not own or touch (verified: `test_process_items_processed.py`
+  +93, `test_task_state_sync.py` +94, `test_task_state_write_sites_are_registered.py` +28 lines
+  uncommitted) — not attributable to this fix.
+- **Architecture graph**: checked both nodes this phase owns
+  (`endpoint-stock-assignment-match-preview`, `domain-assignment-acceptability-evaluator`,
+  both `human_confirmed`/`reviewed`). Neither's description or evidence makes any claim this fix
+  contradicts — both describe the evaluator/endpoint at architectural granularity (a shared pure
+  decision boundary; a read-only endpoint that reports every check), not the specific call-site
+  wiring the defect was in. No stale claim found; no delta needed, same conclusion as fix round 1
+  for the same reason (a call-site correction inside an already-recorded boundary).
+- **Perimeter this round (cycle-scoped):** production —
+  `services/queries/stock_report/preview_stock_task_assignment_match.py`,
+  `routers/api_v1/stock_report.py`; test —
+  `tests/integration/services/queries/stock_report/test_preview_stock_task_assignment_match.py`;
+  docs — this Review log entry. Mutation-probe file (applied-and-reverted, same file as the
+  production perimeter, no separate file touched): `preview_stock_task_assignment_match.py`.
+  Not touched, confirmed by `git diff --stat` before and after: `_move_assignment.py`,
+  `sync_task_stock_assignments.py`, `_task_state_write_scanner.py`,
+  `task_state_write_site_registry.py`, `test_task_state_write_sites_are_registered.py`,
+  `test_process_items_processed.py`, `test_task_state_sync.py` (all batch-C2-owned, all left at
+  whatever state that concurrent round had them in).
+- **Owner cards: none.** The round's own scope (the two-line fix plus the narrowed assumed set)
+  was fully specified; the one open point (item_category_id's type) had a single correct answer
+  forced by C3(g)(iii) and the existing nullable domain column, not a judgment split between two
+  reasonable outcomes, so it is recorded as a judgment call rather than escalated.
