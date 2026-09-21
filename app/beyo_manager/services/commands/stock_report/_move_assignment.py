@@ -266,3 +266,74 @@ async def move_assignment(
             )
         )
     return events
+
+
+async def resolve_processed_group(session, assignments, *, row, workspace_id, now, trigger):
+    """`move_assignment` in grouped form for the processed webhook (phase 9; master
+    plan §6.5; intention §8B D6 "Processed, grouped per row"; §14F F5).
+
+    `assignments` is every assignment of `row` that this request decided to move,
+    each still carrying its **current** (pre-move) `state` — the caller has already
+    re-read it after the row/assignment locks and decided, per entry in request
+    order, that it is active. The target is `resolved` from `awaiting`, otherwise
+    `resolved_early` (from `in_queue`/`in_progress` — the only other active states,
+    §14F F2). One guarded counter statement carries the group's summed per-column
+    delta (HC-3: the same statement builder and repair routine as `move_assignment`,
+    never a second counter path); the goal step (F4) runs per assignment after it.
+    """
+    moved: list[tuple[object, "StockTaskAssignmentStateEnum", "StockTaskAssignmentStateEnum"]] = []
+    for assignment in assignments:
+        from_state = assignment.state
+        target = (
+            StockTaskAssignmentStateEnum.RESOLVED
+            if from_state == StockTaskAssignmentStateEnum.AWAITING
+            else StockTaskAssignmentStateEnum.RESOLVED_EARLY
+        )
+        assignment.state = target
+        assignment.updated_by_id = None
+        assignment.updated_at = now
+        moved.append((assignment, from_state, target))
+    await session.flush()
+
+    deltas = {"quantity_in_queue": 0, "quantity_in_progress": 0, "quantity_awaiting": 0}
+    for _assignment, from_state, _target in moved:
+        deltas[_COUNTER_COLUMN[from_state]] -= _assignment.quantity
+
+    values = await _apply_counter_delta(
+        session,
+        row_id=row.client_id,
+        deltas=deltas,
+        workspace_id=workspace_id,
+        trigger=trigger,
+        now=now,
+    )
+
+    for assignment, from_state, target in moved:
+        await apply_goal_effect(
+            session,
+            assignment,
+            from_state=from_state,
+            to_state=target,
+            trigger=trigger,
+            now=now,
+        )
+
+    events = [
+        build_stock_task_assignment_event(
+            "state-changed",
+            client_id=assignment.client_id,
+            workspace_id=workspace_id,
+            stock_report_item_id=assignment.stock_report_item_id,
+            task_id=assignment.task_id,
+            state=target.value,
+        )
+        for assignment, _from_state, target in moved
+    ]
+    events.append(
+        build_stock_report_item_updated_event(
+            client_id=row.client_id,
+            workspace_id=workspace_id,
+            values=values,
+        )
+    )
+    return events

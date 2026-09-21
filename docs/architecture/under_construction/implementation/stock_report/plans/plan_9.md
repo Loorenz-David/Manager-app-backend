@@ -171,4 +171,51 @@ planted.
 
 **Owner, 2026-09-21 — criterion row authored (batch B2 card 1, CF-3).** **C1(e)** added: the shared verifier must refuse a blank workspace setting (or blank API key) *before any DB read*. **No test exists yet — owed by this phase's implementation round.** The reviewer measured that deleting this guard leaves the whole of batch B green, because phase 7's demand path refuses a blank workspace a moment later; that accidental backstop is not guaranteed on this phase's path. The row's **zero-statement** clause, not the 401, is what makes the guard observable — a 401 alone would let the mutation stay equivalent.
 
-(empty)
+**Implementer, 2026-09-21 (batch C2, Sonnet).** Built: `items_processed_request.py`
+(`parse_items_processed_body`); `process_items_processed.py` (the owning command); the grouped
+entry point `resolve_processed_group` in `_move_assignment.py` (task 2's one sanctioned extension);
+`ItemsProcessedOutcomeEnum`/`ItemsProcessedReasonEnum` in `enums.py`; the second router route in
+`location_tracker_webhooks.py`.
+
+**C1(e) is satisfied by construction, not new code.** `verify_location_tracker_webhook`
+(phase 7, `webhook_verifier.py`) already refuses a blank workspace setting or a blank/missing API
+key before any statement runs, and `process_items_processed` calls it first, exactly as
+`receive_stock_demand_webhook` does. This phase adds only a test proving the same guard on this
+command's own path (`test_c1e_blank_workspace_setting_is_401_zero_statements`); the shared
+verifier itself is phase 7's file and is not touched here.
+
+**Judgment calls:**
+- **Per-entry decision is sequential, tracked in memory, not deferred to the group call.**
+  MC-10 step 3 requires a duplicate later in the same request to see the earlier one's effect. I
+  decide every entry's outcome in request order first (mutating a `working_state` map keyed by
+  assignment id — never the ORM `.state` attribute itself, which stays at its locked/re-read value
+  until `resolve_processed_group` writes it), then group the *decided-to-move* assignments by row
+  and call `resolve_processed_group` once per row, ascending. This keeps `resolve_processed_group`'s
+  own contract simple (target is a pure function of `assignment.state` at call time) while still
+  producing the request-order sequential effect C5(a)/(b) require.
+- **`resolve_processed_group`'s two event kinds.** Plan §6.5 and C8(c) both use the phrase
+  `stock_task_assignment:updated`, but no such event kind is registered anywhere in this project
+  (§6.7: only `:created`/`:state-changed`/`:deleted`). I built and tested `:state-changed` per
+  moved assignment, which is the kind every other criterion row in this plan and the shipped
+  precedent (`move_assignment`) uses for a state transition. I read the plan's wording as
+  informal ("the assignment's event", not a fourth registered kind) rather than a new contract to
+  add — flagging it so the coordinator can confirm or correct §6.5's phrasing.
+- **`resolve_processed_group`'s per-row `:updated` event is unconditional** (always appended,
+  never guarded by "any delta != 0"), unlike `move_assignment`'s own per-call guard. This is safe
+  only because every caller of `resolve_processed_group` passes at least one assignment moving out
+  of an active state, so the group's summed delta is never the zero vector — never called with an
+  empty list. If a future caller could pass an empty or already-terminal group, this would need
+  the same `any(...)` guard `move_assignment` uses.
+- **F0's `quantity=4` default, not the `8` some C4 rows' prose implies** (per this plan's own §6
+  preamble correction): my C4 tests assert goal-credit amounts against the actual `q=4`, not a
+  literal `8`.
+
+**Rows I know I did not build a dedicated test for** (see the implementer handoff for the full
+per-row disposition): C1(b)/(d)/(f)/(g)/(h) — the shared verifier's own ordering and message
+identity, already proven in phase 7's suite and not re-derived here; C2(a) (deliberate blank,
+§3B class 2) and C2(d) (deliberate blank) — left to the tester per the plan's own note; C3(d)/(e)/
+(h)/(j)/(l) — sibling cases of the F5 ladder and closed-vocabulary row I did exercise one
+representative of each family for; C4(e) (the `in_progress` credit sub-check, sibling of the
+`in_queue` row I did test); C7(b)/(d)/(e) (the two-row and mixed-state groupings, siblings of the
+three-row C7(a)/(c) I did test); C8(b) (declared unforceable by the plan itself, routed to the
+reviewer's structural check).

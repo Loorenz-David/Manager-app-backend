@@ -71,3 +71,20 @@ class StockDemandOutcomeEnum(enum.Enum):
 
     APPLIED = "applied"
     CATEGORY_NOT_FOUND = "category_not_found"
+
+
+class ItemsProcessedOutcomeEnum(enum.Enum):
+    """Per-entry outcome of the processed webhook (phase 9; §14F F5)."""
+
+    RESOLVED = "resolved"
+    IGNORED = "ignored"
+
+
+class ItemsProcessedReasonEnum(enum.Enum):
+    """Per-entry `reason` of the processed webhook, JSON `null` when the outcome is
+    `resolved` from `awaiting` (phase 9; §14F F5). `not_awaiting` is retired
+    (§14C C48)."""
+
+    ITEM_NOT_FOUND = "item_not_found"
+    NO_OPEN_ASSIGNMENT = "no_open_assignment"
+    EARLY = "early"

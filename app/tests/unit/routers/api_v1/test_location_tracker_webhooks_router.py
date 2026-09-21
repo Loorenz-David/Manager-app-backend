@@ -97,3 +97,51 @@ def test_c5c_router_renders_build_err_for_a_faked_auth_error(monkeypatch):
     assert response.status_code == 401
     assert response.json() == {"error": "Unauthorized.", "ok": False}
     assert captured["calls"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Plan 9 — the processed webhook's own route (same router file, second route)
+# ---------------------------------------------------------------------------
+
+
+def test_items_processed_route_forwards_raw_bytes_and_headers_and_renders_build_ok(
+    monkeypatch,
+):
+    client, captured = _build_test_client(
+        monkeypatch,
+        SimpleNamespace(success=True, data={"results": []}, error=None),
+    )
+
+    response = client.post(
+        "/api/v1/location-tracker/webhooks/items-processed",
+        content=b'[{"article_number": "SR-x"}]',
+        headers={"X-API-KEY": "k"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"data": {"results": []}, "ok": True, "warnings": []}
+    assert captured["calls"] == 1
+    assert captured["identity"] == {}
+    assert captured["incoming_data"]["raw_body"] == b'[{"article_number": "SR-x"}]'
+    assert captured["incoming_data"]["headers"]["x-api-key"] == "k"
+
+
+def test_items_processed_route_renders_build_err_for_a_faked_auth_error(monkeypatch):
+    client, captured = _build_test_client(
+        monkeypatch,
+        SimpleNamespace(
+            success=False,
+            data=None,
+            error=LocationTrackerWebhookAuthError("Unauthorized."),
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/location-tracker/webhooks/items-processed",
+        content=b"[]",
+        headers={"x-api-key": "wrong"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"error": "Unauthorized.", "ok": False}
+    assert captured["calls"] == 1
