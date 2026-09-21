@@ -48,6 +48,10 @@ from tests.helpers.stock_report import make_ctx, seed_stock_report_workspace
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 NOW = datetime(2026, 9, 21, 12, 0, 0, tzinfo=timezone.utc)
+# C4(a)'s two `created_at` values: one earlier row, and one shared value that
+# leaves `client_id` as the only separator of the remaining pair.
+EARLY = datetime(2026, 9, 21, 10, 0, 0, tzinfo=timezone.utc)
+LATE = datetime(2026, 9, 21, 11, 0, 0, tzinfo=timezone.utc)
 CRITERIA = {"wood_group": ["teak"]}
 
 ASSIGNMENT_KEYS = {
@@ -225,28 +229,40 @@ async def test_every_non_deleted_state_is_listed_in_created_at_client_id_order(
     )
     await db_session.flush()
 
+    # `client_id` is a ULID with no monotonic counter (master plan §10), so the
+    # three listed ids are bound by **sorting the real ids at runtime**, never by
+    # creation order, and `created_at` is then written against that sort (L-14):
+    #   * `HI` — the largest `client_id` — is back-dated, so `created_at`
+    #     ascending DISAGREES with `client_id` ascending. Ordering by `client_id`
+    #     alone yields [LO, MID, HI] and fails here: that is what arms the
+    #     `created_at` term of the row's key.
+    #   * `LO` and `MID` SHARE one `created_at`, so `client_id` is the only term
+    #     the contract leaves to separate them. Measured 2026-09-22: dropping
+    #     that term does NOT change this result — the plan is
+    #     `Sort(created_at) ← Index Scan(ix_..._stock_report_item_id)`, the
+    #     back-dating above is a HOT update so the scan still feeds the sort in
+    #     insertion order, and insertion order is `client_id` order because `CR`
+    #     mints its ULIDs milliseconds apart. The tiebreaker is a determinism
+    #     guarantee this plan absorbs; keep it asserted, but do not read a green
+    #     run without it as evidence.
+    # The expected list below is constructed explicitly; re-running production's
+    # own ORDER BY in the test would mirror the clause instead of pinning it.
+    LO, MID, HI = sorted([a1, a2, a4])
+    for client_id, created_at in ((HI, EARLY), (MID, LATE), (LO, LATE)):
+        await db_session.execute(
+            text(
+                "UPDATE stock_task_assignments SET created_at = :created_at "
+                "WHERE client_id = :client_id"
+            ),
+            {"created_at": created_at, "client_id": client_id},
+        )
+    await db_session.flush()
+
     listed = await _GA(db_session, seeded, row.client_id)
 
     ids = [element["client_id"] for element in listed["stock_task_assignments"]]
     assert set(ids) == {a1, a2, a4}
-    expected_order = (
-        (
-            await db_session.execute(
-                select(StockTaskAssignment.client_id)
-                .where(
-                    StockTaskAssignment.stock_report_item_id == row.client_id,
-                    StockTaskAssignment.is_deleted.is_(False),
-                )
-                .order_by(
-                    StockTaskAssignment.created_at.asc(),
-                    StockTaskAssignment.client_id.asc(),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    assert ids == list(expected_order)
+    assert ids == [HI, LO, MID]
     by_id = {
         element["client_id"]: element
         for element in listed["stock_task_assignments"]

@@ -387,3 +387,58 @@ C1(c) **is** exercised at the surface the cell names — the tester's in-place r
 "empty history" wording is open, card D-7.2). The cascade's two fresh `SELECT`s and its
 `ctx`-free argument list are consumed from the gate's own reading. Perimeter clean: no serializer
 and no request model was added, exactly as owner card 5 requires.
+
+---
+
+## Review log — verification fix round 1 (2026-09-22, Opus tester, slot `dt2`)
+
+Handoff: `handoffs/tester/2026-09-22_batch_D1_fix_verification_1_handoff.md`. Scope: the two
+findings routed `verification` — **S-1** (C4(a)) and **N-4** (C2(a)). No production file changed
+(`git diff b6cbbb9..HEAD -- app/beyo_manager app/migrations app/scripts` → 0 files); no criterion
+cell edited; no criterion row authored.
+
+**C4(a) — the fixture now orders the data against its key, and the row's two expectations are
+constructed, not re-derived.** `test_every_non_deleted_state_is_listed_in_created_at_client_id_order`
+binds `LO < MID < HI` by sorting the three listed ids at runtime (master plan §10), then writes
+`created_at` against that sort: `HI` gets the earlier value, `LO` and `MID` share the later one.
+The expectation is now the explicit list `[HI, LO, MID]`; the second `ORDER BY` that mirrored
+production's own clause is gone.
+
+- **RP-1** (`list_stock_task_assignments.py` def., drop `created_at`, order by `client_id` alone)
+  → **RED**, `assert ids == [HI, LO, MID]`, index 0 differs. It was **green** on the pre-fix
+  fixture (reviewer, 5 runs). This is the arming proof the correction asked for.
+- **RP-2** (both terms `.desc()`) → **RED** at the same assertion, re-run at the new surface (L-23).
+- **RP-1b** (drop `client_id`, keep `created_at`) → **green, and measured EQUIVALENT at this
+  boundary, not a weak fixture.** Probe on the real fixture: the plan is
+  `Sort(created_at) ← Index Scan using ix_stock_task_assignments_stock_report_item_id`; the
+  `created_at` back-dating is a HOT update, so the index entries still address the original
+  tuples and the scan feeds the sort in **insertion** order (measured `scan=[LO, MID, HI]` while
+  `ctid=[HI, MID, LO]`), the sort is stable, and insertion order equals `client_id` order because
+  `CR` mints its ULIDs milliseconds apart. The tie therefore already emerges in `client_id`
+  ascending order **without** the term, so removing it yields byte-identical output. The
+  `client_id` term is a determinism guarantee whose removal this query plan absorbs; no fixture
+  built from `CR` at this boundary can observe it. See the handoff's own section — this is the
+  one correction quoted in the fix prompt that is not implemented as quoted (§9 rule 14).
+
+**C2(a) — `target_kind` is now asserted** in
+`test_a_counter_left_non_zero_is_repaired_to_zero_and_recorded`
+(`record.target_kind == StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM`). Armed by **RP-11**
+(`_delete_stock_report_item_cascade.py` def., `STOCK_REPORT_ITEM` → `HISTORY_RECORD`) → **RED**,
+and red on **that assertion alone**: 1 failed / 5 passed, no other test in the file moves, which
+is the measurement behind N-4's "nothing else in the batch pins this mapping".
+
+**The two rows' existing plan-named mutations re-run at the new surface** (L-23 — I edited both
+test functions, so the previous round's reds do not carry): **M-71** (filter to
+`ACTIVE_ASSIGNMENT_STATES`) → red at C4(a)'s `set(ids)`, A2 and A4 missing; **M-72** (hand-typed
+five-state list) → red at the same assertion, A4 alone missing — the §9 rule 16 defect the row
+exists for; **M-67** (cascade raises instead of repairing) → red at C2(a),
+`RuntimeError: … has a non-zero quantity_in_queue`. All three reverted, `git diff --quiet` exit 0.
+
+**Closing stamp** (this tree, clean but for the two test files): **24 failed / 3739 passed /
+1 skipped**. Failure-ID diff against the checked-in 23-ID baseline: `+1` =
+`test_the_priority_record_snapshots_the_live_awaiting_counter` (the declared card D-5 witness),
+`−0`. Pass count unchanged — no test added, none removed.
+
+**Proposed cell backfills** (the coordinator folds; the tester does not): C4(a) gains the ordering
+mutant **RP-1** (drop `created_at` from the `order_by`) beside its two state-filter mutants, and
+C2(a) gains **RP-11**. Both are measured red on this tree.

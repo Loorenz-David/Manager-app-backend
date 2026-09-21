@@ -28,6 +28,7 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
 )
 from beyo_manager.domain.stock_report.enums import (
     StockReportHistoryRecordTypeEnum,
+    StockReportRepairTargetKindEnum,
     StockTaskAssignmentStateEnum as S,
 )
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
@@ -420,6 +421,10 @@ async def test_a_counter_left_non_zero_is_repaired_to_zero_and_recorded(db_sessi
     )
     assert len(records) == 1
     record = records[0]
+    # C2(a) names the record's full shape, `stock_report_item` included: master
+    # plan §6.5 maps a `counter_*` divergence to STOCK_REPORT_ITEM, and this is
+    # the only assertion in the batch that pins the cascade's own mapping.
+    assert record.target_kind == StockReportRepairTargetKindEnum.STOCK_REPORT_ITEM
     assert record.target_client_id == row.client_id
     assert record.field == "quantity_in_queue"
     assert record.stored_value == "3"
