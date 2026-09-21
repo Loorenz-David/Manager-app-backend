@@ -316,10 +316,10 @@ Only the actor named for a transition writes its row. **Since §3A (2026-09-19) 
 | 5 | Goal credit: the MC-5 table incl. `resolved_early`, goal self-heal, the worked sequence | **VERIFIED** | 2026-09-21 | orchestrator | batch B1 APPROVED at `6b0e7d5`; every row of this phase passed re-review 1 and is mutation-armed. rows 23, criteria 3; complex: no (round 9: +5 rows; owner card 1 fold 2026-09-21: +1 row) |
 | 6 | Demand service, set-based (D6): find-or-create, goal records, replay, deadline, statement bound, locked-set assertion | **VERIFIED** | 2026-09-21 | orchestrator | batch B2 APPROVED; every row of this phase passed re-review 1 and is mutation-armed. rows 36, criteria 8; complex: yes (set-based SQL, two-session rows) (round 8: +1 row, `_demand_lookup.py`) |
 | 7 | Demand endpoint: key auth, body validation, duplicates, identity invariant over real bytes, envelope | **VERIFIED** | 2026-09-21 | orchestrator | batch B2 APPROVED; every row of this phase passed re-review 1 and is mutation-armed. rows 52, criteria 7; complex: no |
-| 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | PENDING | 2026-09-19 | planner | rows 66, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows; owner card 1 fold 2026-09-21: +1 row, C4(m) — carries a one-file perimeter extension, plan 8 §7) |
+| 8 | Assignments: batch create with the matcher, override and `already_processed_by_scanner`, batch delete, race error, role cells | **PROJECTED** | 2026-09-21 | orchestrator | rows 67, criteria 8; complex: yes (lock order, race row) (round 9: +7 rows; owner card 1 fold 2026-09-21: +1 row, C4(m) — one-file perimeter extension, §7; **batch C1 fold 2026-09-21: +1 row, C5(b) — the caller's lock order, owner card C / L-29**; 24 mutation + 4 fixture cells folded; cards A, B, D ruled) |
 | 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | PENDING | 2026-09-19 | planner | rows 43, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows; owner card 1 fold 2026-09-21: +1 row, C1(e)) |
 | 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | PENDING | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
-| 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | PENDING | 2026-09-19 | planner | rows 27, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row) |
+| 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | **PROJECTED** | 2026-09-21 | orchestrator | rows 26, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row; **batch C1 fold 2026-09-21: −1 row, C4(h) WITHDRAWN as unbuildable — owner card F**; 8 mutation + 4 fixture cells folded; cards B, E ruled) |
 | 12 | Priority, dense ordering, history records for user actions, the list endpoint | PENDING | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
 | 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | PENDING | 2026-09-19 | planner | rows 18, criteria 5; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten) |
 | 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | PENDING | 2026-09-19 | planner | rows 37, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable (owner card 1 fold 2026-09-21: +1 row, C5(g)) |
@@ -336,6 +336,15 @@ new script disagrees with the published totals on row shape, so the published fi
 forward and incremented rather than re-derived). Criteria 98 → 99: plan 4 gains C8. Phase 4 now
 also sits at eight criteria (3, 4, 6, 8, 9). **Rows 4 C8(a) and 5 C2(e) are born satisfied** (tests
 exist, mutations measured red); **8 C4(m), 9 C1(e) and 13A C5(g) are owed by their phases' rounds.**
+
+**Batch C1 fold, 2026-09-21 — totals stay 620 / 99.** Derivation: plan 8 `git diff` shows
+**+29 / −28** `^| C` lines (net **+1**: C5(b), owner card C) and plan 11 **+11 / −12** (net
+**−1**: C4(h) withdrawn, owner card F); +1 − 1 = 0 against the carried 620. Criteria unchanged —
+C5(b) joins plan 8's existing C5 and C4(h) leaves a C4 that keeps other rows. Per the standing
+practice since the owner card 1 fold, the published total is carried and adjusted by verified
+per-file diffs rather than re-derived, because a row-shape regex still disagrees with it (the
+C1 projection found the cause for plan 8: two shorthand lines, `C8(a)–C8(d)` and `C8(e)–C8(h)`,
+each stand for four criteria — **this is a reporting artefact, not a row count error**).
 
 **Trace coverage (derived by the same script from the trace cells).** Ledger: M1 → 1, 3, 4, 8, 10,
 13, 13A · M2 → 9, 10, 11, 13A · M3 → 6, 9, 13A · M4 → 1, 6, 7, 8, 9, 12, 13, 13A · M5 → 5, 9, 12 ·
@@ -378,7 +387,7 @@ rows are cited as `§14E En` / `§14F Fn` beside the contract they amend.
 | B2 | 6, 7 | IMPLEMENTATION_PROMPT_READY | 2026-09-21 | orchestrator | *superseded.* | prompt `prompts/implementer/2026-09-21_batch_B2_implement_1.md`, Sonnet. Fold applied to plans 6-7 at `a2f4fc2` — 21 mutation/fixture cells. Blockers B3 (statement listener cannot see parameters → `record_statement_calls` added, perimeter extended), B4 (`StockDemandOutcomeEnum` never shipped → `enums.py` added to the perimeter for that name only), B5 (every row commits and purges), B6 (self-defeating monkeypatch) and outcome defect O1 (bind two distinct parameters, which satisfies the cell verbatim) are all resolved in the prompt |
 | B2 | 6, 7 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | *superseded.* | waits for B1 APPROVED. Fold for plans 6-7 (16 cells) applied at B2 prompt time, not now. Carries blockers B3 (statement listener cannot see parameters), B4 (`StockDemandOutcomeEnum` never shipped), B5 (every row must commit and purge), B6 (plan 7 C7(a)'s monkeypatch is self-defeating), and outcome defect O1 (plan 6 C7(a) says "two parameters"; one shared bind compiles to one) |
 | B | 4, 5, 6, 7 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | *superseded by the B1/B2 split.* |
-| C1 | 8, 11 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | **Batch C split into C1 (8 → 11) and C2 (9 → 10) by the owner, 2026-09-21, and run under §3B** (implementer → tester → reviewer). A, B1, B2 APPROVED, so C1 is unblocked; next act is the batch C projection + lesson fold (§9A) |
+| C1 | 8, 11 | **PROJECTED** | 2026-09-21 | orchestrator | Projection r0 (`handoffs/projectionist/2026-09-21_batch_C1_projection_handoff.md`, Opus, tree `b95780b`, prompt `prompts/projectionist/2026-09-21_batch_C1_projection.md`). **34 empty mutation cells classified 29 / 1 / 4** under §3B's amended bullet; the fold applied 32 mutation and 8 fixture cells, left 2 labelled blanks, and added §9 rules 17 and 18, a rule 7 fifth use, a rule 8 amendment, two §6.1b rows and a §10 environment fact. **Three of the pre-pass's proposed mutations were wrong at the site** (one named a symbol not there, one named the wrong file and would have crashed the suite, one predicted an impossible result) — caught by reading shipped phase 1-7 code, which is what this gate is for. **Six owner cards, all ruled the same day:** A (C1(j)/C1(k) could not fail behind the unique index → `count_writes == 0` clause, rule 7's fifth use — the owner overruled the recommended fixture route because it would have armed the rows by proving *check ordering* and put two independent refusal reasons in one fixture), B (plan 11 C1(c) and plan 8 C6(g) were unbuildable against the round-9 §14F F9 ruling → both rebuilt through a **`failed`** assignment), C (**C5(b) authored** — the caller's lock order, forceable form with a recorded `UNFORCEABLE` fallback; closes L-29, the batch B1 fixture that ran and could not fail), D (C4(l) re-stated to the fourteen-key shape), E (plan 11 C4(b)/C5(b) **known-unarmed** — guarded twice, and the restructure would take a row lock on every ordinary item save), F (plan 11 C4(h) **withdrawn** — `complete_task_post_handling` builds `UpdateItemRequest(client_id, item_zone)` and structurally cannot change a category; verified at source by the orchestrator). Totals unchanged at 620 / 99 (+1 row plan 8, −1 plan 11, both verified by `git diff`). Next: the implementer prompt |
 | C2 | 9, 10 | BATCH_NOT_STARTED | 2026-09-21 | orchestrator | waits for C1 APPROVED (9←8). Phase 10's concurrency evidence is bounded by §3B |
 | C | 8, 9, 10, 11 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | *superseded by the C1/C2 split.* |
 | D | 12, 13, 13A, 14 | BATCH_NOT_STARTED | 2026-09-19 | orchestrator | waits for C APPROVED; projection checks plan 13A §7 (the six §14E questions) |
@@ -443,6 +452,8 @@ depends on a new one adds a row here in the same act.
 | File (foreign) | The load-bearing detail | What it arms | How it was found |
 |---|---|---|---|
 | `bm/domain/items/properties_signature.py` | `sort_keys=True` in the `json.dumps` of `compute_properties_signature` (line ~25) | Row identity under JSON key reordering — intention §4A MC-3, **plan 7 C4(a)**. Every mutation cell in that family pointed at `criteria_normalization.py`, where C4(a) is provably **inert** (measured, batch B2 re-review P1). | batch B2 re-review, L-25 |
+| `bm/services/commands/tasks/add_item_to_task.py` | the one-active-PRIMARY-per-task check (`:47-57`) and the `removed_at IS NULL` duplicate check (`:59-68`) | MC-13's `item_not_task_primary` and MC-14's "a swap is removal then add" — and, negatively, the **constructibility** of plan 8 C6(g) / plan 11 C1(c): because a task holds one active PRIMARY item, "one task with two assignments" is reachable only as terminal + active for the same item | batch C1 projection, L-25 |
+| `bm/services/commands/task_post_handling/complete_task_post_handling.py` | its `_update_item_in_session` call builds `UpdateItemRequest(client_id=…, item_zone=…)` (`:120-129`) — `item_category_id` is never in `model_fields_set` | MC-14's "the guard covers both callers" is true by *placement*, not because this caller can change a category. This is why plan 11 C4(h) was withdrawn (owner card F, 2026-09-21) | batch C1 projection, L-25 |
 
 A source comment now marks the argument in place and points back here, so the next editor of that
 file sees the dependency without reading this plan set.
@@ -770,11 +781,19 @@ Charter rules 1–17 apply in full. Project-specific rules, each binding on ever
    capture them with `capture_dispatch` at the consumer's import site and assert the list — never
    an internal call.
 7. **Statement counting is reserved for the ratified bounds** (MC-9 zero-write replay, D6 counts,
-   MC-20 read-only, the image batch bound) and always through `record_statements`. It is never
-   used to assert query text or internal structure.
+   MC-20 read-only, the image batch bound, and — **fifth use, owner card A, 2026-09-21** — a
+   *refused-before-the-write* clause where a database constraint would otherwise reproduce the
+   refusal's whole observable, as in plan 8 C1(j)/C1(k)) and always through `record_statements`.
+   It is never used to assert query text or internal structure.
 8. **Named mutations name file and definition-vs-call-site; the row is run whole-file, never
    `-k`;** a mutation's observed-red set is recorded across the suite when the symbol is
    asserted in more than one file (earned three pipelines running).
+   A mutation ledger is scoped to a **test id**, never to a mutant: a test that moves re-runs its
+   mutations at the new surface, and a cell shared between two rows must be shown to reach the
+   **second** row's distinguishing assertion before one run may discharge both. "The dependency's
+   own suite covers it" and "it is the same code edit" are claims to be measured in this round,
+   never substitutes for a run. (Folds §9A lessons L-21, L-23 and L-28, which are one
+   proposition-conflation defect at three levels.)
 9. **Two-session rows** open the second session with `beyo_manager.models.database.get_db_session()`,
    synchronise with `asyncio.Event`/`asyncio.Barrier`, bound every wait with `asyncio.wait_for`,
    and always release and purge (precedent
@@ -803,6 +822,22 @@ Charter rules 1–17 apply in full. Project-specific rules, each binding on ever
     list. (The DB partial indexes are the one place a literal list stands — as an *inclusion* list of
     the three active states, fixed in the phase-1 migration.)
 
+17. **Relocating a row's test to a narrower surface is a criterion change, and criterion changes
+    are the owner's.** Moving a row's evidence from the boundary its outcome names to a cheaper
+    one — a command row proven at its parser, an endpoint row proven at a helper — changes what
+    the row claims even when the assertion text is identical. An implementer or tester that
+    judges a relocation necessary declares it and stops; the owner authorizes it, and the plan's
+    cell is amended in the same act. Earned: batch B2 review 1 B1/S1 (four rows proven at parser
+    scope) and batch B2 card 1 (plan 8 C4(m)'s one-file relocation, which the owner did
+    authorize). (§9A lesson L-20.)
+18. **Every phase pins the public signatures it registers.** A phase that adds a name to §6.5 or
+    §6.1 is complete only when some row in its own plan asserts that name's shape at its own
+    boundary — arity, the keys of what it returns, and the error it raises. A signature registered
+    but unpinned is how a plan cites a contract that never shipped. Earned: §9A lesson L-8,
+    explicitly unimplemented across ten phases and already the cause of batch B projection blocker
+    B1 (`StockDemandOutcomeEnum` was cited by two plans and existed in neither). Adopted as one
+    standing rule rather than one criterion row per phase (orchestrator, 2026-09-21).
+
 
 **The demand statement budget, measured 2026-09-21 (batch B2 review 1).** Exact counts, not bounds:
 all-new **8**, all-changed **7**, all-unchanged **5**, one-unknown-category **8**. Verified by
@@ -823,6 +858,19 @@ four review rounds is unlanded there, and the concrete debt is **94 criterion ro
 (`—`) mutation cell** — plan 8: 26, plan 9: 18, plan 10: 15, plan 11: 8, plan 12: 16, plan 13: 6,
 plan 13A: 5.
 
+**Batch C1 fold executed, 2026-09-21 (plans 8 and 11).** Order followed as prescribed: L-20
+first (→ §9 rule 17, then plan 8 §7), L-17's preamble half second (→ both §6 preambles; its
+outcome half found **no** arithmetic defect — the one candidate, plan 8 C4(k)'s `(8,0,0)`, is
+correct once the second item is specified as a copy of I, which is a fixture fold), then L-9,
+L-10, L-12, L-13, L-15, L-16, L-21, L-23, L-24, L-25, L-28, L-30. **32 mutation cells and 8
+fixture cells folded across the two plans**; 2 cells left deliberately blank with a labelled
+reason (plan 8 C3(d) class 2, plan 11 C5(b) class 3 known-unarmed). Owner-only lessons were not
+folded: L-29 became card C and is now applied; L-5 was checked and recorded as **not blocked**
+(`ValidationError` 422 is unambiguous in this repo — pydantic's own escaping a command reaches
+`run_service`'s generic handler and becomes a 500, so only `bm.errors.validation.ValidationError`
+can produce 422); L-2 resolved into §4's count note; L-17's outcome half found nothing. Six owner
+cards were raised and all six ruled the same day.
+
 **Fold order is not free.** L-20 lands **first** (it defines which cells an agent may touch), then
 L-17 (the projection called its batch-B instance "the single most important item"; plans 12/13/13A
 seed rows by ORM and raw SQL under the same `assert_stock_report_clean` obligation and carry no
@@ -837,7 +885,7 @@ preamble clause), then the rest.
 | L-5 | A row whose outcome is an error identity must pin the identity | OPEN (partly folded into 4, 6) | 8, 12, 13, 13A | **OUTCOME (owner)** + fixture |
 | L-6 | A plan must not require a file the repo's convention forbids | **APPLIED** (no forward target) | — | — |
 | L-7 | A fixture must make its own predicate the only reason the outcome holds | OPEN | **12** (`high = A1 B2 C3` is dense), 13, 13A | FIXTURE |
-| L-8 | Pin each phase's registered public signatures with a criterion | OPEN — *explicitly unimplemented*; already cost projection blocker B1 | §9 or §6.5 + one row per phase | **OUTCOME (owner)** or standing rule |
+| L-8 | Pin each phase's registered public signatures with a criterion | **APPLIED** (§9 **rule 18**, 2026-09-21 — adopted as one standing rule, not one row per phase) | — | — |
 | L-9 | Rule-17 rows carry the *rule* next to the literal | OPEN (folded into 4–7) | 8, 9, 13A | NOTE + mutation |
 | L-10 | Say "equivalent mutant"; do not name a defect that cannot exist | OPEN | **all of 8–13A — the 94 `—` cells** | MUTATION |
 | L-11 | A mutation against a dependency's comparison engine must be grounded in what that engine compares | OPEN | **10** (the AST registry guard C4(a)–(g)), 13A | MUTATION |
@@ -849,16 +897,16 @@ preamble clause), then the rest.
 | L-17 | A row's exact outcome is computed from its own fixture, side effects included | OPEN — **highest yield** | §6 preambles of **8, 9, 10, 11, 12, 13, 13A** | FIXTURE preamble + **outcome (owner)** where an outcome is arithmetically wrong |
 | L-18 | A ruling that amends one registry row amends its callers in the same act | **APPLIED** (both instances) | residual: not a §9 standing rule | NOTE |
 | L-19 | A mutation whose bite depends on a preamble condition repeats that condition in the cell | OPEN | 9, 10, 13A | MUTATION |
-| L-20 | **Relocating a row's test to a narrower surface is a criterion change, and criterion changes are the owner's** | OPEN — **land first** | §9 standing rule, then 8, 12, 13 | NOTE (authority boundary) |
-| L-21 | "The dependency's own suite covers it" never discharges a mutation cell | OPEN | §9 rule 8 + 8, 9, 13A | NOTE + mutation |
+| L-20 | **Relocating a row's test to a narrower surface is a criterion change, and criterion changes are the owner's** | **APPLIED** (§9 **rule 17** + plan 8 §7, 2026-09-21; landed first as planned) | residual: 12, 13 at their folds | NOTE (authority boundary) |
+| L-21 | "The dependency's own suite covers it" never discharges a mutation cell | **APPLIED** (§9 rule 8 amended 2026-09-21, the three-lesson cluster folded as one) | residual: 9, 13A cells | NOTE + mutation |
 | L-22 | Bound the shape you derived — no `≤` on a derived count | OPEN (the §9 statement budget landed; the cells did not) | **13A C5(d) `≤ 7`**, audit 9, 12 | **OUTCOME (owner)** |
-| L-23 | A mutation ledger is scoped to a **test id**, never to a mutant — a test that moves re-runs its mutations at the new surface | OPEN | §9 rule 8 + 8, 12, 13 | NOTE |
+| L-23 | A mutation ledger is scoped to a **test id**, never to a mutant — a test that moves re-runs its mutations at the new surface | **APPLIED** (§9 rule 8, same act) | residual: 12, 13 | NOTE |
 | L-24 | A bidirectional invariant needs one mutation per direction | OPEN | 13A C1/C2, 8 C3, 11 C6 | MUTATION |
 | L-25 | Name the arming *site*, and verify it is the site the row depends on | OPEN (residual — §6.1b landed, the verification clause did not) | §9 rule 8; 10, 11 (foreign sites) | NOTE + mutation |
 | L-26 | An absence instrument deserves one positive observation per project | OPEN | §9 rule 7; 9, 10, 12, 13A | NOTE + mutation |
 | L-27 | Route a declined mutation to the reviewer in the same round, not to a fold | OPEN | §3A / fix-prompt template | NOTE (process) |
-| L-28 | "Same code edit" is a claim to be measured, not asserted | OPEN | §9 rule 8 + every shared/mirror cell in 8–13A | NOTE + mutation |
-| L-29 | A fixture that models an environment cannot fail — write the premise as a criterion on the caller | OPEN | **8** (named by the lesson itself), 11, 13 | **OUTCOME (owner)** |
+| L-28 | "Same code edit" is a claim to be measured, not asserted | **APPLIED** (§9 rule 8, same act; every shared cell in 8 and 11 now says "both runs recorded") | residual: 9, 10, 12, 13, 13A | NOTE + mutation |
+| L-29 | A fixture that models an environment cannot fail — write the premise as a criterion on the caller | **APPLIED for 8** (owner card C, 2026-09-21 → plan 8 **C5(b)**, forceable form with a recorded `UNFORCEABLE` fallback) | residual: 13 | **OUTCOME (owner)** |
 | L-30 | Where a plan offers a choice of fixture, the criterion names the choice that keeps the row armed | OPEN | 8, 12, 13 | FIXTURE |
 | L-31 | A fold that replaces a vague mutation with a precise site must verify the site executes under the row's own fixture | OPEN as a standing rule (honoured once, in batch B2) | the fold protocol itself | NOTE (process) |
 
@@ -891,6 +939,16 @@ Both resolve contradictions the endpoint inventory found, and both are frontend-
    name the old seven-key shape are superseded and re-stated at the batch C fold.
 
 ## 10. Environment topology (verified 2026-09-19 by the planner; if reality disagrees, update here)
+
+**`client_id` order is not creation order (measured, 2026-09-21).** `IdentityMixin` mints
+`f"{prefix}_{ULID()}"` (`bm/models/base/identity.py:11`); `python-ulid` 3.0.0 fills the 80-bit
+randomness with `os.urandom` and keeps **no monotonic counter** (`ulid/__init__.py:120`). Two ids
+minted in the same millisecond therefore have random relative order — measured by the
+orchestrator over 2000 ids minted in a tight loop: **977 of 1999 consecutive pairs sorted out of
+order**, i.e. a coin flip. No fixture may assume the first row created sorts first; a criterion
+asserting an ascending-`client_id` or ascending-`item_id` order binds its labels by **sorting the
+real ids at runtime**. (Charter rule 17 — the shape is owned by a dependency. Folded into plan 8
+C4(k) and C6(h); every `ascending client_id` claim in §6.5 should be re-read against it.)
 
 - **Working directory** `backend/app/`; virtualenv `app/.venv` (activate, or prefix commands with
   `.venv/bin/`). Installed: SQLAlchemy 2.0.40, asyncpg 0.30.0 (the re-check's timeout shapes were
