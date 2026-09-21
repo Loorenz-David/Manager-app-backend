@@ -344,6 +344,7 @@ Only the actor named for a transition writes its row. **Since §3A (2026-09-19) 
 | 9 | Processed webhook: §14F F5 order, `early` reason, grouped per-column counter update, replay, one owning transaction | PENDING | 2026-09-19 | planner | rows 43, criteria 8; complex: yes (grouping, sorted locks) (round 9: 4 rows rewritten, +9 rows; owner card 1 fold 2026-09-21: +1 row, C1(e)) |
 | 10 | Task-state sync at S1–S9, the registry guard, three two-writer interleavings | PENDING | 2026-09-19 | planner | rows 35, criteria 7; complex: yes (nine-site sweep, two-session rows) (round 9: 1 row rewritten, +5 rows) |
 | 11 | Removal hooks (task, item, PRIMARY unlink) and the category guard on both item writers | **VERIFIED** | 2026-09-21 | orchestrator | rows 26, criteria 7; complex: yes (five existing commands, new locks) (round 9: +1 row; **batch C1 fold 2026-09-21: −1 row, C4(h) WITHDRAWN as unbuildable — owner card F**; 8 mutation + 4 fixture cells folded; cards B, E ruled); **VERIFIED 2026-09-21, batch C1 APPROVED** |
+| 8A | Assignment match preview: the shared acceptability evaluation (MC-21) extracted from phase 8, plus the read-only preview endpoint | **PLANNED** | 2026-09-21 | orchestrator | rows 20, criteria 6; complex: no (read-only; the risk is the refactor, guarded by phase 8's 67 armed rows). Intention §14G, round 10, additive. Runs **outside the batch machinery**: owner-run on Codex terra, projection → implement → review, no tester (§3B). Three owner cards ruled 2026-09-21 (C3(e), C3(f) authored; C5(a) amended); C6(f) withdrawn to a §7 note |
 | 12 | Priority, dense ordering, history records for user actions, the list endpoint | PENDING | 2026-09-19 | planner | rows 45, criteria 7; complex: yes (advisory lock, shift statements) |
 | 13 | Row deletion cascade, second self-heal trigger, assignment reads and compact serializers | PENDING | 2026-09-19 | planner | rows 19, criteria 6; complex: yes (cascade, lock order) (rounds 8–9: 2 rows rewritten; **batch C1 tester card 2, 2026-09-21: +1 row and +1 criterion, C6(a) — plan 8 C4(l)'s cross-shape clause moved here, the only phase where both shapes exist**) |
 | 13A | Scanner delete webhook: find-and-delete through the cascade, six carried questions (intention §14E) | PENDING | 2026-09-19 | planner | rows 37, criteria 7; complex: yes (multi-row cascade, deterministic contention rows); projection mandatory, not waivable (owner card 1 fold 2026-09-21: +1 row, C5(g)) |
@@ -376,6 +377,30 @@ owner card 2 because phase 8 cannot compare against an endpoint phase 13 builds.
 620 + 1, the addition verified as exactly one `^| C` line in `git diff` on plan 13; criteria
 99 → 100 because plan 13 gains a C6 group. No other row count moved — the tester edited no
 criterion cell (`git diff` over the criteria tables: 0 lines).
+
+**Totals re-derived by script, 2026-09-21 — and the long-running discrepancy is closed.**
+**713 criterion rows in 106 criteria across 16 plans** (plan 8A included). Per plan: 1 → 53/7 · 
+2 → 75/7 · 3 → 42/8 · 4 → 83/8 · 5 → 23/3 · 6 → 64/8 · 7 → 72/7 · 8 → 70/8 · 8A → 20/6 · 
+9 → 44/8 · 10 → 35/7 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 · 13A → 37/7 · 14 → 5/2.
+
+*Why this differs from the 615 → 620 → 621 figures carried since planning.* Those counted
+**table lines**; this counts **criterion rows**. Seven plans use a shorthand line that stands for
+several rows — `| C8(a)–C8(d) | … |` is one line and four criteria — and expanding them adds 62
+rows (2: +16 · 3: +6 · 4: +16 · 8: +6 · 8A: +3 · 12: +9 · 13: +6). The batch C1 investigation
+found this for plan 8 alone and reconciled it exactly (61 lines − 2 shorthand + 8 = 67, and 70
+after this batch's three authored rows). **The same cause explains the rest.**
+
+*One residual, owed.* Carrying the published chain forward gives 645; expanding shorthand gives
+707; the script measures **713**. The 6-row gap is not yet explained and is **owed at the batch
+C2 gate** — most likely rows added by folds that were never added to the published running total.
+Until then, prefer the derived figure over any carried one, and re-run the derivation rather than
+incrementing a number by hand. The script is trivial (match `^\| C\d+\([a-z]\)`, expand an
+`–C\d+\([a-z]\)` range, collect the `C\d+` group) and should be re-run at every gate.
+
+*Why this matters beyond bookkeeping.* Charter manifest property 3 requires every count to be
+derived, never typed. This entry replaces a hand-arithmetic note that was itself wrong — the
+orchestrator typed a total and a derivation that did not agree with each other, which is exactly
+the defect the rule exists to prevent.
 
 **Trace coverage (derived by the same script from the trace cells).** Ledger: M1 → 1, 3, 4, 8, 10,
 13, 13A · M2 → 9, 10, 11, 13A · M3 → 6, 9, 13A · M4 → 1, 6, 7, 8, 9, 12, 13, 13A · M5 → 5, 9, 12 ·
@@ -478,6 +503,17 @@ review finding.
 | `scanner_property_tables.py` | `WOOD_GROUPS`, `DRAWER_RANGES`, `WOOD_TYPE_KEY`, `WOOD_GROUP_KEY`, `DRAWERS_QTY_KEY`, `DRAWERS_RANGE_KEY`, `EXCLUDED_ITEM_PROPERTY_KEYS` (`qty_extensions`, `quantity`, `wood_group`, `drawers_range`), `SCANNER_SOURCE_COMMIT = "0d80bf2"`, `SCANNER_SOURCE_READ_ON = "2026-09-18"`, `validate_wood_groups(groups) -> None`, `validate_drawer_ranges(ranges) -> None` (both called at import), `wood_group_of_token(token) -> str \| None`, `drawer_range_of(stored: str) -> str \| None` |
 | `criteria_matcher.py` | `CriterionFailure` (frozen dataclass: `key: str`, `reason: StockCriteriaMismatchReasonEnum`); `build_item_property_bag(item) -> dict[str, str]`; `tokenize_property_value(value: str) -> list[str]`; `evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]` (sorted by key); `matches_stock_criteria(item, criteria) -> bool` |
 | `serializers.py` | `serialize_stock_report_item(row, *, category) -> dict`; `serialize_stock_task_assignment(assignment, *, item, task, images) -> dict`; `serialize_item_compact(item, *, images) -> dict`; `serialize_task_compact(task) -> dict` |
+
+**Phase 8A additions (2026-09-21, intention §14G / MC-21).** New pure module
+`bm/domain/stock_report/assignment_checks.py`: `AssignmentCheckResult`, `ADVISORY_CHECKS`,
+`PASS_BY_CONSTRUCTION_CHECKS`, `evaluate_assignment_checks`, `first_failed_check`; plus
+`StockAssignmentCheckResultEnum` in `enums.py` (`pass`, `fail`, `pass_by_construction`,
+`not_evaluated`). New queries module `bm/services/queries/stock_report/assignment_check_inputs.py`
+(`fetch_assignment_check_inputs`) and command `preview_stock_task_assignment_match.py`. **Removed
+from `create_stock_task_assignments.py`'s row:** `_phase3_reason` and the three `_lookup_*`
+helpers, which move to the shared modules above — MC-21 requires one implementation of the
+acceptability decision, consumed as a first failure by the command and as a whole list by the
+preview. Pinned by plan 8A's criteria (§9 rule 18).
 
 ### 6.1b Foreign load-bearing dependencies (owner, 2026-09-21 — lesson L-25)
 
@@ -637,6 +673,7 @@ tag `location-tracker-webhooks` (the existing `location_tracker.router` keeps it
 | `PATCH /api/v1/stock-report/items/{client_id}/priority-order` | `set_stock_report_item_priority_order` | ADMIN, MANAGER, SELLER | 12 |
 | `DELETE /api/v1/stock-report/items/{client_id}` | `delete_stock_report_item` | ADMIN, MANAGER | 13 |
 | `GET /api/v1/stock-report/items/{client_id}/assignments` | `list_stock_task_assignments` | ADMIN, MANAGER, WORKER, SELLER | 13 |
+| `POST /api/v1/stock-report/items/{client_id}/match-preview` | `preview_stock_task_assignment_match` | ADMIN, MANAGER, WORKER | **8A** |
 
 The three webhook routes take `Request`, read `await request.body()`, and build
 `ServiceContext(identity={}, incoming_data={"raw_body": raw, "headers": dict(request.headers)}, session=session)`
