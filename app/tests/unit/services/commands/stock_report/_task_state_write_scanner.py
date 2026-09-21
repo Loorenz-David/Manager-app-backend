@@ -8,13 +8,18 @@ guard"):
        (`x.state = ...`, `x.state: T = ...`, or `x.state` inside a tuple/list
        assignment target — `a, x.state = ...`);
     b. every `setattr(...)` call;
-    c. every `update(Task)` / `insert(Task)` call;
-    d. every `Task(...)` call carrying a `state=` keyword;
+    c. every `update(Task)` / `insert(Task)` call, including the table object
+       (`Task.__table__.update().values(state=...)` and `update(Task.__table__)`);
+    d. every `Task(...)` call carrying a `state=` keyword, including a dict
+       unpack (`Task(**{"state": ...})`);
     e. every call to `maybe_advance_task_to_working`, `maybe_reopen_task_to_working`,
        `maybe_evaluate_task_ready` or `_apply_step_transition`;
     f. every raw-SQL construct naming the `tasks` table — a `text(...)` call, or a
        `.execute(...)` call, whose literal argument mentions both `tasks` and
        `state` (owner, 2026-09-21, batch C2 review card 4).
+
+The same construct rules also cover `for task.state in ...`, `with ... as task.state`, and
+`builtins.setattr(task, "state", ...)`.
 
 **Collection is by construct, not by spelling** (owner, card 4): classes (c), (d)
 and (e) are collected **however their names are imported** — a plain name, or a
@@ -50,7 +55,7 @@ _HELPER_CALL_NAMES = frozenset(
 # against its expected spelling (class-(f) additions of `text`/`execute` are
 # resolved structurally, via attribute access or a direct call, not by import
 # alias — nobody imports `execute` as a bare name).
-_ALIASABLE_NAMES = frozenset({"update", "insert", "Task"} | _HELPER_CALL_NAMES)
+_ALIASABLE_NAMES = frozenset({"setattr", "update", "insert", "Task"} | _HELPER_CALL_NAMES)
 
 
 @dataclass(frozen=True)
@@ -125,6 +130,12 @@ def _iter_assign_targets(target: ast.AST):
         yield target
 
 
+def _dict_unpack_contains_keyword(node: ast.AST, keyword_name: str) -> bool:
+    return isinstance(node, ast.Dict) and any(
+        isinstance(key, ast.Constant) and key.value == keyword_name for key in node.keys
+    )
+
+
 class _FileVisitor(ast.NodeVisitor):
     def __init__(self, relpath: str, import_aliases: dict[str, str] | None = None):
         self.relpath = relpath
@@ -151,6 +162,40 @@ class _FileVisitor(ast.NodeVisitor):
             return func.attr
         return None
 
+    def _is_task_table_reference(self, node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "__table__"
+            and isinstance(node.value, ast.Name)
+            and self._resolve(node.value.id) == "Task"
+        )
+
+    def _is_task_table_write_chain(self, node: ast.Call) -> bool:
+        """Whether a chained call reaches Task.__table__.update/insert()."""
+        current: ast.AST = node.func.value if isinstance(node.func, ast.Attribute) else node
+        while isinstance(current, ast.Call) and isinstance(current.func, ast.Attribute):
+            if (
+                current.func.attr in {"update", "insert"}
+                and not current.args
+                and self._is_task_table_reference(current.func.value)
+            ):
+                return True
+            current = current.func.value
+        return False
+
+    def _record_attr_state_targets(self, target: ast.AST, lineno: int) -> None:
+        for target in _iter_assign_targets(target):
+            if isinstance(target, ast.Attribute) and target.attr == "state":
+                self.sites.append(
+                    WriteSite(
+                        self.relpath,
+                        lineno,
+                        "attr_state",
+                        self._enclosing(),
+                        f"{_unparse_safe(target.value)}.state",
+                    )
+                )
+
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
         self._function_stack.append(node.name)
         self.generic_visit(node)
@@ -163,52 +208,42 @@ class _FileVisitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
         for top_target in node.targets:
-            for target in _iter_assign_targets(top_target):
-                if isinstance(target, ast.Attribute) and target.attr == "state":
-                    self.sites.append(
-                        WriteSite(
-                            self.relpath,
-                            node.lineno,
-                            "attr_state",
-                            self._enclosing(),
-                            f"{_unparse_safe(target.value)}.state",
-                        )
-                    )
+            self._record_attr_state_targets(top_target, node.lineno)
         self.generic_visit(node)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:  # noqa: N802
-        target = node.target
-        if isinstance(target, ast.Attribute) and target.attr == "state":
-            self.sites.append(
-                WriteSite(
-                    self.relpath,
-                    node.lineno,
-                    "attr_state",
-                    self._enclosing(),
-                    f"{_unparse_safe(target.value)}.state",
-                )
-            )
+        self._record_attr_state_targets(node.target, node.lineno)
         self.generic_visit(node)
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:  # noqa: N802
-        target = node.target
-        if isinstance(target, ast.Attribute) and target.attr == "state":
-            self.sites.append(
-                WriteSite(
-                    self.relpath,
-                    node.lineno,
-                    "attr_state",
-                    self._enclosing(),
-                    f"{_unparse_safe(target.value)}.state",
-                )
-            )
+        self._record_attr_state_targets(node.target, node.lineno)
+        self.generic_visit(node)
+
+    def visit_For(self, node: ast.For) -> None:  # noqa: N802
+        self._record_attr_state_targets(node.target, node.lineno)
+        self.generic_visit(node)
+
+    def visit_AsyncFor(self, node: ast.AsyncFor) -> None:  # noqa: N802
+        self._record_attr_state_targets(node.target, node.lineno)
+        self.generic_visit(node)
+
+    def visit_With(self, node: ast.With) -> None:  # noqa: N802
+        for item in node.items:
+            if item.optional_vars is not None:
+                self._record_attr_state_targets(item.optional_vars, node.lineno)
+        self.generic_visit(node)
+
+    def visit_AsyncWith(self, node: ast.AsyncWith) -> None:  # noqa: N802
+        for item in node.items:
+            if item.optional_vars is not None:
+                self._record_attr_state_targets(item.optional_vars, node.lineno)
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         callee = self._resolve_callee(node.func)
         raw_callee_repr = _unparse_safe(node.func)
 
-        if isinstance(node.func, ast.Name) and node.func.id == "setattr":
+        if callee == "setattr":
             args_repr = ", ".join(_unparse_safe(arg) for arg in node.args[:2])
             self.sites.append(
                 WriteSite(self.relpath, node.lineno, "setattr", self._enclosing(), args_repr)
@@ -217,8 +252,13 @@ class _FileVisitor(ast.NodeVisitor):
         elif (
             callee in ("update", "insert")
             and node.args
-            and isinstance(node.args[0], ast.Name)
-            and self._resolve(node.args[0].id) == "Task"
+            and (
+                (
+                    isinstance(node.args[0], ast.Name)
+                    and self._resolve(node.args[0].id) == "Task"
+                )
+                or self._is_task_table_reference(node.args[0])
+            )
         ):
             self.sites.append(
                 WriteSite(
@@ -232,13 +272,35 @@ class _FileVisitor(ast.NodeVisitor):
 
         elif (
             callee == "Task"
-            and any(keyword.arg == "state" for keyword in node.keywords)
+            and (
+                any(keyword.arg == "state" for keyword in node.keywords)
+                or any(
+                    keyword.arg is None
+                    and _dict_unpack_contains_keyword(keyword.value, "state")
+                    for keyword in node.keywords
+                )
+            )
         ):
             self.sites.append(
                 WriteSite(
                     self.relpath,
                     node.lineno,
                     "task_ctor",
+                    self._enclosing(),
+                    f"{raw_callee_repr}(state=...)",
+                )
+            )
+
+        elif (
+            callee == "values"
+            and any(keyword.arg == "state" for keyword in node.keywords)
+            and self._is_task_table_write_chain(node)
+        ):
+            self.sites.append(
+                WriteSite(
+                    self.relpath,
+                    node.lineno,
+                    "update_or_insert_task",
                     self._enclosing(),
                     f"{raw_callee_repr}(state=...)",
                 )
@@ -290,7 +352,14 @@ def collect_write_sites() -> list[WriteSite]:
         visitor = _FileVisitor(relpath, aliases)
         visitor.visit(tree)
         sites.extend(visitor.sites)
-    return sites
+
+    # A chained table write visits both the outer `.values(...)` call and its
+    # inner `.update()` call. The registry is keyed by (path, line), so retain
+    # one collected construct per source line just as the guard's contract does.
+    unique_sites: dict[tuple[str, int], WriteSite] = {}
+    for site in sites:
+        unique_sites.setdefault(site.key, site)
+    return list(unique_sites.values())
 
 
 def _function_bodies_named(function_name: str):

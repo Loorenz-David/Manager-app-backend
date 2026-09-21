@@ -574,3 +574,32 @@ carrying all of batch C2's work byte-unchanged. **No re-take is owed on C2's
 account.** See the handoff's §14 addendum, which also records that `d38f3b3` swept
 this round's handoff and plan 9's entry into a phase-8A commit I did not author
 (reported, not undone; `git diff -- app/` still empty).
+
+**Implementer follow-up, 2026-09-21 (Codex, owner card R-1 / C4(k)).** Extended
+`_task_state_write_scanner.py` by construct, without changing production code or the
+registry: table-object updates (`Task.__table__.update()...values(state=...)` and
+`update(Task.__table__)`), `for`/`with` attribute targets, qualified
+`builtins.setattr`, and `Task(**{"state": ...})`. Chained table writes are reduced to
+one site per `(path, line)`, matching the registry key and avoiding a duplicate report
+for the inner `.update()` call. Corrected the guard test module docstring to name class
+(f), C4(i)/(j)/(k), and the four new forms (N-12).
+
+The authorized EOF plant in `update_task.py` contained six lines for the four construct
+families (two table spellings and two attribute-target spellings). The clean guard was
+`7 passed`; with all plants it failed on all six new lines and passed the other six
+checks. The four named collector mutations were run separately, each on the whole guard
+file and each observed red (`1 failed, 6 passed`): disabling table-object support removed
+lines 122/123, disabling `for`/`with` target handling removed 117/119, restoring the
+plain-name-only `setattr` branch removed 121, and restoring literal-keyword-only Task
+construction removed 124. Each mutation was reverted and proved with `git diff --quiet`;
+the plant was then reverted and independently proved clean. Mutation ledger:
+**4 declared / 4 executed / 4 red / 4 reverted**.
+
+Live-corpus grep over `app/beyo_manager/` and `app/scripts/` found zero instances of all
+four families; the existing `Task.__table__.update()` matches are under excluded tests.
+Lint passed with `ruff check` on both touched Python files. The required L4 at
+`BEYO_TEST_SLOT=r1` was **23 failed / 3668 passed / 1 skipped**: exactly the published
+21 IDs plus the two named non-main-slot `test_database_isolation` IDs, with both failure-ID
+diffs empty. Arithmetic reconciles as `23 = 21 + 2` and `23 + 3668 + 1 = 3692` collected
+tests. The checkpoint is not approved; see
+`handoffs/implementer/2026-09-21_card_R1_guard_extension_handoff.md`.

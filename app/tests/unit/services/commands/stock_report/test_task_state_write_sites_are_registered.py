@@ -3,9 +3,11 @@
 
 An AST sweep of `app/beyo_manager/**/*.py` and `app/scripts/**/*.py` (excluding
 `app/tests/**` and `app/migrations/**`) collects every site MC-2 names — a `.state`
-attribute write, a `setattr()` call, an `update(Task)`/`insert(Task)` call, a
-`Task(...)` constructor carrying `state=`, and a call to one of the four sync-adjacent
-helpers — and checks it against the checked-in registry
+attribute write (including `for`/`with` targets), a `setattr()` call (including
+`builtins.setattr`), an `update(Task)`/`insert(Task)` call (including the
+`Task.__table__` forms), a `Task(...)` constructor carrying `state=` (including a
+dict-unpacked keyword), a call to one of the four sync-adjacent helpers, and the
+raw-SQL `tasks`/`state` construct (class (f)) — and checks it against the checked-in registry
 (`task_state_write_site_registry.py`). C4(a) is this file's own control row: on the
 current tree, every collected site has a registry entry, every registry entry is
 still produced by the collector, every `task_write`'s named sync function(s) really
@@ -13,8 +15,11 @@ call `sync_task_stock_assignments`, and every `paused_driver`'s `new_state=` is
 literally `TaskStepStateEnum.PAUSED`.
 
 C4(b)-(h), the six required probes plus the staleness check, are the tester's
-arming work (master plan §3B: named mutations move to the tester); this file proves
-only that the instrument is correctly wired on the tree as shipped.
+arming work (master plan §3B: named mutations move to the tester). C4(i) is the
+helper-level negative; C4(j) covers the annotated, tuple-target, aliased and raw-SQL
+spellings; and C4(k) covers table-object writes, `for`/`with` targets,
+`builtins.setattr`, and a dict-unpacked constructor. This file proves the instrument
+is correctly wired on the tree as shipped.
 """
 
 from __future__ import annotations
