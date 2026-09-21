@@ -58,8 +58,9 @@ identity discovery — intention §14E E4 "the same engine as find-or-create"), 
    `async with maybe_begin(session)` — the session must have **no** open transaction on entry (assert
    `not session.in_transaction()` and raise `RuntimeError` otherwise: the autobegin trap of MC-9).
    Inside, in this order and with nothing before it:
-   1. `SELECT set_config('statement_timeout', :ms, true), set_config('lock_timeout', :ms, true)`
-      with `:ms = str(timeout_ms)`.
+   1. `SELECT set_config('statement_timeout', :statement_timeout_ms, true),
+      set_config('lock_timeout', :lock_timeout_ms, true)` with both binds set to
+      `str(timeout_ms)`. **Two distinct bind names, not one used twice** (O1).
    2. `SELECT 1 FROM workspaces WHERE client_id = :ws` → none → `LocationTrackerWebhookAuthError`.
    3. One `SELECT` of non-deleted categories of the workspace whose `lower(name)` is in the set of
       `item_category_key`; resolve in memory: exact `strip(name)` match first, else a unique
@@ -357,7 +358,8 @@ neither a mutation nor a fixture cell, so it is outside the fold authority grant
 >    set_config('lock_timeout', :lock_timeout_ms, true)` with both binds set to `str(timeout_ms)`.
 >    **Two distinct bind names, not one used twice** (O1).
 
-Until it is applied, the shipped code is right and the task text is stale.
+**APPLIED by the owner, 2026-09-21.** §5 task 2 step 1 now carries the two distinct bind
+names; the task text and the shipped code agree. N9/O1 is closed.
 
 ---
 
@@ -366,9 +368,8 @@ perimeter and was not re-verdicted: `git diff ff39a96..29b4395 -- app/beyo_manag
 neither `test_apply_stock_demand.py` nor `test_apply_stock_demand_timing.py` changed. **36/36
 stands** from review 1. Batch total 88/88; batch B2 — and with it batch B — is **APPROVED**.
 
-Outstanding against this plan, unchanged and still the owner's: **§5 task 2 step 1 contradicts the
-shipped code** after the O1 decision (review 1 N9); the replacement text is in review 1 §8 item 1
-and repeated above in this log. Notes N3 (C1(f)'s unasserted "nothing written" half — equivalent),
+Outstanding against this plan: **§5 task 2 step 1 — CLOSED 2026-09-21**, the owner applied the
+replacement text (two distinct bind names), so N9/O1 no longer stands. Notes N3 (C1(f)'s unasserted "nothing written" half — equivalent),
 N5/CF-2 (MC-4's sorted VALUES has no test that can fail — owner card 1), N6 (C6(b) carries one
 statement of slack) and N7/CF-5 (C6 and C7(a) are implementation-coupled by design) are carried
 forward unchanged.

@@ -105,6 +105,7 @@ planted.
 | C1(b) | wrong key | 401 | — | M7 |
 | C1(c) | workspace setting names no workspace | 401 | — | MC-8 step 4 |
 | C1(d) | wrong key **and** malformed body | 401 (not 422) | parse first | MC-8 order |
+| C1(e) | valid `x-api-key` and a valid body naming a live assignment, but the workspace setting blank (`"   "`) | 401 `Unauthorized.`; **zero statements issued** (the MC-9 statement listener) — the refusal happens in the verifier, before any DB read; the assignment untouched; no event. Run the twin with the API key blank instead | `webhook_verifier.py` (definition site), each run separately: (i) delete the `workspace_id is None or not workspace_id.strip()` guard → the blank id is returned, the command runs and issues at least the workspace `SELECT` → the **zero-statement** clause reddens even if the request still ends 401; (ii) delete the `api_key` guard → same shape | MC-8 step 2; batch B2 review 1 N1, CF-3, owner card 1. Measured 2026-09-21: with guard (i) deleted the whole of batch B stays green, because phase 7's demand path happens to refuse a blank workspace downstream — the zero-statement clause is what makes the guard observable on this phase's path |
 | C2(a) | `b"{}"` | 422 | — | MC-8 |
 | C2(b) | `b"[]"` | 422 | accept → 200 | MC-8 (U21) |
 | C2(c) | `["0000612"]` (entry not an object) | 422 | — | MC-8 |
@@ -146,8 +147,9 @@ planted.
 
 ## 7. Notes
 
-- Sizing: 42 criterion rows in 8 criteria; `complex: yes`. (Counts re-derived by script after the
+- Sizing: 43 criterion rows in 8 criteria; `complex: yes`. (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
+- **Owner card 1 fold, 2026-09-21.** The count above is the previously derived count **+1**: exactly one criterion row was added to this plan by that fold, verified as a single `^+| C` line in `git diff` (not re-derived by a new script — the published totals and my regex disagree on row shape, and a typed count is the defect this project keeps finding).
 - The grouped entry point is the one sanctioned extension of `_move_assignment.py` after phase 4;
   it must call the same guarded-statement builder and the same repair routine (a second copy is a
   review finding).
@@ -161,5 +163,7 @@ planted.
   non-zero deltas; the repair-record rule is unchanged (one record per column actually wrong).
 
 ## 8. Review log
+
+**Owner, 2026-09-21 — criterion row authored (batch B2 card 1, CF-3).** **C1(e)** added: the shared verifier must refuse a blank workspace setting (or blank API key) *before any DB read*. **No test exists yet — owed by this phase's implementation round.** The reviewer measured that deleting this guard leaves the whole of batch B green, because phase 7's demand path refuses a blank workspace a moment later; that accidental backstop is not guaranteed on this phase's path. The row's **zero-statement** clause, not the 401, is what makes the guard observable — a 401 alone would let the mutation stay equivalent.
 
 (empty)

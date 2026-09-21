@@ -615,8 +615,9 @@ async def test_c2_c_second_upward_drift_survives_a_subtracting_move(db_session):
     assert await _fresh_goal(db_session, goal.client_id) == 5
     assert await _repair_records(db_session, seeded.workspace.client_id) == []
     divergences = await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
-    goal_divergences = [d for d in divergences if d["kind"] == "goal_total"]
-    assert goal_divergences == [
+    # C2(e) asserts "exactly one divergence" over the whole list, so the list is read
+    # unfiltered (batch B1 re-review N15: the unfiltered form was measured to pass).
+    assert divergences == [
         {
             "kind": "goal_total",
             "client_id": goal.client_id,

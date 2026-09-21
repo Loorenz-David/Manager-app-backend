@@ -165,6 +165,7 @@ by a fresh `SELECT`.
 | C7(b) | `MV(awaiting → resolved)` with `actor_user_id = None` | `updated_by_id IS NULL`, `updated_at == t0` | stamp a fake system user | MC-17 (null = Scanner) |
 | C7(c) | A with prior `updated_by_id = X`; `MV(in_queue → DELETE)` with actor U | `deleted_by_id == U`, `deleted_at == t0`, `updated_by_id` still `X` | stamp `updated_*` on delete | MC-17 (U12) |
 | C7(d) | C1(d)'s move (`MV(in_queue → in_progress)`, actor U, `now = t0`), with R's `updated_at` and `updated_by_id` first set to known non-null values (`t_seed`, X) by raw SQL | R's `updated_at`/`updated_by_id` unchanged | stamp the row on a counter move | MC-17 "any counter move: unchanged" |
+| C8(a) | C1(s)'s fixture (`MV(in_queue → resolved_early)`) with R carrying **both** `priority = HIGH` and `priority_order = 1` (both, or `priority_order_nullness` fails the clean assertion for an unrelated reason) | the `stock_report_item:updated` payload carries `"priority": "high"` — the enum's **value**, a JSON string — and `"priority_order": 1`; never a `StockReportPriorityEnum` member | `_events.py` (definition site): `"priority": priority.value if priority is not None else None` → `"priority": priority` → the payload carries the enum member instead of the word → reddens exactly `test_c1_s_in_queue_to_resolved_early` (measured 2026-09-21, batch B1 fix 1: 1 failed / 58 passed; reverted, checksum-confirmed) | MC-19 payload block (`priority`: `"high"\|"medium"\|"low"\|null`); batch B1 review S3, owner card 1 |
 
 **Required ledger row (charter rule 15, §12A (e)):** plant `from`'s delta as `−2q` in
 `_move_assignment.py` (definition site). Expected: every C1 ✓ row from a counted state still
@@ -173,8 +174,9 @@ passes the counter and check assertions (self-heal) and **reddens only on the re
 
 ## 7. Notes
 
-- Sizing: 62 criterion rows in 7 criteria; `complex: yes`. (Counts re-derived by script after the
+- Sizing: 63 criterion rows in 8 criteria; `complex: yes`. (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
+- **Owner card 1 fold, 2026-09-21.** The count above is the previously derived count **+1**: exactly one criterion row was added to this plan by that fold, verified as a single `^+| C` line in `git diff` (not re-derived by a new script — the published totals and my regex disagree on row shape, and a typed count is the defect this project keeps finding).
 - C1(h)–(p) mirror rows carry `—` because C1(d)–(g)'s mutations apply to the same statement; rule 2
   still wants each cell as its own row (the table is total).
 - Round 9 (2026-09-19): the table in task 1 replaces MC-1's five-state table (§14C C47); C1(s)–(u),
@@ -187,6 +189,8 @@ passes the counter and check assertions (self-heal) and **reddens only on the re
   locks and rolls back or purges.
 
 ## 8. Review log
+
+**Owner, 2026-09-21 — criterion row authored (batch B1 re-review card 1).** **C8(a)** added: MC-19's `:updated` payload must spell `priority` as the enum's *value*. The row is born satisfied — `test_c1_s_in_queue_to_resolved_early` already asserts `priority: "high"`, and the named mutation was run and measured red in batch B1 fix 1 (1 failed / 58 passed, reverted and checksum-confirmed). No implementation is owed. The row converts a candidate recorded in this log into an obligation, so a future tidy of the test file cannot silently delete the guard.
 
 **Implementer, 2026-09-21 (batch B1-implement-1, tree `e50807b`).** Built `_move_assignment.py`
 (the total allowed-move table driven off `ACTIVE_ASSIGNMENT_STATES`/`TERMINAL_ASSIGNMENT_STATES`

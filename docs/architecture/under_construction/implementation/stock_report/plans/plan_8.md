@@ -143,6 +143,7 @@ dispatch. Every success row ends with `assert_stock_report_clean`.
 | C4(j) | any creation | A `created_by_id == U`, `updated_by_id IS NULL`, `updated_at IS NULL` | stamp `updated_*` on creation | MC-17 (U12) |
 | C4(k) | two entries on R (two tasks/items) | both created; `(8, 0, 0)`; response lists both in ascending `item_id` | — | MC-13 phase 5 order |
 | C4(l) | response shape | each element has exactly the seven keys of task 2 | — | §9 |
+| C4(m) | **Inherited from phase 7 (the demand path), not this phase's own surface — see §7.** `AD([(category, properties, q)])` creating a new row, then a second `AD` changing that row's `quantity_requested` | after the create: `created_by_id IS NULL`, `updated_by_id IS NULL`, `updated_at IS NULL`. After the quantity change: `updated_by_id` and `updated_at` **still NULL** (unchanged), `quantity_requested` = the new value | `apply_stock_demand.py` (definition site), two sites, each run separately: (i) add `"created_by_id": <any non-NULL user id>` to the step-5 INSERT `values` dict → the create half reddens; (ii) extend the step-7 raw `UPDATE stock_report_items AS r SET quantity_requested = v.q` with `, updated_at = now(), updated_by_id = :actor` → the change half reddens | MC-17 rows "Demand creates a row" and "Demand changes `quantity_requested`"; batch B2 review 1 N4, CF-1, owner card 1 |
 | C5(a) | two sessions, each `CR([I on R])` and `CR([I on R2])` with different tasks (same item, two rows), barrier-released after parse | exactly one active assignment on I; the losing call raises `StockAssignmentRefused` with `item_already_assigned`; the winner's counters correct on its row; the loser's row untouched | drop the Item lock (phase 2) → both pass the pre-check → one hits the unique index (500 or the backstop) | MC-4 error contract, M4 |
 | C6(a) | A `in_queue` `q = 4` via `CR`; `DL([A])` | counters `(0, 0, 0)`; A `is_deleted true`, `deleted_by_id == U`, `deleted_at == ctx.now`; flag false; events `[stock_task_assignment:deleted {state: in_queue}, stock_report_item:updated]` | — | §9 "assignment deletion", MC-14 |
 | C6(b) | A `awaiting` credited to G (`G == 4`); `DL([A])` | `G == 0`; `mem IS NULL` | — | MC-5 row 5 |
@@ -163,8 +164,10 @@ dispatch. Every success row ends with `assert_stock_report_clean`.
 
 ## 7. Notes
 
-- Sizing: 65 criterion rows in 8 criteria; `complex: yes`. (Counts re-derived by script after the
+- Sizing: 66 criterion rows in 8 criteria; `complex: yes`. (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
+- **Owner card 1 fold, 2026-09-21.** The count above is the previously derived count **+1**: exactly one criterion row was added to this plan by that fold, verified as a single `^+| C` line in `git diff` (not re-derived by a new script — the published totals and my regex disagree on row shape, and a typed count is the defect this project keeps finding).
+- **C4(m) is inherited debt, not this phase's own surface.** Its fixture and both named mutations live in `apply_stock_demand.py` (phase 7's perimeter), because the MC-17 demand-authorship cells were shipped correctly in batch B2 and asserted by nothing (review 1 N4 / CF-1), and phases 6–7 are already VERIFIED — adding the row there would reopen a closed gate. The batch-B2 reviewer routed it here as the next round with capacity. **This phase's perimeter is therefore extended by one file, `apply_stock_demand.py`, for this row only**; the test belongs in the demand test file, not in this phase's own.
 - Round 9 (2026-09-19): C1(p)–(u) added for `already_processed_by_scanner` (its two adjacent pairs
   in MC-13's order are each a row); C6(i) added for deleting a `resolved_early` assignment. The
   reason vocabulary of `StockAssignmentRefused` is closed and registered in master plan §6.4. In a
@@ -179,5 +182,7 @@ dispatch. Every success row ends with `assert_stock_report_clean`.
   fixtures stay as they are (they test the operation directly).
 
 ## 8. Review log
+
+**Owner, 2026-09-21 — criterion row authored (batch B2 card 1, CF-1).** **C4(m)** added: the demand path must leave `created_by_id` and `updated_*` NULL when it creates a row, and `updated_*` unchanged when it changes `quantity_requested` (MC-17). **No test exists yet — this row is owed by this phase's implementation round.** See §7 for the one-file perimeter extension it carries: the code under test is phase 7's, which is VERIFIED, so the row could not be placed in plan 6 or 7 without reopening a closed gate.
 
 (empty)
