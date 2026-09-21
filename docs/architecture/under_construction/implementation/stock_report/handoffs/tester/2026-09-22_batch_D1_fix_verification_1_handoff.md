@@ -20,7 +20,7 @@ question, not a production defect.
 Prompt: `prompts/tester/2026-09-22_batch_D1_fix_verification_1.md`.
 Tester checkpoint: **`82d96e4`** — the commit carrying the two test files, the plan 13 Review
 log entry and this handoff. The SHA is filled in by a follow-up docs-only commit, because a
-commit cannot contain its own hash and amending would rewrite it again (see §7 item 7).
+commit cannot contain its own hash and amending would rewrite it again (see §7 item 6).
 Implementer checkpoint consumed: **`b6cbbb9`**. Review round 1 tree: **`4b90bad`**.
 
 ---
