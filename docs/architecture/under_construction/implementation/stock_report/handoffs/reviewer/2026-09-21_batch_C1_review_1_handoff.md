@@ -89,6 +89,7 @@ no file that survives this session.
 | Check | Result |
 |---|---|
 | Intention `planning/intention.md` status header | `RATIFIED` (round 9, 2026-09-19) — **pass** |
+| Intention sections read and used as the semantic authority | §5A **MC-1/MC-16** (the predicate table — B1's authority), §5B **MC-14** in full (the hook table, "the find-or-create guard, made exact", callers, lock order), §9C **MC-12/MC-13**, §9D **MC-19**, §9E **MC-18**, **§14F F9**. (The review prompt named `SR/intention.md`, which does not exist; the orchestrator corrected the path mid-session. I had already located the file and this review was built on it throughout — no judgment call was made without it.) `planning/scanner_source_evidence.md` and `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` read and found to bear on this batch only through the contrast cited in S1 — both describe the Scanner surface, not the two assignment endpoints |
 | Master plan §4A batch C1 | `TESTED`; A, B1, B2 `APPROVED` — **pass** |
 | Tree | `a9b734f`, `git status --porcelain` empty at entry and at exit |
 | `git diff 6eaf2d3..8c60fb0 -- app/beyo_manager/` | empty (re-run, one command, doctrine's first check) |
@@ -219,6 +220,12 @@ dumped -> {'entries': [{'stock_report_item_id': 'a', 'task_id': 'b', 'item_id': 
 boundary, which is the plan's own fixture shorthand — the row is satisfied and I marked it PASS.
 The contract it serves is not. Both the implementer's §8 item 3 and the tester's candidate
 criterion 5 describe this as "FastAPI's own validation error"; it is not an error at all (note N5).
+
+**Why the contract says what it says.** The intention distinguishes the two surfaces
+deliberately: `docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md` row 9 records
+"unknown fields are ignored" for the **Scanner** webhooks, while MC-13 writes "→ 422 (a local API,
+so strict)" for this one. The shipped router silently applies the webhook convention to the local
+API — which is exactly the divergence the parenthetical was written to prevent.
 
 **Suggested correction.** `model_config = ConfigDict(extra="forbid")` on the three router body
 models, or drop them in favour of the registered request classes. `min_length=1` on the router's
@@ -400,6 +407,18 @@ So the next re-review can spend its budget elsewhere.
   two parametrized into 3 and 2), race 2, delete 11, task_side 4, item_side 8, guard 13, locks 2,
   ser 4, router 10, demand 1 = **95**. Three candidate criteria and three rule-18 pins declared;
   **zero silent orphans**.
+- **The category guard's placement is ratified, not a judgment call.** Intention §5B MC-14's
+  "the find-or-create guard, made exact" bullet prescribes the placement verbatim: "before its
+  first write to `existing` (the `_DIRECT_FIELDS` `setattr` loop)". The implementer reported this
+  as an undeclared judgment call and the tester carried it as candidate criterion 4; both were
+  being more modest than the authority requires. The code matches the intention in **both**
+  writers. That raises the stakes of the candidate criterion rather than lowering them — the
+  uncovered case ("category change plus another field in one request") guards a *ratified*
+  placement that no row and no test currently observes. I agree with both agents that nothing
+  would catch a regression; the suggested row in the tester's §8 item 4 is the right shape.
+  MC-14 also confirms the two preconditions B1 depends on: "the item's tasks are untouched" (P31)
+  on item deletion, and the task-deletion hook touching assignments only — so in both cases the
+  `TaskItem` link survives and `_lookup_primary_pairs` still returns the pair.
 - Every `EQUIVALENT` I re-derived from the code is genuinely equivalent: C7(b) (a phase-3 raise
   precedes every dispatch statement and `events` is empty there, so no placement can fail the row);
   C4(k) (`:244` and `:309` sort twice); C6(c)/C6(i) (the `deltas` guard and the coalescer's
