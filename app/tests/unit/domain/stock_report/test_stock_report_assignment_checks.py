@@ -1,18 +1,19 @@
-from types import SimpleNamespace
-
 from beyo_manager.domain.stock_report.assignment_checks import (
     evaluate_assignment_checks,
     first_failed_check,
 )
 from beyo_manager.domain.stock_report.enums import StockAssignmentCheckResultEnum as R
 from beyo_manager.domain.tasks.enums import TaskStateEnum
+from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
+from beyo_manager.models.tables.tasks.task import Task
 
 
 def test_assignment_checks_returns_all_results_in_precedence_order():
     results = evaluate_assignment_checks(
-        row=SimpleNamespace(is_deleted=False, item_category_id="category-1"),
-        task=SimpleNamespace(is_deleted=False, state=TaskStateEnum.FAILED),
-        item=SimpleNamespace(is_deleted=False, item_category_id="category-2"),
+        row=StockReportItem(is_deleted=False, item_category_id="category-1"),
+        task=Task(is_deleted=False, state=TaskStateEnum.FAILED),
+        item=Item(is_deleted=False, item_category_id="category-2"),
         task_id="task-1",
         item_id="item-1",
         primary_pairs=set(),

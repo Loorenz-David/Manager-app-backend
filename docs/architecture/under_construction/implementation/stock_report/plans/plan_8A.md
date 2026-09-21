@@ -477,3 +477,24 @@ ruling (criterion-row authorship is reserved — master plan §3B):
   `6df549d436ade66e8a2fb254455953f4b9161342b73b14054bd0d822f82155ed`.
 - Full evidence, mutation sites, proposed backfills, perimeter, and the two owner questions are in
   `handoffs/implementer/2026-09-21_phase_8A_implement_1_handoff.md`.
+
+### 2026-09-21 — fix round 1 — Codex
+
+- Closed P8A-R1-04 by replacing C1(b)'s `SimpleNamespace` stand-ins with transient,
+  un-persisted `StockReportItem`, `Task`, and `Item` instances. The evaluator inputs and all
+  nine result/order assertions are otherwise unchanged; no production code was changed.
+- The rebuilt C1(b) file passed: `1 passed`. The named early-return mutation in
+  `app/beyo_manager/domain/stock_report/assignment_checks.py:evaluate_assignment_checks`
+  reddened the same check-name assertion (`1 failed`; the returned list stopped at
+  `item_not_task_primary`). The mutation was reverted and
+  `git diff --quiet -- app/beyo_manager/domain/stock_report/assignment_checks.py` returned 0.
+- Lint passed: `ruff check tests/unit/domain/stock_report/test_stock_report_assignment_checks.py`.
+- One required L4 under `BEYO_TEST_SLOT=a8`:
+  `23 failed, 3661 passed, 1 skipped` (3685 collected; arithmetic `23 + 3661 + 1`).
+  Current-minus-published failure IDs are exactly
+  `test_database_isolation.py::test_worker_name_resolution[None-None-beyo_test_main_main]`
+  and `test_database_isolation.py::test_worker_name_resolution_uses_xdist_worker`.
+  Published-minus-current is empty. The two slot-sensitive isolation failures are the known
+  non-defects from the review ruling; the published 21-ID set is otherwise identical.
+- No Architecture Graph delta was needed: this was a test-fixture correction within the existing
+  evaluator boundary.
