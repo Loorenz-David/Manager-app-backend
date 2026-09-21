@@ -380,3 +380,70 @@ to build).
 `app/tests/unit/services/commands/stock_report/test_items_processed_request.py`.
 `sync_task_stock_assignments.py` (plan 10's file) is also touched, for F-1 — see
 plan 10's entry.
+
+**Reviewer, 2026-09-21 (batch C2 re-review, round 2, Opus). Verdict: APPROVED for
+plan 9 — 45/45 PASS, 0 FAIL, 0 NOT_VERIFIED.** Handoff
+`handoffs/reviewer/2026-09-21_batch_C2_review_2_handoff.md`. Delta-scoped per the
+charter review protocol; round 1's 44 settled rows not re-verified (the only plan-9
+file change is `test_process_items_processed.py`, +93 lines, **zero deletions**).
+Perimeter verified against the five checkpoint commits: exact match to the declared
+eight files, nothing outside, no criterion cell edited (`d72f2e9` = 180 insertions,
+0 deletions across both plans).
+
+**C8(d) — PASS, was NOT_VERIFIED.** Built to the **owner's restated cell**, not the
+original: the fixture is a terminal (`resolved`) assignment via
+`_create_at([AWAITING, RESOLVED])`, which is exactly what card 3 restated; the
+unproducible `in_progress` example is gone. The declared mutation (remove
+`_assert_allowed_move`) is tree-matched and consumed, and its reported `KeyError`
+shape corroborated by reading (`_assert_allowed_move` returns on the `'='` cell at
+`:64`, so the write proceeds and `_COUNTER_COLUMN[RESOLVED_EARLY]` raises).
+**Second sub-check armed by me** (charter rule 12 — the row has two sub-checks and
+the round declared one mutation): moving `_assert_allowed_move` to *after*
+`assignment.state = target` gives `1 failed, 42 passed`, reddening exactly
+`test_c8d_…` on `RESOLVED_EARLY != RESOLVED`. So the "nothing is written" clause —
+the one F-4 called load-bearing — genuinely discriminates. Reverted, md5
+`b5089815aa87550eaa2c56cfd204d0fa` before and after.
+
+**N-5's three production additions judged explicitly** (the re-review prompt's
+first ask). All three mirror `move_assignment` faithfully; none reaches a published
+contract. (i) The `from_state == target` short-circuit is the `'='` cell and nothing
+else — the computed target makes it true for exactly one state, `resolved_early`,
+and every other terminal state falls through to `_assert_allowed_move` and raises;
+it is **unreachable from the webhook** (`process_items_processed:139` filters to
+`ACTIVE_ASSIGNMENT_STATES`). (ii) `if not moved: return []` is safe: the caller never
+passes an empty group, and `_apply_counter_delta`'s `session.execute` would autoflush
+anything the skipped flush would have. (iii) The zero-delta `:updated` guard is
+**aligned with ratified semantics, not a deviation** — MC-19's own net-change rule
+(`_events.py:53-93`) already drops a `:updated` whose payload equals the row's
+initial values, and no consumer depends on the event arriving unconditionally.
+
+**Measured, not reasoned — the three mutant combinations** (whole-file runs, slot
+`rv2`): remove `return []` alone → **43 passed**; remove the zero-delta guard alone
+→ **43 passed**; remove **both** → **1 failed, 42 passed**
+(`test_resolve_processed_group_short_circuits_an_assignment_already_at_target`).
+The pair is **jointly load-bearing and individually equivalent** — the "guarded
+twice, so no single-site mutant exists" shape. They did **not** ship unguarded; one
+declared test discriminates the pair, and what was missing was only the record of
+which mutant bites. Lesson **L-36**. Two notes carried: **N-7**, the zero-delta
+branch is unreachable-false at this site (`ck_stock_task_assignments_quantity_positive`
+forbids an all-zero delta with `moved` non-empty) — correct to keep, recorded so no
+future round spends a mutation on it (lesson **L-37**); **N-8**, the N-5 test's
+docstring attributes the empty return to the zero-delta guard when it is the
+`if not moved` early return (the L-33 family at its smallest).
+
+**N-1's disposition is true at the site**, not a paraphrase: the cited
+`test_c3g_outer_whitespace_matches_and_echoes_untouched` exists at
+`test_process_items_processed.py:698`. **N-13 (new, carried):**
+`process_items_processed` sets `outcomes[index] = "resolved"` *before* calling
+`resolve_processed_group`, so if the short-circuit ever fired for a webhook entry
+Scanner would be told "resolved" for an assignment nothing wrote — unreachable
+today, worth a call-site comment for the next caller.
+
+**Evidence policy:** no L4 taken. Pre-run authorization line — *narrower evidence is
+sufficient because all eight batch-C2 files are byte-identical to `d3c93a3`, whose
+L4 the orchestrator took on a clean tree, and the only `app/` delta to my tree is
+phase 8A's, disjoint from C2's perimeter and from every import radius my hypotheses
+reach.* ⚠ A foreign commit, `df09143` (phase 8A, owner ruling round 3), landed
+during the session and withdraws one parametrized case, so the gate stamp `3669` no
+longer describes the tree — **the approval-gate L4 must be re-taken; expect 3668**,
+23-ID set unchanged. Reported, not acted on.
