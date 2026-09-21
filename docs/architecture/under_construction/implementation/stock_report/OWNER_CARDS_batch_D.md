@@ -279,6 +279,68 @@ Grouped because each is a sentence, none blocks anything, and all three are your
    where none does.
 
 
+---
+
+## Card D-8 — the "row deleted" announcement is pinned by nothing (reviewer's R-1)
+
+**Class:** criterion row. **Yours to author.** Recommendation: **yes, add it.**
+
+This batch created `build_stock_report_item_deleted_event` and I registered it in §6.5 at the D1
+gate. **§9 rule 18 says every registered public signature must be pinned by a row in its own
+plan, and this one is pinned by nothing.** The reviewer proved it rather than asserting it: it
+changed the announcement's `extra` block from `{}` to junk and ran the entire deletion test file
+— **every test passed.** Two references exist in the tree and neither reads `extra`.
+
+So a later change could start shipping fields the frontend never agreed to, or drop the empty
+block a renderer relies on, and nothing would notice. The guard is one assertion in a test file
+that already captures these events.
+
+**Rule 18 exists because of exactly this**, and this is its first violation since it was written.
+Worth noting as a process lesson in its own right: *registering a signature should emit a pin
+obligation at the same moment* — I registered it and did not check that anything pinned it.
+
+**On silence:** the row stays unpinned and is recorded as a finding, never as coverage.
+
+---
+
+## Card D-9 — seven statements address a row by id with no workspace term (reviewer's R-2)
+
+**Class:** production, but **no behaviour change and nothing is wrong today.** Recommendation:
+**yes, but as a follow-up after D — not inside this batch.**
+
+Both the tester and the reviewer raised this independently, and the reviewer found it is **seven
+statements, not the four I noticed**: five in the deletion cascade (assignment `SELECT`, counters
+`SELECT`, position `SELECT`, row soft-delete, history soft-delete) and two in the priority
+commands (the mover `UPDATE`, the serialize re-read).
+
+**No tenancy hole exists.** The caller has already resolved and locked the row by workspace and
+`client_id` is a globally unique prefixed ULID. The problem is legibility: *the same function
+threads `workspace_id` into three of its statements and omits it from five others*, so no reader
+can tell which omission is deliberate. This project has already repaired exactly this shape once
+(batch B1 added `Task.workspace_id` to `set_task_stock_flag`).
+
+Seven one-line additions; the existing suite staying green is the proof of inertness.
+
+---
+
+## Card D-10 — eight tests answer to no rule (reviewer's R-3)
+
+**Class:** plan. Recommendation: **fold four, delete three, and decide the fifth with them.**
+
+Five tests were declared as candidates by the implementer and carried unchanged by the tester;
+the reviewer found **three more** that re-check at the HTTP layer something two existing rows
+already prove one layer down. None is credited against any row, so none inflates coverage — but
+they are surface nobody is assigned to keep honest.
+
+The reviewer's recommendation, which I endorse: **fold the four request-body guards** (unknown
+fields ×2, an explicit `null` priority, an absent filter) because they guard a defect this project
+actually shipped once (batch C1's S1), and **drop the three HTTP-layer duplicates.**
+
+**The lesson under it is the one worth keeping:** *a candidate test must be adopted or deleted in
+the round that creates it.* These have now been deferred twice and the question comes back bigger
+each time.
+
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:
