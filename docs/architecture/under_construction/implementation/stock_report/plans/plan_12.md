@@ -76,7 +76,7 @@ routes), `app/tests/unit/routers/api_v1/test_stock_report_router.py` (twelve cel
    workspace; categories batch-loaded in one query (deleted categories included by id, so a deleted
    category still serializes its name); `{"stock_report_items": [...]}` — no pagination key.
 5. `serialize_stock_report_item(row, *, category)`: `client_id`, `item_category {client_id, name,
-   major_category}`, `properties` (stored, normalized), `properties_signature`, the four quantities,
+   major_category, **image_url**}`, `properties` (stored, normalized), `properties_signature`, the four quantities,
    `priority`, `priority_order`, `created_at`, `updated_at` (ISO UTC), `created_by_id`, `updated_by_id`.
 6. Router: three routes; role lists per master plan §6.6.
 7. Tests first from the table.
@@ -172,3 +172,33 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 ## 8. Review log
 
 (empty)
+
+
+---
+
+## Review log — owner addition, 2026-09-21: `item_category.image_url`
+
+**The owner asked for the item category's `image_url` to surface on stock-report instances — a
+promise already made to the frontend.** Added to `serialize_stock_report_item`'s `item_category`
+block above, so the nested shape is now **four** keys: `client_id`, `name`, `major_category`,
+`image_url`.
+
+**It lands here rather than as a post-batch patch, and that is the whole point.** The owner
+expected to bolt this on after batch D closed, which would have meant editing an APPROVED phase —
+an owner decision plus a re-gate. It does not: `serialize_stock_report_item` is **phase 12's own
+new function**, unwritten today, and it already receives the resolved `category` object as a
+keyword argument. So there is no join to add, no query to change, and no approved code to reopen —
+it is one key in a dict this phase is writing from scratch, and it gets a criterion row and a test
+like everything else in the phase.
+
+`ItemCategory.image_url` is `Mapped[str | None]`, `String(1024)`, nullable
+(`models/tables/items/item_category.py:23`), so the key is `str | None` and **the serializer must
+emit it as `None`, never omit it** — an absent key and a null key are different things to a
+frontend renderer, and the row below pins the key's presence, not just its value.
+
+**This row is armable and must be armed:** a mutation dropping `image_url` from the returned dict
+reddens it. Do not let it ship as a key nobody asserts.
+
+**Whose authority.** The owner instructed this directly. It is recorded here rather than applied
+silently, and the criterion text below is the orchestrator's transcription of that instruction —
+correct it if it overreaches.
