@@ -8,18 +8,22 @@ path; row-by-row transcription and mutation arming belong to the tester.
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
 from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
 from beyo_manager.errors.validation import ConflictError
+from beyo_manager.models.database import get_db_session
+from beyo_manager.models.tables.customers.customer import Customer
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
+from beyo_manager.models.tables.tasks.task import Task
+from beyo_manager.models.tables.tasks.task_note import TaskNote
 from beyo_manager.services.commands.items.find_or_create_item import find_or_create_item
 from beyo_manager.services.commands.items.update_item import update_item
 from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
@@ -28,7 +32,12 @@ from beyo_manager.services.commands.stock_report.create_stock_task_assignments i
 )
 from beyo_manager.services.commands.tasks.create_task import create_task
 from beyo_manager.services.context import ServiceContext
-from tests.helpers.stock_report import assert_stock_report_clean, make_ctx, seed_stock_report_workspace
+from tests.helpers.stock_report import (
+    assert_stock_report_clean,
+    make_ctx,
+    purge_stock_report_workspace,
+    seed_stock_report_workspace,
+)
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -102,6 +111,8 @@ async def test_c4a_changing_category_with_active_assignment_is_refused(db_sessio
     await _CR(db_session, seeded, row, seeded.task, seeded.item)
     before = await db_session.get(Item, seeded.item.client_id)
     before_category, before_updated_at = before.item_category_id, before.updated_at
+    before_snapshot = before.item_category_snapshot
+    before_major_snapshot = before.item_major_category_snapshot
 
     with pytest.raises(ConflictError) as excinfo:
         await _update_item(
@@ -111,7 +122,67 @@ async def test_c4a_changing_category_with_active_assignment_is_refused(db_sessio
 
     after = await db_session.get(Item, seeded.item.client_id)
     assert after.item_category_id == before_category
+    assert after.item_category_snapshot == before_snapshot
+    assert after.item_major_category_snapshot == before_major_snapshot
     assert after.updated_at == before_updated_at
+
+
+async def test_c4b_setting_the_same_category_is_not_a_change(db_session):
+    """C4(b): re-sending the stored category is a no-op, never a refusal. Declared
+    **known-unarmed** by the owner (card E, 2026-09-21): the no-op is guarded twice
+    — the caller's own `differs` term and the guard's `incoming == current`
+    short-circuit — so no single-site mutant exists and the owner declined the
+    one-decision-point restructure."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _CR(db_session, seeded, row, seeded.task, seeded.item)
+
+    await _update_item(db_session, seeded, item_category_id=seeded.categories[0].client_id)
+
+    item = await db_session.get(Item, seeded.item.client_id)
+    assert item.item_category_id == seeded.categories[0].client_id
+
+
+async def test_c4d_null_to_a_category_is_a_change(db_session):
+    """C4(d): the guard is None-aware in both directions. `NULL -> K` is a change.
+    The NULL is planted with raw SQL after assignment because creation refuses a
+    category-less item (`item_has_no_category`)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    await db_session.execute(
+        Item.__table__.update()
+        .where(Item.client_id == seeded.item.client_id)
+        .values(item_category_id=None)
+    )
+    # The raw UPDATE bypasses the identity map; production's per-request session
+    # loads the item fresh, so the test must expire the stale attribute rather than
+    # let a stale `K` make the comparison read "no change".
+    await db_session.execute(
+        select(Item)
+        .where(Item.client_id == seeded.item.client_id)
+        .execution_options(populate_existing=True)
+    )
+
+    with pytest.raises(ConflictError) as excinfo:
+        await _update_item(
+            db_session, seeded, item_category_id=seeded.categories[0].client_id
+        )
+    assert str(excinfo.value) == _MESSAGE
+
+
+async def test_c4e_a_category_to_null_is_a_change(db_session):
+    """C4(e): the other direction — `K -> NULL` is a change too."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _CR(db_session, seeded, row, seeded.task, seeded.item)
+
+    with pytest.raises(ConflictError) as excinfo:
+        await _update_item(db_session, seeded, item_category_id=None)
+    assert str(excinfo.value) == _MESSAGE
+
+    item = await db_session.get(Item, seeded.item.client_id)
+    assert item.item_category_id == seeded.categories[0].client_id
 
 
 async def test_c4c_changing_an_unrelated_field_with_active_assignment_is_allowed(db_session):
@@ -209,27 +280,103 @@ async def _create_task(db_session, seeded, *, item_category_id, article_number=N
     return await create_task(ctx)
 
 
+async def _workspace_counts(session, workspace_id):
+    """The three row classes C5(a) names — `create_task` writes the Task row
+    (`create_task.py:~150`) and its note (`:203`) and resolves the customer
+    (`:177`) **before** it reaches `find_or_create_item` (`:259`), so these counts
+    only stay put if the whole creation really rolls back."""
+    return {
+        "tasks": await session.scalar(
+            select(func.count()).select_from(Task).where(Task.workspace_id == workspace_id)
+        ),
+        "notes": await session.scalar(
+            select(func.count())
+            .select_from(TaskNote)
+            .where(TaskNote.workspace_id == workspace_id)
+        ),
+        "customers": await session.scalar(
+            select(func.count())
+            .select_from(Customer)
+            .where(Customer.workspace_id == workspace_id)
+        ),
+    }
+
+
 async def test_c5a_create_task_naming_a_new_category_for_an_actively_assigned_item_is_refused(
     db_session,
 ):
+    """C5(a): the guard fires inside `create_task`'s own owner-mode transaction, so
+    the **whole creation** rolls back — no task row, no task note, no customer row,
+    and no change to I.
+
+    The command runs on a **second, fresh session** (`get_db_session()`), which is
+    what production's `get_db()` hands every request. Inside the test's own
+    `db_session` this clause is not observable at all: that session has been in one
+    continuously-autobegun transaction since the fixture's first flush, so
+    `create_task`'s `maybe_begin` never reaches owner mode and never gets the chance
+    to roll back (implementer handoff §8 item 5).
+    """
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    try:
+        row = await _make_row(db_session, seeded)
+        await _CR(db_session, seeded, row, seeded.task, seeded.item)
+        await db_session.commit()
+
+        before = await _workspace_counts(db_session, workspace_id)
+
+        error = None
+        async for session2 in get_db_session():
+            ctx = ServiceContext(
+                identity={
+                    "workspace_id": workspace_id,
+                    "user_id": seeded.manager.client_id,
+                    "role_name": "manager",
+                },
+                incoming_data={
+                    "task_type": "internal",
+                    "item": {
+                        "article_number": seeded.item.article_number,
+                        "item_category_id": seeded.categories[1].client_id,
+                    },
+                },
+                session=session2,
+            )
+            with pytest.raises(ConflictError) as excinfo:
+                await create_task(ctx)
+            error = excinfo.value
+            break
+        assert str(error) == _MESSAGE
+
+        await db_session.commit()
+        assert await _workspace_counts(db_session, workspace_id) == before
+        item = await db_session.get(Item, seeded.item.client_id)
+        assert item.item_category_id == seeded.categories[0].client_id
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.execute(
+            TaskNote.__table__.delete().where(TaskNote.workspace_id == workspace_id)
+        )
+        await db_session.commit()
+
+
+async def test_c5b_create_task_naming_the_same_category_is_allowed(db_session):
+    """C5(b): re-sending the stored category through `create_task` is not a change.
+    Declared **known-unarmed** by the plan and by owner card E — the no-op is
+    guarded twice (the caller's `differs` term and the guard's own short-circuit),
+    so dropping either alone is an equivalent mutant, and the owner declined the
+    one-decision-point restructure because it would take a row lock on every
+    ordinary item save."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     await _CR(db_session, seeded, row, seeded.task, seeded.item)
 
-    with pytest.raises(ConflictError) as excinfo:
-        await _create_task(db_session, seeded, item_category_id=seeded.categories[1].client_id)
-    assert str(excinfo.value) == _MESSAGE
+    result = await _create_task(
+        db_session, seeded, item_category_id=seeded.categories[0].client_id
+    )
 
-    # NOTE: this session has been in one continuously-autobegun transaction since
-    # `seed_stock_report_workspace`'s first flush, so `create_task`'s own
-    # `maybe_begin` never reaches owner mode here and never gets a chance to roll
-    # back — a same-session read would see the flushed-but-uncommitted Task row
-    # regardless of whether the real (fresh-session, production) rollback fires.
-    # "The whole creation rolls back" is therefore not independently observable at
-    # this scope; it is asserted analytically in the intention (§5B, verified: no
-    # `begin_nested` wraps the call, no earlier step commits) and is not proven by
-    # this test. What this test does prove: the guard fires with the exact message
-    # and the item's own category is unaffected.
+    assert result["client_id"]
     item = await db_session.get(Item, seeded.item.client_id)
     assert item.item_category_id == seeded.categories[0].client_id
 

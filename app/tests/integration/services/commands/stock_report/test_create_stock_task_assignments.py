@@ -22,7 +22,10 @@ from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
-from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
+from beyo_manager.domain.stock_report.enums import (
+    StockReportHistoryRecordTypeEnum,
+    StockTaskAssignmentStateEnum as S,
+)
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.errors.stock_report import (
     StockAssignmentPropertyMismatch,
@@ -30,13 +33,20 @@ from beyo_manager.errors.stock_report import (
 )
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.items.item import Item
+from beyo_manager.models.tables.stock_report.stock_report_history_record import (
+    StockReportHistoryRecord,
+)
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
 )
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_item import TaskItem
-from beyo_manager.services.commands.stock_report._move_assignment import move_assignment
+from beyo_manager.models.tables.workspaces.workspace import Workspace
+from beyo_manager.services.commands.stock_report._move_assignment import (
+    ASSIGNMENT_DELETE,
+    move_assignment,
+)
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
     create_stock_task_assignments,
 )
@@ -144,6 +154,64 @@ async def _counters(db_session, row_id):
     ).one()
 
 
+async def _set_task_state(db_session, task, state):
+    await db_session.execute(
+        Task.__table__.update().where(Task.client_id == task.client_id).values(state=state)
+    )
+
+
+async def _make_goal(db_session, seeded, row, *, created_at=NOW):
+    """The row's current goal record G (MC-5) — a `quantity_requested_change`
+    history record. Rows C4(e)/C4(f) name `G` in their outcome."""
+    record = StockReportHistoryRecord(
+        workspace_id=seeded.workspace.client_id,
+        stock_report_item_id=row.client_id,
+        type=StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+        quantity_requested=row.quantity_requested,
+        quantity_awaiting=0,
+        created_at=created_at,
+    )
+    db_session.add(record)
+    await db_session.flush()
+    return record
+
+
+async def _goal_awaiting(db_session, goal_id):
+    return await db_session.scalar(
+        select(StockReportHistoryRecord.quantity_awaiting).where(
+            StockReportHistoryRecord.client_id == goal_id
+        )
+    )
+
+
+async def _fresh_assignment(db_session, client_id):
+    return (
+        await db_session.execute(
+            select(StockTaskAssignment)
+            .where(StockTaskAssignment.client_id == client_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+
+
+async def _create_and_move(db_session, seeded, row, target, *, task=None, item=None):
+    """Create A through `CR` (plan 8 §6: assignments in fixtures come from the
+    command) and walk it to `target` with phase 4's `move_assignment` — `PR`
+    (phase 9) does not exist in batch C1."""
+    result = await _CR(
+        db_session, seeded, [_entry(row, task or seeded.task, item or seeded.item)]
+    )
+    assignment_id = result["stock_task_assignments"][0]["client_id"]
+    for state in target:
+        assignment = await _fresh_assignment(db_session, assignment_id)
+        await move_assignment(
+            db_session, assignment, state,
+            workspace_id=seeded.workspace.client_id,
+            actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
+        )
+    return assignment_id
+
+
 # ---------------------------------------------------------------------------
 # Happy path — the write and the response shape
 # ---------------------------------------------------------------------------
@@ -200,19 +268,79 @@ async def test_quantity_floors_at_one(db_session):
     assert await _counters(db_session, row.client_id) == (1, 0, 0)
 
 
-async def test_resolved_task_may_still_be_assigned(db_session):
+@pytest.mark.parametrize(
+    ("task_state", "expected_state", "expected_counters"),
+    [
+        (TaskStateEnum.ASSIGNED, "in_queue", (4, 0, 0)),
+        (TaskStateEnum.WORKING, "in_progress", (0, 4, 0)),
+        (TaskStateEnum.STALLED, "in_progress", (0, 4, 0)),
+    ],
+)
+async def test_assignment_state_follows_the_task_state(
+    db_session, task_state, expected_state, expected_counters
+):
+    """C4(b) `assigned`, C4(c) `working`, C4(d) `stalled` — one row per cell of
+    `ASSIGNMENT_STATE_BY_TASK_STATE` that this phase's criteria name. The counters
+    are moved by the operation, never written by the test."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
-    await db_session.execute(
-        Task.__table__.update().where(Task.client_id == seeded.task.client_id).values(
-            state=TaskStateEnum.RESOLVED
-        )
-    )
+    await _set_task_state(db_session, seeded.task, task_state)
+
+    result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    assert result["stock_task_assignments"][0]["state"] == expected_state
+    assert (await _counters(db_session, row.client_id)) == expected_counters
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+async def test_c4e_ready_task_creates_awaiting_and_credits_the_goal(db_session):
+    """C4(e): `ready` -> `awaiting`, counters `(0, 0, 4)`, the row's goal record G
+    credited 4, and the assignment's credit memory pointing at G (MC-5)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    goal = await _make_goal(db_session, seeded, row)
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.READY)
+
+    result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    payload = result["stock_task_assignments"][0]
+    assert payload["state"] == "awaiting"
+    assert (await _counters(db_session, row.client_id)) == (0, 0, 4)
+    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    assignment = await _fresh_assignment(db_session, payload["client_id"])
+    assert assignment.credited_history_record_id == goal.client_id
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+async def test_resolved_task_may_still_be_assigned(db_session):
+    """C4(f): a `resolved` task may still be assigned — `awaiting`, and the goal
+    record G is credited."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    goal = await _make_goal(db_session, seeded, row)
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.RESOLVED)
 
     result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
 
     assert result["stock_task_assignments"][0]["state"] == "awaiting"
     assert (await _counters(db_session, row.client_id)) == (0, 0, 4)
+    assert await _goal_awaiting(db_session, goal.client_id) == 4
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+async def test_c4g_quantity_is_copied_from_the_item(db_session):
+    """C4(g): the assignment's quantity is the item's, not a constant. Distinct
+    from C4(h), which exercises the `max(..., 1)` floor."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await db_session.execute(
+        Item.__table__.update().where(Item.client_id == seeded.item.client_id).values(quantity=8)
+    )
+
+    result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    assert result["stock_task_assignments"][0]["quantity"] == 8
+    assert (await _counters(db_session, row.client_id)) == (8, 0, 0)
 
 
 async def test_two_entries_ascending_item_id_response_order_and_summed_counters(db_session):
@@ -265,6 +393,89 @@ async def test_row_soft_deleted_is_refused(db_session):
     assert excinfo.value.details == [{"index": 0, "reason": "stock_report_item_not_found"}]
 
 
+async def test_c1c_row_in_a_foreign_workspace_is_refused(db_session):
+    """C1(c): a **cross-workspace reference** — the foreign row carries this
+    workspace's own category and criteria, so it is an otherwise-valid target and
+    tenancy is the only reason the call refuses (plan 8 §6)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    foreign_workspace = Workspace(
+        client_id=f"ws_frn_{seeded.workspace.client_id}", name="Foreign"
+    )
+    db_session.add(foreign_workspace)
+    await db_session.flush()
+    criteria = {"wood_group": ["teak"]}
+    foreign_row = StockReportItem(
+        workspace_id=foreign_workspace.client_id,
+        item_category_id=seeded.categories[0].client_id,
+        properties=criteria,
+        properties_signature=compute_stock_criteria_signature(criteria),
+        quantity_requested=10,
+    )
+    db_session.add(foreign_row)
+    await db_session.flush()
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(foreign_row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "stock_report_item_not_found"}]
+
+
+async def test_c1e_absent_item_id_is_refused_item_not_found(db_session):
+    """C1(e). `item_not_found` precedes `item_not_task_primary` in MC-13's order."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, "itm_absent")])
+    assert excinfo.value.details == [{"index": 0, "reason": "item_not_found"}]
+
+
+async def test_c1g_retired_primary_link_is_refused_item_not_task_primary(db_session):
+    """C1(g): the PRIMARY link exists but carries `removed_at`."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await db_session.execute(
+        TaskItem.__table__.update()
+        .where(TaskItem.task_id == seeded.task.client_id)
+        .values(removed_at=NOW)
+    )
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "item_not_task_primary"}]
+
+
+async def test_c1k_item_already_assigned_on_the_same_row_refuses_before_any_write(
+    db_session,
+):
+    """C1(k) (owner card A): the pre-check refuses *before* attempting the write.
+    The reason alone does not separate the pre-check from the `IntegrityError`
+    backstop — `count_writes == 0` is the clause that does (master plan §9 rule 7,
+    fifth ratified use)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    async with record_statements(db_session) as statements:
+        with pytest.raises(StockAssignmentRefused) as excinfo:
+            await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "item_already_assigned"}]
+    assert count_writes(statements, {"stock_task_assignments"}) == 0
+
+
+async def test_c1n_category_mismatch_precedes_the_property_matcher(db_session):
+    """C1(n) (U18): phase 3 runs to completion before phase 4, so a row that is
+    both in the wrong category and failing the matcher answers 422
+    `category_mismatch`, never the 409."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(
+        db_session,
+        seeded,
+        criteria={"upholstery": ["velvet"]},
+        category=seeded.categories[1],
+    )
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "category_mismatch"}]
+
+
 async def test_related_item_is_refused_item_not_task_primary(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
@@ -275,32 +486,116 @@ async def test_related_item_is_refused_item_not_task_primary(db_session):
 
 
 async def test_already_resolved_pair_is_refused_already_processed_by_scanner(db_session):
+    """C1(p). Fixture per the plan: the retry names **R**, the same row, so the
+    named mutation ("drop the check") lets a second assignment be born rather than
+    producing some other refusal."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
-    result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
-    assignment = await db_session.get(StockTaskAssignment, result["stock_task_assignments"][0]["client_id"])
-    await move_assignment(
-        db_session, assignment, S.AWAITING, workspace_id=seeded.workspace.client_id,
-        actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
-    )
-    await move_assignment(
-        db_session, assignment, S.RESOLVED, workspace_id=seeded.workspace.client_id,
-        actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
-    )
-    row2 = await _make_row(db_session, seeded, criteria={"wood_group": ["oak"]}, quantity_requested=1)
+    await _create_and_move(db_session, seeded, row, (S.AWAITING, S.RESOLVED))
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "already_processed_by_scanner"}]
+
+
+async def test_c1q_resolved_early_on_another_row_is_refused_already_processed(db_session):
+    """C1(q): §14F F9 keys on the (task, item) pair, "on any row" — the retry names
+    R2, a different row, and is still refused."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _create_and_move(db_session, seeded, row, (S.RESOLVED_EARLY,))
+    # R2 is a different row that the item would otherwise match: §14F F9 is the
+    # only reason the second request refuses.
+    row2 = await _make_row(db_session, seeded, criteria={"upholstery": ["down"]})
+
     with pytest.raises(StockAssignmentRefused) as excinfo:
         await _CR(db_session, seeded, [_entry(row2, seeded.task, seeded.item)])
     assert excinfo.value.details == [{"index": 0, "reason": "already_processed_by_scanner"}]
 
 
-async def test_failed_task_is_refused(db_session):
+async def test_c1r_a_new_task_for_the_same_item_is_not_affected(db_session):
+    """C1(r): §14F F9 keys on the pair, not the item — a brand-new task for an item
+    Scanner has already reported may be assigned."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
+    await _create_and_move(db_session, seeded, row, (S.AWAITING, S.RESOLVED))
+    task2, _ = await _second_pair(db_session, seeded, "c1r", primary=False)
+    # T's PRIMARY link is retired and T2 becomes the item's PRIMARY task.
     await db_session.execute(
-        Task.__table__.update().where(Task.client_id == seeded.task.client_id).values(
-            state=TaskStateEnum.FAILED
-        )
+        TaskItem.__table__.update()
+        .where(TaskItem.task_id == seeded.task.client_id)
+        .values(removed_at=NOW)
     )
+    await db_session.execute(
+        TaskItem.__table__.update()
+        .where(TaskItem.task_id == task2.client_id)
+        .values(item_id=seeded.item.client_id, role=TaskItemRoleEnum.PRIMARY)
+    )
+
+    result = await _CR(db_session, seeded, [_entry(row, task2, seeded.item)])
+
+    assert result["stock_task_assignments"][0]["state"] == "in_queue"
+
+
+async def test_c1s_a_soft_deleted_resolved_assignment_does_not_refuse(db_session):
+    """C1(s): §14F F9 counts only non-deleted assignments — a user who unassigned
+    the reported pair may assign it again."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    assignment_id = await _create_and_move(
+        db_session, seeded, row, (S.AWAITING, S.RESOLVED)
+    )
+    assignment = await _fresh_assignment(db_session, assignment_id)
+    await move_assignment(
+        db_session, assignment, ASSIGNMENT_DELETE,
+        workspace_id=seeded.workspace.client_id,
+        actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
+    )
+
+    result = await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    assert result["stock_task_assignments"][0]["state"] == "in_queue"
+
+
+async def test_c1t_item_not_task_primary_comes_before_already_processed(db_session):
+    """C1(t): MC-13's adjacent pair `item_not_task_primary` -> `already_processed_
+    by_scanner`. Both predicates hold; the earlier reason is the answer."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _create_and_move(db_session, seeded, row, (S.AWAITING, S.RESOLVED))
+    await db_session.execute(
+        TaskItem.__table__.update()
+        .where(TaskItem.task_id == seeded.task.client_id)
+        .values(role=TaskItemRoleEnum.RELATED)
+    )
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "item_not_task_primary"}]
+
+
+async def test_c1u_already_processed_comes_before_task_failed_or_cancelled(db_session):
+    """C1(u): MC-13's adjacent pair `already_processed_by_scanner` ->
+    `task_failed_or_cancelled`. Both predicates hold; the earlier reason wins."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _create_and_move(db_session, seeded, row, (S.AWAITING, S.RESOLVED))
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.FAILED)
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+    assert excinfo.value.details == [{"index": 0, "reason": "already_processed_by_scanner"}]
+
+
+@pytest.mark.parametrize(
+    "task_state", [TaskStateEnum.FAILED, TaskStateEnum.CANCELLED]
+)
+async def test_failed_task_is_refused(db_session, task_state):
+    """C1(h) (`failed`) and C1(i) (`cancelled`) — one row per member of the refused
+    task-state set, never a sampled one (charter rule 2)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _set_task_state(db_session, seeded.task, task_state)
     with pytest.raises(StockAssignmentRefused) as excinfo:
         await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
     assert excinfo.value.details == [{"index": 0, "reason": "task_failed_or_cancelled"}]
@@ -416,6 +711,32 @@ async def test_duplicate_task_in_batch_names_every_offending_index(db_session):
     ]
 
 
+async def test_c2c_phase1_and_phase3_reasons_arrive_in_one_error(db_session):
+    """C2(c): phase 1's duplicates are *collected into* phase 3's error — one 422
+    carrying all three offending indices, never a phase-1-only refusal."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    task_b, item_b = await _second_pair(db_session, seeded, "c2c1")
+    task_c, _ = await _second_pair(db_session, seeded, "c2c2", primary=False)
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(
+            db_session,
+            seeded,
+            [
+                _entry(row, seeded.task, seeded.item),
+                _entry(row, task_b, item_b),
+                _entry(row, task_c, seeded.item),
+                _entry(row, "tsk_absent", "itm_absent"),
+            ],
+        )
+    assert excinfo.value.details == [
+        {"index": 0, "reason": "duplicate_item_in_batch"},
+        {"index": 2, "reason": "duplicate_item_in_batch"},
+        {"index": 3, "reason": "task_not_found"},
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Phase 4 — the property matcher
 # ---------------------------------------------------------------------------
@@ -483,16 +804,53 @@ async def test_override_on_a_matching_entry_is_ignored(db_session):
     assert result["stock_task_assignments"][0]["property_mismatch_overridden"] is False
 
 
-async def test_unknown_top_level_field_is_refused_422(db_session):
+async def test_c3d_retry_after_a_409_is_re_evaluated_from_scratch(db_session):
+    """C3(d): the retry is a fresh request — phase 3 runs again before phase 4, so
+    a task cancelled since the 409 answers 422 `task_failed_or_cancelled` and the
+    override never reaches the matcher."""
     seeded = await seed_stock_report_workspace(db_session)
-    ctx = make_ctx(
-        db_session,
-        seeded,
-        role_name="worker",
-        incoming_data={"entries": [], "unexpected": True},
+    row = await _make_row(
+        db_session, seeded, criteria={"upholstery": ["velvet"]}
     )
+    with pytest.raises(StockAssignmentPropertyMismatch):
+        await _CR(db_session, seeded, [_entry(row, seeded.task, seeded.item)])
+
+    await _set_task_state(db_session, seeded.task, TaskStateEnum.CANCELLED)
+
+    with pytest.raises(StockAssignmentRefused) as excinfo:
+        await _CR(
+            db_session, seeded, [_entry(row, seeded.task, seeded.item, override=True)]
+        )
+    assert excinfo.value.details == [{"index": 0, "reason": "task_failed_or_cancelled"}]
+
+
+async def test_unknown_top_level_field_is_refused_422(db_session):
+    """C3(e): an unknown field at either level is a 422. The entry list is
+    **valid** here — an empty `entries` would refuse for C3(f)'s reason instead and
+    leave this row unable to fail (charter rule 2's companion)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    valid = _entry(row, seeded.task, seeded.item)
+
     with pytest.raises(ValidationError):
-        await create_stock_task_assignments(ctx)
+        await create_stock_task_assignments(
+            make_ctx(
+                db_session,
+                seeded,
+                role_name="worker",
+                incoming_data={"entries": [valid], "unexpected": True},
+            )
+        )
+
+    with pytest.raises(ValidationError):
+        await create_stock_task_assignments(
+            make_ctx(
+                db_session,
+                seeded,
+                role_name="worker",
+                incoming_data={"entries": [{**valid, "unexpected": True}]},
+            )
+        )
 
 
 async def test_empty_entries_is_refused_422(db_session):

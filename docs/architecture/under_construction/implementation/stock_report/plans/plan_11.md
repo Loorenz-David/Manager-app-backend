@@ -195,3 +195,38 @@ this project adds more `test_serializers.py`-shaped files elsewhere.
 handoff for the full per-criterion map): C4(b), C4(d), C4(e) (built: C4(a), C4(c), C4(f),
 C4(g), C4(i)); C5(b) (declared known-unarmed by the plan itself); the two C7 rows (declared
 unforceable); C6(a)-(c) (the trigger-string rows) — not built in this round.
+
+**Tester (verification engineer), 2026-09-21 (batch C1, Opus).** All 26 live criterion rows
+(C4(h) withdrawn) have a disposition. 7 tests added, 0 removed; no production change. Full
+ledger: `handoffs/tester/2026-09-21_batch_C1_test_1_handoff.md`.
+
+*Judgment calls and re-sitings:*
+- **C2(b)** — "act on any role" is an **equivalent mutant**: the hook's discovery query is keyed
+  on `(task_id, item_id)`, so unlinking a RELATED item finds no assignment whatever the role
+  check says. Re-sited to the `item_id` term of that query; both runs recorded. The row also
+  gained its "no stock event" clause, which was unasserted.
+- **C2(c)** — the test asserted C2(a)'s clause (`A.is_deleted is True`) *before* the `CR`, so the
+  shared mutation short-circuited there and never reached this row's own bite (charter rule 12).
+  The removal assertion now sits after the `CR`, which is where the cell says the bite is (L-28).
+- **C3(a)** — the test read the Task back with `db_session.get(...)`, which returns the
+  identity-mapped instance; a defect deleting the task with a Core statement left it saying
+  `False` and the row could not fail. The read is now `populate_existing`. With that, the
+  "also delete the task" mutant reddens.
+- **C5(a)** — the implementer correctly reported that "the whole creation rolls back" is not
+  observable inside `db_session` (one continuously-autobegun transaction, so `create_task`'s
+  `maybe_begin` never reaches owner mode). The test now runs `create_task` on a **second, fresh
+  session** from `get_db_session()` — production's own topology — and asserts the task, task-note
+  and customer counts in W are unchanged. `create_task` writes the Task row (`:~150`), its note
+  (`:203`) and resolves the customer (`:177`) *before* `find_or_create_item` (`:259`), so the
+  clause is load-bearing. Armed by a mutant that commits before the refusal escapes; the cell's
+  other half, "guard after the first write", is **equivalent** (the rollback hides write order).
+- **C4(b)** and **C5(b)** — tests added; both recorded `EQUIVALENT`, the named C4(b) mutant
+  measured green exactly as owner card E predicts. Not reopened.
+- **C7(a)/(b)** — both named mutations executed and recorded. `UNFORCEABLE` as the plan declares.
+  "Drop the new Item lock" does redden `test_removal_locks.py`'s MC-1 statement-order test, so
+  the reviewer's structural check for C7(b) has an automated instrument; C7(a)'s
+  (`remove_item_from_task`'s Task lock) has none and stays a reading check.
+- **C1(a)/(b)/(c), C2(a)** gained the clauses their outcome cells name and their tests did not
+  assert (task flag, the dispatched stock events, R's counters).
+
+*Blocked:* none. No `BLOCKED-PRODUCTION` row.

@@ -10,7 +10,7 @@ tester (see the implementer handoff).
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
@@ -29,8 +29,16 @@ from beyo_manager.services.commands.stock_report._move_assignment import move_as
 from beyo_manager.services.commands.stock_report.create_stock_task_assignments import (
     create_stock_task_assignments,
 )
+from beyo_manager.models.tables.stock_report.stock_report_repair_record import (
+    StockReportRepairRecord,
+)
 from beyo_manager.services.commands.tasks.delete_task import delete_task
-from tests.helpers.stock_report import assert_stock_report_clean, make_ctx, seed_stock_report_workspace
+from tests.helpers.stock_report import (
+    assert_stock_report_clean,
+    capture_dispatch,
+    make_ctx,
+    seed_stock_report_workspace,
+)
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -113,6 +121,14 @@ async def _CR(db_session, seeded, row, task, item):
     return result["stock_task_assignments"][0]["client_id"]
 
 
+def _capture_task_events(monkeypatch):
+    """`delete_task` dispatches through `event_bus`, not the module-level
+    `dispatch` the stock-report commands import."""
+    return capture_dispatch(
+        monkeypatch, "beyo_manager.services.commands.tasks.delete_task.event_bus.dispatch"
+    )
+
+
 async def _delete_task(db_session, seeded, task):
     ctx = make_ctx(
         db_session, seeded, role_name="manager", incoming_data={"client_id": task.client_id}
@@ -142,7 +158,11 @@ async def _counters(db_session, row_id):
     ).one()
 
 
-async def test_c1a_deleting_task_removes_active_assignment_and_updates_counters(db_session):
+async def test_c1a_deleting_task_removes_active_assignment_and_updates_counters(
+    db_session, monkeypatch
+):
+    """C1(a), every clause: the task and its assignment go, the counters zero, the
+    task flag clears, and both stock events ride out beside the task's own."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     assignment_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
@@ -151,19 +171,28 @@ async def test_c1a_deleting_task_removes_active_assignment_and_updates_counters(
         db_session, assignment, S.AWAITING, workspace_id=seeded.workspace.client_id,
         actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
     )
+    captured = _capture_task_events(monkeypatch)
 
     await _delete_task(db_session, seeded, seeded.task)
 
     task = await db_session.get(Task, seeded.task.client_id)
     assert task.is_deleted is True
+    assert task.is_stock_assignment is False
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.is_deleted is True
     assert assignment.deleted_by_id == seeded.manager.client_id
     assert await _counters(db_session, row.client_id) == (0, 0, 0)
+    names = [event.event_name for event in captured]
+    assert "stock_task_assignment:deleted" in names
+    assert "stock_report_item:updated" in names
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
-async def test_c1b_deleting_task_removes_resolved_assignment_without_counter_change(db_session):
+async def test_c1b_deleting_task_removes_resolved_assignment_without_counter_change(
+    db_session, monkeypatch
+):
+    """C1(b): the hook takes **every** non-deleted assignment, not only the active
+    ones — and a terminal one moves no counter, so MC-19 emits no `:updated`."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     assignment_id = await _CR(db_session, seeded, row, seeded.task, seeded.item)
@@ -177,12 +206,18 @@ async def test_c1b_deleting_task_removes_resolved_assignment_without_counter_cha
         db_session, assignment, S.RESOLVED, workspace_id=seeded.workspace.client_id,
         actor_user_id=seeded.manager.client_id, now=NOW, trigger="test",
     )
+    captured = _capture_task_events(monkeypatch)
 
     await _delete_task(db_session, seeded, seeded.task)
 
     assignment = await _fresh_assignment(db_session, assignment_id)
     assert assignment.is_deleted is True
     assert await _counters(db_session, row.client_id) == (0, 0, 0)
+    task = await db_session.get(Task, seeded.task.client_id)
+    assert task.is_stock_assignment is False
+    names = [event.event_name for event in captured]
+    assert "stock_task_assignment:deleted" in names
+    assert "stock_report_item:updated" not in names
 
 
 async def test_c1c_deleting_task_removes_every_non_deleted_assignment_of_the_task(db_session):
@@ -204,3 +239,35 @@ async def test_c1c_deleting_task_removes_every_non_deleted_assignment_of_the_tas
     assert a.is_deleted is True
     assert b.is_deleted is True
     assert await _counters(db_session, row2.client_id) == (0, 0, 0)
+    # R carried only the `failed` assignment, so its counters never moved.
+    assert await _counters(db_session, row.client_id) == (0, 0, 0)
+    task = await db_session.get(Task, seeded.task.client_id)
+    assert task.is_stock_assignment is False
+
+
+async def test_c6a_repair_record_carries_the_delete_task_trigger(db_session):
+    """C6(a) (§12A's closed trigger set): drift repaired inside the task-deletion
+    hook is stamped `inline:delete_task`, the trigger this call site passes."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded)
+    await _CR(db_session, seeded, row, seeded.task, seeded.item)
+    await db_session.execute(
+        text("UPDATE stock_report_items SET quantity_in_queue = 0 WHERE client_id = :id"),
+        {"id": row.client_id},
+    )
+
+    await _delete_task(db_session, seeded, seeded.task)
+
+    records = (
+        (
+            await db_session.execute(
+                select(StockReportRepairRecord).where(
+                    StockReportRepairRecord.workspace_id == seeded.workspace.client_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(records) == 1
+    assert records[0].trigger == "inline:delete_task"

@@ -251,3 +251,53 @@ arming time rather than during it.
 **C4(l)'s second clause** ("`set(element) == set(GET /items/{client_id}/assignments`'s element)")
 is not exercised: that endpoint is phase 13, not yet built in this batch. My tests assert the
 fourteen-key shape directly instead.
+
+**Tester (verification engineer), 2026-09-21 (batch C1, Opus).** All 67 criterion rows have a
+disposition. 29 tests added, 0 removed, 1 renamed; no production change (`git diff
+6eaf2d3..HEAD -- app/beyo_manager/` empty). Full ledger:
+`handoffs/tester/2026-09-21_batch_C1_test_1_handoff.md`.
+
+*Judgment calls and re-sitings (each shows both runs in ledger table 1):*
+- **C4(k)** — the named mutation (drop the phase-5 write-loop sort) is an **equivalent mutant**:
+  the response is sorted a *second* time at `create_stock_task_assignments.py:309`
+  (`sorted(created, key=item_id)`), so either sort alone keeps the row's observable ascending.
+  Armed by removing **both** sorts. Backfill proposed.
+- **C4(c)** — the cell's "write counters directly" names no file/site (rule 11). The §9 rule 3
+  ORM-write shape was run (`_apply_counter_delta`, value sourced from the identity-mapped
+  instance) and is **equivalent at this row's boundary** — a single create reads the same value
+  it would have computed. Re-sited to the `state_map.py` WORKING cell, which is what makes both
+  of the row's clauses true. Backfill proposed.
+- **C1(r)** — the cell's mutant applied to the *membership test* alone is inert: the
+  `_lookup_processed_pairs` query already filters `task_id.in_(task_ids)`. "Key the check on
+  `item_id` alone" only exists as query-plus-test; both runs recorded.
+- **C6(c) / C6(i)** — "no `:updated` for a terminal delete" is guarded **twice**: the
+  `deltas` guard in `_move_assignment.py:260` *and* `coalesce_stock_report_events`' drop of a
+  payload equal to the row's initial values. Either alone is equivalent; armed by removing both.
+- **C6(e)** — the named mutant (drop `is_deleted.is_(False)` from discovery) is caught by the
+  implementer's post-lock re-read, so it is equivalent; armed by removing the discovery filter
+  **and** the re-read.
+- **C7(b)** — "dispatch inside the block" is equivalent by construction: a phase-3 refusal raises
+  before any dispatch statement and `events` is empty at that point, so no placement of the
+  dispatch call can make the row fail. Recorded `EQUIVALENT`, row noted as structurally true.
+- **C3(a)** — the "sorted failures" sub-check cannot fail **with this row's own fixture**: the
+  criteria live in a JSONB column and Postgres stores keys by (length, bytewise), which for
+  `quantity` / `upholstery` / `wood_group` is already alphabetical (measured:
+  `'{"wood_group":1,"quantity":2,"upholstery":3}'::jsonb` -> `quantity, upholstery, wood_group`).
+  The "missing `details`" sub-check is armed. Fixture fold proposed (L-14).
+- **C5(b)** — built as the owner's card C describes (two sessions, two items, opposite request
+  order, one barrier). The named mutation (delete `.order_by(model.client_id)` from
+  `_locks.py:_lock`) leaves the test green: with the `IN` list still `sorted(client_ids)` both
+  sessions receive rows in the same physical order, so the deadlock does not reproduce.
+  **`UNFORCEABLE`** per the owner's authorized fallback; the structural check is named in the
+  handoff. The test is kept: it is the row's outcome (both calls complete, one active assignment
+  per item, both rows' counters correct) and it holds.
+- **C3(e)** — the implementer's fixture sent `{"entries": [], "unexpected": True}`, which refuses
+  for **C3(f)'s** reason as well, so `extra="ignore"` left it green. Fixture strengthened to a
+  valid entry plus an unknown field, and the entry-level clause added.
+- **C3(d)** — sited on real code after all: the retry's `task_failed_or_cancelled` comes from the
+  same cancelled-state check C1(i) names, and C1(i)'s mutation reddens C3(d)'s own assertion.
+  `ARMED-SHARED`; backfill proposed.
+
+*Blocked:* **C5(a)** `BLOCKED-PLAN` and **C4(l)** (second clause) `BLOCKED-PLAN` — see the
+handoff's owner cards 1 and 2. No `BLOCKED-PRODUCTION` row: production behaved correctly under
+every probe.
