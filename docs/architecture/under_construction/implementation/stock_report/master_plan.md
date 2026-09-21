@@ -392,14 +392,11 @@ criterion cell (`git diff` over the criteria tables: 0 lines).
 **Totals, derived by committed script — `count_criteria.py`, re-run at every gate.**
 
 ```
-DERIVED TOTAL: 647 criterion rows in 107 criteria across 16 plans
-  table lines 585 + 62 shorthand expansion = 647 rows
+DERIVED TOTAL: 650 criterion rows in 107 criteria across 16 plans
+  table lines 588 + 62 shorthand expansion = 650 rows
 ```
 
-**645 → 647 / 106 → 107 on 2026-09-21**, from the two rows the owner authored on the batch C2
-tester's cards: plan 9 **C8(d)** (45/8) and plan 10 **C8(a)** (36/8, a new criterion, which is why
-criteria moved too). Both are **OWED by a C2 fix round**, not satisfied on the gate tree. Re-run
-`count_criteria.py`; do not increment this by hand.
+**645 → 647 → 650 on 2026-09-21**, criteria 106 → 107. Two rows from the batch C2 **tester's** cards — plan 9 **C8(d)** and plan 10 **C8(a)** (a new criterion, which is why criteria moved) — then three from the batch C2 **review's** cards: plan 10 **C1(m)** (card 1, the two-assignment task), **C4(i)** (card 2, the guard's negative assertion) and **C4(j)** (card 4, the five constructs the collector misses). Plans now 9 → **45/8** and 10 → **39/8**. **All five are OWED by the C2 fix round**, none satisfied on the gate tree. Re-run `count_criteria.py`; never increment this by hand.
 
 Per plan (rows/criteria): 1 → 53/7 · 2 → 75/7 · 3 → 42/8 · 4 → 63/8 · 5 → 23/3 · 6 → 36/8 ·
 7 → 52/7 · 8 → 70/8 · 8A → 20/6 · 9 → 44/8 · 10 → 35/7 · 11 → 26/7 · 12 → 45/7 · 13 → 19/6 ·

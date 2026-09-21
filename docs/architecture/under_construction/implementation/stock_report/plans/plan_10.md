@@ -135,7 +135,7 @@ command's import site). Every row ends with `assert_stock_report_clean`.
 
 ## 7. Notes
 
-- Sizing: **36** criterion rows in **8** criteria; `complex: yes`. (**35/7 + C8(a)**, owner card 2, 2026-09-21 — the new criterion C8 puts this phase **at the §15 eight-criteria cap**.) (Counts re-derived by script after the
+- Sizing: **39** criterion rows in **8** criteria; `complex: yes`. (35/7 + C8(a) tester card 2; **+ C1(m), C4(i), C4(j)** from batch C2 review cards 1, 2 and 4, 2026-09-21. The C8 criterion puts this phase **at the §15 eight-criteria cap** — further *rows* are fine, further *criteria* need a re-size.) (Counts re-derived by script after the
   round-9 fold; see the delta handoff.)
 - C4(b)–(g) are the six required probes of MC-2: each is planted, observed red, reverted, and
   recorded with the observed failure message — they are rows, not prose.
