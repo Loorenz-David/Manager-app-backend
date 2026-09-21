@@ -7845,10 +7845,10 @@ nodes:
             service context.
           inferenceReason: A dedicated route with its own role boundary and
             path-to-service handoff is an independently named API endpoint.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-09-21T13:52:14.508Z
-    updatedAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T16:00:38.424Z
   - id: domain-assignment-acceptability-evaluator
     type: domain
     name: assignment acceptability evaluator
@@ -7867,10 +7867,10 @@ nodes:
             already-fetched entities, with advisory and assumed-result handling.
           inferenceReason: A named pure domain boundary shared by creation and preview
             owns the acceptability semantics independently of either transport.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.95
     createdAt: 2026-09-21T13:52:14.508Z
-    updatedAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T16:00:38.424Z
   - id: endpoint-items-processed-webhook
     type: endpoint
     name: items processed webhook
@@ -14574,10 +14574,10 @@ edges:
           inferenceReason: The query service is the endpoint's implementation boundary and
             directly demonstrates the endpoint's dependency on the shared domain
             decision.
-    origin: ai_inferred
+    origin: human_confirmed
     confidence: 0.94
     createdAt: 2026-09-21T13:52:14.508Z
-    updatedAt: 2026-09-21T13:52:14.508Z
+    updatedAt: 2026-09-21T16:00:38.424Z
   - sourceNodeId: endpoint-items-processed-webhook
     relationshipType: depends_on
     targetNodeId: domain-processed-webhook-resolution

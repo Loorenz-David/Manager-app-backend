@@ -2095,10 +2095,22 @@ having to infer it from `matched_item_client_id`, and so the divergence is obser
 rather than only in production.
 
 **The construction rule.** With `task_id` null the caller is creating the task in the same act, so
-three checks **pass by construction** and are reported `pass_by_construction`, never `pass`: a new
-task is `pending` (`task_failed_or_cancelled` cannot fire), the item will be PRIMARY on it
+**four** checks **pass by construction** and are reported `pass_by_construction`, never `pass`:
+the task does not exist yet (`task_not_found` cannot fire), a new task is `pending`
+(`task_failed_or_cancelled` cannot fire), the item will be PRIMARY on it
 (`item_not_task_primary` cannot fire), and it has no prior assignment pair
-(`already_processed_by_scanner` cannot fire). With `task_id` supplied, all three are evaluated
+(`already_processed_by_scanner` cannot fire).
+
+> **⚠ Corrected 2026-09-21 — this clause said "three" and omitted `task_not_found`.** My
+> omission when authoring §14G. The shipped code is right and so is the published frontend
+> handoff (v2, "Four checks report `pass_by_construction`"): the evaluator's
+> `PASS_BY_CONSTRUCTION_CHECKS` frozenset holds the three named above, and
+> `preview_stock_task_assignment_match.py:132` adds `task_not_found` on the null-`task_id` path.
+> That has to be so — with no task there is no task to find, and reporting it as a *failure*
+> would make `can_proceed` false for every no-task-yet preview, which is the exact case this
+> endpoint exists to serve. Found by reconciling the authority against the published handoff and
+> the code, not by a review. **Owner card at the C2 gate for ratification of this wording**; the
+> behaviour is unchanged and nothing needs to be rebuilt. With `task_id` supplied, all three are evaluated
 against the real task. **A preview taken with a null `task_id` does not license a create against
 an existing task**, and the response says so by construction because the caller can see which
 results were assumed rather than measured.

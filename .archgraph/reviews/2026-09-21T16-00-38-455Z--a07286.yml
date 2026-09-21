@@ -1,0 +1,49 @@
+reviewId: 2026-09-21T16-00-38-455Z--a07286
+reviewedItemIds:
+  - node:endpoint-stock-assignment-match-preview
+  - node:domain-assignment-acceptability-evaluator
+  - edge:endpoint-stock-assignment-match-preview--depends_on-->domain-assignment-acceptability-evaluator
+decisions:
+  - itemId: node:endpoint-stock-assignment-match-preview
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Owner authorized 2026-09-21 (phase 8A review card 1, recommended
+      option). Evidence re-verified independently by the orchestrator against
+      the code: router registers POST /items/{client_id}/match-preview at symbol
+      route_preview_stock_task_assignment_match with require_roles([ADMIN,
+      MANAGER, WORKER]) — matches the evidence summary exactly."
+  - itemId: node:domain-assignment-acceptability-evaluator
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Owner authorized 2026-09-21 (phase 8A review card 1). Evidence
+      re-verified: evaluate_assignment_checks exists and _CHECK_ORDER carries
+      exactly nine checks in MC-13 precedence order, with item_already_assigned
+      preceding item_has_no_category and category_mismatch as MC-13 requires.
+      Confirms the 'nine ordered' claim."
+  - itemId: edge:endpoint-stock-assignment-match-preview--depends_on-->domain-assignment-acceptability-evaluator
+    decision: promote
+    previousOrigin: ai_inferred
+    resultingOrigin: human_confirmed
+    rationale: "Owner authorized 2026-09-21 (phase 8A review card 1). Evidence
+      re-verified: preview_stock_task_assignment_match imports and invokes
+      evaluate_assignment_checks, so the preview path demonstrably depends on
+      the shared acceptability decision rather than reimplementing it — the
+      MC-21 single-implementation contract."
+retiredItemIds: []
+reviewerSource: client-approval
+clientInfo:
+  name: claude-code
+  version: 2.1.276
+timestamp: 2026-09-21T16:00:38.455Z
+graphRevisionBefore: c1ef5a6cbe34c88681f2f5a4810b0ce0ef420acadac8575822f6288a3a216c17
+graphRevisionAfter: d6e9aee772c591e309c676516179e9b389a8bc5d10755b97a896d9d89ed723ad
+evidenceSummary: 3 evidence entries across 3 files; no drift detected
+humanInstruction: 'Owner instruction, 2026-09-21: "about the owner card we can
+  go for the recommended option" — referring to phase 8A review 1 card 1, whose
+  recommendation was to authorize promotion of the match-preview endpoint node,
+  the shared acceptability evaluator node, and the depends_on edge between them.
+  Scope is exactly these three items; the other 70 pending review items are
+  untouched and remain pending.'
+reviewTokenCorrelation: d2b2bf57aedf

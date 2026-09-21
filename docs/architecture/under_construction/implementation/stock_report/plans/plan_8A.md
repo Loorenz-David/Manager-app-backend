@@ -295,7 +295,7 @@ blank carries its note; the implementer sites it on the real code, runs it, and 
 |---|---|---|---|---|
 | C1(a) | Three triples, each refused by `create` for a different one of the three entities the preview looks up itself. (i) T raw-set `is_deleted = true`; (ii) I in **K2** and `item_category_id: K2` in the body (so the outcome holds whichever side card 2 rules for); (iii) I's PRIMARY `TaskItem` raw-set to RELATED. Per case the test calls **both** `CR([{R, T, I}])` and `PV(B0 + the case's field)` and compares | per case, `PV(...)["refusal_reason"] == ` the `reason` of the `{index: 0}` element of the `StockAssignmentRefused` `CR` raises — **both sides computed in the test, neither typed**; the values are (i) `task_not_found`, (ii) `category_mismatch`, (iii) `item_not_task_primary`; nothing written by either call | — *(class 2, one per case: the only possible divergence is the preview's own entity lookup, since the decision itself is shared — e.g. for (i), drop `is_deleted` from the preview's task read. The site is in the new preview module)* | **MC-21** ("neither may hold a check the other lacks"), MC-13 phase 3, M4 |
 | C1(b) | Unit, transient production instances (charter rule 3): `row` in K1; `task` `state FAILED`; `item` in K2 with `quantity 1`; `task_id`/`item_id` given; `primary_pairs = set()`, `processed_pairs = set()`, `active_item_ids = {item_id}`; `assumed` omitted | `evaluate_assignment_checks` returns **nine** results whose `check` values are, in order, `stock_report_item_not_found`, `task_not_found`, `item_not_found`, `item_not_task_primary`, `already_processed_by_scanner`, `task_failed_or_cancelled`, `item_already_assigned`, `item_has_no_category`, `category_mismatch`; exactly four are `fail` (`item_not_task_primary`, `task_failed_or_cancelled`, `item_already_assigned`, `category_mismatch`) and the other five `pass`; `advisory` is true on `item_already_assigned` and false on the other eight; `first_failed_check(...) == "item_not_task_primary"` | return as soon as a check fails (`assignment_checks.py:evaluate_assignment_checks`, definition site) → the list is four long and the last three results are absent | **MC-21** ("returns the per-check results in that order"), MC-13 phase 3 order, §9 rule 18 |
-| C2(a) | `PV(B0)` — every check passes | the response has **exactly** the **eight** §14G keys — the seven of the ratified response table plus **`values_source`**, added by the owner 2026-09-21 so a caller can see whether the stored item or its own supplied values were evaluated (owner card 2); `can_proceed true`; `override_required false`; `refusal_reason None`; `property_failures == []`; `matched_item_client_id == I.client_id`; `values_source == "stored"`; `checks` is the nine MC-13 names in order, every `result == "pass"`, `advisory` true only on `item_already_assigned` | — *(class 2: the response is assembled in the new preview module; site the key set or the `pass` mapping there)* | §14G response table, MC-21, §9 rule 18 |
+| C2(a) | `PV(B0)` — every check passes | the response has **exactly** the **seven** §14G keys — the six of the originally ratified response table plus **`values_source`**, added by the owner 2026-09-21 so a caller can see whether the stored item or its own supplied values were evaluated (owner card 2); `can_proceed true`; `override_required false`; `refusal_reason None`; `property_failures == []`; `matched_item_client_id == I.client_id`; `values_source == "stored"`; `checks` is the nine MC-13 names in order, every `result == "pass"`, `advisory` true only on `item_already_assigned` | — *(class 2: the response is assembled in the new preview module; site the key set or the `pass` mapping there)* | §14G response table, MC-21, §9 rule 18 |
 | C2(b) | `PV(B0)` on the same acceptable triple — the one case where a write would be plausible | no `stock_task_assignment` row exists for (R, T, I) after the call; R's counters are still `(0, 0, 0)` with `quantity_requested 10`; `T.is_stock_assignment` is still `false`; `assert_stock_report_clean` | **planted defect (charter rule 15):** insert and flush a `StockTaskAssignment` for the previewed triple inside `preview_stock_task_assignment_match` (definition site) → the row exists and the counters move | §14G ("writes nothing, locks nothing and reserves nothing"), M1 |
 | C3(a) | `CR([{R, T, I}])` first, so I carries an active `in_queue` assignment; then `PV(B0)` — the same triple | the `item_already_assigned` entry of `checks` is `{result: "fail", advisory: true}`; **`can_proceed` is `true`**; every other check `pass` | remove `item_already_assigned` from `ADVISORY_CHECKS` (`assignment_checks.py`, definition site) → `advisory` reads false **and** `can_proceed` flips to false | §14G semantics 1, MC-13, M4 |
 | C3(b) | the C3(a) fixture and call | `refusal_reason == "item_already_assigned"` — `can_proceed true` and a non-null `refusal_reason` coexist, because the reason is what `create` would refuse with, advisory or not | — *(class 2: the preview's `refusal_reason` derivation — e.g. filter advisory failures out of it — is in the new module)* | §14G response table + semantics 1, MC-21 |
@@ -324,7 +324,7 @@ blank carries its note; the implementer sites it on the real code, runs it, and 
   it. This repo's router tests fake `get_db`, so no DB-backed HTTP row is available to prove it
   honestly. If phase 14 or a later phase gains a real HTTP fixture, this is the first thing to
   point it at.
-- **`values_source` (owner, 2026-09-21, card 2).** The response carries an eighth key,
+- **`values_source` (owner, 2026-09-21, card 2).** The response carries a seventh key,
   `"stored" | "supplied"`, naming which values the evaluation actually used. It exists because
   card 2's ruling is correct but surprising: a caller who types changed properties, gets
   `can_proceed true`, and does not realise the **stored** item was evaluated has no way to see
@@ -415,17 +415,32 @@ roles ADMIN/MANAGER/WORKER, phase 8A; §4/§4A — the tracker rows for this pha
 - Sizing: 6 criteria (counts derived from the table by script, see below), well inside the
   charter's ≤ 8.
 
-**Row and mutation counts, derived from §6's table (16 table lines, C6(a)–C6(d) being four rows —
-not typed):** **19 criterion rows across 6 criteria**. **10 rows carry a named mutation**, over
-**7 sites** and **10 mutants**: the early return in `evaluate_assignment_checks` (C1(b)), the
-planted insert in the preview module (C2(b), charter rule 15), `ADVISORY_CHECKS` (C3(a)),
-`PASS_BY_CONSTRUCTION_CHECKS` (C5(a)), the route decorator (C6(a)–C6(d), four mutants, one per
-sub-row), the body model (C6(e)) and the path injection (C6(f)). **9 rows carry a deliberate
-class-2 blank**, and their notes ask for one mutation per enumerated case — 3 for C1(a), 3 for
-C4(a), 2 each for C3(d), C4(b) and C4(c), 1 each for C2(a), C3(b), C3(c) and C5(b) = **16 to be
-sited** by the implementation round. Declared set = **10 named + 16 sited = 26**; the round reports
+**Row and mutation counts, derived from §6's table (17 active table lines, C6(a)–C6(d) being
+four rows — not typed):** **20 criterion rows across 6 criteria**. **9 rows carry an active named
+mutation**, over **6 sites** and **9 mutants**: the early return in `evaluate_assignment_checks`
+(C1(b)), the planted insert in the preview module (C2(b), charter rule 15), `ADVISORY_CHECKS`
+(C3(a)), `PASS_BY_CONSTRUCTION_CHECKS` (C5(a)), the route decorator (C6(a)–C6(d), four mutants,
+one per sub-row) and the body model (C6(e)). **9 rows carry a deliberate class-2 blank**, and
+their notes ask for one mutation per enumerated case — 3 for C1(a), 3 for C4(a), 2 each for
+C3(d), C4(b) and C4(c), 1 each for C2(a), C3(b), C3(c) and C5(b) = **16 to be sited** by the
+implementation round. Declared set = **9 named + 16 sited = 25**; the round reports
 `executed == declared` against that arithmetic, re-derived from this table rather than copied
 (charter manifest properties 3 and 4).
+
+> **⚠ Corrected 2026-09-21 by the orchestrator** (phase 8A review findings **P8A-R1-02** and
+> **P8A-R1-03**, both routed `plan`, both my defects — no code or criterion substance changed).
+>
+> - This block previously read **19 rows / 10 named mutations / declared 26**. It counted **16**
+>   table lines where there are **17**, and it counted the **withdrawn** C6(f)'s path-injection
+>   site as an active mutation. C6(f) is withdrawn to a §7 note, so it arms nothing: the active
+>   set is **9**. The committed `SR/count_criteria.py` independently derives **20 rows / 6
+>   criteria** for this plan, and the review's own mutation table has exactly **9** rows.
+> - **C2(a) said the response has "exactly eight" keys.** It has **seven**. The error was mine
+>   and it was double-counting: when I added `values_source` I called it "the eighth key" and
+>   wrote "the seven of the ratified table plus `values_source`" — but §14G's table carried
+>   **six** at that moment, and `values_source` is now the seventh **inside** it, not an addition
+>   to it. The implementation and its test always returned seven and were never wrong.
+>   **No eighth API field is to be invented to satisfy the old wording.**
 
 **This plan is not dispatchable until owner cards 1–3 are ruled.** Cards 1 and 3 decide outcome
 cells that do not yet exist; card 2 decides a fixture the endpoint's main use case depends on. Rows
