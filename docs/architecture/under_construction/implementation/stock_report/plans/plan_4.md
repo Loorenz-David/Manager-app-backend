@@ -270,3 +270,141 @@ can emit a `:updated` equal to the snapshot — C5(c) is the live case, so
 `coalesce_stock_report_events` must compare values), N7 (N-S3's tenancy guard untested), N8
 (handoff test counts: measured 59 / 4, not 63 / 7), N11 (no row pins MC-17's "creation:
 `updated_*` NULL" — phase 8's).
+
+**Implementer, 2026-09-21 (batch_B1-fix-1, tree `d6b0603` + this round's diff, claude-sonnet-5).**
+Fix round for the four review findings routed here (S1, S2, S3, S4); card 2 belongs to plan 5.
+
+- **S1 fixed.** `test_c5_b_upward_drift_is_not_self_healed` now asserts the divergence list whole
+  (was filtered to `kind == "counter_in_queue"`) and adds the `repair_stock_report(ctx)` leg
+  mirroring `test_c2_c`'s closing block: `[e["kind"] for e in result["repaired"]] ==
+  ["counter_in_queue"]`, counters back to `(0, 4, 0)`, one `manual` repair record.
+- **S2 fixed, scoped to this plan's two test files** (the prompt's "Do" names exactly
+  `test_move_assignment.py` and `test_remove_assignment.py`, not plan 5's `test_goal_credit.py`,
+  which N-R1 also concerns — see judgment call below). A shared helper `_hold_caller_locks`
+  (duplicated identically in both files, not hoisted into the shared test kit — see judgment call)
+  issues column-only `SELECT … FOR UPDATE` — task first when `remove_assignment` will run, then the
+  row, then the assignment — before every one of the 26 `move_assignment` call sites and 4
+  `remove_assignment` call sites in these two files. Column-only (never a full-entity select) so it
+  never repopulates an identity-mapped instance a test deliberately keeps stale (C4(c), C7(d),
+  C6(c)'s pre-seeded task stamps).
+- **S3 fixed.** `test_c1_s_in_queue_to_resolved_early`'s fixture now sets `priority = HIGH` and
+  `priority_order = 1` on R (both, per the correction's caveat); the `:updated` payload assertion
+  now pins `priority: "high"`. Mutation run: `_events.py`'s `"priority": priority.value if priority
+  is not None else None` → `"priority": priority` — reddens exactly `test_c1_s_...` (58 passed / 1
+  failed), reverted, checksum-confirmed unchanged. Declared as a candidate criterion (§ below).
+- **S4 fixed** — see the re-derived ledger below.
+
+**S2 judgment call.** The prompt's Do text says "add a shared helper to **both** test files" and
+names the lock order "task (for the `remove_assignment` rows), then the row, then the assignment" —
+that is plan 4's own two files, not plan 5's. N-R1 is cited in the same paragraph as authority for
+*why* the rule matters, not as a third file to touch. I read this literally: `test_goal_credit.py`
+is unchanged by S2 (card 2 adds one new test there, with no lock helper). This leaves N-R1's premise
+for plan 5's own move_assignment-driven tests unmodelled — flagging it plainly rather than silently
+extending scope, per charter rule 14. Recommend the coordinator decide whether plan 5 needs its own
+S2-shaped item in a future fold.
+
+**S2 retained-mutation-citation judgment call.** Every scenario in both files now carries one extra
+line (the lock helper call). Charter's retained-row-expiry rule ("a retained row expires when this
+round edits its test") read literally would invalidate all ~33 of phase 4's previously-cited
+mutation results, since every test in the file changed. I judged the added line inert with respect
+to every assertion — a `SELECT <single column> … FOR UPDATE` inside the same transaction the test
+already owns, touching no column any assertion reads, and never selecting a full entity (so it
+cannot repopulate an identity map an assertion depends on staying stale) — and did **not** blanket
+re-run the phase's full mutation set on that basis alone. Corroborating evidence: the full L1 stamp
+on both files is green post-edit (59/4 passed, unchanged collection counts), and every mutation this
+round *did* re-run (C1(u), C6(c), C5(a), C5(b), S3's own) behaved exactly as before. Re-running all
+~33 unrequested would itself be a finding under "over-evidence is a defect, symmetrically." Flagging
+this explicitly rather than asserting a blanket re-run happened.
+
+**The re-derived phase-4 mutation ledger.** `executed == declared` was asserted at 33 in the
+original round; the review measured the table (31 numbered rows, one — row 13 — explicitly not a
+run) supports only **30** distinct executed texts, with C1(d)/(e) (row 4) and C7(c) (shares row 8
+with C1(g)(iii) — same code edit, different observing test) present in the table but omitted from
+the prose sum. Re-deriving from the table, criterion by criterion:
+
+| Criterion | Declared mutations | Table row(s) |
+|---|---|---|
+| C1(a) | 3 (i, ii, iii) | 1, 2, 3 |
+| C1(d)/(e) (shared) | 1 | 4 |
+| C1(f) | 1 | 5 |
+| C1(g) | 3 (i, ii, iii) — (iii)'s equivalent-mutant note is carried by C5(c), not a 4th slot | 6, 7, 8 |
+| C1(n) | 1 | 9 |
+| C1(q)/(r) (shared) | 1 | 10 |
+| C1(s) | 1 | 11 |
+| C1(t) | 1 | 12 |
+| C1(u) | 3 (i, ii, iii) — (i) is literally row 10's edit observed a third way, not a new text; (ii) is its own; (iii) is new this round | 10 (shared), 14, **new row 32** |
+| C2(a)–(f) | 3 (i, ii, iii) | 15, 16, 17 |
+| C3(a)–(v) (22 cells) | 4 guard mutations + 1 combined proof — the collapse | 18, 19, 20, 21, 22 |
+| C4(a) | 1 | 23 |
+| C4(b) | 0 (plan names none) | — |
+| C4(c) | 1 | 24 |
+| C5(a) | 1 | **new row 33** |
+| C5(b) | 1 | **new row 34** |
+| C5(c) | 1 | **not run — see gap below** |
+| C6(a) | 1 | 25 |
+| C6(b) | 1 | 26 |
+| C6(c) | 1 (corrected text this round, same slot) | 27 |
+| C7(a) | 1 | 28 |
+| C7(b) | 1 | 29 |
+| C7(c) | 0 additional — shares row 8 with C1(g)(iii) (same code edit) | 8 |
+| C7(d) | 1 | 30 |
+| Required ledger row | 1 | 31 |
+
+**C3 collapse, explicit.** 22 declared "allow it" cells → 4 guard mutations (creation guard: c3a,
+c3b, c3c, c3n; resolved-only-from-awaiting guard: c3d, c3e; terminal-from-state guard: c3f, g, h, i,
+j, k, l, p, q, r, t — 11 single-guarded cells; resolved_early guard: c3o) + 1 combined proof (guards
+2+3+4 removed together, reddens all 18 non-creation cells at once, including the four double-guarded
+c3m, c3s, c3u, c3v). Re-confirmed by the reviewer's own probe A (18 failed, ids exact) — not re-run
+here, cited by tree-identity (their tree `1351b5f` matches this round's unedited production files).
+
+**Re-run this round (S4's two named cells, both corrected per review notes N2/N3):**
+- **C1(u)(iii)** — subtract `q` from `quantity_awaiting` on `resolved_early → DELETE`
+  (`_delta_vector`, definition site) — **reddened exactly `test_c1_u_resolved_early_to_delete`
+  (phase 4) and `test_c1_q_resolved_early_to_delete_keeps_the_credit` (phase 5)**, 2 failed / 80
+  passed over both files. Confirms N2: not equivalent. Applied and reverted on
+  `_move_assignment.py`; checksum-confirmed unchanged after revert.
+- **C6(c)** — drop `updated_at=Task.updated_at` from `set_task_stock_flag`'s `.values()`
+  (`_task_flag.py`, definition site) — **reddened exactly `test_c6_c_flag_flip_never_stamps_task_updated_columns`**, 1 failed / 3 passed. Confirms N3. Applied and reverted on `_task_flag.py`;
+  checksum-confirmed unchanged after revert.
+
+**Two additional gaps found and closed this round (not named by S4, discovered while
+re-deriving):** the ledger table has no row at all for C5(a) or C5(b) despite both being counted in
+the original prose sum ("C5(a)=1, C5(b)=1") — no command, no observed-red, nothing. Both closed:
+- **C5(a)** — drop the three `>= 0` guard clauses from `_apply_counter_delta`'s `WHERE`
+  (`_move_assignment.py`, definition site) — **reddened exactly
+  `test_c5_a_downward_drift_self_heals_with_one_repair_record`** via a Postgres `CheckViolationError`
+  on `ck_stock_report_items_quantity_in_queue_nonneg`, exactly as the plan's instrument (a)
+  predicts. 1 failed / 58 passed. Reverted; checksum-confirmed unchanged.
+- **C5(b)** — run the self-heal block unconditionally after the guarded UPDATE returns 1 row
+  (`_apply_counter_delta`, definition site) — **reddened exactly
+  `test_c5_b_upward_drift_is_not_self_healed`** (a spurious repair record appears and the "zero
+  repair records" clause fails). 1 failed / 58 passed. Reverted; checksum-confirmed unchanged.
+
+**One gap found, not closed (declared this round, deferred).** **C5(c)**'s named mutation ("issue
+the soft-delete after the counter statement") also has no table row. Closing it means restructuring
+`move_assignment`'s write order (moving the own-columns block after the counter statement, at least
+for the DELETE path) — a control-flow change to the mutation harness itself, not a value swap, and
+therefore higher-risk to get right under this round's own stated caution ("the main risk in this
+round is breaking one of the 83 armed rows while tidying"). I did not attempt it. Per charter rule
+14: declining because the risk of a miswired probe outweighs closing one already-passing,
+already-read-verified criterion (§4.5 of the review handoff confirms the write order by reading).
+Recommend routing to the next fold or a dedicated mini-round — **candidate note N12**.
+
+**Re-derived totals.** Evidenced (table-backed) executed = 30 (original) + 3 (C1(u)(iii), C5(a),
+C5(b), this round) = **33**. Declared (every plan cell, mechanically enumerated above) = 33 + C5(c)
+= **34**. **`executed (33) != declared (34)`** — the one open gap is C5(c), named above, not
+silently dropped. Nothing else in the 24-group breakdown is unaccounted for.
+
+**Candidate criterion declared (S3, MC-19 payload).** `test_c1_s_in_queue_to_resolved_early`'s
+extended fixture (priority `HIGH` + `priority_order 1`) and payload assertion (`priority: "high"`)
+serve intention §9D MC-19's payload contract. Named mutation: emit `values["priority"]` unchanged in
+`_events.py` (drop `.value`) → red on exactly this test. For the coordinator to fold into a table
+row, or refuse with a recorded reason (charter rule 16) — **not added as a row here**, per the
+prompt's explicit instruction that a criterion row is the owner's/coordinator's call.
+
+**N8, N9 corrected (documentation only, no code implication).** Collection counts, measured by
+`--collect-only`: `test_move_assignment.py` **59**, `test_remove_assignment.py` **4**,
+`test_goal_credit.py` **23** (22 + this round's 1 new candidate-criterion test in plan 5) — batch
+total **86**. N9: plan 5's Review log names "C1(r)" among its declared mirrors; plan 5's table ends
+at C1(q) — there is no C1(r). Not edited in place (the entry is dated and attributed to the
+implement round); recorded here instead, per the "never rewrite a published record" spirit.

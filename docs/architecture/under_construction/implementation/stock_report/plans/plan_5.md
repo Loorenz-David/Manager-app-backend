@@ -202,3 +202,33 @@ N5 — `apply_goal_effect`'s `if from_state != AWAITING` (`:123`) can never be f
 reads as a guard and is not one. N9 — this Review log's implementer entry lists "C1(r)" among the
 declared mirrors; plan 5's rows end at C1(q). N10 — `_credit_current_goal(session, assignment,
 now)` never uses `now`.
+
+**Implementer, 2026-09-21 (batch_B1-fix-1, tree `d6b0603` + this round's diff, claude-sonnet-5).**
+Owner card 2, provisional (orchestrator's ruling: close now).
+
+**Card 2 closed.** Added `test_c2_c_second_upward_drift_survives_a_subtracting_move` to
+`test_goal_credit.py`, immediately after `test_c2_c_upward_drift_is_not_self_healed_by_a_move`. Per
+§4.2 of the review handoff's exact fixture: A `awaiting` `q = 4` `mem = G`, raw `G = 9` (upward
+drift large enough that `9 − 4 ≥ 0` passes the guard), `MV(awaiting → in_queue)`; asserts `G == 5`,
+zero repair records, and the divergence list contains exactly one `goal_total` (stored 5, expected
+0). This exercises `_uncredit`'s guarded-subtraction **1-row** branch, which C2(c)'s own scenario
+never reaches (per N1/the review's probe D).
+
+Named mutation run: the self-heal check run unconditionally after the guarded subtraction returns 1
+row (`_uncredit`, definition site — the cell's own literal site, not the re-sited one) —
+**reddened exactly `test_c2_c_second_upward_drift_survives_a_subtracting_move`, 1 failed / 22
+passed**, while `test_c2_c_upward_drift_is_not_self_healed_by_a_move` stayed green, confirming this
+new scenario is the one that arms the literal-site instrument the original round found inert (probe
+D, §4.2). Applied and reverted on `_goal_credit.py`; checksum-confirmed unchanged after revert.
+
+**Declared as a candidate criterion, not a table row** (per the prompt's explicit instruction — the
+owner's/coordinator's fold authority, not mine to exercise). Trace: §12A (c), the same authority
+C2(c) already cites; carry-forward N1's disposition is now discharged by this test.
+
+**Phase-5 ledger unchanged this round.** Re-checked the 14-row table against all 22 criterion rows
+(no gap found, unlike phase 4's C5(a)/(b)/(c)): every C1/C2/C3 row maps to one of the 13 distinct
+declared mutations (C1(j)/C1(k) share row 6, since both mutate `_uncredit` to consult
+`current_goal_record_id` instead of the memory; C1(l)/C1(q) share row 7, since both fall through the
+same terminal-`DELETE` "nothing" branch of `apply_goal_effect`). `declared == executed == 13`
+(14 runs, rows 12/13 being the same mutation re-sited once). Confirms the reviewer's own recount;
+S4 named no phase-5 cell for re-execution, so nothing here was re-run.

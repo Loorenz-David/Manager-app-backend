@@ -584,6 +584,49 @@ async def test_c2_c_upward_drift_is_not_self_healed_by_a_move(db_session):
     assert records[0].created_by_id == seeded.manager.client_id
 
 
+async def test_c2_c_second_upward_drift_survives_a_subtracting_move(db_session):
+    """Owner card 2 (batch B1 fix 1, provisional — see the handoff): C2(c)'s named
+    mutation is inert on the scenario above because neither of its two moves ever
+    reaches `_uncredit`'s guarded-subtraction 1-row branch (§4.2 of the review
+    handoff). This scenario drives a move that *does* subtract, against a goal total
+    that has drifted upward but not so far that the guard trips — closing the
+    residual hole the review found. Declared as a candidate criterion in plan 5's
+    Review log, not as a table row (N1)."""
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(db_session, seeded, counters={"quantity_awaiting": 4})
+    goal = await _make_goal(db_session, seeded, row, quantity_awaiting=4, created_at=T0)
+    await _seed_flag(db_session, seeded.task, True)
+    assignment = await _make_assignment(
+        db_session, seeded, row, state=S.AWAITING, credited=goal.client_id
+    )
+    await db_session.execute(
+        text("UPDATE stock_report_history_records SET quantity_awaiting = 9 WHERE client_id = :g"),
+        {"g": goal.client_id},
+    )
+    await move_assignment(
+        db_session,
+        assignment,
+        S.IN_QUEUE,
+        workspace_id=seeded.workspace.client_id,
+        actor_user_id=seeded.manager.client_id,
+        now=NOW,
+        trigger="task_sync",
+    )
+    assert await _fresh_goal(db_session, goal.client_id) == 5
+    assert await _repair_records(db_session, seeded.workspace.client_id) == []
+    divergences = await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
+    goal_divergences = [d for d in divergences if d["kind"] == "goal_total"]
+    assert goal_divergences == [
+        {
+            "kind": "goal_total",
+            "client_id": goal.client_id,
+            "field": "quantity_awaiting",
+            "stored": 5,
+            "expected": 0,
+        }
+    ]
+
+
 async def test_c2_d_recomputation_includes_resolved_early_credit(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 2})

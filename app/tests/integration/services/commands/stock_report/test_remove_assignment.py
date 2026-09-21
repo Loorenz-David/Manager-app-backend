@@ -64,6 +64,33 @@ async def _seed_flag(db_session, task, value):
     )
 
 
+async def _hold_caller_locks(db_session, *, row, assignment=None, task=None):
+    """S2 (batch B1 fix 1): models the locks the real caller already holds before
+    invoking remove_assignment (MC-1's lock order, master plan §9 rule 4) — task first
+    (remove_assignment writes tasks *after* the row and assignment locks, inverting
+    MC-1's order; that is safe only because the caller already holds the task lock),
+    then the stock_report_items row, then the stock_task_assignment. Column-only
+    SELECTs, never a full-entity select, so nothing here repopulates an identity-mapped
+    instance a test deliberately keeps stale. Locking a row this same transaction
+    already holds is a no-op in Postgres. Asserts nothing about internals — fixture
+    fidelity only."""
+    if task is not None:
+        await db_session.execute(
+            select(Task.client_id).where(Task.client_id == task.client_id).with_for_update()
+        )
+    await db_session.execute(
+        select(StockReportItem.client_id)
+        .where(StockReportItem.client_id == row.client_id)
+        .with_for_update()
+    )
+    if assignment is not None and assignment.client_id is not None:
+        await db_session.execute(
+            select(StockTaskAssignment.client_id)
+            .where(StockTaskAssignment.client_id == assignment.client_id)
+            .with_for_update()
+        )
+
+
 async def _task_flag(db_session, task_id):
     return await db_session.scalar(
         select(Task.is_stock_assignment).where(Task.client_id == task_id)
@@ -107,6 +134,7 @@ async def test_c6_a_removing_the_only_assignment_clears_the_flag(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, task=seeded.task, row=row, assignment=assignment)
     await remove_assignment(
         db_session,
         assignment,
@@ -141,6 +169,9 @@ async def test_c6_b_flag_stays_true_while_a_second_assignment_remains(db_session
     await _make_assignment(
         db_session, seeded, row, item=item2, quantity=1, state=S.RESOLVED
     )
+    await _hold_caller_locks(
+        db_session, task=seeded.task, row=row, assignment=assignment_a
+    )
     await remove_assignment(
         db_session,
         assignment_a,
@@ -165,6 +196,8 @@ async def test_c6_c_flag_flip_never_stamps_task_updated_columns(db_session):
         {"t": t_seed, "u": seeded.worker.client_id, "task_id": seeded.task.client_id},
     )
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    # Column-only lock: must not disturb the raw-SQL task stamps just seeded above.
+    await _hold_caller_locks(db_session, task=seeded.task, row=row, assignment=assignment)
     await remove_assignment(
         db_session,
         assignment,
@@ -198,6 +231,7 @@ async def test_c5_c_delete_write_order_self_heals_with_one_repair_record(db_sess
         text("UPDATE stock_report_items SET quantity_in_queue = 0 WHERE client_id = :r"),
         {"r": row.client_id},
     )
+    await _hold_caller_locks(db_session, task=seeded.task, row=row, assignment=assignment)
     await remove_assignment(
         db_session,
         assignment,

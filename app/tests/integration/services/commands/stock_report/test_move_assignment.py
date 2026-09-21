@@ -7,6 +7,7 @@ from beyo_manager.domain.items.enums import ItemStateEnum
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
+from beyo_manager.domain.stock_report.enums import StockReportPriorityEnum
 from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
 from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.items.item import Item
@@ -23,8 +24,15 @@ from beyo_manager.services.commands.stock_report._move_assignment import (
     IllegalAssignmentMove,
     move_assignment,
 )
+from beyo_manager.services.commands.stock_report.repair_stock_report import (
+    repair_stock_report,
+)
 from tests.helpers.statement_listener import count_writes, record_statements
-from tests.helpers.stock_report import assert_stock_report_clean, seed_stock_report_workspace
+from tests.helpers.stock_report import (
+    assert_stock_report_clean,
+    make_ctx,
+    seed_stock_report_workspace,
+)
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -37,7 +45,7 @@ PROPERTIES = {"wood_type": "Teak", "upholstery": "Down"}
 # ---------------------------------------------------------------------------
 
 
-async def _make_row(db_session, seeded, *, counters=None):
+async def _make_row(db_session, seeded, *, counters=None, priority=None, priority_order=None):
     counters = counters or {}
     row = StockReportItem(
         workspace_id=seeded.workspace.client_id,
@@ -48,6 +56,8 @@ async def _make_row(db_session, seeded, *, counters=None):
         quantity_in_queue=counters.get("quantity_in_queue", 0),
         quantity_in_progress=counters.get("quantity_in_progress", 0),
         quantity_awaiting=counters.get("quantity_awaiting", 0),
+        priority=priority,
+        priority_order=priority_order,
     )
     db_session.add(row)
     await db_session.flush()
@@ -90,6 +100,33 @@ async def _seed_flag(db_session, task, value):
         text("UPDATE tasks SET is_stock_assignment = :v WHERE client_id = :t"),
         {"v": value, "t": task.client_id},
     )
+
+
+async def _hold_caller_locks(db_session, *, row, assignment=None, task=None):
+    """S2 (batch B1 fix 1): models the locks the real caller already holds before
+    invoking move_assignment/remove_assignment (MC-1's lock order, master plan §9
+    rule 4) — task first (only relevant ahead of remove_assignment, whose tasks write
+    happens *after* the row and assignment locks, inverting MC-1's order; that is safe
+    only because the caller already holds the task lock), then the stock_report_items
+    row, then the stock_task_assignment. Column-only SELECTs, never a full-entity
+    select, so nothing here repopulates an identity-mapped instance a test deliberately
+    keeps stale (C4(c), C7(d)). Locking a row this same transaction already holds is a
+    no-op in Postgres. Asserts nothing about internals — fixture fidelity only."""
+    if task is not None:
+        await db_session.execute(
+            select(Task.client_id).where(Task.client_id == task.client_id).with_for_update()
+        )
+    await db_session.execute(
+        select(StockReportItem.client_id)
+        .where(StockReportItem.client_id == row.client_id)
+        .with_for_update()
+    )
+    if assignment is not None and assignment.client_id is not None:
+        await db_session.execute(
+            select(StockTaskAssignment.client_id)
+            .where(StockTaskAssignment.client_id == assignment.client_id)
+            .with_for_update()
+        )
 
 
 async def _second_pair(db_session, seeded, suffix):
@@ -219,6 +256,7 @@ async def test_c1_a_to_c_creation(db_session, target, expected_counters):
         item_id=seeded.item.client_id,
         quantity=4,
     )
+    await _hold_caller_locks(db_session, row=row)
     events = await move_assignment(
         db_session,
         assignment,
@@ -256,6 +294,7 @@ async def test_c1_d_in_queue_to_in_progress(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -284,6 +323,7 @@ async def test_c1_e_in_queue_to_awaiting(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -302,6 +342,7 @@ async def test_c1_f_in_queue_to_failed(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -331,6 +372,7 @@ async def test_c1_g_in_queue_to_delete(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -371,6 +413,7 @@ async def test_c1_h_to_j_in_progress_moves(db_session, target, expected_counters
     row = await _make_row(db_session, seeded, counters={"quantity_in_progress": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_PROGRESS)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -388,6 +431,7 @@ async def test_c1_k_in_progress_to_delete(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded, counters={"quantity_in_progress": 4})
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_PROGRESS)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -414,6 +458,7 @@ async def test_c1_l_m_o_awaiting_moves(db_session, target, expected_counters):
     row = await _make_row(db_session, seeded, counters={"quantity_awaiting": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.AWAITING)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -432,6 +477,7 @@ async def test_c1_n_awaiting_to_resolved_scanner(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_awaiting": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.AWAITING)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -463,6 +509,7 @@ async def test_c1_p_awaiting_to_delete(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded, counters={"quantity_awaiting": 4})
     assignment = await _make_assignment(db_session, seeded, row, state=S.AWAITING)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -484,6 +531,7 @@ async def test_c1_q_r_terminal_delete_moves_no_counter(db_session, from_state, r
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     assignment = await _make_assignment(db_session, seeded, row, state=from_state)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -509,9 +557,20 @@ async def test_c1_q_r_terminal_delete_moves_no_counter(db_session, from_state, r
 
 async def test_c1_s_in_queue_to_resolved_early(db_session):
     seeded = await seed_stock_report_workspace(db_session)
-    row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
+    # S3 (batch B1 fix 1, MC-19 payload, owner card 1): priority + priority_order set
+    # on R so the `:updated` payload carries a non-null priority — both fields, or
+    # consistency.py's priority_order_nullness check fails the clean assertion below
+    # for an unrelated reason.
+    row = await _make_row(
+        db_session,
+        seeded,
+        counters={"quantity_in_queue": 4},
+        priority=StockReportPriorityEnum.HIGH,
+        priority_order=1,
+    )
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -543,6 +602,8 @@ async def test_c1_s_in_queue_to_resolved_early(db_session):
         quantity_in_queue=0,
         quantity_in_progress=0,
         quantity_awaiting=0,
+        priority="high",
+        priority_order=1,
     )
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
@@ -552,6 +613,7 @@ async def test_c1_t_in_progress_to_resolved_early(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_progress": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_PROGRESS)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -573,6 +635,7 @@ async def test_c1_u_resolved_early_to_delete(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     assignment = await _make_assignment(db_session, seeded, row, state=S.RESOLVED_EARLY)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -625,6 +688,7 @@ async def test_c2_same_state_is_noop(db_session, state):
     row = await _make_row(db_session, seeded, counters=counters)
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=state)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     async with record_statements(db_session) as statements:
         events = await move_assignment(
             db_session,
@@ -699,6 +763,9 @@ async def test_c3_forbidden_moves_raise(db_session, from_state, target):
         )
     else:
         assignment = await _make_assignment(db_session, seeded, row, state=from_state)
+    await _hold_caller_locks(
+        db_session, row=row, assignment=None if is_creation else assignment
+    )
     with pytest.raises(IllegalAssignmentMove):
         await move_assignment(
             db_session,
@@ -728,6 +795,7 @@ async def test_c4_a_units_not_one(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 8})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, quantity=8, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -751,6 +819,7 @@ async def test_c4_b_two_assignments_second_item_and_task(db_session):
     await _make_assignment(
         db_session, seeded, row, task=task2, item=item2, quantity=5, state=S.IN_QUEUE
     )
+    await _hold_caller_locks(db_session, row=row, assignment=assignment_a)
     await move_assignment(
         db_session,
         assignment_a,
@@ -775,6 +844,9 @@ async def test_c4_c_updated_event_uses_returning_not_stale_orm(db_session):
         text("UPDATE stock_report_items SET quantity_requested = 99 WHERE client_id = :r"),
         {"r": row.client_id},
     )
+    # Column-only lock (never a full-entity select), so it does not touch the
+    # identity-mapped `loaded_row`/`assignment` this test deliberately keeps stale.
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     events = await move_assignment(
         db_session,
         assignment,
@@ -802,6 +874,7 @@ async def test_c5_a_downward_drift_self_heals_with_one_repair_record(db_session,
         text("UPDATE stock_report_items SET quantity_in_queue = 0 WHERE client_id = :r"),
         {"r": row.client_id},
     )
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     with caplog.at_level("WARNING"):
         await move_assignment(
             db_session,
@@ -840,6 +913,7 @@ async def test_c5_b_upward_drift_is_not_self_healed(db_session):
         text("UPDATE stock_report_items SET quantity_in_queue = 5 WHERE client_id = :r"),
         {"r": row.client_id},
     )
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -855,9 +929,11 @@ async def test_c5_b_upward_drift_is_not_self_healed(db_session):
         compute_stock_report_divergences,
     )
 
+    # S1 (batch B1 fix 1): the row says "check reports one" — assert the divergence
+    # list whole, not filtered to one kind, so a second, unrelated divergence would
+    # not pass unnoticed.
     divergences = await compute_stock_report_divergences(db_session, seeded.workspace.client_id)
-    counter_divergences = [d for d in divergences if d["kind"] == "counter_in_queue"]
-    assert counter_divergences == [
+    assert divergences == [
         {
             "kind": "counter_in_queue",
             "client_id": row.client_id,
@@ -866,6 +942,18 @@ async def test_c5_b_upward_drift_is_not_self_healed(db_session):
             "expected": 0,
         }
     ]
+
+    # S1: the row's fourth clause — repair_stock_report then clears it — mirroring
+    # test_c2_c's closing block (plan 5's twin of this row).
+    ctx = make_ctx(db_session, seeded, incoming_data={}, query_params={})
+    ctx.now = NOW
+    result = await repair_stock_report(ctx)
+    assert [entry["kind"] for entry in result["repaired"]] == ["counter_in_queue"]
+    assert await _counters(db_session, row.client_id) == (0, 4, 0)
+    records = await _repair_records(db_session, seeded.workspace.client_id)
+    assert len(records) == 1
+    assert records[0].trigger == "manual"
+    assert records[0].created_by_id == seeded.manager.client_id
 
 
 # ---------------------------------------------------------------------------
@@ -878,6 +966,7 @@ async def test_c7_a_stamps_actor_and_now(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -897,6 +986,7 @@ async def test_c7_b_null_actor_means_scanner(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_awaiting": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.AWAITING)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -917,6 +1007,7 @@ async def test_c7_c_delete_stamps_deleted_only(db_session):
     assignment = await _make_assignment(
         db_session, seeded, row, state=S.IN_QUEUE, updated_by_id=seeded.worker.client_id
     )
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -945,6 +1036,9 @@ async def test_c7_d_counter_move_does_not_stamp_the_row(db_session):
         {"t": t_seed, "u": seeded.worker.client_id, "r": row.client_id},
     )
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    # Column-only lock (never a full-entity select): must not disturb the raw-SQL
+    # stamps just seeded on R, which this row's assertion depends on staying put.
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
@@ -978,6 +1072,7 @@ async def test_required_ledger_row_double_decrement_self_heals(db_session):
     row = await _make_row(db_session, seeded, counters={"quantity_in_queue": 4})
     await _seed_flag(db_session, seeded.task, True)
     assignment = await _make_assignment(db_session, seeded, row, state=S.IN_QUEUE)
+    await _hold_caller_locks(db_session, row=row, assignment=assignment)
     await move_assignment(
         db_session,
         assignment,
