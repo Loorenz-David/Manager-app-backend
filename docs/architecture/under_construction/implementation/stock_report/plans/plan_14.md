@@ -86,6 +86,40 @@ New: `docs/handoff/to_frontend/STOCK_REPORT_API_v1_<YYYYMMDD>.md`, `docs/domains
 - The guard's roots are `docs/domains/stock_report/` and the one handoff file; state the roots in
   the test (verification-scope rule).
 
+**Added by the batch D projection + fold, 2026-09-21 (round 0). Nothing below changes a criterion outcome.**
+
+- **Two frontend handoffs for this project are already published**, both under
+  `docs/architecture/under_construction/implementation/stock_report/handoffs/to_frontend/`:
+  `HANDOFF_TO_FRONTEND_stock_report_api_20260921.md` (all batch-D endpoints, tagged PROVISIONAL,
+  and it explicitly promises "the backend derives the nullability contract from shipped code in
+  phase 14") and `HANDOFF_TO_FRONTEND_stock_report_match_preview_v2_20260921.md` (the ratified
+  preview contract, **correct as written**, `item_category_id` required — no v3). §4 names a third
+  file in a **different folder** (`docs/handoff/to_frontend/`) under a **different convention**
+  (`STOCK_REPORT_API_v1_<date>.md`), which would leave three live documents and supersede two
+  published contracts without saying so. Reconciling the file name, the folder and the
+  supersession sentence is a plan/owner call before the prompt compiles.
+- **The match-preview endpoint is missing from this plan's tasks.** §2 cites neither §14G nor
+  MC-21, and tasks 1 and 3 never name `POST /items/{client_id}/match-preview` — the only phase-8A
+  surface the frontend has to build against. C1(a) would catch the route mechanically (it parses
+  the router), but nothing makes tasks 1/3 document its request body, its check vocabulary or the
+  required `item_category_id`.
+- **C1(b)'s stated root cannot see four of the six event names.** `_events.py` contains one
+  literal (`stock_report_item:updated`) plus the f-string `f"stock_task_assignment:{kind}"`;
+  `stock_report_item:created` is built in `apply_stock_demand.py:271`, and
+  `stock_report_item:deleted` will be built wherever phase 13 puts it. A guard rooted in
+  `_events.py` alone would assert one name and pass. The root has to be every `event_name=` site
+  under `bm/services/commands/stock_report/` plus the three `kind` values — or master plan §6.7's
+  list. Changing a row's root is an owner card.
+- **L-38.** Before the docs guard is called armed, grep the whole repo — tests included — for how
+  routes, roles and event names are actually written, and plant that spelling. The router declares
+  roles as `Depends(require_roles([ADMIN, MANAGER, WORKER]))` with the constants imported by name,
+  not as string literals; a guard that greps for `"admin"` finds nothing and passes.
+- **No register lesson names phase 14, and that is an oversight, not a judgement.** L-15 (a
+  `sorted()` over a `set` needs ≥ 3 elements or the assertion is the guard), L-26 (an absence
+  instrument deserves one positive observation) and L-32 (name the property, not the statement)
+  all bear on a docs guard whose whole job is an absence claim. Charter rule 15 applies in full:
+  each of C1(a)–C1(d) ships with the planted deletion observed red, which the cells already name.
+
 ## 8. Review log
 
 (empty)
