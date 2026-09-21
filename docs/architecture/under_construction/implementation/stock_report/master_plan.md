@@ -129,6 +129,11 @@ default because plans 11 and 13 build `resolved_early` fixtures through `PR` onc
 - **Owner**: carries artifacts between sessions — orchestrator → owner → Codex → owner →
   orchestrator → owner → reviewer → owner → orchestrator — and decides exceptional questions.
 
+**Suspended for batch C.** The three "launched by the owner" clauses above are overridden for the
+duration of batch C by §3B's owner exception of 2026-09-21: the orchestrator launches all four
+roles as subagents, and the implementer is a Sonnet subagent rather than Codex. Read §3B's *Who
+launches* bullet, not this list, until batch C is APPROVED.
+
 **Batch projection (replaces per-phase round-0 projection).** Before compiling a batch prompt the
 orchestrator reads the batch's phase plans and checks only: cross-phase contradictions, dependency
 problems, integration hazards, externally derived assumptions still unverified (rule 17), locking
@@ -234,18 +239,53 @@ its projection.
   The **tester's handoff** (`handoffs/tester/`, prompts in `prompts/tester/`) carries the
   three-table verification ledger per phase with `executed == declared` and its own L4 on the tree
   it hands over. The reviewer consumes the tester's stamp.
-- *Mutation cells:* a cell that names a mutation is binding (closed set). For a `—` cell the
-  tester applies its doctrine — one load-bearing mutation, a shared one already observed on the
-  row's own assertion, or a recorded equivalent — and **proposes** the cell's backfill; the
-  orchestrator folds it. The tester edits no plan cell. §9 rules 8 and 9 bind the tester as written.
+- *Mutation cells (amended by the owner, 2026-09-21 — supersedes this bullet's original text,
+  which left every `—` cell to the tester):* a cell that names a mutation is binding (closed set).
+  The **projection** attempts a mutation for every `—` cell in its scope and sorts it into three
+  classes, because the 94 cells are not one kind of thing:
+  1. **Plan-determined** — the mutation is derivable from the row's own fixture/outcome/trace text
+     without knowing how the code will be written (drop a named filter, unsort a named list,
+     delete a named guard or call, flip a named literal or map cell). **The orchestrator folds
+     these**, restoring the `executed == declared` gate on them.
+  2. **Site-undetermined** — the outcome is real but the line that makes it true is an
+     implementation choice. The cell stays `—` **with a one-line note saying the blank is
+     deliberate**, so the tester knows to site it on real code rather than read it as an
+     oversight; the tester sites it, declares it in ledger table 1, and proposes the backfill.
+  3. **Reveals a defect** — the attempt exposes a fixture too uniform to discriminate, a sort/set
+     row with < 3 elements, a tenancy row with no cross-workspace reference, a paraphrased
+     outcome, or a contradiction with another row. Fixture cells fold to the orchestrator;
+     anything touching an outcome or a criterion row is an **owner card**.
+
+  *Why the split.* Measured over batch C's 67 cells (plans 8, 9, 10, 11) before any code existed:
+  **57 plan-determined, 5 site-undetermined, 5 defective.** Leaving all 67 to the tester would
+  hand it 57 derivations it gains nothing by making and would drop the closed-set gate on all 67
+  to keep 5 honest; pre-naming all 67 would repeat batch B's inert and declined mutations, which
+  are concentrated in exactly the 5. The class-3 finding is the load-bearing one: trying to name a
+  mutation is the cheapest known test of a row, and when it fails the repair is usually a
+  **fixture** cell — which neither implementer nor tester may edit, so a tester meeting it at
+  arming time is blocked mid-session.
+
+  The tester prompt states the split explicitly: *declared = the N named cells in your scope; the
+  M deliberate blanks are yours to site and propose.* The tester still edits no plan cell. §9
+  rules 8 and 9 bind the tester as written.
 - *Review:* per §3A, against the tester's ledger; every finding carries `route: production |
   verification | plan`. *Fix:* one prompt **per routed role**, not one Codex prompt — production
   first when both exist, and the tester then re-arms only the rows whose test or mutation site the
   fix touched. §3A's owner stop on a second CHANGES_REQUESTED and its light re-review scope are
   unchanged.
-- *Who runs it:* a Claude session with `verification-engineer`, **never Sonnet, launched by the
-  owner** with the orchestrator's prompt (§3A's manual bridge; the orchestrator still launches
-  nothing). It shares no context with the implementer.
+- *Who runs it:* a Claude session with `verification-engineer`, **never Sonnet**. It shares no
+  context with the implementer.
+- *Who launches (owner exception, 2026-09-21 — batch C only):* **the orchestrator launches all
+  four roles directly** — projectionist, implementer, tester, reviewer — as subagents, suspending
+  §3A's manual bridge for the duration of batch C. Granted by the owner to measure the tester
+  addition end-to-end against batch B's overnight run (which was reliable but long); the
+  hypothesis under test is *shorter and still reliable*. A subagent starts with a fresh context,
+  so the no-shared-context requirement above is satisfied by construction. Models for batch C:
+  projectionist Opus · implementer Sonnet (measured: production was right in round 1 across A, B1
+  and B2 under Sonnet, and the proof burden that exposed it has moved to the tester) · tester
+  Opus · reviewer Opus. **The exception expires at batch C APPROVED**; batch D re-reads this
+  bullet. Everything else in §3A's bridge — the owner stop on a second CHANGES_REQUESTED, owner
+  cards, and the reservation of criterion-row authorship to the owner — is untouched.
 - *States (§4A):* `… IMPLEMENTED → TEST_PROMPT_READY → TESTING → TESTED → REVIEW_PROMPT_READY →
   REVIEWING → (CHANGES_REQUESTED → FIX_PROMPT_READY[role] → … → TESTED → …)* → APPROVED`. A
   tester handoff with a `BLOCKED-PRODUCTION` row returns to the implementer before any review is
