@@ -1,0 +1,159 @@
+---
+batch: C2
+phases: [9, 10]
+role: review
+round: 1
+state: DRAFT
+date: 2026-09-21
+actor: orchestrator
+model: Opus
+---
+
+# Batch C2 review — plans 9 and 10
+
+> **DRAFT.** "Trees and artifacts", "Already verified by the orchestrator" and "Where your budget
+> buys something new" are completed by the orchestrator from the implementer's and tester's
+> handoffs before dispatch. Do not dispatch while this banner is present.
+
+Read these by absolute path first and follow them as session doctrine:
+
+- `/Users/davidloorenz/agent-skills/plan-reviewer.md`
+- `/Users/davidloorenz/agent-skills/pipeline-charter.md`
+
+Project root: `/Users/davidloorenz/Desktop/Developer/BeyoApps_2025/ManagerBeyo-app/backend`
+Project dir: `docs/architecture/under_construction/implementation/stock_report/` (below, `SR/`)
+
+**Scope:** `SR/plans/plan_9.md` and `SR/plans/plan_10.md`. The authority above them is
+`SR/planning/intention.md` — RATIFIED — and it **wins over any plan**. Read `SR/master_plan.md`
+§3B (how this project runs the tester), §6 (registry), §9 (standing rules), §9A (lessons), §10
+(environment facts).
+
+## Trees and artifacts
+
+- **Implementer handoff:** `SR/handoffs/implementer/2026-09-21_batch_C2_implement_1_handoff.md`
+- **Tester handoff:** `SR/handoffs/tester/2026-09-21_batch_C2_test_1_handoff.md`
+- **Implementer checkpoints:** _(orchestrator fills)_
+- **Tester checkpoint:** _(orchestrator fills)_
+
+## ⚠ A second workstream is in this tree — do not charge it to this batch
+
+**Set `BEYO_TEST_SLOT=c2` on every pytest invocation, not just the L4.** `pytest.ini` carries
+`-n 6 --dist loadfile`, so even a single-file run claims six worker databases. Omitting the slot
+silently shares the default `main` slot with the other workstream and makes both results
+worthless **while looking like genuine failures**.
+
+Phase 8A (match preview + the MC-21 extraction) landed at `9105f71`, implemented on Codex, and is
+**implemented but NOT approved** — its own review ran in parallel and may have landed fixes. Its
+files:
+
+```
+app/beyo_manager/domain/stock_report/assignment_checks.py
+app/beyo_manager/domain/stock_report/enums.py                      # ALSO in plan 9's perimeter
+app/beyo_manager/routers/api_v1/stock_report.py                    # possibly also plan 9's
+app/beyo_manager/services/commands/stock_report/create_stock_task_assignments.py
+app/beyo_manager/services/queries/stock_report/assignment_check_inputs.py
+app/beyo_manager/services/queries/stock_report/preview_stock_task_assignment_match.py
+```
+
+Three are shared surfaces. **8A's content is out of your scope and is not a finding here.** What
+*is* in your scope: whether this batch's changes to the three shared files are correct and
+declared. If you cannot separate the two authorships in a diff, say so rather than guessing.
+
+## Already verified by the orchestrator — consume by citation, do not re-run
+
+_(orchestrator fills: the independently re-run L4, both failure-ID diffs, the pass-count
+arithmetic, and confirmation that the tester's tree matches the implementer's in production code.)_
+
+Per the charter's test-evidence rule, tree-matched evidence is consumed by citation. **Do not
+re-run an L4 to confirm what is already tree-matched** — spend that budget on variation instead.
+
+## Where your budget buys something new
+
+_(orchestrator fills from tester §10 "variation not spent" and both handoffs' judgment calls.)_
+
+Standing leads for this batch, independent of what the handoffs say:
+
+1. **Plan 10's three C5 rows are this batch's hard evidence, and the likeliest place for a row
+   that cannot fail.** They assert three serialization orders forced by a **referee** session
+   that holds the row's `FOR UPDATE` while each participant's command is observed to block;
+   Postgres then queues the waiters in arrival order. The precedent is `test_apply_stock_demand.py:821-867`.
+   **The two observed blocks are assertions, not setup** — a C5 test that does not observe both
+   has not forced its order, whatever it asserts afterwards. The B1 lesson is exactly this shape:
+   a lock test that ran inside one transaction and could not fail. Check that each C5 mutation
+   reddens **deterministically**, not once.
+2. **Rule 16 makes several rows inert if production spells its states out.** Both plans carry
+   rows whose named mutation *is* a hand-typed state list. If the real code does not use
+   `ACTIVE_ASSIGNMENT_STATES` / `TERMINAL_ASSIGNMENT_STATES`, those mutations prove nothing even
+   though they redden.
+3. **Two rows are UNFAILABLE BY DESIGN by owner ruling** — plan 10 C2(a) and C7(b) — and **three
+   are deliberate class-2 blanks** — plan 10 C4(a) (the guard's control row) and plan 9 C2(a) and
+   C2(d) (both landing on one shipped guard at `stock_demand_request.py:34`). The rulings are
+   settled; **do not re-litigate them.** Do check they were applied to the right rows, which is a
+   different question, and check that the *real* evidence each cell names actually exists.
+4. **Plan 9 C8(b)** stays `UNFORCEABLE` with a structural check (§9 rule 9). Judge whether the
+   structural check honestly discharges what the row promises.
+5. **Plan 9 C8(c) is §9 rule 18's second instance** — it pins `resolve_processed_group`'s callable
+   contract and returned event kinds. It is deliberately **not** a second copy of the webhook's
+   behavioural coverage; if it has become one, that is over-verification and a `verification`
+   finding.
+6. **§10 — `client_id` order is not creation order** (ULIDs, no monotonic counter; 977 of 1999
+   consecutive pairs measured out of order). Plan 9 groups and orders rows. A test that assumes
+   insertion order passes by luck, and any mutation against an order it never established is
+   inert. This is a cheap, high-yield thing to grep for.
+
+**Sample the dispositions that can hide a row that cannot fail** — `ARMED-SHARED`, `EQUIVALENT`
+and `UNFORCEABLE`. That is where "the same code edit arms both rows" gets asserted rather than
+measured (§9 rule 8).
+
+## What this batch is also measuring
+
+Batch C1 was the tester role's first run: **103 mutations, zero production defects, eleven rows
+that could not fail.** The reviewer then found **two real production bugs** by going *past the
+rows* to the ratified authority — and one was a **missing row**, which the tester structurally
+cannot find.
+
+That is the division of labour, and it tells you where your budget is worth most: **the rows are
+already the tester's job.** Yours is the authority the rows were derived from. Read §14F and the
+MC contracts and ask what they promise that no row in either plan asks about.
+
+## Owner rulings binding on this review
+
+Five cards were ruled at the C2 projection, 2026-09-21 (`13a3e14`). Settled — check application,
+not merit:
+
+- Plan 9 **C7(b)** re-stated to the observable grouped outcome (both affected rows end at their
+  expected zero counters, each emits exactly one update event). It must **not** assert the number
+  of SQL `UPDATE` statements or runtime row ordering; ascending `client_id` lock ordering stays a
+  structural invariant verified by the existing structural criterion. **A test asserting statement
+  counts here is a finding.**
+- Plan 9 **C8(c)** authored (card 5) — the rule-18 pin described above.
+- Plan 9 **C3(g)** gained the echo clause; plan 9 §6 gained the quantity preamble (where a row
+  says `q = n`, the fixture sets item I's `quantity` to `n` before `CR`; **F0's default is 4, not
+  the 8 some C4 rows assume**).
+- Plan 10 **§6 gained the referee-lock choreography** and its three C5 fixtures/mutations were
+  rebuilt (cards 3 and 4).
+- Plan 9 §4 gained `_move_assignment.py` and `enums.py`; both plans gained a §7 bullet authorising
+  named mutations in approved phases' files.
+
+Also new since C1: §3B's rule that **a ruling adding an assertion must reach the tester or it is
+paperwork** — earned because C1 folds landed behind a handed-over tester and surfaced as findings
+S2/S3. If you find a ratified clause in either plan with nothing proving it, check the fold date
+against the tester's dispatch before routing it: it may be this failure mode, which routes `plan`
+and is the orchestrator's, not the implementer's.
+
+## Deliverable
+
+Your handoff at `SR/handoffs/reviewer/2026-09-21_batch_C2_review_1_handoff.md`, per your closing
+protocol: per-row PASS / FAIL / NOT_VERIFIED for every row in both plans, the verdict
+(`APPROVED` / `CHANGES_REQUESTED`), findings each with a `route` — `production` (code wrong) ·
+`verification` (code right, proof weak, missing or excessive) · `plan` (row ambiguous,
+contradictory or unprovable) — notes, and owner cards under `⚠ OWNER DECISIONS REQUIRED (n)`.
+
+**Over-verification is a finding too.** If the tester spent budget where a row did not ask for it,
+route it `verification` and say so; the role is being calibrated and a silent pass teaches nothing.
+
+You fix nothing. Never push. If you run a probe in production code, revert it and show the file
+byte-identical.
+
+Report what you did not check, plainly. Every prior session in this project did, and it is why
+this prompt can point you at something useful instead of everything.
