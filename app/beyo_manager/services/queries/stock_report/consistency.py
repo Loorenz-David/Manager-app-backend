@@ -5,7 +5,10 @@ from sqlalchemy import func, select
 from beyo_manager.domain.stock_report.criteria_normalization import (
     compute_stock_criteria_signature,
 )
-from beyo_manager.domain.stock_report.enums import ACTIVE_ASSIGNMENT_STATES
+from beyo_manager.domain.stock_report.enums import (
+    ACTIVE_ASSIGNMENT_STATES,
+    StockReportHistoryRecordTypeEnum,
+)
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
@@ -201,7 +204,11 @@ async def compute_stock_report_divergences(
         (
             await session.execute(
                 select(StockReportHistoryRecord)
-                .where(StockReportHistoryRecord.workspace_id == workspace_id)
+                .where(
+                    StockReportHistoryRecord.workspace_id == workspace_id,
+                    StockReportHistoryRecord.type
+                    == StockReportHistoryRecordTypeEnum.QUANTITY_REQUESTED_CHANGE,
+                )
                 .execution_options(populate_existing=True)
             )
         )
