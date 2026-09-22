@@ -535,6 +535,35 @@ unnecessary" with its conditions, like D-6 and D-11.
 rather the one-line fix land now than wait for the projection's answer, say so and it is a
 five-minute change.
 
+---
+
+# D2 projection cards — owner rulings, 2026-09-22
+
+Verbatim: *"yes for both ( recomendations are correct )"*, answering the two I put to the owner.
+
+| Card | Ruling | Authority |
+|---|---|---|
+| **D2-3 / plan 14 C2(a)** — the last documentation check | **AUTOMATE it.** A small test compares the handoff's field table against the serializers. It stops being the one criterion in the project met by a reviewer's eye rather than by a test | **owner, 2026-09-22** |
+| **Frontend board bug (BL-1)** | **QUEUE as the first item of the wiring stage**, not fixed today. It is in the frontend repo and outside this pipeline | **owner, 2026-09-22** |
+| **D2-1 / C5(b)'s staleness premise** | **Settled by the orchestrator's re-measurement, not by the owner** — the premise is **false**; see L-40's correction and L-49. Mutant (i) is retired as unprovable | orchestrator, measured |
+| **D2-2 / D-3, the validators** | **CLOSE as "no change" — phase 7 is not touched.** This is the owner's own conditional ruling of 2026-09-22 discharging itself: *"D2's projection establishes whether 13A needs the validators exposed at all; if it does not, phase 7 is not touched."* The projection established it does not — `stock_demand_request.py:48-56` holds no validator *functions*, only three inline expressions, so "exposing" would mean **writing a new helper inside an APPROVED file**, and no test anywhere pins the defect strings. 13A writes its own four lines | owner's conditional, discharged |
+
+### The one consequence of D2-1 that needs recording rather than ruling
+
+With mutant (i) retired, **nothing in the project observes the cascade's fresh `SELECT` of
+`priority`/`priority_order`.** It is recorded as **"unobservable, not unnecessary"**, like D-6 and
+D-11, and with its conditions stated:
+
+The re-read is inert **because** `synchronize_session="auto"` resolves to `"evaluate"` and every
+term of `_group_where` plus the band evaluates identically in Python and in SQL **when the caller
+passes an enum member**, which `cascade_delete_stock_report_item` does (`priority=row.priority`).
+**It expires if** any of those becomes true: a criterion is added that Python cannot evaluate (a SQL
+function, a subquery, a JSON operator); the caller ever passes a plain string again; the held object
+is detached or expired rather than live in the identity map; or SQLAlchemy's default strategy
+changes. **In any of those the re-read becomes load-bearing.** It is correct defensive code and is
+**not** to be deleted on the strength of being inert — that is exactly the misreading the
+`EQUIVALENT` label invites and the reason the owner required this wording.
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:
