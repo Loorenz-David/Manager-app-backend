@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from beyo_manager.config import Settings
 from beyo_manager.domain.items.enums import ItemStateEnum
@@ -519,6 +519,87 @@ async def test_non_integer_target_is_a_validation_error(db_session):
         await db_session.commit()
 
 
+async def test_order_lookup_refuses_foreign_deleted_and_absent_rows(db_session):
+    """Plan 12 C1(p) — the tenancy and visibility boundary of the *second* route.
+
+    C1(o)'s twin. `PATCH …/priority-order` is a separate route with its own
+    `require_roles` list, request model and command module; the lookup is shared,
+    so the behaviour is right — what was missing is the test that would notice if
+    it were not. The foreign row is a **cross-workspace reference**: same category
+    name, same properties, same `high` group with the same orders, so tenancy is
+    the only reason the call refuses.
+
+    Two fixture choices that the row's mutants depend on:
+
+    * the soft-deleted cell is **D**, the last row of a real `high` group, not the
+      null row `N`. Admitting `N` would answer `STOCK_REPORT_ROW_HAS_NO_PRIORITY`
+      and never reach the move; admitting D renumbers its **live** neighbours
+      around it, which is the `order_density` divergence the cell names. Deleting
+      the group's last row leaves `A1 B2 C3` dense, so the fixture itself plants
+      no drift.
+    * the refusals are **collected** and the state is read **per cell, before the
+      rollback**. Two things would otherwise make the "no state anywhere changes"
+      half of the outcome unable to fail. Under `pytest.raises` the first cell
+      that does not raise returns before that half ever executes (charter rule
+      12). And `maybe_begin` is subordinate whenever the session already holds a
+      transaction — a state read opens one — so a leaked write would be undone by
+      the loop's own `rollback()` and read back clean. Rolling back at the **top**
+      of each iteration keeps the command in owner mode, where it commits, and
+      the read that follows sees what leaked. Measured: with the read after the
+      rollback, mutant (i) left both state assertions green.
+    """
+    seeded = await seed_stock_report_workspace(db_session)
+    foreign = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    foreign_id = foreign.workspace.client_id
+    S = _seller(db_session, seeded)
+    try:
+        g = await _seed_groups(db_session, workspace_id)
+        fg = await _seed_groups(db_session, foreign_id)
+        await db_session.execute(
+            text(
+                "UPDATE stock_report_items SET is_deleted = true "
+                "WHERE client_id = :client_id"
+            ),
+            {"client_id": g.D},
+        )
+        await db_session.commit()
+        before = await _state(db_session, workspace_id)
+        foreign_before = await _state(db_session, foreign_id)
+
+        refused = []
+        for client_id in (fg.B, g.D, "sri_absent"):
+            await db_session.rollback()
+            try:
+                await _SO(db_session, S, client_id, 1)
+            except NotFound:
+                refused.append(client_id)
+            assert await _state(db_session, workspace_id) == before, client_id
+            assert await _state(db_session, foreign_id) == foreign_before, client_id
+
+        assert await _records(db_session, workspace_id) == []
+        assert await _records(db_session, foreign_id) == []
+        await assert_stock_report_clean(db_session, workspace_id)
+        assert refused == [fg.B, g.D, "sri_absent"]
+    finally:
+        # A tenancy leak wires the two workspaces together in **both**
+        # directions: a history record of W points at the foreign row, and that
+        # row's `updated_by_id` points at W's seller. Either purge order then
+        # trips an FK RESTRICT, and an exception raised in `finally` *replaces*
+        # the assertion that fired — the run reports an opaque IntegrityError
+        # instead of "the foreign workspace changed" (measured under mutant (i)).
+        # Clearing W's records first breaks the cycle.
+        await db_session.execute(
+            delete(StockReportHistoryRecord).where(
+                StockReportHistoryRecord.workspace_id == workspace_id
+            )
+        )
+        await purge_stock_report_workspace(db_session, foreign_id)
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
 # ---------------------------------------------------------------------------
 # The priority change (MC-7 rows 6-9)
 # ---------------------------------------------------------------------------
@@ -636,6 +717,44 @@ async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_sessio
         assert records[0].priority_order == 3
         assert records[0].quantity_awaiting == 4
         # §9 rule 2 — this is the clause that fails.
+        await assert_stock_report_clean(db_session, workspace_id)
+    finally:
+        await purge_stock_report_workspace(db_session, workspace_id)
+        await db_session.commit()
+
+
+async def test_the_order_record_snapshots_awaiting_without_tripping_the_check(
+    db_session,
+):
+    """Plan 12 C3(e) — the other half of the `2fb7acb` fix.
+
+    That fix scoped `consistency.py`'s `goal_total` rule to goal records, and
+    excludes **two** history types from it. The witness beside this one
+    (`test_the_priority_record_snapshots_the_live_awaiting_counter`, C3(d))
+    watches `priority_change` only: re-admitting `priority_order_change` to the
+    predicate left every stock-report test green.
+
+    `SO(B, 1)` on a row carrying one `awaiting` assignment of q = 4 — a scenario
+    that plants **no** drift. The record legitimately snapshots a live counter
+    that nothing credits, so a `goal_total` check applied to it can never be
+    satisfied, and `compute_stock_report_divergences` must still answer `[]`.
+    """
+    seeded = await seed_stock_report_workspace(db_session)
+    await db_session.commit()
+    workspace_id = seeded.workspace.client_id
+    S = _seller(db_session, seeded)
+    try:
+        g = await _seed_groups(db_session, workspace_id)
+        await _awaiting_assignment(db_session, seeded, g.B, 4)
+        assert (await _row(db_session, g.B)).quantity_awaiting == 4
+
+        await _SO(db_session, S, g.B, 1)
+
+        records = await _records(db_session, workspace_id)
+        assert len(records) == 1
+        assert records[0].type is StockReportHistoryRecordTypeEnum.PRIORITY_ORDER_CHANGE
+        assert records[0].quantity_awaiting == 4
+        # The clause the fix exists for: no phantom `goal_total` divergence.
         await assert_stock_report_clean(db_session, workspace_id)
     finally:
         await purge_stock_report_workspace(db_session, workspace_id)

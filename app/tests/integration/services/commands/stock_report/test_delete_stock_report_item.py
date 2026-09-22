@@ -343,6 +343,19 @@ async def test_cascade_removes_every_assignment_and_soft_deletes_the_row(
     assert names.count("stock_task_assignment:deleted") == 4
     assert names.count("stock_report_item:deleted") == 1
     assert "stock_report_item:updated" not in names
+
+    # C3(b): the `:deleted` event's **shape** (master plan §6.7, §6.5, §9 rule 18;
+    # the published frontend contract §7). Until this block existed the builder
+    # was registered and pinned by nothing — the re-review set its payload to junk
+    # and all six delete tests passed. `extra` is asserted as EQUALITY: a subset
+    # check ("no forbidden key present") is what let the junk through.
+    deleted_event = next(
+        event for event in captured if event.event_name == "stock_report_item:deleted"
+    )
+    assert deleted_event.event_name == "stock_report_item:deleted"
+    assert deleted_event.client_id == row.client_id
+    assert deleted_event.workspace_id == deleted_row.workspace_id
+    assert deleted_event.extra == {}
     assert await _goal_awaiting(db_session, goal.client_id) == 8
     assert (
         await db_session.execute(

@@ -527,3 +527,49 @@ is the owner's to authorise (card D-12); I authored none.
 
 **Nothing else in plan 12 changed.** No production file, test file or criterion cell of this phase
 was touched by this round; no tracker row written (§4: orchestrator-only).
+
+## Review log — verification, post-gate arming round (2026-09-22, Opus tester, slot `dq`)
+
+Scope: the two rows the owner ruled and the coordinator authored **after** the D1 gate — **C1(p)**
+and **C3(e)**. Both are now ARMED. No production file changed (`git diff HEAD -- app/beyo_manager/`
+→ 0 files); every probe reverted with `git diff --quiet` exit 0. No criterion cell edited.
+
+**C1(p)** — new test `test_order_lookup_refuses_foreign_deleted_and_absent_rows` in
+`test_stock_report_priority_and_ordering.py`, the twin of C1(o)'s. All three named mutants run and
+red. Three judgment calls, each of which changed the outcome:
+
+1. **Sited at the command's tenancy boundary from the start, not at `_find_row` alone.** Every one
+   of the three would be absorbed by the post-lock re-read if applied to `_find_row` only — the
+   `priority-order` command carries the same double guard as the `priority` command, where the D1
+   tester measured both inert sitings (M-16a, M-17a). I did not re-measure the inert siting on
+   this second module; the structure is identical and the precedent is tree-bound.
+2. **The soft-deleted cell is `D`, not the null row `N`.** Admitting `N` answers
+   `STOCK_REPORT_ROW_HAS_NO_PRIORITY` and never reaches the move, so mutant (ii)'s named bite —
+   live neighbours renumbered, `order_density` diverges — would be unreachable. `D` is the last
+   row of a real `high` group, so deleting it leaves `A1 B2 C3` dense and the fixture plants no
+   drift. Measured red: a live `high` row moved 3 → 4.
+3. **The "no state anywhere changes" clause could not fail as first written, and the reason
+   generalises.** `maybe_begin` is *subordinate* whenever the session already holds a transaction —
+   and a state read opens one — so the command does not commit, and the loop's own `rollback()`
+   erased the leaked write before it could be read back. Measured: with the read placed after the
+   rollback, mutant (i) left **both** state assertions green while the leak was real. Rolling back
+   at the **top** of each iteration keeps the command in owner mode and the clause becomes
+   falsifiable. **C1(o)'s test has the same shape**; its state clause is inert for the same reason.
+   It is never exposed there because `pytest.raises` fires first on every one of its three mutants,
+   so the row is armed either way — but the clause is decoration. Reported, not fixed: C1(o) is
+   APPROVED and outside this round's perimeter.
+4. **A teardown fix, because an exception in `finally` *replaces* the assertion that fired.** A
+   tenancy leak wires the two workspaces together in both directions (a history record of W points
+   at the foreign row; that row's `updated_by_id` points at W's seller), so either purge order
+   trips an FK RESTRICT and the run reports an opaque `IntegrityError` instead of "the foreign
+   workspace changed". Measured under mutant (i) before the fix. W's records are now cleared first.
+
+**C3(e)** — new test `test_the_order_record_snapshots_awaiting_without_tripping_the_check`. The
+named mutant (widen the `histories` predicate to admit `PRIORITY_ORDER_CHANGE`) reddens it on
+`assert_stock_report_clean`'s divergence assertion and **nothing else in the file** — C3(d)'s
+witness stays green, which is exactly the half-guarded fix the row was authored to close.
+
+**Proposed plan-cell backfills** (the coordinator folds; I authored nothing): C1(p)'s mutation cell
+should say the three mutants are sited across `_find_row` **and** `_lock_row_and_group` (plus the
+post-lock guard for (ii)), as C1(o)'s cell now does — sited at `_find_row` alone all three are
+absorbed.

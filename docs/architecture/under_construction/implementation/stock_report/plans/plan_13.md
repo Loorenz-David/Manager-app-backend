@@ -493,3 +493,43 @@ legitimately part of the fix perimeter; `shasum -c` OK and `grep -c "PROBE P7"` 
 
 **Nothing else in plan 13 changed.** No production file, test file or criterion cell of this phase
 was touched by this round; no tracker row written (§4: orchestrator-only).
+
+## Review log — verification, post-gate arming round (2026-09-22, Opus tester, slot `dq`)
+
+Scope: **C3(b)** only, the row the owner ruled and the coordinator authored after the D1 gate. Now
+ARMED on three of its four clauses by mutation and the fourth by a replacement mutant. No
+production file changed; every probe reverted with `git diff --quiet` exit 0. No criterion cell
+edited.
+
+**Evidence is a strengthening, not a new test.** C1(a)'s fixture is ~40 lines of setup and four
+`CR` + `move_assignment` calls; the cell names that fixture, and
+`test_cascade_removes_every_assignment_and_soft_deletes_the_row` already captures the dispatch
+list. Four assertions were added there rather than duplicating the fixture. `extra` is asserted as
+**equality** (`== {}`), which is the clause that bites.
+
+**Mutant (i)** — `extra={"stock_report_item_id": client_id}` — red on `assert deleted_event.extra
+== {}`, and on nothing else in the file. That is the defect the re-review planted and all six
+delete tests survived; one test now catches it.
+
+**Mutant (ii) cannot be applied: the code is already in the mutant state.** The cell says "take
+`workspace_id` from the caller's `ctx` rather than the row". At the call site
+(`_delete_stock_report_item_cascade.py:201-203`) the argument **is** the cascade's `workspace_id`
+parameter, and its only caller passes `ctx.workspace_id` (`delete_stock_report_item.py:121`). So
+the "mutated" form is what ships, and the "correct" form the cell describes — sourcing from the
+row — is not what the code does. The two are indistinguishable at every reachable boundary:
+`_lock_row_and_group` filters `workspace_id == ctx.workspace_id`, so `row.workspace_id ==
+ctx.workspace_id` on every path that reaches the builder, and the cascade has exactly one caller
+today. Recorded `EQUIVALENT` (unappliable as named), not forced.
+
+Master plan **§6.7** states the rule as *"`workspace_id` on every event comes from the entity's
+row, never from `ctx`"*. The emitted **value** satisfies it; the **source** does not. Whether that
+matters is a production question for the owner (owner card 1 below), not something a test can
+settle — and it is live, because 13A is the cascade's second caller.
+
+**Replacement mutant run so the clause is not shipped unarmed** (proposed backfill, I authored no
+cell): source the builder's `workspace_id` from `row.client_id` — a copy-paste slip at a
+two-argument call where both operands are strings, and precisely the class §6.7's rule exists for.
+Red on `assert deleted_event.workspace_id == deleted_row.workspace_id` alone.
+
+**Proposed plan-cell backfill:** replace C3(b) mutant (ii) with the above, and record that the
+named mutant is the code's current state.
