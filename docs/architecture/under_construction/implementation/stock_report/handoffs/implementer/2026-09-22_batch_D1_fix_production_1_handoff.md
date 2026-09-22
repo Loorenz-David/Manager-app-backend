@@ -297,3 +297,9 @@ an edit — another reason not to improvise it inside a one-predicate fix round.
    forward, or the next agent will read a non-defect as a regression (§5).
 4. Consider whether the master plan's D1 baseline note should record that this session's L4 was
    taken at `2fb7acb` on slot `dp` with both diffs empty.
+5. **Two foreign commits landed on `main` while this session ran**, between my code checkpoint
+   and my docs commit: `b9d2d03` (`OWNER_CARDS_batch_D.md`, +60) and `79ad5aa`
+   (`REMAINING_WORK.md`, +129) — both yours, both docs-only. Neither is mine and neither is in my
+   perimeter. `git diff 2fb7acb..HEAD --stat -- app/` is **empty**, so the L4 stamp at `2fb7acb`
+   still covers the shipped code tree; a perimeter check over `2fb7acb..HEAD` will however see
+   those two files and should attribute them to you, not to this round.
