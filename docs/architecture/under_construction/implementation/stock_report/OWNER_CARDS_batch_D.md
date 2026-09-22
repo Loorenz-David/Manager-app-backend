@@ -7,6 +7,66 @@ status: OPEN — nothing here has been applied
 
 # Owner cards parked during batch D
 
+---
+
+## ✅ OWNER RULINGS, 2026-09-22 — all remaining cards ruled
+
+Verbatim: *"apply after D1 approves, then continue with D2. you should complete all the remaning
+task by your self."* Taken together with the previous turn's *"yes"* to the recommendations, with
+the four caveats I raised and the owner accepted by not overriding them.
+
+**Timing is part of the ruling:** every row addition waits until **D1 is APPROVED**, so D1's
+re-review scope stays clean (§3B — a fold that adds an assertion behind a running review produces
+a ratified clause with no evidence; that became findings S2/S3 in batch C1).
+
+| Card | Ruling | When |
+|---|---|---|
+| **D-5** | fix approved, scoped to goal records | **in flight now** |
+| **D-4** | amend intention §9 to four keys — **and sweep §9 for other drift**, not just this key | after D1 |
+| **D-1** | author C1(p), the priority-order tenancy row, from the drafted cell text | after D1 |
+| **D-8** | author the row pinning `stock_report_item:deleted` — **highest priority of the three**, it is a published-contract promise with no guard | after D1 |
+| **D-10** | **per-test, not as a block of four** (my caveat, unoverridden): fold the two `refuse_unknown_fields` guards, which guard a defect class this project actually shipped in C1; re-check the other two against existing rows before authoring, and drop the three HTTP-layer duplicates | after D1 |
+| **D-6** | accept C2(b) unguarded — **record the SQLAlchemy version it was measured on**, because the inertness is dependency-owned (charter rule 17) and an upgrade reopens it | after D1 |
+| **D-11** | accept the tiebreaker as a structural check — **record the query plan and table size**, same reason | after D1 |
+| **D-7 (1)** | correct C3(a) to **four** assignment-deletion events | after D1 |
+| **D-7 (2)** | "empty history" is unachievable and the row is reworded — see below | after D1 |
+| **D-7 (3)** | **do NOT add a criterion row** — reversal of my own card, see below | after D1 |
+| **D-9** | yes, but **after batch D closes**, not inside it | post-D |
+| **D-3** | **not ruled now, by my recommendation** — D2's projection establishes whether 13A needs the validators exposed at all; if it does not, phase 7 is not touched | D2 projection |
+| **D-2** | closed — registered by me at the D1 gate | done |
+
+### Both labels must say "unobservable, not unnecessary" (D-6, D-11)
+
+`EQUIVALENT` is accurate and **dangerous**: the next reader takes it as *"this code does nothing"*
+and deletes it. D-6's fresh `SELECT` is inert only because of how the installed SQLAlchemy
+synchronises the identity map; D-11's tiebreaker is invisible only under today's query plan on a
+small table — and a bigger table is exactly the case the clause exists for. Both records carry the
+measurement **and its conditions**.
+
+### D-7 (2) — the reworded outcome
+
+`apply_stock_demand` writes a goal record whenever `quantity_requested` rises above the previous
+value, and **creation counts as previous = 0** (intention line 784; verified at
+`apply_stock_demand.py:202-208, 243-258`). So a re-created row has **one** history record the
+instant it exists, and "empty history" can never be true. The row's real intent is that **the
+deleted row's history does not carry over**. Proposed outcome, for the record — the owner
+authors:
+
+> *a **new** live row whose history contains **only its own new goal record**, and none of the
+> deleted row's records*
+
+### D-7 (3) — I reversed my own recommendation
+
+My card punted ("whether that deserves a criterion row is yours"). That was wrong. The tester
+looked for a mutation that could observe MC-16's cascade ordering and **found none**. Where no
+observable exists, **a criterion row cannot be armed either** — authoring one would manufacture
+exactly the unarmable promise this project has now closed four times (C4(i), C4(j), C4(k), and
+plan 10 C2(a)). It is recorded as a **structural check** instead.
+
+**One honesty note:** this rests on the tester's measurement. It is one of the few claims in this
+batch I did **not** re-verify myself.
+
+
 **Read this with `FINALIZATION_STEPS.md`.** That file is the plan; this one is the short list of
 things the plan could not decide.
 
