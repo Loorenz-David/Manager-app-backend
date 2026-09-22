@@ -406,3 +406,73 @@ the predicate) red on the witness at `tests/helpers/stock_report.py:143`, revert
 **23 failed / 3740 passed / 1 skipped**, both ID diffs empty against the 23-ID D1 baseline.
 No test file was touched. Full record:
 `handoffs/implementer/2026-09-22_batch_D1_fix_production_1_handoff.md`.
+
+### Re-review of the owner-authorized amendment (batch D1, round 2) — 2026-09-22, Opus reviewer, slot `dr2`, tree `74c7a6e`
+
+**The amendment is CONFIRMED.** One predicate, one function, `+8 / −1`; `git diff 06ad124..HEAD`
+shows no other `app/beyo_manager` path. Full record:
+`handoffs/reviewer/2026-09-22_batch_D1_rereview_1_handoff.md`.
+
+**The repair mirror was NOT added, and that judgement is confirmed by execution, not accepted.**
+Two probes, both at `repair_stock_report.py`'s `goal_total` `UPDATE` (def.), both reverted clean:
+- **P4** — add the mirror guard (`type == QUANTITY_REQUESTED_CHANGE`) → **GREEN, 443 passed**: the
+  guard changes no observable outcome.
+- **P5** — invert the same guard (`type != …`) → **RED, 3 failed / 440 passed**, all three
+  `RuntimeError: goal-total repair affected an unexpected number of rows` at `:263`
+  (`test_manual_repair_fixes_goal_total_and_writes_history_record`,
+  `test_repair_dispatches_only_changed_stock_report_rows`,
+  `test_c2_c_upward_drift_is_not_self_healed_by_a_move`).
+
+P5 is what makes P4 mean something: the branch **is** exercised, and every record it writes is a
+`quantity_requested_change`. The mirror is therefore an **equivalent mutant** and unarmable by
+construction — the L-37 shape, correctly identified. Adding it would have been the finding.
+Structural agreement: `compute_stock_report_divergences` has exactly three production consumers
+(`get_stock_report_consistency.py:10`, `repair_stock_report.py:170,217,294`) plus the test helper,
+and the repair constructs no divergence of its own.
+
+**The narrowed lock set is safe (consequence 1).** Probe **P6** instrumented the repair to raise if
+the `goal_total` branch ever writes a history record that was not in the list handed to
+`lock_stock_report_history_records` → **GREEN, 443 passed**. Structurally the lock set and the
+write set are the *same comprehension* over the divergence list, so narrowing cannot make them
+diverge; and the branch needs no sibling record, because
+`_recompute_goal_totals_for_workspace` reads **assignments**, not other history records.
+
+**The read endpoint contract is not violated (consequence 2).** MC-20's divergence table already
+scopes `goal_total` to *"`quantity_awaiting` of each **goal record**"*. The check was out of
+conformance before the fix and is in conformance after it; the published
+`HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` §4.1 enumerates the eight `kind` values and
+the five-key shape and says nothing about record types. No key, kind, type or sort changed.
+**No frontend addendum is owed.**
+
+**CC-2 — recommended disposition: CLOSE as "do not implement" (finding R2-5, route `plan`).**
+Adding `is_deleted.is_(False)` to the `histories` selection (probe **P8**) leaves all 443
+stock-report tests green, so it is an equivalent mutant — *and* it would narrow MC-20 below its
+ratified wording, which says "each **goal record**" with no non-deleted qualifier. MC-5's
+"non-deleted" qualifies the **current** goal record (the credit *target*), not the reconciliation
+*set*, and MC-5's own last table row requires the arithmetic to run on a soft-deleted `R`.
+Measured directly by probe **P7** (an `assert_stock_report_clean` added to the cascade test and
+reverted): after MC-16's cascade the goal record sits at 8 with A1's credit subtracted and
+A2's/A4's kept, every history record soft-deleted, and the check reports **nothing**. Implementing
+CC-2 would stop the check watching every goal record of every deleted row, for no observable gain.
+
+**CC-1 is untouched by me** and remains the coordinator's to route; nothing in this round asserts
+the repair's non-write on a `priority_change` snapshot.
+
+**New finding against this amendment — R2-2 · should-fix · route `verification` → owner card D-12.**
+The predicate excludes **two** record types and only one is guarded. Probe **P3** widened it to
+`.in_((QUANTITY_REQUESTED_CHANGE, PRIORITY_ORDER_CHANGE))` and the whole stock-report L2 surface
+stayed **green — 632 passed**, although `set_stock_report_item_priority_order.py:155-166` writes a
+`priority_order_change` record snapshotting the same live `quantity_awaiting` as the
+`priority_change` record that caused B-1. Absence bounded by grep (every caller of
+`compute_stock_report_divergences` / `assert_stock_report_clean` in `app/tests` is inside that L2
+set), so no L4 was spent. §9 rule 15 is satisfied for one of the guard's two exclusions.
+
+**Architecture graph — no write, claim verified.** The
+`query-stock-report-consistency → table-stock-report-history-record` `reads_from` evidence summary
+(`.archgraph/architecture.yml:14585-14592`) reads *"Sums workspace-scoped **goal records** …"*,
+which was false of the code on 2026-09-20 and is true as of `2fb7acb`. The fix closes a graph/code
+discrepancy; no node or edge needs amending and nothing is queued for adjudication.
+
+**L4 gate stamp:** `BEYO_TEST_SLOT=dr2 … pytest -m 'not e2e'` at `74c7a6e`, clean tree —
+**23 failed / 3740 passed / 1 skipped**, both ID diffs ∅ against the 23-ID D1 baseline.
+No criterion cell of plan 3 was touched; no tracker row written (§4: orchestrator-only).

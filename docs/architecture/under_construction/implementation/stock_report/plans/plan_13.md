@@ -442,3 +442,53 @@ exists for; **M-67** (cascade raises instead of repairing) → red at C2(a),
 **Proposed cell backfills** (the coordinator folds; the tester does not): C4(a) gains the ordering
 mutant **RP-1** (drop `created_at` from the `order_by`) beside its two state-filter mutants, and
 C2(a) gains **RP-11**. Both are measured red on this tree.
+
+### Re-review 1 (batch D1, round 2) — 2026-09-22, Opus reviewer, slot `dr2`, tree `74c7a6e`
+
+**Verdicts for this plan's in-scope rows: `C4(a)` PASS** (was FAIL, S-1) **and `C2(a)` PASS**
+(N-4 closed). Delta-scoped; plan 13's other 17 rows are carried from round 1 and were not
+re-opened. Full record: `handoffs/reviewer/2026-09-22_batch_D1_rereview_1_handoff.md`.
+
+**C4(a) — three mutant shapes at the one site, on a green suite.**
+- **RP-1** (drop `created_at`, leave `client_id`) → **RED**, 1 failed / 4 passed,
+  `test_list_stock_task_assignments.py:265 assert ids == [HI, LO, MID]`, "At index 0 diff".
+  S-1's shipping risk — "a change that dropped the date entirely would ship unnoticed" — is closed.
+- **RP-1b** (drop `client_id`, keep `created_at`) → **GREEN**, 5 passed. The tester's measurement
+  is confirmed independently.
+- **RP-1b-var** (*new shape, nobody named it*: keep `client_id`, reverse it to `.desc()`) →
+  **RED**, 1 failed / 4 passed, same assertion, **"At index 1 diff"** — the tied `LO`/`MID` pair.
+
+The state-filter half (M-71, M-72) is consumed by citation: the production fix does not reach that
+site. All probes reverted, `shasum -c` OK, `git diff --quiet` exit 0.
+
+**Finding R2-1 · should-fix · route `plan`.** The C4(a) cell as folded at `cbecd2b` reads *"**The
+`client_id` tiebreaker itself is an EQUIVALENT mutant at this boundary, measured not assumed**
+(owner card D-11): dropping it leaves the output identical…"*. The first clause does not follow
+from the second and is **false**: RP-1b-var reddens the row. What is equivalent is the **deletion**
+of the term, not the term — when present it decides the tie (reverse it, the output reverses);
+when absent, today's plan happens to supply the same order for free. So C4(a) is armed on the
+`created_at` term **and** on the tiebreaker's *direction*, and unarmed only against the clause's
+*removal*. **Suggested cell wording:** *"deleting the `client_id` term is unobservable under
+today's query plan (RP-1b, green — conditions recorded); **reversing** it is observable and is the
+tiebreaker's arming proof (RP-1b-var, red at the tied pair, 2026-09-22)."*
+**Owner card D-11 is NOT re-opened** — the accept ruling stands and is better supported than when
+it was taken; only the sentence recording it is wrong, and the card's own note already asks for
+"the measurement **and its conditions**".
+
+**C2(a) — N-4 closed.** **RP-11** (`_delete_stock_report_item_cascade.py`, def.:
+`target_kind=STOCK_REPORT_ITEM` → `HISTORY_RECORD`) → **RED**, 1 failed / 5 passed, at
+`test_delete_stock_report_item.py:427`, the new assertion, **nothing else in the file moves**.
+Re-run rather than cited because the tester's tree carried the un-fixed `consistency.py` and this
+file reaches that module through `assert_stock_report_clean`. M-67 consumed by citation (it aborts
+the cascade before the consistency assertion is ever evaluated, so the tree change cannot affect
+it).
+
+**Probe inside this plan's test file, declared.** One `assert_stock_report_clean` line was added to
+`test_delete_stock_report_item.py::test_cascade_removes_every_assignment_and_soft_deletes_the_row`
+to measure whether a **soft-deleted goal record** still reconciles clean after MC-16's cascade — it
+does (6 passed: goal at 8, A1's credit subtracted, A2's/A4's kept, every history record
+soft-deleted, check empty). Reverted from a scratch copy rather than with git, because the file is
+legitimately part of the fix perimeter; `shasum -c` OK and `grep -c "PROBE P7"` → 0.
+
+**Nothing else in plan 13 changed.** No production file, test file or criterion cell of this phase
+was touched by this round; no tracker row written (§4: orchestrator-only).

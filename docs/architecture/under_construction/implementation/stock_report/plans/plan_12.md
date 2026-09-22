@@ -487,3 +487,41 @@ health check ignores non-goal records; CC-2: soft-deleted goal records). CC-1 is
 3's, not phase 12's — plan 12 C3(d) already exercises the behaviour incidentally through
 `assert_stock_report_clean`, but nothing anywhere asserts that the **repair** leaves a
 `priority_change` snapshot untouched, which is the destructive half of the defect.
+
+### Re-review 1 (batch D1, round 2) — 2026-09-22, Opus reviewer, slot `dr2`, tree `74c7a6e`
+
+**Verdict for this plan's in-scope row: `C3(d)` PASS** (was FAIL / `BLOCKED-PRODUCTION`, B-1 /
+owner card D-5). Delta-scoped; plan 12's other 44 rows are carried from round 1 and were not
+re-opened. Full record: `handoffs/reviewer/2026-09-22_batch_D1_rereview_1_handoff.md`.
+
+**C3(d) — what was measured, on a green suite (L-45).** The witness
+`test_the_priority_record_snapshots_the_live_awaiting_counter` is green **unedited** (16 passed in
+its file). Its named mutant was re-applied faithfully — the record's `session.add` relocated to
+*before* the gap-close, the append and the mover `UPDATE` — and is **RED**: 2 failed / 14 passed,
+the witness at `:627` `assert 2 == 3` plus `test_priority_change_closes_the_source_gap_and_appends`
+at `:556`. Both reverted, `shasum -c` OK, `git diff --quiet` exit 0.
+
+**Finding R2-3 · should-fix · route `verification` (§9 rule 12).** The row states **two**
+sub-checks and the named mutant reaches only one: it trips `:627` (`priority_order == 3`) and
+returns before `:628` (`quantity_awaiting == 4`) executes. The second clause *is* discriminating —
+probe P2 (`mover["quantity_awaiting"]` → `mover["quantity_in_queue"]`, def. site) is red at `:628`
+`assert 0 == 4`, 1 failed / 15 passed, witness alone. **Measured mutant for the cell, no test work
+owed:** *"`set_stock_report_item_priority.py` (def.): the record's `quantity_awaiting` sources
+`mover["quantity_in_queue"]` → red at the snapshot clause alone (1 failed / 15 passed,
+2026-09-22)."* Round 1 could not see this (L-D: the mutant ran against a baseline-red witness).
+
+**Finding R2-4 · note · route `verification`.** The witness's docstring (`:591`) still reads
+*"This test is currently RED on the unmutated tree, and that is the finding"*, with a live
+`input/expected/observed` defect block. It has been green since `2fb7acb`. The production-fix round
+was forbidden to touch test files and the verification round's perimeter excluded this one, so the
+stale claim belongs to nobody — re-tense it at the next touch and name `2fb7acb`.
+
+**Finding R2-2 · should-fix · route `verification` → owner card D-12.** The fix's predicate
+excludes **two** record types and only one is guarded. `set_stock_report_item_priority_order.py`
+writes a `priority_order_change` record snapshotting the same live `quantity_awaiting`; re-admitting
+that type to the predicate leaves the whole stock-report L2 surface green (632 passed), so a future
+widening reinstates B-1 on a second path unwatched. Absence bounded by grep, no L4 spent. The row
+is the owner's to authorise (card D-12); I authored none.
+
+**Nothing else in plan 12 changed.** No production file, test file or criterion cell of this phase
+was touched by this round; no tracker row written (§4: orchestrator-only).
