@@ -1,6 +1,6 @@
 ---
 subject: stock_report — what the frontend must change to run against the finished backend
-status: DRAFT — not published, not copied to the frontend repo
+status: READY — phase 14 re-verified and re-issued the contract; this guide is updated to match
 date: 2026-09-22
 actor: orchestrator
 authority: owner, 2026-09-22 — the wiring stage; BL-1 ruled "queue as the first item of the wiring stage"
@@ -12,9 +12,13 @@ authority: owner, 2026-09-22 — the wiring stage; BL-1 ruled "queue as the firs
 frontend already calls almost all of them correctly. This document is only the **delta**: the
 places where the two sides disagree, ordered by what breaks first.
 
-**Status: DRAFT.** It is not published and not copied into the frontend repo, because plan 14 still
-has to re-verify the published contract against shipped code. If that finds nothing moved, this
-ships as-is. Two items below (**W-4**, **W-6**) depend on that outcome.
+**The contract moved on 2026-09-22, and this guide is written against the new one.** Phase 14
+re-verified the published contract field by field against shipped code, found one real error, and
+re-issued: **`HANDOFF_TO_FRONTEND_stock_report_api_20260922.md` is now the document to build
+against.** The previous `…_api_v2_20260921.md` was **moved unedited** into `archived/`.
+`…_match_preview_v2_20260921.md` is **not** superseded and is still current.
+
+**So the frontend's `backend_handoff/` folder now holds two dead documents, not one** — see W-4.
 
 **Verified against shipped code**, not against documents: `routers/api_v1/stock_report.py`,
 `domain/stock_report/serializers.py`, `criteria_normalization.py`, and the commands and queries
@@ -128,7 +132,8 @@ nothing marking it dead** (the backend moved its own copy to `archived/`):
 |---|---|---|
 | `prompts/PROMPT_02_codex_logic_phase.md` | 28 | tells the logic implementer to read the **v1** handoff as source 3 |
 | `planning/raw_intention.md` | 22 | names v1 by absolute path as "the" API documentation |
-| `handoffs/LOGIC_PHASE_HANDOFF.md` | 51-55 | waits for a "promised final verification handoff" that **is not coming** |
+| `handoffs/LOGIC_PHASE_HANDOFF.md` | 51-55 | waits for a "promised final verification handoff" — **it has now arrived**: it is `…_api_20260922.md` |
+| `backend_handoff/` (whole folder) | — | holds **v1 and v2**, both now dead, and **not** the current `…_api_20260922.md` |
 
 That last one matters most. It says `item_category.image_url` stays nullish in the schemas *until*
 the promised verification handoff. **v2 is that handoff.** Nothing further is coming unless plan 14
@@ -140,13 +145,13 @@ this is the direct cause of W-5); a claimed 11-or-12 field contradiction in the 
 (v2 pins **12**); and "payloads arrive in `extra`" when the wire payload is **flat**
 (`socket_handler.py:59-63` sends `{"client_id": …, **event.extra}`).
 
-**What to change.** Delete or move `backend_handoff/HANDOFF_TO_FRONTEND_stock_report_api_20260921.md`
-under `backend_handoff/archived/`; repoint `PROMPT_02_codex_logic_phase.md:28` and
-`raw_intention.md:22` at v2; rewrite `LOGIC_PHASE_HANDOFF.md:51-55` to say the verification handoff
-is v2 and has been delivered.
+**What to change.** Copy in `HANDOFF_TO_FRONTEND_stock_report_api_20260922.md` from the backend's
+`handoffs/to_frontend/`; move **both** `…_api_20260921.md` (v1) and `…_api_v2_20260921.md` (v2) into
+`backend_handoff/archived/`; repoint `PROMPT_02_codex_logic_phase.md:28` and `raw_intention.md:22`
+at the **20260922** file; and rewrite `LOGIC_PHASE_HANDOFF.md:51-55` — the verification handoff it
+is waiting for has arrived, and `item_category.image_url` can stop being nullish in the schemas.
 
-**Depends on plan 14.** If phase 14's re-verification re-issues the contract, repoint at the new
-dated file instead — it will carry a `supersedes:` key naming the current one.
+**Keep `…_match_preview_v2_20260921.md` exactly where it is.** It is not superseded.
 
 ## W-5. Every field is optional-and-nullable because v1 said nullability was unpinned
 
@@ -171,15 +176,24 @@ fallbacks. Your own handoff already names this file as the single tightening poi
 **Do this after W-1, not before** — W-1 loosens one field deliberately, and the two changes touch the
 same file.
 
-## W-6. The published contract has one wrong example — do not "fix" correct code to match it
+## W-6. The contract's wrong `properties` example — FIXED, but only in the new document
 
-The v2 contract §6.1 shows `"properties": { "wood_group": "teak" }`. **The stored normalized form is
-`{"wood_group": ["teak"]}`** — confirmed at `criteria_normalization.py:9-10` and by
-`criteria_matcher.py:96`, which does `token in accepted`, a membership test against a list.
+The old v2 contract §6.1 showed `"properties": { "wood_group": "teak" }`. **The stored normalized
+form is `{"wood_group": ["teak"]}`** — `criteria_normalization.py:9-10`, and
+`criteria_matcher.py:96` does `token in accepted`, a membership test against a list.
 
-**The frontend code is right and the contract is wrong.** A team trusting §6.1 over the code would
-"fix" a correct schema into a broken one. Being corrected on the backend side through plan 14's
-re-issue mechanism — **not** by editing the published file in place.
+**Your code was right and the document was wrong.** It is corrected in
+`…_api_20260922.md`, and the correction is called out explicitly in that document's §0.
+
+**Why this still needs your attention:** the wrong example is still sitting in the **archived** v2
+file, which is still in your `backend_handoff/` folder and not marked dead. Anyone reading it would
+"fix" a correct schema into a broken one. **That is W-4's real cost, and it is why W-4 is not just
+tidying.**
+
+**There is now a test that stops this class of error coming back.** `test_stock_report_docs.py`
+parses the published document's field/nullability table and compares it field by field against the
+shipped serializers. I planted three mutants against it — flip a nullable field to non-nullable,
+flip a non-nullable to nullable, delete a table row — and all three redden it.
 
 ## W-7. Assumptions that hold today and are undefended
 
