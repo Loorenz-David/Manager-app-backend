@@ -89,6 +89,12 @@ def test_c1i_quantity_requested_is_ignored_and_the_entry_shape_is_the_registered
     """C1(i), parse half (§14E E2/U7, Scanner v2 §4A.1 "sent anyway, it is ignored"),
     and master plan §9 rule 18 — the registered `DemandDeleteEntry` shape pinned at
     its own boundary: `DemandEntry` **without** `quantity_requested`.
+
+    The key carries a value phase 7's demand rule would **refuse** (`"seven"` is not
+    an integer). That is deliberate: the row says the key is *ignored, not validated*,
+    and with the plan cell's literal `5` a mutant that validates the key accepts it
+    too, so the row's own named mutation could not fail. Measured — see the handoff's
+    M8 row.
     """
     raw_properties = {"wood_group": ["teak"]}
     entries = parse_stock_demand_deleted_body(
@@ -97,7 +103,7 @@ def test_c1i_quantity_requested_is_ignored_and_the_entry_shape_is_the_registered
                 {
                     "itemCategory": " Dining Chairs ",
                     "properties": raw_properties,
-                    "quantityRequested": 5,
+                    "quantityRequested": "seven",
                     "somethingElse": {"nested": True},
                 }
             ]
