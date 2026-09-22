@@ -136,6 +136,33 @@ to the frontend, and the only one that renders.
 
 ## Card D-5 — **THE ONE THAT MATTERS.** Phase 12 activates a data-destroying defect in APPROVED phase 3
 
+> ## ✅ RULED BY THE OWNER, 2026-09-22 — **APPROVED, scoped**
+>
+> Verbatim: *"yes i approve the fix ( only assignment reconciliation against goal records )."*
+>
+> **The parenthesis is the specification** and it is narrower than "fix the bug": the
+> assignment-reconciliation rule applies to goal records and to nothing else. Dispatched as a
+> production fix round — **one** type predicate on the `histories` selection in
+> `consistency.py`, so the `goal_total` rule is computed over `quantity_requested_change`
+> records only.
+>
+> **The repair's mirror guard is deliberately NOT added.** I checked the callers before writing
+> the prompt: `repair_stock_report` obtains its divergence list *only* from
+> `compute_stock_report_divergences` (`:170`, `:217`, `:294`) and never builds one itself, so
+> once the check stops emitting these entries the repair branch can never receive one. A second
+> guard there would be an **unreachable mirror no test could arm** — the exact shape this project
+> already recorded as **L-37** in batch C2. One filter fixes all three consumers (the repair, the
+> read endpoint, and `assert_stock_report_clean`).
+>
+> **Phase 3 stays VERIFIED.** This is an owner-authorized amendment to shipped code, following
+> the batch B1 precedent (`_task_flag.py` gained its `workspace_id` term the same way), not a
+> reopened gate. The proof of inertness is phase 3's own suite green with **no test file
+> touched**.
+>
+> **The proof the fix worked** is that plan 12 **C3(d)**'s witness test —
+> `test_the_priority_record_snapshots_the_live_awaiting_counter`, deliberately red since the
+> tester round — goes green **without being edited**.
+
 **Class:** production defect in **APPROVED, VERIFIED** phase-3 code. **Parked because fixing it
 reopens an approved phase**, which is a gate decision and yours — not because the direction is
 unclear. The direction is settled by ratified text; only the authority to act is missing.
