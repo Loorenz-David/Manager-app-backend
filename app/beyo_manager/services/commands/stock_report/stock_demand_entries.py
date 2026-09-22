@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from beyo_manager.domain.stock_report.enums import StockDemandOutcomeEnum
+from beyo_manager.domain.stock_report.enums import (
+    StockDemandDeletedOutcomeEnum,
+    StockDemandOutcomeEnum,
+)
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
 
 
@@ -41,6 +44,38 @@ class DemandOutcome:
     item_category_raw: str
     properties_raw: dict
     outcome: StockDemandOutcomeEnum
+
+
+@dataclass(frozen=True)
+class DemandDeleteEntry:
+    """One entry of the Scanner **delete** request (phase 13A, §14E E2).
+
+    `DemandEntry` without `quantity_requested`: the delete body carries no quantity,
+    and a `quantityRequested` key sent anyway is an unknown key, ignored like any
+    other (§14E E2/U7). `item_category_key` is derived the same way, so both
+    `_demand_lookup.py` helpers take this type unchanged — "the same engine as
+    find-or-create" (§14E E4).
+    """
+
+    index: int
+    item_category_raw: str
+    item_category_key: str = field(init=False)
+    properties_raw: dict
+    properties_normalized: dict
+    properties_signature: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "item_category_key", self.item_category_raw.strip().lower()
+        )
+
+
+@dataclass(frozen=True)
+class DemandDeleteOutcome:
+    index: int
+    item_category_raw: str
+    properties_raw: dict
+    outcome: StockDemandDeletedOutcomeEnum
 
 
 @dataclass

@@ -73,6 +73,21 @@ class StockDemandOutcomeEnum(enum.Enum):
     CATEGORY_NOT_FOUND = "category_not_found"
 
 
+class StockDemandDeletedOutcomeEnum(enum.Enum):
+    """Per-entry outcome of the Scanner **delete** webhook (phase 13A; §14E E7).
+
+    Added here by phase 13A, the phase that gives it a caller — the §6.1 registry's
+    claim that it ships in phase 1 was corrected in batch B2 (blocker B4) and again
+    at the batch D2 projection (F-08). `INLINE_REPAIR_TRIGGERS` is deliberately
+    **not** added beside it: `write_repair_record` takes a free-form `trigger`
+    string, so the frozenset would have no caller (charter rule 4).
+    """
+
+    DELETED = "deleted"
+    NOT_FOUND = "not_found"
+    CATEGORY_NOT_FOUND = "category_not_found"
+
+
 class ItemsProcessedOutcomeEnum(enum.Enum):
     """Per-entry outcome of the processed webhook (phase 9; §14F F5)."""
 

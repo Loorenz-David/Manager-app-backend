@@ -145,3 +145,69 @@ def test_items_processed_route_renders_build_err_for_a_faked_auth_error(monkeypa
     assert response.status_code == 401
     assert response.json() == {"error": "Unauthorized.", "ok": False}
     assert captured["calls"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Plan 13A C7(a) — the delete webhook's own route (same router file, third route)
+# ---------------------------------------------------------------------------
+
+
+def test_c7a_stock_demand_deleted_route_forwards_raw_bytes_and_headers(monkeypatch):
+    """C7(a): the third route is exactly the shape of the other two — raw bytes and
+    the header map reach the command, `identity` is empty (§9 rule 5: the webhook
+    never carries a workspace), and success renders the standard envelope."""
+    client, captured = _build_test_client(
+        monkeypatch,
+        SimpleNamespace(
+            success=True,
+            data={"results": [{"itemCategory": "Dining Chairs", "properties": {}, "outcome": "deleted"}]},
+            error=None,
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/location-tracker/webhooks/stock-demand-deleted",
+        content=b"[...]",
+        headers={"X-API-KEY": "k"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": {
+            "results": [
+                {"itemCategory": "Dining Chairs", "properties": {}, "outcome": "deleted"}
+            ]
+        },
+        "ok": True,
+        "warnings": [],
+    }
+    assert captured["calls"] == 1
+    assert captured["identity"] == {}
+    assert captured["incoming_data"]["raw_body"] == b"[...]"
+    assert captured["incoming_data"]["headers"]["x-api-key"] == "k"
+    assert set(captured["incoming_data"]) == {"raw_body", "headers"}
+
+
+def test_c7a_stock_demand_deleted_route_renders_build_err_for_a_faked_auth_error(
+    monkeypatch,
+):
+    """C7(a), the refusal half: a `LocationTrackerWebhookAuthError` from the command
+    renders 401 with the identical body every Scanner 401 carries."""
+    client, captured = _build_test_client(
+        monkeypatch,
+        SimpleNamespace(
+            success=False,
+            data=None,
+            error=LocationTrackerWebhookAuthError("Unauthorized."),
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/location-tracker/webhooks/stock-demand-deleted",
+        content=b"[]",
+        headers={"x-api-key": "wrong"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"error": "Unauthorized.", "ok": False}
+    assert captured["calls"] == 1
