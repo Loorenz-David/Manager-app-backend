@@ -32,10 +32,7 @@ from sqlalchemy import or_, select, text
 
 from beyo_manager.config import settings
 from beyo_manager.domain.stock_report.enums import StockDemandDeletedOutcomeEnum
-from beyo_manager.errors.stock_report import (
-    LocationTrackerWebhookAuthError,
-    StockDemandDeadlineExceeded,
-)
+from beyo_manager.errors.stock_report import StockDemandDeadlineExceeded
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
@@ -62,6 +59,7 @@ from beyo_manager.services.commands.stock_report.stock_demand_deleted_request im
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.infra.location_tracker.webhook_verifier import (
+    refuse_webhook_auth,
     verify_location_tracker_webhook,
 )
 
@@ -145,7 +143,7 @@ async def process_stock_demand_deleted(ctx) -> dict:
             )
         ).first()
         if workspace_row is None:
-            raise LocationTrackerWebhookAuthError("Unauthorized.")
+            raise refuse_webhook_auth("workspace_not_found")
 
         # 3. The ordering advisory lock (MC-1 class 1), taken BEFORE discovery.
         await acquire_stock_report_order_lock(ctx.session, workspace_id)

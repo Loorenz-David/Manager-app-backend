@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     manager_api_key_to_location_tracker_app: str | None = Field(default=None, alias="MANAGER_API_KEY_TO_LOCATION_TRACKER_APP")
     location_tracker_webhook_workspace_id: str | None = Field(default=None, alias="LOCATION_TRACKER_WEBHOOK_WORKSPACE_ID")
     stock_demand_webhook_timeout_ms: int = Field(default=5000, alias="STOCK_DEMAND_WEBHOOK_TIMEOUT_MS")
+    # Log the inbound body of the Scanner stock webhooks. On by default: these
+    # bodies are item categories and properties, never credentials, and they are
+    # the only record of what Scanner actually sent. Turn it off to keep bodies
+    # out of the log stream.
+    stock_webhook_log_payloads: bool = Field(default=True, alias="STOCK_WEBHOOK_LOG_PAYLOADS")
 
     # Environment
     environment: str = Field(default="development", alias="ENVIRONMENT")

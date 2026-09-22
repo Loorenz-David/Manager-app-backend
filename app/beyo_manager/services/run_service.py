@@ -41,6 +41,29 @@ async def run_service(
         data = await fn(ctx)
         return StatusOutcome(success=True, data=data)
     except DomainError as exc:
+        # A refusal is an outcome, not a crash — but it used to leave no trace at
+        # all, so a rejected webhook was indistinguishable from one that never
+        # arrived. Client-side refusals (4xx) are INFO; a 5xx domain error is a
+        # warning because it means the server gave up on work it accepted.
+        service_name = getattr(fn, "__name__", repr(fn))
+        logger.log(
+            logging.WARNING if exc.http_status >= 500 else logging.INFO,
+            "Refused %s | exc_type=%s status=%s exc_message=%s "
+            "user_id=%s workspace_id=%s entities=%s",
+            service_name,
+            type(exc).__name__,
+            exc.http_status,
+            exc,
+            ctx.user_id,
+            ctx.workspace_id,
+            _entity_ids(ctx),
+            extra={
+                "event_type": "service.domain_error",
+                "service": service_name,
+                "status_code": exc.http_status,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
         return StatusOutcome(success=False, error=exc)
     except Exception as exc:
         service_name = getattr(fn, "__name__", repr(fn))

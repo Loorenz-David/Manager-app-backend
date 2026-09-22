@@ -19,7 +19,6 @@ from beyo_manager.domain.stock_report.enums import (
     ACTIVE_ASSIGNMENT_STATES,
     StockTaskAssignmentStateEnum,
 )
-from beyo_manager.errors.stock_report import LocationTrackerWebhookAuthError
 from beyo_manager.models.tables.items.item import Item
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
     StockTaskAssignment,
@@ -37,6 +36,7 @@ from beyo_manager.services.commands.stock_report.items_processed_request import 
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.infra.events import dispatch
 from beyo_manager.services.infra.location_tracker.webhook_verifier import (
+    refuse_webhook_auth,
     verify_location_tracker_webhook,
 )
 
@@ -65,7 +65,7 @@ async def process_items_processed(ctx) -> dict:
             )
         ).first()
         if workspace_row is None:
-            raise LocationTrackerWebhookAuthError("Unauthorized.")
+            raise refuse_webhook_auth("workspace_not_found")
 
         stripped_numbers = {stripped for _, _, stripped in stripped_by_index}
 

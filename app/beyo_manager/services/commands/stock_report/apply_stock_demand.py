@@ -25,10 +25,7 @@ from beyo_manager.domain.stock_report.enums import (
     StockDemandOutcomeEnum,
     StockReportHistoryRecordTypeEnum,
 )
-from beyo_manager.errors.stock_report import (
-    LocationTrackerWebhookAuthError,
-    StockDemandDeadlineExceeded,
-)
+from beyo_manager.errors.stock_report import StockDemandDeadlineExceeded
 from beyo_manager.models.tables.stock_report.stock_report_history_record import (
     StockReportHistoryRecord,
 )
@@ -46,6 +43,9 @@ from beyo_manager.services.commands.stock_report.stock_demand_entries import (
 )
 from beyo_manager.services.commands.utils.transaction import maybe_begin
 from beyo_manager.services.infra.events.domain_event import WorkspaceEvent
+from beyo_manager.services.infra.location_tracker.webhook_verifier import (
+    refuse_webhook_auth,
+)
 
 _PRIORITY_COLUMN_TYPE = StockReportItem.__table__.c.priority.type
 
@@ -91,7 +91,7 @@ async def apply_stock_demand(
             )
         ).first()
         if workspace_row is None:
-            raise LocationTrackerWebhookAuthError("Unauthorized.")
+            raise refuse_webhook_auth("workspace_not_found")
 
         # 3. Categories.
         category_by_key = await resolve_categories_for_entries(
