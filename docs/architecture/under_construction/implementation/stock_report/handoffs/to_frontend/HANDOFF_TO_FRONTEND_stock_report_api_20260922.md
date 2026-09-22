@@ -399,9 +399,10 @@ Roles: **admin, manager, worker, seller**.
 { "data": { "stock_task_assignments": [ /* §6.2 */ ] }, "ok": true, "warnings": [] }
 ```
 
-Every non-deleted assignment of the row, in **all** states — `resolved` and
-`resolved_early` included, because this list is the board's traceability surface.
-Ordered by `created_at, client_id`.
+By default, every non-deleted assignment except exact `resolved` is returned.
+Pass `?include_resolved=true` to include exact `resolved` assignments as well.
+`resolved_early` remains visible by default because it is a separate state. Results are
+ordered by `created_at, client_id`.
 
 **404** if the row is absent, deleted or foreign — *not* an empty array.
 

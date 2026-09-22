@@ -47,7 +47,7 @@ under the project's `handoffs/to_frontend/`.
 | `PATCH …/priority` | `{"priority": "high"\|"medium"\|"low"\|null}` — the key is required and has no default |
 | `PATCH …/priority-order` | `{"priority_order": <strict int>}` — the string `"2"` is refused, never coerced |
 | `DELETE …/items/{client_id}` | **none**; `client_id` travels in the path |
-| `GET …/items/{client_id}/assignments` | none |
+| `GET …/items/{client_id}/assignments` | no body; optional `?include_resolved=true` query parameter. Exact `resolved` assignments are hidden by default |
 | the three webhooks | raw bytes, read with `await request.body()`; the body is a JSON array and is parsed by the command, not by FastAPI |
 
 ## 3. Response bodies

@@ -257,6 +257,7 @@ async def route_delete_stock_report_item(
 @router.get("/items/{client_id}/assignments")
 async def route_list_stock_task_assignments(
     client_id: str,
+    include_resolved: bool = False,
     claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER, SELLER])),
     session: AsyncSession = Depends(get_db),
 ):
@@ -265,4 +266,5 @@ async def route_list_stock_task_assignments(
         claims,
         session,
         incoming_data={"client_id": client_id},
+        query_params={"include_resolved": include_resolved},
     )

@@ -1,9 +1,9 @@
 """`GET /api/v1/stock-report/items/{client_id}/assignments` (master plan §6.5,
 phase 13; intention §9, §9B ruling 2).
 
-The row's non-deleted assignments in **all** states — `resolved` and
-`resolved_early` included; the board's traceability surface (§14F F10) — ordered by
-`created_at, client_id`. Items, tasks and images are batch-loaded once for the whole
+The row's non-deleted assignments, with exact `resolved` assignments hidden unless the
+caller requests them. `resolved_early` remains a distinct visible state. Rows are ordered
+by `created_at, client_id`. Items, tasks and images are batch-loaded once for the whole
 response, and the element is built by the shipped `serialize_stock_task_assignment`,
 the same function the create endpoint returns, so the two surfaces agree key for key.
 """
@@ -13,6 +13,7 @@ from __future__ import annotations
 from sqlalchemy import and_, select
 
 from beyo_manager.domain.images.enums import ImageLinkEntityTypeEnum
+from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum
 from beyo_manager.domain.stock_report.serializers import (
     serialize_stock_task_assignment,
 )
@@ -29,6 +30,7 @@ from beyo_manager.models.tables.tasks.task import Task
 
 async def list_stock_task_assignments(ctx) -> dict:
     client_id = ctx.incoming_data.get("client_id")
+    include_resolved = ctx.query_params.get("include_resolved", False)
 
     # The row lookup is the visibility boundary: absent, soft-deleted and foreign
     # are one answer, and it is `NotFound` — never an empty list.
@@ -42,19 +44,27 @@ async def list_stock_task_assignments(ctx) -> dict:
     if row is None:
         raise NotFound("Stock report item not found.")
 
+    assignments_statement = (
+        select(StockTaskAssignment)
+        .where(
+            StockTaskAssignment.workspace_id == ctx.workspace_id,
+            StockTaskAssignment.stock_report_item_id == client_id,
+            StockTaskAssignment.is_deleted.is_(False),
+        )
+        .order_by(
+            StockTaskAssignment.created_at.asc(),
+            StockTaskAssignment.client_id.asc(),
+        )
+    )
+    if not include_resolved:
+        assignments_statement = assignments_statement.where(
+            StockTaskAssignment.state != StockTaskAssignmentStateEnum.RESOLVED
+        )
+
     assignments = (
         (
             await ctx.session.execute(
-                select(StockTaskAssignment)
-                .where(
-                    StockTaskAssignment.workspace_id == ctx.workspace_id,
-                    StockTaskAssignment.stock_report_item_id == client_id,
-                    StockTaskAssignment.is_deleted.is_(False),
-                )
-                .order_by(
-                    StockTaskAssignment.created_at.asc(),
-                    StockTaskAssignment.client_id.asc(),
-                )
+                assignments_statement
             )
         )
         .scalars()

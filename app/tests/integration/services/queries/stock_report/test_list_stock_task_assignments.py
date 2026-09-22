@@ -195,22 +195,31 @@ async def _move(session, seeded, assignment_id, target):
     )
 
 
-async def _GA(session, seeded, client_id, *, user=None, role_name="manager"):
+async def _GA(
+    session,
+    seeded,
+    client_id,
+    *,
+    user=None,
+    role_name="manager",
+    include_resolved=False,
+):
     ctx = make_ctx(
         session,
         seeded,
         role_name=role_name,
         user=user,
         incoming_data={"client_id": client_id},
+        query_params={"include_resolved": include_resolved},
     )
     return await list_stock_task_assignments(ctx)
 
 
-async def test_every_non_deleted_state_is_listed_in_created_at_client_id_order(
+async def test_resolved_assignments_are_hidden_by_default_and_opted_into(
     db_session,
 ):
-    """C4(a): active, `resolved` and `resolved_early` are all listed — the
-    traceability surface (§14F F10) — and the soft-deleted one is not."""
+    """The default list hides exact `resolved`, while the opt-in list retains every
+    non-deleted state. `resolved_early` stays visible in both lists."""
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     a1 = (await _CR(db_session, seeded, row))["client_id"]
@@ -261,15 +270,26 @@ async def test_every_non_deleted_state_is_listed_in_created_at_client_id_order(
     listed = await _GA(db_session, seeded, row.client_id)
 
     ids = [element["client_id"] for element in listed["stock_task_assignments"]]
-    assert set(ids) == {a1, a2, a4}
-    assert ids == [HI, LO, MID]
+    assert set(ids) == {a1, a4}
     by_id = {
         element["client_id"]: element
         for element in listed["stock_task_assignments"]
     }
     assert by_id[a4]["state"] == "resolved_early"
-    assert by_id[a2]["state"] == "resolved"
     assert by_id[a1]["state"] == "in_queue"
+
+    included = await _GA(
+        db_session, seeded, row.client_id, include_resolved=True
+    )
+    included_ids = [
+        element["client_id"] for element in included["stock_task_assignments"]
+    ]
+    assert set(included_ids) == {a1, a2, a4}
+    assert included_ids == [HI, LO, MID]
+    assert {
+        element["client_id"]: element["state"]
+        for element in included["stock_task_assignments"]
+    }[a2] == "resolved"
 
 
 async def test_the_element_is_the_fourteen_key_shape_with_its_two_nested_objects(

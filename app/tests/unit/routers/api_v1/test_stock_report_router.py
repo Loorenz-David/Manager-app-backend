@@ -351,7 +351,16 @@ def test_delete_item_route_rejects_worker_and_seller(monkeypatch, role):
 @pytest.mark.parametrize("role", ["admin", "manager", "worker", "seller"])
 def test_list_assignments_route_reaches_service_for_every_role(monkeypatch, role):
     http, calls = client(monkeypatch, role)
-    response = http.get("/api/v1/stock-report/items/sri_1/assignments")
+    response = http.get(
+        "/api/v1/stock-report/items/sri_1/assignments?include_resolved=true"
+    )
     assert response.status_code == 200
     assert len(calls) == 1
     assert calls[0][1].incoming_data == {"client_id": "sri_1"}
+    assert calls[0][1].query_params == {"include_resolved": True}
+
+
+def test_list_assignments_route_hides_resolved_by_default(monkeypatch):
+    http, calls = client(monkeypatch, "manager")
+    assert http.get("/api/v1/stock-report/items/sri_1/assignments").status_code == 200
+    assert calls[0][1].query_params == {"include_resolved": False}
