@@ -165,7 +165,14 @@ def test_stock_assignment_property_mismatch_renders_code_and_details(monkeypatch
             "stock_report_item_id": "sri_1",
             "task_id": "tsk_1",
             "item_id": "itm_1",
-            "failures": [{"key": "wood_group", "reason": "missing_on_item"}],
+            "failures": [
+                {
+                    "key": "wood_group",
+                    "reason": "missing_on_item",
+                    "accepted_values": ["teak"],
+                    "item_values": [],
+                }
+            ],
         }
     ]
     error = StockAssignmentPropertyMismatch(details)

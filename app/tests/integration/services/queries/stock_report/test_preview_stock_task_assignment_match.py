@@ -9,7 +9,10 @@ from beyo_manager.domain.stock_report.criteria_normalization import (
 from beyo_manager.domain.stock_report.enums import StockTaskAssignmentStateEnum as S
 from beyo_manager.domain.tasks.enums import TaskItemRoleEnum, TaskStateEnum
 from beyo_manager.errors.not_found import NotFound
-from beyo_manager.errors.stock_report import StockAssignmentRefused
+from beyo_manager.errors.stock_report import (
+    StockAssignmentPropertyMismatch,
+    StockAssignmentRefused,
+)
 from beyo_manager.errors.validation import ValidationError
 from beyo_manager.models.tables.stock_report.stock_report_item import StockReportItem
 from beyo_manager.models.tables.stock_report.stock_task_assignment import (
@@ -102,7 +105,14 @@ async def _create(db_session, seeded, row):
     )
 
 
-@pytest.mark.parametrize("case, expected", [("task_deleted", "task_not_found"), ("category", "category_mismatch"), ("not_primary", "item_not_task_primary")])
+@pytest.mark.parametrize(
+    "case, expected",
+    [
+        ("task_deleted", "task_not_found"),
+        ("category", "category_mismatch"),
+        ("not_primary", "item_not_task_primary"),
+    ],
+)
 async def test_preview_refusal_reason_matches_create(db_session, case, expected):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
@@ -139,10 +149,15 @@ async def test_preview_evaluator_returns_nine_results_and_first_failure(db_sessi
     row = await _make_row(db_session, seeded)
     result = await _preview(db_session, seeded, row, **_body(seeded))
     assert [check["check"] for check in result["checks"]] == [
-        "stock_report_item_not_found", "task_not_found", "item_not_found",
-        "item_not_task_primary", "already_processed_by_scanner",
-        "task_failed_or_cancelled", "item_already_assigned",
-        "item_has_no_category", "category_mismatch",
+        "stock_report_item_not_found",
+        "task_not_found",
+        "item_not_found",
+        "item_not_task_primary",
+        "already_processed_by_scanner",
+        "task_failed_or_cancelled",
+        "item_already_assigned",
+        "item_has_no_category",
+        "category_mismatch",
     ]
     assert all(check["result"] == "pass" for check in result["checks"])
     assert set(result) == {
@@ -160,7 +175,14 @@ async def test_preview_evaluator_returns_nine_results_and_first_failure(db_sessi
     assert result["property_failures"] == []
     assert result["matched_item_client_id"] == seeded.item.client_id
     assert result["values_source"] == "stored"
-    assert next(check for check in result["checks"] if check["check"] == "item_already_assigned")["advisory"] is True
+    assert (
+        next(
+            check
+            for check in result["checks"]
+            if check["check"] == "item_already_assigned"
+        )["advisory"]
+        is True
+    )
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
@@ -168,14 +190,21 @@ async def test_preview_does_not_write_or_change_counters(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     await _preview(db_session, seeded, row, **_body(seeded))
-    assert await db_session.scalar(
-        select(StockTaskAssignment).where(
-            StockTaskAssignment.stock_report_item_id == row.client_id
+    assert (
+        await db_session.scalar(
+            select(StockTaskAssignment).where(
+                StockTaskAssignment.stock_report_item_id == row.client_id
+            )
         )
-    ) is None
+        is None
+    )
     refreshed_row = await db_session.get(StockReportItem, row.client_id)
     refreshed_task = await db_session.get(Task, seeded.task.client_id)
-    assert (refreshed_row.quantity_in_queue, refreshed_row.quantity_in_progress, refreshed_row.quantity_awaiting) == (0, 0, 0)
+    assert (
+        refreshed_row.quantity_in_queue,
+        refreshed_row.quantity_in_progress,
+        refreshed_row.quantity_awaiting,
+    ) == (0, 0, 0)
     assert refreshed_task.is_stock_assignment is False
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
@@ -185,8 +214,14 @@ async def test_preview_reports_advisory_active_assignment_without_blocking(db_se
     row = await _make_row(db_session, seeded)
     await _create(db_session, seeded, row)
     result = await _preview(db_session, seeded, row, **_body(seeded))
-    check = next(item for item in result["checks"] if item["check"] == "item_already_assigned")
-    assert check == {"check": "item_already_assigned", "result": "fail", "advisory": True}
+    check = next(
+        item for item in result["checks"] if item["check"] == "item_already_assigned"
+    )
+    assert check == {
+        "check": "item_already_assigned",
+        "result": "fail",
+        "advisory": True,
+    }
     assert result["can_proceed"] is True
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
@@ -201,7 +236,10 @@ async def test_preview_refusal_reason_includes_advisory_failure(db_session):
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
-@pytest.mark.parametrize("body", [{"article_number": "SR-does-not-exist"}, {"article_number": None, "sku": None}])
+@pytest.mark.parametrize(
+    "body",
+    [{"article_number": "SR-does-not-exist"}, {"article_number": None, "sku": None}],
+)
 async def test_preview_unresolved_identifier_is_not_found_error(db_session, body):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
@@ -212,7 +250,14 @@ async def test_preview_unresolved_identifier_is_not_found_error(db_session, body
         **_body(seeded, **body, properties={}, quantity=1),
     )
     assert result["matched_item_client_id"] is None
-    assert result["property_failures"] == [{"key": "wood_group", "reason": "missing_on_item"}]
+    assert result["property_failures"] == [
+        {
+            "key": "wood_group",
+            "reason": "missing_on_item",
+            "accepted_values": ["teak"],
+            "item_values": [],
+        }
+    ]
     assert result["override_required"] is True
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
@@ -220,17 +265,39 @@ async def test_preview_unresolved_identifier_is_not_found_error(db_session, body
 async def test_preview_quantity_is_matched_from_supplied_candidate(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded, criteria={"quantity": ["4"]})
-    matching = await _preview(db_session, seeded, row, **_body(seeded, article_number=None, quantity=4, properties={}))
-    failing = await _preview(db_session, seeded, row, **_body(seeded, article_number=None, quantity=7, properties={}))
+    matching = await _preview(
+        db_session,
+        seeded,
+        row,
+        **_body(seeded, article_number=None, quantity=4, properties={}),
+    )
+    failing = await _preview(
+        db_session,
+        seeded,
+        row,
+        **_body(seeded, article_number=None, quantity=7, properties={}),
+    )
     assert matching["property_failures"] == []
     assert matching["override_required"] is False
-    assert failing["property_failures"] == [{"key": "quantity", "reason": "value_not_accepted"}]
+    assert failing["property_failures"] == [
+        {
+            "key": "quantity",
+            "reason": "value_not_accepted",
+            "accepted_values": ["4"],
+            "item_values": ["7"],
+        }
+    ]
     assert failing["override_required"] is True
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
-@pytest.mark.parametrize("body", [{"article_number": "SR-does-not-exist"}, {"article_number": None, "sku": None}])
-async def test_preview_unresolved_item_marks_item_checks_not_evaluated(db_session, body):
+@pytest.mark.parametrize(
+    "body",
+    [{"article_number": "SR-does-not-exist"}, {"article_number": None, "sku": None}],
+)
+async def test_preview_unresolved_item_marks_item_checks_not_evaluated(
+    db_session, body
+):
     # C3(e), corrected round 2, 2026-09-21: the four ITEM-DEPENDENT checks (need a
     # persisted item to mean anything) read not_evaluated. item_has_no_category and
     # category_mismatch are NOT in this set any more -- they are computable from the
@@ -239,7 +306,12 @@ async def test_preview_unresolved_item_marks_item_checks_not_evaluated(db_sessio
     row = await _make_row(db_session, seeded)
     result = await _preview(db_session, seeded, row, **_body(seeded, **body))
     by_name = {check["check"]: check for check in result["checks"]}
-    for name in ("item_not_found", "item_not_task_primary", "already_processed_by_scanner", "item_already_assigned"):
+    for name in (
+        "item_not_found",
+        "item_not_task_primary",
+        "already_processed_by_scanner",
+        "item_already_assigned",
+    ):
         assert by_name[name]["result"] == "not_evaluated"
     for name in ("item_has_no_category", "category_mismatch"):
         assert by_name[name]["result"] == "pass"
@@ -267,7 +339,61 @@ async def test_preview_uses_stored_values_when_identifier_resolves(db_session):
     assert result["can_proceed"] is True
     assert result["matched_item_client_id"] == seeded.item.client_id
     assert result["values_source"] == "stored"
-    assert next(check for check in result["checks"] if check["check"] == "category_mismatch")["result"] == "pass"
+    assert (
+        next(
+            check for check in result["checks"] if check["check"] == "category_mismatch"
+        )["result"]
+        == "pass"
+    )
+    await assert_stock_report_clean(db_session, seeded.workspace.client_id)
+
+
+async def test_preview_failure_values_match_create_for_the_stored_item(db_session):
+    seeded = await seed_stock_report_workspace(db_session)
+    row = await _make_row(
+        db_session,
+        seeded,
+        criteria={"upholstery": ["foam"], "wood_group": ["light"]},
+    )
+    preview_result = await _preview(
+        db_session,
+        seeded,
+        row,
+        **_body(
+            seeded,
+            properties={"upholstery": "Foam", "wood_type": "Oak"},
+            quantity=99,
+        ),
+    )
+
+    assert preview_result["values_source"] == "stored"
+    assert preview_result["property_failures"] == [
+        {
+            "key": "upholstery",
+            "reason": "value_not_accepted",
+            "accepted_values": ["foam"],
+            "item_values": ["down"],
+        },
+        {
+            "key": "wood_group",
+            "reason": "value_not_accepted",
+            "accepted_values": ["light"],
+            "item_values": ["teak"],
+        },
+    ]
+
+    with pytest.raises(StockAssignmentPropertyMismatch) as excinfo:
+        await create_stock_task_assignments(
+            make_ctx(
+                db_session,
+                seeded,
+                role_name="worker",
+                incoming_data={
+                    "entries": [_entry(row, seeded.task, seeded.item)],
+                },
+            )
+        )
+    assert excinfo.value.details[0]["failures"] == preview_result["property_failures"]
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
@@ -296,10 +422,13 @@ async def test_preview_requires_live_row_in_request_workspace(db_session, path_c
         )
 
 
-@pytest.mark.parametrize("body", [
-    {"quantity": None, "_remove_quantity": True},
-    {"sku": "SKU-live"},
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"quantity": None, "_remove_quantity": True},
+        {"sku": "SKU-live"},
+    ],
+)
 async def test_preview_rejects_malformed_body(db_session, body):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
@@ -323,9 +452,21 @@ async def test_preview_ignores_deleted_or_foreign_candidate_item(db_session, ite
         foreign = await seed_stock_report_workspace(db_session)
         article_number = foreign.item.article_number
     await db_session.flush()
-    result = await _preview(db_session, seeded, row, **_body(seeded, article_number=article_number, properties={}, quantity=1))
+    result = await _preview(
+        db_session,
+        seeded,
+        row,
+        **_body(seeded, article_number=article_number, properties={}, quantity=1),
+    )
     assert result["matched_item_client_id"] is None
-    assert result["property_failures"] == [{"key": "wood_group", "reason": "missing_on_item"}]
+    assert result["property_failures"] == [
+        {
+            "key": "wood_group",
+            "reason": "missing_on_item",
+            "accepted_values": ["teak"],
+            "item_values": [],
+        }
+    ]
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
 
 
@@ -334,7 +475,9 @@ async def test_preview_ignores_deleted_or_foreign_candidate_item(db_session, ite
     "expect_can_proceed, expect_refusal_reason",
     [
         pytest.param("same", "pass", "pass", True, None, id="own_category"),
-        pytest.param("other", "fail", "pass", False, "category_mismatch", id="different_category"),
+        pytest.param(
+            "other", "fail", "pass", False, "category_mismatch", id="different_category"
+        ),
     ],
 )
 async def test_preview_supplied_category_takes_effect_with_no_item(
@@ -383,9 +526,24 @@ async def test_preview_with_no_task_reports_construction_results(db_session):
     row = await _make_row(db_session, seeded)
     result = await _preview(db_session, seeded, row, **_body(seeded, task_id=None))
     by_name = {check["check"]: check for check in result["checks"]}
-    for name in ("task_not_found", "task_failed_or_cancelled", "item_not_task_primary", "already_processed_by_scanner"):
+    for name in (
+        "task_not_found",
+        "task_failed_or_cancelled",
+        "item_not_task_primary",
+        "already_processed_by_scanner",
+    ):
         assert by_name[name]["result"] == "pass_by_construction"
-    assert all(check["result"] != "pass" for check in by_name.values() if check["check"] in {"task_not_found", "task_failed_or_cancelled", "item_not_task_primary", "already_processed_by_scanner"})
+    assert all(
+        check["result"] != "pass"
+        for check in by_name.values()
+        if check["check"]
+        in {
+            "task_not_found",
+            "task_failed_or_cancelled",
+            "item_not_task_primary",
+            "already_processed_by_scanner",
+        }
+    )
     assert result["can_proceed"] is True
     assert result["refusal_reason"] is None
     await assert_stock_report_clean(db_session, seeded.workspace.client_id)
@@ -395,9 +553,27 @@ async def test_preview_reports_all_real_task_failures_in_order(db_session):
     seeded = await seed_stock_report_workspace(db_session)
     row = await _make_row(db_session, seeded)
     assignment = await _create(db_session, seeded, row)
-    await move_assignment(db_session, assignment, S.AWAITING, workspace_id=seeded.workspace.client_id, actor_user_id=seeded.manager.client_id, now=NOW, trigger="test")
-    await move_assignment(db_session, assignment, S.RESOLVED, workspace_id=seeded.workspace.client_id, actor_user_id=seeded.manager.client_id, now=NOW, trigger="test")
-    task_item = await db_session.scalar(select(TaskItem).where(TaskItem.task_id == seeded.task.client_id))
+    await move_assignment(
+        db_session,
+        assignment,
+        S.AWAITING,
+        workspace_id=seeded.workspace.client_id,
+        actor_user_id=seeded.manager.client_id,
+        now=NOW,
+        trigger="test",
+    )
+    await move_assignment(
+        db_session,
+        assignment,
+        S.RESOLVED,
+        workspace_id=seeded.workspace.client_id,
+        actor_user_id=seeded.manager.client_id,
+        now=NOW,
+        trigger="test",
+    )
+    task_item = await db_session.scalar(
+        select(TaskItem).where(TaskItem.task_id == seeded.task.client_id)
+    )
     task_item.role = TaskItemRoleEnum.RELATED
     seeded.task.state = TaskStateEnum.CANCELLED
     await db_session.flush()

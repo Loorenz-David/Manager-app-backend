@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from beyo_manager.domain.task_steps.enums import TaskStepReadinessStatusEnum, TaskStepStateEnum
-from beyo_manager.domain.tasks.enums import TaskStateEnum, TaskTypeEnum
+from beyo_manager.domain.tasks.enums import TaskPriorityEnum, TaskStateEnum, TaskTypeEnum
 from beyo_manager.models.tables.tasks.step_state_record import StepStateRecord
 from beyo_manager.models.tables.tasks.task import Task
 from beyo_manager.models.tables.tasks.task_step import TaskStep
@@ -34,7 +34,16 @@ class _World:
         self.suffix = suffix
         self._n = 0
 
-    async def task(self, name, *, state=TaskStateEnum.WORKING, completed_at=None) -> Task:
+    async def task(
+        self,
+        name,
+        *,
+        state=TaskStateEnum.WORKING,
+        completed_at=None,
+        priority=TaskPriorityEnum.NORMAL,
+        ready_by_at=None,
+        is_stock_assignment=False,
+    ) -> Task:
         self._n += 1
         task = Task(
             client_id=f"tsk_{self.suffix}_{name}",
@@ -42,7 +51,10 @@ class _World:
             task_scalar_id=self._n,
             task_type=TaskTypeEnum.INTERNAL,
             state=state,
+            priority=priority,
+            ready_by_at=ready_by_at,
             completed_at=completed_at,
+            is_stock_assignment=is_stock_assignment,
             created_by_id=self.user.client_id,
             created_at=BASE,
         )
@@ -216,6 +228,67 @@ async def test_recently_completed_pagination_is_stable_across_ties(db_session) -
     collected = [task_id for page in pages for task_id in page]
     assert len(collected) == 5
     assert len(set(collected)) == 5
+
+
+# --- is_stock_assignment ------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_default_ordering_ranks_a_stock_assignment_above_priority_on_a_shared_due_date(
+    db_session,
+) -> None:
+    """The tier sits between the due date and priority: at one ready_by_at a NORMAL stock
+    assignment beats an URGENT task that is not one."""
+    world = await _world(db_session)
+    # Client ids sort "plain" < "stock", so the tiebreaker alone would give the wrong answer.
+    await world.task("plain", priority=TaskPriorityEnum.URGENT, ready_by_at=_at(10))
+    await world.task("stock", ready_by_at=_at(10), is_stock_assignment=True)
+
+    ids = await _ids(world)
+
+    assert ids == [f"tsk_{world.suffix}_stock", f"tsk_{world.suffix}_plain"]
+
+
+@pytest.mark.integration
+async def test_default_ordering_keeps_the_due_date_above_the_stock_assignment_tier(
+    db_session,
+) -> None:
+    world = await _world(db_session)
+    await world.task("sooner", ready_by_at=_at(0))
+    await world.task("later_stock", ready_by_at=_at(60), is_stock_assignment=True)
+    await world.task("undated_stock", is_stock_assignment=True)
+
+    ids = await _ids(world)
+
+    assert ids == [
+        f"tsk_{world.suffix}_sooner",
+        f"tsk_{world.suffix}_later_stock",
+        f"tsk_{world.suffix}_undated_stock",
+    ]
+
+
+@pytest.mark.integration
+async def test_explicit_order_by_ignores_the_stock_assignment_flag(db_session) -> None:
+    world = await _world(db_session)
+    await world.task("plain", priority=TaskPriorityEnum.URGENT, ready_by_at=_at(10))
+    await world.task("stock", ready_by_at=_at(10), is_stock_assignment=True)
+
+    ids = await _ids(world, order_by="priority:desc")
+
+    assert ids == [f"tsk_{world.suffix}_plain", f"tsk_{world.suffix}_stock"]
+
+
+@pytest.mark.integration
+async def test_payload_carries_is_stock_assignment(db_session) -> None:
+    world = await _world(db_session)
+    await world.task("stock", is_stock_assignment=True)
+    await world.task("plain")
+
+    result = await list_tasks(_ctx(world))
+    by_id = {item["task"]["client_id"]: item["task"] for item in result["tasks_pagination"]["items"]}
+
+    assert by_id[f"tsk_{world.suffix}_stock"]["is_stock_assignment"] is True
+    assert by_id[f"tsk_{world.suffix}_plain"]["is_stock_assignment"] is False
 
 
 # --- last_interacted ----------------------------------------------------------------------

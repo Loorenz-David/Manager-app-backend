@@ -27,6 +27,7 @@ def test_serialize_task_light_includes_task_schedule_fields():
         scheduled_end_at=datetime(2026, 6, 26, 11, 0, tzinfo=timezone.utc),
         return_method=None,
         assortment="three_seater",
+        is_stock_assignment=True,
     )
 
     result = serialize_task_light(task)
@@ -35,6 +36,7 @@ def test_serialize_task_light_includes_task_schedule_fields():
     assert result["scheduled_start_at"] == "2026-06-26T09:00:00+00:00"
     assert result["scheduled_end_at"] == "2026-06-26T11:00:00+00:00"
     assert result["assortment"] == "three_seater"
+    assert result["is_stock_assignment"] is True
 
 
 @pytest.mark.unit
@@ -68,12 +70,14 @@ def test_serialize_task_includes_customer_name_snapshot():
         closed_at=None,
         completed_at=None,
         is_deleted=False,
+        is_stock_assignment=False,
         deleted_at=None,
     )
 
     result = serialize_task(task)
 
     assert result["customer_name_snapshot"] == "Snapshot Customer"
+    assert result["is_stock_assignment"] is False
 
 
 def _step_stub():

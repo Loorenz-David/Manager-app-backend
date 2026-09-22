@@ -18,10 +18,21 @@ from beyo_manager.domain.stock_report.scanner_property_tables import (
 class CriterionFailure:
     key: str
     reason: StockCriteriaMismatchReasonEnum
+    accepted_values: tuple[str, ...]
+    item_values: tuple[str, ...]
 
 
 def tokenize_property_value(value: str) -> list[str]:
     return [part.strip().lower() for part in re.split(r"[,/]", value) if part.strip()]
+
+
+def serialize_criterion_failure(failure: CriterionFailure) -> dict:
+    return {
+        "key": failure.key,
+        "reason": failure.reason.value,
+        "accepted_values": list(failure.accepted_values),
+        "item_values": list(failure.item_values),
+    }
 
 
 def _property_value(value) -> str | None:
@@ -66,10 +77,15 @@ def evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]:
     failures = []
     for key, accepted in criteria.items():
         value = bag.get(key)
+        accepted_values = tuple(accepted) if isinstance(accepted, list) else ()
+        item_values = tuple(tokenize_property_value(value)) if value is not None else ()
         if isinstance(accepted, list) and not accepted:
             failures.append(
                 CriterionFailure(
-                    key, StockCriteriaMismatchReasonEnum.CRITERION_NOT_UNDERSTOOD
+                    key,
+                    StockCriteriaMismatchReasonEnum.CRITERION_NOT_UNDERSTOOD,
+                    accepted_values,
+                    item_values,
                 )
             )
             continue
@@ -86,7 +102,18 @@ def evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]:
                 if source_key in bag
                 else StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
             )
-            failures.append(CriterionFailure(key, reason))
+            source_value = bag.get(source_key) if source_key is not None else None
+            failures.append(
+                CriterionFailure(
+                    key,
+                    reason,
+                    accepted_values,
+                    tuple(tokenize_property_value(source_value))
+                    if reason is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+                    and source_value is not None
+                    else item_values,
+                )
+            )
             continue
         if accepted is None:
             continue
@@ -94,14 +121,20 @@ def evaluate_stock_criteria(item, criteria: dict) -> list[CriterionFailure]:
         if not tokens:
             failures.append(
                 CriterionFailure(
-                    key, StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
+                    key,
+                    StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM,
+                    accepted_values,
+                    item_values,
                 )
             )
             continue
         if not any(token in accepted for token in tokens):
             failures.append(
                 CriterionFailure(
-                    key, StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED
+                    key,
+                    StockCriteriaMismatchReasonEnum.VALUE_NOT_ACCEPTED,
+                    accepted_values,
+                    tuple(tokens),
                 )
             )
     return sorted(failures, key=lambda failure: failure.key)

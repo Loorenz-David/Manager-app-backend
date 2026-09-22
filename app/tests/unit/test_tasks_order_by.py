@@ -27,12 +27,14 @@ def _rendered_in_statement(order_by, **kwargs) -> str:
     return _compile(stmt)
 
 
+_PRIORITY_CASE = (
+    "CASE WHEN (tasks.priority = 'urgent') THEN 4 WHEN (tasks.priority = 'high') THEN 3 "
+    "WHEN (tasks.priority = 'normal') THEN 2 WHEN (tasks.priority = 'low') THEN 1 ELSE 0 END DESC"
+)
 _DEFAULT = [
     "tasks.ready_by_at ASC NULLS LAST",
-    (
-        "CASE WHEN (tasks.priority = 'urgent') THEN 4 WHEN (tasks.priority = 'high') THEN 3 "
-        "WHEN (tasks.priority = 'normal') THEN 2 WHEN (tasks.priority = 'low') THEN 1 ELSE 0 END DESC"
-    ),
+    "tasks.is_stock_assignment DESC",
+    _PRIORITY_CASE,
     "tasks.created_at ASC",
     "tasks.client_id ASC",
 ]
@@ -41,6 +43,22 @@ _DEFAULT = [
 @pytest.mark.unit
 def test_default_ordering_ends_on_the_primary_key() -> None:
     assert _rendered(None) == _DEFAULT
+
+
+@pytest.mark.unit
+def test_default_ordering_ranks_stock_assignments_after_the_due_date_and_before_priority() -> None:
+    """A stock assignment wins a tie on the due date, but never overrides an earlier one."""
+    assert _DEFAULT.index("tasks.is_stock_assignment DESC") == 1
+    assert _DEFAULT.index(_PRIORITY_CASE) == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "order_by, task_states",
+    [("ready_by_at", None), ("priority:desc", None), ("recently_completed", ["ready"]), ("last_interacted", None)],
+)
+def test_explicit_order_by_never_adds_the_stock_assignment_tier(order_by, task_states) -> None:
+    assert not any("is_stock_assignment" in clause for clause in _rendered(order_by, task_states=task_states))
 
 
 @pytest.mark.unit
@@ -70,13 +88,13 @@ def test_legacy_keys_are_unchanged(order_by, expected) -> None:
 @pytest.mark.unit
 def test_legacy_priority_key_is_unchanged() -> None:
     clauses = _rendered("priority:desc")
-    assert clauses == [_DEFAULT[1], "tasks.client_id ASC"]
+    assert clauses == [_PRIORITY_CASE, "tasks.client_id ASC"]
 
 
 @pytest.mark.unit
 def test_multiple_legacy_keys_keep_their_order() -> None:
     assert _rendered("priority:desc,created_at") == [
-        _DEFAULT[1],
+        _PRIORITY_CASE,
         "tasks.created_at ASC",
         "tasks.client_id ASC",
     ]

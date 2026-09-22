@@ -4,6 +4,7 @@ from beyo_manager.domain.stock_report.criteria_matcher import (
     build_item_property_bag,
     evaluate_stock_criteria,
     matches_stock_criteria,
+    serialize_criterion_failure,
 )
 from beyo_manager.domain.stock_report.enums import StockCriteriaMismatchReasonEnum
 from beyo_manager.models.tables.items.item import Item
@@ -38,23 +39,89 @@ def test_matcher_reports_all_sorted_failures():
         ("upholstery", StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM),
         ("wood_group", StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM),
     ]
+    assert [serialize_criterion_failure(failure) for failure in failures] == [
+        {
+            "key": "quantity",
+            "reason": "value_not_accepted",
+            "accepted_values": ["2"],
+            "item_values": ["1"],
+        },
+        {
+            "key": "upholstery",
+            "reason": "missing_on_item",
+            "accepted_values": ["x"],
+            "item_values": [],
+        },
+        {
+            "key": "wood_group",
+            "reason": "missing_on_item",
+            "accepted_values": ["dark"],
+            "item_values": [],
+        },
+    ]
 
 
 @pytest.mark.unit
 def test_empty_list_is_not_a_wildcard():
     failures = evaluate_stock_criteria(item({"upholstery": "blue"}), {"upholstery": []})
     assert len(failures) == 1
-    assert failures[0].reason is StockCriteriaMismatchReasonEnum.CRITERION_NOT_UNDERSTOOD
+    assert (
+        failures[0].reason is StockCriteriaMismatchReasonEnum.CRITERION_NOT_UNDERSTOOD
+    )
+    assert serialize_criterion_failure(failures[0]) == {
+        "key": "upholstery",
+        "reason": "criterion_not_understood",
+        "accepted_values": [],
+        "item_values": ["blue"],
+    }
 
 
 @pytest.mark.unit
 def test_known_source_without_derived_group_reports_no_group():
-    assert (
-        evaluate_stock_criteria(item({"wood_type": "Other"}), {"wood_group": ["dark"]})[
-            0
-        ].reason
-        is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+    failure = evaluate_stock_criteria(
+        item({"wood_type": "Other"}), {"wood_group": ["dark"]}
+    )[0]
+    assert failure.reason is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+    assert serialize_criterion_failure(failure) == {
+        "key": "wood_group",
+        "reason": "no_group_for_value",
+        "accepted_values": ["dark"],
+        "item_values": ["other"],
+    }
+
+
+@pytest.mark.unit
+def test_matcher_failure_values_use_normalized_tokens_for_derived_and_raw_criteria():
+    failures = evaluate_stock_criteria(
+        item(
+            {"wood_type": "Teak, Oak", "upholstery": "Down/Feather", "drawers_qty": "0"}
+        ),
+        {
+            "drawers_range": ["3-5"],
+            "upholstery": ["foam"],
+            "wood_group": ["light"],
+        },
     )
+    assert [serialize_criterion_failure(failure) for failure in failures] == [
+        {
+            "key": "drawers_range",
+            "reason": "no_group_for_value",
+            "accepted_values": ["3-5"],
+            "item_values": ["0"],
+        },
+        {
+            "key": "upholstery",
+            "reason": "value_not_accepted",
+            "accepted_values": ["foam"],
+            "item_values": ["down", "feather"],
+        },
+        {
+            "key": "wood_group",
+            "reason": "value_not_accepted",
+            "accepted_values": ["light"],
+            "item_values": ["teak"],
+        },
+    ]
 
 
 @pytest.mark.unit
@@ -161,12 +228,18 @@ def test_wildcard_and_token_matching_table():
         evaluate_stock_criteria(item({"shape": ", /"}), {"shape": ["oval"]})[0].reason
         is StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
     )
-    assert evaluate_stock_criteria(item({"wood_type": "Other"}), {"wood_group": None})[
-        0
-    ].reason is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
-    assert evaluate_stock_criteria(item({"shape": "Oval"}), {"drawers_range": ["3-5"]})[
-        0
-    ].reason is StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
+    assert (
+        evaluate_stock_criteria(item({"wood_type": "Other"}), {"wood_group": None})[
+            0
+        ].reason
+        is StockCriteriaMismatchReasonEnum.NO_GROUP_FOR_VALUE
+    )
+    assert (
+        evaluate_stock_criteria(item({"shape": "Oval"}), {"drawers_range": ["3-5"]})[
+            0
+        ].reason
+        is StockCriteriaMismatchReasonEnum.MISSING_ON_ITEM
+    )
     assert evaluate_stock_criteria(item(None), {}) == []
 
 

@@ -20,7 +20,10 @@ from beyo_manager.domain.stock_report.assignment_checks import (
     evaluate_assignment_checks,
     first_failed_check,
 )
-from beyo_manager.domain.stock_report.criteria_matcher import evaluate_stock_criteria
+from beyo_manager.domain.stock_report.criteria_matcher import (
+    evaluate_stock_criteria,
+    serialize_criterion_failure,
+)
 from beyo_manager.domain.stock_report.serializers import serialize_stock_task_assignment
 from beyo_manager.domain.stock_report.state_map import ASSIGNMENT_STATE_BY_TASK_STATE
 from beyo_manager.errors.stock_report import (
@@ -78,18 +81,22 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
         # Phase 2 — locks, MC-1 order (items -> tasks -> stock_report_items).
         locked_items = await lock_items(ctx.session, ctx.workspace_id, item_ids)
         locked_tasks = await lock_tasks(ctx.session, ctx.workspace_id, task_ids)
-        locked_rows = await lock_stock_report_items(ctx.session, ctx.workspace_id, row_ids)
+        locked_rows = await lock_stock_report_items(
+            ctx.session, ctx.workspace_id, row_ids
+        )
         initial_row_values = {
             row_id: row_values(row) for row_id, row in locked_rows.items()
         }
 
-        primary_pairs, processed_pairs, active_item_ids = (
-            await fetch_assignment_check_inputs(
-                ctx.session,
-                workspace_id=ctx.workspace_id,
-                task_ids=task_ids,
-                item_ids=item_ids,
-            )
+        (
+            primary_pairs,
+            processed_pairs,
+            active_item_ids,
+        ) = await fetch_assignment_check_inputs(
+            ctx.session,
+            workspace_id=ctx.workspace_id,
+            task_ids=task_ids,
+            item_ids=item_ids,
         )
 
         # Phase 3 — per-entry refusal checks, first failing reason wins.
@@ -113,7 +120,10 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
 
         if reasons:
             raise StockAssignmentRefused(
-                [{"index": index, "reason": reasons[index]} for index in sorted(reasons)]
+                [
+                    {"index": index, "reason": reasons[index]}
+                    for index in sorted(reasons)
+                ]
             )
 
         # Phase 4 — the property matcher (MC-12).
@@ -132,8 +142,7 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
                         "task_id": entry.task_id,
                         "item_id": entry.item_id,
                         "failures": [
-                            {"key": failure.key, "reason": failure.reason.value}
-                            for failure in failures
+                            serialize_criterion_failure(failure) for failure in failures
                         ],
                     }
                 )
@@ -178,7 +187,9 @@ async def create_stock_task_assignments(ctx: ServiceContext) -> dict:
                         is_creation=True,
                     )
                 )
-                await set_task_stock_flag(ctx.session, ctx.workspace_id, task.client_id, True)
+                await set_task_stock_flag(
+                    ctx.session, ctx.workspace_id, task.client_id, True
+                )
                 created.append(assignment)
         except IntegrityError:
             raise StockAssignmentRefused(

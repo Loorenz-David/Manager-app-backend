@@ -78,6 +78,7 @@ _LAST_STATE_RECORD_KEYS = {
 _TASK_KEYS = {
     "assortment",
     "client_id",
+    "is_stock_assignment",
     "item_location",
     "priority",
     "ready_by_at",
@@ -364,3 +365,65 @@ async def test_unknown_state_filter_value_is_a_domain_error_not_a_driver_crash(d
             )
         )
     assert "not_a_state" in str(exc.value)
+
+
+@pytest.mark.integration
+async def test_stock_assignment_steps_rank_first_on_a_shared_due_date(db_session):
+    """Between the `ready_by_at` tier and the id tiebreaker: whichever of two steps due at
+    the same time belongs to the stock-assignment task lists first. Flagging each task in
+    turn is what makes the assertion independent of how the tiebreaker orders the two ids.
+    """
+    workspace, user, section, _ = await _seed_step(db_session)
+    suffix = uuid4().hex[:8]
+    due = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+
+    seeded_step = (
+        await db_session.execute(select(TaskStep).where(TaskStep.working_section_id == section.client_id))
+    ).scalar_one()
+    seeded_task = (await db_session.execute(select(Task).where(Task.client_id == seeded_step.task_id))).scalar_one()
+    other_task = Task(
+        client_id=f"tsk_{suffix}",
+        workspace_id=workspace.client_id,
+        task_scalar_id=2,
+        task_type=TaskTypeEnum.INTERNAL,
+        state=TaskStateEnum.ASSIGNED,
+        created_by_id=user.client_id,
+    )
+    other_step = TaskStep(
+        client_id=f"tsp_{suffix}",
+        workspace_id=workspace.client_id,
+        task_id=other_task.client_id,
+        working_section_id=section.client_id,
+        working_section_name_snapshot=section.name,
+        state=TaskStepStateEnum.PENDING,
+        readiness_status=TaskStepReadinessStatusEnum.READY,
+        total_dependencies=0,
+        completed_dependencies=0,
+        created_by_id=user.client_id,
+        created_at=due,
+    )
+    seeded_task.ready_by_at = due
+    other_task.ready_by_at = due
+    db_session.add_all([other_task, other_step])
+    await db_session.flush()
+
+    async def ordered_ids() -> list[str]:
+        result = await list_working_section_steps(
+            _ctx(
+                db_session,
+                workspace_id=workspace.client_id,
+                user_id=user.client_id,
+                working_section_id=section.client_id,
+                group_by_upholstery=False,
+            )
+        )
+        return [item["client_id"] for item in result["steps_pagination"]["items"]]
+
+    seeded_task.is_stock_assignment = True
+    await db_session.flush()
+    assert (await ordered_ids()) == [seeded_step.client_id, other_step.client_id]
+
+    seeded_task.is_stock_assignment = False
+    other_task.is_stock_assignment = True
+    await db_session.flush()
+    assert (await ordered_ids()) == [other_step.client_id, seeded_step.client_id]

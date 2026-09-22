@@ -104,7 +104,14 @@ async def list_working_section_steps(ctx: ServiceContext) -> dict:
         order_by_clauses.append(
             case((TaskStep.client_id.in_(reassigned_step_ids), 0), else_=1)
         )
-    order_by_clauses.extend([Task.ready_by_at.asc().nullslast(), TaskStep.client_id.desc()])
+    # Among steps due at the same time, those of a stock-assignment task come first.
+    order_by_clauses.extend(
+        [
+            Task.ready_by_at.asc().nullslast(),
+            Task.is_stock_assignment.desc(),
+            TaskStep.client_id.desc(),
+        ]
+    )
 
     stmt = (
         select(TaskStep.client_id)

@@ -589,7 +589,12 @@ Make your handlers idempotent.
 - **No pagination anywhere**, by decision.
 - **No history read endpoint.** History records are written; nothing exposes them.
 - **No local row creation.** Rows are created by Scanner's demand webhook only.
-- **`is_stock_assignment` is not surfaced** on the task read shape.
+- ~~**`is_stock_assignment` is not surfaced** on the task read shape.~~ **Amended
+  2026-09-22:** it now is. `is_stock_assignment: boolean` sits on the `task` object of
+  `GET /api/v1/tasks` and `GET /api/v1/tasks/{id}`, and on `step.task` of
+  `GET /api/v1/working-sections/{id}/steps`. Both listings' **default** ordering ranks it
+  directly after `ready_by_at` (flagged first), above priority; an explicit `order_by` on
+  the tasks listing is unaffected.
 - **No "forgotten items" view** — there is no screen that lists items Scanner resolved
   early so someone can chase the step that was skipped. It was considered and deferred.
 - No batch match-preview — it is one row per call.

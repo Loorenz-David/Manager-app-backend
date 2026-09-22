@@ -80,8 +80,12 @@ def _build_order_by(
     # keys below (a batch transition stamps one identical `now` across many rows), so ending
     # every ordering on the primary key is what makes them usable.
     tiebreaker = Task.client_id.asc()
+    # A stock assignment outranks priority but not the due date: among tasks due at the same
+    # time, the ones feeding the stock report come first. Default ordering only — an explicit
+    # `order_by` names what the caller wants and is not second-guessed.
     default_clauses = [
         Task.ready_by_at.asc().nulls_last(),
+        Task.is_stock_assignment.desc(),
         priority_rank.desc(),
         Task.created_at.asc(),
         tiebreaker,

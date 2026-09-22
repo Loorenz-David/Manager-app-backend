@@ -56,6 +56,7 @@ def serialize_task(
         "closed_at": task.closed_at.isoformat() if task.closed_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "is_deleted": task.is_deleted,
+        "is_stock_assignment": task.is_stock_assignment,
         "deleted_at": task.deleted_at.isoformat() if task.deleted_at else None,
         "post_handling": (
             [serialize_task_post_handling(ph) for ph in post_handling_instances]
@@ -397,6 +398,7 @@ def serialize_task_light(task: Task) -> dict:
         "scheduled_end_at": task.scheduled_end_at.isoformat() if task.scheduled_end_at else None,
         "return_method": task.return_method.value if task.return_method else None,
         "assortment": task.assortment,
+        "is_stock_assignment": task.is_stock_assignment,
     }
 
 

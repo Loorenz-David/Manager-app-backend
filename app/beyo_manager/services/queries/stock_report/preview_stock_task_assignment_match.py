@@ -13,7 +13,10 @@ from beyo_manager.domain.stock_report.assignment_checks import (
     evaluate_assignment_checks,
     first_failed_check,
 )
-from beyo_manager.domain.stock_report.criteria_matcher import evaluate_stock_criteria
+from beyo_manager.domain.stock_report.criteria_matcher import (
+    evaluate_stock_criteria,
+    serialize_criterion_failure,
+)
 from beyo_manager.domain.stock_report.enums import StockAssignmentCheckResultEnum
 from beyo_manager.errors.not_found import NotFound
 from beyo_manager.errors.validation import ValidationError
@@ -81,9 +84,7 @@ async def preview_stock_task_assignment_match(ctx) -> dict:
     identifier = request.article_number or request.sku
     if identifier is not None:
         identifier_column = (
-            Item.article_number
-            if request.article_number is not None
-            else Item.sku
+            Item.article_number if request.article_number is not None else Item.sku
         )
         matched_item = await ctx.session.scalar(
             select(Item).where(
@@ -102,13 +103,15 @@ async def preview_stock_task_assignment_match(ctx) -> dict:
     )
     task_ids = {task.client_id} if task is not None else set()
     item_ids = {matched_item.client_id} if matched_item is not None else set()
-    primary_pairs, processed_pairs, active_item_ids = (
-        await fetch_assignment_check_inputs(
-            ctx.session,
-            workspace_id=ctx.workspace_id,
-            task_ids=task_ids,
-            item_ids=item_ids,
-        )
+    (
+        primary_pairs,
+        processed_pairs,
+        active_item_ids,
+    ) = await fetch_assignment_check_inputs(
+        ctx.session,
+        workspace_id=ctx.workspace_id,
+        task_ids=task_ids,
+        item_ids=item_ids,
     )
 
     assumed = {}
@@ -151,15 +154,13 @@ async def preview_stock_task_assignment_match(ctx) -> dict:
     ]
     return {
         "can_proceed": all(
-            result.result is not StockAssignmentCheckResultEnum.FAIL
-            or result.advisory
+            result.result is not StockAssignmentCheckResultEnum.FAIL or result.advisory
             for result in checks
         ),
         "override_required": bool(property_failures),
         "refusal_reason": first_failed_check(checks),
         "property_failures": [
-            {"key": failure.key, "reason": failure.reason.value}
-            for failure in property_failures
+            serialize_criterion_failure(failure) for failure in property_failures
         ],
         "matched_item_client_id": (
             matched_item.client_id if matched_item is not None else None
