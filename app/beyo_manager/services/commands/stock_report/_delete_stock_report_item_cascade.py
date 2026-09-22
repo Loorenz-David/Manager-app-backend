@@ -139,10 +139,25 @@ async def cascade_delete_stock_report_item(
     # ── (iii) The gap close, then the two soft-deletes.
     #
     # `priority`/`priority_order` come from a **fresh `SELECT`**, never from the ORM
-    # instance loaded at the lock. Phase 13A calls this cascade once per row inside
-    # one transaction, so by the second call that instance is stale after the first
-    # cascade's Core shift (§9 rule 3; 13A C5(b) is the only armed evidence of it
-    # anywhere, and 13A's perimeter forbids editing this module).
+    # instance loaded at the lock.
+    #
+    # CORRECTED 2026-09-22 — this comment previously claimed the held instance goes
+    # **stale** after the first cascade's shift, and that claim is false. Measured on
+    # the production shape (PostgreSQL, asyncpg, `AsyncSession`, SQLAlchemy 2.0.40):
+    # `update()` here is ORM-enabled, `synchronize_session="auto"` resolves to
+    # `"evaluate"`, and every term of `close_priority_gap`'s WHERE clause evaluates
+    # the same way in Python as in SQL **when the caller passes an enum member** —
+    # which it does (`priority=position["priority"]`). The identity map is therefore
+    # SYNCHRONISED and the read below is **not** load-bearing today. The earlier
+    # measurement that said otherwise had passed the plain string `"high"`, and
+    # `StockReportItem.priority == "high"` is true in SQL but false in Python.
+    #
+    # The `SELECT` stays: it is correct defensive code, recorded "unobservable, not
+    # unnecessary", and it becomes load-bearing again if a criterion is added that
+    # Python cannot evaluate (a SQL function, subquery or JSON operator), if a caller
+    # passes a plain string, if the instance is detached or expired rather than live
+    # in the identity map, or if SQLAlchemy's default strategy changes. **Do not
+    # delete it for being inert.** (§9 rule 3; master plan L-40 as corrected, L-49.)
     position = (
         (
             await session.execute(

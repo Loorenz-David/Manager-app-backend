@@ -88,7 +88,22 @@ Order by value, all authored against the drafted text in `OWNER_CARDS_batch_D.md
 Each addition is a test plus a measured-red mutation, then the row. **A row recorded before its
 mutation is observed red is the failure this project has closed four times.**
 
-## 5. D2 — projection first, and it is not waivable — **IN FLIGHT** (`prompts/projectionist/2026-09-22_batch_D2_projection_1.md`)
+## 5. D2 — projection **DONE (BLOCKED → resolved → folded)**; implementation is next
+
+**Projection r0 returned BLOCKED**, on the one thing the batch was split to protect: 13A **C5(b)**'s
+ORM-staleness premise. The orchestrator re-measured on the production shape and **the projection was
+right** — the premise is false, the earlier contrary measurement had passed a string where the code
+passes an enum member. See master plan **L-40 (corrected)** and **L-49**.
+
+**Resolved and folded:** all **20 findings** applied to plans 13A and 14; C5(b) mutant (i) retired
+and replaced by **(i-r)** (each cascade closes its own gap against the positions the previous one
+left — observable, and invisible to plan 13 because plan 13 deletes one row); §7 Q2's armedness
+restated; the batch-D split rationale corrected in §4; the cascade's own comment, which asserted the
+staleness, corrected in place (comment only, suite green). Owner card **D-3 closed as "no change"** —
+phase 7 is not touched. Plan 14 **C2(a)** is now met by a **test**, per the owner's ruling.
+
+**Next: implement.** Prompt ready at `prompts/implementer/2026-09-22_batch_D2_implement_1.md`.
+Then tester → review → fix rounds → gate.
 
 Plans **13A** and **14**. 13A's projection is mandatory per the master plan.
 

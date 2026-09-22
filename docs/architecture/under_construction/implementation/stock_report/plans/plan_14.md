@@ -35,13 +35,17 @@ v1 or v2 file (nothing is owed to Scanner — intention §18, 2026-09-19 revisio
    `bm/services/queries/stock_report/preview_stock_task_assignment_match.py` (phase 8A).
 4. `architecture/23_documentation.md`, `25_soft_delete.md` ("document the cascade strategy in
    `states.md`"); `app/tests/unit/docs/test_item_economics_docs.py` (the docs-accuracy guard shape).
-5. **The two frontend documents already published for this project**, both under
+5. **The two frontend documents currently live for this project**, both under
    `handoffs/to_frontend/` in this project folder — read both before writing a line:
-   `HANDOFF_TO_FRONTEND_stock_report_api_20260921.md` (every batch-D endpoint, tagged PROVISIONAL,
-   and it promises in §0 and §8 that the nullability contract arrives in **this** phase) and
+   `HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` (every batch-D endpoint; **every line
+   tagged VERIFIED or SPECIFIED**, not PROVISIONAL — see its §1 — and it promises that the
+   nullability contract is settled in **this** phase) and
    `HANDOFF_TO_FRONTEND_stock_report_match_preview_v2_20260921.md` (the **ratified** preview
    contract — correct as written, `item_category_id` required, and the source of truth for that
-   endpoint's semantics).
+   endpoint's semantics). **Path correction, projection r0 F-17:** this item previously cited
+   `HANDOFF_TO_FRONTEND_stock_report_api_20260921.md` at `handoffs/to_frontend/` and called it
+   PROVISIONAL. That file resolves only under `handoffs/to_frontend/archived/` — it is superseded,
+   and it is not what this phase reads.
 
 ## 3. Dependencies
 
@@ -49,12 +53,16 @@ Phases 10, 11, 13A APPROVED (every route, error, state and event exists).
 
 ## 4. Files expected to change
 
-New: `docs/architecture/under_construction/implementation/stock_report/handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_api_<YYYYMMDD>.md`
-(a **new** file with a **new date**, in the folder the project's two published handoffs already
-live in and under their naming scheme), `docs/domains/stock_report/api.md`,
-`docs/domains/stock_report/states.md`, `app/tests/unit/docs/test_stock_report_docs.py`.
+New: `docs/domains/stock_report/api.md`, `docs/domains/stock_report/states.md`,
+`app/tests/unit/docs/test_stock_report_docs.py`.
 
-Moved (content **not** edited): the superseded handoffs go to
+**New, conditional on task 3 finding a divergence** (projection r0 F-16 — the handoff is already
+published and task 3 is a re-verification, not an authoring job):
+`docs/architecture/under_construction/implementation/stock_report/handoffs/to_frontend/HANDOFF_TO_FRONTEND_stock_report_api_<YYYYMMDD>.md`
+(a **new** file with a **new date**, in the folder the project's published handoffs already
+live in and under their naming scheme). If nothing moved, this file is **not** created.
+
+Moved (content **not** edited), **only if that re-issue happens**: the superseded handoff goes to
 `…/handoffs/to_frontend/archived/`.
 
 **Owner card 7, ruled 2026-09-21 — the supersession protocol, and it is not optional.**
@@ -64,7 +72,9 @@ four days on a previous project, and the guard against it is positional, not edi
   `HANDOFF_TO_FRONTEND_stock_report_*` name — never an edit to, and never a reuse of, an existing
   filename;
 - its frontmatter carries an explicit **`supersedes:`** key naming **every** document it replaces
-  (at minimum `HANDOFF_TO_FRONTEND_stock_report_api_20260921.md`);
+  (at minimum `HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` — the current document;
+  projection r0 F-16 corrects the earlier `…_api_20260921.md`, which is itself already superseded
+  and archived);
 - the superseded files are **moved** into `archived/` — not deleted, not edited, so their content
   stays recoverable and the record of what the frontend was told still reads true;
 - its **first section** states plainly which document is current and that the others are
@@ -76,16 +86,27 @@ four days on a previous project, and the guard against it is positional, not edi
 ## 5. Tasks (refine at prompt time)
 
 1. `api.md`: every route of master plan §6.6 with method, path, roles, request body, response body,
-   error identities/codes — **thirteen routes, the phase-8A `POST /items/{client_id}/match-preview`
-   included** (owner card 7, 2026-09-21: it was missing from this plan, and it is the one board
-   endpoint the frontend can already build against); the **three** webhooks (demand, processed,
-   delete) with a pointer to the Scanner v2 file
+   error identities/codes — **thirteen routes in total, the three Scanner webhooks included** (10
+   `@router.` sites in `stock_report.py` + 3 in `location_tracker_webhooks.py` once 13A ships;
+   projection r0 F-20 — the earlier wording parsed as 13 + 3 = 16, which is wrong), the phase-8A
+   `POST /items/{client_id}/match-preview` included (owner card 7, 2026-09-21: it was missing from
+   this plan, and it is the one board endpoint the frontend can already build against); the three
+   webhooks (demand, processed, delete) with a pointer to the Scanner v2 file
    (`docs/handoff/to_scanner/STOCK_REPORT_WEBHOOKS_v2_20260919.md`).
 2. `states.md`: the assignment state machine (plan 4 task 1's six-state table — MC-1 as amended by
    §14F), which actor performs each entry (the sync, the Scanner processed webhook for `resolved`
    and `resolved_early`), the cascade strategy for row deletion by a user **and by Scanner (13A)**,
    task deletion, PRIMARY unlink and item deletion (MC-14, MC-16), the soft-delete predicates.
-3. The frontend handoff: the routes, roles, payload shapes **with nullability per field**, the
+3. The frontend handoff — **re-verify, do not author** (projection r0 F-15; the body used to say
+   "author", contradicting this plan's own Review log of 2026-09-21): **Re-verify the published
+   `HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md` against shipped code: read each of the six
+   SPECIFIED routes field by field, flip its tag to VERIFIED, and correct anything that moved.
+   Re-issue only if something moved** — a new dated file in the same folder under the same name
+   scheme, carrying a `supersedes:` key naming `…_api_v2_20260921.md`, with that file **moved**
+   (never edited) to `archived/`. If nothing moved, record that in the session handoff and leave the
+   published file untouched. `…_match_preview_v2_20260921.md` is not superseded and not moved.
+   **What that document must carry — the checklist the re-verification reads against:** the routes,
+   roles, payload shapes **with nullability per field**, the
    override retry contract (MC-13), the two structured errors **with the closed reason vocabulary
    of `stock_assignment_refused` (master plan §6.4), `already_processed_by_scanner` explained in
    product words**, the event names and payloads (the `state` values an assignment event can carry
@@ -110,8 +131,11 @@ four days on a previous project, and the guard against it is positional, not edi
    the code missing from the handoff, and a name in the handoff that no site builds). Rooting it in
    `_events.py` alone is the defect the card forbids: that module holds one literal name,
    `stock_report_item:created` is built at `apply_stock_demand.py:271`, and
-   `stock_report_item:deleted` wherever phase 13 puts it. State the roots in the test
-   (verification-scope rule).
+   `stock_report_item:deleted` at `_delete_stock_report_item_cascade.py:59` (phase 13 chose that home; projection r0 F-14). State the roots in the test
+   (verification-scope rule). **Nullability (owner ruling 2026-09-22, projection r0 card 3 / F-19):**
+   the guard also parses the handoff's payload/field tables and compares each field's nullability
+   claim against the shipped serializers in `app/beyo_manager/domain/stock_report/serializers.py`,
+   failing when the two disagree — C2(a) is a **test**, not a reviewer's eye.
 5. Run `pytest tests/unit/docs/` before and after writing.
 
 ## 6. Criteria
@@ -119,10 +143,10 @@ four days on a previous project, and the guard against it is positional, not edi
 | Row | Fixture / input | Exact outcome | Named mutation (site) | Trace |
 |---|---|---|---|---|
 | C1(a) | `test_stock_report_docs.py` over `api.md` | every `(method, path, roles)` the router declares is present — the three webhook routes included; a route removed from the doc reddens | delete one route line from `api.md` | §6.6, M9 |
-| C1(b) | over the handoff, with the guard's roots stated in the test | every event name in **master plan §6.7** and every name constructed at an `event_name=` site under `bm/services/commands/stock_report/` (the `stock_task_assignment:{kind}` template's three values included) appears in the handoff; a name present in the code and absent from the handoff reddens, **and so does the reverse** | two mutants, **both runs recorded** (one per direction, L-13): (i) delete one event name from the handoff → red; (ii) add a name to §6.7 / a new `event_name=` site that the handoff does not carry → red. Rooting the guard in `_events.py` alone is itself the defect this row now forbids: that module holds one literal name, `stock_report_item:created` is built at `apply_stock_demand.py:271` and `stock_report_item:deleted` wherever phase 13 puts it | MC-19 |
+| C1(b) | over the handoff, with the guard's roots stated in the test | every event name in **master plan §6.7** and every name constructed at an `event_name=` site under `bm/services/commands/stock_report/` (the `stock_task_assignment:{kind}` template's three values included) appears in the handoff; a name present in the code and absent from the handoff reddens, **and so does the reverse** | **three mutants, all three runs recorded** (L-13; charter rule 12, one mutation per sub-check): (i) delete one event name from the handoff → red; (ii) add a name to §6.7 / a new `event_name=` site that the handoff does not carry → red; **(iii) add `stock_report_item:archived` to the handoff's event table while no `event_name=` site and no §6.7 entry builds it → the reverse direction reddens** — projection r0 F-13: (i) and (ii) both trip *"a name in the code missing from the handoff"*, so the reverse direction this row claims was **unarmed** until (iii). Rooting the guard in `_events.py` alone is itself the defect this row now forbids: that module holds one literal name, `stock_report_item:created` is built at `apply_stock_demand.py:271` and `stock_report_item:deleted` at **`_delete_stock_report_item_cascade.py:59`** (projection r0 F-14 — it has a concrete home now) | MC-19 |
 | C1(c) | over both | every error class and registered identity of `bm/errors/stock_report.py` / master plan §6.4 appears | delete one | MC-13, §6.4 |
-| C1(d) | over `states.md` and the handoff | every `StockTaskAssignmentStateEnum.value` appears in both (six, `resolved_early` included) | delete `resolved_early` from `states.md` | §14F F10, §6.1 |
-| C2(a) | the handoff's payload tables | every nullable field of the three serializers is annotated nullable and names the condition that produces the null (reviewer reads the serializers) | — (review) | §9B, master plan §9 rule 15 |
+| C1(d) | over `states.md` and the handoff | every `StockTaskAssignmentStateEnum.value` appears in both (six, `resolved_early` included) | **two mutants, both runs recorded** (charter rule 12, one per surface — projection r0 F-18: the row asserts **both** documents but planted only in `states.md`): (i) delete `resolved_early` from `states.md` → red; (ii) delete `resolved_early` from the handoff's state list → red. Record which mutant bites on which surface | §14F F10, §6.1 |
+| C2(a) | `test_stock_report_docs.py` over the handoff's payload tables **and** the shipped serializers in `app/beyo_manager/domain/stock_report/serializers.py` — parsed, not read by eye (owner ruling 2026-09-22 on projection r0 card 3: *"yes for both ( recomendations are correct )"* — this row gets a test, and is **not** recorded as a charter standing-rule-1 exception) | every nullable field of the three serializers is annotated nullable and names the condition that produces the null; the test asserts the handoff's field/nullability table agrees with the serializers field by field | `test_stock_report_docs.py` (def.): the test extracts each payload field's nullability from the handoff's tables and compares it against what the serializer can emit; the mutant **changes one field's nullability claim in the handoff's table** — flip a field the serializer can emit as `None` to non-nullable — → the comparison disagrees → red. (Projection r0 F-19: this cell was `— (review)`, the only criterion in the project with no test behind it, on the document the frontend trusts most.) State the roots in the test (verification-scope rule) | §9B, master plan §9 rule 15, charter standing rule 1 |
 
 ## 7. Notes
 
@@ -131,8 +155,9 @@ four days on a previous project, and the guard against it is positional, not edi
   script after the round-8/9 fold; see the delta handoff.)
 - Rounds 8–9 (2026-09-19): depends on 13A (the third webhook must exist before `api.md` lists it);
   C1(d) added; tasks 1–4 name the new state, the new reason and the delete webhook.
-- The guard's roots are `docs/domains/stock_report/` and the one handoff file; state the roots in
-  the test (verification-scope rule).
+- The guard's roots are `docs/domains/stock_report/`, the one handoff file and — since the
+  2026-09-22 ruling on C2(a) — `app/beyo_manager/domain/stock_report/serializers.py`; state the
+  roots in the test (verification-scope rule).
 
 **Added by the batch D projection + fold, 2026-09-21 (round 0). Nothing below changes a criterion outcome.**
 
@@ -204,3 +229,35 @@ end of the batch instead of being born unverified, and the frontend gets to star
 
 **Tasks 1, 2 and 4 are unchanged**, and C1(b)'s widened root (owner card 6) now has a real target
 to guard — the published file — rather than one that does not exist yet.
+
+---
+
+## Review log — 2026-09-22: batch D2 projection r0 findings applied
+
+**Projection r0, 2026-09-22 (batch D2) — BLOCKED; this plan's findings applied.** Task 3's body
+still said *author* while this plan's own 2026-09-21 Review log had already changed it to
+**re-verify and re-issue** — the body now matches (F-15), and §4 moves the new handoff from an
+unconditional **New:** to *new only if task 3 finds a divergence*, with the `supersedes:` minimum
+corrected from the archived `…_api_20260921.md` to the current `…_api_v2_20260921.md` (F-16). §2
+item 5 cited that same archived path at the live folder and called it PROVISIONAL; the live document
+is `…_api_v2_20260921.md`, tagged VERIFIED/SPECIFIED (F-17). §5 task 1's "thirteen routes … the
+three webhooks" parsed as 16 — thirteen is the total, webhooks included (F-20). C1(b)'s two mutants
+were measured to bite the **same** direction, so a third arms the reverse ("a name in the handoff
+that no site builds"), and `stock_report_item:deleted` now has a concrete home at
+`_delete_stock_report_item_cascade.py:59` (F-13, F-14). C1(d) asserted **both** surfaces but planted
+only in `states.md`; it gains a second mutant on the handoff (F-18).
+
+**C2(a) — owner ruling 2026-09-22, verbatim "yes for both ( recomendations are correct )": it gets a
+test, not a reviewer's eye.** The row is **not** recorded as a charter standing-rule-1 exception.
+The docs guard now compares the published handoff's field/nullability table against the shipped
+serializers in `app/beyo_manager/domain/stock_report/serializers.py`, and the mutant changes one
+field's nullability claim in the handoff so the comparison reddens (F-19, 14 half). §5 task 4 and
+§7's roots note carry the same addition. **Note — C1(b)'s guard root was measured CORRECT as
+written**: every stock-report `event_name=` site already lives under
+`bm/services/commands/stock_report/`, and widening the root to `app/beyo_manager/` would pull ~60
+unrelated event names into a stock-report document and make the guard red on arrival. It was not
+widened.
+
+Applied here: **F-13 … F-20 (14 half)**. No criterion row was added or removed — the count stays
+**5 criterion rows in 2 criteria**. Handoff
+`handoffs/projectionist/2026-09-22_batch_D2_projection_1_handoff.md`.
