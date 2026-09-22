@@ -75,6 +75,7 @@ async def cascade_delete_stock_report_item(
             await session.execute(
                 select(StockTaskAssignment)
                 .where(
+                    StockTaskAssignment.workspace_id == workspace_id,
                     StockTaskAssignment.stock_report_item_id == row.client_id,
                     StockTaskAssignment.is_deleted.is_(False),
                 )
@@ -108,7 +109,10 @@ async def cascade_delete_stock_report_item(
                     StockReportItem.quantity_in_queue,
                     StockReportItem.quantity_in_progress,
                     StockReportItem.quantity_awaiting,
-                ).where(StockReportItem.client_id == row.client_id)
+                ).where(
+                    StockReportItem.workspace_id == workspace_id,
+                    StockReportItem.client_id == row.client_id,
+                )
             )
         )
         .mappings()
@@ -120,7 +124,10 @@ async def cascade_delete_stock_report_item(
             continue
         await session.execute(
             update(StockReportItem)
-            .where(StockReportItem.client_id == row.client_id)
+            .where(
+                StockReportItem.workspace_id == workspace_id,
+                StockReportItem.client_id == row.client_id,
+            )
             .values(**{field: 0})
         )
         await write_repair_record(
@@ -163,7 +170,10 @@ async def cascade_delete_stock_report_item(
             await session.execute(
                 select(
                     StockReportItem.priority, StockReportItem.priority_order
-                ).where(StockReportItem.client_id == row.client_id)
+                ).where(
+                    StockReportItem.workspace_id == workspace_id,
+                    StockReportItem.client_id == row.client_id,
+                )
             )
         )
         .mappings()
@@ -192,7 +202,10 @@ async def cascade_delete_stock_report_item(
     # strictly after it.
     await session.execute(
         update(StockReportItem)
-        .where(StockReportItem.client_id == row.client_id)
+        .where(
+            StockReportItem.workspace_id == workspace_id,
+            StockReportItem.client_id == row.client_id,
+        )
         .values(
             is_deleted=True,
             deleted_at=now,
@@ -205,6 +218,7 @@ async def cascade_delete_stock_report_item(
     await session.execute(
         update(StockReportHistoryRecord)
         .where(
+            StockReportHistoryRecord.workspace_id == workspace_id,
             StockReportHistoryRecord.stock_report_item_id == row.client_id,
             StockReportHistoryRecord.is_deleted.is_(False),
         )

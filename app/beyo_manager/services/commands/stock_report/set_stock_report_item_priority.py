@@ -116,7 +116,9 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
         if source_priority == target_priority:
             # §14B B2: no write, no record, no stamp, no event.
             return {
-                "stock_report_item": await _serialize(ctx.session, request.client_id)
+                "stock_report_item": await _serialize(
+                    ctx.session, ctx.workspace_id, request.client_id
+                )
             }
 
         shifted = []
@@ -138,7 +140,10 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
             (
                 await ctx.session.execute(
                     update(StockReportItem)
-                    .where(StockReportItem.client_id == request.client_id)
+                    .where(
+                        StockReportItem.workspace_id == ctx.workspace_id,
+                        StockReportItem.client_id == request.client_id,
+                    )
                     .values(
                         priority=target_priority,
                         priority_order=target_order,
@@ -186,7 +191,7 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
             # guaranteed, so neighbours follow their new position.
             for neighbour in sorted(shifted, key=lambda r: r["priority_order"])
         )
-        payload = await _serialize(ctx.session, request.client_id)
+        payload = await _serialize(ctx.session, ctx.workspace_id, request.client_id)
 
     await dispatch(
         coalesce_stock_report_events(events, initial_row_values=initial_row_values)
@@ -194,14 +199,31 @@ async def set_stock_report_item_priority(ctx: ServiceContext) -> dict:
     return {"stock_report_item": payload}
 
 
-async def _serialize(session, client_id):
+async def _serialize(session, workspace_id, client_id):
     """Read the row back (and its category **by id**, so a soft-deleted category
-    still serializes its name — MC-16) after the Core statements above, which leave
-    any ORM instance stale (§9 rule 3)."""
+    still serializes its name — MC-16) after the Core statements above.
+
+    The `workspace_id` term carries no behaviour — the caller has already resolved
+    and locked the row by workspace, and `client_id` is a globally unique prefixed
+    ULID. It is here for **legibility** (owner card D-9): this module threaded
+    `workspace_id` into some of its statements and omitted it from others, so no
+    reader could tell which omission was deliberate. Precedent: batch B1 added
+    `Task.workspace_id` to `set_task_stock_flag` for the same reason.
+
+    This docstring used to say the Core statements above "leave any ORM instance
+    stale (§9 rule 3)". **That is false and was corrected 2026-09-22:** those
+    statements are ORM-enabled, `synchronize_session="auto"` resolves to
+    `"evaluate"`, and their criteria evaluate identically in Python and in SQL, so
+    the identity map is synchronised (master plan L-40 as corrected, L-49).
+    `populate_existing=True` stays as defensive code; it is not load-bearing today.
+    """
     row = (
         await session.execute(
             select(StockReportItem)
-            .where(StockReportItem.client_id == client_id)
+            .where(
+                StockReportItem.workspace_id == workspace_id,
+                StockReportItem.client_id == client_id,
+            )
             .execution_options(populate_existing=True)
         )
     ).scalar_one()
