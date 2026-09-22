@@ -189,6 +189,22 @@ async def test_c5g_two_demand_batches_with_overlapping_new_identities_do_not_dea
 
     Measured 2026-09-21: removing **both** sorts leaves all 28 phase-6 tests green —
     nothing existing contends, which is why this row had to be written.
+
+    **This test does not arm the two sorts, and that is measured, not assumed.**
+    Batch D2 ran both named mutations against it — `sorted()` dropped from
+    `absent_identities`, and `.order_by(StockReportItem.client_id)` dropped from the
+    locking `SELECT` — at two identities and again at forty, twice each: **green every
+    time.** The reason is structural, not a fixture size: each batch's absent
+    identities go in as **one** multi-row `INSERT … ON CONFLICT DO NOTHING`, and a
+    backend runs that statement to completion unless it blocks. The second session's
+    client-side work (statement compilation) costs more than the first session's whole
+    insert, so the first always holds every new row before the second touches one, and
+    the second then blocks on a single row while holding none. No cycle can form, in
+    either sort order. What this test does prove is the positive half: both batches
+    complete, exactly one live row exists per identity, each identity is created
+    exactly once, and neither side raises. The sorts themselves are checked
+    structurally — they are present at `apply_stock_demand.py`'s `absent_identities`
+    and on its `FOR UPDATE` select — per master plan §9 rule 9.
     """
     seeded = await seed_stock_report_workspace(db_session)
     await db_session.commit()
