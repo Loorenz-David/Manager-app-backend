@@ -3,38 +3,64 @@ subject: stock_report — the ordered execution list from the D1 production fix 
 date: 2026-09-22
 actor: orchestrator
 authority: owner, 2026-09-22 — "apply after D1 approves, then continue with D2. you should complete all the remaning task by your self"
-status: IN PROGRESS
+status: CLOSED — 2026-09-22, all 16 phases VERIFIED, all batches APPROVED
 ---
 
-# Remaining work, in order
+# Remaining work, in order — **CLOSED**
 
-**This is the single ordered list.** It supersedes `D1_GATE_CHECKLIST.md` (whose six gate items
-are all discharged). `OWNER_CARDS_batch_D.md` holds the rulings; `FINALIZATION_STEPS.md` holds the
-owner's original ordering, which this expands.
-
-**Every owner card is now ruled.** Nothing below waits on a person. The two authority lines still
-hold absolutely: **rule only what the intention settles and cite the clause**, and **park anything
-that turns on a domain invariant or a published contract that the owner has not already ruled on.**
+**This was the single ordered list.** Steps 1–8 below are all discharged and are kept as the
+record of how the project finished. It supersedes `D1_GATE_CHECKLIST.md`;
+`OWNER_CARDS_batch_D.md` holds the rulings.
 
 ---
 
-## STATUS, 2026-09-22 — steps 1 through 4 are DONE
+## STATUS — **CLOSED 2026-09-22. All sixteen phases VERIFIED; all four batches APPROVED.**
 
-Steps 1, 2, 3 and 4 are complete. **D1 is APPROVED at `d800e73`; phases 12 and 13 are VERIFIED;
-14 of 16 phases are done.** All four ruled card additions are authored **and armed**, every mutant
-re-measured by the orchestrator rather than consumed from an agent's stamp. Totals **660 criterion
-rows in 108 criteria across 16 plans**.
+Every step 1–8 below is done. Nothing in this pipeline is outstanding.
 
-**What remains is steps 5 through 8**, and step 5 (D2's projection) is **in flight**.
+| | |
+|---|---|
+| Phases | **16 / 16 VERIFIED** |
+| Batches | A, B1, B2, C1, C2, **D1**, **D2** — all APPROVED |
+| Criteria | **660 criterion rows in 108 criteria across 16 plans** (by `count_criteria.py`, never typed) |
+| Final L4 | **23 failed / 3798 passed / 1 skipped**, both failure-ID diffs **empty** against the checked-in 23-ID baseline |
+| Suite growth | 3103 passing at project start → **3798**, the 23-ID baseline unchanged throughout |
+| Frontend | contract re-issued as `…_api_20260922.md`; **wiring guide delivered** to the frontend repo |
 
-**Two things are carried to the owner and must not be quietly closed:**
-- **Card D-13** (new) — the deleted event's `workspace_id` comes from `ctx`, which contradicts
-  ratified intention line 1495 and master plan §6.7. Unobservable today; routed to D2's projection
-  for measurement; **parked** because it turns on ratified text.
-- **The eighth D-10 id** (`test_a_row_with_no_assignments_answers_an_empty_list`) was outside the
-  arming round's scope and is still **undecided**. Carried to closeout.
+### The five things that outlived the pipeline — none is lost, none is silent
+
+1. **S3, the lock-order window** — owner-ruled *"file it"*. An unlocked discovery decides a lock
+   set; correct data, worst case a Postgres tie-break and a Scanner retry. **The same shape ships
+   in APPROVED phase 13**, so D2 is not where it was introduced. Exact fix and trace in
+   `OWNER_CARDS_batch_D.md`; plan 13A §7 Q1 carries the qualification.
+2. **The two stale `items_router` tests** — they assert against a symbol renamed by foreign commit
+   `3f19249` and have guarded nothing since. Worth one small change **in the project that owns
+   them**, not here.
+3. **One D-10 test undecided** — `test_a_row_with_no_assignments_answers_an_empty_list` was outside
+   the arming round's scope.
+4. **§6's seeding procedure ends in a no-op** in plan 13A, which is why C3(a)'s fixture yields two
+   history records rather than three. Changing it touches C3(a)–C3(d) and C5(e) at once; plan
+   authorship, not a fold.
+5. **The frontend's own work list** — `FRONTEND_WIRING_GUIDE_draft.md`, delivered. **W-1 can dark
+   the whole board in production** and is first in its work order.
+
+### What this project learned, in one line each
+
+The dominant defect was never the code. Across the whole pipeline the production code was right in
+round 1 far more often than not, and nearly every round went on **whether the tests could fail**.
+The lessons that came out of batch D alone: **L-40** (corrected — the ORM asymmetry does not
+exist), **L-41** (additive mutants are absorbed), **L-42** (fixture discrimination is per row),
+**L-43** (a registered signature must be pinned), **L-46** (a subset assertion is not a shape
+assertion), **L-47** (plant the mutant at every surface), **L-48** (prose gets read as a
+specification), **L-49** (a probe must pass production's own values — this one cost a false lesson
+and a batch split justified by an untruth), **L-50** (one slot means one run).
+
+**If there is a next pipeline:** put the **tester between implementer and reviewer on every
+batch**, not only the ones that look risky. D2 skipped it and the review caught what a tester
+would have — later, and at the cost of a full round.
 
 ---
+
 
 ## 1. D1 production fix — DONE (`2fb7acb`)
 

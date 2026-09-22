@@ -389,6 +389,13 @@ owner card 2 because phase 8 cannot compare against an endpoint phase 13 builds.
 99 → 100 because plan 13 gains a C6 group. No other row count moved — the tester edited no
 criterion cell (`git diff` over the criteria tables: 0 lines).
 
+**Resolving a cited artifact path.** Prompts and handoffs are cited throughout this tracker and the
+plan Review logs by their **original** path (`handoffs/reviewer/…`, `prompts/implementer/…`). For an
+archived batch the file lives at `archive/batch_<X>/<the same relative path>`. Citations were
+deliberately not rewritten — they record the path as it stood when the decision was taken. See
+`archive/README.md`, which also lists what is deliberately **not** archived (the 23-ID baseline file,
+the published frontend contracts, phase 8A, the planner and inventory artifacts).
+
 **Totals, derived by committed script — `count_criteria.py`, re-run at every gate.**
 
 ```
