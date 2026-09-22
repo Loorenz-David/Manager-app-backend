@@ -588,8 +588,10 @@ async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_sessio
     `quantity_awaiting` (4). A record built before the append would read
     `priority_order` NULL.
 
-    **This test is currently RED on the unmutated tree, and that is the finding**
-    (tester, batch D1 — routed `BLOCKED-PRODUCTION`):
+    **HISTORY — this test was RED on the unmutated tree from the batch D1 tester
+    round until `2fb7acb`, and that redness was the finding** (routed
+    `BLOCKED-PRODUCTION`, owner card D-5). It is green now; the record below is
+    kept because the defect it describes is the reason this test exists:
 
       input     `SP(B, low)` on a row carrying one `awaiting` assignment of q = 4,
                 a scenario that plants no drift (§9 rule 2 therefore requires
@@ -608,7 +610,14 @@ async def test_the_priority_record_snapshots_the_live_awaiting_counter(db_sessio
     snapshots a non-zero live counter that nothing credits, so it can never satisfy
     the check. `repair_stock_report.py`'s `goal_total` branch would then overwrite
     that snapshot with 0, contradicting §6.2's "Priority records are never touched
-    after they are written". The fix is in APPROVED phase 3's files, not phase 12's.
+    after they are written". The defect was in APPROVED phase 3's files, not in
+    phase 12's.
+
+    **Fixed at `2fb7acb`** under the owner's ruling of 2026-09-22 ("only assignment
+    reconciliation against goal records"): the `histories` selection in
+    `consistency.py` now admits `QUANTITY_REQUESTED_CHANGE` records only. This test
+    went green **without being edited**, which is what proves the fix rather than a
+    rewritten assertion. Revert that one predicate and this test reddens alone.
     """
     seeded = await seed_stock_report_workspace(db_session)
     await db_session.commit()
