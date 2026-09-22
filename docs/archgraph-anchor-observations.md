@@ -1189,3 +1189,51 @@ Not mentioned to the session, not corrected, and nothing in the 8A prompts will 
 result. Noting for my own discipline that I *read* this delta closely before committing it, but
 only to confirm it carried no foreign hunks before an orchestrator-made checkpoint — not to judge
 its anchoring.
+
+## 2026-09-22 — stock_report closeout + a non-pipeline observability change; first *measured* span rate
+
+**This is the first entry with an actual number on new evidence, after five sessions of
+"unmeasured".** I read the store directly rather than inferring from reports.
+
+**New evidence written this session by me: none.** The webhook-logging change (`43b5c7a`) recorded
+no graph delta. So the numbers below are about evidence *already in the store*, written earlier
+today by the pipeline's own agents, which I read while answering an owner question about whether
+the graph is trustworthy for a fresh session.
+
+**Span rate, measured off `.archgraph/architecture.yml`:**
+
+- **Nodes with `createdAt` 2026-09-22: 3, carrying 5 evidence entries — 0 with `startLine`/
+  `endLine`, 5 with `symbol`. 100% span-free.**
+- Whole store for comparison: 320 node-evidence entries, **86 carry `startLine` (27%)**, 232 carry
+  a `symbol`. The 86 are the accumulated pre-policy tier.
+- Spot-read of `endpoint-stock-demand-deleted-webhook`: both its entries (node + the `calls`
+  relationship) are `path` + `symbol` + `summary` + `inferenceReason`, no span. The symbols
+  (`stock_demand_deleted_webhook_route`) still resolve.
+
+**The standing confound still applies and is if anything stronger here** — this project's master
+plan §8 carries the explicit *"do not emit startLine/endLine"* instruction, so 100% compliance
+says nothing about the policy text on its own. **A clean test still needs a session whose prompt
+is silent on anchoring, and the pipeline is now closed, so that test will not come from this
+project.** Worth the owner knowing: the confound is not going to resolve itself.
+
+**A drift datapoint the policy predicts and the store now demonstrates.** I edited
+`location_tracker_webhooks.py` this session: all three routes moved behind a new `_run_webhook`
+wrapper, so every line number in that file changed. `endpoint-stock-demand-deleted-webhook`'s
+evidence, anchored to the symbol `stock_demand_deleted_webhook_route`, **needed no repair and got
+none** — the symbol still resolves, the description still holds. Under the old span habit this
+edit would have invalidated at least two entries. First time I have seen the policy's stated
+benefit actually pay out on a real edit rather than in the abstract.
+
+**Re-anchor activity:** none. No `archgraph_repair_anchors` call, no `re-anchor` op.
+
+**Review findings about location:** none — no graph review ran.
+
+**Closing-work language:** none.
+
+**One observation that is not about anchoring**, filed here only because I noticed it in the same
+read and it bears on the owner's question: of the 22 stock-report nodes, **20 are `ai_inferred`
+with `reviewState: pending`** and every one I opened has `sourceLinks: []` — evidence lives in
+`metadata.evidence` only. So the graph's stock-report tier is unreviewed and not source-linked,
+which means staleness detection cannot see it at all. That is node governance, not anchoring, and
+it is the owner's to adjudicate. I reported it to them as part of answering their question; I did
+not change anything.
