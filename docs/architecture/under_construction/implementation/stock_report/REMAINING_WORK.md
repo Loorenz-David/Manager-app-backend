@@ -18,7 +18,25 @@ that turns on a domain invariant or a published contract that the owner has not 
 
 ---
 
-## 1. D1 production fix — IN FLIGHT
+## STATUS, 2026-09-22 — steps 1 through 4 are DONE
+
+Steps 1, 2, 3 and 4 are complete. **D1 is APPROVED at `d800e73`; phases 12 and 13 are VERIFIED;
+14 of 16 phases are done.** All four ruled card additions are authored **and armed**, every mutant
+re-measured by the orchestrator rather than consumed from an agent's stamp. Totals **660 criterion
+rows in 108 criteria across 16 plans**.
+
+**What remains is steps 5 through 8**, and step 5 (D2's projection) is **in flight**.
+
+**Two things are carried to the owner and must not be quietly closed:**
+- **Card D-13** (new) — the deleted event's `workspace_id` comes from `ctx`, which contradicts
+  ratified intention line 1495 and master plan §6.7. Unobservable today; routed to D2's projection
+  for measurement; **parked** because it turns on ratified text.
+- **The eighth D-10 id** (`test_a_row_with_no_assignments_answers_an_empty_list`) was outside the
+  arming round's scope and is still **undecided**. Carried to closeout.
+
+---
+
+## 1. D1 production fix — DONE (`2fb7acb`)
 
 Card D-5, owner-approved and scoped to goal records. One type predicate in `consistency.py`.
 
@@ -28,7 +46,7 @@ Card D-5, owner-approved and scoped to goal records. One type predicate in `cons
 - revert the filter → witness red again → restore, `git diff --quiet` exit 0;
 - **gate L4 back at 23 / 3739 / 1**, ID diff empty both ways against the checked-in baseline.
 
-## 2. D1 narrow re-review
+## 2. D1 narrow re-review — DONE (`30d7193`, APPROVED)
 
 Delta-scoped: the fix, plus the rows the fix and the verification fix round touched
 (12 C3(d), 13 C4(a), 13 C2(a)). Everything else was settled at 58/64 in round 1 and is **not**
@@ -39,13 +57,13 @@ already red by one test; the re-review confirms the ones that matter now that it
 one batch — §3A says that is not automatic and the coordinator stops and relays. **That would go
 back to the owner**, ruled or not.
 
-## 3. D1 gate
+## 3. D1 gate — DONE (`d800e73`)
 
 Approval-gate commit · phases 12 and 13 → **VERIFIED** · batch tracker D1 → **APPROVED** ·
 graph delta (one batched `apply_changes`) · archive D1's spent prompts and consumed handoffs to
 `archive/batch_D1/`.
 
-## 4. Apply the ruled card additions — only now, never before step 3
+## 4. Apply the ruled card additions — DONE (`96e5e33`, `1084791`, and this commit)
 
 Order by value, all authored against the drafted text in `OWNER_CARDS_batch_D.md`:
 
@@ -70,7 +88,7 @@ Order by value, all authored against the drafted text in `OWNER_CARDS_batch_D.md
 Each addition is a test plus a measured-red mutation, then the row. **A row recorded before its
 mutation is observed red is the failure this project has closed four times.**
 
-## 5. D2 — projection first, and it is not waivable
+## 5. D2 — projection first, and it is not waivable — **IN FLIGHT** (`prompts/projectionist/2026-09-22_batch_D2_projection_1.md`)
 
 Plans **13A** and **14**. 13A's projection is mandatory per the master plan.
 

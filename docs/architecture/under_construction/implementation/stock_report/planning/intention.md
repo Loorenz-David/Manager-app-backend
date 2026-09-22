@@ -8,6 +8,7 @@ source_evidence: scanner_source_evidence.md (this folder) — cited below as E1�
 date: 2026-09-18
 round: 9 (early Scanner resolution into the terminal state `resolved_early` — §14F; card 14 answered; re-ratified 2026-09-19; 0 cards open)
 round 10 (2026-09-21): §14G added — match preview + MC-21. **Additive by owner ruling: the gate holds and no re-ratification was required**, because the section adds a read-only surface over already-ratified checks and changes no contract, invariant or outcome. Status above is unchanged and only the owner writes it.
+round 11 (2026-09-22): §14H added — the two **response-shape** drifts between this document and the code + published frontend contract, corrected in this document's favour of what already ships. **Corrective by owner ruling** (card D-4: *"amend intention §9 to four keys — and sweep §9 for other drift, not just this key"*); no behaviour, contract, invariant or outcome moves, because §14H changes only where this document had fallen behind code that is VERIFIED and a contract already published. Status above is unchanged and only the owner writes it.
 ```
 
 Paths are relative to `backend/`. `app/beyo_manager/` is abbreviated `bm/`.
@@ -1326,7 +1327,7 @@ change comes from a task-state command, that command dispatches these events alo
 (subordinate operations return pending events, they never dispatch — `06_commands_local.md`).
 On webhook paths the workspace comes from the row, never from the (empty) request identity.
 
-Response shapes: StockReportItem carries the four quantities, priority, order, `properties`, and
+Response shapes **— SUPERSEDED ON TWO POINTS BY §14H (2026-09-22, owner card D-4): `item_category` is four keys, not three, and Assignment is fourteen keys, not five. Read §14H before deriving anything from this paragraph.** StockReportItem carries the four quantities, priority, order, `properties`, and
 an **`item_category`** object `{client_id, name, major_category}` — the raw draft's `item_type`
 / `type_name` naming is dropped so no "ItemType" concept leaks ahead of the Item Domain migration.
 Assignment carries `client_id`, `state`, `stock_report_item_id`, `item`, `task` using two new
@@ -2171,6 +2172,75 @@ A soft-deleted, foreign or absent row in the path is `NotFound`, as every other 
 match?" was raised, considered and **rejected as unneeded** — it would require ordering and
 pagination decisions over all rows for no current caller. Recorded here so it is not re-proposed
 as an oversight. If a caller appears, it is a new amendment.
+
+### 14H. Amendment — response shapes in §9 had fallen behind the code (owner card D-4, 2026-09-22, round 11)
+
+**This amendment corrects this document, not the code.** Both shapes below are **VERIFIED** in
+`app/beyo_manager/domain/stock_report/serializers.py` and **published** to the frontend in
+`HANDOFF_TO_FRONTEND_stock_report_api_v2_20260921.md`. §9's prose had fallen behind them. Later
+amendments win over earlier sections (§18), so **§14H is the authority for response shapes** and
+§9's "Response shapes" paragraph is superseded on these two points only.
+
+**The risk this closes is the one this project has already been bitten by:** the intention is the
+document everything is re-derived from. Someone re-deriving the board from §9 would drop a key the
+app renders and nine keys the frontend already consumes.
+
+#### (a) `item_category` is **four** keys, not three
+
+§9 says `{client_id, name, major_category}`. The shipped shape is:
+
+```jsonc
+"item_category": { "client_id": "ictg_…", "name": "Dining Chairs",
+                   "major_category": "…", "image_url": "https://… | null" }
+```
+
+`image_url` was added on the **owner's own instruction of 2026-09-21** so the category's picture
+reaches the stock-report board. `ItemCategory.image_url` is nullable, and **on a category with no
+image the key is present and `null`, never absent** — an omitted key and a null key are different
+things to a renderer. The published contract states it as `string | null` (§6.1). Pinned by plan 12
+**C4(e)**, armed on three mutants including the one that proves the *present-and-null* half is
+independently asserted rather than riding on the populated row's key-set check.
+
+The rest of §9's sentence stands: there is still **no `item_type` key**, so no "ItemType" concept
+leaks ahead of the Item Domain migration.
+
+#### (b) Assignment is **fourteen** keys, not five
+
+This is the drift the sweep found, and it is the larger of the two. §9 says *"Assignment carries
+`client_id`, `state`, `stock_report_item_id`, `item`, `task`"* — five. The shipped and published
+shape is **fourteen** (published contract §6.2, marked VERIFIED there):
+
+```jsonc
+{ "client_id": "sta_…", "state": "…", "stock_report_item_id": "sri_…",
+  "task_id": "tsk_…", "item_id": "itm_…", "quantity": 2,
+  "property_mismatch_overridden": false, "credited_history_record_id": "… | null",
+  "created_at": "…", "created_by_id": "… | null",
+  "updated_at": "…", "updated_by_id": "… | null",
+  "item": { /* serialize_item_compact, 7 keys */ },
+  "task": { /* serialize_task_compact, 12 keys */ } }
+```
+
+The nine keys §9 omitted are not new: `task_id`, `item_id`, `quantity`,
+`property_mismatch_overridden`, `credited_history_record_id` and the four audit stamps. §9 was
+naming the *interesting* keys in prose and was read afterwards as an exhaustive list, which is how
+the gap survived to phase 13.
+
+#### (c) What the sweep checked and found **correct** — recorded so it is not re-swept
+
+The ruling asked for §9 to be swept rather than patched at one key. Compared against shipped code,
+key by key:
+
+| §9 shape | Shipped | Verdict |
+|---|---|---|
+| `item_category` | `serialize_stock_report_item` | **DRIFT — (a)**, 3 → 4 |
+| Assignment | `serialize_stock_task_assignment` | **DRIFT — (b)**, 5 → 14 |
+| `serialize_item_compact` (7 named) | 7 keys, same names, same order | **exact match** |
+| `serialize_task_compact` (12 named) | 12 keys, same names, same order | **exact match** |
+| StockReportItem "four quantities, priority, order, `properties`" | also `client_id`, `properties_signature`, `created_at`, `updated_at`, `created_by_id`, `updated_by_id` | **prose, not a key list** — it names what the capability is *about* and never claimed to be exhaustive. Left as prose deliberately; the exhaustive shape is plan 12 **C4(e)** and published contract §6.1, and duplicating a 14-key list into three documents is how (b) happened |
+
+**The general lesson, and it is why (c) exists:** §9's failure was not a wrong key, it was **prose
+being read as a specification**. Where a shape must be exact, the criterion row and the published
+contract are the authority and this document points at them.
 
 ## 15. Pre-implementation protocol
 

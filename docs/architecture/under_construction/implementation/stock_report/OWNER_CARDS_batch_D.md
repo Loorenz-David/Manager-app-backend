@@ -428,6 +428,113 @@ the round that creates it.* These have now been deferred twice and the question 
 each time.
 
 
+---
+
+# Resolutions, 2026-09-22 (post-D1-gate) — orchestrator
+
+Under the owner's instruction *"apply after D1 approves, then continue with D2. you should complete
+all the remaning task by your self"*. **Every ruling below is the owner's own, applied; where
+measurement changed a card's shape, the change and its evidence are stated rather than folded away.**
+
+## D-10 — RESOLVED, and its shape changed under measurement
+
+**Ruled:** fold four, delete three. **Applied:** fold **six** under **one new criterion**, delete
+**none**, author **no** row for the seventh.
+
+The ruling carried an explicit condition — *delete only if confirmed by execution that the
+behaviour is already proven one layer down.* The arming round tested it per test, as the card
+required, and **the condition is not met**:
+
+| Test(s) | Measured | Verdict |
+|---|---|---|
+| `test_ordering_routes_refuse_unknown_fields` ×2 | dropping `extra="forbid"` from both ordering body models reddens **exactly these 2 ids**, 51 passed | keep → **C8(a)** |
+| `test_ordering_routes_refuse_malformed_bodies` ×3 | weakening the router's models reddens **exactly those 3 ids** (50 passed) while the integration file where C1(m)/C1(n) are armed stays **18/18 green** | keep → **C8(b), C8(c), C8(d)** |
+| `test_priority_route_accepts_an_explicit_null` | narrowing the router model reddens **only that id** — a **422 where the published contract promises 200** | keep → **C8(e)** |
+| `test_list_items_route_passes_no_priority_when_the_param_is_absent` | C4(b) + C4(d) already produce the identical payload for both inputs; the residue is an assertion on a **mocked collaborator's call argument** (charter rule 2) | **no row authored** |
+
+**Why the three "duplicates" are not duplicates:** the two ordering routes declare their **own**
+body models, separate from the `requests/__init__.py` models that C1(m)/C1(n) pin. The layer below
+never executes the router's declarations. Deleting them would have left the 422 contract the
+**published** frontend handoff actually promises pinned by nothing — the exact shape of §9 rule 18,
+three months' worth of it.
+
+So it was never *"eight tests answering to no rule"*. It was **one missing criterion**, now plan 12
+**C8**, covering five promises of the published contract (§2.3, §5.2, §5.3). Totals 655 → **660**
+rows, 107 → **108** criteria.
+
+**All five mutants were re-measured by the orchestrator before the rows were recorded** — not
+consumed from the tester's stamp — each reddening its own id alone, file restored `git diff --quiet`
+exit 0. *A row recorded before its mutation is observed red is the failure this project has closed
+four times; it is not being reopened for a card that looked clerical.*
+
+**The eighth id** in the reviewer's list, `test_a_row_with_no_assignments_answers_an_empty_list`,
+was outside the arming round's scope and remains **undecided**. It is the only piece of D-10 still
+open and it is carried to closeout, not to D2.
+
+## D-6, D-11, D-7(3) — recorded as **unobservable, not unnecessary**, with their conditions
+
+A measurement that says "no honest test can see this" is only worth keeping if the conditions that
+made it true are recorded with it. **If a condition changes, the measurement expires** — it does not
+silently stay true. Installed at the time of measurement: **SQLAlchemy 2.0.40, pydantic 2.11.3,
+asyncpg 0.30.0, PostgreSQL as configured by `pytest.ini`'s slot databases.**
+
+- **D-6 — plan 13 C2(b)'s ORM-staleness tripwire cannot trip.** Condition: the counter statement is
+  **PK equality + `RETURNING`**, which leaves SQLAlchemy 2.0.40's identity map **synchronised**
+  (measured 7 vs 7). **Expires if** the statement's criteria widen from PK equality, `RETURNING` is
+  dropped, or the SQLAlchemy major version moves. **It does not generalise:** the same measurement
+  on `close_priority_gap`'s shift (range criteria) came back **stale** (3 vs 2), which is why
+  **13A C5(b) is armable** and why batch D was split at all. That correction is **L-40**.
+- **D-11 — plan 13 C4(a)'s `client_id` tiebreaker.** Conditions: the query plan
+  (`Sort(created_at) ← Index Scan using ix_stock_task_assignments_stock_report_item_id`), which
+  feeds a **stable** sort, and a table small enough that the planner chooses it. **Expires if** the
+  plan changes to a merge/parallel sort or the table grows past the planner's threshold.
+  **Narrowed by re-review finding R2-1:** *deleting* the term is unobservable, but **reversing** it
+  (`client_id.desc()`) **reddens at the tied pair**. So the row is armed on two of three ordering
+  sub-terms, not one, and the blind spot is smaller than this card originally described. The
+  decision stands; the description was wrong and is corrected.
+- **D-7(3) — the unguarded cascade ordering.** **No row authored, deliberately.** No observable
+  exists at any boundary, and authoring one would manufacture a promise nothing can arm — the L-37
+  shape this project has already shipped once and recorded. Recorded here so the absence is a
+  decision with a reason rather than a gap.
+
+## D-13 — NEW, and it is the owner's, not mine (raised by the arming round)
+
+**Class:** production. **Status: PARKED for the owner; routed to D2's projection for measurement.
+Not fixed, not ruled.**
+
+Intention line **1495** is ratified: *"`workspace_id` comes from the entity's row, never from `ctx`
+(§2.5)"*, and master plan §6.7 restates it verbatim. But
+`_delete_stock_report_item_cascade.py:203` builds `stock_report_item:deleted` from the
+`workspace_id` **parameter**, which `delete_stock_report_item.py:126` fills from `ctx.workspace_id`.
+**The code contradicts ratified text.**
+
+**Why it is harmless today, and exactly when it stops being:** the delete refuses anything outside
+the caller's workspace, so the two values are identical by construction — which is also why plan 13
+C3(b)'s named mutant (ii) is recorded `EQUIVALENT` and **unappliable**: "take it from `ctx`" *is* the
+shipped form, so there is nothing to mutate. **13A adds a second caller** that deletes rows in a
+**loop** rather than one per request. If that caller ever passes a workspace other than the row's,
+deletion events address the wrong workspace's screens and **no test anywhere can see it.**
+
+**Why I did not fix it, though it is one line and I hold a broad delegation.** Three reasons, and
+the first is sufficient:
+
+1. **It turns on ratified text**, which is the one class the overnight limit parks and the owner
+   has not lifted. D-5 was this same class and it went to the owner.
+2. Today it is **unfixable-with-evidence**: no test at a public boundary can distinguish the two
+   values, so the fix would ship unarmed — and an unarmable guard is **L-37**, which this project
+   has shipped once already.
+3. It would **reopen phase 13 hours after it was approved**, for a change with no observable effect.
+
+**Routed, not dropped.** D2's projection is asked to answer with evidence whether 13A's second
+caller makes the difference **observable at the webhook boundary**. If it does, the one-line fix
+belongs in 13A's perimeter with a row that can see it — the batch that creates the need pays for it,
+and the named mutant becomes appliable. If it does not, this closes as "unobservable, not
+unnecessary" with its conditions, like D-6 and D-11.
+
+**Owner:** this is the one thing from the post-gate round that is genuinely yours. If you would
+rather the one-line fix land now than wait for the projection's answer, say so and it is a
+five-minute change.
+
 ## Carried OUT of the pipeline entirely — not cards, not for tonight
 
 Repeated from `FINALIZATION_STEPS.md` so this file stands alone:

@@ -112,7 +112,7 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 | C1(m) | `SP(B, "urgent")` | 422 (`ValidationError`) | `requests/__init__.py` (def.): widen `SetStockReportItemPriorityRequest.priority` to `str \| None` → `"urgent"` reaches the command and nothing raises → red. **Rule 17, measured on the installed pydantic 2.11.3:** a `StockReportPriorityEnum \| None` field rejects `"urgent"` by value, accepts `"high"` and `null`, and 422s an omitted key (the field carries no default); the parse function converts pydantic's error into `bm.errors.validation.ValidationError`, which is the only class that yields 422 here | MC-7 "anything else → 422" |
 | C1(n) | `SO(B, "2")` (non-integer) | 422 | `requests/__init__.py` (def.): declare `priority_order` as a plain `int` instead of `StrictInt` → **measured on the installed pydantic 2.11.3, lax mode coerces `"2"` to `2`**, the call returns a 200 no-op and the row reddens. The row is decidable only if that field is strict; this cell is where that contract is pinned (rule 17) | MC-7 |
 | C1(o) | three calls as U of W — `SP(row of the foreign workspace, low)`, `SP(a soft-deleted row of W, low)`, `SP("sri_absent", low)`. The foreign row is a **cross-workspace reference** (preamble): same category, same properties, same `high` group with the same orders, so tenancy is the only reason it refuses | `NotFound` each; no state anywhere changes; the foreign workspace's group is byte-identical | three mutants at `set_stock_report_item_priority.py`'s row lookup (def.), **all three runs recorded** (L-34's three visibility cells): (i) drop the `workspace_id` term → the foreign row is found and moved; (ii) drop `is_deleted = false` → the soft-deleted row is moved and `priority_order_nullness` diverges; (iii) return the serialized row instead of raising when the lookup finds nothing → the absent id answers 200 | M4 |
-| C1(p) | **Authored 2026-09-22, owner card D-1.** three calls as U of W — `SO(row of the foreign workspace, 1)`, `SO(a soft-deleted row of W, 1)`, `SO("sri_absent", 1)`. The foreign row is a **cross-workspace reference** (preamble): same category, same properties, same `high` group with the same orders, so tenancy is the only reason it refuses | `NotFound` each; no state anywhere changes; the foreign workspace's group is byte-identical | three mutants at `set_stock_report_item_priority_order.py`'s row lookup (def.), **all three runs recorded** (L-34's three visibility cells): (i) drop the `workspace_id` term → the foreign row is found and reordered; (ii) drop `is_deleted = false` → the soft-deleted row is reordered and its **live** neighbours are renumbered around it → `order_density` diverges (the divergence loads rows under `is_deleted = false`, `consistency.py:129`, then expects each group dense `1..n`); (iii) return the serialized row instead of raising when the lookup finds nothing → the absent id answers 200 | M4. **Why this row exists:** C1(o) covers these three cells for the **priority** route only, and `…/priority-order` is a second route with its own `require_roles` list, request model and command module. The lookup is shared, so the behaviour is right — what was missing is the row that would notice if it were not |
+| C1(p) | **Authored 2026-09-22, owner card D-1.** three calls as U of W — `SO(row of the foreign workspace, 1)`, `SO(a soft-deleted row of W, 1)`, `SO("sri_absent", 1)`. The foreign row is a **cross-workspace reference** (preamble): same category, same properties, same `high` group with the same orders, so tenancy is the only reason it refuses | `NotFound` each; no state anywhere changes; the foreign workspace's group is byte-identical | three mutants at `set_stock_report_item_priority_order.py`'s row lookup (def.), **all three runs recorded** (L-34's three visibility cells). **Site, corrected at the post-gate arming round (2026-09-22, tester slot `dq`; orchestrator fold): every mutant must be planted at BOTH lookup surfaces — `_find_row:44-51` and `_lock_row_and_group:59-71` — and mutant (ii) additionally at the post-lock guard `:97` (`if row is None or row.is_deleted`).** Planted at `_find_row` alone all three are **absorbed**: the post-lock re-read finds the row again and re-raises, so the cell stays green and the row would have been recorded armed while guarding nothing. This is the same double-guard the D1 tester measured on the priority command (M-16a/M-17a) — the shape is now twice-confirmed in this phase: (i) drop the `workspace_id` term → the foreign row is found and reordered; (ii) drop `is_deleted = false` → the soft-deleted row is reordered and its **live** neighbours are renumbered around it → `order_density` diverges (the divergence loads rows under `is_deleted = false`, `consistency.py:129`, then expects each group dense `1..n`); (iii) return the serialized row instead of raising when the lookup finds nothing → the absent id answers 200 | M4. **Why this row exists:** C1(o) covers these three cells for the **priority** route only, and `…/priority-order` is a second route with its own `require_roles` list, request model and command module. The lookup is shared, so the behaviour is right — what was missing is the row that would notice if it were not |
 | C2(a) | two sessions: `SO(C, 1)` and `SO(D, 2)` barrier-released | high group is dense `1..4`; the end state equals one of the two sequential compositions (**inherent disjunction — unforced interleaving; recorded, see (c)**) | **class 3 — no mutant can force this row**, because the interleaving is unforced (§9 rule 9). Treat it as an invariant check, never as the serialization proof. Structural property the reviewer derives (L-32), stated as a post-condition and not as a statement to look at: *after either serialisation the `high` group is exactly `1..4` with no gap and no duplicate, and the on-disk state equals one of the two sequential compositions.* The serialization itself is proven deterministically by **C2(c)**; C2(c) does **not** cover this row's density-under-a-real-race half, and nothing in this phase does | MC-7 race row 1 |
 | C2(b) | `SO(A, 3)` vs `SP(N, high)` barrier-released | high dense `1..5`, N last | **class 3 — unforced interleaving**, same treatment as C2(a). Structural property (L-32): *after either serialisation `high` is exactly `1..5`, N holds order 5, and the state equals one of the two sequential compositions.* Deterministic serialization evidence: **C2(c)** | MC-7 race row 2 |
 | C2(c) | session H opens a transaction and takes `pg_advisory_xact_lock(hashtext('stock_report_order:' \|\| W))`; then `SO(C, 1)` is started | the move does **not** complete within 0.5 s; after H commits it completes with high = A2 B3 C1 D4 | remove `acquire_stock_report_order_lock` → completes while H holds → red | MC-7 serialization (deterministic form) |
@@ -135,10 +135,15 @@ Tenancy rows (C1(o), C4(f)) use a **cross-workspace reference** (L-16): the fore
 | C7(a)–C7(d) | `PATCH …/priority` as admin / manager / worker / seller | reached / reached / 403 / reached | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `PATCH …/priority` route (def.) — **both directions run and recorded** (L-13/L-24): (i) remove the role under test → its "reached" cell answers 403; (ii) add `WORKER` to the list → the 403 cell reaches the service | MC-18 |
 | C7(e)–C7(h) | `PATCH …/priority-order` as admin / manager / worker / seller | reached / reached / 403 / reached | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `PATCH …/priority-order` route (def.) — both directions, as C7(a)–(d), run and recorded separately: this is a **second route**, not the same edit (§9 rule 8) | MC-18 |
 | C7(i)–C7(l) | `GET …/items` as admin / manager / worker / seller | reached ×4 | `bm/routers/api_v1/stock_report.py`, the `require_roles([...])` list of the `GET …/items` route (def.): remove the role under test → that cell answers 403 → red. Four runs, one per role, each recorded — every cell here is "reached", so there is no opposite direction to run | MC-18 |
+| C8(a) | **Authored 2026-09-22, owner card D-10.** `PATCH …/priority` with `{"priority": "high", "unexpected": true}` and `PATCH …/priority-order` with `{"priority_order": 2, "unexpected": true}`, both as manager | 422 from **both** routes, and the service is never reached (`calls == []`) | `bm/routers/api_v1/stock_report.py` (def.): drop `model_config = ConfigDict(extra="forbid")` from **both** `_SetStockReportItemPriorityBody` and `_SetStockReportItemPriorityOrderBody` → the unknown key is ignored, both routes answer 200 and the command is called → **measured red by the orchestrator 2026-09-22: exactly these two ids, 2 failed / 51 passed**, file restored `git diff --quiet` exit 0 | Published contract §2.3 ("HTTP 422, `detail` is an **array**… a different 422 from §2.2's"). **Why this criterion exists:** C1(m)/C1(n) pin `requests/__init__.py`, the **command**-layer models. The two routes declare their **own** body models, and the layer below never executes them — measured: weakening the router's models reddens only the router file while the integration file where C1(m)/C1(n) are armed stays **18/18 green**. Six tests guarded these five promises and answered to no criterion row; this criterion is the rule they answer to |
+| C8(b) | `PATCH …/priority` with `{}` (the key omitted), as manager | 422; service never reached | `bm/routers/api_v1/stock_report.py` (def.): give `_SetStockReportItemPriorityBody.priority` a default of `None` → the omitted key becomes a legal "clear the priority" and the route answers 200 → **measured red by the orchestrator 2026-09-22: 1 failed / 52 passed**, that id alone | Published contract §5.2: *"the key is required and has no default; omitting it is a 422."* |
+| C8(c) | `PATCH …/priority` with `{"priority": "urgent"}`, as manager | 422; service never reached | `bm/routers/api_v1/stock_report.py` (def.): widen `_SetStockReportItemPriorityBody.priority` to `str \| None` → `"urgent"` is accepted by the router and reaches the command → **measured red by the orchestrator 2026-09-22: 1 failed / 52 passed**, that id alone. The **same edit shape** as C1(m)'s mutant but a **different site** (router model, not `requests/__init__.py`) — §9 rule 8 counts these as two edits because the declarations are independent, which is the fact this criterion was authored to pin | Published contract §5.2 (the four legal values); MC-7 "anything else → 422" |
+| C8(d) | `PATCH …/priority-order` with `{"priority_order": "2"}` (the string), as manager | 422; service never reached | `bm/routers/api_v1/stock_report.py` (def.): declare `_SetStockReportItemPriorityOrderBody.priority_order` as a plain `int` instead of `StrictInt` → pydantic's lax mode coerces `"2"` to `2` and the route answers 200 → **measured red by the orchestrator 2026-09-22 on the installed pydantic 2.11.3: 1 failed / 52 passed**, that id alone | Published contract §5.3: *"a **strict integer**. The string `"2"` is a **422**, not coerced."* |
+| C8(e) | `PATCH …/priority` with `{"priority": null}`, as manager | **200**, and the command receives `incoming_data == {"priority": None, "client_id": "sri_1"}` — the null is passed through, not dropped | `bm/routers/api_v1/stock_report.py` (def.): narrow `_SetStockReportItemPriorityBody.priority` to `StockReportPriorityEnum` (drop `\| None`) → `null` answers **422 where the published contract promises 200** → **measured red by the orchestrator 2026-09-22: 1 failed / 52 passed**, that id alone. This is the one cell of the five whose outcome is a **success**, so its mutant is the only one that turns a 200 into a 422 rather than the reverse | Published contract §5.2: *"`null` is a legal value and means \"clear the priority\"."* Distinct from **C1(l)**, which is `SP(N, null)` at the **command** boundary (no record, no event); that row proves the service model accepts `null`, this one proves the **route** does |
 
 ## 7. Notes
 
-- Sizing: **47 criterion rows in 7 criteria**; `complex: yes`. (Re-derived by `SR/count_criteria.py` 2026-09-22 after **C1(p)** (owner card D-1) and **C3(e)** (owner card D-12) were authored post-gate; was 45.)
+- Sizing: **52 criterion rows in 8 criteria**; `complex: yes`. (Re-derived by `SR/count_criteria.py` 2026-09-22 after **C1(p)** (owner card D-1) and **C3(e)** (owner card D-12) were authored post-gate — 45 → 47 — and again after **C8(a)–C8(e)** (owner card D-10) — 47 → 52. C8 is the phase's only **router-boundary** criterion: C7 pins the routes' `require_roles` lists, C8 pins their **body models**, which are a second declaration of the request contract that the command layer never executes.)
 - C2(a)/(b) carry an inherent disjunction because the interleaving is unforced; C2(c) is the
   deterministic proof that the advisory lock is taken. The reviewer treats (a)/(b) as invariant
   checks, not as the serialization proof.
@@ -573,3 +578,62 @@ witness stays green, which is exactly the half-guarded fix the row was authored 
 should say the three mutants are sited across `_find_row` **and** `_lock_row_and_group` (plus the
 post-lock guard for (ii)), as C1(o)'s cell now does — sited at `_find_row` alone all three are
 absorbed.
+
+---
+
+## Review log — post-gate card application, orchestrator, 2026-09-22
+
+Applied after the D1 gate under the owner's ruling *"apply after D1 approves, then continue with
+D2. you should complete all the remaning task by your self"*. **Every mutation below was run by the
+orchestrator, not consumed from an agent's stamp.**
+
+### 1. New criterion **C8(a)–C8(e)** — the routes' own body models (owner card D-10)
+
+The card read as *"eight tests answer to no rule — fold four, drop three."* Measurement changed its
+shape. The two ordering routes declare their **own** body models
+(`_SetStockReportItemPriorityBody`, `_SetStockReportItemPriorityOrderBody`), separate from the
+`requests/__init__.py` models that **C1(m)/C1(n)** pin, and **the layer below never executes the
+router's declarations** — weakening the router's models reddens the router file while the
+integration file where C1(m)/C1(n) are armed stays **18/18 green**. So the three "HTTP-layer
+duplicates" the card proposed deleting are the **only** guard on five promises of the **published**
+frontend contract. Deleting them would have re-created the §9 rule 18 shape that card D-8 exists to
+close.
+
+The card's ruling carried the condition *"delete only if confirmed by execution that the behaviour
+is already proven one layer down."* Execution says it is not. **Keeping them is the ruling applied.**
+
+**Five mutants, five sub-checks, each re-measured red by the orchestrator on 2026-09-22 (slot
+`dm`), each reddening its own id alone, file restored `git diff --quiet` exit 0 after every one:**
+
+| Row | Mutant at `routers/api_v1/stock_report.py` | Result |
+|---|---|---|
+| C8(a) | drop `extra="forbid"` from **both** ordering body models | **2 failed / 51 passed** — exactly the two `refuse_unknown_fields` ids |
+| C8(b) | give `priority` a default of `None` | **1 failed / 52 passed** — the omitted-key id alone |
+| C8(c) | widen `priority` to `str \| None` | **1 failed / 52 passed** — the `"urgent"` id alone |
+| C8(d) | `priority_order: StrictInt` → `int` | **1 failed / 52 passed** — the `"2"` id alone (pydantic 2.11.3 lax mode coerces) |
+| C8(e) | narrow `priority` to `StockReportPriorityEnum` (drop `\| None`) | **1 failed / 52 passed** — a **422 where the published contract promises 200** |
+
+Baseline for all five: 53 passed, unmutated.
+
+**`test_list_items_route_passes_no_priority_when_the_param_is_absent` gets no row**, deliberately.
+C4(b) + C4(d) already produce the identical payload for both inputs, so the defect it would catch
+is **invisible at the public boundary**; what remains is an assertion on a mocked collaborator's
+call argument, which charter rule 2 excludes from being a criterion. Authoring a row for it would
+have restated two existing rows and credited coverage that does not exist.
+
+### 2. **C1(p)**'s mutation cell corrected — the site was wrong and the row would have been false
+
+The arming round found that all three of C1(p)'s named mutants are **absorbed** when planted at
+`_find_row` alone: the post-lock re-read finds the row again and re-raises, so the cell stays green.
+**A row recorded on that evidence would have been recorded armed while guarding nothing.** The cell
+now requires every mutant at **both** lookup surfaces (`_find_row:44-51` and
+`_lock_row_and_group:59-71`), and mutant (ii) additionally at the post-lock guard `:97`.
+
+This is the second time the double-guard shape has been measured in this phase — the D1 tester hit
+it on the priority command (M-16a/M-17a). It is the same family as **L-41**: the code's own
+idempotence swallows the mutant. **Twice-confirmed in one phase is worth more than a lesson line.**
+
+### 3. Sizing
+
+**47 → 52 rows, 7 → 8 criteria**, re-derived by `SR/count_criteria.py` (never typed). Project
+totals **655 → 660 rows in 108 criteria across 16 plans**.
