@@ -133,8 +133,12 @@ thing the whole pipeline was for.
    not satisfy them).
 2. **D-9** — the seven missing `workspace_id` terms, as its own post-D change. Behaviour-preserving;
    the suite staying green is the proof.
-3. **The five "adjacent" baseline failures** (§10.1). The owner ruled "fix none, revisit at
-   closeout" on 2026-09-19. **Evaluate and recommend; do not silently fix foreign projects' tests.**
+3. **The five "adjacent" baseline failures** (§10.1) — **DONE 2026-09-22, recommendation: fix
+   none.** Both causes named by execution: two are a stale reference to `_DeleteIssuesBody`,
+   renamed by foreign commit `3f19249` (and this project never touched `items.py` — 0 commits
+   since `cce4b1b`); three are `A transaction is already begun on this Session`, a fixture defect
+   in their own files. Full evaluation in master plan §10.1. **Relay to the owner at closeout** —
+   the two stale ones are worth a small change *in the project that owns them*, not here.
 4. Graph delta · archive to `archive/batch_D2/` · approval-gate commits · update
    `project_stock_report_pipeline.md`.
 

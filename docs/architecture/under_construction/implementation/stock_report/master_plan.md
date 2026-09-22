@@ -1197,6 +1197,37 @@ Result: **0 overlaps, 5 adjacent, 16 unrelated.** Card 1 answered **A** by the o
 fix none; every phase diffs against the published 21-ID baseline; the five adjacent tests are
 revisited at closeout.
 
+#### Closeout evaluation of the five adjacent failures — 2026-09-22, orchestrator
+
+**Recommendation: fix none of them inside this project. All five have causes entirely outside
+stock_report, and both causes are now named by execution rather than by inspection.**
+
+They were failing before this project started, they are failing identically now (both ID diffs
+against the checked-in 23-ID baseline **empty** at every gate), and *adjacency* was always a
+statement about **risk** — a phase changes a model these tests touch — not about blame. The risk
+is what needed discharging, and it is discharged:
+
+| # | Test | Cause, measured | Ours? |
+|---|---|---|---|
+| 19, 20 | `unit/test_items_router.py::test_route_list_item_issues_forwards_client_id`, `::test_route_delete_item_issues_forwards_ids` | `AttributeError: module … has no attribute '_DeleteIssuesBody'. Did you mean: '_BatchDeleteIssuesBody'?` — a **rename** the tests were never updated for | **No.** The rename is commit `3f19249` *"refactor issue types and added them to the bootstrap seed"*, a foreign change. **This project never touched `routers/api_v1/items.py` at all**: `git log cce4b1b..HEAD -- app/beyo_manager/routers/api_v1/items.py` → **0 commits**. Phase 11's adjacency was to `find_or_create_item`, not to these routes |
+| 2, 8, 9 | `…/bootstrap/test_seed_working_sections_integration.py::…`, `…/working_sections/test_batch_working_section_integration.py::…` ×2 | `sqlalchemy.exc.InvalidRequestError: A transaction is already begun on this Session.` — the tests open a transaction on a session that already carries one | **No.** A fixture-pattern defect in those files, structural and schema-independent. Stock Report's test helpers are opt-in and imported by none of them |
+
+**Why "fix none" is still right and not just inherited.** Two of the five are a one-line rename
+away from green and it is tempting. But they belong to a foreign, APPROVED project; a green test
+there is a claim about *that* project's behaviour, and this project has no standing to make it.
+Fixing them would also move the baseline — the 23-ID set every gate in this pipeline diffs against
+— which is the one artifact that has made every gate in this project decidable.
+
+**What I recommend instead, for the owner and outside this pipeline:** the two `items_router` tests
+are **stale, not failing** — they assert against a symbol that no longer exists, so they have
+guarded nothing since `3f19249`. That is worth one small change in the project that owns them, and
+it is the same class as the 23 stale tests cleaned on 2026-09-19. The three transaction-error tests
+need a fixture fix, which is real work and a real decision for their owner.
+
+**Also carried out, unchanged:** the two `test_database_isolation.py` IDs in the 23-ID set are
+**slot-sensitive, not broken** — they pass under `main` and fail under any other slot. Both are
+named in the baseline so they cost nothing, and the file belongs to a foreign APPROVED project.
+
 ### 10.2 Leaking test files against the phases (owner table 2)
 
 **No Stock Report code reads across workspaces.** The consistency check and the manual repair take
