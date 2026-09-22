@@ -316,3 +316,37 @@ serializers' rows. Full ledger in the implementer handoff.
 second test asserts every serializer's field set contains at least one nullable and one
 non-nullable field — an agreement check over a uniform set cannot fail (L-26). It discharges the
 same row.
+
+---
+
+## Review log — 2026-09-22: batch D2 review 1 (reviewer, Opus, slot `d2r`) — plan 14 **PASSES**
+
+Tree `072c7da`; `app/` byte-identical to `fcf2fb8`. L4 **23 / 3798 / 1**, both ID diffs empty.
+**5 PASS / 0 FAIL / 0 NOT_VERIFIED** over 5 rows. The batch verdict is CHANGES_REQUESTED on three
+13A rows; **nothing in plan 14 blocks**. Handoff
+`handoffs/reviewer/2026-09-22_batch_D2_review_1_handoff.md`.
+
+**Verified correct.** The guard's roots are stated in the module docstring and are the real ones:
+the app's own route table through `create_app()` with `require_roles([...])` resolved through
+`routers/utils/roles.py` (L-38 satisfied — no string-literal grep, 13 routes found and pinned);
+master plan §6.7 **plus** the AST scan of `event_name=` sites with the assignment template expanded
+over its three kinds, failing in **both** directions (C1(b)(iii) is the one that arms the reverse);
+the four error classes and the `STOCK_REPORT_*` identities per document; the six-member state enum
+per surface; and, for C2(a), the four serializers parsed as AST with each field resolved to its
+mapped column's own `nullable` and compared for **equality** against the handoff's tables, plus the
+`Null when` cell. Sub-shapes (`item`, `task`, `item_images`) are skipped by design and the handoff
+documents `item_images` in prose beside the table, so the equality is not silently forcing an
+incomplete document. `test_c2a_at_least_one_field_of_each_kind_exists_to_discriminate` is the L-26
+positive observation, and it is the only one in the file.
+
+The re-issue protocol (owner card 7) was followed: a new dated file with `supersedes:`, a first
+section naming the current document, the superseded file **moved** unedited to `archived/` (the
+rename shows 0 content change), `…match_preview_v2…` neither superseded nor moved.
+
+| # | Row | Severity | Route | Note |
+|---|---|---|---|---|
+| N5 | C1(b) | note | verification | `_event_names_in_code()` scans `_STOCK_COMMANDS.glob("*.py")`, which is **not** recursive, while the stated root is "every site **under**" the package. Harmless today — the only subpackage is `requests/` and it builds no event name (four `event_name=` sites, all top level) — but `rglob` would make the root match its own description |
+| N6 | C1(b), C1(c) | note | verification | C1(a) pins `len(routes) == 13` and C1(d) pins `len(states) == 6`, so neither can go vacuous. C1(b) and C1(c) have no such guard: an empty event-name scan or an empty `STOCK_REPORT_[A-Z_]+:` match set would leave both loops passing over nothing. Verified non-empty on this tree (13 documented paths, 4 error classes). L-15/L-26 shape |
+| N7 | — | note | plan | Implementer handoff §6: "C5 10 (a 1, b 3, c 1, d 1, e 2, f 1, g 2)" — the parenthetical sums to 11. The total is right after C5(e)'s second mutant is retired; the parenthetical counts runs. The 54-row ledger and "declared 50 / executed 54" reconcile; the ID sequence has numbering gaps only (no M27–M29, M32, M37) |
+
+No probe touched any plan-14 file. No archgraph write.

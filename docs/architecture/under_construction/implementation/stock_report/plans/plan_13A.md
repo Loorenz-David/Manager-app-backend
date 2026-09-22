@@ -433,3 +433,47 @@ nobody the wiser; it flagged it instead and its ledger shows the greens. The sam
 concurrency row whose protection is real but whose mutant cannot bite — is now the **third** in this
 project (plan 13 C2(b), plan 13A C5(b) mutant (i), and this). **Surfaced to the owner** rather than
 folded silently, because the row is theirs.
+
+---
+
+## Review log — 2026-09-22: batch D2 review 1 (reviewer, Opus, slot `d2r`) — **CHANGES_REQUESTED**
+
+Tree `072c7da`; `app/` byte-identical to the implementer's stamp `fcf2fb8`. L4 **23 / 3798 / 1**,
+both ID diffs against the checked-in 23-ID baseline **empty**. Perimeter exact (ten files, §4).
+Plan 13A: **34 PASS / 3 FAIL / 0 NOT_VERIFIED** over 37 rows. **Production code correct everywhere
+reachable; all three FAILs are evidence weaker than the cell.** Handoff
+`handoffs/reviewer/2026-09-22_batch_D2_review_1_handoff.md`.
+
+| # | Row | Severity | Route | Finding |
+|---|---|---|---|---|
+| B1 | C5(b) | **blocking** | verification | The row's expected outcome depends on an **unpinned `client_id` order** between the two candidates. The loop runs ascending `client_id`; `_seed_group`'s guard (`placed != sorted(placed)`) is satisfied by the two fillers alone and never pins R against C. Measured: minting C first (positions and request order unchanged) reddens the row — `test_process_stock_demand_deleted.py:1180: assert 3 == 2`, 1 failed / 32 passed. Production is right in both branches; only the assertion flips. §6's own preamble forbids this. Also a latent baseline flake |
+| B2 | C5(b) cell | should-fix | plan | The cell states "C's deleted row keeps `priority_order 2` (shifted 3 → 2 by R's cascade)" — an outcome its own fixture does not determine. The cell must name which candidate the ascending-`client_id` loop reaches first |
+| S1 | C3(a) | should-fix | verification | "**Every** history record of R soft-deleted with NULL author" is asserted for **one of three**. The fixture's phase-12 seeding leaves `priority_change` and `priority_order_change` records (the test's own `_goal_record` docstring says so) and the test reads only `quantity_requested_change`. Measured: narrowing the cascade's history soft-delete to that one type leaves **33/33** phase rows green, **6/6** phase-13 delete tests green and **495 passed** across the whole stock-report domain (L2). Production is correct; nothing observes it |
+| S2 | C5(e) | should-fix | verification | The cell requires W′ "seeded with the identical row, group and **six** assignments"; the test uses the `env` fixture's W′ — one bare row, no group, no assignments, no goal record. Against that shape every branch of `compute_stock_report_divergences` is unconditionally satisfied, so the W′ half (the half carried question (5) exists for) **cannot fail**. The W half is armed by M36 |
+| S3 | §7 Q1 / step 4.6 | should-fix | production | **The cascade acts on assignments outside the locked set.** Step 4.6 discovers assignment ids unlocked; block (i) of the cascade re-selects the live set and `remove_assignment` → `recompute_task_stock_flag` issues `UPDATE tasks`. `create_stock_task_assignments` takes 2 → 3 → 4 and **no advisory lock**, so it can commit a new assignment on a candidate row between 4.6 and 4.8; the webhook then takes a **class-3 lock after class 4 and 5**, the inversion Q1 declares impossible, closing a `40P01` cycle with a concurrent `delete_stock_task_assignments`. Measured: with 4.6 forced empty (no class-3/class-5 statement at all) C3(a)/C3(b)/C3(d)/C4(b)/C5(e) stay green — only C5(b)'s statement counts notice. **Not introduced here**: `delete_stock_report_item.py` (APPROVED phase 13) has the identical shape. → **owner card 1** |
+| N1 | C1(d) | note | — | "nothing written" is not asserted (unit-only row); the class is covered by C1(j)/C1(k) |
+| N2 | C6(a), C6(b) | note | verification | Both omit `assert_stock_report_clean`, which §6's preamble makes standing for every non-drift row (C6(a) omits the foreign check too) |
+| N3 | C5(f) | note | verification | "the foreign counts unchanged" is asserted for `stock_report_items` only |
+| N4 | C1(i) | note | plan | The folded cell reads `"seven"`; the integration test still sends `5` and cannot fail under the cell's mutation (implementer F-2). The unit half arms it. Cell and test now disagree |
+
+**Settled and not re-opened:** C5(b) mutant (i)'s retirement and the cascade's fresh `SELECT`
+("unobservable, not unnecessary"); C5(g)'s two sorts (positive half armed, sorts by §9 rule 9);
+card D-3; the `_events.py` probes — confirmed reverted (`git diff fcf2fb8..HEAD -- app/` empty).
+
+**Verified correct, so the next round need not re-buy it:** the step list in order (deadline first
+line, verify-before-parse, X3, `set_config` first statement, advisory lock before discovery,
+3 → 4 → 5, re-read guard, ascending cascade loop, deadline check last); one statement per lock
+class for any candidate count, including two candidates in two different priority groups;
+`ctx.workspace_id` never read; duplicate candidates unreachable by construction; the coalescer's
+`:deleted` rule across rows, asserted as a multiset with per-name counts; counters in a multi-row
+delete covered indirectly by the zero-repair-record clause; the trace chain both ways with no
+orphan test; 37 + 5 = 42 rows and 56 test ids = the L4's pass delta.
+
+**Multi-row question (the orchestrator's):** one inconsistency no row asserts — **the history
+records of rows deleted in a multi-row request** (S1). `assert_stock_report_clean` cannot see it
+because `compute_stock_report_divergences` inspects live rows only. Counters, events and the group
+ordering are covered; ordering's *evidence* is B1's problem, not the code's.
+
+**Probes applied and reverted** (all `git diff --quiet -- app/` exit 0 after):
+`test_process_stock_demand_deleted.py`, `_delete_stock_report_item_cascade.py`,
+`process_stock_demand_deleted.py`. No DB, schema or archgraph side effect.
