@@ -16,6 +16,9 @@ from beyo_manager.services.commands.working_sections.edit_working_section import
 	edit_working_section,
 )
 from beyo_manager.services.context import ServiceContext
+from beyo_manager.services.queries.working_sections.get_task_step import (
+	get_task_step,
+)
 from beyo_manager.services.queries.working_sections.get_working_section import (
 	get_working_section,
 )
@@ -124,6 +127,24 @@ async def get_user_last_active_step_record_route(
 		session=session,
 	)
 	outcome = await run_service(get_user_last_active_step_record, ctx)
+	if not outcome.success:
+		return build_err(outcome.error)
+	return build_ok(outcome.data)
+
+
+@router.get("/steps/{step_id}")
+async def get_task_step_route(
+	step_id: str,
+	claims: dict = Depends(require_roles([ADMIN, MANAGER, WORKER])),
+	session: AsyncSession = Depends(get_db),
+):
+	ctx = ServiceContext(
+		incoming_data={"step_id": step_id},
+		query_params={},
+		identity=claims,
+		session=session,
+	)
+	outcome = await run_service(get_task_step, ctx)
 	if not outcome.success:
 		return build_err(outcome.error)
 	return build_ok(outcome.data)
